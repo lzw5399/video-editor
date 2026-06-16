@@ -1,0 +1,8 @@
+{
+  "command": "ping",
+  "payload": {
+    "kind": "ping",
+    "unexpected": true
+  },
+  "requestId": "phase-1-invalid-unknown-field"
+}

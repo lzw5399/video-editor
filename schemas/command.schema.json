@@ -35,6 +35,7 @@
       "description": "Phase 1 command payloads.",
       "oneOf": [
         {
+          "description": "Payload accepted by the Phase 1 `ping` command.",
           "type": "object",
           "properties": {
             "kind": {
@@ -42,11 +43,13 @@
               "const": "ping"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind"
           ]
         },
         {
+          "description": "Payload accepted by the Phase 1 `version` command.",
           "type": "object",
           "properties": {
             "kind": {
@@ -54,6 +57,7 @@
               "const": "version"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind"
           ]

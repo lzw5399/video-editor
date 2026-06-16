@@ -33,9 +33,19 @@ pub enum CommandName {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CommandPayload {
-    Ping,
-    Version,
+    Ping(PingCommandPayload),
+    Version(VersionCommandPayload),
 }
+
+/// Payload accepted by the Phase 1 `ping` command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PingCommandPayload {}
+
+/// Payload accepted by the Phase 1 `version` command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VersionCommandPayload {}
 
 /// Standard command result envelope used by binding calls.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

@@ -1,0 +1,7 @@
+{
+  "command": "ping",
+  "payload": {
+    "kind": "ping"
+  },
+  "requestId": "phase-1-minimal-command"
+}

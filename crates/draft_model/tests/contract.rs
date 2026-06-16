@@ -14,7 +14,7 @@ fn contract_deserializes_ping_and_version_envelopes() {
     .expect("ping command envelope should deserialize");
 
     assert_eq!(ping.command, CommandName::Ping);
-    assert!(matches!(ping.payload, CommandPayload::Ping));
+    assert!(matches!(ping.payload, CommandPayload::Ping(_)));
     assert_eq!(ping.request_id.as_deref(), Some("req-ping-1"));
 
     let version: CommandEnvelope = serde_json::from_value(json!({
@@ -24,7 +24,7 @@ fn contract_deserializes_ping_and_version_envelopes() {
     .expect("version command envelope should deserialize");
 
     assert_eq!(version.command, CommandName::Version);
-    assert!(matches!(version.payload, CommandPayload::Version));
+    assert!(matches!(version.payload, CommandPayload::Version(_)));
     assert_eq!(version.request_id, None);
 }
 

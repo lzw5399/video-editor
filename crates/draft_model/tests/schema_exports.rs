@@ -6,7 +6,7 @@ use std::{
 
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope,
+    CommandResultEnvelope, PingCommandPayload, VersionCommandPayload,
 };
 use schemars::schema_for;
 use ts_rs::{Config, TS};
@@ -25,19 +25,23 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     let schema_path = root.join("schemas/command.schema.json");
     let generated_dir = root.join("apps/desktop-electron/src/generated");
 
-    fs::create_dir_all(schema_path.parent().expect("schema path should have parent"))
-        .expect("schema directory should be created");
+    fs::create_dir_all(
+        schema_path
+            .parent()
+            .expect("schema path should have parent"),
+    )
+    .expect("schema directory should be created");
     fs::create_dir_all(&generated_dir).expect("generated TypeScript directory should be created");
 
-    let schema = schema_for!(CommandEnvelope);
-    let schema_json =
-        serde_json::to_string_pretty(&schema).expect("command schema should serialize");
+    let schema_json = command_schema_json();
     fs::write(&schema_path, format!("{schema_json}\n")).expect("command schema should be written");
 
     write_ts(
         generated_dir.join("CommandEnvelope.ts"),
         &[
             export_decl::<CommandName>(),
+            export_decl::<PingCommandPayload>(),
+            export_decl::<VersionCommandPayload>(),
             export_decl::<CommandPayload>(),
             export_decl::<CommandEnvelope>(),
         ],
@@ -74,7 +78,6 @@ fn write_ts(path: PathBuf, declarations: &[String]) {
 fn schema_fixtures_validate_command_contracts() {
     let root = project_root();
     let fixture_dir = root.join("fixtures/draft");
-    let schema_path = root.join("schemas/command.schema.json");
     let positive = BTreeSet::from(["minimal-command.json"]);
     let negative = BTreeSet::from(["invalid-unknown-field.json"]);
 
@@ -106,10 +109,8 @@ fn schema_fixtures_validate_command_contracts() {
         "every draft JSON fixture must be explicitly classified"
     );
 
-    let schema_json: serde_json::Value = serde_json::from_slice(
-        &fs::read(&schema_path).expect("generated command schema should exist"),
-    )
-    .expect("generated command schema should parse as JSON");
+    let schema_json: serde_json::Value = serde_json::from_str(&command_schema_json())
+        .expect("generated command schema should parse");
     let schema =
         jsonschema::validator_for(&schema_json).expect("generated command schema should compile");
 
@@ -140,4 +141,9 @@ fn read_fixture(fixture_dir: &Path, fixture_name: &str) -> serde_json::Value {
         &fs::read(fixture_dir.join(fixture_name)).expect("fixture should be readable"),
     )
     .expect("fixture should parse as JSON")
+}
+
+fn command_schema_json() -> String {
+    let schema = schema_for!(CommandEnvelope);
+    serde_json::to_string_pretty(&schema).expect("command schema should serialize")
 }
