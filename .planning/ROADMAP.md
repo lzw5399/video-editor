@@ -33,9 +33,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Scaffold Rust workspace, Electron app, and Node binding shell
-- [ ] 01-02: Add FFmpeg/ffprobe discovery and runtime configuration
-- [ ] 01-03: Add schema, fixture, golden, and CI test harness
+- [ ] 01-01-PLAN.md - Scaffold Rust workspace, Electron app, and Node binding shell
+- [ ] 01-02-PLAN.md - Add FFmpeg/ffprobe discovery and runtime configuration
+- [ ] 01-03-PLAN.md - Add schema, fixture, golden, and CI test harness
 
 ### Phase 2: Draft And Material System
 **Goal**: Establish `.veproj` drafts, Jianying-aligned schema concepts, material import/probing, and save/open integrity.
@@ -136,4 +136,3 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
-
