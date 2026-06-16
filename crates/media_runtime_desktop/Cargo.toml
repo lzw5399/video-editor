@@ -1,0 +1,13 @@
+[package]
+name = "media_runtime_desktop"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+media_runtime = { path = "../media_runtime" }
