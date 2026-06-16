@@ -25,4 +25,8 @@ impl FfmpegExecutor for DesktopFfmpegExecutor {
     fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output> {
         Command::new(binary).args(["-version"]).output()
     }
+
+    fn run(&self, binary: &Path, args: &[String]) -> std::io::Result<Output> {
+        Command::new(binary).args(args).output()
+    }
 }

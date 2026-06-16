@@ -29,4 +29,7 @@ pub trait FfmpegExecutor {
 
     /// Run a version probe with explicit process arguments.
     fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output>;
+
+    /// Run an FFmpeg-family process with explicit process arguments.
+    fn run(&self, binary: &Path, args: &[String]) -> std::io::Result<Output>;
 }
