@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/workspace_anchor"]
+members = [
+  "crates/draft_model",
+  "crates/draft_commands",
+  "crates/engine_core",
+  "crates/render_graph",
+  "crates/ffmpeg_compiler",
+]
 resolver = "3"
 
 [workspace.package]
@@ -9,11 +15,6 @@ license = "UNLICENSED"
 
 [workspace.metadata.video-editor]
 planned-members = [
-  "crates/draft_model",
-  "crates/draft_commands",
-  "crates/engine_core",
-  "crates/render_graph",
-  "crates/ffmpeg_compiler",
   "crates/media_runtime",
   "crates/media_runtime_desktop",
   "crates/preview_service",

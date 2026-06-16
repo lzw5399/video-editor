@@ -3,5 +3,21 @@
 version = 4
 
 [[package]]
-name = "workspace_anchor"
+name = "draft_commands"
+version = "0.1.0"
+
+[[package]]
+name = "draft_model"
+version = "0.1.0"
+
+[[package]]
+name = "engine_core"
+version = "0.1.0"
+
+[[package]]
+name = "ffmpeg_compiler"
+version = "0.1.0"
+
+[[package]]
+name = "render_graph"
 version = "0.1.0"
