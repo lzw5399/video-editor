@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CommandEnvelope",
+  "description": "Rust-owned command envelope accepted by the Electron binding boundary.",
+  "type": "object",
+  "properties": {
+    "command": {
+      "$ref": "#/$defs/CommandName"
+    },
+    "payload": {
+      "$ref": "#/$defs/CommandPayload"
+    },
+    "requestId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "command",
+    "payload"
+  ],
+  "$defs": {
+    "CommandName": {
+      "description": "Phase 1 command names supported by the Rust contract.",
+      "type": "string",
+      "enum": [
+        "ping",
+        "version"
+      ]
+    },
+    "CommandPayload": {
+      "description": "Phase 1 command payloads.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "ping"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "version"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
