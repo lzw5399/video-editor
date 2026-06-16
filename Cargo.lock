@@ -507,6 +507,11 @@ dependencies = [
 [[package]]
 name = "media_runtime"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror",
+ "which",
+]
 
 [[package]]
 name = "media_runtime_desktop"
@@ -1144,6 +1149,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23939e44bb9a5d7576fa2b563dc2e136628f1224e88a8deed09e04858b77871f"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "which"
+version = "8.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

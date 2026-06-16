@@ -11,7 +11,7 @@ use media_runtime::{
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
-fn discover_runtime_config_prefers_explicit_env_paths_before_path() {
+fn discovery_runtime_config_prefers_explicit_env_paths_before_path() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("env-before-path");
     let env_ffmpeg = sandbox.bin("env", "ffmpeg", "ffmpeg version env-build\n", "", 0);
@@ -47,7 +47,7 @@ fn discover_runtime_config_prefers_explicit_env_paths_before_path() {
 }
 
 #[test]
-fn discover_runtime_config_falls_back_to_path_when_env_vars_are_absent() {
+fn discovery_runtime_config_falls_back_to_path_when_env_vars_are_absent() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("path-success");
     let path_ffmpeg = sandbox.bin("path", "ffmpeg", "ffmpeg version path-build\n", "", 0);
@@ -66,7 +66,7 @@ fn discover_runtime_config_falls_back_to_path_when_env_vars_are_absent() {
 }
 
 #[test]
-fn missing_binary_error_includes_kind_checked_paths_and_remediation() {
+fn discovery_missing_binary_error_includes_kind_checked_paths_and_remediation() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("missing");
     let missing_ffmpeg = sandbox.root.join("does-not-exist-ffmpeg");
@@ -89,7 +89,7 @@ fn missing_binary_error_includes_kind_checked_paths_and_remediation() {
 }
 
 #[test]
-fn bad_binary_error_uses_bounded_output_summary() {
+fn discovery_bad_binary_error_uses_bounded_output_summary() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("bad-binary");
     let long_stderr = "x".repeat(MAX_STDERR_SUMMARY_BYTES + 128);
@@ -140,14 +140,7 @@ impl Sandbox {
         Box::leak(dir.into_boxed_path())
     }
 
-    fn bin(
-        &self,
-        dir: &str,
-        name: &str,
-        stdout: &str,
-        stderr: &str,
-        exit_code: i32,
-    ) -> PathBuf {
+    fn bin(&self, dir: &str, name: &str, stdout: &str, stderr: &str, exit_code: i32) -> PathBuf {
         let path = self.dir(dir).join(name);
         let script = format!(
             "#!/bin/sh\nprintf '{}'\nprintf '{}' >&2\nexit {exit_code}\n",

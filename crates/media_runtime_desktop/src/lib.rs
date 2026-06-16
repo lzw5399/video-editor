@@ -2,9 +2,10 @@
 //!
 //! This crate is the desktop backend for `media_runtime::FfmpegExecutor`.
 //! Electron can inject this service at the app shell boundary. It does not
-//! download, bundle, redistribute, discover, or run FFmpeg in this plan.
+//! download, bundle, or redistribute FFmpeg in this plan.
 
 use std::path::Path;
+use std::process::{Command, Output};
 
 use media_runtime::FfmpegExecutor;
 
@@ -19,5 +20,9 @@ impl FfmpegExecutor for DesktopFfmpegExecutor {
 
     fn can_execute(&self, binary: &Path) -> bool {
         binary.is_file()
+    }
+
+    fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output> {
+        Command::new(binary).args(["-version"]).output()
     }
 }

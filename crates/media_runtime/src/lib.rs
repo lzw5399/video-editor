@@ -1,11 +1,19 @@
 //! FFmpeg process runtime boundary.
 //!
-//! This crate owns the service boundary for FFmpeg and ffprobe execution. Later
-//! plans add env/PATH discovery, version probes, progress reporting, and
-//! structured runtime errors here. Pure draft and timeline semantic crates must
-//! not depend on this trait.
+//! This crate owns the service boundary for FFmpeg and ffprobe execution. Pure
+//! draft and timeline semantic crates must not depend on this trait.
 
 use std::path::Path;
+use std::process::Output;
+
+mod discovery;
+mod error;
+
+pub use discovery::{
+    BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
+    discover_runtime_config, probe_binary_version, resolve_binary,
+};
+pub use error::{DiscoveryError, DiscoveryErrorKind};
 
 /// Service-boundary trait for executing FFmpeg-family binaries.
 ///
@@ -17,8 +25,8 @@ pub trait FfmpegExecutor {
     fn executor_name(&self) -> &'static str;
 
     /// Returns whether this executor can attempt to run a binary at `binary`.
-    ///
-    /// Phase 1 implementations may answer conservatively. Later discovery work
-    /// will probe `ffmpeg -version` and `ffprobe -version` through this boundary.
     fn can_execute(&self, binary: &Path) -> bool;
+
+    /// Run a version probe with explicit process arguments.
+    fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output>;
 }
