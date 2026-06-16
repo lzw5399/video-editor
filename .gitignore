@@ -8,6 +8,9 @@
 **/build/
 **/out/
 **/.vite/
+**/native/
+**/test-results/
+**/playwright-report/
 
 # Native addon build outputs
 **/*.node
