@@ -440,17 +440,15 @@ test:
 |---|-------|---------|---------------|
 | A1 | Electron native binding load failures may appear in Electron but not plain Node if loader paths or module formats differ. | Common Pitfalls | Planner should keep the Electron smoke test in Phase 1 instead of relying only on Node-level tests. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should CI target Node 24.12.0 exactly or an LTS range?**
    - What we know: Local Node is 24.12.0; Vite 8 requires Node 20.19+ or 22.12+. [VERIFIED: local command, CITED: https://vite.dev/guide/]
-   - What's unclear: The project has not chosen a CI Node version policy beyond requiring guidance. [VERIFIED: CONTEXT.md]
-   - Recommendation: Pin `.nvmrc`/CI to `24.12.0` for exact local parity in Phase 1, and document that Electron's bundled Node is separate from system Node. [VERIFIED: local command, CITED: https://www.electronjs.org/docs/latest/tutorial/tutorial-prerequisites]
+   - Resolution: Pin `.nvmrc` and CI to Node `24.12.0` for exact local parity in Phase 1, and document that Electron's bundled Node is separate from system Node. [VERIFIED: local command, CITED: https://www.electronjs.org/docs/latest/tutorial/tutorial-prerequisites]
 
 2. **Should generated schema/TS files be committed?**
    - What we know: Phase 1 requires contract drift tests and Rust-owned generated contracts. [VERIFIED: CONTEXT.md]
-   - What's unclear: The user has not explicitly chosen committed generated files vs generated-on-test only. [VERIFIED: CONTEXT.md]
-   - Recommendation: Commit generated schema/TS files and make `just test` fail if regeneration changes them. [VERIFIED: CONTEXT.md]
+   - Resolution: Commit generated schema/TS files and make `just test` fail if regeneration changes them. [VERIFIED: CONTEXT.md]
 
 ## Environment Availability
 
