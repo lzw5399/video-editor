@@ -19,7 +19,7 @@ Users can reliably import media, edit clips on a familiar Jianying-style timelin
 ### Active
 
 - [ ] Provide a Jianying-like desktop editing workspace with media, preview, inspector, and multi-track timeline regions.
-- [ ] Use Jianying-style concepts across product language, documentation, schema, and core model: draft, material, track, segment, target/source time range, main track magnet, canvas adjustment, keyframe, sticker, text bubble, text effect, filter, transition.
+- [ ] Use Jianying-style concepts consistently across desktop UI, Rust core, IPC commands, documentation, schema, and tests: draft, material, track, segment, target/source time range, main track magnet, canvas adjustment, keyframe, sticker, text bubble, text effect, filter, transition.
 - [ ] Store project state in a self-owned `.veproj` project bundle with a canonical `project.json` source of truth.
 - [ ] Implement Rust-owned project, media, timeline, command, undo/redo, snapping, render graph, and FFmpeg compilation layers.
 - [ ] Support an MVP editor flow: import video/image/audio, arrange clips on tracks, split/trim/move/delete, add text/subtitle and BGM, preview, save/open, and export MP4.
@@ -38,7 +38,7 @@ Users can reliably import media, edit clips on a familiar Jianying-style timelin
 
 The project is guided by `AI_Video_Editing_Single_Engine_Guideline.md`, with the important correction that the current target is a general desktop video editor, not a talking-head editor. Kdenlive is the main reference for editor capability boundaries, project bin/timeline/monitor/export organization, and backend-model discipline. MLT is the main reference for media engine abstractions such as producer, playlist, tractor/multitrack, filter, transition, consumer, and profile.
 
-`reference/pyJianYingDraft` is used as a vocabulary and compatibility reference. Its draft, material, track, segment, source/target time range, canvas adjustment, keyframe, text, sticker, effect, filter, transition, and template concepts should shape both user-facing language and the core project schema. Do not invent a second conceptual vocabulary when Jianying terminology is already clear.
+`reference/pyJianYingDraft` is used as a vocabulary and compatibility reference. Its draft, material, track, segment, source/target time range, canvas adjustment, keyframe, text, sticker, effect, filter, transition, and template concepts should shape the desktop UI, Rust core domain model, IPC command names, project schema, tests, and documentation. Do not invent a second conceptual vocabulary when Jianying terminology is already clear.
 
 The application should feel like a restrained Jianying-style editor rather than a generic dashboard. The first screen should be the editor workspace: top feature categories, left material/effect library, center preview, right property inspector, and bottom multi-track timeline. MVP may leave advanced categories as placeholders, but the layout and interaction model should be established early.
 
@@ -46,7 +46,7 @@ The application should feel like a restrained Jianying-style editor rather than 
 
 - **Architecture**: UI emits commands; Rust core owns project and timeline semantics. No UI code may directly construct FFmpeg commands.
 - **Project format**: `.veproj/project.json` is the canonical source of truth. Render graphs, FFmpeg scripts, thumbnails, waveform data, proxy files, and preview caches are derived artifacts.
-- **Terminology**: Product language, docs, schema, and core model should follow Jianying concepts wherever possible. Prefer draft/material/track/segment/keyframe/filter/transition-style terms over invented equivalents.
+- **Terminology**: Product language, desktop code, Rust domain types, IPC commands, docs, schema, and tests should follow Jianying concepts wherever possible. Prefer draft/material/track/segment/keyframe/filter/transition-style terms over invented equivalents.
 - **Time model**: Core time math must use integer microseconds, frame indices, or rational frame rates. Avoid naked floating-point time in persisted semantics.
 - **Rendering**: Render Graph isolates editing semantics from FFmpeg. FFmpeg Runtime executes jobs and reports progress/errors; it does not decide editing behavior.
 - **References**: Kdenlive and MLT are conceptual references only. Do not copy GPL code, assets, XML definitions, presets, or UI implementation.
