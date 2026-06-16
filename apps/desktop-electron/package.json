@@ -6,7 +6,8 @@
   "main": "dist/main/index.cjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "pnpm run build:native && vite build --mode main && vite build --mode preload && vite build",
+    "build:electron": "vite build --mode main && vite build --mode preload && vite build",
+    "build": "pnpm run build:native && pnpm run build:electron",
     "build:native": "napi build --manifest-path ../../crates/bindings_node/Cargo.toml --platform --release --output-dir native --js index.cjs --dts index.d.ts",
     "test": "pnpm run build && playwright test"
   },

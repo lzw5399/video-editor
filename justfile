@@ -11,8 +11,15 @@ dev:
 
 build:
   pnpm install --frozen-lockfile
-  pnpm run build
+  pnpm run build:rust
+  pnpm --filter @video-editor/desktop build
 
 test:
   pnpm install --frozen-lockfile
-  pnpm run test
+  pnpm run test:rust
+  cargo test -p draft_model schema -- --nocapture
+  cargo test -p media_runtime discovery -- --nocapture
+  cargo test -p bindings_node -- --nocapture
+  pnpm --filter @video-editor/desktop test
+  cargo test -p testkit render_smoke -- --nocapture
+  git diff --exit-code schemas apps/desktop-electron/src/generated

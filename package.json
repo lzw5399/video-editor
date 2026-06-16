@@ -9,7 +9,17 @@
   },
   "scripts": {
     "dev": "pnpm --recursive --if-present dev",
-    "build": "cargo build --workspace --locked && pnpm --recursive --if-present build",
-    "test": "cargo test --workspace --locked && pnpm --recursive --if-present test"
+    "build:rust": "cargo check --workspace --locked && cargo build --workspace --locked",
+    "build:native": "pnpm --filter @video-editor/desktop build:native",
+    "build:desktop": "pnpm --filter @video-editor/desktop build",
+    "build": "pnpm run build:rust && pnpm run build:desktop",
+    "test:rust": "cargo fmt --all --check && cargo check --workspace --locked && cargo test --workspace --locked",
+    "test:schema": "cargo test -p draft_model schema -- --nocapture",
+    "test:runtime": "cargo test -p media_runtime discovery -- --nocapture",
+    "test:bindings": "cargo test -p bindings_node -- --nocapture",
+    "test:desktop": "pnpm --filter @video-editor/desktop test",
+    "test:render-smoke": "cargo test -p testkit render_smoke -- --nocapture",
+    "test:contracts": "git diff --exit-code schemas apps/desktop-electron/src/generated",
+    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:runtime && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:contracts"
   }
 }
