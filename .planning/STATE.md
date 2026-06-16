@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-08-PLAN.md
-last_updated: "2026-06-16T22:38:50.117Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-06-16T22:51:20.313Z"
 last_activity: 2026-06-16 -- Phase 1 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -26,35 +26,36 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 1 (Foundation And Golden Harness) — EXECUTING
-Plan: 7 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-06-16 -- Phase 1 execution started
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 7 min
-- Total execution time: 48 min
+- Total execution time: 53 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 7 | 48 min | 7 min |
+| 01 | 8 | 53 min | 7 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 48 min
+- Last 5 plans: 40 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
 | Phase 01 P06 | 9 min | 2 tasks | 10 files |
 | Phase 01 P05 | 10 min | 2 tasks | 16 files |
 | Phase 01 P08 | 11 min | 2 tasks | 14 files |
+| Phase 01 P07 | 5 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Kept the Electron privileged boundary in main/preload: renderer code calls only window.videoEditorCore and never imports Electron or Node APIs. — Plan 01-08 implements the required renderer-to-Rust smoke while preserving context isolation and narrow IPC channels.
 - [Phase 01]: Built the native addon through approved @napi-rs/cli during desktop build/test instead of committing native artifacts. — Generated native outputs are platform-specific build artifacts and should be reproducible rather than committed.
 - [Phase 01]: Used the Rust-generated CommandEnvelope and CommandResultEnvelope TypeScript contracts at the Electron IPC/test boundary. — This preserves D-06 by avoiding handwritten parallel IPC contract types.
+- [Phase 01]: Extended media_runtime::FfmpegExecutor with a generic argument-array process runner so render smoke helpers stay inside the runtime boundary. — The existing runtime trait only supported version probes; the render smoke needed FFmpeg/ffprobe execution without shell-concatenated commands.
 
 ### Pending Todos
 
@@ -104,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-16T22:38:07.453Z
-Stopped at: Completed 01-08-PLAN.md
+Last session: 2026-06-16T22:50:48.647Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
