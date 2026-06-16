@@ -1,6 +1,6 @@
 use bindings_node::{execute_command, ping, version};
 use draft_model::CommandErrorKind;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[test]
 fn ping_returns_standard_ok_envelope() {
@@ -18,7 +18,10 @@ fn version_returns_standard_ok_envelope() {
 
     assert_eq!(envelope["ok"], true);
     assert_eq!(envelope["data"]["coreVersion"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(envelope["data"]["contractVersion"], draft_model::DRAFT_MODEL_VERSION);
+    assert_eq!(
+        envelope["data"]["contractVersion"],
+        draft_model::DRAFT_MODEL_VERSION
+    );
     assert_eq!(envelope["error"], Value::Null);
     assert_eq!(envelope["events"], json!([]));
 }
@@ -40,7 +43,10 @@ fn execute_command_matches_direct_phase_one_envelopes() {
     .expect("command version returns a JSON envelope");
 
     assert_eq!(ping_from_command, ping().expect("direct ping returns"));
-    assert_eq!(version_from_command, version().expect("direct version returns"));
+    assert_eq!(
+        version_from_command,
+        version().expect("direct version returns")
+    );
 }
 
 #[test]
