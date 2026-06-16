@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -67,4 +68,76 @@ fn write_ts(path: PathBuf, declarations: &[String]) {
         ts.push_str(declaration);
     }
     fs::write(path, ts).expect("TypeScript contract should be written");
+}
+
+#[test]
+fn schema_fixtures_validate_command_contracts() {
+    let root = project_root();
+    let fixture_dir = root.join("fixtures/draft");
+    let schema_path = root.join("schemas/command.schema.json");
+    let positive = BTreeSet::from(["minimal-command.json"]);
+    let negative = BTreeSet::from(["invalid-unknown-field.json"]);
+
+    let fixture_names = fs::read_dir(&fixture_dir)
+        .expect("fixtures/draft directory should exist")
+        .map(|entry| {
+            let entry = entry.expect("fixture directory entry should be readable");
+            let path = entry.path();
+            assert_eq!(
+                path.extension().and_then(|extension| extension.to_str()),
+                Some("json"),
+                "fixtures/draft should only contain JSON fixtures: {}",
+                path.display()
+            );
+            entry
+                .file_name()
+                .into_string()
+                .expect("fixture names should be UTF-8")
+        })
+        .collect::<BTreeSet<_>>();
+
+    let expected = positive.union(&negative).copied().collect::<BTreeSet<_>>();
+    let actual = fixture_names
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        actual, expected,
+        "every draft JSON fixture must be explicitly classified"
+    );
+
+    let schema_json: serde_json::Value = serde_json::from_slice(
+        &fs::read(&schema_path).expect("generated command schema should exist"),
+    )
+    .expect("generated command schema should parse as JSON");
+    let schema =
+        jsonschema::validator_for(&schema_json).expect("generated command schema should compile");
+
+    for fixture_name in positive {
+        let value = read_fixture(&fixture_dir, fixture_name);
+        serde_json::from_value::<CommandEnvelope>(value.clone())
+            .expect("positive fixture should deserialize through Rust model");
+        schema
+            .validate(&value)
+            .expect("positive fixture should validate against JSON Schema");
+    }
+
+    for fixture_name in negative {
+        let value = read_fixture(&fixture_dir, fixture_name);
+        assert!(
+            serde_json::from_value::<CommandEnvelope>(value.clone()).is_err(),
+            "negative fixture should fail Rust model deserialization: {fixture_name}"
+        );
+        assert!(
+            schema.validate(&value).is_err(),
+            "negative fixture should fail JSON Schema validation: {fixture_name}"
+        );
+    }
+}
+
+fn read_fixture(fixture_dir: &Path, fixture_name: &str) -> serde_json::Value {
+    serde_json::from_slice(
+        &fs::read(fixture_dir.join(fixture_name)).expect("fixture should be readable"),
+    )
+    .expect("fixture should parse as JSON")
 }
