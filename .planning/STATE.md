@@ -11,7 +11,7 @@ progress:
   completed_phases: 0
   total_plans: 9
   completed_plans: 5
-  percent: 0
+  percent: 56
 ---
 
 # Project State
@@ -30,25 +30,25 @@ Plan: 6 of 9
 Status: Ready to execute
 Last activity: 2026-06-16 -- Phase 1 execution started
 
-Progress: [████░░░░░░] 44%
+Progress: [██████░░░░] 56%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
-- Average duration: 4 min
-- Total execution time: 18 min
+- Total plans completed: 5
+- Average duration: 5 min
+- Total execution time: 27 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 4 | 18 min | 4 min |
+| 01 | 5 | 27 min | 5 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 18 min
+- Last 5 plans: 27 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -75,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Documented FFmpeg as local env/PATH discovery only for Phase 1, with no download, bundling, redistribution, or license review. — This preserves D-12 and avoids implying FFmpeg binary distribution before packaging/release work reviews licensing obligations.
 - [Phase 01]: Kept the Node-API surface limited to ping, version, and execute_command. — Plan 01-04 implements D-05 and avoids premature editor semantics at the native boundary.
 - [Phase 01]: Returned binding data by serializing draft_model CommandResultEnvelope values instead of defining JavaScript-owned contracts. — This preserves D-06 and D-08 by keeping Rust-owned contracts as the source of truth.
+- [Phase 01]: Generated command schema and TypeScript contracts from Rust tests, with drift checked by cargo test plus git diff. — Plan 01-06 implements D-06 for the command envelope artifacts consumed by Electron.
+- [Phase 01]: Command fixtures under fixtures/draft are explicitly classified as positive or negative and validated through serde plus JSON Schema. — This implements TEST-01/D-07 for Phase 1 command fixtures and prevents unclassified fixture drift.
 
 ### Pending Todos
 
