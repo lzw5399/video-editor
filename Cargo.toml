@@ -1,0 +1,23 @@
+[workspace]
+members = ["crates/workspace_anchor"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95.0"
+license = "UNLICENSED"
+
+[workspace.metadata.video-editor]
+planned-members = [
+  "crates/draft_model",
+  "crates/draft_commands",
+  "crates/engine_core",
+  "crates/render_graph",
+  "crates/ffmpeg_compiler",
+  "crates/media_runtime",
+  "crates/media_runtime_desktop",
+  "crates/preview_service",
+  "crates/project_store",
+  "crates/bindings_node",
+  "crates/testkit",
+]

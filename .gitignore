@@ -1,1 +1,29 @@
-reference
+# Rust
+/target/
+
+# Node and Electron
+/node_modules/
+**/node_modules/
+**/dist/
+**/build/
+**/out/
+**/.vite/
+
+# Native addon build outputs
+**/*.node
+**/*.dylib
+**/*.dll
+**/*.so
+
+# Generated media and preview/export artifacts
+/fixtures/media-generated/*
+!/fixtures/media-generated/.gitkeep
+**/.ve-preview-cache/
+**/.ve-waveform-cache/
+**/.ve-proxy-cache/
+**/render-output/
+
+# Local/editor noise
+.DS_Store
+*.log
+*.tmp
