@@ -42,7 +42,7 @@ Plans:
 - [x] 01-03-PLAN.md - Create service-boundary crate shells and runtime-boundary docs
 - [x] 01-04-PLAN.md - Implement the Node-API binding crate
 - [ ] 01-05-PLAN.md - Implement FFmpeg/ffprobe discovery and command-envelope runtime probe
-- [ ] 01-06-PLAN.md - Generate schema/TypeScript contracts and validate fixtures
+- [x] 01-06-PLAN.md - Generate schema/TypeScript contracts and validate fixtures
 - [ ] 01-07-PLAN.md - Add tiny FFmpeg render smoke harness
 - [ ] 01-08-PLAN.md - Create minimal Electron shell and binding smoke
 - [ ] 01-09-PLAN.md - Finalize `just` build/test gates and CI
@@ -160,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation And Golden Harness | 4/9 | In Progress|  |
+| 1. Foundation And Golden Harness | 5/9 | In Progress|  |
 | 2. Draft And Material System | 0/4 | Not started | - |
 | 3. Timeline Command Core | 0/4 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
