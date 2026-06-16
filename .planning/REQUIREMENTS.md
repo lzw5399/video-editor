@@ -9,8 +9,8 @@
 
 - [x] **FOUND-01**: Developer can build a Rust workspace and Electron desktop shell from a clean checkout.
 - [x] **FOUND-02**: Electron can call the Rust core through a typed binding/API boundary.
-- [ ] **FOUND-03**: The app can discover configured FFmpeg and ffprobe binaries and report actionable errors when unavailable.
-- [ ] **FOUND-04**: The repository includes deterministic fixtures and golden test harnesses before feature work depends on media rendering.
+- [x] **FOUND-03**: The app can discover configured FFmpeg and ffprobe binaries and report actionable errors when unavailable.
+- [x] **FOUND-04**: The repository includes deterministic fixtures and golden test harnesses before feature work depends on media rendering.
 
 ### Draft Format
 
@@ -116,8 +116,8 @@
 |-------------|-------|--------|
 | FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Complete |
-| FOUND-03 | Phase 1 | Pending |
-| FOUND-04 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Complete |
+| FOUND-04 | Phase 1 | Complete |
 | DRAFT-01 | Phase 2 | Pending |
 | DRAFT-02 | Phase 2 | Pending |
 | DRAFT-03 | Phase 2 | Pending |

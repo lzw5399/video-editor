@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-06-16T21:31:43.825Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-06-16T21:40:43.559Z"
 last_activity: 2026-06-16 -- Phase 1 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
-  percent: 22
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 1 (Foundation And Golden Harness) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-06-16 -- Phase 1 execution started
 
-Progress: [██░░░░░░░░] 22%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 2
-- Average duration: 5 min
-- Total execution time: 10 min
+- Total plans completed: 3
+- Average duration: 4 min
+- Total execution time: 13 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2 | 10 min | 5 min |
+| 01 | 3 | 13 min | 4 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 10 min
+- Last 5 plans: 13 min
 - Trend: baseline established
 
 ## Accumulated Context
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Replaced the temporary workspace anchor with the first real Phase 1 semantic crate members. — Plan 01-02 moved the Rust workspace from a temporary anchor to real pure semantic crates so later bindings and service boundaries have stable package targets.
 - [Phase 01]: Kept Phase 1 command scope to ping/version envelopes and standardized unsupported-command errors. — Real timeline editing commands are intentionally deferred; this protects the Phase 1 boundary from premature command semantics.
 - [Phase 01]: Used generic CommandResultEnvelope<T> so typed ping/version responses can travel through the same ok/error/events result shape. — The generic result keeps typed Rust data while preserving the standardized envelope required by the Electron binding contract.
+- [Phase 01]: Placed runtime/platform traits at consuming service boundaries: media_runtime, project_store, and preview_service. — Plan 01-03 established service-boundary ownership so future desktop, mobile, and server backends are injected at boundaries instead of leaking platform traits into semantic crates.
+- [Phase 01]: Deferred HardwareEncoder to later preview/export pipeline work and did not create a Rust type for it. — Hardware encoder selection depends on real encode presets, runtime capabilities, and packaging constraints, all outside Plan 01-03.
+- [Phase 01]: Documented FFmpeg as local env/PATH discovery only for Phase 1, with no download, bundling, redistribution, or license review. — This preserves D-12 and avoids implying FFmpeg binary distribution before packaging/release work reviews licensing obligations.
 
 ### Pending Todos
 
@@ -86,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-16T21:31:43.823Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-06-16T21:39:40.792Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
