@@ -27,6 +27,7 @@ pub struct CommandEnvelope {
 pub enum CommandName {
     Ping,
     Version,
+    ProbeMediaRuntime,
 }
 
 /// Phase 1 command payloads.
@@ -35,6 +36,7 @@ pub enum CommandName {
 pub enum CommandPayload {
     Ping(PingCommandPayload),
     Version(VersionCommandPayload),
+    ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
 }
 
 /// Payload accepted by the Phase 1 `ping` command.
@@ -46,6 +48,11 @@ pub struct PingCommandPayload {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct VersionCommandPayload {}
+
+/// Payload accepted by the Phase 1 non-editing runtime probe command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProbeMediaRuntimeCommandPayload {}
 
 /// Standard command result envelope used by binding calls.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -72,6 +79,7 @@ pub struct CommandError {
 pub enum CommandErrorKind {
     UnsupportedCommand,
     InvalidPayload,
+    RuntimeDiscoveryFailed,
     Internal,
 }
 

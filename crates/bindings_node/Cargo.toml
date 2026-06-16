@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 draft_model = { path = "../draft_model" }
+media_runtime = { path = "../media_runtime" }
 napi = { version = "3.9.2", features = ["serde-json"] }
 napi-derive = "3.5.6"
 serde = { version = "1.0.228", features = ["derive"] }

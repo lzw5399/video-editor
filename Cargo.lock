@@ -42,6 +42,7 @@ name = "bindings_node"
 version = "0.1.0"
 dependencies = [
  "draft_model",
+ "media_runtime",
  "napi",
  "napi-build",
  "napi-derive",

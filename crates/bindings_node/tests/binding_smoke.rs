@@ -100,7 +100,10 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
         envelope["data"]["ffmpeg"]["source"]["variable"],
         "VE_FFMPEG_PATH"
     );
-    assert_eq!(envelope["data"]["ffmpeg"]["version"], "ffmpeg version binding-test");
+    assert_eq!(
+        envelope["data"]["ffmpeg"]["version"],
+        "ffmpeg version binding-test"
+    );
     assert_eq!(envelope["data"]["ffprobe"]["kind"], "ffprobe");
     assert_eq!(envelope["data"]["ffprobe"]["path"], json!(ffprobe));
     assert_eq!(envelope["data"]["ffprobe"]["source"]["kind"], "env");
@@ -108,7 +111,10 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
         envelope["data"]["ffprobe"]["source"]["variable"],
         "VE_FFPROBE_PATH"
     );
-    assert_eq!(envelope["data"]["ffprobe"]["version"], "ffprobe version binding-test");
+    assert_eq!(
+        envelope["data"]["ffprobe"]["version"],
+        "ffprobe version binding-test"
+    );
 }
 
 #[test]

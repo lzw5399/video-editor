@@ -6,7 +6,8 @@ use std::{
 
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope, PingCommandPayload, VersionCommandPayload,
+    CommandResultEnvelope, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
+    VersionCommandPayload,
 };
 use schemars::schema_for;
 use ts_rs::{Config, TS};
@@ -42,6 +43,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
             export_decl::<VersionCommandPayload>(),
+            export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<CommandPayload>(),
             export_decl::<CommandEnvelope>(),
         ],

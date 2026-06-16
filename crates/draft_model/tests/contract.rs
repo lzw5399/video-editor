@@ -5,7 +5,7 @@ use draft_model::{
 use serde_json::json;
 
 #[test]
-fn contract_deserializes_ping_and_version_envelopes() {
+fn contract_deserializes_phase_one_command_envelopes() {
     let ping: CommandEnvelope = serde_json::from_value(json!({
         "command": "ping",
         "payload": { "kind": "ping" },
@@ -26,6 +26,23 @@ fn contract_deserializes_ping_and_version_envelopes() {
     assert_eq!(version.command, CommandName::Version);
     assert!(matches!(version.payload, CommandPayload::Version(_)));
     assert_eq!(version.request_id, None);
+
+    let runtime_probe: CommandEnvelope = serde_json::from_value(json!({
+        "command": "probeMediaRuntime",
+        "payload": { "kind": "probeMediaRuntime" },
+        "requestId": "req-runtime-probe"
+    }))
+    .expect("runtime probe command envelope should deserialize");
+
+    assert_eq!(runtime_probe.command, CommandName::ProbeMediaRuntime);
+    assert!(matches!(
+        runtime_probe.payload,
+        CommandPayload::ProbeMediaRuntime(_)
+    ));
+    assert_eq!(
+        runtime_probe.request_id.as_deref(),
+        Some("req-runtime-probe")
+    );
 }
 
 #[test]
