@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-06-16T21:40:43.559Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-06-16T21:51:37.480Z"
 last_activity: 2026-06-16 -- Phase 1 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 9
-  completed_plans: 3
-  percent: 33
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 1 (Foundation And Golden Harness) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-06-16 -- Phase 1 execution started
 
@@ -51,6 +51,8 @@ Progress: [███░░░░░░░] 33%
 - Last 5 plans: 13 min
 - Trend: baseline established
 
+| Phase 01 P04 | 5 min | 2 tasks | 6 files |
+
 ## Accumulated Context
 
 ### Decisions
@@ -70,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Placed runtime/platform traits at consuming service boundaries: media_runtime, project_store, and preview_service. — Plan 01-03 established service-boundary ownership so future desktop, mobile, and server backends are injected at boundaries instead of leaking platform traits into semantic crates.
 - [Phase 01]: Deferred HardwareEncoder to later preview/export pipeline work and did not create a Rust type for it. — Hardware encoder selection depends on real encode presets, runtime capabilities, and packaging constraints, all outside Plan 01-03.
 - [Phase 01]: Documented FFmpeg as local env/PATH discovery only for Phase 1, with no download, bundling, redistribution, or license review. — This preserves D-12 and avoids implying FFmpeg binary distribution before packaging/release work reviews licensing obligations.
+- [Phase 01]: Kept the Node-API surface limited to ping, version, and execute_command. — Plan 01-04 implements D-05 and avoids premature editor semantics at the native boundary.
+- [Phase 01]: Returned binding data by serializing draft_model CommandResultEnvelope values instead of defining JavaScript-owned contracts. — This preserves D-06 and D-08 by keeping Rust-owned contracts as the source of truth.
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-16T21:39:40.792Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-06-16T21:51:37.478Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
