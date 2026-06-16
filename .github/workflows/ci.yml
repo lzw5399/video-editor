@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  phase-1-gates:
+    name: Phase 1 build and test gates
+    runs-on: ubuntu-latest
+    env:
+      DISPLAY: ":99"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system FFmpeg tools for tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg xvfb
+          ffmpeg -version
+          ffprobe -version
+          Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 &
+
+      - name: Install Rust 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.95.0
+          rustc --version
+          cargo --version
+
+      - name: Set up Node 24.12.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+
+      - name: Activate pnpm 10.32.1 with Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+          node --version
+          pnpm --version
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            cargo install just --locked --version 1.53.0
+          fi
+          just --version
+
+      - name: Build
+        run: just build
+
+      - name: Test
+        run: just test
