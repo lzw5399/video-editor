@@ -1,7 +1,14 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 
+import type { CommandEnvelope } from "../generated/CommandEnvelope";
+import { executeCommand, ping, version } from "./nativeBinding";
+
 const isDevelopment = process.env.VITE_DEV_SERVER_URL !== undefined;
+
+ipcMain.handle("core:ping", () => ping());
+ipcMain.handle("core:version", () => version());
+ipcMain.handle("core:executeCommand", (_event, command: CommandEnvelope) => executeCommand(command));
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
