@@ -75,6 +75,25 @@ fn execute_command_rejects_non_phase_one_command_with_structured_error() {
 }
 
 #[test]
+fn execute_command_rejects_mismatched_command_payload_kind() {
+    let envelope = execute_command(json!({
+        "command": "version",
+        "payload": { "kind": "ping" },
+        "requestId": "req-mismatch"
+    }))
+    .expect("mismatched command returns an error envelope");
+
+    assert_eq!(envelope["ok"], false);
+    assert_eq!(envelope["data"], Value::Null);
+    assert_eq!(
+        envelope["error"]["kind"],
+        serde_json::to_value(CommandErrorKind::InvalidPayload).unwrap()
+    );
+    assert_eq!(envelope["error"]["command"], "version");
+    assert_eq!(envelope["events"], json!([]));
+}
+
+#[test]
 fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("binding-probe-ok");

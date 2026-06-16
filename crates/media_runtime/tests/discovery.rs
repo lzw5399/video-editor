@@ -1,11 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use media_runtime::{
     BinaryKind, DiscoveryErrorKind, DiscoverySource, MAX_STDERR_SUMMARY_BYTES,
-    discover_runtime_config,
+    discover_runtime_config, probe_binary_version_with_timeout,
 };
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -116,6 +116,34 @@ fn discovery_bad_binary_error_uses_bounded_output_summary() {
     );
 }
 
+#[test]
+fn discovery_version_probe_times_out_for_hung_binary() {
+    let sandbox = Sandbox::new("hung-binary");
+    let hung_ffmpeg = sandbox.bin_sleep("env", "ffmpeg", 2);
+
+    let error = probe_binary_version_with_timeout(
+        BinaryKind::Ffmpeg,
+        hung_ffmpeg.clone(),
+        DiscoverySource::Env {
+            variable: "VE_FFMPEG_PATH".to_string(),
+        },
+        Duration::from_millis(100),
+    )
+    .expect_err("hung version probe should time out");
+
+    assert_eq!(error.kind, DiscoveryErrorKind::VersionProbeFailed);
+    assert_eq!(error.binary, BinaryKind::Ffmpeg);
+    assert_eq!(error.checked_paths, vec![hung_ffmpeg]);
+    assert!(
+        error
+            .stderr_summary
+            .as_deref()
+            .unwrap_or_default()
+            .contains("timed out"),
+        "timeout errors should be actionable"
+    );
+}
+
 struct Sandbox {
     root: PathBuf,
 }
@@ -147,6 +175,20 @@ impl Sandbox {
             shell_escape_single_quotes(stdout),
             shell_escape_single_quotes(stderr)
         );
+        fs::write(&path, script).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        path
+    }
+
+    fn bin_sleep(&self, dir: &str, name: &str, seconds: u64) -> PathBuf {
+        let path = self.dir(dir).join(name);
+        let script = format!("#!/bin/sh\nsleep {seconds}\nprintf 'ffmpeg version late\\n'\n");
         fs::write(&path, script).unwrap();
 
         #[cfg(unix)]

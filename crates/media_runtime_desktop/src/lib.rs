@@ -30,3 +30,44 @@ impl FfmpegExecutor for DesktopFfmpegExecutor {
         Command::new(binary).args(args).output()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use media_runtime::FfmpegExecutor;
+
+    use super::DesktopFfmpegExecutor;
+
+    #[test]
+    fn run_times_out_for_hung_processes() {
+        let sandbox = std::env::temp_dir().join(format!(
+            "video-editor-desktop-runtime-timeout-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&sandbox).unwrap();
+        let binary = sandbox.join("ffmpeg");
+        fs::write(&binary, "#!/bin/sh\nsleep 2\n").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_millis(100));
+        let error = executor
+            .run(&binary, &[])
+            .expect_err("hung process should time out");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(error.to_string().contains("timed out"));
+
+        let _ = fs::remove_dir_all(sandbox);
+    }
+}

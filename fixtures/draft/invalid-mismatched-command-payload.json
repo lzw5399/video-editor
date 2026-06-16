@@ -1,0 +1,7 @@
+{
+  "command": "version",
+  "payload": {
+    "kind": "ping"
+  },
+  "requestId": "fixture-invalid-mismatch"
+}

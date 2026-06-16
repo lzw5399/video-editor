@@ -103,3 +103,16 @@ fn contract_rejects_unknown_top_level_fields() {
 
     assert!(result.is_err(), "unknown envelope fields must fail");
 }
+
+#[test]
+fn contract_rejects_mismatched_command_and_payload_kind() {
+    let result = serde_json::from_value::<CommandEnvelope>(json!({
+        "command": "version",
+        "payload": { "kind": "ping" }
+    }));
+
+    assert!(
+        result.is_err(),
+        "command name and payload kind must describe the same operation"
+    );
+}
