@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 
 - [x] 01-01-PLAN.md - Create root tooling, workspace manifests, and command entrypoints
-- [ ] 01-02-PLAN.md - Create pure Rust semantic crate shells and command contracts
+- [x] 01-02-PLAN.md - Create pure Rust semantic crate shells and command contracts
 - [ ] 01-03-PLAN.md - Create service-boundary crate shells and runtime-boundary docs
 - [ ] 01-04-PLAN.md - Implement the Node-API binding crate
 - [ ] 01-05-PLAN.md - Implement FFmpeg/ffprobe discovery and command-envelope runtime probe
@@ -160,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation And Golden Harness | 1/9 | In Progress|  |
+| 1. Foundation And Golden Harness | 2/9 | In Progress|  |
 | 2. Draft And Material System | 0/4 | Not started | - |
 | 3. Timeline Command Core | 0/4 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |

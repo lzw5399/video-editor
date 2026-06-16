@@ -8,7 +8,7 @@
 ### Foundation
 
 - [x] **FOUND-01**: Developer can build a Rust workspace and Electron desktop shell from a clean checkout.
-- [ ] **FOUND-02**: Electron can call the Rust core through a typed binding/API boundary.
+- [x] **FOUND-02**: Electron can call the Rust core through a typed binding/API boundary.
 - [ ] **FOUND-03**: The app can discover configured FFmpeg and ffprobe binaries and report actionable errors when unavailable.
 - [ ] **FOUND-04**: The repository includes deterministic fixtures and golden test harnesses before feature work depends on media rendering.
 
@@ -69,7 +69,7 @@
 
 ### Testing And Quality
 
-- [ ] **TEST-01**: Schema and model tests validate every golden draft fixture.
+- [x] **TEST-01**: Schema and model tests validate every golden draft fixture.
 - [ ] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
 - [ ] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
 - [ ] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
@@ -115,7 +115,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FOUND-01 | Phase 1 | Complete |
-| FOUND-02 | Phase 1 | Pending |
+| FOUND-02 | Phase 1 | Complete |
 | FOUND-03 | Phase 1 | Pending |
 | FOUND-04 | Phase 1 | Pending |
 | DRAFT-01 | Phase 2 | Pending |
@@ -152,7 +152,7 @@
 | UI-03 | Phase 4 | Pending |
 | UI-04 | Phase 4 | Pending |
 | UI-05 | Phase 4 | Pending |
-| TEST-01 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 3 | Pending |
 | TEST-03 | Phase 5 | Pending |
 | TEST-04 | Phase 5 | Pending |
