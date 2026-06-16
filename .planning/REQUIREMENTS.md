@@ -7,7 +7,7 @@
 
 ### Foundation
 
-- [ ] **FOUND-01**: Developer can build a Rust workspace and Electron desktop shell from a clean checkout.
+- [x] **FOUND-01**: Developer can build a Rust workspace and Electron desktop shell from a clean checkout.
 - [ ] **FOUND-02**: Electron can call the Rust core through a typed binding/API boundary.
 - [ ] **FOUND-03**: The app can discover configured FFmpeg and ffprobe binaries and report actionable errors when unavailable.
 - [ ] **FOUND-04**: The repository includes deterministic fixtures and golden test harnesses before feature work depends on media rendering.
@@ -114,7 +114,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Pending |
 | FOUND-03 | Phase 1 | Pending |
 | FOUND-04 | Phase 1 | Pending |
@@ -161,6 +161,7 @@
 | TEST-07 | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 45 total
 - Mapped to phases: 45
 - Unmapped: 0
