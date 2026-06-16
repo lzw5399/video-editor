@@ -15,7 +15,6 @@ pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
 /// Rust-owned command envelope accepted by the Electron binding boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct CommandEnvelope {
     pub command: CommandName,
     pub payload: CommandPayload,
@@ -25,7 +24,6 @@ pub struct CommandEnvelope {
 /// Phase 1 command names supported by the Rust contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export)]
 pub enum CommandName {
     Ping,
     Version,
@@ -34,7 +32,6 @@ pub enum CommandName {
 /// Phase 1 command payloads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-#[ts(export)]
 pub enum CommandPayload {
     Ping,
     Version,
@@ -43,7 +40,6 @@ pub enum CommandPayload {
 /// Standard command result envelope used by binding calls.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct CommandResultEnvelope<T> {
     pub ok: bool,
     pub data: Option<T>,
@@ -54,7 +50,6 @@ pub struct CommandResultEnvelope<T> {
 /// Structured error payload for failed command execution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct CommandError {
     pub kind: CommandErrorKind,
     pub message: String,
@@ -64,7 +59,6 @@ pub struct CommandError {
 /// Stable command error kinds shared by the binding boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export)]
 pub enum CommandErrorKind {
     UnsupportedCommand,
     InvalidPayload,
@@ -74,7 +68,6 @@ pub enum CommandErrorKind {
 /// Event emitted with a command result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct CommandEvent {
     pub kind: String,
     pub message: Option<String>,
@@ -83,7 +76,6 @@ pub struct CommandEvent {
 /// Response data returned by the `ping` command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct PingResponse {
     pub pong: bool,
 }
@@ -91,7 +83,6 @@ pub struct PingResponse {
 /// Response data returned by the `version` command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(export)]
 pub struct VersionResponse {
     pub core_version: String,
     pub contract_version: String,
