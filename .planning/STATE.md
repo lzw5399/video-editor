@@ -11,7 +11,7 @@ progress:
   completed_phases: 0
   total_plans: 9
   completed_plans: 1
-  percent: 0
+  percent: 11
 ---
 
 # Project State
@@ -30,28 +30,26 @@ Plan: 2 of 9
 Status: Ready to execute
 Last activity: 2026-06-16 -- Phase 1 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: n/a
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 5 min
+- Total execution time: 5 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 1 | 5 min | 5 min |
 
 **Recent Trend:**
 
-- Last 5 plans: n/a
-- Trend: n/a
-
-| Phase 01 P01 | 5 min | 2 tasks | 11 files |
+- Last 5 plans: 5 min
+- Trend: baseline established
 
 ## Accumulated Context
 
@@ -65,6 +63,7 @@ Recent decisions affecting current work:
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.
 - Initialization: Kdenlive/MLT/pyJianYingDraft are references only, not production runtimes.
 - Initialization: Each phase needs executable test gates.
+- Phase 01 Plan 01: Pinned root Rust/Node/pnpm toolchains and established `just` as the public command surface for Phase 1.
 
 ### Pending Todos
 
