@@ -18,7 +18,7 @@
 中层参考模型：MLT
 底层媒体执行：FFmpeg
 自研核心：Timeline Model + Engine Core + Render Graph + FFmpeg Compiler
-长期语言：Rust 为主，C++ 只在深度绑定 libav* / 特殊性能模块时使用
+长期语言：Rust core
 ```
 
 也就是：
