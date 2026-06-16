@@ -10,6 +10,7 @@ members = [
   "crates/project_store",
   "crates/preview_service",
   "crates/testkit",
+  "crates/bindings_node",
 ]
 resolver = "3"
 
@@ -19,6 +20,4 @@ rust-version = "1.95.0"
 license = "UNLICENSED"
 
 [workspace.metadata.video-editor]
-planned-members = [
-  "crates/bindings_node",
-]
+planned-members = []
