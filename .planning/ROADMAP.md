@@ -13,7 +13,7 @@ This milestone builds a desktop-first Jianying-style video editor MVP on a Rust-
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures
+- [x] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures (completed 2026-06-16)
 - [ ] **Phase 2: Draft And Material System** - `.veproj` draft bundle, Jianying-aligned schema, material import/probing, and save/open validation
 - [ ] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics
 - [ ] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration
@@ -45,7 +45,7 @@ Plans:
 - [x] 01-06-PLAN.md - Generate schema/TypeScript contracts and validate fixtures
 - [x] 01-07-PLAN.md - Add tiny FFmpeg render smoke harness
 - [x] 01-08-PLAN.md - Create minimal Electron shell and binding smoke
-- [ ] 01-09-PLAN.md - Finalize `just` build/test gates and CI
+- [x] 01-09-PLAN.md - Finalize `just` build/test gates and CI
 
 ### Phase 2: Draft And Material System
 
@@ -160,7 +160,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation And Golden Harness | 8/9 | In Progress|  |
+| 1. Foundation And Golden Harness | 9/9 | Complete   | 2026-06-16 |
 | 2. Draft And Material System | 0/4 | Not started | - |
 | 3. Timeline Command Core | 0/4 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
