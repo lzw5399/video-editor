@@ -19,6 +19,8 @@ const TINY_WIDTH: u32 = 160;
 const TINY_HEIGHT: u32 = 90;
 const TINY_FPS: u32 = 10;
 const TINY_DURATION_SECONDS: f64 = 1.0;
+const TINY_DURATION_MIN_MICROS: u64 = 900_000;
+const TINY_DURATION_MAX_MICROS: u64 = 1_200_000;
 
 /// Result type for deterministic smoke helpers.
 pub type SmokeResult<T> = Result<T, SmokeError>;
@@ -71,6 +73,37 @@ impl TinyLavfiMedia {
     }
 }
 
+/// ffprobe metadata used by the Phase 1 render smoke harness.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmokeMetadata {
+    pub duration_microseconds: u64,
+    pub width: u32,
+    pub height: u32,
+    pub frame_rate_numerator: u32,
+    pub frame_rate_denominator: u32,
+    pub has_video_stream: bool,
+    pub has_audio_stream: bool,
+}
+
+/// Tiny render smoke output and parsed metadata.
+#[derive(Debug)]
+pub struct TinyRenderSmoke {
+    media: TinyLavfiMedia,
+    metadata: SmokeMetadata,
+}
+
+impl TinyRenderSmoke {
+    /// Path to the generated MP4 output. The file is removed when this value is dropped.
+    pub fn output_path(&self) -> &Path {
+        self.media.output_path()
+    }
+
+    /// Parsed ffprobe metadata for the generated output.
+    pub fn metadata(&self) -> &SmokeMetadata {
+        &self.metadata
+    }
+}
+
 /// Generate a tiny deterministic MP4 using FFmpeg lavfi sources.
 pub fn generate_tiny_lavfi_media() -> SmokeResult<TinyLavfiMedia> {
     let runtime = discover_runtime_config()?;
@@ -95,6 +128,94 @@ pub fn generate_tiny_lavfi_media() -> SmokeResult<TinyLavfiMedia> {
         _temp_dir: temp_dir,
         output_path,
     })
+}
+
+/// Generate tiny media and assert it through ffprobe metadata.
+pub fn run_tiny_render_smoke() -> SmokeResult<TinyRenderSmoke> {
+    let media = generate_tiny_lavfi_media()?;
+    let metadata = probe_media_metadata(media.output_path())?;
+    assert_tiny_smoke_metadata(&metadata)?;
+
+    Ok(TinyRenderSmoke { media, metadata })
+}
+
+/// Probe an existing media file with ffprobe and return metadata needed by the smoke gate.
+pub fn probe_media_metadata(path: impl AsRef<Path>) -> SmokeResult<SmokeMetadata> {
+    let path = path.as_ref();
+    if !path.is_file() {
+        return Err(SmokeError::new(format!(
+            "cannot probe missing media file {}",
+            path.display()
+        )));
+    }
+
+    let runtime = discover_runtime_config()?;
+    let executor = DesktopFfmpegExecutor;
+    let args = vec![
+        "-v".to_string(),
+        "error".to_string(),
+        "-output_format".to_string(),
+        "json".to_string(),
+        "-show_entries".to_string(),
+        "stream=codec_type,width,height,r_frame_rate,duration:format=duration".to_string(),
+        path.display().to_string(),
+    ];
+    let output = executor
+        .run(&runtime.ffprobe.path, &args)
+        .map_err(|error| {
+            SmokeError::new(format!(
+                "failed to launch ffprobe at {}: {error}",
+                runtime.ffprobe.path.display()
+            ))
+        })?;
+
+    if !output.status.success() {
+        return Err(SmokeError::new(format!(
+            "ffprobe metadata probe failed: stdout=`{}` stderr=`{}`",
+            bounded_summary(&output.stdout),
+            bounded_summary(&output.stderr)
+        )));
+    }
+
+    parse_ffprobe_metadata(&output.stdout)
+}
+
+/// Assert that smoke metadata matches the Phase 1 tiny lavfi contract.
+pub fn assert_tiny_smoke_metadata(metadata: &SmokeMetadata) -> SmokeResult<()> {
+    if !metadata.has_video_stream {
+        return Err(SmokeError::new("expected a video stream"));
+    }
+
+    if !metadata.has_audio_stream {
+        return Err(SmokeError::new("expected an audio stream"));
+    }
+
+    if metadata.width != TINY_WIDTH || metadata.height != TINY_HEIGHT {
+        return Err(SmokeError::new(format!(
+            "expected {TINY_WIDTH}x{TINY_HEIGHT}, got {}x{}",
+            metadata.width, metadata.height
+        )));
+    }
+
+    if metadata.frame_rate_denominator == 0
+        || metadata.frame_rate_numerator != TINY_FPS * metadata.frame_rate_denominator
+    {
+        return Err(SmokeError::new(format!(
+            "expected {TINY_FPS} fps, got {}/{}",
+            metadata.frame_rate_numerator, metadata.frame_rate_denominator
+        )));
+    }
+
+    if !(TINY_DURATION_MIN_MICROS..=TINY_DURATION_MAX_MICROS)
+        .contains(&metadata.duration_microseconds)
+    {
+        return Err(SmokeError::new(format!(
+            "expected about one second, got {} microseconds",
+            metadata.duration_microseconds
+        )));
+    }
+
+    Ok(())
 }
 
 fn run_ffmpeg_generate(
@@ -141,6 +262,105 @@ fn run_ffmpeg_generate(
     }
 
     Ok(())
+}
+
+fn parse_ffprobe_metadata(bytes: &[u8]) -> SmokeResult<SmokeMetadata> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
+        SmokeError::new(format!("failed to parse ffprobe JSON metadata: {error}"))
+    })?;
+    let streams = value
+        .get("streams")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| SmokeError::new("ffprobe JSON metadata did not include streams"))?;
+    let video_stream = streams.iter().find(|stream| {
+        stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("video")
+    });
+    let audio_stream = streams.iter().find(|stream| {
+        stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("audio")
+    });
+    let video_stream =
+        video_stream.ok_or_else(|| SmokeError::new("ffprobe did not report a video stream"))?;
+    let format_duration = value
+        .get("format")
+        .and_then(|format| format.get("duration"))
+        .and_then(serde_json::Value::as_str);
+    let stream_duration = video_stream
+        .get("duration")
+        .and_then(serde_json::Value::as_str);
+    let duration_microseconds = format_duration
+        .or(stream_duration)
+        .ok_or_else(|| SmokeError::new("ffprobe did not report media duration"))
+        .and_then(parse_decimal_seconds_to_microseconds)?;
+    let frame_rate = video_stream
+        .get("r_frame_rate")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| SmokeError::new("ffprobe did not report video frame rate"))
+        .and_then(parse_rational_frame_rate)?;
+
+    Ok(SmokeMetadata {
+        duration_microseconds,
+        width: json_u32(video_stream, "width")?,
+        height: json_u32(video_stream, "height")?,
+        frame_rate_numerator: frame_rate.0,
+        frame_rate_denominator: frame_rate.1,
+        has_video_stream: true,
+        has_audio_stream: audio_stream.is_some(),
+    })
+}
+
+fn json_u32(value: &serde_json::Value, key: &str) -> SmokeResult<u32> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| SmokeError::new(format!("ffprobe did not report numeric {key}")))
+}
+
+fn parse_decimal_seconds_to_microseconds(value: &str) -> SmokeResult<u64> {
+    let (whole, fractional) = value
+        .split_once('.')
+        .map_or((value, ""), |(whole, fractional)| (whole, fractional));
+    let whole_micros = whole
+        .parse::<u64>()
+        .map_err(|error| SmokeError::new(format!("invalid duration seconds `{value}`: {error}")))?
+        .saturating_mul(1_000_000);
+    let mut fraction = fractional
+        .chars()
+        .take(6)
+        .filter(|character| character.is_ascii_digit())
+        .collect::<String>();
+
+    while fraction.len() < 6 {
+        fraction.push('0');
+    }
+
+    let fraction_micros = if fraction.is_empty() {
+        0
+    } else {
+        fraction.parse::<u64>().map_err(|error| {
+            SmokeError::new(format!("invalid duration fraction `{value}`: {error}"))
+        })?
+    };
+
+    Ok(whole_micros.saturating_add(fraction_micros))
+}
+
+fn parse_rational_frame_rate(value: &str) -> SmokeResult<(u32, u32)> {
+    let (numerator, denominator) = value
+        .split_once('/')
+        .ok_or_else(|| SmokeError::new(format!("invalid frame rate `{value}`")))?;
+    let numerator = numerator.parse::<u32>().map_err(|error| {
+        SmokeError::new(format!("invalid frame rate numerator `{value}`: {error}"))
+    })?;
+    let denominator = denominator.parse::<u32>().map_err(|error| {
+        SmokeError::new(format!("invalid frame rate denominator `{value}`: {error}"))
+    })?;
+
+    if denominator == 0 {
+        return Err(SmokeError::new("frame rate denominator cannot be zero"));
+    }
+
+    Ok((numerator, denominator))
 }
 
 fn bounded_summary(bytes: &[u8]) -> String {

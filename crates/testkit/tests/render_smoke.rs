@@ -1,5 +1,5 @@
 use testkit::{
-    assert_tiny_smoke_metadata, probe_media_metadata, run_tiny_render_smoke, SmokeMetadata,
+    SmokeMetadata, assert_tiny_smoke_metadata, probe_media_metadata, run_tiny_render_smoke,
 };
 
 #[test]
