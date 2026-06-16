@@ -81,7 +81,10 @@ fn schema_fixtures_validate_command_contracts() {
     let root = project_root();
     let fixture_dir = root.join("fixtures/draft");
     let positive = BTreeSet::from(["minimal-command.json"]);
-    let negative = BTreeSet::from(["invalid-unknown-field.json"]);
+    let negative = BTreeSet::from([
+        "invalid-mismatched-command-payload.json",
+        "invalid-unknown-field.json",
+    ]);
 
     let fixture_names = fs::read_dir(&fixture_dir)
         .expect("fixtures/draft directory should exist")
