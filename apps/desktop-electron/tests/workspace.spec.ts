@@ -166,8 +166,10 @@ test("Chinese editor workspace opens with required regions and material states",
   try {
     await expectVisibleWorkspaceRegions(page);
 
-    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "滤镜", "调节"]) {
-      await expect(page.getByRole("button", { name: category })).toBeVisible();
+    const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
+
+    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"]) {
+      await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
     }
 
     await expect(page.getByText("预览将在下一阶段接入")).toBeVisible();
@@ -188,20 +190,22 @@ test("workspace panels switch categories without losing Chinese empty states", a
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await page.getByRole("button", { name: "文字" }).click();
+    const resourceTree = page.getByRole("navigation", { name: "资源分类" });
+
+    await resourceTree.getByRole("button", { name: "文字" }).click();
     await expect(page.getByRole("heading", { name: "文字" })).toBeVisible();
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
     await expect(page.getByLabel("文字对齐")).toBeVisible();
 
-    await page.getByRole("button", { name: "音频" }).click();
+    await resourceTree.getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
     await expect(page.getByRole("button", { name: "添加音频" })).toBeVisible();
     await expect(page.getByText("音量与静音")).toBeVisible();
 
-    for (const category of ["贴纸", "特效", "转场", "滤镜", "调节"]) {
-      await page.getByRole("button", { name: category }).click();
+    for (const category of ["贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"]) {
+      await resourceTree.getByRole("button", { name: category }).click();
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
-      await expect(page.getByText(`${category}面板已预留`)).toBeVisible();
+      await expect(page.getByText(`${category}功能已预留`)).toBeVisible();
       await expect(page.getByText(`当前阶段暂不提供${category}编辑，后续会通过剪辑核心命令接入对应能力。`)).toBeVisible();
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }

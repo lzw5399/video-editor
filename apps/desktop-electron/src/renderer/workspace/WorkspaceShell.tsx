@@ -95,6 +95,7 @@ export function WorkspaceShell({
           materialPath={materialPath}
           onBundlePathChange={onBundlePathChange}
           onMaterialPathChange={onMaterialPathChange}
+          onCategoryChange={onCategoryChange}
           onImportMaterial={onImportMaterial}
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}

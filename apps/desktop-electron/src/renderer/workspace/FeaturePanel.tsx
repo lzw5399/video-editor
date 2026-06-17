@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 
 import type { Material, TextAlignment, TextSegment } from "../../generated/Draft";
 import {
+  WORKSPACE_CATEGORIES,
+  WORKSPACE_CATEGORY_META,
   findFirstMaterialByKind,
   findTrackByKind,
   formatMaterialDetail,
@@ -23,6 +25,7 @@ type FeaturePanelProps = {
   materialPath: string;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
+  onCategoryChange: (category: WorkspaceCategory) => void;
   onImportMaterial: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -32,20 +35,62 @@ type FeaturePanelProps = {
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
 
+type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
+
+const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
+
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
+  let content: React.ReactElement;
+
   if (props.category === "媒体") {
-    return <MaterialPanel {...props} />;
+    content = <MaterialPanel {...props} />;
+  } else if (props.category === "文字") {
+    content = <TextPanel {...props} />;
+  } else if (props.category === "音频") {
+    content = <AudioPanel {...props} />;
+  } else {
+    content = <DeferredCategoryPanel category={props.category} />;
   }
 
-  if (props.category === "文字") {
-    return <TextPanel {...props} />;
-  }
+  return (
+    <div className="resource-panel-shell">
+      <ResourceCategoryTree activeCategory={props.category} onCategoryChange={props.onCategoryChange} />
+      <div className="resource-content-panel">{content}</div>
+    </div>
+  );
+}
 
-  if (props.category === "音频") {
-    return <AudioPanel {...props} />;
-  }
+function ResourceCategoryTree({
+  activeCategory,
+  onCategoryChange
+}: {
+  activeCategory: WorkspaceCategory;
+  onCategoryChange: (category: WorkspaceCategory) => void;
+}): React.ReactElement {
+  return (
+    <nav className="resource-category-tree" aria-label="资源分类">
+      {WORKSPACE_CATEGORIES.map((category) => {
+        const metadata = WORKSPACE_CATEGORY_META[category];
 
-  return <DeferredCategoryPanel category={props.category} />;
+        return (
+          <button
+            key={category}
+            type="button"
+            className={category === activeCategory ? "resource-category-button active" : "resource-category-button"}
+            aria-label={metadata.label}
+            aria-pressed={category === activeCategory}
+            title={metadata.label}
+            onClick={() => onCategoryChange(category)}
+          >
+            <span className="resource-category-symbol" aria-hidden="true">
+              {metadata.symbol}
+            </span>
+            <span className="resource-category-label">{metadata.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 function MaterialPanel({
@@ -58,6 +103,27 @@ function MaterialPanel({
   onRefreshMaterials,
   onListMissingMaterials
 }: FeaturePanelProps): React.ReactElement {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<MaterialFilter>("全部");
+  const filteredMaterials = useMemo(
+    () =>
+      workspace.materials.filter((material) => {
+        const matchesSearch =
+          search.trim().length === 0 ||
+          material.displayName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()) ||
+          material.uri.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
+        const matchesFilter =
+          filter === "全部" ||
+          (filter === "视频" && material.kind === "video") ||
+          (filter === "图片" && material.kind === "image") ||
+          (filter === "音频" && material.kind === "audio") ||
+          (filter === "丢失" && material.status !== "available");
+
+        return matchesSearch && matchesFilter;
+      }),
+    [filter, search, workspace.materials]
+  );
+
   return (
     <div className="feature-panel-content">
       <div className="panel-header">
@@ -78,12 +144,35 @@ function MaterialPanel({
         </label>
         <div className="button-row">
           <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
-            刷新素材
+            刷新
           </button>
           <button type="button" className="secondary-action" onClick={onListMissingMaterials}>
-            检查丢失素材
+            检查丢失
           </button>
         </div>
+      </div>
+
+      <div className="media-tool-row">
+        <input
+          aria-label="搜索素材"
+          placeholder="搜索素材"
+          value={search}
+          onChange={(event) => setSearch(event.currentTarget.value)}
+        />
+      </div>
+
+      <div className="material-filter-bar" role="group" aria-label="素材筛选">
+        {MATERIAL_FILTERS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={filter === value ? "active" : ""}
+            aria-pressed={filter === value}
+            onClick={() => setFilter(value)}
+          >
+            {value}
+          </button>
+        ))}
       </div>
 
       {workspace.materialDiagnostics.length === 0 ? null : (
@@ -94,7 +183,7 @@ function MaterialPanel({
         </div>
       )}
 
-      <MaterialList materials={workspace.materials} />
+      <MaterialList materials={filteredMaterials} />
     </div>
   );
 }
@@ -155,7 +244,13 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
         </button>
       </div>
 
-      <div className="field-stack">
+      <div className="function-chip-row" aria-label="文字功能">
+        <span>标题</span>
+        <span>字幕</span>
+        <span>样式</span>
+      </div>
+
+      <div className="function-card field-stack">
         <label className="field-row">
           <span>文字内容</span>
           <textarea value={content} onChange={(event) => setContent(event.currentTarget.value)} />
@@ -271,7 +366,13 @@ function AudioPanel({
         </button>
       </div>
 
-      <div className="field-stack">
+      <div className="function-chip-row" aria-label="音频功能">
+        <span>BGM</span>
+        <span>音效</span>
+        <span>淡入淡出</span>
+      </div>
+
+      <div className="function-card field-stack">
         <label className="field-row">
           <span>BGM素材</span>
           <select value={selectedMaterialId} onChange={(event) => setMaterialId(event.currentTarget.value)}>
@@ -294,7 +395,7 @@ function AudioPanel({
         </label>
       </div>
 
-      <div className="field-stack">
+      <div className="function-card field-stack">
         <h3>音量与静音</h3>
         <label className="field-row">
           <span>音量（毫音量）</span>
@@ -337,7 +438,7 @@ function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): R
         <h2>{category}</h2>
       </div>
       <div className="empty-state">
-        <strong>{category}面板已预留</strong>
+        <strong>{category}功能已预留</strong>
         <span>当前阶段暂不提供{category}编辑，后续会通过剪辑核心命令接入对应能力。</span>
       </div>
     </div>
@@ -361,7 +462,7 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
 
         return (
           <article className="material-row" aria-label={`素材 ${material.displayName}`} key={material.materialId}>
-            <div className="material-thumb">{formatMaterialKind(material.kind)}</div>
+            <div className="material-thumb" aria-hidden="true">{formatMaterialKind(material.kind)}</div>
             <div className="material-copy">
               <div className="material-title">
                 <strong>{material.displayName}</strong>
