@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { CommandState, TimelineSelection } from "../generated/CommandEnvelope";
-import type { MissingMaterialCommandDiagnostic } from "../generated/CommandResultEnvelope";
+import type { MissingMaterialCommandDiagnostic, PreviewStatus } from "../generated/CommandResultEnvelope";
 import type {
   Draft,
   Material,
@@ -59,9 +59,22 @@ export type WorkspaceState = {
   selection: TimelineSelection;
   materials: Material[];
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
+  preview: PreviewDisplayState;
   bindingStatus: BindingStatus;
   pendingCommand: string | null;
   commandError: string | null;
+};
+
+export type PreviewDisplayState = {
+  frameArtifactPath: string | null;
+  frameStatusLabel: string;
+  frameMetadataLabel: string;
+  segmentArtifactPath: string | null;
+  segmentStatusLabel: string;
+  segmentMetadataLabel: string;
+  error: string | null;
+  lastRequestedPlayhead: Microseconds | null;
+  lastRequestedRangeLabel: string | null;
 };
 
 export type SelectedTrackView = {
@@ -284,6 +297,17 @@ export function createInitialWorkspaceState(): WorkspaceState {
     selection: initialTimelineSelection,
     materials: initialWorkspaceDraft.materials,
     materialDiagnostics: [],
+    preview: {
+      frameArtifactPath: null,
+      frameStatusLabel: "等待请求预览帧",
+      frameMetadataLabel: "帧预览尚未生成",
+      segmentArtifactPath: null,
+      segmentStatusLabel: "等待生成预览片段",
+      segmentMetadataLabel: "片段预览尚未生成",
+      error: null,
+      lastRequestedPlayhead: null,
+      lastRequestedRangeLabel: null
+    },
     bindingStatus: {
       kind: "checking",
       label: "正在连接剪辑核心"
@@ -368,6 +392,16 @@ export function formatMaterialDetail(material: Material): string {
 
 export function formatCommandError(message: string): string {
   return `操作失败：${message}。请检查素材或撤销上一步后重试。`;
+}
+
+export function formatPreviewStatus(status: PreviewStatus): string {
+  const labels: Record<PreviewStatus, string> = {
+    generated: "已生成",
+    cached: "命中缓存",
+    invalidated: "已失效"
+  };
+
+  return labels[status];
 }
 
 export function materialStatusMessage(material: Material): string | null {

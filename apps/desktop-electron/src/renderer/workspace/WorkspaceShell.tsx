@@ -14,6 +14,8 @@ type WorkspaceShellProps = {
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
   onPlayheadChange: (value: number) => void;
+  onRequestPreviewFrame: () => void;
+  onRequestPreviewSegment: () => void;
   onImportMaterial: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -43,6 +45,8 @@ export function WorkspaceShell({
   onBundlePathChange,
   onMaterialPathChange,
   onPlayheadChange,
+  onRequestPreviewFrame,
+  onRequestPreviewSegment,
   onImportMaterial,
   onRefreshMaterials,
   onListMissingMaterials,
@@ -108,7 +112,16 @@ export function WorkspaceShell({
       </section>
 
       <section className="preview-monitor" aria-label="预览窗口">
-        <PreviewMonitor draftName={workspace.draft.metadata.name} bindingStatus={workspace.bindingStatus} playheadUs={playheadUs} />
+        <PreviewMonitor
+          draftName={workspace.draft.metadata.name}
+          bindingStatus={workspace.bindingStatus}
+          preview={workspace.preview}
+          pending={workspace.pendingCommand !== null}
+          playheadUs={playheadUs}
+          onPlayheadChange={onPlayheadChange}
+          onRequestPreviewFrame={onRequestPreviewFrame}
+          onRequestPreviewSegment={onRequestPreviewSegment}
+        />
       </section>
 
       <aside className="inspector-panel" aria-label="属性检查器">

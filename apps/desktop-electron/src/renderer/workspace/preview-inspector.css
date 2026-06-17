@@ -1,7 +1,7 @@
 .preview-shell {
   display: grid;
-  grid-template-rows: 32px minmax(0, 1fr) 40px 24px;
-  gap: 8px;
+  grid-template-rows: 30px minmax(0, 1fr) 40px 48px 24px;
+  gap: 6px;
   width: min(100%, 840px);
   min-width: 0;
 }
@@ -43,8 +43,8 @@
   place-items: center;
   width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 236px;
-  max-height: calc(100vh - 382px);
+  min-height: 196px;
+  max-height: calc(100vh - 392px);
   border: 1px solid #3a3a36;
   border-radius: 6px;
   background: #070707;
@@ -52,21 +52,31 @@
 
 .preview-placeholder {
   display: grid;
+  gap: 8px;
   place-items: center;
+  max-width: 100%;
   padding: 16px;
   color: #d8d6cf;
   text-align: center;
 }
 
-.preview-placeholder span {
+.preview-placeholder span,
+.preview-placeholder code,
+.preview-artifact-line code {
+  max-width: 100%;
+  overflow: hidden;
   color: #9b9890;
   font-size: 12px;
   line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview-transport {
+  display: grid;
+  grid-template-columns: 88px auto minmax(112px, 150px) auto;
   justify-content: center;
-  gap: 12px;
+  gap: 6px;
   overflow: hidden;
 }
 
@@ -78,16 +88,17 @@
 
 .preview-control-group {
   display: flex;
-  gap: 6px;
+  gap: 3px;
   min-width: 0;
 }
 
-.preview-icon-button {
+.preview-icon-button,
+.preview-command-button {
   display: grid;
-  flex: 0 0 32px;
+  flex: 0 0 28px;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 30px;
   padding: 0;
   border: 1px solid #3d3d38;
   border-radius: 4px;
@@ -98,15 +109,103 @@
   line-height: 1;
 }
 
-.preview-icon-button:disabled {
+.preview-icon-button:disabled,
+.preview-command-button:disabled {
   cursor: not-allowed;
   opacity: 0.56;
+}
+
+.preview-command-button {
+  flex-basis: 38px;
+  width: 38px;
+  font-size: 12px;
+}
+
+.preview-seek-control {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.preview-seek-control span {
+  overflow: hidden;
+  color: #9b9890;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-seek-control input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #f0eee8;
+  background: #161614;
+  font-size: 12px;
+  line-height: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-command-group {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.preview-artifact-panel {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.preview-artifact-line {
+  display: grid;
+  grid-template-columns: 52px 86px 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid #343431;
+  border-radius: 4px;
+  background: #191917;
+}
+
+.preview-artifact-line strong,
+.preview-artifact-line span {
+  overflow: hidden;
+  color: #aaa79f;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-artifact-line strong {
+  color: #f0eee8;
 }
 
 .preview-status-line {
   gap: 8px;
   justify-content: center;
   overflow: hidden;
+}
+
+.preview-status-line span[aria-label="预览状态"] {
+  min-width: 0;
+  overflow: hidden;
+  color: #d8d6cf;
+  text-overflow: ellipsis;
 }
 
 .inspector-tabs {

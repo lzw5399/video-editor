@@ -569,43 +569,6 @@ h2 {
   background: #151515;
 }
 
-.preview-shell {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) 32px;
-  gap: 12px;
-  width: min(100%, 840px);
-  min-width: 0;
-}
-
-.preview-stage {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 236px;
-  max-height: calc(100vh - 360px);
-  border: 1px solid #3a3a36;
-  border-radius: 6px;
-  background: #070707;
-}
-
-.preview-placeholder {
-  display: grid;
-  gap: 8px;
-  place-items: center;
-  padding: 16px;
-  color: #d8d6cf;
-  text-align: center;
-}
-
-.preview-placeholder strong {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.preview-placeholder span,
-.preview-status,
 .empty-state span,
 .track-header span,
 .segment-block span,
@@ -615,15 +578,6 @@ h2 {
   color: #9b9890;
   font-size: 12px;
   line-height: 1.4;
-}
-
-.preview-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
 }
 
 .status-dot {

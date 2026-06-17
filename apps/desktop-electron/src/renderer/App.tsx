@@ -6,6 +6,7 @@ import type {
   ImportMaterialResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
+  PreviewArtifactResponse,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type { Draft, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
@@ -20,6 +21,8 @@ import {
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSegmentCommand,
+  buildRequestPreviewFrameCommand,
+  buildRequestPreviewSegmentCommand,
   buildRedoTimelineEditCommand,
   buildSelectTimelineSegmentsCommand,
   buildSetSegmentVolumeCommand,
@@ -34,6 +37,8 @@ import {
   findFirstMaterialByKind,
   findTrackByKind,
   formatCommandError,
+  formatMicroseconds,
+  formatPreviewStatus,
   getSelectedSegmentView,
   getSelectedTrackView,
   initialWorkspaceDraft,
@@ -45,6 +50,9 @@ import { WorkspaceShell } from "./workspace/WorkspaceShell";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
+
+const PREVIEW_CACHE_ROOT = "/tmp/video-editor-preview-cache";
+const PREVIEW_SEGMENT_DURATION_US = 2_000_000;
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
@@ -210,6 +218,75 @@ export function App(): React.ReactElement {
         commandError: applied.errorMessage
       };
     });
+  }
+
+  async function executePreviewCommand(
+    buildCommand: DraftCommandBuilder,
+    pendingCommand: string,
+    applyResult: DraftCommandResultApplier<PreviewArtifactResponse>
+  ): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
+        const next = {
+          ...current,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    commandInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand,
+        commandError: null,
+        preview: {
+          ...current.preview,
+          error: null,
+          frameStatusLabel: pendingCommand === "请求预览帧" ? "正在请求预览帧" : current.preview.frameStatusLabel,
+          segmentStatusLabel: pendingCommand === "生成预览片段" ? "正在生成预览片段" : current.preview.segmentStatusLabel
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const command = buildCommand(workspaceRef.current);
+      const result = await window.videoEditorCore.executeCommand<PreviewArtifactResponse>(command);
+      setWorkspace((current) => {
+        const next = applyResult(current, result);
+        workspaceRef.current = next;
+        return next;
+      });
+    } catch (error: unknown) {
+      const message = previewCommandErrorMessage(error instanceof Error ? error.message : String(error), pendingCommand);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: null,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            error: message,
+            frameStatusLabel: pendingCommand === "请求预览帧" ? "预览帧失败" : current.preview.frameStatusLabel,
+            segmentStatusLabel: pendingCommand === "生成预览片段" ? "预览片段失败" : current.preview.segmentStatusLabel
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } finally {
+      commandInFlightRef.current = false;
+    }
   }
 
   async function handleImportMaterial(): Promise<void> {
@@ -534,6 +611,103 @@ export function App(): React.ReactElement {
     void executeTimelineCommand((current) => buildRedoTimelineEditCommand(current), "重做");
   }
 
+  function handleRequestPreviewFrame(): void {
+    const targetTime = Math.max(0, Math.round(playheadUs));
+
+    void executePreviewCommand(
+      (current) =>
+        buildRequestPreviewFrameCommand({
+          draft: current.draft,
+          cacheRoot: PREVIEW_CACHE_ROOT,
+          targetTime
+        }),
+      "请求预览帧",
+      (current, result) => {
+        if (!result.ok || result.data === null) {
+          const message = previewCommandErrorMessage(result, "请求预览帧");
+          return {
+            ...current,
+            pendingCommand: null,
+            commandError: message,
+            preview: {
+              ...current.preview,
+              frameStatusLabel: "预览帧失败",
+              error: message,
+              lastRequestedPlayhead: targetTime
+            }
+          };
+        }
+
+        return {
+          ...current,
+          pendingCommand: null,
+          commandError: null,
+          preview: {
+            ...current.preview,
+            frameArtifactPath: result.data.path,
+            frameStatusLabel: `预览帧${formatPreviewStatus(result.data.status)}`,
+            frameMetadataLabel: `${result.data.mimeType} · ${formatMicroseconds(result.data.targetTimerange.start)}`,
+            error: null,
+            lastRequestedPlayhead: targetTime
+          }
+        };
+      }
+    );
+  }
+
+  function handleRequestPreviewSegment(): void {
+    const targetTimerange = {
+      start: Math.max(0, Math.round(playheadUs)),
+      duration: PREVIEW_SEGMENT_DURATION_US
+    };
+
+    void executePreviewCommand(
+      (current) =>
+        buildRequestPreviewSegmentCommand({
+          draft: current.draft,
+          cacheRoot: PREVIEW_CACHE_ROOT,
+          targetTimerange
+        }),
+      "生成预览片段",
+      (current, result) => {
+        const rangeLabel = `${formatMicroseconds(targetTimerange.start)} - ${formatMicroseconds(
+          targetTimerange.start + targetTimerange.duration
+        )}`;
+
+        if (!result.ok || result.data === null) {
+          const message = previewCommandErrorMessage(result, "生成预览片段");
+          return {
+            ...current,
+            pendingCommand: null,
+            commandError: message,
+            preview: {
+              ...current.preview,
+              segmentStatusLabel: "预览片段失败",
+              error: message,
+              lastRequestedPlayhead: targetTimerange.start,
+              lastRequestedRangeLabel: rangeLabel
+            }
+          };
+        }
+
+        return {
+          ...current,
+          pendingCommand: null,
+          commandError: null,
+          preview: {
+            ...current.preview,
+            segmentArtifactPath: result.data.path,
+            segmentStatusLabel: `预览片段${formatPreviewStatus(result.data.status)}`,
+            segmentMetadataLabel: `${result.data.mimeType} · ${rangeLabel}`,
+            error: null,
+            lastRequestedPlayhead: targetTimerange.start,
+            lastRequestedRangeLabel: rangeLabel
+          }
+        };
+      }
+    );
+  }
+
   return (
     <WorkspaceShell
       workspace={workspace}
@@ -545,6 +719,8 @@ export function App(): React.ReactElement {
       onBundlePathChange={setBundlePath}
       onMaterialPathChange={setMaterialPath}
       onPlayheadChange={setPlayheadUs}
+      onRequestPreviewFrame={handleRequestPreviewFrame}
+      onRequestPreviewSegment={handleRequestPreviewSegment}
       onImportMaterial={handleImportMaterial}
       onRefreshMaterials={handleRefreshMaterials}
       onListMissingMaterials={handleListMissingMaterials}
@@ -564,6 +740,24 @@ export function App(): React.ReactElement {
       onRedoTimelineEdit={handleRedoTimelineEdit}
     />
   );
+}
+
+function previewCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string, actionLabel: string): string {
+  const kindLabels: Record<string, string> = {
+    previewServiceFailed: "预览服务失败",
+    runtimeDiscoveryFailed: "运行时发现失败",
+    invalidPayload: "命令参数无效",
+    internal: "内部错误"
+  };
+  const commandError =
+    typeof resultOrMessage === "string" ? null : resultOrMessage.error;
+  const message =
+    typeof resultOrMessage === "string"
+      ? resultOrMessage
+      : resultOrMessage.error?.message ?? "剪辑核心返回未知预览错误";
+  const kindLabel = commandError === null ? "预览命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
+
+  return `${actionLabel}失败（${kindLabel}）：${message}`;
 }
 
 function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {
