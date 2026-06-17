@@ -3,7 +3,7 @@
 import type { Draft, Material, MaterialId, MaterialStatus } from "./Draft";
 import type { CommandState, TimelineSelection } from "./CommandEnvelope";
 
-export type CommandErrorKind = "unsupportedCommand" | "invalidPayload" | "runtimeDiscoveryFailed" | "invalidProject" | "projectIoFailed" | "materialProbeFailed" | "missingMaterial" | "internal";
+export type CommandErrorKind = "unsupportedCommand" | "invalidPayload" | "runtimeDiscoveryFailed" | "invalidProject" | "projectIoFailed" | "materialProbeFailed" | "missingMaterial" | "invalidTimelineEdit" | "internal";
 export type CommandError = { kind: CommandErrorKind, message: string, command: string | null, };
 export type CommandEvent = { kind: string, message: string | null, };
 export type CommandResultEnvelope<T> = { ok: boolean, data: T | null, error: CommandError | null, events: Array<CommandEvent>, };

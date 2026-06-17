@@ -51,6 +51,12 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "importMaterial"
                 | "listMaterials"
                 | "listMissingMaterials"
+                | "addSegment"
+                | "selectTimelineSegments"
+                | "moveSegment"
+                | "splitSegment"
+                | "trimSegment"
+                | "deleteSegment"
         ) {
             return to_js_value(error_envelope(
                 CommandErrorKind::UnsupportedCommand,
@@ -92,6 +98,12 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             }
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
+        CommandName::AddSegment
+        | CommandName::SelectTimelineSegments
+        | CommandName::MoveSegment
+        | CommandName::SplitSegment
+        | CommandName::TrimSegment
+        | CommandName::DeleteSegment => timeline_command(envelope.command, envelope.payload),
     }
 }
 
@@ -207,6 +219,18 @@ fn list_missing_materials_command(
     }
 }
 
+fn timeline_command(command: CommandName, payload: CommandPayload) -> Result<serde_json::Value> {
+    let command = command_wire_name(&command);
+    match draft_commands::timeline::execute_timeline_edit(payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(error_envelope(
+            CommandErrorKind::InvalidTimelineEdit,
+            error.to_string(),
+            command,
+        )),
+    }
+}
+
 fn command_diagnostic(diagnostic: MissingMaterialDiagnostic) -> MissingMaterialCommandDiagnostic {
     MissingMaterialCommandDiagnostic {
         material_id: diagnostic.material_id,
@@ -287,6 +311,12 @@ fn runtime_discovery_message(error: DiscoveryError) -> String {
     }
 
     message
+}
+
+fn command_wire_name(command: &CommandName) -> Option<String> {
+    serde_json::to_value(command)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
 }
 
 fn raw_command_name(command: &serde_json::Value) -> Option<String> {

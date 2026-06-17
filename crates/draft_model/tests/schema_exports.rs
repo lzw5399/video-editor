@@ -5,18 +5,18 @@ use std::{
 };
 
 use draft_model::{
-    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
-    AddSegmentCommandPayload, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
+    AddSegmentCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
     DeleteSegmentCommandPayload, Draft, DraftId, DraftMetadata, DraftSchemaVersion, Filter,
     ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
     ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MoveSegmentCommandPayload,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingCommandPayload,
-    ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId,
-    SelectTimelineSegmentsCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
-    TargetTimerange, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
-    Transition, TrimSegmentCommandPayload, VersionCommandPayload,
+    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    MoveSegmentCommandPayload, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
+    RationalFrameRate, Segment, SegmentId, SelectTimelineSegmentsCommandPayload, SnappingSettings,
+    SourceTimerange, SplitSegmentCommandPayload, TargetTimerange, TimelineCommandResponse,
+    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -46,7 +46,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -55,6 +55,12 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<AddSegmentCommandPayload>(),
+            export_decl::<SelectTimelineSegmentsCommandPayload>(),
+            export_decl::<MoveSegmentCommandPayload>(),
+            export_decl::<SplitSegmentCommandPayload>(),
+            export_decl::<TrimSegmentCommandPayload>(),
+            export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -140,7 +146,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -149,6 +155,12 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<AddSegmentCommandPayload>(),
+            export_decl::<SelectTimelineSegmentsCommandPayload>(),
+            export_decl::<MoveSegmentCommandPayload>(),
+            export_decl::<SplitSegmentCommandPayload>(),
+            export_decl::<TrimSegmentCommandPayload>(),
+            export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -225,7 +237,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -234,6 +246,12 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<AddSegmentCommandPayload>(),
+            export_decl::<SelectTimelineSegmentsCommandPayload>(),
+            export_decl::<MoveSegmentCommandPayload>(),
+            export_decl::<SplitSegmentCommandPayload>(),
+            export_decl::<TrimSegmentCommandPayload>(),
+            export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -374,6 +392,30 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<TimelineCommandResponse>(
         &mut schema_value,
         "TimelineCommandResponse",
+    );
+    include_command_contract_schema::<AddSegmentCommandPayload>(
+        &mut schema_value,
+        "AddSegmentCommandPayload",
+    );
+    include_command_contract_schema::<SelectTimelineSegmentsCommandPayload>(
+        &mut schema_value,
+        "SelectTimelineSegmentsCommandPayload",
+    );
+    include_command_contract_schema::<MoveSegmentCommandPayload>(
+        &mut schema_value,
+        "MoveSegmentCommandPayload",
+    );
+    include_command_contract_schema::<SplitSegmentCommandPayload>(
+        &mut schema_value,
+        "SplitSegmentCommandPayload",
+    );
+    include_command_contract_schema::<TrimSegmentCommandPayload>(
+        &mut schema_value,
+        "TrimSegmentCommandPayload",
+    );
+    include_command_contract_schema::<DeleteSegmentCommandPayload>(
+        &mut schema_value,
+        "DeleteSegmentCommandPayload",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -607,6 +649,72 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "listMissingMaterials" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "addSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "selectTimelineSegments" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "selectTimelineSegments" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "moveSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "moveSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "splitSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "splitSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "trimSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "trimSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "deleteSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "deleteSegment" }
                     },
                     "required": ["kind"]
                 }

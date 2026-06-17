@@ -1,5 +1,47 @@
 {
   "$defs": {
+    "AddSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline add command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "sourceTimerange": {
+          "$ref": "#/$defs/SourceTimerange"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "segmentId",
+        "materialId",
+        "sourceTimerange",
+        "targetTimerange"
+      ],
+      "title": "AddSegmentCommandPayload",
+      "type": "object"
+    },
     "CommandEvent": {
       "additionalProperties": false,
       "description": "Event emitted with a command result.",
@@ -50,7 +92,13 @@
         "probeMediaRuntime",
         "importMaterial",
         "listMaterials",
-        "listMissingMaterials"
+        "listMissingMaterials",
+        "addSegment",
+        "selectTimelineSegments",
+        "moveSegment",
+        "splitSegment",
+        "trimSegment",
+        "deleteSegment"
       ],
       "type": "string"
     },
@@ -190,6 +238,236 @@
             "bundlePath"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline add command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addSegment",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "sourceTimerange": {
+              "$ref": "#/$defs/SourceTimerange"
+            },
+            "targetTimerange": {
+              "$ref": "#/$defs/TargetTimerange"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "segmentId",
+            "materialId",
+            "sourceTimerange",
+            "targetTimerange"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline selection command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "selectTimelineSegments",
+              "type": "string"
+            },
+            "segmentIds": {
+              "items": {
+                "$ref": "#/$defs/SegmentId"
+              },
+              "type": "array"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackIds": {
+              "items": {
+                "$ref": "#/$defs/TrackId"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentIds",
+            "trackIds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline move command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "moveSegment",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "targetStart": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "targetTrackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "targetTrackId",
+            "targetStart"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline split command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "splitSegment",
+              "type": "string"
+            },
+            "rightSegmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "splitAt": {
+              "$ref": "#/$defs/Microseconds"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "rightSegmentId",
+            "splitAt"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline trim command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "direction": {
+              "$ref": "#/$defs/TrimSegmentDirection"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "trimSegment",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "targetTimerange": {
+              "$ref": "#/$defs/TargetTimerange"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "direction",
+            "targetTimerange"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 timeline delete command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "deleteSegment",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -224,6 +502,32 @@
         "maxHistoryEntries",
         "snapping"
       ],
+      "type": "object"
+    },
+    "DeleteSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline delete command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId"
+      ],
+      "title": "DeleteSegmentCommandPayload",
       "type": "object"
     },
     "Draft": {
@@ -469,6 +773,40 @@
       "minimum": 0,
       "type": "integer"
     },
+    "MoveSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline move command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "targetStart": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "targetTrackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "targetTrackId",
+        "targetStart"
+      ],
+      "title": "MoveSegmentCommandPayload",
+      "type": "object"
+    },
     "RationalFrameRate": {
       "additionalProperties": false,
       "properties": {
@@ -544,6 +882,42 @@
     "SegmentId": {
       "type": "string"
     },
+    "SelectTimelineSegmentsCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline selection command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentIds": {
+          "items": {
+            "$ref": "#/$defs/SegmentId"
+          },
+          "type": "array"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackIds": {
+          "items": {
+            "$ref": "#/$defs/TrackId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentIds",
+        "trackIds"
+      ],
+      "title": "SelectTimelineSegmentsCommandPayload",
+      "type": "object"
+    },
     "SnappingSettings": {
       "additionalProperties": false,
       "description": "Deterministic snapping settings passed to Rust timeline semantics.",
@@ -575,6 +949,40 @@
         "start",
         "duration"
       ],
+      "type": "object"
+    },
+    "SplitSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline split command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "rightSegmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "splitAt": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "rightSegmentId",
+        "splitAt"
+      ],
+      "title": "SplitSegmentCommandPayload",
       "type": "object"
     },
     "TargetTimerange": {
@@ -708,6 +1116,48 @@
         "duration"
       ],
       "type": "object"
+    },
+    "TrimSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 timeline trim command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "direction": {
+          "$ref": "#/$defs/TrimSegmentDirection"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "direction",
+        "targetTimerange"
+      ],
+      "title": "TrimSegmentCommandPayload",
+      "type": "object"
+    },
+    "TrimSegmentDirection": {
+      "description": "Trim edge controlled by the Phase 3 timeline trim command.",
+      "enum": [
+        "left",
+        "right"
+      ],
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -808,6 +1258,108 @@
           "properties": {
             "kind": {
               "const": "listMissingMaterials"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "addSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "selectTimelineSegments"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "selectTimelineSegments"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "moveSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "moveSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "splitSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "splitSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "trimSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "trimSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "deleteSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "deleteSegment"
             }
           },
           "required": [

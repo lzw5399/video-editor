@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
+draft_commands = { path = "../draft_commands" }
 draft_model = { path = "../draft_model" }
 media_runtime = { path = "../media_runtime" }
 media_runtime_desktop = { path = "../media_runtime_desktop" }

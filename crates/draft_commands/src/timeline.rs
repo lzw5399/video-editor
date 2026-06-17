@@ -1,9 +1,9 @@
 //! Timeline command validation helpers.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, Material, MaterialId, MaterialKind, Microseconds, Segment,
-    SegmentId, SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track,
-    TrackId, TrackKind, TrimSegmentDirection, validate_draft,
+    CommandEvent, CommandPayload, CommandState, Draft, Material, MaterialId, MaterialKind,
+    Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange, TimelineCommandResponse,
+    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection, validate_draft,
 };
 
 use crate::{TimelineCommandError, TimelineCommandErrorKind};
@@ -125,6 +125,65 @@ pub fn main_video_track_id(draft: &Draft) -> Option<TrackId> {
         .iter()
         .find(|track| track.kind == TrackKind::Video)
         .map(|track| track.track_id.clone())
+}
+
+pub fn execute_timeline_edit(
+    payload: CommandPayload,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    match payload {
+        CommandPayload::AddSegment(payload) => add_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.segment_id,
+            payload.material_id,
+            payload.source_timerange,
+            payload.target_timerange,
+        ),
+        CommandPayload::SelectTimelineSegments(payload) => select_timeline_segments(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_ids,
+            payload.track_ids,
+        ),
+        CommandPayload::MoveSegment(payload) => move_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.target_track_id,
+            payload.target_start,
+        ),
+        CommandPayload::SplitSegment(payload) => split_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.right_segment_id,
+            payload.split_at,
+        ),
+        CommandPayload::TrimSegment(payload) => trim_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.direction,
+            payload.target_timerange,
+        ),
+        CommandPayload::DeleteSegment(payload) => delete_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+        ),
+        other => Err(TimelineCommandError::new(
+            TimelineCommandErrorKind::UnsupportedCommand {
+                command: format!("{:?}", other.command_name()),
+            },
+        )),
+    }
 }
 
 pub fn add_segment(

@@ -424,6 +424,7 @@ pub enum CommandErrorKind {
     ProjectIoFailed,
     MaterialProbeFailed,
     MissingMaterial,
+    InvalidTimelineEdit,
     Internal,
 }
 

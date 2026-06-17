@@ -305,8 +305,7 @@ fn execute_command_routes_timeline_add_move_and_selection() {
         json!({ "segmentIds": ["segment-a"], "trackIds": ["video-track"] })
     );
     assert_eq!(
-        selected["data"]["draft"],
-        moved["data"]["draft"],
+        selected["data"]["draft"], moved["data"]["draft"],
         "selection command must not mutate draft"
     );
 }
