@@ -4,7 +4,7 @@ use draft_model::{
 };
 use engine_core::{
     EngineProfile, frame_index_to_microseconds, normalize_draft, resolve_frame_state,
-    resolve_render_range,
+    resolve_render_range, EngineErrorKind, TextLayoutProfile,
 };
 
 #[test]
@@ -206,6 +206,66 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
             ]
         })
     );
+}
+
+#[test]
+fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
+    let normalized = normalize_draft(&frame_state_draft(), &EngineProfile::mvp_default())
+        .expect("draft should normalize");
+
+    let frame = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect("frame state should resolve");
+    let overlay = frame
+        .text_overlays
+        .first()
+        .expect("active text overlay should be resolved");
+
+    assert_eq!(overlay.font_family, "PingFang SC");
+    assert_eq!(overlay.font_candidate, "VE_TEXT_FONT_PATH");
+    assert_eq!(
+        overlay.fallback_candidates,
+        vec![
+            "VE_TEXT_FONT_PATH",
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+    );
+    assert_eq!(overlay.alignment, TextAlignment::Center);
+    assert_eq!(overlay.safe_area.left, 96);
+    assert_eq!(overlay.safe_area.top, 54);
+    assert_eq!(overlay.wrapping_policy.as_str(), "boundedWidth");
+    assert_eq!(overlay.layout_width, 1_728);
+    assert_eq!(overlay.layout_height, 58);
+}
+
+#[test]
+fn text_layout_missing_profile_returns_classified_engine_error() {
+    let profile = EngineProfile {
+        text_layout: None,
+        ..EngineProfile::mvp_default()
+    };
+    let normalized = normalize_draft(&frame_state_draft(), &profile)
+        .expect("missing text layout is classified when text overlay is resolved");
+
+    let error = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect_err("active text segment without profile should fail");
+
+    assert_eq!(error.kind, EngineErrorKind::MissingTextLayoutProfile);
+}
+
+#[test]
+fn text_layout_invalid_profile_returns_classified_engine_error() {
+    let profile = EngineProfile {
+        text_layout: Some(TextLayoutProfile::invalid_for_tests()),
+        ..EngineProfile::mvp_default()
+    };
+
+    let error = normalize_draft(&frame_state_draft(), &profile)
+        .expect_err("invalid text profile should not silently change layout");
+
+    assert_eq!(error.kind, EngineErrorKind::InvalidTextLayoutProfile);
 }
 
 fn frame_state_draft() -> Draft {
