@@ -1,23 +1,19 @@
-import type { Material } from "../../generated/Draft";
-import {
-  formatMicroseconds,
-  formatTrackKind,
-  WORKSPACE_CATEGORIES,
-  type WorkspaceCategory,
-  type WorkspaceState
-} from "../viewModel";
+import { WORKSPACE_CATEGORIES, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
+import { Timeline } from "./Timeline";
 
 type WorkspaceShellProps = {
   workspace: WorkspaceState;
   activeCategory: WorkspaceCategory;
   bundlePath: string;
   materialPath: string;
+  playheadUs: number;
   onCategoryChange: (category: WorkspaceCategory) => void;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
+  onPlayheadChange: (value: number) => void;
   onImportMaterial: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -33,9 +29,11 @@ export function WorkspaceShell({
   activeCategory,
   bundlePath,
   materialPath,
+  playheadUs,
   onCategoryChange,
   onBundlePathChange,
   onMaterialPathChange,
+  onPlayheadChange,
   onImportMaterial,
   onRefreshMaterials,
   onListMissingMaterials,
@@ -96,38 +94,8 @@ export function WorkspaceShell({
       </aside>
 
       <section className="timeline-panel" aria-label="时间线">
-        <div className="timeline-toolbar">
-          <span>时间线</span>
-          <span>主轨磁吸已开启</span>
-        </div>
-        <div className="timeline-ruler">
-          <span>00:00:00.000</span>
-          <span>00:00:05.000</span>
-          <span>00:00:10.000</span>
-        </div>
-        <div className="track-list">
-          {workspace.draft.tracks.map((track) => (
-            <div className={`track-row ${track.kind}`} key={track.trackId}>
-              <div className="track-header">
-                <strong>{track.name}</strong>
-                <span>{formatTrackKind(track.kind)}轨道</span>
-              </div>
-              <div className="segment-lane">
-                {track.segments.map((segment) => (
-                  <div className="segment-block" key={segment.segmentId}>
-                    <strong>{materialName(workspace.materials, segment.materialId)}</strong>
-                    <span>{formatMicroseconds(segment.targetTimerange.duration)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <Timeline workspace={workspace} playheadUs={playheadUs} onPlayheadChange={onPlayheadChange} />
       </section>
     </main>
   );
-}
-
-function materialName(materials: Material[], materialId: string): string {
-  return materials.find((material) => material.materialId === materialId)?.displayName ?? "素材";
 }

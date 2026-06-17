@@ -55,6 +55,7 @@ export function App(): React.ReactElement {
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
   const [bundlePath, setBundlePath] = useState("/tmp/phase-04-demo.veproj");
   const [materialPath, setMaterialPath] = useState("/tmp/demo-material.mp4");
+  const [playheadUs, setPlayheadUs] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -367,9 +368,11 @@ export function App(): React.ReactElement {
       activeCategory={activeCategory}
       bundlePath={bundlePath}
       materialPath={materialPath}
+      playheadUs={playheadUs}
       onCategoryChange={setActiveCategory}
       onBundlePathChange={setBundlePath}
       onMaterialPathChange={setMaterialPath}
+      onPlayheadChange={setPlayheadUs}
       onImportMaterial={handleImportMaterial}
       onRefreshMaterials={handleRefreshMaterials}
       onListMissingMaterials={handleListMissingMaterials}

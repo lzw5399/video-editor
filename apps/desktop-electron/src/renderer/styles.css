@@ -467,7 +467,10 @@ h2 {
 .preview-status,
 .empty-state span,
 .track-header span,
-.segment-block span {
+.segment-block span,
+.timeline-status,
+.playhead-control span,
+.playhead-time {
   color: #9b9890;
   font-size: 12px;
   line-height: 1.4;
@@ -568,36 +571,96 @@ h2 {
 .timeline-panel {
   grid-column: 1 / 4;
   display: grid;
-  grid-template-rows: 36px 28px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 220px;
   padding: 12px 16px 16px;
   overflow: hidden;
   background: #151515;
 }
 
-.timeline-toolbar,
+.timeline-surface {
+  display: grid;
+  grid-template-rows: 36px 28px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.transport-strip,
 .timeline-ruler {
   display: flex;
   align-items: center;
   min-width: 0;
 }
 
-.timeline-toolbar {
-  justify-content: space-between;
-  color: #f0eee8;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
+.transport-strip {
+  display: grid;
+  grid-template-columns: auto 260px 104px minmax(120px, 1fr);
+  gap: 12px;
+  height: 36px;
 }
 
-.timeline-toolbar span:last-child {
-  color: #9b9890;
-  font-size: 12px;
-  font-weight: 400;
+.transport-buttons {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transport-button {
+  width: 54px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #f0eee8;
+  background: #252522;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 34px;
+  white-space: nowrap;
+}
+
+.transport-button:hover:not(:disabled) {
+  border-color: #4a4a44;
+  background: #292926;
+}
+
+.transport-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.playhead-control {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.playhead-control input {
+  width: 100%;
+  height: 30px;
+  border: 1px solid #3a3a36;
+  border-radius: 4px;
+  color: #f0eee8;
+  background: #151515;
+  font: inherit;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.playhead-time,
+.timeline-status {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-ruler {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
   height: 28px;
   border-bottom: 1px solid #343431;
   color: #9b9890;
@@ -605,10 +668,38 @@ h2 {
   line-height: 1.4;
 }
 
+.timeline-header-spacer {
+  border-right: 1px solid #343431;
+}
+
+.ruler-track {
+  position: relative;
+  min-width: 0;
+  height: 28px;
+}
+
+.ruler-tick {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.ruler-tick::before {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 1px;
+  height: 5px;
+  background: #4a4a44;
+  content: "";
+}
+
 .track-list {
+  position: relative;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 4px;
   min-height: 0;
   overflow: auto;
   padding-top: 8px;
@@ -617,15 +708,14 @@ h2 {
 .track-row {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
-  min-height: 56px;
+  height: 56px;
   border: 1px solid #343431;
-  border-radius: 6px;
   overflow: hidden;
   background: #20201e;
 }
 
 .track-row.audio {
-  min-height: 48px;
+  height: 48px;
 }
 
 .track-header {
@@ -649,25 +739,65 @@ h2 {
 
 .segment-lane {
   position: relative;
-  display: flex;
-  align-items: center;
   min-width: 0;
-  padding: 8px;
   overflow: hidden;
 }
 
 .segment-block {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
   display: grid;
   align-content: center;
   gap: 4px;
-  width: min(42%, 360px);
-  min-width: 88px;
-  height: 36px;
+  min-width: 8px;
   padding: 4px 8px;
-  border: 1px solid #20c7d9;
+  border: 1px solid #35565b;
   border-radius: 4px;
   overflow: hidden;
+  color: #e8f7f9;
   background: #243336;
+  text-align: left;
+  cursor: pointer;
+}
+
+.segment-block:hover {
+  border-color: #4f7378;
+  background: #283c40;
+}
+
+.segment-block.selected {
+  border-color: #20c7d9;
+  outline: 1px solid #20c7d9;
+  outline-offset: -2px;
+  background: #263f45;
+}
+
+.segment-block span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playhead {
+  position: absolute;
+  top: 8px;
+  bottom: 0;
+  z-index: 3;
+  width: 2px;
+  background: #20c7d9;
+  pointer-events: none;
+}
+
+.playhead::before {
+  position: absolute;
+  top: -7px;
+  left: -5px;
+  width: 12px;
+  height: 7px;
+  border-radius: 2px 2px 0 0;
+  background: #20c7d9;
+  content: "";
 }
 
 @media (max-width: 1199px) {

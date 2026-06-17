@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { CommandState, TimelineSelection } from "../generated/CommandEnvelope";
 import type { MissingMaterialCommandDiagnostic } from "../generated/CommandResultEnvelope";
 import type {
@@ -7,6 +9,7 @@ import type {
   MaterialStatus,
   Microseconds,
   Segment,
+  Track,
   TrackKind
 } from "../generated/Draft";
 
@@ -51,6 +54,30 @@ export type SelectedSegmentView = {
   segment: Segment;
   track: SelectedTrackView;
   material: Material | null;
+};
+
+export type TimelineSegmentView = {
+  segment: Segment;
+  material: Material | null;
+  label: string;
+  sourceLabel: string;
+  targetLabel: string;
+  start: Microseconds;
+  duration: Microseconds;
+  selected: boolean;
+};
+
+export type TimelineTrackRow = {
+  track: Track;
+  kindLabel: string;
+  rowClassName: string;
+  segments: TimelineSegmentView[];
+};
+
+export type TimelineView = {
+  rows: TimelineTrackRow[];
+  duration: Microseconds;
+  rulerTicks: Microseconds[];
 };
 
 export const initialWorkspaceDraft: Draft = {
@@ -252,6 +279,10 @@ export function formatMicroseconds(duration: Microseconds | null | undefined): s
   return `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}.${milliseconds.toString().padStart(3, "0")}`;
 }
 
+export function formatTimelineTime(time: Microseconds | null | undefined): string {
+  return formatMicroseconds(time);
+}
+
 export function formatMaterialKind(kind: MaterialKind): string {
   const labels: Record<MaterialKind, string> = {
     video: "视频",
@@ -377,6 +408,52 @@ export function getSelectedSegmentView(draft: Draft, selection: TimelineSelectio
   return null;
 }
 
+export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): TimelineView {
+  const duration = Math.max(
+    10_000_000,
+    ...draft.tracks.flatMap((track) =>
+      track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
+    )
+  );
+  const rows = draft.tracks.map((track) => ({
+    track,
+    kindLabel: formatTrackKind(track.kind),
+    rowClassName: `track-row ${track.kind}`,
+    segments: track.segments.map((segment) => {
+      const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
+      const selected = selection.segmentIds.includes(segment.segmentId);
+      return {
+        segment,
+        material,
+        label: material?.displayName ?? `片段 ${segment.segmentId}`,
+        sourceLabel: `源 ${formatTimelineTime(segment.sourceTimerange.start)} / ${formatTimelineTime(
+          segment.sourceTimerange.duration
+        )}`,
+        targetLabel: `目标 ${formatTimelineTime(segment.targetTimerange.start)} / ${formatTimelineTime(
+          segment.targetTimerange.duration
+        )}`,
+        start: segment.targetTimerange.start,
+        duration: segment.targetTimerange.duration,
+        selected
+      };
+    })
+  }));
+
+  return {
+    rows,
+    duration,
+    rulerTicks: buildRulerTicks(duration)
+  };
+}
+
+export function segmentBlockStyle(segment: TimelineSegmentView, timelineDuration: Microseconds): CSSProperties {
+  const safeDuration = Math.max(1, timelineDuration);
+  return {
+    left: `${(Math.max(0, segment.start) / safeDuration) * 100}%`,
+    width: `${(Math.max(1, segment.duration) / safeDuration) * 100}%`
+  };
+}
+
 export function findTrackByKind(draft: Draft, kind: TrackKind) {
   return draft.tracks.find((track) => track.kind === kind) ?? null;
 }
@@ -394,4 +471,11 @@ export function nextTrackStart(track: { segments: Segment[] }): Microseconds {
 
 function padTime(value: number): string {
   return value.toString().padStart(2, "0");
+}
+
+function buildRulerTicks(duration: Microseconds): Microseconds[] {
+  const tickCount = 5;
+  const lastTickIndex = tickCount - 1;
+
+  return Array.from({ length: tickCount }, (_value, index) => Math.round((duration * index) / lastTickIndex));
 }
