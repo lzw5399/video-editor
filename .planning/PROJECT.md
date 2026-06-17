@@ -59,12 +59,12 @@ The application should feel like a restrained Jianying-style editor rather than 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Build a general-purpose desktop video editor, not an oral-video product | The current goal is a Jianying-like editor; oral-video language in the guideline is not the active product scope | - Pending |
-| Start with Rust Core from day one | Editing semantics, schema, render graph, and tests should become durable cross-platform assets immediately | - Pending |
-| Use Electron for the first desktop shell | Electron gives the fastest path to a desktop editor UI while Rust owns core logic | - Pending |
+| Start with Rust Core from day one | Editing semantics, schema, render graph, and tests should become durable cross-platform assets immediately | Phase 1 established the Rust workspace, command contracts, Node-API binding, and runtime/test boundaries |
+| Use Electron for the first desktop shell | Electron gives the fastest path to a desktop editor UI while Rust owns core logic | Phase 1 established the Electron shell, preload bridge, and Rust binding smoke |
 | Use a self-owned `.veproj` format | Long-term cross-platform control matters more than direct use of Jianying or Kdenlive formats | - Pending |
 | Align product and schema concepts with Jianying | Users and future compatibility work benefit from familiar vocabulary; avoid creating a parallel terminology layer | - Pending |
 | Treat Kdenlive and MLT as references, not runtimes | Their architecture and abstractions are useful, but direct integration creates licensing, mobility, and product-control problems | - Pending |
-| Test every layer of the pipeline | A video editor fails through subtle time, render, preview, and packaging drift; phase gates must catch this early | - Pending |
+| Test every layer of the pipeline | A video editor fails through subtle time, render, preview, and packaging drift; phase gates must catch this early | Phase 1 established `just build`, `just test`, schema drift checks, Electron smoke, FFmpeg discovery tests, and render smoke |
 
 ## Evolution
 
@@ -84,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after initialization*
+*Last updated: 2026-06-17 after Phase 1 completion*

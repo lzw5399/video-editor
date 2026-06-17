@@ -159,13 +159,25 @@
 | TEST-05 | Phase 5 | Pending |
 | TEST-06 | Phase 6 | Pending |
 | TEST-07 | Phase 6 | Pending |
+| ADV-01 | Post-MVP | Deferred |
+| ADV-02 | Post-MVP | Deferred |
+| ADV-03 | Post-MVP | Deferred |
+| ADV-04 | Post-MVP | Deferred |
+| ADV-05 | Post-MVP | Deferred |
+| COMP-01 | Post-MVP | Deferred |
+| COMP-02 | Post-MVP | Deferred |
+| COMP-03 | Post-MVP | Deferred |
+| PLAT-01 | Post-MVP | Deferred |
+| PLAT-02 | Post-MVP | Deferred |
+| PLAT-03 | Post-MVP | Deferred |
 
 **Coverage:**
 
 - v1 requirements: 45 total
 - Mapped to phases: 45
 - Unmapped: 0
+- v2/post-MVP requirements: 11 total, deferred
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after initial definition*
+*Last updated: 2026-06-17 after Phase 1 completion*
