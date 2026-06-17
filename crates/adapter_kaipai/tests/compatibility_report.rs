@@ -52,7 +52,7 @@ fn compatibility_report_contract_status_taxonomy_is_locked() {
 fn compatibility_report_contract_contains_stable_diagnostic_fields() {
     let report = CompatibilityReport {
         schema_version: CompatibilityReportSchemaVersion::current(),
-        source_kind: "kaipaiFormulaBundle".to_owned(),
+        source_kind: "offlineFormulaBundle".to_owned(),
         source_id: "template:redacted-template-001".to_owned(),
         generated_at: "2026-06-17T00:00:00Z".to_owned(),
         summary: CompatibilityReportSummary {
@@ -77,7 +77,7 @@ fn compatibility_report_contract_contains_stable_diagnostic_fields() {
 
     let value = serde_json::to_value(report).expect("report should serialize");
     assert_eq!(value["schemaVersion"], 1);
-    assert_eq!(value["sourceKind"], "kaipaiFormulaBundle");
+    assert_eq!(value["sourceKind"], "offlineFormulaBundle");
     assert_eq!(value["sourceId"], "template:redacted-template-001");
     assert_eq!(value["generatedAt"], "2026-06-17T00:00:00Z");
     assert_eq!(value["items"][0]["externalPath"], "sourceMedia");

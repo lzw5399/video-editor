@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "kaipaiSmartEditFormulaBundle",
+  "provenance": {
+    "templateId": "SEC0054",
+    "recipeId": "1721819614877617",
+    "formulaTaskId": "formula-task-missing-resource",
+    "formulaRequestId": "formula-request-missing-resource",
+    "capturedAt": "2026-06-17T00:00:00.000Z"
+  },
+  "sourceMedia": {
+    "uri": "media/source.mp4",
+    "width": 1080,
+    "height": 1920,
+    "durationMs": 3000
+  },
+  "recognizerResult": {
+    "word_list": [
+      {
+        "text": "missing",
+        "startMs": 0,
+        "endMs": 800
+      }
+    ]
+  },
+  "safeArea": {
+    "value": "100,200,300,400",
+    "status": "detected",
+    "source": "redactedLocalRecognizer"
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-source-video",
+      "uri": "media/source.mp4",
+      "kind": "video",
+      "displayName": "source.mp4"
+    }
+  ],
+  "formula": {
+    "tracks": [],
+    "segments": [],
+    "resourceUse": "missingFixture"
+  },
+  "resources": [
+    {
+      "resourceId": "missing-sticker",
+      "kind": "sticker",
+      "uri": "resources/stickers/missing-sticker.png",
+      "displayName": "missing-sticker.png"
+    }
+  ]
+}

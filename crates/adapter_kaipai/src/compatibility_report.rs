@@ -158,7 +158,7 @@ pub fn classify_formula_bundle_compatibility(
 
     CompatibilityReport {
         schema_version: CompatibilityReportSchemaVersion::current(),
-        source_kind: "kaipaiFormulaBundle".to_owned(),
+        source_kind: "offlineFormulaBundle".to_owned(),
         source_id: format!("template:{}", bundle.provenance.template_id),
         generated_at: generated_at.into(),
         summary: CompatibilityReportSummary::from_items(&items),

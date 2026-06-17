@@ -172,6 +172,7 @@ fn formula_bundle_fixtures_reject_in_memory_unsafe_payloads() {
 
 fn positive_formula_fixtures() -> BTreeSet<&'static str> {
     BTreeSet::from([
+        "positive/resource-bundle-with-local-assets.json",
         "positive/sanitized-formula-bundle.json",
         "positive/sanitized-formula-with-direct-materials.json",
     ])
@@ -234,8 +235,19 @@ fn collect_formula_fixtures(root: &Path, dir: &Path, paths: &mut BTreeSet<String
             .expect("formula fixture should live under fixture root")
             .to_string_lossy()
             .replace('\\', "/");
+        if resource_localizer_negative_fixture_paths().contains(relative.as_str()) {
+            continue;
+        }
         paths.insert(relative);
     }
+}
+
+fn resource_localizer_negative_fixture_paths() -> BTreeSet<&'static str> {
+    BTreeSet::from([
+        "negative/missing-resource.json",
+        "negative/path-traversal-resource.json",
+        "negative/sha256-mismatch.json",
+    ])
 }
 
 fn read_formula_fixture(fixture_dir: &Path, fixture_path: &str) -> Value {

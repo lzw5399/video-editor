@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "kaipaiSmartEditFormulaBundle",
+  "provenance": {
+    "templateId": "SEC0054",
+    "recipeId": "1721819614877617",
+    "formulaTaskId": "formula-task-resource-local",
+    "formulaRequestId": "formula-request-resource-local",
+    "capturedAt": "2026-06-17T00:00:00.000Z"
+  },
+  "sourceMedia": {
+    "uri": "media/source.mp4",
+    "width": 1080,
+    "height": 1920,
+    "durationMs": 3000
+  },
+  "recognizerResult": {
+    "word_list": [
+      {
+        "text": "resource",
+        "startMs": 0,
+        "endMs": 800
+      }
+    ]
+  },
+  "safeArea": {
+    "value": "100,200,300,400",
+    "status": "detected",
+    "source": "redactedLocalRecognizer"
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-source-video",
+      "uri": "media/source.mp4",
+      "kind": "video",
+      "displayName": "source.mp4"
+    }
+  ],
+  "formula": {
+    "tracks": [],
+    "segments": [],
+    "resourceUse": "localAssetFixture"
+  },
+  "resources": [
+    {
+      "resourceId": "font-redacted",
+      "kind": "font",
+      "uri": "resources/fonts/redacted-font.ttf",
+      "sha256": "001185e820f758e192bc6ba683933eb87756e4009b31422f41c2c6b848be0270",
+      "displayName": "redacted-font.ttf"
+    },
+    {
+      "resourceId": "sticker-redacted",
+      "kind": "sticker",
+      "uri": "resources/stickers/redacted-sticker.png",
+      "sha256": "1055b0032a851c06b42b46cd46a9f79472d35b095ee415afee271cc03df775b0",
+      "displayName": "redacted-sticker.png"
+    },
+    {
+      "resourceId": "pip-redacted",
+      "kind": "video",
+      "uri": "resources/videos/redacted-pip.mp4",
+      "sha256": "e14164d572ed86035282808e99496b0c7f6c5b48265cc4320fd43c672ea7c53f",
+      "displayName": "redacted-pip.mp4"
+    }
+  ]
+}
