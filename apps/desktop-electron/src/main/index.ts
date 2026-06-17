@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
-import type { CommandResultEnvelope, ExportJobStatusResponse, PreviewArtifactResponse } from "../generated/CommandResultEnvelope";
+import type {
+  CommandResultEnvelope,
+  ExportJobStatusResponse,
+  PreviewArtifactResponse,
+  RuntimeCapabilityReport
+} from "../generated/CommandResultEnvelope";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
@@ -39,6 +44,10 @@ ipcMain.handle("core:version", (event) => {
 ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   assertAllowedIpcSender(event);
   recordTestExecuteCommand(command);
+  const testRuntimeCapabilitiesResponse = maybeBuildTestRuntimeCapabilitiesResponse(command);
+  if (testRuntimeCapabilitiesResponse !== null) {
+    return testRuntimeCapabilitiesResponse;
+  }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
     return testPreviewResponse;
@@ -158,6 +167,103 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     preset,
     jobId
   });
+}
+
+function maybeBuildTestRuntimeCapabilitiesResponse(
+  command: CommandEnvelope
+): CommandResultEnvelope<RuntimeCapabilityReport> | null {
+  if (command.payload.kind !== "probeRuntimeCapabilities") {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES === "0") {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES === "error") {
+    return {
+      ok: false,
+      data: null,
+      error: {
+        kind: "runtimeDiscoveryFailed",
+        message: "运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。",
+        command: "probeRuntimeCapabilities"
+      },
+      events: []
+    };
+  }
+
+  if (
+    process.env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES !== "1" &&
+    process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1"
+  ) {
+    return null;
+  }
+
+  return {
+    ok: true,
+    data: {
+      status: "ready",
+      executorName: "desktop-test-runtime",
+      ffmpeg: {
+        kind: "ffmpeg",
+        path: "/tmp/video-editor-test-runtime/ffmpeg",
+        source: "PATH",
+        version: "ffmpeg version test",
+        configureSummary: "configuration: test-runtime",
+        status: "ready",
+        diagnostic: null
+      },
+      ffprobe: {
+        kind: "ffprobe",
+        path: "/tmp/video-editor-test-runtime/ffprobe",
+        source: "PATH",
+        version: "ffprobe version test",
+        configureSummary: "configuration: test-runtime",
+        status: "ready",
+        diagnostic: null
+      },
+      h264Encoder: {
+        name: "H.264",
+        available: true,
+        status: "ready",
+        diagnostic: null
+      },
+      aacEncoder: {
+        name: "AAC",
+        available: true,
+        status: "ready",
+        diagnostic: null
+      },
+      assFilter: {
+        name: "ASS",
+        available: true,
+        status: "ready",
+        diagnostic: null
+      },
+      subtitlesFilter: {
+        name: "subtitles",
+        available: true,
+        status: "ready",
+        diagnostic: null
+      },
+      fontReadiness: {
+        envTextFontPath: null,
+        availableFontPaths: ["/System/Library/Fonts/PingFang.ttc"],
+        status: "ready",
+        diagnostic: null
+      },
+      licensePosture: {
+        externalRuntime: true,
+        redistributableBuild: false,
+        source: "externalRuntime",
+        message: "当前使用本机 FFmpeg，仅用于本地测试，不代表可再发行构建。"
+      },
+      diagnostics: []
+    },
+    error: null,
+    events: []
+  };
 }
 
 function maybeBuildTestPreviewResponse(command: CommandEnvelope): CommandResultEnvelope<PreviewArtifactResponse> | null {

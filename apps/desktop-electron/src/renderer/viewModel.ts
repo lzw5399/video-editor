@@ -67,6 +67,7 @@ export type WorkspaceState = {
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
   preview: PreviewDisplayState;
   export: ExportDisplayState;
+  runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   bindingStatus: BindingStatus;
   pendingCommand: string | null;
   commandError: string | null;
@@ -95,6 +96,28 @@ export type ExportDisplayState = {
   validation: ExportValidationReport | null;
   diagnosticLabel: string | null;
   error: string | null;
+};
+
+export type RuntimeDiagnosticsStatus = "idle" | "checking" | "ready" | "warning" | "error";
+export type RuntimeDiagnosticsTone = "ready" | "warning" | "error" | "muted";
+
+export type RuntimeDiagnosticsRow = {
+  label: string;
+  value: string;
+  detail: string;
+  tone: RuntimeDiagnosticsTone;
+};
+
+export type RuntimeDiagnosticsDisplayState = {
+  status: RuntimeDiagnosticsStatus;
+  statusLabel: string;
+  statusDetail: string;
+  packageStatusLabel: string;
+  rows: RuntimeDiagnosticsRow[];
+  diagnostics: string[];
+  canPreview: boolean;
+  canExport: boolean;
+  checkedAtLabel: string;
 };
 
 export type SelectedTrackView = {
@@ -340,12 +363,41 @@ export function createInitialWorkspaceState(): WorkspaceState {
       diagnosticLabel: null,
       error: null
     },
+    runtimeDiagnostics: createWaitingRuntimeDiagnosticsState(),
     bindingStatus: {
       kind: "checking",
       label: "正在连接剪辑核心"
     },
     pendingCommand: null,
     commandError: null
+  };
+}
+
+export function createWaitingRuntimeDiagnosticsState(): RuntimeDiagnosticsDisplayState {
+  return {
+    status: "idle",
+    statusLabel: "等待运行环境检测",
+    statusDetail: "打包应用启动后会检测剪辑核心、FFmpeg、编码器和字幕能力。",
+    packageStatusLabel: "打包状态待检测",
+    rows: [],
+    diagnostics: [],
+    canPreview: false,
+    canExport: false,
+    checkedAtLabel: "尚未检测"
+  };
+}
+
+export function createCheckingRuntimeDiagnosticsState(): RuntimeDiagnosticsDisplayState {
+  return {
+    status: "checking",
+    statusLabel: "正在检测运行环境",
+    statusDetail: "正在检测剪辑核心、编码器、字幕和字体环境。",
+    packageStatusLabel: "打包状态检测中",
+    rows: [],
+    diagnostics: [],
+    canPreview: false,
+    canExport: false,
+    checkedAtLabel: "检测中"
   };
 }
 

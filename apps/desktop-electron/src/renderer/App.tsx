@@ -8,6 +8,7 @@ import type {
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
   PreviewArtifactResponse,
+  RuntimeCapabilityReport,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
@@ -25,6 +26,7 @@ import {
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSegmentCommand,
+  buildProbeRuntimeCapabilitiesCommand,
   buildRequestPreviewFrameCommand,
   buildRequestPreviewSegmentCommand,
   buildRedoTimelineEditCommand,
@@ -35,9 +37,12 @@ import {
   buildStartExportCommand,
   buildTrimSegmentCommand,
   buildUndoTimelineEditCommand,
-  commandErrorMessage
+  commandErrorMessage,
+  runtimeDiagnosticsFromError,
+  runtimeDiagnosticsFromReport
 } from "./commandHelpers";
 import {
+  createCheckingRuntimeDiagnosticsState,
   createInitialWorkspaceState,
   findFirstMaterialByKind,
   findTrackByKind,
@@ -87,6 +92,7 @@ export function App(): React.ReactElement {
   const [playheadUs, setPlayheadUs] = useState(0);
   const workspaceRef = useRef(workspace);
   const commandInFlightRef = useRef(false);
+  const runtimeProbeInFlightRef = useRef(false);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -134,6 +140,8 @@ export function App(): React.ReactElement {
         },
         commandError: null
       }));
+
+      void handleProbeRuntimeCapabilities();
     }
 
     void bootstrapWorkspace().catch((error: unknown) => {
@@ -368,6 +376,56 @@ export function App(): React.ReactElement {
       });
     } finally {
       commandInFlightRef.current = false;
+    }
+  }
+
+  async function handleProbeRuntimeCapabilities(): Promise<void> {
+    if (runtimeProbeInFlightRef.current) {
+      return;
+    }
+
+    runtimeProbeInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        runtimeDiagnostics: createCheckingRuntimeDiagnosticsState(),
+        commandError: null
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const result = await window.videoEditorCore.executeCommand<RuntimeCapabilityReport>(
+        buildProbeRuntimeCapabilitiesCommand()
+      );
+      setWorkspace((current) => {
+        const runtimeDiagnostics =
+          result.ok && result.data !== null
+            ? runtimeDiagnosticsFromReport(result.data)
+            : runtimeDiagnosticsFromError(result.error?.message ?? "运行环境检测失败");
+        const next = {
+          ...current,
+          runtimeDiagnostics,
+          commandError: result.ok ? current.commandError : runtimeDiagnostics.statusLabel
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWorkspace((current) => {
+        const runtimeDiagnostics = runtimeDiagnosticsFromError(message);
+        const next = {
+          ...current,
+          runtimeDiagnostics,
+          commandError: runtimeDiagnostics.statusLabel
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } finally {
+      runtimeProbeInFlightRef.current = false;
     }
   }
 
@@ -694,6 +752,24 @@ export function App(): React.ReactElement {
   }
 
   function handleRequestPreviewFrame(): void {
+    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
+      const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            frameStatusLabel: "预览暂不可用",
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
     const targetTime = Math.max(0, Math.round(playheadUs));
 
     void executePreviewCommand(
@@ -738,6 +814,24 @@ export function App(): React.ReactElement {
   }
 
   function handleRequestPreviewSegment(): void {
+    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
+      const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            segmentStatusLabel: "预览暂不可用",
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
     const targetTimerange = {
       start: Math.max(0, Math.round(playheadUs)),
       duration: PREVIEW_SEGMENT_DURATION_US
@@ -811,6 +905,24 @@ export function App(): React.ReactElement {
   }
 
   function handleStartExport(): void {
+    if (!workspaceRef.current.runtimeDiagnostics.canExport) {
+      const message = runtimeUnavailableMessage(workspaceRef.current, "导出暂不可用");
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message,
+            logSummary: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
     void executeExportCommand(
       (current) =>
         buildStartExportCommand({
@@ -862,6 +974,7 @@ export function App(): React.ReactElement {
       onPlayheadChange={setPlayheadUs}
       onRequestPreviewFrame={handleRequestPreviewFrame}
       onRequestPreviewSegment={handleRequestPreviewSegment}
+      onProbeRuntimeCapabilities={handleProbeRuntimeCapabilities}
       onExportOutputPathChange={handleExportOutputPathChange}
       onExportPresetChange={handleExportPresetChange}
       onStartExport={handleStartExport}
@@ -954,6 +1067,15 @@ function exportCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknow
   const kindLabel = commandError === null ? "导出命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
 
   return `${actionLabel}失败（${kindLabel}）：${message}`;
+}
+
+function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: string): string {
+  const detail =
+    workspace.runtimeDiagnostics.status === "checking"
+      ? workspace.runtimeDiagnostics.statusLabel
+      : workspace.runtimeDiagnostics.statusDetail || workspace.runtimeDiagnostics.statusLabel;
+
+  return `${actionLabel}：${detail}`;
 }
 
 function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {

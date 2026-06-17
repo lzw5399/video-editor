@@ -17,6 +17,7 @@ type WorkspaceShellProps = {
   onPlayheadChange: (value: number) => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
+  onProbeRuntimeCapabilities: () => void;
   onExportOutputPathChange: (value: string) => void;
   onExportPresetChange: (value: ExportPreset) => void;
   onStartExport: () => void;
@@ -53,6 +54,7 @@ export function WorkspaceShell({
   onPlayheadChange,
   onRequestPreviewFrame,
   onRequestPreviewSegment,
+  onProbeRuntimeCapabilities,
   onExportOutputPathChange,
   onExportPresetChange,
   onStartExport,
@@ -128,11 +130,13 @@ export function WorkspaceShell({
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
           exportState={workspace.export}
+          runtimeDiagnostics={workspace.runtimeDiagnostics}
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
           onPlayheadChange={onPlayheadChange}
           onRequestPreviewFrame={onRequestPreviewFrame}
           onRequestPreviewSegment={onRequestPreviewSegment}
+          onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
           onExportOutputPathChange={onExportOutputPathChange}
           onExportPresetChange={onExportPresetChange}
           onStartExport={onStartExport}

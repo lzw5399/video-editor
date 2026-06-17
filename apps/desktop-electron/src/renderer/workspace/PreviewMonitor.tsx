@@ -6,7 +6,10 @@ import {
   formatMicroseconds,
   type BindingStatus,
   type ExportDisplayState,
-  type PreviewDisplayState
+  type PreviewDisplayState,
+  type RuntimeDiagnosticsDisplayState,
+  type RuntimeDiagnosticsRow,
+  type RuntimeDiagnosticsTone
 } from "../viewModel";
 
 import "./preview-inspector.css";
@@ -16,11 +19,13 @@ type PreviewMonitorProps = {
   bindingStatus: BindingStatus;
   preview: PreviewDisplayState;
   exportState: ExportDisplayState;
+  runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   pending: boolean;
   playheadUs?: number;
   onPlayheadChange: (value: number) => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
+  onProbeRuntimeCapabilities: () => void;
   onExportOutputPathChange: (value: string) => void;
   onExportPresetChange: (value: ExportPreset) => void;
   onStartExport: () => void;
@@ -48,11 +53,13 @@ export function PreviewMonitor({
   bindingStatus,
   preview,
   exportState,
+  runtimeDiagnostics,
   pending,
   playheadUs = 0,
   onPlayheadChange,
   onRequestPreviewFrame,
   onRequestPreviewSegment,
+  onProbeRuntimeCapabilities,
   onExportOutputPathChange,
   onExportPresetChange,
   onStartExport,
@@ -63,6 +70,9 @@ export function PreviewMonitor({
   const exportCanCancel =
     exportState.jobId !== null &&
     (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
+  const previewFrameLabel = runtimeDiagnostics.canPreview ? "请求预览帧" : "预览暂不可用";
+  const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
+  const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
 
   return (
     <div className="preview-shell">
@@ -120,20 +130,20 @@ export function PreviewMonitor({
           <button
             type="button"
             className="preview-command-button"
-            aria-label="请求预览帧"
-            title="请求预览帧"
+            aria-label={previewFrameLabel}
+            title={previewFrameLabel}
             onClick={onRequestPreviewFrame}
-            disabled={pending}
+            disabled={pending || !runtimeDiagnostics.canPreview}
           >
             帧
           </button>
           <button
             type="button"
             className="preview-command-button"
-            aria-label="生成预览片段"
-            title="生成预览片段"
+            aria-label={previewSegmentLabel}
+            title={previewSegmentLabel}
             onClick={onRequestPreviewSegment}
-            disabled={pending}
+            disabled={pending || !runtimeDiagnostics.canPreview}
           >
             片段
           </button>
@@ -149,6 +159,8 @@ export function PreviewMonitor({
           path={preview.segmentArtifactPath}
         />
       </div>
+
+      <RuntimeDiagnosticsPanel diagnostics={runtimeDiagnostics} pending={pending} onProbe={onProbeRuntimeCapabilities} />
 
       <div className="export-panel" aria-label="导出面板">
         <label className="export-path-control">
@@ -174,7 +186,7 @@ export function PreviewMonitor({
           </select>
         </label>
         <div className="export-actions" role="group" aria-label="导出操作">
-          <button type="button" aria-label="开始导出" title="开始导出" onClick={onStartExport} disabled={pending}>
+          <button type="button" aria-label={startExportLabel} title={startExportLabel} onClick={onStartExport} disabled={pending || !runtimeDiagnostics.canExport}>
             导出
           </button>
           <button
@@ -221,6 +233,66 @@ export function PreviewMonitor({
       </div>
     </div>
   );
+}
+
+function RuntimeDiagnosticsPanel({
+  diagnostics,
+  pending,
+  onProbe
+}: {
+  diagnostics: RuntimeDiagnosticsDisplayState;
+  pending: boolean;
+  onProbe: () => void;
+}): React.ReactElement {
+  const actionLabel = diagnostics.status === "idle" ? "检查运行环境" : "重新检测运行环境";
+  const busy = diagnostics.status === "checking";
+  const detail = diagnostics.diagnostics[0] ?? diagnostics.statusDetail;
+
+  return (
+    <section className={`runtime-diagnostics-panel ${diagnostics.status}`} aria-label="运行环境诊断">
+      <div className="runtime-diagnostics-header">
+        <div className="runtime-status-summary" aria-label="运行环境状态">
+          <span className={`runtime-status-dot ${diagnostics.status}`} aria-hidden="true" />
+          <strong>{diagnostics.statusLabel}</strong>
+          <span title={detail}>{detail}</span>
+        </div>
+        <button
+          type="button"
+          aria-label={actionLabel}
+          title={actionLabel}
+          onClick={onProbe}
+          disabled={pending || busy}
+        >
+          {actionLabel === "检查运行环境" ? "检测" : "重检"}
+        </button>
+      </div>
+      <div className="runtime-capability-grid" aria-label="运行能力列表">
+        {diagnostics.rows.length === 0 ? (
+          <div className="runtime-capability-row muted" aria-label="打包状态">
+            <strong>打包状态</strong>
+            <span>{diagnostics.packageStatusLabel}</span>
+            <em>{diagnostics.checkedAtLabel}</em>
+          </div>
+        ) : (
+          diagnostics.rows.map((row) => <RuntimeDiagnosticsRowView key={row.label} row={row} />)
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RuntimeDiagnosticsRowView({ row }: { row: RuntimeDiagnosticsRow }): React.ReactElement {
+  return (
+    <div className={`runtime-capability-row ${runtimeToneClass(row.tone)}`} aria-label={row.label} title={row.detail}>
+      <strong>{row.label}</strong>
+      <span>{row.value}</span>
+      <em>{row.detail || "无额外诊断"}</em>
+    </div>
+  );
+}
+
+function runtimeToneClass(tone: RuntimeDiagnosticsTone): string {
+  return tone;
 }
 
 function PreviewArtifactLine({

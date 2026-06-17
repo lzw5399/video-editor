@@ -1,6 +1,6 @@
 .preview-shell {
   display: grid;
-  grid-template-rows: 28px minmax(0, 1fr) 34px 38px 58px 22px;
+  grid-template-rows: 26px minmax(140px, 1fr) 32px 34px 78px 58px 20px;
   gap: 4px;
   width: min(100%, 840px);
   min-width: 0;
@@ -43,7 +43,9 @@
   display: grid;
   justify-self: center;
   place-items: center;
-  width: min(100%, clamp(360px, 34vw, 560px));
+  width: auto;
+  height: 100%;
+  max-width: min(100%, 560px);
   aspect-ratio: 16 / 9;
   min-height: 0;
   max-height: 100%;
@@ -195,6 +197,141 @@
 
 .preview-artifact-line strong {
   color: #f0eee8;
+}
+
+.runtime-diagnostics-panel {
+  display: grid;
+  grid-template-rows: 24px minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 5px 6px;
+  border: 1px solid #343431;
+  border-radius: 4px;
+  background: #191917;
+}
+
+.runtime-diagnostics-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.runtime-status-summary {
+  display: grid;
+  grid-template-columns: 10px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.runtime-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d6a23f;
+}
+
+.runtime-status-dot.ready {
+  background: #5f9f73;
+}
+
+.runtime-status-dot.error {
+  background: #e45a5a;
+}
+
+.runtime-status-summary strong,
+.runtime-status-summary span,
+.runtime-capability-row strong,
+.runtime-capability-row span,
+.runtime-capability-row em {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-status-summary strong {
+  color: #f0eee8;
+  font-weight: 600;
+}
+
+.runtime-status-summary span,
+.runtime-capability-row em {
+  color: #9b9890;
+  font-style: normal;
+}
+
+.runtime-diagnostics-header button {
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #f0eee8;
+  background: #252522;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.runtime-diagnostics-header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.runtime-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.runtime-capability-row {
+  display: grid;
+  grid-template-columns: 68px 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 20px;
+  padding: 0 5px;
+  border: 1px solid #30302d;
+  border-radius: 4px;
+  background: #151513;
+}
+
+.runtime-capability-row strong {
+  color: #d8d6cf;
+  font-weight: 600;
+}
+
+.runtime-capability-row span {
+  color: #9b9890;
+}
+
+.runtime-capability-row.ready span {
+  color: #5f9f73;
+}
+
+.runtime-capability-row.warning span {
+  color: #d6a23f;
+}
+
+.runtime-capability-row.error span {
+  color: #e45a5a;
+}
+
+.runtime-capability-row.muted {
+  grid-column: 1 / -1;
 }
 
 .export-panel {
