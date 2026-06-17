@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 6 context gathered
-last_updated: "2026-06-17T20:10:41.167Z"
+stopped_at: Phase 6 UI-SPEC approved
+last_updated: "2026-06-17T20:16:55.357Z"
 last_activity: 2026-06-18 -- Completed Phase 05 Plan 09 preview/export parity and final gates
 progress:
   total_phases: 14
@@ -201,6 +201,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T20:10:41.164Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-mvp-hardening-and-packaging/06-CONTEXT.md
+Last session: 2026-06-17T20:16:55.354Z
+Stopped at: Phase 6 UI-SPEC approved
+Resume file: .planning/phases/06-mvp-hardening-and-packaging/06-UI-SPEC.md
