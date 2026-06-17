@@ -9,8 +9,10 @@ use std::process::Output;
 
 mod discovery;
 mod error;
+mod job;
 mod probe;
 mod process;
+mod validate;
 
 pub use discovery::{
     BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
@@ -18,11 +20,20 @@ pub use discovery::{
     resolve_binary,
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
+pub use job::{
+    CancelToken, FfmpegJobEvent, FfmpegJobId, FfmpegJobResult, FfmpegJobState, FfmpegProgress,
+    FfmpegRuntimeError, FfmpegRuntimeErrorKind, FfmpegRuntimeJob, parse_progress_lines,
+    run_export_job,
+};
 pub use probe::{
     MaterialProbeAudio, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
     MaterialProbeMetadata, MaterialProbeStatus, RationalFrameRate, probe_material_metadata,
 };
 pub use process::{DEFAULT_PROCESS_TIMEOUT, run_process_with_timeout};
+pub use validate::{
+    OutputValidationError, OutputValidationErrorKind, OutputValidationExpectation,
+    OutputValidationReport, validate_rendered_output,
+};
 
 /// Service-boundary trait for executing FFmpeg-family binaries.
 ///
