@@ -123,6 +123,7 @@ async function expectProfessionalWorkspaceAtViewport(
   await expectNoCategoryLabelWrap(page);
   await expectPreviewCanvasAspectRatio(page);
   await expectIconButtonsHaveAccessibleNames(page);
+  await expectTimelineInputsFit(page);
 }
 
 async function expectStableBox(locator: Locator, label: string): Promise<RegionBox> {
@@ -239,6 +240,24 @@ async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   );
 
   expect(missingNames, "图标/紧凑按钮需要中文 aria-label 和 title").toEqual([]);
+}
+
+async function expectTimelineInputsFit(page: Page): Promise<void> {
+  const clippedInputs = await page.locator(".timeline-control input, .playhead-control input").evaluateAll((inputs) =>
+    inputs
+      .map((input) => {
+        const element = input as HTMLInputElement;
+        return {
+          label: element.getAttribute("aria-label") ?? element.closest("label")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+          value: element.value,
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth
+        };
+      })
+      .filter((item) => item.scrollWidth > item.clientWidth + 1)
+  );
+
+  expect(clippedInputs, "时间线数字输入不能裁切当前数值").toEqual([]);
 }
 
 test("Chinese editor workspace opens with required regions and material states", async () => {

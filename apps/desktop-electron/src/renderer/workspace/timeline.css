@@ -80,7 +80,7 @@
 }
 
 .timeline-control {
-  flex-basis: 96px;
+  flex-basis: 108px;
 }
 
 .compact-select {
@@ -105,7 +105,7 @@
 
 .timeline-zoom-shell {
   display: flex;
-  flex: 0 0 112px;
+  flex: 0 0 100px;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -342,6 +342,12 @@
   outline-offset: -2px;
 }
 
+@media (max-width: 1399px) {
+  .timeline-status {
+    display: none;
+  }
+}
+
 @media (max-width: 1199px) {
   .transport-strip {
     gap: 4px;
@@ -357,15 +363,19 @@
   }
 
   .playhead-control {
-    flex-basis: 100px;
+    flex-basis: 112px;
   }
 
   .timeline-control {
-    flex-basis: 84px;
+    flex-basis: 108px;
   }
 
   .timeline-zoom-shell {
-    flex-basis: 96px;
+    flex-basis: 80px;
+  }
+
+  .timeline-zoom-shell span {
+    display: none;
   }
 
   .snapping-status {

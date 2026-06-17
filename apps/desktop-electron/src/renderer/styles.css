@@ -854,7 +854,7 @@ h2 {
 }
 
 .timeline-control {
-  flex-basis: 96px;
+  flex-basis: 108px;
 }
 
 .compact-select {
@@ -1035,6 +1035,12 @@ h2 {
   content: "";
 }
 
+@media (max-width: 1399px) {
+  .timeline-status {
+    display: none;
+  }
+}
+
 @media (max-width: 1199px) {
   .workspace {
     grid-template-columns: 272px minmax(420px, 1fr) 272px;
@@ -1069,11 +1075,11 @@ h2 {
   }
 
   .playhead-control {
-    flex-basis: 100px;
+    flex-basis: 112px;
   }
 
   .timeline-control {
-    flex-basis: 84px;
+    flex-basis: 108px;
   }
 
   .playhead-time,
