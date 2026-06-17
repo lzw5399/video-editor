@@ -5,9 +5,10 @@ use std::{
 };
 
 use draft_model::{
-    AddSegmentCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
-    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DeleteSegmentCommandPayload, Draft, DraftId, DraftMetadata, DraftSchemaVersion, Filter,
+    AddSegmentCommandPayload, AddTextSegmentCommandPayload, CommandEnvelope, CommandError,
+    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
+    CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload, Draft, DraftId,
+    DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, Filter,
     ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
     ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
@@ -15,8 +16,9 @@ use draft_model::{
     MoveSegmentCommandPayload, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
     RationalFrameRate, RedoTimelineEditCommandPayload, Segment, SegmentId,
     SelectTimelineSegmentsCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track,
-    TrackId, TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
+    SplitSegmentCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
+    TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
+    TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
     VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
@@ -47,7 +49,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -64,6 +66,8 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
+            export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -117,6 +121,12 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<Keyframe>(),
         export_decl::<Filter>(),
         export_decl::<Transition>(),
+        export_decl::<TextAlignment>(),
+        export_decl::<TextStroke>(),
+        export_decl::<TextShadow>(),
+        export_decl::<TextBackground>(),
+        export_decl::<TextStyle>(),
+        export_decl::<TextSegment>(),
         export_decl::<Segment>(),
         export_decl::<Track>(),
         export_decl::<Draft>(),
@@ -149,7 +159,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -166,6 +176,8 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
+            export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -249,6 +261,42 @@ fn schema_exports_include_undo_redo_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_text_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let draft_ts = ts_contract(&[
+        export_decl::<TextAlignment>(),
+        export_decl::<TextStroke>(),
+        export_decl::<TextShadow>(),
+        export_decl::<TextBackground>(),
+        export_decl::<TextStyle>(),
+        export_decl::<TextSegment>(),
+    ]);
+
+    for expected_contract in [
+        "TextSegment",
+        "TextStyle",
+        "TextAlignment",
+        "AddTextSegmentCommandPayload",
+        "EditTextSegmentCommandPayload",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
+            "schema or draft TypeScript should include {expected_contract}"
+        );
+    }
+    for expected_contract in [
+        "AddTextSegmentCommandPayload",
+        "EditTextSegmentCommandPayload",
+    ] {
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -262,7 +310,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -279,6 +327,8 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
+            export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -451,6 +501,14 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<RedoTimelineEditCommandPayload>(
         &mut schema_value,
         "RedoTimelineEditCommandPayload",
+    );
+    include_command_contract_schema::<AddTextSegmentCommandPayload>(
+        &mut schema_value,
+        "AddTextSegmentCommandPayload",
+    );
+    include_command_contract_schema::<EditTextSegmentCommandPayload>(
+        &mut schema_value,
+        "EditTextSegmentCommandPayload",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
