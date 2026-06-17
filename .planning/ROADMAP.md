@@ -60,14 +60,26 @@ Plans:
   4. Missing material detection surfaces a recoverable state without corrupting the draft.
 
 **Plans**: 6 plans
-
 Plans:
+**Wave 1**
 
 - [ ] 02-01-PLAN.md - Define draft/material/track/segment schema and migration hooks
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md - Implement project bundle persistence, path helpers, and round-trip tests
 - [ ] 02-03-PLAN.md - Implement media-runtime probing and generated material test fixtures
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-04-PLAN.md - Implement material import service, missing diagnostics, and draft contracts
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 02-05-PLAN.md - Expose material commands through bindings and Electron smoke
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 02-06-PLAN.md - Add draft/material fixtures and final Phase 2 gates
 
 ### Phase 3: Timeline Command Core
