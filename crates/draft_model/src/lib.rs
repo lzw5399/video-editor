@@ -71,6 +71,9 @@ pub enum CommandName {
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
+    StartExport,
+    GetExportJobStatus,
+    CancelExport,
 }
 
 /// Command payloads.
@@ -99,6 +102,9 @@ pub enum CommandPayload {
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
+    StartExport(StartExportCommandPayload),
+    GetExportJobStatus(GetExportJobStatusCommandPayload),
+    CancelExport(CancelExportCommandPayload),
 }
 
 impl CommandPayload {
@@ -127,6 +133,9 @@ impl CommandPayload {
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
+            Self::StartExport(_) => CommandName::StartExport,
+            Self::GetExportJobStatus(_) => CommandName::GetExportJobStatus,
+            Self::CancelExport(_) => CommandName::CancelExport,
         }
     }
 }
@@ -425,6 +434,37 @@ pub struct InvalidatePreviewCacheCommandPayload {
     pub reason: String,
 }
 
+/// H.264/AAC export presets exposed through Rust-owned export services.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportPreset {
+    H264AacDraft,
+    H264AacBalanced,
+}
+
+/// Payload accepted by the Phase 5 export start command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StartExportCommandPayload {
+    pub draft: Draft,
+    pub output_path: String,
+    pub preset: ExportPreset,
+}
+
+/// Payload accepted by the Phase 5 export status command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GetExportJobStatusCommandPayload {
+    pub job_id: String,
+}
+
+/// Payload accepted by the Phase 5 export cancellation command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CancelExportCommandPayload {
+    pub job_id: String,
+}
+
 /// Segment and track selection returned by Rust-owned timeline commands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -595,6 +635,7 @@ pub enum CommandErrorKind {
     MissingMaterial,
     InvalidTimelineEdit,
     PreviewServiceFailed,
+    ExportServiceFailed,
     Internal,
 }
 
@@ -653,6 +694,93 @@ pub struct PreviewCacheInvalidationResponse {
     pub invalidated_count: u32,
     pub retained_count: u32,
     pub status: PreviewStatus,
+}
+
+/// Stable export job phase displayed by desktop clients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportJobPhase {
+    Queued,
+    Running,
+    Validating,
+    Completed,
+    Cancelled,
+    Failed,
+    ValidationFailed,
+}
+
+/// Stable classes of export diagnostics returned through command envelopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportDiagnosticKind {
+    InvalidOutputPath,
+    EngineFailed,
+    RenderGraphFailed,
+    CompileFailed,
+    RuntimeUnavailable,
+    RuntimeFailed,
+    Cancelled,
+    ValidationFailed,
+}
+
+/// Export diagnostic details suitable for UI display and bounded logs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportDiagnostic {
+    pub kind: ExportDiagnosticKind,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub stdout_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub stderr_summary: Option<String>,
+}
+
+/// Binding-safe validation report for a rendered export output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportValidationReport {
+    pub path: String,
+    pub file_size_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub duration: Option<Microseconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub frame_rate: Option<RationalFrameRate>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub height: Option<u32>,
+    pub has_audio: bool,
+}
+
+/// Export job state returned by start/status/cancel commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportJobStatusResponse {
+    pub job_id: String,
+    pub phase: ExportJobPhase,
+    pub output_path: String,
+    pub preset: ExportPreset,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub progress_per_mille: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub out_time: Option<Microseconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub log_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub validation: Option<ExportValidationReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<ExportDiagnostic>,
 }
 
 /// Response data returned by the `ping` command.

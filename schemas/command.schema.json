@@ -130,6 +130,20 @@
       "title": "AddTextSegmentCommandPayload",
       "type": "object"
     },
+    "CancelExportCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 export cancellation command.",
+      "properties": {
+        "jobId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "title": "CancelExportCommandPayload",
+      "type": "object"
+    },
     "CommandEvent": {
       "additionalProperties": false,
       "description": "Event emitted with a command result.",
@@ -196,7 +210,10 @@
         "setTrackMute",
         "requestPreviewFrame",
         "requestPreviewSegment",
-        "invalidatePreviewCache"
+        "invalidatePreviewCache",
+        "startExport",
+        "getExportJobStatus",
+        "cancelExport"
       ],
       "type": "string"
     },
@@ -907,6 +924,68 @@
             "reason"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 export start command.",
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "startExport",
+              "type": "string"
+            },
+            "outputPath": {
+              "type": "string"
+            },
+            "preset": {
+              "$ref": "#/$defs/ExportPreset"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "outputPath",
+            "preset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 export status command.",
+          "properties": {
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "getExportJobStatus",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 export cancellation command.",
+          "properties": {
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "cancelExport",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "jobId"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1058,6 +1137,200 @@
       "title": "EditTextSegmentCommandPayload",
       "type": "object"
     },
+    "ExportDiagnostic": {
+      "additionalProperties": false,
+      "description": "Export diagnostic details suitable for UI display and bounded logs.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ExportDiagnosticKind"
+        },
+        "message": {
+          "type": "string"
+        },
+        "stderrSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdoutSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "type": "object"
+    },
+    "ExportDiagnosticKind": {
+      "description": "Stable classes of export diagnostics returned through command envelopes.",
+      "enum": [
+        "invalidOutputPath",
+        "engineFailed",
+        "renderGraphFailed",
+        "compileFailed",
+        "runtimeUnavailable",
+        "runtimeFailed",
+        "cancelled",
+        "validationFailed"
+      ],
+      "type": "string"
+    },
+    "ExportJobPhase": {
+      "description": "Stable export job phase displayed by desktop clients.",
+      "enum": [
+        "queued",
+        "running",
+        "validating",
+        "completed",
+        "cancelled",
+        "failed",
+        "validationFailed"
+      ],
+      "type": "string"
+    },
+    "ExportJobStatusResponse": {
+      "additionalProperties": false,
+      "description": "Export job state returned by start/status/cancel commands.",
+      "properties": {
+        "diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportDiagnostic"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "logSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outTime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microseconds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputPath": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/ExportJobPhase"
+        },
+        "preset": {
+          "$ref": "#/$defs/ExportPreset"
+        },
+        "progressPerMille": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportValidationReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "jobId",
+        "phase",
+        "outputPath",
+        "preset"
+      ],
+      "title": "ExportJobStatusResponse",
+      "type": "object"
+    },
+    "ExportPreset": {
+      "description": "H.264/AAC export presets exposed through Rust-owned export services.",
+      "enum": [
+        "h264AacDraft",
+        "h264AacBalanced"
+      ],
+      "type": "string"
+    },
+    "ExportValidationReport": {
+      "additionalProperties": false,
+      "description": "Binding-safe validation report for a rendered export output.",
+      "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microseconds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fileSizeBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalFrameRate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasAudio": {
+          "type": "boolean"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "fileSizeBytes",
+        "hasAudio"
+      ],
+      "type": "object"
+    },
     "Filter": {
       "additionalProperties": false,
       "properties": {
@@ -1075,6 +1348,20 @@
         "name",
         "parameters"
       ],
+      "type": "object"
+    },
+    "GetExportJobStatusCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 export status command.",
+      "properties": {
+        "jobId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "title": "GetExportJobStatusCommandPayload",
       "type": "object"
     },
     "InvalidatePreviewCacheCommandPayload": {
@@ -1797,6 +2084,28 @@
       "title": "SplitSegmentCommandPayload",
       "type": "object"
     },
+    "StartExportCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 export start command.",
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "outputPath": {
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/ExportPreset"
+        }
+      },
+      "required": [
+        "draft",
+        "outputPath",
+        "preset"
+      ],
+      "title": "StartExportCommandPayload",
+      "type": "object"
+    },
     "TargetTimerange": {
       "additionalProperties": false,
       "properties": {
@@ -2498,6 +2807,57 @@
           "properties": {
             "kind": {
               "const": "invalidatePreviewCache"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "startExport"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "startExport"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "getExportJobStatus"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "getExportJobStatus"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "cancelExport"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "cancelExport"
             }
           },
           "required": [

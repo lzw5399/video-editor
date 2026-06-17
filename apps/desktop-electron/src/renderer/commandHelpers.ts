@@ -2,10 +2,13 @@ import type {
   AddSegmentCommandPayload,
   AddAudioSegmentCommandPayload,
   AddTextSegmentCommandPayload,
+  CancelExportCommandPayload,
   CommandEnvelope,
   CommandState,
   DeleteSegmentCommandPayload,
   EditTextSegmentCommandPayload,
+  ExportPreset,
+  GetExportJobStatusCommandPayload,
   ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
@@ -16,6 +19,7 @@ import type {
   RequestPreviewSegmentCommandPayload,
   SelectTimelineSegmentsCommandPayload,
   SplitSegmentCommandPayload,
+  StartExportCommandPayload,
   TimelineSelection,
   TrimSegmentCommandPayload,
   TrackId,
@@ -359,6 +363,41 @@ export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCac
   } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
 
   return envelope("invalidatePreviewCache", payload);
+}
+
+type StartExportOptions = {
+  draft: Draft;
+  outputPath: string;
+  preset: ExportPreset;
+};
+
+export function buildStartExportCommand(options: StartExportOptions): CommandEnvelope {
+  const payload = {
+    kind: "startExport",
+    draft: options.draft,
+    outputPath: options.outputPath,
+    preset: options.preset
+  } satisfies StartExportCommandPayload & { kind: "startExport" };
+
+  return envelope("startExport", payload);
+}
+
+export function buildGetExportJobStatusCommand(jobId: string): CommandEnvelope {
+  const payload = {
+    kind: "getExportJobStatus",
+    jobId
+  } satisfies GetExportJobStatusCommandPayload & { kind: "getExportJobStatus" };
+
+  return envelope("getExportJobStatus", payload);
+}
+
+export function buildCancelExportCommand(jobId: string): CommandEnvelope {
+  const payload = {
+    kind: "cancelExport",
+    jobId
+  } satisfies CancelExportCommandPayload & { kind: "cancelExport" };
+
+  return envelope("cancelExport", payload);
 }
 
 export function applyTimelineCommandResult(

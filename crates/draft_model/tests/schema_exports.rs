@@ -6,14 +6,16 @@ use std::{
 
 use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
-    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
-    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload,
-    Draft, DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, Filter,
-    ImportMaterialCommandPayload, ImportMaterialResponse, InvalidatePreviewCacheCommandPayload,
-    Keyframe, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MainTrackMagnet, Material,
-    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
+    DeleteSegmentCommandPayload, Draft, DraftId, DraftMetadata, DraftSchemaVersion,
+    EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
+    ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
+    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
+    InvalidatePreviewCacheCommandPayload, Keyframe, ListMaterialsCommandPayload,
+    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
+    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
     PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
     PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload, RationalFrameRate,
@@ -21,9 +23,10 @@ use draft_model::{
     RequestPreviewSegmentCommandPayload, Segment, SegmentId, SegmentVolume,
     SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
     SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
-    TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow, TextStroke, TextStyle,
-    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind, Transition,
-    TrimSegmentCommandPayload, UndoTimelineEditCommandPayload, VersionCommandPayload,
+    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
+    TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
+    TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
+    VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -80,6 +83,10 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RequestPreviewSegmentCommandPayload>(),
             export_decl::<PreviewCacheEntryRef>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<ExportPreset>(),
+            export_decl::<StartExportCommandPayload>(),
+            export_decl::<GetExportJobStatusCommandPayload>(),
+            export_decl::<CancelExportCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -94,7 +101,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     );
 
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -105,6 +112,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<ExportJobPhase>(),
+            export_decl::<ExportDiagnosticKind>(),
+            export_decl::<ExportDiagnostic>(),
+            export_decl::<ExportValidationReport>(),
+            export_decl::<ExportJobStatusResponse>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -204,6 +216,10 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RequestPreviewSegmentCommandPayload>(),
             export_decl::<PreviewCacheEntryRef>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<ExportPreset>(),
+            export_decl::<StartExportCommandPayload>(),
+            export_decl::<GetExportJobStatusCommandPayload>(),
+            export_decl::<CancelExportCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -213,7 +229,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
         ],
     );
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -224,6 +240,11 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<ExportJobPhase>(),
+            export_decl::<ExportDiagnosticKind>(),
+            export_decl::<ExportDiagnostic>(),
+            export_decl::<ExportValidationReport>(),
+            export_decl::<ExportJobStatusResponse>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -390,6 +411,46 @@ fn schema_exports_include_preview_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_export_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+
+    for expected_contract in [
+        "StartExportCommandPayload",
+        "GetExportJobStatusCommandPayload",
+        "CancelExportCommandPayload",
+        "ExportPreset",
+        "ExportJobStatusResponse",
+        "ExportJobPhase",
+        "ExportValidationReport",
+        "ExportDiagnostic",
+        "ExportDiagnosticKind",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract)
+                || command_envelope_ts.contains(expected_contract)
+                || command_result_ts.contains(expected_contract),
+            "export command contracts should include {expected_contract}"
+        );
+    }
+
+    for forbidden in [
+        "ffmpegArgs",
+        "filterComplex",
+        "filterScript",
+        "sidecars",
+        "processHandle",
+        "validationExpectation",
+    ] {
+        assert!(
+            !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
+            "export contracts must not expose renderer-owned {forbidden}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -430,6 +491,10 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<RequestPreviewSegmentCommandPayload>(),
             export_decl::<PreviewCacheEntryRef>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<ExportPreset>(),
+            export_decl::<StartExportCommandPayload>(),
+            export_decl::<GetExportJobStatusCommandPayload>(),
+            export_decl::<CancelExportCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -442,7 +507,7 @@ fn command_envelope_ts_contract() -> String {
 
 fn command_result_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -453,6 +518,11 @@ fn command_result_ts_contract() -> String {
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<ExportJobPhase>(),
+            export_decl::<ExportDiagnosticKind>(),
+            export_decl::<ExportDiagnostic>(),
+            export_decl::<ExportValidationReport>(),
+            export_decl::<ExportJobStatusResponse>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -663,6 +733,18 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "InvalidatePreviewCacheCommandPayload",
     );
+    include_command_contract_schema::<StartExportCommandPayload>(
+        &mut schema_value,
+        "StartExportCommandPayload",
+    );
+    include_command_contract_schema::<GetExportJobStatusCommandPayload>(
+        &mut schema_value,
+        "GetExportJobStatusCommandPayload",
+    );
+    include_command_contract_schema::<CancelExportCommandPayload>(
+        &mut schema_value,
+        "CancelExportCommandPayload",
+    );
     include_command_contract_schema::<PreviewArtifactResponse>(
         &mut schema_value,
         "PreviewArtifactResponse",
@@ -670,6 +752,14 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<PreviewCacheInvalidationResponse>(
         &mut schema_value,
         "PreviewCacheInvalidationResponse",
+    );
+    include_command_contract_schema::<ExportValidationReport>(
+        &mut schema_value,
+        "ExportValidationReport",
+    );
+    include_command_contract_schema::<ExportJobStatusResponse>(
+        &mut schema_value,
+        "ExportJobStatusResponse",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -1079,6 +1169,39 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "invalidatePreviewCache" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "startExport" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "startExport" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "getExportJobStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "getExportJobStatus" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "cancelExport" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "cancelExport" }
                     },
                     "required": ["kind"]
                 }
