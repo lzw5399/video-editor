@@ -311,7 +311,7 @@ fn output_profiles_share_the_same_graph_shape_with_distinct_profile_metadata() {
             },
             "validationHints": [
                 "validate file exists and is non-empty",
-                "validate duration, fps, resolution, and audio stream with ffprobe"
+                "validate duration, frame rate, resolution, and audio stream with runtime metadata"
             ]
         })
     );

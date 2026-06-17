@@ -130,7 +130,8 @@ impl RenderOutputProfile {
             preset,
             validation_hints: vec![
                 "validate file exists and is non-empty".to_owned(),
-                "validate duration, fps, resolution, and audio stream with ffprobe".to_owned(),
+                "validate duration, frame rate, resolution, and audio stream with runtime metadata"
+                    .to_owned(),
             ],
         }
     }
