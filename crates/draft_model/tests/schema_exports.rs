@@ -114,6 +114,66 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(generated_dir.join("Draft.ts"), &draft_ts);
 }
 
+#[test]
+fn schema_exports_include_timeline_command_session_contracts() {
+    let schema_json = command_schema_json();
+    for expected_contract in [
+        "TimelineSelection",
+        "CommandState",
+        "CommandHistorySnapshot",
+        "SnappingSettings",
+        "TimelineCommandResponse",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract),
+            "command schema should include {expected_contract}"
+        );
+    }
+
+    let command_envelope_ts = ts_contract_with_prelude(
+        "import type { Draft, MaterialId, MaterialKind } from \"./Draft\";\n\n",
+        &[
+            export_decl::<CommandName>(),
+            export_decl::<PingCommandPayload>(),
+            export_decl::<VersionCommandPayload>(),
+            export_decl::<ProbeMediaRuntimeCommandPayload>(),
+            export_decl::<ImportMaterialCommandPayload>(),
+            export_decl::<ListMaterialsCommandPayload>(),
+            export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<CommandPayload>(),
+            export_decl::<CommandEnvelope>(),
+        ],
+    );
+    let command_result_ts = ts_contract_with_prelude(
+        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\n\n",
+        &[
+            export_decl::<CommandErrorKind>(),
+            export_decl::<CommandError>(),
+            export_decl::<CommandEvent>(),
+            export_decl::<CommandResultEnvelope<()>>(),
+            export_decl::<MissingMaterialCommandDiagnosticKind>(),
+            export_decl::<MissingMaterialCommandDiagnostic>(),
+            export_decl::<ImportMaterialResponse>(),
+            export_decl::<ListMaterialsResponse>(),
+            export_decl::<ListMissingMaterialsResponse>(),
+        ],
+    );
+
+    for expected_contract in [
+        "TimelineSelection",
+        "CommandState",
+        "CommandHistorySnapshot",
+        "SnappingSettings",
+        "TimelineCommandResponse",
+    ] {
+        assert!(
+            command_envelope_ts.contains(expected_contract)
+                || command_result_ts.contains(expected_contract),
+            "generated TypeScript contracts should include {expected_contract}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
