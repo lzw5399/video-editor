@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures (completed 2026-06-16)
 - [x] **Phase 2: Draft And Material System** - `.veproj` draft bundle, Jianying-aligned schema, material import/probing, and save/open validation (completed 2026-06-17)
-- [ ] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics
+- [x] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics (completed 2026-06-17)
 - [ ] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration
 - [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
 - [ ] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness
@@ -116,20 +116,21 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 03-05-PLAN.md - Add fixtures, source guards, and final Phase 3 gates
+- [x] 03-05-PLAN.md - Add fixtures, source guards, and final Phase 3 gates
 
 ### Phase 4: Jianying-Style Desktop Workspace
 
 **Goal**: Build the desktop editor workspace with Jianying-like structure and command-only integration to the Rust core.
 **Depends on**: Phase 3
-**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, TEST-06
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, UI-06, TEST-06
 **UI hint**: yes
 **Success Criteria** (what must be TRUE):
 
   1. User sees a Jianying-like workspace: top feature categories, left material/function panel, center preview, right inspector, bottom timeline.
   2. User can import materials, add/edit segments, edit text/audio values, and see draft state update through Rust commands.
   3. UI consistently uses Jianying concepts and does not expose alternate internal jargon.
-  4. Timeline and panel layout remain stable during selection, hover, drag, and playback updates.
+  4. Desktop UI uses Simplified Chinese for user-visible copy by default.
+  5. Timeline and panel layout remain stable during selection, hover, drag, and playback updates.
 
 **Plans**: 4 plans
 
@@ -191,7 +192,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
-| 3. Timeline Command Core | 4/5 | In Progress|  |
+| 3. Timeline Command Core | 5/5 | Complete   | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |

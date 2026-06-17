@@ -66,11 +66,12 @@
 - [ ] **UI-03**: UI uses Jianying-style terms consistently and does not expose alternate internal jargon.
 - [ ] **UI-04**: UI emits typed commands to Rust and cannot mutate the draft directly.
 - [ ] **UI-05**: Timeline controls have stable dimensions and do not shift layout during selection, hover, or playback updates.
+- [ ] **UI-06**: Desktop UI user-facing language is Simplified Chinese by default, including panel titles, controls, empty states, errors, and test-visible copy.
 
 ### Testing And Quality
 
 - [x] **TEST-01**: Schema and model tests validate every golden draft fixture.
-- [ ] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
+- [x] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
 - [ ] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
 - [ ] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
 - [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
@@ -152,8 +153,9 @@
 | UI-03 | Phase 4 | Pending |
 | UI-04 | Phase 4 | Pending |
 | UI-05 | Phase 4 | Pending |
+| UI-06 | Phase 4 | Pending |
 | TEST-01 | Phase 1 | Complete |
-| TEST-02 | Phase 3 | Pending |
+| TEST-02 | Phase 3 | Complete |
 | TEST-03 | Phase 5 | Pending |
 | TEST-04 | Phase 5 | Pending |
 | TEST-05 | Phase 5 | Pending |

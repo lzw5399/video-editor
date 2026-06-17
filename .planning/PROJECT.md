@@ -19,6 +19,7 @@ Users can reliably import media, edit clips on a familiar Jianying-style timelin
 ### Active
 
 - [ ] Provide a Jianying-like desktop editing workspace with media, preview, inspector, and multi-track timeline regions.
+- [ ] Desktop app user-facing language is Simplified Chinese by default, including product copy, panel titles, controls, empty states, errors, and test-visible UI text.
 - [ ] Use Jianying-style concepts consistently across desktop UI, Rust core, IPC commands, documentation, schema, and tests: draft, material, track, segment, target/source time range, main track magnet, canvas adjustment, keyframe, sticker, text bubble, text effect, filter, transition.
 - [ ] Store project state in a self-owned `.veproj` project bundle with a canonical `project.json` source of truth.
 - [ ] Implement Rust-owned project, media, timeline, command, undo/redo, snapping, render graph, and FFmpeg compilation layers.
@@ -42,6 +43,8 @@ The project is guided by `AI_Video_Editing_Single_Engine_Guideline.md`, with the
 
 The application should feel like a restrained Jianying-style editor rather than a generic dashboard. The first screen should be the editor workspace: top feature categories, left material/effect library, center preview, right property inspector, and bottom multi-track timeline. MVP may leave advanced categories as placeholders, but the layout and interaction model should be established early.
 
+The Electron desktop UI should use Simplified Chinese as the default user-facing language. Internal Rust, IPC, schema, and test identifiers can remain code-friendly, but visible copy should be Chinese and should preserve Jianying-style terminology.
+
 ## Constraints
 
 - **Architecture**: UI emits commands; Rust core owns project and timeline semantics. No UI code may directly construct FFmpeg commands.
@@ -63,6 +66,7 @@ The application should feel like a restrained Jianying-style editor rather than 
 | Use Electron for the first desktop shell | Electron gives the fastest path to a desktop editor UI while Rust owns core logic | Phase 1 established the Electron shell, preload bridge, and Rust binding smoke |
 | Use a self-owned `.veproj` format | Long-term cross-platform control matters more than direct use of Jianying or Kdenlive formats | - Pending |
 | Align product and schema concepts with Jianying | Users and future compatibility work benefit from familiar vocabulary; avoid creating a parallel terminology layer | - Pending |
+| Use Simplified Chinese for the desktop UI | The first desktop product targets a Chinese Jianying-style editing experience, so visible copy should match the user's language and editing vocabulary | Applies starting in Phase 4 UI work |
 | Treat Kdenlive and MLT as references, not runtimes | Their architecture and abstractions are useful, but direct integration creates licensing, mobility, and product-control problems | - Pending |
 | Test every layer of the pipeline | A video editor fails through subtle time, render, preview, and packaging drift; phase gates must catch this early | Phase 1 established `just build`, `just test`, schema drift checks, Electron smoke, FFmpeg discovery tests, and render smoke |
 
@@ -84,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after Phase 1 completion*
+*Last updated: 2026-06-17 after Phase 3 execution*
