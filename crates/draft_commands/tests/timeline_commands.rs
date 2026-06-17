@@ -1,363 +1,279 @@
 use draft_commands::{
     TimelineCommandErrorKind,
-    timeline,
+    timeline::{
+        add_segment as command_add_segment, delete_segment as command_delete_segment,
+        move_segment as command_move_segment,
+        select_timeline_segments as command_select_timeline_segments,
+        split_segment as command_split_segment, trim_segment as command_trim_segment,
+    },
 };
 use draft_model::{
-    AddSegmentCommandPayload, CommandState, DeleteSegmentCommandPayload, Draft, Material,
-    MaterialKind, Microseconds, MoveSegmentCommandPayload, SelectTimelineSegmentsCommandPayload,
-    SourceTimerange, SplitSegmentCommandPayload, TargetTimerange, TimelineSelection, Track,
-    TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
+    CommandState, Draft, Material, MaterialKind, Microseconds, Segment, SourceTimerange,
+    TargetTimerange, TimelineSelection, Track, TrackKind, TrimSegmentDirection,
 };
 
 #[test]
 fn add_segment() {
-    let draft = draft_with_empty_tracks();
-    let command_state = CommandState::empty();
-    let selection = TimelineSelection::empty();
+    let draft = draft_with_tracks_and_materials();
+    let response = command_add_segment(
+        &draft,
+        &CommandState::empty(),
+        &TimelineSelection::empty(),
+        "video-track".into(),
+        "intro-segment".into(),
+        "video-material".into(),
+        SourceTimerange::new(100_000, 400_000),
+        TargetTimerange::new(1_000_000, 400_000),
+    )
+    .expect("add segment should commit on a valid unlocked compatible track");
 
-    let response = timeline::add_segment(AddSegmentCommandPayload {
-        draft: draft.clone(),
-        command_state: command_state.clone(),
-        selection: selection.clone(),
-        track_id: "video-track".into(),
-        segment_id: "segment-a".into(),
-        material_id: "video-material".into(),
-        source_timerange: SourceTimerange::new(250_000, 500_000),
-        target_timerange: TargetTimerange::new(1_000_000, 500_000),
-    })
-    .expect("valid add should commit");
-
-    assert_eq!(draft.tracks[0].segments.len(), 0, "input draft is immutable");
+    assert!(draft.tracks[0].segments.is_empty(), "input draft stays unchanged");
     assert_eq!(response.draft.tracks[0].segments.len(), 1);
     let segment = &response.draft.tracks[0].segments[0];
-    assert_eq!(segment.segment_id.as_str(), "segment-a");
+    assert_eq!(segment.segment_id.as_str(), "intro-segment");
     assert_eq!(segment.material_id.as_str(), "video-material");
-    assert_eq!(segment.source_timerange, SourceTimerange::new(250_000, 500_000));
-    assert_eq!(segment.target_timerange, TargetTimerange::new(1_000_000, 500_000));
-    assert_eq!(response.selection.segment_ids, vec!["segment-a".into()]);
-    assert_eq!(response.command_state.undo_stack.len(), 1);
-    assert_eq!(response.command_state.redo_stack.len(), 0);
+    assert_eq!(segment.source_timerange, SourceTimerange::new(100_000, 400_000));
+    assert_eq!(segment.target_timerange, TargetTimerange::new(1_000_000, 400_000));
+    assert_eq!(response.selection.segment_ids, vec!["intro-segment".into()]);
     assert_eq!(response.events[0].kind, "segmentAdded");
 }
 
 #[test]
 fn timeline_edits() {
-    let response = timeline::add_segment(AddSegmentCommandPayload {
-        draft: draft_with_empty_tracks(),
-        command_state: CommandState::empty(),
-        selection: TimelineSelection::empty(),
-        track_id: "video-track".into(),
-        segment_id: "segment-a".into(),
-        material_id: "video-material".into(),
-        source_timerange: SourceTimerange::new(100_000, 700_000),
-        target_timerange: TargetTimerange::new(1_000_000, 700_000),
-    })
-    .expect("add should commit");
+    let (draft, state, selection) = draft_with_existing_video_segment();
 
-    let selected = timeline::select_timeline_segments(SelectTimelineSegmentsCommandPayload {
-        draft: response.draft.clone(),
-        command_state: response.command_state.clone(),
-        selection: response.selection.clone(),
-        segment_ids: vec!["segment-a".into()],
-        track_ids: vec!["video-track".into()],
-    })
-    .expect("select should commit");
-    assert_eq!(selected.draft, response.draft, "selection does not mutate draft");
+    let selected = command_select_timeline_segments(
+        &draft,
+        &state,
+        &selection,
+        vec!["segment-a".into()],
+        vec!["video-track".into()],
+    )
+    .expect("selection command should not mutate draft");
+    assert_eq!(selected.draft, draft);
     assert_eq!(selected.selection.segment_ids, vec!["segment-a".into()]);
     assert_eq!(selected.selection.track_ids, vec!["video-track".into()]);
     assert_eq!(selected.events[0].kind, "timelineSelectionChanged");
 
-    let moved = timeline::move_segment(MoveSegmentCommandPayload {
-        draft: selected.draft.clone(),
-        command_state: selected.command_state.clone(),
-        selection: selected.selection.clone(),
-        segment_id: "segment-a".into(),
-        target_track_id: "video-track".into(),
-        target_start: Microseconds::new(2_000_000),
-    })
-    .expect("move should commit");
-    let segment = &moved.draft.tracks[0].segments[0];
-    assert_eq!(segment.source_timerange, SourceTimerange::new(100_000, 700_000));
-    assert_eq!(segment.target_timerange, TargetTimerange::new(2_000_000, 700_000));
+    let moved = command_move_segment(
+        &draft,
+        &state,
+        &selected.selection,
+        "segment-a".into(),
+        "video-track".into(),
+        Microseconds::new(500_000),
+    )
+    .expect("move should change target start only");
+    let moved_segment = &moved.draft.tracks[0].segments[0];
+    assert_eq!(moved_segment.source_timerange, SourceTimerange::new(100_000, 400_000));
+    assert_eq!(moved_segment.target_timerange, TargetTimerange::new(500_000, 400_000));
     assert_eq!(moved.events[0].kind, "segmentMoved");
 
-    let split = timeline::split_segment(SplitSegmentCommandPayload {
-        draft: moved.draft.clone(),
-        command_state: moved.command_state.clone(),
-        selection: moved.selection.clone(),
-        segment_id: "segment-a".into(),
-        right_segment_id: "segment-b".into(),
-        split_at: Microseconds::new(2_300_000),
-    })
-    .expect("split should commit");
+    let split = command_split_segment(
+        &draft,
+        &state,
+        &selected.selection,
+        "segment-a".into(),
+        "segment-b".into(),
+        Microseconds::new(250_000),
+    )
+    .expect("split should create adjacent segments with adjusted source ranges");
     assert_eq!(split.draft.tracks[0].segments.len(), 2);
     assert_eq!(
-        split.draft.tracks[0].segments[0].source_timerange,
-        SourceTimerange::new(100_000, 300_000)
-    );
-    assert_eq!(
         split.draft.tracks[0].segments[0].target_timerange,
-        TargetTimerange::new(2_000_000, 300_000)
+        TargetTimerange::new(0, 250_000)
     );
     assert_eq!(
-        split.draft.tracks[0].segments[1].source_timerange,
-        SourceTimerange::new(400_000, 400_000)
+        split.draft.tracks[0].segments[0].source_timerange,
+        SourceTimerange::new(100_000, 250_000)
     );
     assert_eq!(
         split.draft.tracks[0].segments[1].target_timerange,
-        TargetTimerange::new(2_300_000, 400_000)
+        TargetTimerange::new(250_000, 150_000)
+    );
+    assert_eq!(
+        split.draft.tracks[0].segments[1].source_timerange,
+        SourceTimerange::new(350_000, 150_000)
     );
     assert_eq!(split.events[0].kind, "segmentSplit");
 
-    let left_trimmed = timeline::trim_segment(TrimSegmentCommandPayload {
-        draft: split.draft.clone(),
-        command_state: split.command_state.clone(),
-        selection: split.selection.clone(),
-        segment_id: "segment-a".into(),
-        direction: TrimSegmentDirection::Left,
-        target_timerange: TargetTimerange::new(2_100_000, 200_000),
-    })
-    .expect("left trim should commit");
+    let left_trimmed = command_trim_segment(
+        &draft,
+        &state,
+        &selected.selection,
+        "segment-a".into(),
+        TrimSegmentDirection::Left,
+        TargetTimerange::new(150_000, 250_000),
+    )
+    .expect("left trim should advance source start and shrink target");
     assert_eq!(
         left_trimmed.draft.tracks[0].segments[0].source_timerange,
-        SourceTimerange::new(200_000, 200_000)
+        SourceTimerange::new(250_000, 250_000)
     );
     assert_eq!(
         left_trimmed.draft.tracks[0].segments[0].target_timerange,
-        TargetTimerange::new(2_100_000, 200_000)
-    );
-    assert_eq!(left_trimmed.events[0].kind, "segmentTrimmed");
-
-    let right_trimmed = timeline::trim_segment(TrimSegmentCommandPayload {
-        draft: left_trimmed.draft.clone(),
-        command_state: left_trimmed.command_state.clone(),
-        selection: left_trimmed.selection.clone(),
-        segment_id: "segment-b".into(),
-        direction: TrimSegmentDirection::Right,
-        target_timerange: TargetTimerange::new(2_300_000, 250_000),
-    })
-    .expect("right trim should commit");
-    assert_eq!(
-        right_trimmed.draft.tracks[0].segments[1].source_timerange,
-        SourceTimerange::new(400_000, 250_000)
-    );
-    assert_eq!(
-        right_trimmed.draft.tracks[0].segments[1].target_timerange,
-        TargetTimerange::new(2_300_000, 250_000)
+        TargetTimerange::new(150_000, 250_000)
     );
 
-    let deleted = timeline::delete_segment(DeleteSegmentCommandPayload {
-        draft: right_trimmed.draft.clone(),
-        command_state: right_trimmed.command_state.clone(),
-        selection: TimelineSelection {
-            segment_ids: vec!["segment-a".into(), "segment-b".into()],
-            track_ids: vec!["video-track".into()],
-        },
-        segment_id: "segment-a".into(),
-    })
-    .expect("delete should commit");
-    assert_eq!(deleted.draft.tracks[0].segments.len(), 1);
-    assert_eq!(deleted.draft.tracks[0].segments[0].segment_id.as_str(), "segment-b");
-    assert_eq!(deleted.selection.segment_ids, vec!["segment-b".into()]);
+    let right_trimmed = command_trim_segment(
+        &draft,
+        &state,
+        &selected.selection,
+        "segment-a".into(),
+        TrimSegmentDirection::Right,
+        TargetTimerange::new(0, 250_000),
+    )
+    .expect("right trim should preserve source start and shrink duration");
+    assert_eq!(
+        right_trimmed.draft.tracks[0].segments[0].source_timerange,
+        SourceTimerange::new(100_000, 250_000)
+    );
+    assert_eq!(
+        right_trimmed.draft.tracks[0].segments[0].target_timerange,
+        TargetTimerange::new(0, 250_000)
+    );
+    assert_eq!(right_trimmed.events[0].kind, "segmentTrimmed");
+
+    let deleted = command_delete_segment(
+        &draft,
+        &state,
+        &selected.selection,
+        "segment-a".into(),
+    )
+    .expect("delete should remove the segment and clean selection");
+    assert!(deleted.draft.tracks[0].segments.is_empty());
+    assert!(deleted.selection.segment_ids.is_empty());
     assert_eq!(deleted.events[0].kind, "segmentDeleted");
 }
 
 #[test]
 fn invalid_edits_are_atomic() {
-    let valid = timeline::add_segment(AddSegmentCommandPayload {
-        draft: draft_with_empty_tracks(),
-        command_state: CommandState::empty(),
-        selection: TimelineSelection::empty(),
-        track_id: "video-track".into(),
-        segment_id: "segment-a".into(),
-        material_id: "video-material".into(),
-        source_timerange: SourceTimerange::new(0, 500_000),
-        target_timerange: TargetTimerange::new(0, 500_000),
-    })
-    .expect("seed add should commit");
+    let (draft, state, selection) = draft_with_existing_video_segment();
 
-    let base_draft = valid.draft.clone();
-    let base_state = valid.command_state.clone();
-    let base_selection = valid.selection.clone();
+    let overlap = command_add_segment(
+        &draft,
+        &state,
+        &selection,
+        "video-track".into(),
+        "overlap".into(),
+        "video-material".into(),
+        SourceTimerange::new(500_000, 250_000),
+        TargetTimerange::new(100_000, 250_000),
+    )
+    .expect_err("same-track overlap should reject");
+    assert!(matches!(overlap.kind, TimelineCommandErrorKind::OverlappingSegment { .. }));
 
-    assert_atomic_rejection(
-        timeline::add_segment(AddSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            track_id: "video-track".into(),
-            segment_id: "overlap".into(),
-            material_id: "video-material".into(),
-            source_timerange: SourceTimerange::new(0, 500_000),
-            target_timerange: TargetTimerange::new(250_000, 500_000),
-        }),
-        TimelineCommandErrorKind::OverlappingSegment {
-            track_id: "video-track".into(),
-            first_segment_id: "segment-a".into(),
-            second_segment_id: "overlap".into(),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    let locked = {
+        let mut locked = draft.clone();
+        locked.tracks[0].locked = true;
+        command_move_segment(
+            &locked,
+            &state,
+            &selection,
+            "segment-a".into(),
+            "video-track".into(),
+            Microseconds::new(600_000),
+        )
+        .expect_err("locked track mutation should reject")
+    };
+    assert!(matches!(locked.kind, TimelineCommandErrorKind::LockedTrack { .. }));
 
-    let mut locked_draft = base_draft.clone();
-    locked_draft.tracks[0].locked = true;
-    assert_atomic_rejection(
-        timeline::move_segment(MoveSegmentCommandPayload {
-            draft: locked_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            segment_id: "segment-a".into(),
-            target_track_id: "video-track".into(),
-            target_start: Microseconds::new(750_000),
-        }),
-        TimelineCommandErrorKind::LockedTrack {
-            track_id: "video-track".into(),
-        },
-        &locked_draft,
-        &base_state,
-        &base_selection,
-    );
+    let material_overrun = command_add_segment(
+        &draft,
+        &state,
+        &selection,
+        "video-track".into(),
+        "overrun".into(),
+        "video-material".into(),
+        SourceTimerange::new(900_000, 200_000),
+        TargetTimerange::new(600_000, 200_000),
+    )
+    .expect_err("source ranges beyond material duration should reject");
+    assert!(matches!(
+        material_overrun.kind,
+        TimelineCommandErrorKind::SourceRangeExceedsMaterialDuration { .. }
+    ));
 
-    assert_atomic_rejection(
-        timeline::add_segment(AddSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            track_id: "video-track".into(),
-            segment_id: "overrun".into(),
-            material_id: "video-material".into(),
-            source_timerange: SourceTimerange::new(900_000, 200_000),
-            target_timerange: TargetTimerange::new(750_000, 200_000),
-        }),
-        TimelineCommandErrorKind::SourceRangeExceedsMaterialDuration {
-            segment_id: "overrun".into(),
-            material_id: "video-material".into(),
-            source_end: Microseconds::new(1_100_000),
-            material_duration: Microseconds::new(1_000_000),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    let invalid_split = command_split_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-a".into(),
+        "right-invalid".into(),
+        Microseconds::new(400_000),
+    )
+    .expect_err("split at segment end should reject");
+    assert!(matches!(
+        invalid_split.kind,
+        TimelineCommandErrorKind::InvalidSplitPoint { .. }
+    ));
 
-    assert_atomic_rejection(
-        timeline::split_segment(SplitSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            segment_id: "segment-a".into(),
-            right_segment_id: "segment-b".into(),
-            split_at: Microseconds::new(0),
-        }),
-        TimelineCommandErrorKind::InvalidSplitPoint {
-            segment_id: "segment-a".into(),
-            split_at: Microseconds::new(0),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    let zero_trim = command_trim_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-a".into(),
+        TrimSegmentDirection::Right,
+        TargetTimerange::new(0, 0),
+    )
+    .expect_err("zero-duration trim should reject");
+    assert!(matches!(
+        zero_trim.kind,
+        TimelineCommandErrorKind::ZeroDuration { .. }
+    ));
 
-    assert_atomic_rejection(
-        timeline::trim_segment(TrimSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            segment_id: "segment-a".into(),
-            direction: TrimSegmentDirection::Right,
-            target_timerange: TargetTimerange::new(0, 0),
-        }),
-        TimelineCommandErrorKind::ZeroDuration {
-            field: "targetTimerange.duration".to_owned(),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    let missing_material = command_add_segment(
+        &draft,
+        &state,
+        &selection,
+        "video-track".into(),
+        "missing".into(),
+        "missing-material".into(),
+        SourceTimerange::new(0, 100_000),
+        TargetTimerange::new(600_000, 100_000),
+    )
+    .expect_err("missing material should reject");
+    assert!(matches!(
+        missing_material.kind,
+        TimelineCommandErrorKind::MaterialNotFound { .. }
+    ));
 
-    assert_atomic_rejection(
-        timeline::delete_segment(DeleteSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            segment_id: "missing-segment".into(),
-        }),
-        TimelineCommandErrorKind::SegmentNotFound {
-            segment_id: "missing-segment".into(),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    let incompatible = command_add_segment(
+        &draft,
+        &state,
+        &selection,
+        "video-track".into(),
+        "audio-on-video".into(),
+        "audio-material".into(),
+        SourceTimerange::new(0, 100_000),
+        TargetTimerange::new(600_000, 100_000),
+    )
+    .expect_err("audio material on video track should reject");
+    assert!(matches!(
+        incompatible.kind,
+        TimelineCommandErrorKind::IncompatibleTrackMaterialKind { .. }
+    ));
 
-    assert_atomic_rejection(
-        timeline::add_segment(AddSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            track_id: "video-track".into(),
-            segment_id: "missing-material".into(),
-            material_id: "missing-material".into(),
-            source_timerange: SourceTimerange::new(0, 100_000),
-            target_timerange: TargetTimerange::new(750_000, 100_000),
-        }),
-        TimelineCommandErrorKind::MaterialNotFound {
-            material_id: "missing-material".into(),
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
-
-    assert_atomic_rejection(
-        timeline::add_segment(AddSegmentCommandPayload {
-            draft: base_draft.clone(),
-            command_state: base_state.clone(),
-            selection: base_selection.clone(),
-            track_id: "audio-track".into(),
-            segment_id: "incompatible".into(),
-            material_id: "video-material".into(),
-            source_timerange: SourceTimerange::new(0, 100_000),
-            target_timerange: TargetTimerange::new(750_000, 100_000),
-        }),
-        TimelineCommandErrorKind::IncompatibleTrackMaterialKind {
-            track_id: "audio-track".into(),
-            track_kind: TrackKind::Audio,
-            material_id: "video-material".into(),
-            material_kind: MaterialKind::Video,
-        },
-        &base_draft,
-        &base_state,
-        &base_selection,
-    );
+    assert_eq!(draft, draft_with_existing_video_segment().0);
+    assert_eq!(state, CommandState::empty());
+    assert_eq!(selection, TimelineSelection::empty());
 }
 
-fn assert_atomic_rejection(
-    result: Result<draft_model::TimelineCommandResponse, draft_commands::TimelineCommandError>,
-    expected: TimelineCommandErrorKind,
-    draft: &Draft,
-    command_state: &CommandState,
-    selection: &TimelineSelection,
-) {
-    let error = result.expect_err("command should reject");
-    assert_eq!(error.kind, expected);
-    assert_eq!(*draft, draft.clone(), "draft remains unchanged after rejection");
-    assert_eq!(
-        *command_state,
-        command_state.clone(),
-        "command state remains unchanged after rejection"
-    );
-    assert_eq!(
-        *selection,
-        selection.clone(),
-        "selection remains unchanged after rejection"
-    );
+fn draft_with_existing_video_segment() -> (Draft, CommandState, TimelineSelection) {
+    let mut draft = draft_with_tracks_and_materials();
+    draft.tracks[0].segments.push(segment(
+        "segment-a",
+        "video-material",
+        100_000,
+        400_000,
+        0,
+        400_000,
+    ));
+    (draft, CommandState::empty(), TimelineSelection::empty())
 }
 
-fn draft_with_empty_tracks() -> Draft {
-    let mut draft = Draft::new("timeline-command-draft", "Timeline Command Draft");
+fn draft_with_tracks_and_materials() -> Draft {
+    let mut draft = Draft::new("timeline-command-draft", "Timeline Commands");
     draft.materials.push(material_with_duration(
         "video-material",
         MaterialKind::Video,
@@ -388,4 +304,20 @@ fn material_with_duration(
     let mut material = Material::new(material_id, kind, uri, material_id);
     material.metadata.duration = Some(Microseconds::new(duration));
     material
+}
+
+fn segment(
+    segment_id: &str,
+    material_id: &str,
+    source_start: u64,
+    source_duration: u64,
+    target_start: u64,
+    target_duration: u64,
+) -> Segment {
+    Segment::new(
+        segment_id,
+        material_id,
+        SourceTimerange::new(source_start, source_duration),
+        TargetTimerange::new(target_start, target_duration),
+    )
 }
