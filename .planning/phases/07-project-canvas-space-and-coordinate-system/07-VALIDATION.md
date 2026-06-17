@@ -9,7 +9,7 @@ created: 2026-06-18
 
 # Phase 07 - Validation Strategy
 
-> Per-phase validation contract for draft canvas schema, Rust-owned canvas commands, preview/export propagation, Chinese desktop UI, and source ownership guards.
+> Per-phase validation contract for draft canvas schema, generated contracts, Rust-owned canvas commands, preview/export propagation, Chinese desktop UI, and source ownership guards.
 
 ---
 
@@ -38,18 +38,21 @@ created: 2026-06-18
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 07-01-01 | 01 | 1 | CANVAS-01, CANVAS-02, CANVAS-03 | T-07-01 / T-07-02 | Malformed canvas dimensions, fps, aspect ratio, color, and image references are rejected in Rust | rust unit | `cargo test -p draft_model canvas -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-01-02 | 01 | 1 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-03 | Generated schema and TypeScript contracts expose Rust-owned canvas payloads | schema + contract | `VE_UPDATE_GENERATED_CONTRACTS=1 cargo test -p draft_model schema_exports_generated_contract_artifacts_from_rust -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-02-01 | 02 | 2 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-05 / T-07-06 | Canvas edits clone, validate, and commit through Rust command history | rust command | `cargo test -p draft_commands canvas -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-02-02 | 02 | 2 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-07 | Node binding only routes typed `updateDraftCanvasConfig` envelopes | rust binding | `cargo test -p bindings_node canvas_commands -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-03-01 | 03 | 2 | CANVAS-01, CANVAS-03 | T-07-08 | Engine profile width, height, and frame rate resolve from `Draft.canvasConfig` | rust unit | `cargo test -p engine_core canvas -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-03-02 | 03 | 2 | CANVAS-02, CANVAS-03 | T-07-09 | Render graph and compiler carry background support/degraded/unsupported diagnostics | rust snapshot | `cargo test -p render_graph canvas -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-03-03 | 03 | 2 | CANVAS-01, CANVAS-02, CANVAS-03 | T-07-10 | Preview/export production paths no longer rely on MVP hard-coded canvas profile | rust service | `cargo test -p preview_service canvas -- --nocapture` | ❌ W0 | ⬜ pending |
-| 07-04-01 | 04 | 3 | CANVAS-04 | T-07-11 | Renderer builds command envelopes only and applies Rust command responses | e2e | `pnpm --filter @video-editor/desktop test:workspace -g "画布"` | ❌ W0 | ⬜ pending |
-| 07-04-02 | 04 | 3 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-12 | Inspector and preview show Chinese canvas settings without direct draft mutation | e2e + layout | `pnpm --filter @video-editor/desktop test:workspace -g "草稿参数|画布"` | ❌ W0 | ⬜ pending |
-| 07-04-03 | 04 | 3 | CANVAS-04 | T-07-13 | 1280x800 and 1120x720 workspaces keep five regions visible without white scrollbars | e2e screenshot | `pnpm --filter @video-editor/desktop test:workspace -g "草稿参数|画布"` | ❌ W0 | ⬜ pending |
-| 07-05-01 | 05 | 4 | CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04 | T-07-14 | Source guards block renderer-owned canvas, render, export, and preview semantics | source guard | `bash scripts/phase7-source-guards.sh` | ❌ W0 | ⬜ pending |
-| 07-05-02 | 05 | 4 | CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04 | T-07-15 | Root gates run Phase 07 checks and generated contracts have no drift | root gate | `pnpm run test:phase7 && pnpm run test && /Users/zhiwen/.cargo/bin/just test` | ❌ W0 | ⬜ pending |
+| 07-01-01 | 01 | 1 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-01 / T-07-02 | Malformed canvas dimensions, fps, aspect ratio, color, and image references are rejected in Rust | rust unit | `cargo test -p draft_model canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-01-02 | 01 | 1 | CANVAS-03 | T-07-03 | Coordinate contract is documented and tested as center-origin, +X right, +Y up | rust unit + docs | `cargo test -p draft_model canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-02-01 | 02 | 2 | CANVAS-01, CANVAS-02 | T-07-04 | Fixtures require valid `canvasConfig` and reject invalid image background references | fixture | `cargo test -p draft_model draft_fixtures -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-02-02 | 02 | 2 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-05 / T-07-06 | Generated schema and TypeScript contracts expose Rust-owned canvas payloads | schema + contract | `VE_UPDATE_GENERATED_CONTRACTS=1 cargo test -p draft_model schema_exports_generated_contract_artifacts_from_rust -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-03-01 | 03 | 3 | CANVAS-01, CANVAS-02, CANVAS-04 | T-07-07 / T-07-09 | Canvas edits clone, validate, and commit through Rust command history | rust command | `cargo test -p draft_commands canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-03-02 | 03 | 3 | CANVAS-04 | T-07-08 | Node binding only routes typed `updateDraftCanvasConfig` envelopes | rust binding | `cargo test -p bindings_node canvas_commands -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-04-01 | 04 | 3 | CANVAS-01, CANVAS-03 | T-07-10 | Engine profile width, height, and frame rate resolve from `Draft.canvasConfig` | rust unit | `cargo test -p engine_core canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-04-02 | 04 | 3 | CANVAS-02, CANVAS-03 | T-07-11 / T-07-13 | Render graph and compiler carry background support/degraded/unsupported diagnostics | rust snapshot | `cargo test -p render_graph canvas -- --nocapture && cargo test -p ffmpeg_compiler canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-05-01 | 05 | 4 | CANVAS-01, CANVAS-02, CANVAS-03 | T-07-14 / T-07-15 | Preview production paths no longer rely on MVP hard-coded canvas profile | rust service | `cargo test -p preview_service canvas -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-05-02 | 05 | 4 | CANVAS-01, CANVAS-02, CANVAS-03 | T-07-14 / T-07-16 | Export validation expects draft canvas dimensions and rational fps | rust service | `cargo test -p bindings_node export_commands -- --nocapture && cargo test -p testkit preview_export_parity -- --nocapture` | ❌ W0 | ⬜ pending |
+| 07-06-01 | 06 | 5 | CANVAS-04 | T-07-17 / T-07-18 | Renderer builds command envelopes only and applies Rust command responses | e2e | `pnpm --filter @video-editor/desktop test:workspace -g "画布"` | ❌ W0 | ⬜ pending |
+| 07-06-02 | 06 | 5 | CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04 | T-07-17 / T-07-19 | Inspector and preview show Chinese canvas settings without direct draft mutation | e2e + layout | `pnpm --filter @video-editor/desktop test:workspace -g "草稿参数|画布"` | ❌ W0 | ⬜ pending |
+| 07-06-03 | 06 | 5 | CANVAS-04 | T-07-18 / T-07-20 | 1280x800 and 1120x720 workspaces keep five regions visible without white scrollbars | e2e screenshot | `pnpm --filter @video-editor/desktop test:workspace -g "草稿参数|画布"` | ❌ W0 | ⬜ pending |
+| 07-07-01 | 07 | 6 | CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04 | T-07-21 / T-07-23 | Source guards block renderer-owned canvas, render, export, and preview semantics | source guard | `bash scripts/phase7-source-guards.sh` | ❌ W0 | ⬜ pending |
+| 07-07-02 | 07 | 6 | CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04 | T-07-22 / T-07-24 | Root gates run Phase 07 checks and generated contracts have no drift | root gate | `pnpm run test:phase7 && pnpm run test && /Users/zhiwen/.cargo/bin/just test` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -58,13 +61,14 @@ created: 2026-06-18
 ## Wave 0 Requirements
 
 - [ ] `crates/draft_model/src/canvas.rs` plus `crates/draft_model/tests/canvas_config.rs` for schema defaults, validation, and coordinate conversion.
-- [ ] Canvas fixture updates in `fixtures/draft/positive/*/project.json` and `fixtures/draft/negative/*canvas*/project.json`.
+- [ ] `docs/canvas-coordinate-system.md` documenting center origin, `+X` right, `+Y` up, and UI pixel conversion.
+- [ ] Canvas fixture updates in `fixtures/draft/positive/*/project.json` and targeted `fixtures/draft/negative/*canvas*/project.json`.
+- [ ] Generated schema/TypeScript wiring for draft canvas and `updateDraftCanvasConfig`.
 - [ ] `crates/draft_commands/src/canvas.rs` and command tests for apply/undo/redo/invalid canvas payloads.
-- [ ] `crates/engine_core/tests/*canvas*` or normalization tests proving non-default canvas profile resolution.
-- [ ] `crates/render_graph/tests/*canvas*`, `crates/ffmpeg_compiler/tests/*canvas*`, `crates/preview_service/tests/*canvas*`, and binding export tests for draft-driven canvas semantics.
+- [ ] `crates/engine_core/tests/*canvas*`, `crates/render_graph/tests/*canvas*`, and `crates/ffmpeg_compiler/tests/*canvas*` for canvas profile and diagnostics.
+- [ ] `crates/preview_service/tests/*canvas*`, `crates/bindings_node/tests/export_commands.rs`, and `crates/testkit/tests/preview_export_parity.rs` coverage for draft-driven preview/export semantics.
 - [ ] `apps/desktop-electron/tests/workspace.spec.ts` canvas UI command-routing and layout coverage at `1280x800` and `1120x720`.
 - [ ] `scripts/phase7-source-guards.sh` plus `package.json` / `justfile` wiring for `test:phase7`.
-- [ ] `docs/canvas-coordinate-system.md` documenting center-origin, `+X` right, `+Y` up, and UI pixel conversion.
 
 Existing infrastructure covers Rust tests, contract generation, Playwright Electron, Phase 4/5 source guard patterns, and root package scripts.
 

@@ -268,26 +268,34 @@ Plans:
   3. All visual coordinates use one documented normalized coordinate system that later sticker/text/PIP/transform/keyframe behavior can share.
   4. Desktop UI exposes Chinese project canvas settings using Jianying-style terms and routes changes through Rust commands.
 
-**Plans**: 5 plans
+**Plans**: 7 plans
 
 Plans:
 
 **Wave 1**
 
-- [ ] 07-01-PLAN.md - Define draft canvas schema, validation, generated contracts, fixtures, and coordinate docs
+- [ ] 07-01-PLAN.md - Define draft canvas model, validation, coordinate docs, and focused tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md - Add undoable Rust canvas command and binding route
-- [ ] 07-03-PLAN.md - Propagate draft canvas profile through engine, render graph, preview, and export
+- [ ] 07-02-PLAN.md - Update fixtures, schema export wiring, and generated canvas contracts
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-04-PLAN.md - Add Chinese inspector and preview canvas UI with Playwright layout gates
+- [ ] 07-03-PLAN.md - Add undoable Rust canvas command and binding route
+- [ ] 07-04-PLAN.md - Propagate canvas profile through engine, render graph, and FFmpeg compiler
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4** *(blocked on Wave 3 render/compiler completion)*
 
-- [ ] 07-05-PLAN.md - Add Phase 07 source guards and public root gates
+- [ ] 07-05-PLAN.md - Propagate canvas profile through preview and export services
+
+**Wave 5** *(blocked on Wave 3 command route and Wave 4 service propagation)*
+
+- [ ] 07-06-PLAN.md - Add Chinese inspector and preview canvas UI with Playwright workspace gates
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 07-07-PLAN.md - Add Phase 07 source guards and public root gates
 
 ### Phase 8: Segment Transform And Visual Compositing
 
@@ -394,7 +402,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
-| 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
+| 7. Project Canvas Space And Coordinate System | 0/7 | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
