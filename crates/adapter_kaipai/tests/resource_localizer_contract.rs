@@ -47,7 +47,11 @@ fn resource_localizer_contract_localizes_renderable_resources_under_resources_di
         result.manifest.resources[0].bundle_relative_uri.as_deref(),
         Some("resources/fonts/redacted-font.ttf")
     );
-    assert!(bundle_path.join("resources/fonts/redacted-font.ttf").exists());
+    assert!(
+        bundle_path
+            .join("resources/fonts/redacted-font.ttf")
+            .exists()
+    );
 }
 
 #[test]
