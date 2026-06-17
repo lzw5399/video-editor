@@ -18,10 +18,12 @@ use draft_model::{
     Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
     PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload, RationalFrameRate,
-    RedoTimelineEditCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, Segment, SegmentId, SegmentVolume,
-    SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
+    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
+    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentId,
+    SegmentVolume, SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
     SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
     StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
     TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
@@ -62,6 +64,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<PingCommandPayload>(),
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
+            export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
@@ -117,6 +120,13 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ExportDiagnostic>(),
             export_decl::<ExportValidationReport>(),
             export_decl::<ExportJobStatusResponse>(),
+            export_decl::<RuntimeCapabilityStatus>(),
+            export_decl::<RuntimeBinaryKind>(),
+            export_decl::<RuntimeBinaryCapability>(),
+            export_decl::<RuntimeFeatureCapability>(),
+            export_decl::<RuntimeFontCapability>(),
+            export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -195,6 +205,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<PingCommandPayload>(),
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
+            export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
@@ -245,6 +256,13 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ExportDiagnostic>(),
             export_decl::<ExportValidationReport>(),
             export_decl::<ExportJobStatusResponse>(),
+            export_decl::<RuntimeCapabilityStatus>(),
+            export_decl::<RuntimeBinaryKind>(),
+            export_decl::<RuntimeBinaryCapability>(),
+            export_decl::<RuntimeFeatureCapability>(),
+            export_decl::<RuntimeFontCapability>(),
+            export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -451,6 +469,35 @@ fn schema_exports_include_export_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_runtime_capability_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+
+    for expected_contract in [
+        "ProbeRuntimeCapabilitiesCommandPayload",
+        "RuntimeCapabilityReport",
+        "RuntimeBinaryCapability",
+        "RuntimeFeatureCapability",
+        "RuntimeFontCapability",
+        "RuntimeLicensePosture",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract)
+                || command_envelope_ts.contains(expected_contract)
+                || command_result_ts.contains(expected_contract),
+            "runtime capability contracts should include {expected_contract}"
+        );
+    }
+
+    assert!(
+        schema_json.contains("probeRuntimeCapabilities")
+            && command_envelope_ts.contains("probeRuntimeCapabilities"),
+        "runtime capability command should be generated from Rust contracts"
+    );
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -470,6 +517,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<PingCommandPayload>(),
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
+            export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
@@ -523,6 +571,13 @@ fn command_result_ts_contract() -> String {
             export_decl::<ExportDiagnostic>(),
             export_decl::<ExportValidationReport>(),
             export_decl::<ExportJobStatusResponse>(),
+            export_decl::<RuntimeCapabilityStatus>(),
+            export_decl::<RuntimeBinaryKind>(),
+            export_decl::<RuntimeBinaryCapability>(),
+            export_decl::<RuntimeFeatureCapability>(),
+            export_decl::<RuntimeFontCapability>(),
+            export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -745,6 +800,10 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "CancelExportCommandPayload",
     );
+    include_command_contract_schema::<ProbeRuntimeCapabilitiesCommandPayload>(
+        &mut schema_value,
+        "ProbeRuntimeCapabilitiesCommandPayload",
+    );
     include_command_contract_schema::<PreviewArtifactResponse>(
         &mut schema_value,
         "PreviewArtifactResponse",
@@ -760,6 +819,31 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<ExportJobStatusResponse>(
         &mut schema_value,
         "ExportJobStatusResponse",
+    );
+    include_command_contract_schema::<RuntimeCapabilityStatus>(
+        &mut schema_value,
+        "RuntimeCapabilityStatus",
+    );
+    include_command_contract_schema::<RuntimeBinaryKind>(&mut schema_value, "RuntimeBinaryKind");
+    include_command_contract_schema::<RuntimeBinaryCapability>(
+        &mut schema_value,
+        "RuntimeBinaryCapability",
+    );
+    include_command_contract_schema::<RuntimeFeatureCapability>(
+        &mut schema_value,
+        "RuntimeFeatureCapability",
+    );
+    include_command_contract_schema::<RuntimeFontCapability>(
+        &mut schema_value,
+        "RuntimeFontCapability",
+    );
+    include_command_contract_schema::<RuntimeLicensePosture>(
+        &mut schema_value,
+        "RuntimeLicensePosture",
+    );
+    include_command_contract_schema::<RuntimeCapabilityReport>(
+        &mut schema_value,
+        "RuntimeCapabilityReport",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -960,6 +1044,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "probeMediaRuntime" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "probeRuntimeCapabilities" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "probeRuntimeCapabilities" }
                     },
                     "required": ["kind"]
                 }

@@ -192,6 +192,7 @@
         "ping",
         "version",
         "probeMediaRuntime",
+        "probeRuntimeCapabilities",
         "importMaterial",
         "listMaterials",
         "listMissingMaterials",
@@ -254,6 +255,20 @@
           "properties": {
             "kind": {
               "const": "probeMediaRuntime",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 6 runtime capability report command.",
+          "properties": {
+            "kind": {
+              "const": "probeRuntimeCapabilities",
               "type": "string"
             }
           },
@@ -1750,6 +1765,12 @@
       ],
       "type": "string"
     },
+    "ProbeRuntimeCapabilitiesCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 6 runtime capability report command.",
+      "title": "ProbeRuntimeCapabilitiesCommandPayload",
+      "type": "object"
+    },
     "RationalFrameRate": {
       "additionalProperties": false,
       "properties": {
@@ -1834,6 +1855,205 @@
         "targetTimerange"
       ],
       "title": "RequestPreviewSegmentCommandPayload",
+      "type": "object"
+    },
+    "RuntimeBinaryCapability": {
+      "additionalProperties": false,
+      "description": "Binding-safe FFmpeg/ffprobe binary capability.",
+      "properties": {
+        "configureSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/RuntimeBinaryKind"
+        },
+        "path": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "source",
+        "version",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeBinaryKind": {
+      "description": "FFmpeg-family binary kind in runtime capability reports.",
+      "enum": [
+        "ffmpeg",
+        "ffprobe"
+      ],
+      "type": "string"
+    },
+    "RuntimeCapabilityReport": {
+      "additionalProperties": false,
+      "description": "Runtime readiness report returned by Rust-owned capability probing.",
+      "properties": {
+        "aacEncoder": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "assFilter": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "executorName": {
+          "type": "string"
+        },
+        "ffmpeg": {
+          "$ref": "#/$defs/RuntimeBinaryCapability"
+        },
+        "ffprobe": {
+          "$ref": "#/$defs/RuntimeBinaryCapability"
+        },
+        "fontReadiness": {
+          "$ref": "#/$defs/RuntimeFontCapability"
+        },
+        "h264Encoder": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "licensePosture": {
+          "$ref": "#/$defs/RuntimeLicensePosture"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        },
+        "subtitlesFilter": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        }
+      },
+      "required": [
+        "status",
+        "executorName",
+        "ffmpeg",
+        "ffprobe",
+        "h264Encoder",
+        "aacEncoder",
+        "assFilter",
+        "subtitlesFilter",
+        "fontReadiness",
+        "licensePosture",
+        "diagnostics"
+      ],
+      "title": "RuntimeCapabilityReport",
+      "type": "object"
+    },
+    "RuntimeCapabilityStatus": {
+      "description": "Stable readiness state for runtime diagnostics displayed by desktop clients.",
+      "enum": [
+        "ready",
+        "warning",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "RuntimeFeatureCapability": {
+      "additionalProperties": false,
+      "description": "Binding-safe feature capability such as H.264/AAC/ASS support.",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "name",
+        "available",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeFontCapability": {
+      "additionalProperties": false,
+      "description": "Binding-safe deterministic font readiness summary.",
+      "properties": {
+        "availableFontPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "envTextFontPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "availableFontPaths",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeLicensePosture": {
+      "additionalProperties": false,
+      "description": "Binding-safe FFmpeg runtime redistribution posture.",
+      "properties": {
+        "externalRuntime": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "redistributableBuild": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "externalRuntime",
+        "redistributableBuild",
+        "source",
+        "message"
+      ],
       "type": "object"
     },
     "Segment": {
@@ -2484,6 +2704,23 @@
           "properties": {
             "kind": {
               "const": "probeMediaRuntime"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "probeRuntimeCapabilities"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "probeRuntimeCapabilities"
             }
           },
           "required": [

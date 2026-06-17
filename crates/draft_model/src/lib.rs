@@ -52,6 +52,7 @@ pub enum CommandName {
     Ping,
     Version,
     ProbeMediaRuntime,
+    ProbeRuntimeCapabilities,
     ImportMaterial,
     ListMaterials,
     ListMissingMaterials,
@@ -83,6 +84,7 @@ pub enum CommandPayload {
     Ping(PingCommandPayload),
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
+    ProbeRuntimeCapabilities(ProbeRuntimeCapabilitiesCommandPayload),
     ImportMaterial(ImportMaterialCommandPayload),
     ListMaterials(ListMaterialsCommandPayload),
     ListMissingMaterials(ListMissingMaterialsCommandPayload),
@@ -114,6 +116,7 @@ impl CommandPayload {
             Self::Ping(_) => CommandName::Ping,
             Self::Version(_) => CommandName::Version,
             Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
+            Self::ProbeRuntimeCapabilities(_) => CommandName::ProbeRuntimeCapabilities,
             Self::ImportMaterial(_) => CommandName::ImportMaterial,
             Self::ListMaterials(_) => CommandName::ListMaterials,
             Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
@@ -183,6 +186,11 @@ pub struct VersionCommandPayload {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProbeMediaRuntimeCommandPayload {}
+
+/// Payload accepted by the Phase 6 runtime capability report command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProbeRuntimeCapabilitiesCommandPayload {}
 
 /// Payload accepted by the Phase 2 material import command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -781,6 +789,93 @@ pub struct ExportJobStatusResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub diagnostic: Option<ExportDiagnostic>,
+}
+
+/// Stable readiness state for runtime diagnostics displayed by desktop clients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeCapabilityStatus {
+    Ready,
+    Warning,
+    Unavailable,
+}
+
+/// FFmpeg-family binary kind in runtime capability reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeBinaryKind {
+    Ffmpeg,
+    Ffprobe,
+}
+
+/// Binding-safe FFmpeg/ffprobe binary capability.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeBinaryCapability {
+    pub kind: RuntimeBinaryKind,
+    pub path: String,
+    pub source: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub configure_summary: Option<String>,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Binding-safe feature capability such as H.264/AAC/ASS support.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeFeatureCapability {
+    pub name: String,
+    pub available: bool,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Binding-safe deterministic font readiness summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeFontCapability {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub env_text_font_path: Option<String>,
+    pub available_font_paths: Vec<String>,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Binding-safe FFmpeg runtime redistribution posture.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeLicensePosture {
+    pub external_runtime: bool,
+    pub redistributable_build: bool,
+    pub source: String,
+    pub message: String,
+}
+
+/// Runtime readiness report returned by Rust-owned capability probing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeCapabilityReport {
+    pub status: RuntimeCapabilityStatus,
+    pub executor_name: String,
+    pub ffmpeg: RuntimeBinaryCapability,
+    pub ffprobe: RuntimeBinaryCapability,
+    pub h264_encoder: RuntimeFeatureCapability,
+    pub aac_encoder: RuntimeFeatureCapability,
+    pub ass_filter: RuntimeFeatureCapability,
+    pub subtitles_filter: RuntimeFeatureCapability,
+    pub font_readiness: RuntimeFontCapability,
+    pub license_posture: RuntimeLicensePosture,
+    pub diagnostics: Vec<String>,
 }
 
 /// Response data returned by the `ping` command.

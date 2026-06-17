@@ -30,9 +30,11 @@ use crate::preview_export_service::{
     invalidate_preview_cache_command, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
 };
+use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
 pub mod material_service;
 pub mod preview_export_service;
+pub mod runtime_capability_service;
 
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -56,6 +58,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "ping"
                 | "version"
                 | "probeMediaRuntime"
+                | "probeRuntimeCapabilities"
                 | "importMaterial"
                 | "listMaterials"
                 | "listMissingMaterials"
@@ -104,6 +107,10 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         CommandName::ProbeMediaRuntime => match discover_runtime_config() {
             Ok(config) => to_js_value(ok_envelope(config)),
             Err(error) => to_js_value(runtime_discovery_error_envelope(error)),
+        },
+        CommandName::ProbeRuntimeCapabilities => match probe_runtime_capabilities_command() {
+            Ok(report) => to_js_value(ok_envelope(report)),
+            Err(error) => to_js_value(runtime_capability_error_envelope(error)),
         },
         CommandName::ImportMaterial => match envelope.payload {
             CommandPayload::ImportMaterial(payload) => import_material_command(payload),
@@ -207,6 +214,16 @@ fn runtime_discovery_error_envelope(
         CommandErrorKind::RuntimeDiscoveryFailed,
         runtime_discovery_message(error),
         Some("probeMediaRuntime".to_string()),
+    )
+}
+
+fn runtime_capability_error_envelope(
+    error: DiscoveryError,
+) -> CommandResultEnvelope<serde_json::Value> {
+    error_envelope(
+        CommandErrorKind::RuntimeDiscoveryFailed,
+        runtime_capability_message(error),
+        Some("probeRuntimeCapabilities".to_string()),
     )
 }
 
@@ -487,6 +504,39 @@ fn runtime_discovery_message(error: DiscoveryError) -> String {
     }
     if let Some(stderr) = error.stderr_summary {
         message.push_str(" stderr: ");
+        message.push_str(&stderr);
+    }
+
+    message
+}
+
+fn runtime_capability_message(error: DiscoveryError) -> String {
+    let mut message = match error.binary {
+        media_runtime::BinaryKind::Ffmpeg => {
+            "未找到 FFmpeg，请配置 VE_FFMPEG_PATH 或加入 PATH。".to_owned()
+        }
+        media_runtime::BinaryKind::Ffprobe => {
+            "未找到 ffprobe，请配置 VE_FFPROBE_PATH 或加入 PATH。".to_owned()
+        }
+    };
+    let checked_paths = error
+        .checked_paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if !checked_paths.is_empty() {
+        message.push_str(" 已检查路径：");
+        message.push_str(&checked_paths);
+        message.push('。');
+    }
+    if let Some(stdout) = error.stdout_summary {
+        message.push_str(" stdout：");
+        message.push_str(&stdout);
+    }
+    if let Some(stderr) = error.stderr_summary {
+        message.push_str(" stderr：");
         message.push_str(&stderr);
     }
 
