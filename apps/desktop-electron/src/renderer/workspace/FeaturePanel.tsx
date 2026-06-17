@@ -111,7 +111,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
   const [shadowColor, setShadowColor] = useState("#222222");
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState("#101010");
-  const [durationSeconds, setDurationSeconds] = useState(3);
+  const [durationUs, setDurationUs] = useState(3_000_000);
   const textTrack = findTrackByKind(workspace.draft, "text");
 
   const text: TextSegment = useMemo(
@@ -148,7 +148,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
         <button
           type="button"
           className="primary-action"
-          onClick={() => onAddTextSegment(text, Math.max(1, durationSeconds) * 1_000_000)}
+          onClick={() => onAddTextSegment(text, durationUs)}
           disabled={workspace.pendingCommand !== null || textTrack === null}
         >
           添加文字
@@ -161,8 +161,14 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
           <textarea value={content} onChange={(event) => setContent(event.currentTarget.value)} />
         </label>
         <label className="field-row">
-          <span>时长（秒）</span>
-          <input type="number" min="1" value={durationSeconds} onChange={(event) => setDurationSeconds(event.currentTarget.valueAsNumber || 1)} />
+          <span>时长（微秒）</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={durationUs}
+            onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
+          />
         </label>
         <label className="field-row">
           <span>字号</span>
@@ -244,7 +250,7 @@ function AudioPanel({
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
   const firstAudioMaterial = findFirstMaterialByKind(workspace.draft, "audio");
   const [materialId, setMaterialId] = useState(firstAudioMaterial?.materialId ?? "");
-  const [durationSeconds, setDurationSeconds] = useState(4);
+  const [durationUs, setDurationUs] = useState(4_000_000);
   const [volume, setVolume] = useState(1000);
   const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
   const selectedTrack = getSelectedTrackView(workspace.draft, workspace.selection);
@@ -258,7 +264,7 @@ function AudioPanel({
         <button
           type="button"
           className="primary-action"
-          onClick={() => onAddAudioSegment(selectedMaterialId, Math.max(1, durationSeconds) * 1_000_000)}
+          onClick={() => onAddAudioSegment(selectedMaterialId, durationUs)}
           disabled={workspace.pendingCommand !== null || audioTrack === null || selectedMaterialId.length === 0}
         >
           添加音频
@@ -277,8 +283,14 @@ function AudioPanel({
           </select>
         </label>
         <label className="field-row">
-          <span>时长（秒）</span>
-          <input type="number" min="1" value={durationSeconds} onChange={(event) => setDurationSeconds(event.currentTarget.valueAsNumber || 1)} />
+          <span>时长（微秒）</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={durationUs}
+            onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
+          />
         </label>
       </div>
 
@@ -366,4 +378,8 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
       })}
     </div>
   );
+}
+
+function toPositiveInteger(value: number, fallback: number): number {
+  return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
 }

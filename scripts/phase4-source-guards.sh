@@ -61,6 +61,16 @@ fail_if_matches \
   'ffmpeg|ffprobe|filter_complex|renderGraph|ffmpegScripts|previewCache|waveform' \
   "${renderer_files[@]}"
 
+fail_if_matches \
+  "renderer command payload timing must use integer microsecond inputs, not seconds-to-microseconds float conversion" \
+  'durationSeconds|\*\s*1_000_000' \
+  "${renderer_files[@]}"
+
+fail_if_matches \
+  "tests must not patch private Electron IPC internals" \
+  '_invokeHandlers' \
+  "$TEST_DIR"
+
 english_terms='Video editor smoke workbench|Feature categories|Material bin|Preview monitor|Inspector|Timeline|Materials|Media|Text|Audio|Effects|Asset|Clip|workbench'
 
 fail_if_matches \

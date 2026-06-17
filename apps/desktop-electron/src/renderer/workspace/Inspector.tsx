@@ -76,7 +76,21 @@ export function Inspector({
       backgroundEnabled:
         selected.segment.text.style.background !== null && selected.segment.text.style.background !== undefined
     });
-  }, [selected?.segment.segmentId]);
+  }, [
+    selected?.segment.segmentId,
+    selected?.segment.volume.levelMillis,
+    selected?.segment.text?.content,
+    selected?.segment.text?.style.fontSize,
+    selected?.segment.text?.style.color,
+    selected?.segment.text?.style.alignment,
+    selected?.segment.text?.style.stroke !== null && selected?.segment.text?.style.stroke !== undefined,
+    selected?.segment.text?.style.stroke?.color,
+    selected?.segment.text?.style.stroke?.width,
+    selected?.segment.text?.style.shadow !== null && selected?.segment.text?.style.shadow !== undefined,
+    selected?.segment.text?.style.shadow?.color,
+    selected?.segment.text?.style.background !== null && selected?.segment.text?.style.background !== undefined,
+    selected?.segment.text?.style.background?.color
+  ]);
 
   const text = useMemo<TextSegment>(
     () => ({

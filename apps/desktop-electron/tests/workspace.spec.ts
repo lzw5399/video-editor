@@ -1,8 +1,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { join } from "node:path";
 
-import type { CommandEnvelope, CommandName } from "../src/generated/CommandEnvelope";
-import type { CommandResultEnvelope } from "../src/generated/CommandResultEnvelope";
+import type { CommandName } from "../src/generated/CommandEnvelope";
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -18,19 +17,22 @@ type RegionBox = {
 };
 
 type VideoEditorCoreApi = {
-  executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
+  executeCommand: (command: unknown) => Promise<unknown>;
 };
 
 declare global {
   interface Window {
     videoEditorCore?: VideoEditorCoreApi;
-    __executeCommandCalls?: ExecuteCommandCall[];
   }
 }
 
 async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
-    args: [join(process.cwd(), "dist/main/index.cjs")]
+    args: [join(process.cwd(), "dist/main/index.cjs")],
+    env: {
+      ...process.env,
+      VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1"
+    }
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
@@ -53,32 +55,18 @@ async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Pro
     throw new Error("workspace test setup error: native videoEditorCore.executeCommand is unavailable");
   }
 
-  await app.evaluate(({ ipcMain }) => {
-    const ipc = ipcMain as unknown as {
-      _invokeHandlers?: Map<string, (event: unknown, command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>>;
-    };
-    const handlers = ipc._invokeHandlers;
-    const originalHandler = handlers?.get("core:executeCommand");
-
-    if (handlers === undefined || originalHandler === undefined) {
-      throw new Error("workspace test setup error: core:executeCommand IPC handler is unavailable");
-    }
-
-    (globalThis as typeof globalThis & { __executeCommandCalls?: ExecuteCommandCall[] }).__executeCommandCalls = [];
-    handlers.set("core:executeCommand", async (event, command) => {
-      (globalThis as typeof globalThis & { __executeCommandCalls?: ExecuteCommandCall[] }).__executeCommandCalls?.push({
-        command: command.command,
-        kind: command.payload.kind,
-        requestId: command.requestId ?? null
-      });
-      return originalHandler(event, command);
-    });
+  await app.evaluate(() => {
+    (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+      .__videoEditorTestExecuteCommandCalls = [];
   });
 }
 
 async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
   return app.evaluate(() => {
-    return (globalThis as typeof globalThis & { __executeCommandCalls?: ExecuteCommandCall[] }).__executeCommandCalls ?? [];
+    return (
+      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+        .__videoEditorTestExecuteCommandCalls ?? []
+    );
   });
 }
 
@@ -208,12 +196,19 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByText("segment-main-video")).toBeVisible();
 
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
-    await page.getByRole("button", { name: "添加片段" }).click();
+    const callsBeforeAdd = await readExecuteCommandCalls(app);
+    await page.getByRole("button", { name: "添加片段" }).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      (button as HTMLButtonElement).click();
+    });
     await expectCommandCall(app, "addSegment");
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(2);
     await expect(page.locator('[aria-label="时间线"]')).toContainText("00:00:08.000 / 00:00:12.000");
 
     const calls = await readExecuteCommandCalls(app);
+    const addSegmentCallsBefore = callsBeforeAdd.filter((call) => call.command === "addSegment").length;
+    const addSegmentCallsAfter = calls.filter((call) => call.command === "addSegment").length;
+    expect(addSegmentCallsAfter - addSegmentCallsBefore).toBe(1);
     expect(calls.map((call) => call.kind)).toEqual(expect.arrayContaining(["selectTimelineSegments", "addSegment"]));
   } finally {
     await app.close();

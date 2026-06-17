@@ -5,6 +5,16 @@ import { pathToFileURL } from "node:url";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import { executeCommand, ping, version } from "./nativeBinding";
 
+type TestExecuteCommandCall = {
+  command: CommandEnvelope["command"];
+  kind: CommandEnvelope["payload"]["kind"];
+  requestId: string | null;
+};
+
+declare global {
+  var __videoEditorTestExecuteCommandCalls: TestExecuteCommandCall[] | undefined;
+}
+
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const isDevelopment = !app.isPackaged && isLoopbackUrl(devServerUrl);
 const packagedRendererFile = join(__dirname, "../renderer/index.html");
@@ -22,6 +32,7 @@ ipcMain.handle("core:version", (event) => {
 });
 ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   assertAllowedIpcSender(event);
+  recordTestExecuteCommand(command);
   return executeCommand(command);
 });
 
@@ -106,4 +117,17 @@ function isAllowedRendererUrl(targetUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+function recordTestExecuteCommand(command: CommandEnvelope): void {
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return;
+  }
+
+  globalThis.__videoEditorTestExecuteCommandCalls ??= [];
+  globalThis.__videoEditorTestExecuteCommandCalls.push({
+    command: command.command,
+    kind: command.payload.kind,
+    requestId: command.requestId ?? null
+  });
 }
