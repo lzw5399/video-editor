@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 04.1 UI-SPEC approved
-last_updated: "2026-06-17T14:46:38.110Z"
+stopped_at: Completed 04.1-01-PLAN.md
+last_updated: "2026-06-17T14:57:23.846Z"
 last_activity: 2026-06-17 -- Phase 04.1 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 28
-  completed_plans: 24
-  percent: 57
+  completed_plans: 25
+  percent: 89
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 04.1 (professional-jianying-workspace-ui-refinement) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 04.1
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-06-17 -- Phase 04.1 execution started
 
-Progress: [█████░░░░░] 57%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 24
-- Average duration: 8 min
-- Total execution time: 167 min
+- Total plans completed: 25
+- Average duration: 7 min
+- Total execution time: 174 min
 
 **By Phase:**
 
@@ -75,6 +75,7 @@ Progress: [█████░░░░░] 57%
 | Phase 04 P02 | 10 min | 2 tasks | 7 files |
 | Phase 04 P03 | 10min | 2 tasks | 6 files |
 | Phase 04 P04 | 45min | 3 tasks | 6 files |
+| Phase 04.1 P01 | 7 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Plan 03 keeps timeline visualization read-only and routes add/select/move/split/trim/delete/undo/redo through generated command envelopes. — The renderer now provides deterministic timeline controls while accepted draft, command state, selection, snapping, and history remain Rust-owned.
 - [Phase 04]: Phase 04 Plan 04 made Playwright workspace tests and source guards the executable closure for the Chinese desktop workspace, command-only timeline boundary, and Phase 4 public test gates. — The phase is only complete when UI language, layout, command boundary, and generated contract discipline are enforced by public gates.
 - [Phase 04]: Phase 04 verification included screenshot-based visual spot checks at 1280x800 and 1120x720, then fixed timeline toolbar clipping with a Playwright geometry regression. — The Chinese desktop workspace is verified as a compact editor surface without remaining Phase 4 visual blockers.
+- [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
+- [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
+- [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
 
 ### Pending Todos
 
@@ -149,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T14:10:13.354Z
-Stopped at: Phase 04.1 UI-SPEC approved
-Resume file: .planning/phases/04.1-professional-jianying-workspace-ui-refinement/04.1-UI-SPEC.md
+Last session: 2026-06-17T14:56:52.673Z
+Stopped at: Completed 04.1-01-PLAN.md
+Resume file: None
