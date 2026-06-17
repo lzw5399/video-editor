@@ -41,7 +41,7 @@
 
 - [x] **TEXT-01**: User can add text/subtitle segments to a text track.
 - [x] **TEXT-02**: User can edit text content, font size, color, alignment, stroke, shadow, and background for MVP text segments.
-- [ ] **TEXT-03**: Text layout uses pinned fonts and deterministic settings for preview/export parity.
+- [x] **TEXT-03**: Text layout uses pinned fonts and deterministic settings for preview/export parity.
 - [x] **AUD-01**: User can add audio/BGM materials to an audio track.
 - [x] **AUD-02**: User can adjust segment volume and track mute state.
 
@@ -55,7 +55,7 @@
 ### Export
 
 - [ ] **EXP-01**: User can export the draft to H.264 MP4 with a small preset set.
-- [ ] **EXP-02**: Export uses the same normalized draft, resolved frame state, render graph, and FFmpeg compilation path as preview.
+- [x] **EXP-02**: Export uses the same normalized draft, resolved frame state, render graph, and FFmpeg compilation path as preview.
 - [ ] **EXP-03**: Export reports progress, supports cancel, captures logs, and classifies common FFmpeg errors.
 - [ ] **EXP-04**: Export output is validated for duration, fps, resolution, audio stream, and file existence.
 
@@ -78,7 +78,7 @@
 
 - [x] **TEST-01**: Schema and model tests validate every golden draft fixture.
 - [x] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
-- [ ] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
+- [x] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
 - [ ] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
 - [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
@@ -144,7 +144,7 @@
 | TIME-07 | Phase 3 | Complete |
 | TEXT-01 | Phase 3 | Complete |
 | TEXT-02 | Phase 3 | Complete |
-| TEXT-03 | Phase 5 | Pending |
+| TEXT-03 | Phase 5 | Complete |
 | AUD-01 | Phase 3 | Complete |
 | AUD-02 | Phase 3 | Complete |
 | PREV-01 | Phase 5 | Pending |
@@ -152,7 +152,7 @@
 | PREV-03 | Phase 5 | Pending |
 | PREV-04 | Phase 5 | Pending |
 | EXP-01 | Phase 5 | Pending |
-| EXP-02 | Phase 5 | Pending |
+| EXP-02 | Phase 5 | Complete |
 | EXP-03 | Phase 5 | Pending |
 | EXP-04 | Phase 5 | Pending |
 | UI-01 | Phase 4 | Complete |
@@ -169,7 +169,7 @@
 | UI-12 | Phase 04.1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 3 | Complete |
-| TEST-03 | Phase 5 | Pending |
+| TEST-03 | Phase 5 | Complete |
 | TEST-04 | Phase 5 | Pending |
 | TEST-05 | Phase 5 | Pending |
 | TEST-06 | Phase 6 | Complete |

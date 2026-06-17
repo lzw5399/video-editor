@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Completed Phase 04.1 verification
-last_updated: "2026-06-17T16:30:10.257Z"
-last_activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-06-17T17:30:24.847Z"
+last_activity: 2026-06-17 -- Phase 05 execution started
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 35
-  completed_plans: 28
-  percent: 71
+  total_plans: 37
+  completed_plans: 29
+  percent: 78
 ---
 
 # Project State
@@ -25,20 +25,20 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: Ready for planning
-Last activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
+Phase: 05 (preview-and-export-pipeline) — EXECUTING
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-06-17 -- Phase 05 execution started
 
-Progress: [███████░░░] 71%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 7 min
-- Total execution time: 201 min
+- Total execution time: 213 min
 
 **By Phase:**
 
@@ -80,6 +80,7 @@ Progress: [███████░░░] 71%
 | Phase 04.1 P02 | 7 min | 2 tasks | 3 files |
 | Phase 04.1 P03 | 9 min | 2 tasks | 4 files |
 | Phase 04.1 P04 | 18 min | 2 tasks | 6 files |
+| Phase 05 P01 | 12 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -150,7 +151,9 @@ Recent decisions affecting current work:
 - [Phase 04.1]: The top feature bar is the only primary category navigation; the left resource panel contains current-feature secondary categories such as 导入、我的、AI生成、云素材、官方素材、即梦AI. — This matches the Jianying Pro workspace hierarchy and prevents duplicated 媒体/音频/文字 primary menus in the left panel.
 - [Phase 04.1]: Timeline track mute header controls now route through the existing `setTrackMute` command path while lock and visibility remain disabled shells. — This closes the review finding without giving renderer ownership of track state semantics.
 - [Phase 04.1]: Compact dark scrollbars and 1120x720/1280x800 screenshot checks are part of the professional workspace visual baseline. — Later UI work should avoid default white scrollbars and should manually inspect proportions after significant layout changes.
-
+- [Phase 05]: Plan 01 established `engine_core::normalize_draft` as the shared semantic input for preview/export callers. — NormalizedDraft now carries render-ready tracks, segments, material refs, and classified non-renderable diagnostics without mutating Draft input.
+- [Phase 05]: Plan 01 established deterministic frame-state and render-range sampling over NormalizedDraft. — FrameState and RenderRangeState use integer microseconds, frame indices, and RationalFrameRate rather than renderer-derived layer lists or floating-point persisted time.
+- [Phase 05]: Plan 01 pinned MVP text layout policy in engine_core. — Text overlays resolve with explicit PingFang SC fallback candidate identities, safe-area, wrapping, alignment, and integer dimensions while filesystem font probing remains outside pure engine_core.
 ### Pending Todos
 
 None yet.
@@ -167,8 +170,14 @@ None yet.
 | Platform | Mobile apps and server renderer | Post-MVP | Initialization |
 | Effects | Advanced effects, masks, text bubbles, text effects, transitions | Post-MVP | Initialization |
 
+## Quick Tasks Completed
+
+| Date | Task | Summary |
+|------|------|---------|
+| 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
+
 ## Session Continuity
 
-Last session: 2026-06-17T15:48:13.315Z
-Stopped at: Completed 04.1-04-PLAN.md
+Last session: 2026-06-17T17:30:24.844Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
