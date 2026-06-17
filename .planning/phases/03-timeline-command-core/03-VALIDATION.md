@@ -40,7 +40,7 @@ Per-phase validation contract for Rust-owned timeline commands, atomic invalid-e
 | 03-03-W1 | 03-03 | 3 | TIME-05 | T-03-02 / T-03-05 | Snapping and MainTrackMagnet are computed in Rust and emit deterministic command events | unit | `cargo test -p draft_commands snapping -- --nocapture` | no W0 | pending |
 | 03-04-W0 | 03-04 | 4 | TEXT-01, TEXT-02 | T-03-01 / T-03-04 | Text segments persist editable text content and MVP style values without hiding text in a URI string | unit/contract | `cargo test -p draft_commands text_commands -- --nocapture && cargo test -p draft_model schema -- --nocapture` | no W0 | pending |
 | 03-04-W1 | 03-04 | 4 | AUD-01, AUD-02 | T-03-01 / T-03-03 | Audio commands reject incompatible tracks/materials and update segment volume plus track mute in Rust | unit | `cargo test -p draft_commands audio_commands -- --nocapture` | no W0 | pending |
-| 03-04-W2 | 03-04 | 4 | TEST-02 | T-03-01 / T-03-02 / T-03-04 / T-03-05 | Required command coverage and generated contract drift gates pass before phase verification | full gate | `pnpm run test:rust && pnpm run test:contracts && pnpm run test:bindings` | partial existing | pending |
+| 03-05-W0 | 03-05 | 5 | TEST-02 | T-03-01 / T-03-02 / T-03-04 / T-03-05 | Required command coverage, fixture classification, source guards, and generated contract drift gates pass before phase verification | full gate | `pnpm run test:rust && pnpm run test:contracts && pnpm run test:bindings` | partial existing | pending |
 
 ## Threat References
 

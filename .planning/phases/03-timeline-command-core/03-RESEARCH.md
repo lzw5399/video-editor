@@ -369,17 +369,15 @@ fn overlaps(a: &TargetTimerange, b: &TargetTimerange) -> Result<bool, TimelineCo
 |---|-------|---------|---------------|
 | A1 | No new external crates are needed for Phase 3 if the planner accepts handwritten local command/history modules. [ASSUMED] | Standard Stack | Planner may need a human-verify checkpoint before adding any extra crate. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What exact default snap threshold should Phase 3 use?**
+1. **What exact default snap threshold should Phase 3 use? RESOLVED**
    - What we know: The threshold must be deterministic, named, microsecond-based, overridable, and tested. [VERIFIED: .planning/phases/03-timeline-command-core/03-CONTEXT.md]
-   - What's unclear: The exact value is intentionally left to the planner. [VERIFIED: .planning/phases/03-timeline-command-core/03-CONTEXT.md]
-   - Recommendation: Use `DEFAULT_SNAP_THRESHOLD_US = 100_000` unless the planner wants a tighter value; make it payload-overridable and fixture-tested. [ASSUMED]
+   - Resolution: Phase 3 plans use `DEFAULT_SNAP_THRESHOLD_US = 100_000`. The value is named in code, payload-overridable, and covered by snapping tests. [RESOLVED: 03-03-PLAN.md]
 
-2. **What bounded history limit should snapshot undo use?**
+2. **What bounded history limit should snapshot undo use? RESOLVED**
    - What we know: Snapshot history is acceptable if bounded and testable. [VERIFIED: .planning/phases/03-timeline-command-core/03-CONTEXT.md]
-   - What's unclear: The bound is not specified. [VERIFIED: .planning/phases/03-timeline-command-core/03-CONTEXT.md]
-   - Recommendation: Use a named default such as `DEFAULT_HISTORY_LIMIT = 100`, accept override in tests, and prune oldest undo entries after committed edits. [ASSUMED]
+   - Resolution: Phase 3 plans use `DEFAULT_HISTORY_LIMIT = 100`. The value is named in code, test-overridable where needed, and covered by undo/redo history-pruning tests. [RESOLVED: 03-03-PLAN.md]
 
 ## Environment Availability
 

@@ -94,14 +94,29 @@ Plans:
   3. Undo/redo works for every committed MVP edit.
   4. Main-track magnet/snapping is computed in Rust core and covered by command tests.
 
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 
-- [ ] 03-01: Implement track/segment timeline model and overlap/stacking rules
-- [ ] 03-02: Implement add, move, split, trim, delete, select, and invalid-edit rejection commands
-- [ ] 03-03: Implement undo/redo, snapping/main-track magnet, and command event output
-- [ ] 03-04: Implement MVP text/audio commands and command test coverage
+**Wave 1**
+
+- [ ] 03-01-PLAN.md - Implement track/segment timeline model and overlap/stacking rules
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md - Implement add, move, split, trim, delete, select, and invalid-edit rejection commands
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md - Implement undo/redo, snapping/main-track magnet, and command event output
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-04-PLAN.md - Implement MVP text/audio semantic commands and direct tests
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-05-PLAN.md - Add fixtures, source guards, and final Phase 3 gates
 
 ### Phase 4: Jianying-Style Desktop Workspace
 
@@ -176,7 +191,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
-| 3. Timeline Command Core | 0/4 | Not started | - |
+| 3. Timeline Command Core | 0/5 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
