@@ -27,4 +27,6 @@ test:
   pnpm run test:desktop
   pnpm run test:render-smoke
   pnpm run test:phase2-source-guards
+  pnpm run test:phase3-commands
+  pnpm run test:phase3-source-guards
   pnpm run test:contracts
