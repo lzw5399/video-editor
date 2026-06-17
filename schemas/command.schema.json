@@ -1,5 +1,47 @@
 {
   "$defs": {
+    "CommandEvent": {
+      "additionalProperties": false,
+      "description": "Event emitted with a command result.",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "CommandHistorySnapshot": {
+      "additionalProperties": false,
+      "description": "Session-only command history snapshot; never persisted to `.veproj/project.json`.",
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "selection"
+      ],
+      "type": "object"
+    },
     "CommandName": {
       "description": "Command names supported by the Rust contract.",
       "enum": [
@@ -150,6 +192,39 @@
           "type": "object"
         }
       ]
+    },
+    "CommandState": {
+      "additionalProperties": false,
+      "description": "Session-only command state passed through Electron as opaque Rust-owned data.",
+      "properties": {
+        "maxHistoryEntries": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "redoStack": {
+          "items": {
+            "$ref": "#/$defs/CommandHistorySnapshot"
+          },
+          "type": "array"
+        },
+        "snapping": {
+          "$ref": "#/$defs/SnappingSettings"
+        },
+        "undoStack": {
+          "items": {
+            "$ref": "#/$defs/CommandHistorySnapshot"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "undoStack",
+        "redoStack",
+        "maxHistoryEntries",
+        "snapping"
+      ],
+      "type": "object"
     },
     "Draft": {
       "additionalProperties": false,
@@ -469,6 +544,23 @@
     "SegmentId": {
       "type": "string"
     },
+    "SnappingSettings": {
+      "additionalProperties": false,
+      "description": "Deterministic snapping settings passed to Rust timeline semantics.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "enabled",
+        "threshold"
+      ],
+      "type": "object"
+    },
     "SourceTimerange": {
       "additionalProperties": false,
       "properties": {
@@ -498,6 +590,58 @@
       "required": [
         "start",
         "duration"
+      ],
+      "type": "object"
+    },
+    "TimelineCommandResponse": {
+      "additionalProperties": false,
+      "description": "Response returned by Rust-owned timeline command execution.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CommandEvent"
+          },
+          "type": "array"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "events"
+      ],
+      "title": "TimelineCommandResponse",
+      "type": "object"
+    },
+    "TimelineSelection": {
+      "additionalProperties": false,
+      "description": "Segment and track selection returned by Rust-owned timeline commands.",
+      "properties": {
+        "segmentIds": {
+          "items": {
+            "$ref": "#/$defs/SegmentId"
+          },
+          "type": "array"
+        },
+        "trackIds": {
+          "items": {
+            "$ref": "#/$defs/TrackId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "segmentIds",
+        "trackIds"
       ],
       "type": "object"
     },

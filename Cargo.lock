@@ -134,6 +134,9 @@ dependencies = [
 [[package]]
 name = "draft_commands"
 version = "0.1.0"
+dependencies = [
+ "draft_model",
+]
 
 [[package]]
 name = "draft_model"

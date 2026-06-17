@@ -159,6 +159,93 @@ pub struct ListMissingMaterialsCommandPayload {
     pub bundle_path: String,
 }
 
+/// Segment and track selection returned by Rust-owned timeline commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TimelineSelection {
+    pub segment_ids: Vec<SegmentId>,
+    pub track_ids: Vec<TrackId>,
+}
+
+impl TimelineSelection {
+    pub fn empty() -> Self {
+        Self {
+            segment_ids: Vec::new(),
+            track_ids: Vec::new(),
+        }
+    }
+}
+
+/// Deterministic snapping settings passed to Rust timeline semantics.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnappingSettings {
+    pub enabled: bool,
+    pub threshold: Microseconds,
+}
+
+impl SnappingSettings {
+    pub const DEFAULT_THRESHOLD: Microseconds = Microseconds(50_000);
+
+    pub fn enabled() -> Self {
+        Self {
+            enabled: true,
+            threshold: Self::DEFAULT_THRESHOLD,
+        }
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            threshold: Self::DEFAULT_THRESHOLD,
+        }
+    }
+}
+
+/// Session-only command history snapshot; never persisted to `.veproj/project.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommandHistorySnapshot {
+    pub draft: Draft,
+    pub selection: TimelineSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub label: Option<String>,
+}
+
+/// Session-only command state passed through Electron as opaque Rust-owned data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommandState {
+    pub undo_stack: Vec<CommandHistorySnapshot>,
+    pub redo_stack: Vec<CommandHistorySnapshot>,
+    pub max_history_entries: u32,
+    pub snapping: SnappingSettings,
+}
+
+impl CommandState {
+    pub const DEFAULT_MAX_HISTORY_ENTRIES: u32 = 100;
+
+    pub fn empty() -> Self {
+        Self {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            max_history_entries: Self::DEFAULT_MAX_HISTORY_ENTRIES,
+            snapping: SnappingSettings::enabled(),
+        }
+    }
+}
+
+/// Response returned by Rust-owned timeline command execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TimelineCommandResponse {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub events: Vec<CommandEvent>,
+}
+
 /// Response data returned by the Phase 2 material import command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

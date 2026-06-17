@@ -5,5 +5,11 @@
 //! semantic layer: UI, filesystem, FFmpeg, preview, and platform execution
 //! details belong outside this crate.
 
+pub mod error;
+pub mod selection;
+pub mod timeline;
+
+pub use selection::TimelineSelection;
+
 /// Boundary marker for the command semantics crate.
 pub const DRAFT_COMMANDS_BOUNDARY: &str = "pure-semantic";

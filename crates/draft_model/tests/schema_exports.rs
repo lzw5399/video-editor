@@ -5,14 +5,16 @@ use std::{
 };
 
 use draft_model::{
-    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope, Draft, DraftId, DraftMetadata, DraftSchemaVersion, Filter,
-    ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
-    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    PingCommandPayload, ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId,
-    SourceTimerange, TargetTimerange, Track, TrackId, TrackKind, Transition, VersionCommandPayload,
+    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
+    CommandName, CommandPayload, CommandResultEnvelope, CommandState, Draft, DraftId,
+    DraftMetadata, DraftSchemaVersion, Filter, ImportMaterialCommandPayload,
+    ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MainTrackMagnet, Material,
+    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingCommandPayload,
+    ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId, SnappingSettings,
+    SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track, TrackId,
+    TrackKind, Transition, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -42,7 +44,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -51,6 +53,10 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<TimelineSelection>(),
+            export_decl::<SnappingSettings>(),
+            export_decl::<CommandHistorySnapshot>(),
+            export_decl::<CommandState>(),
             export_decl::<CommandPayload>(),
             export_decl::<CommandEnvelope>(),
         ],
@@ -61,7 +67,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     );
 
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\nimport type { CommandState, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -72,6 +78,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportMaterialResponse>(),
             export_decl::<ListMaterialsResponse>(),
             export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<TimelineCommandResponse>(),
         ],
     );
     assert_or_update_contract_file(
@@ -131,7 +138,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -140,12 +147,16 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<TimelineSelection>(),
+            export_decl::<SnappingSettings>(),
+            export_decl::<CommandHistorySnapshot>(),
+            export_decl::<CommandState>(),
             export_decl::<CommandPayload>(),
             export_decl::<CommandEnvelope>(),
         ],
     );
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\nimport type { CommandState, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -156,6 +167,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportMaterialResponse>(),
             export_decl::<ListMaterialsResponse>(),
             export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<TimelineCommandResponse>(),
         ],
     );
 
@@ -305,6 +317,17 @@ fn command_schema_json() -> String {
     let schema = schema_for!(CommandEnvelope);
     let mut schema_value =
         serde_json::to_value(schema).expect("command schema should serialize to JSON value");
+    include_command_contract_schema::<TimelineSelection>(&mut schema_value, "TimelineSelection");
+    include_command_contract_schema::<SnappingSettings>(&mut schema_value, "SnappingSettings");
+    include_command_contract_schema::<CommandHistorySnapshot>(
+        &mut schema_value,
+        "CommandHistorySnapshot",
+    );
+    include_command_contract_schema::<CommandState>(&mut schema_value, "CommandState");
+    include_command_contract_schema::<TimelineCommandResponse>(
+        &mut schema_value,
+        "TimelineCommandResponse",
+    );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
     schema_value
@@ -336,6 +359,39 @@ fn constrain_current_draft_schema_version_schema(schema: &mut Schema) {
         "DraftSchemaVersion".to_owned(),
         current_draft_schema_version_schema(),
     );
+}
+
+fn include_command_contract_schema<T>(schema_value: &mut serde_json::Value, name: &str)
+where
+    T: schemars::JsonSchema,
+{
+    let contract_schema = schema_for!(T);
+    let mut contract_value = serde_json::to_value(contract_schema)
+        .expect("command contract schema should serialize to JSON value");
+
+    if let Some(contract_defs) = contract_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        let defs = schema_value
+            .get_mut("$defs")
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("command schema should contain $defs");
+        for (def_name, def_schema) in std::mem::take(contract_defs) {
+            defs.insert(def_name, def_schema);
+        }
+    }
+
+    let contract_object = contract_value
+        .as_object_mut()
+        .expect("command contract schema should be an object");
+    contract_object.remove("$schema");
+    contract_object.remove("$defs");
+    schema_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("command schema should contain $defs")
+        .insert(name.to_owned(), contract_value);
 }
 
 fn current_draft_schema_version_schema() -> serde_json::Value {
