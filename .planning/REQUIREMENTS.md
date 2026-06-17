@@ -82,7 +82,7 @@
 - [x] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
 - [x] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
-- [ ] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
+- [x] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
 - [x] **TEST-08**: Electron workspace tests and source guards verify the professional UI at 1280x800 and 1120x720, including five-region visibility, command-only timeline updates, and no renderer-owned media/render semantics.
 
 ## v2 Requirements
@@ -200,7 +200,7 @@
 | TEST-04 | Phase 5 | Complete |
 | TEST-05 | Phase 5 | Complete |
 | TEST-06 | Phase 6 | Complete |
-| TEST-07 | Phase 6 | Pending |
+| TEST-07 | Phase 6 | Complete |
 | TEST-08 | Phase 04.1 | Complete |
 | CANVAS-01 | Phase 7 | Planned |
 | CANVAS-02 | Phase 7 | Planned |

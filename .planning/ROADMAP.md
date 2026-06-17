@@ -250,7 +250,7 @@ Plans:
 Plans:
 
 - [x] 06-01: Add packaged app build, native binding loading, and bundled runtime checks
-- [ ] 06-02: Add Rust-owned runtime capability report and generated command route
+- [x] 06-02: Add Rust-owned runtime capability report and generated command route
 - [ ] 06-03: Display Rust-owned runtime diagnostics in the Chinese preview shell
 - [ ] 06-04: Add dev and packaged no-mock import-preview-export workflow gates
 - [ ] 06-05: Document known limits, license posture, and post-MVP backlog
@@ -374,7 +374,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
-| 6. MVP Hardening And Packaging | 1/5 | In Progress|  |
+| 6. MVP Hardening And Packaging | 2/5 | In Progress|  |
 | 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
