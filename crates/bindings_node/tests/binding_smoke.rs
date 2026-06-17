@@ -311,7 +311,7 @@ fn execute_command_routes_timeline_add_move_and_selection() {
 }
 
 #[test]
-fn execute_command_routes_snapping_undo_and_redo_events() {
+fn execute_command_routes_timeline_snapping_undo_and_redo_events() {
     let draft = timeline_draft_json();
 
     let first_added = execute_command(json!({
