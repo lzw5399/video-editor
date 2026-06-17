@@ -311,6 +311,131 @@ fn execute_command_routes_timeline_add_move_and_selection() {
 }
 
 #[test]
+fn execute_command_routes_snapping_undo_and_redo_events() {
+    let draft = timeline_draft_json();
+
+    let first_added = execute_command(json!({
+        "command": "addSegment",
+        "payload": {
+            "kind": "addSegment",
+            "draft": draft,
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "video-track",
+            "segmentId": "segment-a",
+            "materialId": "video-material",
+            "sourceTimerange": { "start": 0, "duration": 400_000 },
+            "targetTimerange": { "start": 0, "duration": 400_000 }
+        },
+        "requestId": "req-add-first-segment"
+    }))
+    .expect("first add segment command should return a JSON envelope");
+    assert_eq!(first_added["ok"], true, "{first_added:#}");
+
+    let second_added = execute_command(json!({
+        "command": "addSegment",
+        "payload": {
+            "kind": "addSegment",
+            "draft": first_added["data"]["draft"].clone(),
+            "commandState": first_added["data"]["commandState"].clone(),
+            "selection": first_added["data"]["selection"].clone(),
+            "trackId": "video-track",
+            "segmentId": "segment-b",
+            "materialId": "video-material",
+            "sourceTimerange": { "start": 700_000, "duration": 200_000 },
+            "targetTimerange": { "start": 700_000, "duration": 200_000 }
+        },
+        "requestId": "req-add-second-segment"
+    }))
+    .expect("second add segment command should return a JSON envelope");
+    assert_eq!(second_added["ok"], true, "{second_added:#}");
+
+    let snapped = execute_command(json!({
+        "command": "moveSegment",
+        "payload": {
+            "kind": "moveSegment",
+            "draft": second_added["data"]["draft"].clone(),
+            "commandState": second_added["data"]["commandState"].clone(),
+            "selection": second_added["data"]["selection"].clone(),
+            "segmentId": "segment-b",
+            "targetTrackId": "video-track",
+            "targetStart": 410_000
+        },
+        "requestId": "req-snap-second-segment"
+    }))
+    .expect("move with snapping should return a JSON envelope");
+
+    assert_eq!(snapped["ok"], true, "{snapped:#}");
+    assert_eq!(snapped["data"]["events"][0]["kind"], "segmentMoved");
+    assert!(
+        event_kinds(&snapped).contains(&"snapped"),
+        "binding response should preserve the Rust snapping event"
+    );
+    assert_eq!(
+        snapped["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
+        400_000
+    );
+    assert_eq!(
+        snapped["data"]["commandState"]["undoStack"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+
+    let undone = execute_command(json!({
+        "command": "undoTimelineEdit",
+        "payload": {
+            "kind": "undoTimelineEdit",
+            "draft": snapped["data"]["draft"].clone(),
+            "commandState": snapped["data"]["commandState"].clone(),
+            "selection": snapped["data"]["selection"].clone()
+        },
+        "requestId": "req-undo-snapped-move"
+    }))
+    .expect("undo timeline edit should return a JSON envelope");
+
+    assert_eq!(undone["ok"], true, "{undone:#}");
+    assert_eq!(undone["data"]["events"][0]["kind"], "undoCommitted");
+    assert_eq!(
+        undone["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
+        700_000
+    );
+    assert_eq!(
+        undone["data"]["commandState"]["redoStack"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let redone = execute_command(json!({
+        "command": "redoTimelineEdit",
+        "payload": {
+            "kind": "redoTimelineEdit",
+            "draft": undone["data"]["draft"].clone(),
+            "commandState": undone["data"]["commandState"].clone(),
+            "selection": undone["data"]["selection"].clone()
+        },
+        "requestId": "req-redo-snapped-move"
+    }))
+    .expect("redo timeline edit should return a JSON envelope");
+
+    assert_eq!(redone["ok"], true, "{redone:#}");
+    assert_eq!(redone["data"]["events"][0]["kind"], "redoCommitted");
+    assert_eq!(
+        redone["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
+        400_000
+    );
+    assert!(
+        redone["data"]["commandState"]["redoStack"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn execute_command_rejects_invalid_timeline_edit_with_standard_error() {
     let mut draft = timeline_draft_json();
     draft["tracks"][0]["segments"] = json!([{
@@ -399,7 +524,7 @@ fn empty_command_state_json() -> Value {
         "maxHistoryEntries": 100,
         "snapping": {
             "enabled": true,
-            "threshold": 50_000
+            "threshold": 100_000
         }
     })
 }
@@ -409,6 +534,15 @@ fn empty_selection_json() -> Value {
         "segmentIds": [],
         "trackIds": []
     })
+}
+
+fn event_kinds(envelope: &Value) -> Vec<&str> {
+    envelope["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["kind"].as_str().unwrap())
+        .collect()
 }
 
 fn timeline_draft_json() -> Value {
