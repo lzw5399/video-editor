@@ -782,6 +782,16 @@ dependencies = [
 [[package]]
 name = "preview_service"
 version = "0.1.0"
+dependencies = [
+ "draft_model",
+ "engine_core",
+ "ffmpeg_compiler",
+ "media_runtime",
+ "render_graph",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "proc-macro2"
