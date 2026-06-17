@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { createServer } from "node:http";
 import { join } from "node:path";
 
 import type { CommandEnvelope } from "../src/generated/CommandEnvelope";
@@ -39,6 +40,39 @@ async function launchSmokeAppWithEnv(
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
   return { app, page };
+}
+
+async function startUntrustedHttpPage(): Promise<{ origin: string; url: string; close: () => Promise<void> }> {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end('<!doctype html><html><body><main aria-label="Untrusted page">Untrusted</main></body></html>');
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Expected an ephemeral TCP port for the untrusted test page");
+  }
+
+  const origin = `http://127.0.0.1:${address.port}`;
+  return {
+    origin,
+    url: `${origin}/untrusted`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error !== undefined) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      })
+  };
 }
 
 test("renderer reaches Rust binding only through the typed preload bridge", async () => {
@@ -109,5 +143,41 @@ test("main process ignores non-loopback dev server URLs", async () => {
     expect(location).not.toContain("example.com");
   } finally {
     await app.close();
+  }
+});
+
+test("untrusted navigation cannot access the native preload bridge", async () => {
+  const untrustedPage = await startUntrustedHttpPage();
+  const { app, page } = await launchSmokeApp();
+
+  try {
+    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+    const initialLocation = await page.evaluate(() => window.location.href);
+
+    await page.goto(untrustedPage.url).catch(() => undefined);
+
+    const location = await page.evaluate(() => window.location.href);
+
+    if (location === initialLocation) {
+      await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+      expect(location).not.toContain(untrustedPage.origin);
+      return;
+    }
+
+    expect(location).toContain(untrustedPage.origin);
+    await expect(page.getByRole("main", { name: "Untrusted page" })).toBeVisible();
+    const exposure = await page.evaluate(() => ({
+      coreType: typeof window.videoEditorCore,
+      coreKeys: Object.keys(window.videoEditorCore ?? {}),
+      ipcRendererType: typeof window.ipcRenderer
+    }));
+    expect(exposure).toEqual({
+      coreType: "undefined",
+      coreKeys: [],
+      ipcRendererType: "undefined"
+    });
+  } finally {
+    await app.close();
+    await untrustedPage.close();
   }
 });
