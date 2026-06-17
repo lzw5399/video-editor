@@ -1,3 +1,4 @@
+import type { Material } from "../../generated/Draft";
 import {
   formatMicroseconds,
   formatTrackKind,
@@ -6,6 +7,7 @@ import {
   type WorkspaceState
 } from "../viewModel";
 import { FeaturePanel } from "./FeaturePanel";
+import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
 
 type WorkspaceShellProps = {
@@ -21,6 +23,7 @@ type WorkspaceShellProps = {
   onListMissingMaterials: () => void;
   onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
+  onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
 };
@@ -38,6 +41,7 @@ export function WorkspaceShell({
   onListMissingMaterials,
   onAddTextSegment,
   onAddAudioSegment,
+  onEditSelectedText,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute
 }: WorkspaceShellProps): React.ReactElement {
@@ -83,23 +87,12 @@ export function WorkspaceShell({
       </section>
 
       <aside className="inspector-panel" aria-label="属性检查器">
-        <div className="panel-header">
-          <h2>属性检查器</h2>
-        </div>
-        {workspace.selection.segmentIds.length === 0 ? (
-          <div className="empty-state">
-            <strong>未选择片段</strong>
-            <span>在时间线中选择一个片段后，可在这里调整文字、音量和轨道状态。</span>
-          </div>
-        ) : (
-          <dl className="inspector-list">
-            <div>
-              <dt>已选片段</dt>
-              <dd>{workspace.selection.segmentIds.join("、")}</dd>
-            </div>
-          </dl>
-        )}
-        {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
+        <Inspector
+          workspace={workspace}
+          onEditSelectedText={onEditSelectedText}
+          onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
+          onSetSelectedTrackMute={onSetSelectedTrackMute}
+        />
       </aside>
 
       <section className="timeline-panel" aria-label="时间线">

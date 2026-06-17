@@ -13,6 +13,7 @@ import {
   applyTimelineCommandResult,
   buildAddAudioSegmentCommand,
   buildAddTextSegmentCommand,
+  buildEditTextSegmentCommand,
   buildImportMaterialCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
@@ -328,6 +329,23 @@ export function App(): React.ReactElement {
     );
   }
 
+  function handleEditSelectedText(text: TextSegment): void {
+    const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
+
+    if (selectedSegment === null || selectedSegment.segment.text === null || selectedSegment.segment.text === undefined) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个文字片段")
+      }));
+      return;
+    }
+
+    void executeTimelineCommand(
+      buildEditTextSegmentCommand(workspace, selectedSegment.segment.segmentId, text),
+      "应用文字"
+    );
+  }
+
   function handleSetSelectedTrackMute(trackId: string, muted: boolean): void {
     const selectedTrack = getSelectedTrackView(workspace.draft, workspace.selection);
     const resolvedTrackId = trackId || selectedTrack?.trackId;
@@ -357,6 +375,7 @@ export function App(): React.ReactElement {
       onListMissingMaterials={handleListMissingMaterials}
       onAddTextSegment={handleAddTextSegment}
       onAddAudioSegment={handleAddAudioSegment}
+      onEditSelectedText={handleEditSelectedText}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
     />

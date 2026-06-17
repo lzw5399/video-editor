@@ -147,6 +147,15 @@ h2 {
   padding-right: 4px;
 }
 
+.inspector-content {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -187,6 +196,10 @@ h2 {
   font-weight: 600;
   line-height: 32px;
   white-space: nowrap;
+}
+
+.wide-action {
+  width: 100%;
 }
 
 .field-stack {
@@ -504,6 +517,8 @@ h2 {
 }
 
 .inspector-list {
+  display: grid;
+  gap: 8px;
   margin: 0;
   padding: 16px;
   border: 1px solid #343431;
@@ -515,6 +530,7 @@ h2 {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 8px;
+  min-width: 0;
 }
 
 .inspector-list dt,
@@ -529,7 +545,17 @@ h2 {
 }
 
 .inspector-list dd {
+  overflow: hidden;
   color: #f0eee8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-note {
+  margin: 0;
+  color: #9b9890;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .command-error {
