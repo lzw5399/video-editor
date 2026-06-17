@@ -224,6 +224,26 @@ fn schema_exports_include_timeline_edit_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_undo_redo_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+
+    for expected_contract in [
+        "UndoTimelineEditCommandPayload",
+        "RedoTimelineEditCommandPayload",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract),
+            "command schema should include {expected_contract}"
+        );
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
