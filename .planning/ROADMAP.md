@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures (completed 2026-06-16)
 - [x] **Phase 2: Draft And Material System** - `.veproj` draft bundle, Jianying-aligned schema, material import/probing, and save/open validation (completed 2026-06-17)
 - [x] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics (completed 2026-06-17)
-- [ ] **Phase 03.1: Kaipai Compatibility Foundation** - Offline formula fixtures, compatibility report, resource bundle boundaries, and draft template semantics preparation (INSERTED)
+- [x] **Phase 03.1: Kaipai Compatibility Foundation** - Offline formula fixtures, compatibility report, resource bundle boundaries, and draft template semantics preparation (INSERTED) (completed 2026-06-17)
 - [x] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration (completed 2026-06-17)
 - [x] **Phase 04.1: Professional Jianying Workspace UI Refinement** - Higher-density Jianying Pro-like desktop workspace refinement (completed 2026-06-17)
 - [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
@@ -133,7 +133,7 @@ Plans:
   4. Source guards prevent Kaipai provider/API/Android worker dependencies from leaking into `draft_model`, `engine_core`, `render_graph`, or `ffmpeg_compiler`.
   5. Draft v2/template-semantics gaps are explicitly planned before any offline mapper POC claims preview/export support.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 
@@ -155,7 +155,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 03.1-05-PLAN.md - Add source guards, phase gates, and Draft v2/template-semantics gap inventory
+- [x] 03.1-05-PLAN.md - Add source guards, phase gates, and Draft v2/template-semantics gap inventory
 
 ### Phase 4: Jianying-Style Desktop Workspace
 
@@ -264,7 +264,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 03.1 -> 4 -> 04.1 -> 5 -> 6
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
-| 3.1. Kaipai Compatibility Foundation | 4/5 | In Progress|  |
+| 3.1. Kaipai Compatibility Foundation | 5/5 | Complete   | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
