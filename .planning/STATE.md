@@ -175,6 +175,7 @@ None yet.
 | Date | Task | Summary |
 |------|------|---------|
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
+| 2026-06-18 | 260618-mit-license | Switched project license metadata and README license sections to MIT, and added the standard MIT LICENSE file. |
 
 ## Session Continuity
 
