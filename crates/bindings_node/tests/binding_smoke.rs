@@ -60,11 +60,11 @@ fn execute_command_matches_direct_phase_one_envelopes() {
 }
 
 #[test]
-fn execute_command_rejects_non_phase_one_command_with_structured_error() {
+fn execute_command_rejects_unknown_command_with_structured_error() {
     let envelope = execute_command(json!({
-        "command": "addSegment",
-        "payload": { "kind": "addSegment" },
-        "requestId": "req-add-segment"
+        "command": "renderTimeline",
+        "payload": { "kind": "renderTimeline" },
+        "requestId": "req-render-timeline"
     }))
     .expect("unsupported command returns an error envelope");
 
@@ -74,7 +74,7 @@ fn execute_command_rejects_non_phase_one_command_with_structured_error() {
         envelope["error"]["kind"],
         serde_json::to_value(CommandErrorKind::UnsupportedCommand).unwrap()
     );
-    assert_eq!(envelope["error"]["command"], "addSegment");
+    assert_eq!(envelope["error"]["command"], "renderTimeline");
     assert_eq!(envelope["events"], json!([]));
 }
 
