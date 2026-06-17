@@ -51,7 +51,7 @@ Phase 6 turns the existing development MVP into a release-ready desktop MVP gate
 
 ### Project Scope And Requirements
 - `.planning/PROJECT.md` — Product identity, architecture constraints, terminology, and Phase 6-adjacent decisions.
-- `.planning/ROADMAP.md` — Phase 6 goal, success criteria, and planned 06-01 through 06-03 work.
+- `.planning/ROADMAP.md` — Phase 6 goal, success criteria, and planned 06-01 through 06-05 work.
 - `.planning/REQUIREMENTS.md` — TEST-06 and TEST-07 traceability plus v1/v2 boundaries.
 - `AGENTS.md` — Repository-level GSD, architecture, terminology, time-model, rendering, and testing constraints.
 

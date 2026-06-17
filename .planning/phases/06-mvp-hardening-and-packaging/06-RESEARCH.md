@@ -345,17 +345,17 @@ let capabilities = probe_runtime_render_capabilities(&executor, &runtime)?;
 | A1 | Exact `electron-builder` directory package command spelling should be verified against the installed CLI during implementation; the desired public script name remains `package:dir`. | Standard Stack / Validation Architecture | Low; implementation can adjust script internals without changing the phase command surface. |
 | A2 | Stale packaged assets will be visible through unexpected package contents or old UI labels. | Common Pitfalls | Low; clean output and package-content checks mitigate it. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should Phase 6 bundle FFmpeg or explicitly defer it?**
    - What we know: Context allows external FFmpeg for MVP and forbids silent downloads. [VERIFIED: 06-CONTEXT.md]
-   - What's unclear: Whether the product owner wants a bundled binary for the first public release. [ASSUMED]
+   - Resolution: Phase 6 explicitly defers bundled FFmpeg and uses external/user-provided FFmpeg through `VE_FFMPEG_PATH`, `VE_FFPROBE_PATH`, or `PATH`. Release docs and guards must state that no FFmpeg binary is bundled by Phase 6. [RESOLVED: 06-02/06-05 plans]
    - Recommendation: Plan external FFmpeg for Phase 6 and document bundled FFmpeg as a known limit/backlog item. [VERIFIED: 06-CONTEXT.md]
 
 2. **What exact packaged artifact names should be stable in tests?**
    - What we know: Implementation may choose output names if commands are deterministic. [VERIFIED: 06-CONTEXT.md]
-   - What's unclear: Final branding/app ID/signing names are not locked. [ASSUMED]
-   - Recommendation: Use deterministic test helper discovery by platform plus documented package output directory, not hard-coded marketing artifact names. [ASSUMED]
+   - Resolution: Tests must stabilize on the package output directory and platform executable discovery helper, not final marketing artifact names, app IDs, signing identities, or installer names. [RESOLVED: 06-01/06-04 plans]
+   - Recommendation: Use deterministic test helper discovery by platform plus documented package output directory, not hard-coded marketing artifact names. [VERIFIED: 06-CONTEXT.md]
 
 ## Environment Availability
 
@@ -434,8 +434,10 @@ let capabilities = probe_runtime_render_capabilities(&executor, &runtime)?;
 | Plan | Scope | Key Gates |
 |------|-------|-----------|
 | 06-01 Packaging and runtime boot | Add `electron-builder`, clean build output, package config, native resolver hardening, packaged launch smoke for file renderer/preload/binding/runtime probe. [VERIFIED: 06-CONTEXT.md] | `pnpm --filter @video-editor/desktop package:dir`; `pnpm --filter @video-editor/desktop test:packaged-smoke`. [RECOMMENDED] |
-| 06-02 Runtime capability and no-mock workflow | Add Rust-owned capability report, UI diagnostic states from UI-SPEC, generated command route, no-mock generated-media import/edit/preview/export E2E. [VERIFIED: 06-UI-SPEC.md; VERIFIED: crates/testkit/src/render_compare.rs] | Rust capability tests; `test:real-workflow`; output validation through ffprobe/Rust report. [RECOMMENDED] |
-| 06-03 Release docs and gates | Add FFmpeg external-runtime manifest, third-party notices, MVP known limits/backlog, source/release guard, root script/just integration. [VERIFIED: 06-CONTEXT.md; CITED: https://ffmpeg.org/legal.html] | `scripts/phase6-release-guards.sh`; full `pnpm run test`; full `just test`. [RECOMMENDED] |
+| 06-02 Runtime capability contracts | Add Rust-owned capability report, generated command route, schema/TypeScript drift checks, and binding tests. [VERIFIED: 06-CONTEXT.md; VERIFIED: crates/media_runtime/src/discovery.rs] | Rust capability tests; generated contract drift check. [RECOMMENDED] |
+| 06-03 Runtime diagnostics UI | Add UI diagnostic states from UI-SPEC inside the existing preview shell with Chinese copy and renderer source guards. [VERIFIED: 06-UI-SPEC.md] | `test:runtime-diagnostics`; Phase 5 source guards. [RECOMMENDED] |
+| 06-04 No-mock workflow gates | Add generated-media import/edit/preview/export E2E for dev and packaged app paths. [VERIFIED: crates/testkit/src/render_compare.rs] | `test:real-workflow`; `test:packaged-real-workflow`; output validation through Rust report. [RECOMMENDED] |
+| 06-05 Release docs and gates | Add FFmpeg external-runtime manifest, third-party notices, MVP known limits/backlog, source/release guard, root script/just integration. [VERIFIED: 06-CONTEXT.md; CITED: https://ffmpeg.org/legal.html] | `scripts/phase6-release-guards.sh`; full `pnpm run test`; full `just test`. [RECOMMENDED] |
 
 ## Sources
 

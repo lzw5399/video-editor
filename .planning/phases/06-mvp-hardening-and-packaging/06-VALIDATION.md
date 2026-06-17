@@ -40,10 +40,14 @@ created: 2026-06-18
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 06-01-01 | 01 | 1 | TEST-07 | T-06-01 | Packaged app loads only trusted file renderer and preload bridge | package smoke | `pnpm --filter @video-editor/desktop test:packaged-smoke` | ❌ W0 | ⬜ pending |
 | 06-01-02 | 01 | 1 | TEST-07 | T-06-02 | Native `.node` binding loads from packaged/unpacked resource path, not renderer | package smoke | `pnpm --filter @video-editor/desktop test:packaged-smoke` | ❌ W0 | ⬜ pending |
-| 06-02-01 | 02 | 2 | TEST-06 | T-06-03 | Runtime capability report is Rust-owned and read-only in renderer | rust + e2e | `pnpm run test:phase6-runtime` | ❌ W0 | ⬜ pending |
-| 06-02-02 | 02 | 2 | TEST-06 | T-06-04 | No-mock UI import/preview/export uses generated command bridge only | e2e | `pnpm --filter @video-editor/desktop test:real-workflow` | ❌ W0 | ⬜ pending |
-| 06-03-01 | 03 | 3 | TEST-07 | T-06-05 | Release docs do not imply bundled GPL/nonfree FFmpeg | source guard | `pnpm run test:phase6-release-gates` | ❌ W0 | ⬜ pending |
-| 06-03-02 | 03 | 3 | TEST-06, TEST-07 | T-06-06 | Root gates include Phase 6 checks or document slower package gates explicitly | root gate | `pnpm run test && /Users/zhiwen/.cargo/bin/just test` | ✅ | ⬜ pending |
+| 06-02-01 | 02 | 2 | TEST-06 | T-06-03 | Runtime capability report is Rust-owned | rust | `cargo test -p media_runtime runtime_capability -- --nocapture` | ❌ W0 | ⬜ pending |
+| 06-02-02 | 02 | 2 | TEST-06 | T-06-04 | Runtime capability command is generated from Rust and routed through binding | rust + contract | `cargo test -p bindings_node runtime_capabilities -- --nocapture` | ❌ W0 | ⬜ pending |
+| 06-03-01 | 03 | 3 | TEST-06 | T-06-05 | Runtime diagnostics UI uses generated command bridge only | e2e + source guard | `pnpm --filter @video-editor/desktop test:runtime-diagnostics` | ❌ W0 | ⬜ pending |
+| 06-03-02 | 03 | 3 | TEST-06 | T-06-06 | Diagnostics panel fits the compact preview shell and uses locked Chinese copy | e2e | `pnpm --filter @video-editor/desktop test:runtime-diagnostics` | ❌ W0 | ⬜ pending |
+| 06-04-01 | 04 | 4 | TEST-06, TEST-07 | T-06-07 | No-mock UI workflow uses deterministic media and generated command bridge only | e2e helper | `rg -n "runRealImportPreviewExportWorkflow|generatePhase6MediaFixtures" apps/desktop-electron/tests/helpers` | ❌ W0 | ⬜ pending |
+| 06-04-02 | 04 | 4 | TEST-06, TEST-07 | T-06-08 | Dev and packaged no-mock import/preview/export validate output | e2e | `pnpm --filter @video-editor/desktop test:real-workflow && pnpm --filter @video-editor/desktop test:packaged-real-workflow` | ❌ W0 | ⬜ pending |
+| 06-05-01 | 05 | 5 | TEST-07 | T-06-09 | Release docs do not imply bundled GPL/nonfree FFmpeg | source guard | `pnpm run test:phase6-release-gates` | ❌ W0 | ⬜ pending |
+| 06-05-02 | 05 | 5 | TEST-06, TEST-07 | T-06-10 | Root gates include Phase 6 checks or document slower package gates explicitly | root gate | `pnpm run test && /Users/zhiwen/.cargo/bin/just test` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

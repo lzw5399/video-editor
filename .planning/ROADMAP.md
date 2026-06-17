@@ -245,13 +245,15 @@ Plans:
   3. Release artifacts include FFmpeg license/build manifest and third-party notices.
   4. MVP has a documented known-limits list and clear next-phase backlog for adapters, advanced effects, and platform expansion.
 
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
 
 - [ ] 06-01: Add packaged app build, native binding loading, and bundled runtime checks
-- [ ] 06-02: Add packaged import-preview-export smoke tests and release gates
-- [ ] 06-03: Document known limits, license posture, and post-MVP backlog
+- [ ] 06-02: Add Rust-owned runtime capability report and generated command route
+- [ ] 06-03: Display Rust-owned runtime diagnostics in the Chinese preview shell
+- [ ] 06-04: Add dev and packaged no-mock import-preview-export workflow gates
+- [ ] 06-05: Document known limits, license posture, and post-MVP backlog
 
 ### Phase 7: Project Canvas Space And Coordinate System
 
