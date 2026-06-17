@@ -60,6 +60,8 @@ pub enum CommandName {
     SplitSegment,
     TrimSegment,
     DeleteSegment,
+    UndoTimelineEdit,
+    RedoTimelineEdit,
 }
 
 /// Command payloads.
@@ -78,6 +80,8 @@ pub enum CommandPayload {
     SplitSegment(SplitSegmentCommandPayload),
     TrimSegment(TrimSegmentCommandPayload),
     DeleteSegment(DeleteSegmentCommandPayload),
+    UndoTimelineEdit(UndoTimelineEditCommandPayload),
+    RedoTimelineEdit(RedoTimelineEditCommandPayload),
 }
 
 impl CommandPayload {
@@ -96,6 +100,8 @@ impl CommandPayload {
             Self::SplitSegment(_) => CommandName::SplitSegment,
             Self::TrimSegment(_) => CommandName::TrimSegment,
             Self::DeleteSegment(_) => CommandName::DeleteSegment,
+            Self::UndoTimelineEdit(_) => CommandName::UndoTimelineEdit,
+            Self::RedoTimelineEdit(_) => CommandName::RedoTimelineEdit,
         }
     }
 }
@@ -254,6 +260,24 @@ pub struct DeleteSegmentCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
+}
+
+/// Payload accepted by the Phase 3 undo command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UndoTimelineEditCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+}
+
+/// Payload accepted by the Phase 3 redo command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RedoTimelineEditCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
 }
 
 /// Segment and track selection returned by Rust-owned timeline commands.

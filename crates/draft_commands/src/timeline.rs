@@ -6,7 +6,10 @@ use draft_model::{
     TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection, validate_draft,
 };
 
-use crate::{TimelineCommandError, TimelineCommandErrorKind};
+use crate::{
+    TimelineCommandError, TimelineCommandErrorKind,
+    history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
+};
 
 pub fn checked_source_end(
     timerange: &SourceTimerange,
@@ -178,6 +181,12 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
         ),
+        CommandPayload::UndoTimelineEdit(payload) => {
+            undo_timeline_edit(&payload.draft, &payload.command_state, &payload.selection)
+        }
+        CommandPayload::RedoTimelineEdit(payload) => {
+            redo_timeline_edit(&payload.draft, &payload.command_state, &payload.selection)
+        }
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {
                 command: format!("{:?}", other.command_name()),
@@ -213,7 +222,7 @@ pub fn add_segment(
 
     Ok(response(
         next_draft,
-        command_state.clone(),
+        command_state_after_commit(command_state, draft, _selection, "addSegment"),
         TimelineSelection {
             segment_ids: vec![segment_id],
             track_ids: vec![track_id],
@@ -283,7 +292,7 @@ pub fn move_segment(
 
     Ok(response(
         next_draft,
-        command_state.clone(),
+        command_state_after_commit(command_state, draft, selection, "moveSegment"),
         TimelineSelection {
             segment_ids: vec![segment_id],
             track_ids: vec![target_track_id],
@@ -358,7 +367,7 @@ pub fn split_segment(
 
     Ok(response(
         next_draft,
-        command_state.clone(),
+        command_state_after_commit(command_state, draft, _selection, "splitSegment"),
         TimelineSelection {
             segment_ids: vec![segment_id, right_segment_id],
             track_ids: vec![track_id],
@@ -425,7 +434,7 @@ pub fn trim_segment(
 
     Ok(response(
         next_draft,
-        command_state.clone(),
+        command_state_after_commit(command_state, draft, selection, "trimSegment"),
         TimelineSelection {
             segment_ids: vec![segment_id],
             track_ids: if selection.track_ids.is_empty() {
@@ -460,7 +469,7 @@ pub fn delete_segment(
 
     Ok(response(
         next_draft,
-        command_state.clone(),
+        command_state_after_commit(command_state, draft, selection, "deleteSegment"),
         next_selection,
         "segmentDeleted",
     ))
@@ -493,19 +502,54 @@ fn checked_timerange_end(
 
 fn response(
     draft: Draft,
-    command_state: CommandState,
+    command_state: impl Into<CommandStateWithEvents>,
     selection: TimelineSelection,
     event_kind: &str,
 ) -> TimelineCommandResponse {
+    let command_state = command_state.into();
+    let mut events = vec![CommandEvent {
+        kind: event_kind.to_owned(),
+        message: None,
+    }];
+    events.extend(command_state.events);
     TimelineCommandResponse {
         draft,
-        command_state,
+        command_state: command_state.state,
         selection,
-        events: vec![CommandEvent {
-            kind: event_kind.to_owned(),
-            message: None,
-        }],
+        events,
     }
+}
+
+struct CommandStateWithEvents {
+    state: CommandState,
+    events: Vec<CommandEvent>,
+}
+
+impl From<CommandState> for CommandStateWithEvents {
+    fn from(state: CommandState) -> Self {
+        Self {
+            state,
+            events: Vec::new(),
+        }
+    }
+}
+
+fn command_state_after_commit(
+    command_state: &CommandState,
+    draft: &Draft,
+    selection: &TimelineSelection,
+    label: &str,
+) -> CommandStateWithEvents {
+    let (state, pruned) = push_undo_snapshot(command_state, draft, selection, label);
+    let events = if pruned {
+        vec![CommandEvent {
+            kind: "historyLimitPruned".to_owned(),
+            message: None,
+        }]
+    } else {
+        Vec::new()
+    };
+    CommandStateWithEvents { state, events }
 }
 
 trait ResponseSelectionFallback {

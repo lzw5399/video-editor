@@ -30,7 +30,10 @@ fn undo_redo() {
     assert_eq!(added.command_state.undo_stack.len(), 1);
     assert!(added.command_state.redo_stack.is_empty());
     assert_eq!(added.command_state.undo_stack[0].draft, draft);
-    assert_eq!(added.command_state.undo_stack[0].selection, initial_selection);
+    assert_eq!(
+        added.command_state.undo_stack[0].selection,
+        initial_selection
+    );
 
     let moved = move_segment(
         &added.draft,
@@ -115,8 +118,9 @@ fn undo_redo() {
     .expect("new edit after undo should clear redo");
     assert!(after_new_edit.command_state.redo_stack.is_empty());
 
-    let empty_undo = undo_timeline_edit(&draft, &CommandState::empty(), &TimelineSelection::empty())
-        .expect_err("empty undo should reject");
+    let empty_undo =
+        undo_timeline_edit(&draft, &CommandState::empty(), &TimelineSelection::empty())
+            .expect_err("empty undo should reject");
     assert_eq!(
         empty_undo.kind,
         TimelineCommandErrorKind::HistoryEmpty {
@@ -124,8 +128,9 @@ fn undo_redo() {
         }
     );
 
-    let empty_redo = redo_timeline_edit(&draft, &CommandState::empty(), &TimelineSelection::empty())
-        .expect_err("empty redo should reject");
+    let empty_redo =
+        redo_timeline_edit(&draft, &CommandState::empty(), &TimelineSelection::empty())
+            .expect_err("empty redo should reject");
     assert_eq!(
         empty_redo.kind,
         TimelineCommandErrorKind::HistoryEmpty {

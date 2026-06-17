@@ -98,7 +98,9 @@
         "moveSegment",
         "splitSegment",
         "trimSegment",
-        "deleteSegment"
+        "deleteSegment",
+        "undoTimelineEdit",
+        "redoTimelineEdit"
       ],
       "type": "string"
     },
@@ -468,6 +470,58 @@
             "segmentId"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 undo command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "undoTimelineEdit",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 redo command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "redoTimelineEdit",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -827,6 +881,28 @@
       ],
       "type": "object"
     },
+    "RedoTimelineEditCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 redo command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection"
+      ],
+      "title": "RedoTimelineEditCommandPayload",
+      "type": "object"
+    },
     "Segment": {
       "additionalProperties": false,
       "properties": {
@@ -1158,6 +1234,28 @@
         "right"
       ],
       "type": "string"
+    },
+    "UndoTimelineEditCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 undo command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection"
+      ],
+      "title": "UndoTimelineEditCommandPayload",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1360,6 +1458,40 @@
           "properties": {
             "kind": {
               "const": "deleteSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "undoTimelineEdit"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "undoTimelineEdit"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "redoTimelineEdit"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "redoTimelineEdit"
             }
           },
           "required": [

@@ -2,7 +2,7 @@
 
 import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrimSegmentDirection } from "./Draft";
 
-export type CommandName = "ping" | "version" | "probeMediaRuntime" | "importMaterial" | "listMaterials" | "listMissingMaterials" | "addSegment" | "selectTimelineSegments" | "moveSegment" | "splitSegment" | "trimSegment" | "deleteSegment";
+export type CommandName = "ping" | "version" | "probeMediaRuntime" | "importMaterial" | "listMaterials" | "listMissingMaterials" | "addSegment" | "selectTimelineSegments" | "moveSegment" | "splitSegment" | "trimSegment" | "deleteSegment" | "undoTimelineEdit" | "redoTimelineEdit";
 export type PingCommandPayload = Record<symbol, never>;
 export type VersionCommandPayload = Record<symbol, never>;
 export type ProbeMediaRuntimeCommandPayload = Record<symbol, never>;
@@ -15,9 +15,11 @@ export type MoveSegmentCommandPayload = { draft: Draft, commandState: CommandSta
 export type SplitSegmentCommandPayload = { draft: Draft, commandState: CommandState, selection: TimelineSelection, segmentId: SegmentId, rightSegmentId: SegmentId, splitAt: Microseconds, };
 export type TrimSegmentCommandPayload = { draft: Draft, commandState: CommandState, selection: TimelineSelection, segmentId: SegmentId, direction: TrimSegmentDirection, targetTimerange: TargetTimerange, };
 export type DeleteSegmentCommandPayload = { draft: Draft, commandState: CommandState, selection: TimelineSelection, segmentId: SegmentId, };
+export type UndoTimelineEditCommandPayload = { draft: Draft, commandState: CommandState, selection: TimelineSelection, };
+export type RedoTimelineEditCommandPayload = { draft: Draft, commandState: CommandState, selection: TimelineSelection, };
 export type TimelineSelection = { segmentIds: Array<SegmentId>, trackIds: Array<TrackId>, };
 export type SnappingSettings = { enabled: boolean, threshold: Microseconds, };
 export type CommandHistorySnapshot = { draft: Draft, selection: TimelineSelection, label?: string | null, };
 export type CommandState = { undoStack: Array<CommandHistorySnapshot>, redoStack: Array<CommandHistorySnapshot>, maxHistoryEntries: number, snapping: SnappingSettings, };
-export type CommandPayload = { "kind": "ping" } & PingCommandPayload | { "kind": "version" } & VersionCommandPayload | { "kind": "probeMediaRuntime" } & ProbeMediaRuntimeCommandPayload | { "kind": "importMaterial" } & ImportMaterialCommandPayload | { "kind": "listMaterials" } & ListMaterialsCommandPayload | { "kind": "listMissingMaterials" } & ListMissingMaterialsCommandPayload | { "kind": "addSegment" } & AddSegmentCommandPayload | { "kind": "selectTimelineSegments" } & SelectTimelineSegmentsCommandPayload | { "kind": "moveSegment" } & MoveSegmentCommandPayload | { "kind": "splitSegment" } & SplitSegmentCommandPayload | { "kind": "trimSegment" } & TrimSegmentCommandPayload | { "kind": "deleteSegment" } & DeleteSegmentCommandPayload;
+export type CommandPayload = { "kind": "ping" } & PingCommandPayload | { "kind": "version" } & VersionCommandPayload | { "kind": "probeMediaRuntime" } & ProbeMediaRuntimeCommandPayload | { "kind": "importMaterial" } & ImportMaterialCommandPayload | { "kind": "listMaterials" } & ListMaterialsCommandPayload | { "kind": "listMissingMaterials" } & ListMissingMaterialsCommandPayload | { "kind": "addSegment" } & AddSegmentCommandPayload | { "kind": "selectTimelineSegments" } & SelectTimelineSegmentsCommandPayload | { "kind": "moveSegment" } & MoveSegmentCommandPayload | { "kind": "splitSegment" } & SplitSegmentCommandPayload | { "kind": "trimSegment" } & TrimSegmentCommandPayload | { "kind": "deleteSegment" } & DeleteSegmentCommandPayload | { "kind": "undoTimelineEdit" } & UndoTimelineEditCommandPayload | { "kind": "redoTimelineEdit" } & RedoTimelineEditCommandPayload;
 export type CommandEnvelope = { command: CommandName, payload: CommandPayload, requestId?: string | null, };

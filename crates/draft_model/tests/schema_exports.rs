@@ -13,9 +13,10 @@ use draft_model::{
     MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
     Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     MoveSegmentCommandPayload, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
-    RationalFrameRate, Segment, SegmentId, SelectTimelineSegmentsCommandPayload, SnappingSettings,
-    SourceTimerange, SplitSegmentCommandPayload, TargetTimerange, TimelineCommandResponse,
-    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    RationalFrameRate, RedoTimelineEditCommandPayload, Segment, SegmentId,
+    SelectTimelineSegmentsCommandPayload, SnappingSettings, SourceTimerange,
+    SplitSegmentCommandPayload, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track,
+    TrackId, TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
     VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
@@ -61,6 +62,8 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<SplitSegmentCommandPayload>(),
             export_decl::<TrimSegmentCommandPayload>(),
             export_decl::<DeleteSegmentCommandPayload>(),
+            export_decl::<UndoTimelineEditCommandPayload>(),
+            export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -161,6 +164,8 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<SplitSegmentCommandPayload>(),
             export_decl::<TrimSegmentCommandPayload>(),
             export_decl::<DeleteSegmentCommandPayload>(),
+            export_decl::<UndoTimelineEditCommandPayload>(),
+            export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -272,6 +277,8 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<SplitSegmentCommandPayload>(),
             export_decl::<TrimSegmentCommandPayload>(),
             export_decl::<DeleteSegmentCommandPayload>(),
+            export_decl::<UndoTimelineEditCommandPayload>(),
+            export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -436,6 +443,14 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<DeleteSegmentCommandPayload>(
         &mut schema_value,
         "DeleteSegmentCommandPayload",
+    );
+    include_command_contract_schema::<UndoTimelineEditCommandPayload>(
+        &mut schema_value,
+        "UndoTimelineEditCommandPayload",
+    );
+    include_command_contract_schema::<RedoTimelineEditCommandPayload>(
+        &mut schema_value,
+        "RedoTimelineEditCommandPayload",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -735,6 +750,28 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "deleteSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "undoTimelineEdit" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "undoTimelineEdit" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "redoTimelineEdit" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "redoTimelineEdit" }
                     },
                     "required": ["kind"]
                 }
