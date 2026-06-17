@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-06-PLAN.md
-last_updated: "2026-06-17T19:07:46.070Z"
-last_activity: 2026-06-17 -- Completed Phase 05 Plan 06 preview UI and screenshot gates
+stopped_at: Completed 05-08-PLAN.md
+last_updated: "2026-06-17T19:40:12.121Z"
+last_activity: 2026-06-18 -- Completed Phase 05 Plan 08 export command contracts, binding registry, and desktop UI
 progress:
   total_phases: 14
   completed_phases: 5
   total_plans: 37
-  completed_plans: 35
-  percent: 95
+  completed_plans: 36
+  percent: 97
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 05 (preview-and-export-pipeline) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
-Last activity: 2026-06-17 -- Completed Phase 05 Plan 06 preview UI and screenshot gates
+Last activity: 2026-06-18 -- Completed Phase 05 Plan 08 export command contracts, binding registry, and desktop UI
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 35
+- Total plans completed: 36
 - Average duration: 7 min
-- Total execution time: 236 min
+- Total execution time: 281 min
 
 **By Phase:**
 
@@ -87,6 +87,7 @@ Progress: [██████████] 95%
 | Phase 05 P05 | 10 min | 3 tasks | 13 files |
 | Phase 05 P06 | 14 min | 2 tasks | 10 files |
 | Phase 05 P07 | 8 min | 2 tasks | 5 files |
+| Phase 05 P08 | 45 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 03 carries text style data through engine_core resolved overlays and clips filter/ASS timing to the output profile target range. — This prevents preview/export text style drift and wrong source-time rendering for partial ranges.
 - [Phase 05]: Plan 06 connects the desktop preview monitor to Rust-generated preview command helpers while keeping renderer state to artifact/status/error display fields. — Source guards now block renderer FFmpeg, render graph, cache fingerprint, preview invalidation overlap, and process execution ownership.
 - [Phase 05]: Plan 06 makes 1280x800 and 1120x720 preview screenshots executable gates for the compact Jianying-style workspace baseline. — The top feature bar remains the only primary category navigation, left-panel duplicate menus stay absent, and dark 4px scrollbars remain enforced.
+- [Phase 05]: Plan 08 adds Rust-generated export command contracts for startExport, getExportJobStatus, and cancelExport. — Desktop helpers build envelopes only; renderer code does not construct FFmpeg args, render graphs, export scripts, process handles, or validation expectations.
+- [Phase 05]: Plan 08 routes export through bindings_node's job registry while media_runtime owns process execution and validation. — The binding layer composes engine_core, render_graph, ffmpeg_compiler, and media_runtime without moving export semantics into Electron UI.
+- [Phase 05]: Plan 08 keeps export UI as a compact Chinese panel inside the preview monitor. — This preserves the Jianying-style hierarchy with the top feature bar as the only primary navigation and keeps 1120x720/1280x800 screenshot gates plus dark scrollbar baseline.
 - [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
 
 ### Pending Todos
@@ -196,6 +200,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T19:07:46.067Z
-Stopped at: Completed 05-06-PLAN.md
+Last session: 2026-06-17T19:40:12.119Z
+Stopped at: Completed 05-08-PLAN.md
 Resume file: None

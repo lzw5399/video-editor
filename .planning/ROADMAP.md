@@ -226,7 +226,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 and export runtime completion)*
 
-- [ ] 05-08-PLAN.md - Add export contracts, binding registry, UI, and automated screenshots
+- [x] 05-08-PLAN.md - Add export contracts, binding registry, UI, and automated screenshots
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -371,7 +371,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 7/9 | In Progress|  |
+| 5. Preview And Export Pipeline | 8/9 | In Progress|  |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
 | 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
