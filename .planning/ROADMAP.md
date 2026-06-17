@@ -150,10 +150,33 @@ Plans:
 
 - [x] 04-04-PLAN.md - Add Electron IPC contracts, Playwright smoke flow, and visual layout checks
 
+### Phase 04.1: Professional Jianying Workspace UI Refinement (INSERTED)
+
+**Goal:** Upgrade the existing Jianying-style MVP workspace into a higher-density professional desktop editor UI that is closer to Jianying Pro's workstation structure while preserving original assets and command-only Rust integration.
+**Requirements**: UI-07, UI-08, UI-09, UI-10, UI-11, UI-12, TEST-08
+**Depends on:** Phase 4
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Top feature area, left resource panel, center preview shell, right inspector, and bottom timeline all use compact professional editor density with Simplified Chinese Jianying-style terminology.
+  2. Deferred categories such as stickers, effects, transitions, subtitles, filters, adjustment, templates, and digital human remain visible with Chinese not-yet-connected states rather than disappearing.
+  3. Timeline editing controls still route through `window.videoEditorCore.executeCommand`; renderer code does not mutate draft tracks/segments/timeranges or own undo/redo behavior.
+  4. Preview and export UI shells are ready for Phase 5 integration but do not implement real render graph or FFmpeg execution in the renderer.
+  5. Playwright Electron checks cover 1280x800 and 1120x720 with no region overlap/clipping and source guards enforce the UI/Rust/render boundary.
+
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 04.1-01: Refine top feature area and left resource/function panel density
+- [ ] 04.1-02: Refine preview monitor shell and Jianying-style inspector tabs/controls
+- [ ] 04.1-03: Refine timeline toolbar, track headers, segment visuals, ruler, playhead, snapping, and zoom states
+- [ ] 04.1-04: Add professional workspace Playwright coverage, source guards, and visual regression gates
+
 ### Phase 5: Preview And Export Pipeline
 
 **Goal**: Connect the Rust editing model to a shared render graph path for preview and final MP4 export.
-**Depends on**: Phase 4
+**Depends on**: Phase 04.1
 **Requirements**: TEXT-03, PREV-01, PREV-02, PREV-03, PREV-04, EXP-01, EXP-02, EXP-03, EXP-04, TEST-03, TEST-04, TEST-05
 **Success Criteria** (what must be TRUE):
 
@@ -195,7 +218,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|

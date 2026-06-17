@@ -67,6 +67,12 @@
 - [x] **UI-04**: UI emits typed commands to Rust and cannot mutate the draft directly.
 - [x] **UI-05**: Timeline controls have stable dimensions and do not shift layout during selection, hover, or playback updates.
 - [x] **UI-06**: Desktop UI user-facing language is Simplified Chinese by default, including panel titles, controls, empty states, errors, and test-visible copy.
+- [ ] **UI-07**: Top feature area uses compact icon-plus-text entries with Jianying-style categories and restrained cyan active states.
+- [ ] **UI-08**: Left resource/function panel uses a narrow category tree plus content area with import, search, sort/filter, compact material cards, and visible deferred feature states.
+- [ ] **UI-09**: Center preview shell has a professional monitor structure with title bar, black video canvas, bottom playback controls, fit/ratio/fullscreen controls, and reserved preview-frame integration points.
+- [ ] **UI-10**: Right inspector uses Jianying-style primary tabs, compact rows, sliders, numeric inputs, switches, color swatches, keyframe placeholders, draft parameters when nothing is selected, and segment-specific controls when selected.
+- [ ] **UI-11**: Timeline uses a compact icon toolbar, track headers with lock/visibility/mute state, realistic video/audio/text segment blocks, stable ruler/playhead/snapping/zoom controls, and no layout jump on hover or selection.
+- [ ] **UI-12**: Professional workspace refinement preserves the command-only renderer boundary and does not introduce renderer-owned draft mutation, undo/redo semantics, FFmpeg commands, render graphs, export scripts, or preview cache semantics.
 
 ### Testing And Quality
 
@@ -77,6 +83,7 @@
 - [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
 - [ ] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
+- [ ] **TEST-08**: Electron workspace tests and source guards verify the professional UI at 1280x800 and 1120x720, including five-region visibility, command-only timeline updates, and no renderer-owned media/render semantics.
 
 ## v2 Requirements
 
@@ -154,6 +161,12 @@
 | UI-04 | Phase 4 | Complete |
 | UI-05 | Phase 4 | Complete |
 | UI-06 | Phase 4 | Complete |
+| UI-07 | Phase 04.1 | Pending |
+| UI-08 | Phase 04.1 | Pending |
+| UI-09 | Phase 04.1 | Pending |
+| UI-10 | Phase 04.1 | Pending |
+| UI-11 | Phase 04.1 | Pending |
+| UI-12 | Phase 04.1 | Pending |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 3 | Complete |
 | TEST-03 | Phase 5 | Pending |
@@ -161,6 +174,7 @@
 | TEST-05 | Phase 5 | Pending |
 | TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Pending |
+| TEST-08 | Phase 04.1 | Pending |
 | ADV-01 | Post-MVP | Deferred |
 | ADV-02 | Post-MVP | Deferred |
 | ADV-03 | Post-MVP | Deferred |
@@ -175,8 +189,8 @@
 
 **Coverage:**
 
-- v1 requirements: 45 total
-- Mapped to phases: 45
+- v1 requirements: 52 total
+- Mapped to phases: 52
 - Unmapped: 0
 - v2/post-MVP requirements: 11 total, deferred
 

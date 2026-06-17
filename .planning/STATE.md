@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 04 verified and completed; Phase 05 ready for discussion
-last_updated: "2026-06-17T12:05:59.206Z"
-last_activity: 2026-06-17 -- Phase 04 verified and completed; Phase 05 ready for discussion
+status: planning
+stopped_at: Phase 04 verified and completed; urgent Phase 04.1 UI refinement inserted before Phase 05
+last_updated: "2026-06-17T13:58:25.558Z"
+last_activity: 2026-06-17 -- Phase 04.1 inserted for professional Jianying workspace UI refinement
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 4
   total_plans: 24
   completed_plans: 24
-  percent: 67
+  percent: 57
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 05 — preview-and-export-pipeline
+**Current focus:** Phase 04.1 — professional-jianying-workspace-ui-refinement
 
 ## Current Position
 
-Phase: 05 (preview-and-export-pipeline) — READY TO PLAN
+Phase: 04.1 (professional-jianying-workspace-ui-refinement) — READY TO PLAN
 Plan: Not started
-Status: Phase 04 verified and complete — Phase 05 ready for discussion/planning
-Last activity: 2026-06-17 -- Phase 04 verified and completed; Phase 05 ready for discussion
+Status: Phase 04 verified and complete — urgent Phase 04.1 inserted before Phase 05 preview/export planning
+Last activity: 2026-06-17 -- Phase 04.1 inserted for professional Jianying workspace UI refinement
 
-Progress: [███████░░░] 67%
+Progress: [█████░░░░░] 57%
 
 ## Performance Metrics
 
@@ -77,6 +77,10 @@ Progress: [███████░░░] 67%
 | Phase 04 P04 | 45min | 3 tasks | 6 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
 
 ### Decisions
 
