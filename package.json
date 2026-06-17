@@ -30,8 +30,10 @@
     "test:phase4-source-guards": "bash scripts/phase4-source-guards.sh",
     "test:phase4-workspace": "pnpm --filter @video-editor/desktop test:workspace",
     "test:phase4-professional-ui": "pnpm run test:phase4-source-guards && pnpm run test:phase4-workspace",
+    "test:phase5-render-core": "cargo test -p engine_core -- --nocapture && cargo test -p render_graph -- --nocapture && cargo test -p ffmpeg_compiler -- --nocapture && cargo test -p preview_service -- --nocapture && cargo test -p media_runtime export_job -- --nocapture && cargo test -p media_runtime output_validation -- --nocapture && cargo test -p testkit preview_export_parity -- --nocapture",
     "test:phase5-source-guards": "bash scripts/phase5-source-guards.sh",
+    "test:phase5-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"预览|导出\"",
     "test:contracts": "git diff --exit-code schemas apps/desktop-electron/src/generated",
-    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:contracts"
+    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:phase5-render-core && pnpm run test:phase5-source-guards && pnpm run test:phase5-workspace && pnpm run test:contracts"
   }
 }
