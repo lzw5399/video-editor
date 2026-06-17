@@ -140,7 +140,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md - Implement material, text, and audio panels plus right inspector
+- [x] 04-02-PLAN.md - Implement material, text, and audio panels plus right inspector
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -202,6 +202,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
-| 4. Jianying-Style Desktop Workspace | 1/4 | In progress | - |
+| 4. Jianying-Style Desktop Workspace | 2/4 | In Progress|  |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |

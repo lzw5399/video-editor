@@ -62,9 +62,9 @@
 ### Desktop UI
 
 - [x] **UI-01**: Desktop editor first screen uses a Jianying-like workspace: top feature categories, left material/function panel, center preview, right inspector, and bottom multi-track timeline.
-- [ ] **UI-02**: MVP UI implements media/material, text, and audio panels while reserving visible categories for sticker, effect, transition, filter, and adjustment.
+- [x] **UI-02**: MVP UI implements media/material, text, and audio panels while reserving visible categories for sticker, effect, transition, filter, and adjustment.
 - [x] **UI-03**: UI uses Jianying-style terms consistently and does not expose alternate internal jargon.
-- [ ] **UI-04**: UI emits typed commands to Rust and cannot mutate the draft directly.
+- [x] **UI-04**: UI emits typed commands to Rust and cannot mutate the draft directly.
 - [x] **UI-05**: Timeline controls have stable dimensions and do not shift layout during selection, hover, or playback updates.
 - [x] **UI-06**: Desktop UI user-facing language is Simplified Chinese by default, including panel titles, controls, empty states, errors, and test-visible copy.
 
@@ -149,9 +149,9 @@
 | EXP-03 | Phase 5 | Pending |
 | EXP-04 | Phase 5 | Pending |
 | UI-01 | Phase 4 | Complete |
-| UI-02 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Complete |
 | UI-03 | Phase 4 | Complete |
-| UI-04 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Complete |
 | UI-05 | Phase 4 | Complete |
 | UI-06 | Phase 4 | Complete |
 | TEST-01 | Phase 1 | Complete |
