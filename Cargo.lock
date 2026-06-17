@@ -48,6 +48,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "preview_service",
  "project_store",
  "serde",
  "serde_json",

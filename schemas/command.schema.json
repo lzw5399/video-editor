@@ -193,7 +193,10 @@
         "editTextSegment",
         "addAudioSegment",
         "setSegmentVolume",
-        "setTrackMute"
+        "setTrackMute",
+        "requestPreviewFrame",
+        "requestPreviewSegment",
+        "invalidatePreviewCache"
       ],
       "type": "string"
     },
@@ -813,6 +816,97 @@
             "muted"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 preview frame command.",
+          "properties": {
+            "cacheRoot": {
+              "type": "string"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "requestPreviewFrame",
+              "type": "string"
+            },
+            "targetTime": {
+              "$ref": "#/$defs/Microseconds"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "cacheRoot",
+            "targetTime"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 preview segment command.",
+          "properties": {
+            "cacheRoot": {
+              "type": "string"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "requestPreviewSegment",
+              "type": "string"
+            },
+            "targetTimerange": {
+              "$ref": "#/$defs/TargetTimerange"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "cacheRoot",
+            "targetTimerange"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 5 preview cache invalidation command.",
+          "properties": {
+            "changedMaterialIds": {
+              "items": {
+                "$ref": "#/$defs/MaterialId"
+              },
+              "type": "array"
+            },
+            "changedRanges": {
+              "items": {
+                "$ref": "#/$defs/TargetTimerange"
+              },
+              "type": "array"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/PreviewCacheEntryRef"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "invalidatePreviewCache",
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "entries",
+            "changedRanges",
+            "changedMaterialIds",
+            "reason"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -981,6 +1075,41 @@
         "name",
         "parameters"
       ],
+      "type": "object"
+    },
+    "InvalidatePreviewCacheCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 preview cache invalidation command.",
+      "properties": {
+        "changedMaterialIds": {
+          "items": {
+            "$ref": "#/$defs/MaterialId"
+          },
+          "type": "array"
+        },
+        "changedRanges": {
+          "items": {
+            "$ref": "#/$defs/TargetTimerange"
+          },
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/PreviewCacheEntryRef"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entries",
+        "changedRanges",
+        "changedMaterialIds",
+        "reason"
+      ],
+      "title": "InvalidatePreviewCacheCommandPayload",
       "type": "object"
     },
     "Keyframe": {
@@ -1182,6 +1311,158 @@
       "title": "MoveSegmentCommandPayload",
       "type": "object"
     },
+    "PreviewArtifactResponse": {
+      "additionalProperties": false,
+      "description": "Preview artifact response returned by frame and segment preview commands.",
+      "properties": {
+        "diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewDiagnostic"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/PreviewOutputProfile"
+        },
+        "status": {
+          "$ref": "#/$defs/PreviewStatus"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        }
+      },
+      "required": [
+        "profile",
+        "path",
+        "mimeType",
+        "status",
+        "targetTimerange"
+      ],
+      "title": "PreviewArtifactResponse",
+      "type": "object"
+    },
+    "PreviewCacheEntryRef": {
+      "additionalProperties": false,
+      "description": "Renderer-provided reference to an existing derived preview cache entry.\n\nThis intentionally contains no cache-key formula, FFmpeg args, render graph,\nor derived script content.",
+      "properties": {
+        "artifactPath": {
+          "type": "string"
+        },
+        "materialDependencies": {
+          "items": {
+            "$ref": "#/$defs/MaterialId"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/PreviewOutputProfile"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        }
+      },
+      "required": [
+        "profile",
+        "targetTimerange",
+        "materialDependencies",
+        "artifactPath"
+      ],
+      "type": "object"
+    },
+    "PreviewCacheInvalidationResponse": {
+      "additionalProperties": false,
+      "description": "Preview cache invalidation response returned by the invalidation command.",
+      "properties": {
+        "invalidatedCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retainedCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/PreviewStatus"
+        }
+      },
+      "required": [
+        "invalidatedCount",
+        "retainedCount",
+        "status"
+      ],
+      "title": "PreviewCacheInvalidationResponse",
+      "type": "object"
+    },
+    "PreviewDiagnostic": {
+      "additionalProperties": false,
+      "description": "Preview diagnostic details suitable for UI display and logs.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PreviewDiagnosticKind"
+        },
+        "message": {
+          "type": "string"
+        },
+        "stderrSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdoutSummary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "type": "object"
+    },
+    "PreviewDiagnosticKind": {
+      "description": "Stable classes of preview diagnostics returned through command envelopes.",
+      "enum": [
+        "engineFailed",
+        "renderGraphFailed",
+        "compileFailed",
+        "ioFailed",
+        "runtimeUnavailable",
+        "runtimeFailed"
+      ],
+      "type": "string"
+    },
+    "PreviewOutputProfile": {
+      "description": "Preview artifact profile requested through Rust-owned preview services.",
+      "enum": [
+        "framePng",
+        "segmentMp4"
+      ],
+      "type": "string"
+    },
+    "PreviewStatus": {
+      "description": "Stable preview command status returned through command envelopes.",
+      "enum": [
+        "generated",
+        "cached",
+        "invalidated"
+      ],
+      "type": "string"
+    },
     "RationalFrameRate": {
       "additionalProperties": false,
       "properties": {
@@ -1222,6 +1503,50 @@
         "selection"
       ],
       "title": "RedoTimelineEditCommandPayload",
+      "type": "object"
+    },
+    "RequestPreviewFrameCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 preview frame command.",
+      "properties": {
+        "cacheRoot": {
+          "type": "string"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "targetTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "draft",
+        "cacheRoot",
+        "targetTime"
+      ],
+      "title": "RequestPreviewFrameCommandPayload",
+      "type": "object"
+    },
+    "RequestPreviewSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 5 preview segment command.",
+      "properties": {
+        "cacheRoot": {
+          "type": "string"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        }
+      },
+      "required": [
+        "draft",
+        "cacheRoot",
+        "targetTimerange"
+      ],
+      "title": "RequestPreviewSegmentCommandPayload",
       "type": "object"
     },
     "Segment": {
@@ -2122,6 +2447,57 @@
           "properties": {
             "kind": {
               "const": "setTrackMute"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "requestPreviewFrame"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "requestPreviewFrame"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "requestPreviewSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "requestPreviewSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "invalidatePreviewCache"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "invalidatePreviewCache"
             }
           },
           "required": [

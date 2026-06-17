@@ -7,9 +7,13 @@ import type {
   DeleteSegmentCommandPayload,
   EditTextSegmentCommandPayload,
   ImportMaterialCommandPayload,
+  InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
   MoveSegmentCommandPayload,
+  PreviewCacheEntryRef,
   RedoTimelineEditCommandPayload,
+  RequestPreviewFrameCommandPayload,
+  RequestPreviewSegmentCommandPayload,
   SelectTimelineSegmentsCommandPayload,
   SplitSegmentCommandPayload,
   TimelineSelection,
@@ -302,6 +306,59 @@ export function buildSetTrackMuteCommand(context: CommandContext, trackId: Track
     trackId,
     muted
   });
+}
+
+type RequestPreviewFrameOptions = {
+  draft: Draft;
+  cacheRoot: string;
+  targetTime: Microseconds;
+};
+
+export function buildRequestPreviewFrameCommand(options: RequestPreviewFrameOptions): CommandEnvelope {
+  const payload = {
+    kind: "requestPreviewFrame",
+    draft: options.draft,
+    cacheRoot: options.cacheRoot,
+    targetTime: options.targetTime
+  } satisfies RequestPreviewFrameCommandPayload & { kind: "requestPreviewFrame" };
+
+  return envelope("requestPreviewFrame", payload);
+}
+
+type RequestPreviewSegmentOptions = {
+  draft: Draft;
+  cacheRoot: string;
+  targetTimerange: TargetTimerange;
+};
+
+export function buildRequestPreviewSegmentCommand(options: RequestPreviewSegmentOptions): CommandEnvelope {
+  const payload = {
+    kind: "requestPreviewSegment",
+    draft: options.draft,
+    cacheRoot: options.cacheRoot,
+    targetTimerange: options.targetTimerange
+  } satisfies RequestPreviewSegmentCommandPayload & { kind: "requestPreviewSegment" };
+
+  return envelope("requestPreviewSegment", payload);
+}
+
+type InvalidatePreviewCacheOptions = {
+  entries: PreviewCacheEntryRef[];
+  changedRanges: TargetTimerange[];
+  changedMaterialIds: MaterialId[];
+  reason: string;
+};
+
+export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCacheOptions): CommandEnvelope {
+  const payload = {
+    kind: "invalidatePreviewCache",
+    entries: options.entries,
+    changedRanges: options.changedRanges,
+    changedMaterialIds: options.changedMaterialIds,
+    reason: options.reason
+  } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
+
+  return envelope("invalidatePreviewCache", payload);
 }
 
 export function applyTimelineCommandResult(

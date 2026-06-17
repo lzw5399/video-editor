@@ -6,10 +6,10 @@
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandName, CommandPayload,
     CommandResultEnvelope, DRAFT_MODEL_VERSION, ImportMaterialCommandPayload,
-    ImportMaterialResponse, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    ImportMaterialResponse, InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload,
+    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    VersionResponse,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -23,8 +23,13 @@ use crate::material_service::{
     MissingMaterialDiagnosticKind, import_material_and_save, list_materials,
     list_missing_materials,
 };
+use crate::preview_export_service::{
+    PreviewCommandError, invalidate_preview_cache_command, request_preview_frame_with_executor,
+    request_preview_segment_with_executor,
+};
 
 pub mod material_service;
+pub mod preview_export_service;
 
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -64,6 +69,9 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "addAudioSegment"
                 | "setSegmentVolume"
                 | "setTrackMute"
+                | "requestPreviewFrame"
+                | "requestPreviewSegment"
+                | "invalidatePreviewCache"
         ) {
             return to_js_value(error_envelope(
                 CommandErrorKind::UnsupportedCommand,
@@ -102,6 +110,22 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         CommandName::ListMissingMaterials => match envelope.payload {
             CommandPayload::ListMissingMaterials(payload) => {
                 list_missing_materials_command(payload)
+            }
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::RequestPreviewFrame => match envelope.payload {
+            CommandPayload::RequestPreviewFrame(payload) => request_preview_frame_command(payload),
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::RequestPreviewSegment => match envelope.payload {
+            CommandPayload::RequestPreviewSegment(payload) => {
+                request_preview_segment_command(payload)
+            }
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::InvalidatePreviewCache => match envelope.payload {
+            CommandPayload::InvalidatePreviewCache(payload) => {
+                invalidate_preview_cache_binding_command(payload)
             }
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
@@ -233,6 +257,56 @@ fn list_missing_materials_command(
     }
 }
 
+fn request_preview_frame_command(
+    payload: RequestPreviewFrameCommandPayload,
+) -> Result<serde_json::Value> {
+    let executor = DesktopFfmpegExecutor::default();
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::PreviewServiceFailed,
+                runtime_discovery_message(error),
+                Some("requestPreviewFrame".to_string()),
+            ));
+        }
+    };
+    let config =
+        preview_service::PreviewServiceConfig::new(&payload.cache_root, runtime.ffmpeg.path);
+    match request_preview_frame_with_executor(&executor, &config, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope("requestPreviewFrame", error)),
+    }
+}
+
+fn request_preview_segment_command(
+    payload: RequestPreviewSegmentCommandPayload,
+) -> Result<serde_json::Value> {
+    let executor = DesktopFfmpegExecutor::default();
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::PreviewServiceFailed,
+                runtime_discovery_message(error),
+                Some("requestPreviewSegment".to_string()),
+            ));
+        }
+    };
+    let config =
+        preview_service::PreviewServiceConfig::new(&payload.cache_root, runtime.ffmpeg.path);
+    match request_preview_segment_with_executor(&executor, &config, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope("requestPreviewSegment", error)),
+    }
+}
+
+fn invalidate_preview_cache_binding_command(
+    payload: InvalidatePreviewCacheCommandPayload,
+) -> Result<serde_json::Value> {
+    to_js_value(ok_envelope(invalidate_preview_cache_command(payload)))
+}
+
 fn timeline_command(command: CommandName, payload: CommandPayload) -> Result<serde_json::Value> {
     let command = command_wire_name(&command);
     match draft_commands::timeline::execute_timeline_edit(payload) {
@@ -243,6 +317,17 @@ fn timeline_command(command: CommandName, payload: CommandPayload) -> Result<ser
             command,
         )),
     }
+}
+
+fn preview_error_envelope(
+    command: &str,
+    error: PreviewCommandError,
+) -> CommandResultEnvelope<serde_json::Value> {
+    error_envelope(
+        CommandErrorKind::PreviewServiceFailed,
+        error.to_string(),
+        Some(command.to_string()),
+    )
 }
 
 fn command_diagnostic(diagnostic: MissingMaterialDiagnostic) -> MissingMaterialCommandDiagnostic {

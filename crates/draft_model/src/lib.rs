@@ -68,6 +68,9 @@ pub enum CommandName {
     AddAudioSegment,
     SetSegmentVolume,
     SetTrackMute,
+    RequestPreviewFrame,
+    RequestPreviewSegment,
+    InvalidatePreviewCache,
 }
 
 /// Command payloads.
@@ -93,6 +96,9 @@ pub enum CommandPayload {
     AddAudioSegment(AddAudioSegmentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
+    RequestPreviewFrame(RequestPreviewFrameCommandPayload),
+    RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
+    InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
 }
 
 impl CommandPayload {
@@ -118,6 +124,9 @@ impl CommandPayload {
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
+            Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
+            Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
+            Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
         }
     }
 }
@@ -358,6 +367,64 @@ pub struct SetTrackMuteCommandPayload {
     pub muted: bool,
 }
 
+/// Preview artifact profile requested through Rust-owned preview services.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PreviewOutputProfile {
+    FramePng,
+    SegmentMp4,
+}
+
+/// Stable preview command status returned through command envelopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PreviewStatus {
+    Generated,
+    Cached,
+    Invalidated,
+}
+
+/// Payload accepted by the Phase 5 preview frame command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RequestPreviewFrameCommandPayload {
+    pub draft: Draft,
+    pub cache_root: String,
+    pub target_time: Microseconds,
+}
+
+/// Payload accepted by the Phase 5 preview segment command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RequestPreviewSegmentCommandPayload {
+    pub draft: Draft,
+    pub cache_root: String,
+    pub target_timerange: TargetTimerange,
+}
+
+/// Renderer-provided reference to an existing derived preview cache entry.
+///
+/// This intentionally contains no cache-key formula, FFmpeg args, render graph,
+/// or derived script content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewCacheEntryRef {
+    pub profile: PreviewOutputProfile,
+    pub target_timerange: TargetTimerange,
+    pub material_dependencies: Vec<MaterialId>,
+    pub artifact_path: String,
+}
+
+/// Payload accepted by the Phase 5 preview cache invalidation command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InvalidatePreviewCacheCommandPayload {
+    pub entries: Vec<PreviewCacheEntryRef>,
+    pub changed_ranges: Vec<TargetTimerange>,
+    pub changed_material_ids: Vec<MaterialId>,
+    pub reason: String,
+}
+
 /// Segment and track selection returned by Rust-owned timeline commands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -527,6 +594,7 @@ pub enum CommandErrorKind {
     MaterialProbeFailed,
     MissingMaterial,
     InvalidTimelineEdit,
+    PreviewServiceFailed,
     Internal,
 }
 
@@ -536,6 +604,55 @@ pub enum CommandErrorKind {
 pub struct CommandEvent {
     pub kind: String,
     pub message: Option<String>,
+}
+
+/// Stable classes of preview diagnostics returned through command envelopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PreviewDiagnosticKind {
+    EngineFailed,
+    RenderGraphFailed,
+    CompileFailed,
+    IoFailed,
+    RuntimeUnavailable,
+    RuntimeFailed,
+}
+
+/// Preview diagnostic details suitable for UI display and logs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewDiagnostic {
+    pub kind: PreviewDiagnosticKind,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub stdout_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub stderr_summary: Option<String>,
+}
+
+/// Preview artifact response returned by frame and segment preview commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewArtifactResponse {
+    pub profile: PreviewOutputProfile,
+    pub path: String,
+    pub mime_type: String,
+    pub status: PreviewStatus,
+    pub target_timerange: TargetTimerange,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<PreviewDiagnostic>,
+}
+
+/// Preview cache invalidation response returned by the invalidation command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewCacheInvalidationResponse {
+    pub invalidated_count: u32,
+    pub retained_count: u32,
+    pub status: PreviewStatus,
 }
 
 /// Response data returned by the `ping` command.

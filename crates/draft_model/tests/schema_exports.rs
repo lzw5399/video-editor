@@ -9,12 +9,16 @@ use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
     CommandName, CommandPayload, CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload,
     Draft, DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, Filter,
-    ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
-    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    MoveSegmentCommandPayload, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
-    RationalFrameRate, RedoTimelineEditCommandPayload, Segment, SegmentId, SegmentVolume,
+    ImportMaterialCommandPayload, ImportMaterialResponse, InvalidatePreviewCacheCommandPayload,
+    Keyframe, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MainTrackMagnet, Material,
+    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
+    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload, RationalFrameRate,
+    RedoTimelineEditCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, Segment, SegmentId, SegmentVolume,
     SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
     SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
     TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow, TextStroke, TextStyle,
@@ -71,6 +75,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<PreviewOutputProfile>(),
+            export_decl::<RequestPreviewFrameCommandPayload>(),
+            export_decl::<RequestPreviewSegmentCommandPayload>(),
+            export_decl::<PreviewCacheEntryRef>(),
+            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -85,12 +94,17 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     );
 
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\nimport type { CommandState, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
             export_decl::<CommandEvent>(),
             export_decl::<CommandResultEnvelope<()>>(),
+            export_decl::<PreviewStatus>(),
+            export_decl::<PreviewDiagnosticKind>(),
+            export_decl::<PreviewDiagnostic>(),
+            export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -185,6 +199,11 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<PreviewOutputProfile>(),
+            export_decl::<RequestPreviewFrameCommandPayload>(),
+            export_decl::<RequestPreviewSegmentCommandPayload>(),
+            export_decl::<PreviewCacheEntryRef>(),
+            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -194,12 +213,17 @@ fn schema_exports_include_timeline_command_session_contracts() {
         ],
     );
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus } from \"./Draft\";\nimport type { CommandState, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
             export_decl::<CommandEvent>(),
             export_decl::<CommandResultEnvelope<()>>(),
+            export_decl::<PreviewStatus>(),
+            export_decl::<PreviewDiagnosticKind>(),
+            export_decl::<PreviewDiagnostic>(),
+            export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
             export_decl::<ImportMaterialResponse>(),
@@ -333,6 +357,39 @@ fn schema_exports_include_audio_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_preview_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+
+    for expected_contract in [
+        "RequestPreviewFrameCommandPayload",
+        "RequestPreviewSegmentCommandPayload",
+        "InvalidatePreviewCacheCommandPayload",
+        "PreviewCacheEntryRef",
+        "PreviewOutputProfile",
+        "PreviewArtifactResponse",
+        "PreviewCacheInvalidationResponse",
+        "PreviewStatus",
+        "PreviewDiagnosticKind",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract)
+                || command_envelope_ts.contains(expected_contract)
+                || command_result_ts.contains(expected_contract),
+            "preview command contracts should include {expected_contract}"
+        );
+    }
+
+    for forbidden in ["ffmpegArgs", "filterComplex", "cacheKeyFormula"] {
+        assert!(
+            !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
+            "preview contracts must not expose renderer-owned {forbidden}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -368,12 +425,40 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<PreviewOutputProfile>(),
+            export_decl::<RequestPreviewFrameCommandPayload>(),
+            export_decl::<RequestPreviewSegmentCommandPayload>(),
+            export_decl::<PreviewCacheEntryRef>(),
+            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
             export_decl::<CommandState>(),
             export_decl::<CommandPayload>(),
             export_decl::<CommandEnvelope>(),
+        ],
+    )
+}
+
+fn command_result_ts_contract() -> String {
+    ts_contract_with_prelude(
+        "import type { Draft, Material, MaterialId, MaterialStatus, TargetTimerange } from \"./Draft\";\nimport type { CommandState, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        &[
+            export_decl::<CommandErrorKind>(),
+            export_decl::<CommandError>(),
+            export_decl::<CommandEvent>(),
+            export_decl::<CommandResultEnvelope<()>>(),
+            export_decl::<PreviewStatus>(),
+            export_decl::<PreviewDiagnosticKind>(),
+            export_decl::<PreviewDiagnostic>(),
+            export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<MissingMaterialCommandDiagnosticKind>(),
+            export_decl::<MissingMaterialCommandDiagnostic>(),
+            export_decl::<ImportMaterialResponse>(),
+            export_decl::<ListMaterialsResponse>(),
+            export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<TimelineCommandResponse>(),
         ],
     )
 }
@@ -561,6 +646,30 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<SetTrackMuteCommandPayload>(
         &mut schema_value,
         "SetTrackMuteCommandPayload",
+    );
+    include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
+        &mut schema_value,
+        "RequestPreviewFrameCommandPayload",
+    );
+    include_command_contract_schema::<RequestPreviewSegmentCommandPayload>(
+        &mut schema_value,
+        "RequestPreviewSegmentCommandPayload",
+    );
+    include_command_contract_schema::<PreviewCacheEntryRef>(
+        &mut schema_value,
+        "PreviewCacheEntryRef",
+    );
+    include_command_contract_schema::<InvalidatePreviewCacheCommandPayload>(
+        &mut schema_value,
+        "InvalidatePreviewCacheCommandPayload",
+    );
+    include_command_contract_schema::<PreviewArtifactResponse>(
+        &mut schema_value,
+        "PreviewArtifactResponse",
+    );
+    include_command_contract_schema::<PreviewCacheInvalidationResponse>(
+        &mut schema_value,
+        "PreviewCacheInvalidationResponse",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -937,6 +1046,39 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "setTrackMute" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "requestPreviewFrame" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "requestPreviewFrame" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "requestPreviewSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "requestPreviewSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "invalidatePreviewCache" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "invalidatePreviewCache" }
                     },
                     "required": ["kind"]
                 }
