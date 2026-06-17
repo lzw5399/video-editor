@@ -8,6 +8,7 @@
 mod compatibility_report;
 mod error;
 mod formula_bundle;
+mod resource_localizer;
 
 pub use compatibility_report::{
     CompatibilityCanonicalTarget, CompatibilityCategory, CompatibilityReport,
@@ -19,4 +20,9 @@ pub use formula_bundle::{
     DirectMaterialRef, FormulaBundleKind, FormulaBundleSchemaVersion, FormulaProvenance,
     FormulaResourceRef, FormulaSourceMedia, KaipaiFormulaBundle, RecognizerResult, ResourceKind,
     SafeAreaEvidence, SafeAreaStatus,
+};
+pub use resource_localizer::{
+    LocalizedResource, LocalizedResourceManifest, LocalizedResourceStatus,
+    ResourceLocalizationMode, ResourceLocalizationRequest, ResourceLocalizationResult,
+    ResourceLocalizer,
 };

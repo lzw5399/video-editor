@@ -22,4 +22,11 @@ pub enum AdapterKaipaiError {
         resource_id: String,
         reason: &'static str,
     },
+
+    #[error("Kaipai resource localization IO failed at {path}: {source}")]
+    ResourceLocalizationIo {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
