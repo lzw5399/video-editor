@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     EngineError, EngineErrorKind, MaterialRenderableState, NormalizedDraft, NormalizedSegment,
+    ResolvedTextOverlay, text_layout::resolve_text_overlay,
 };
 
 const MICROSECONDS_PER_SECOND: u128 = 1_000_000;
@@ -15,7 +16,7 @@ pub struct FrameState {
     pub at: Microseconds,
     pub visual_layers: Vec<FrameVisualLayer>,
     pub audio_segments: Vec<FrameAudioSegment>,
-    pub text_overlays: Vec<FrameTextOverlay>,
+    pub text_overlays: Vec<ResolvedTextOverlay>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,16 +42,7 @@ pub struct FrameAudioSegment {
     pub volume_level_millis: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct FrameTextOverlay {
-    pub track_id: TrackId,
-    pub segment_id: SegmentId,
-    pub content: String,
-    pub stack_index: u32,
-    pub source_position: Microseconds,
-    pub target_timerange: TargetTimerange,
-}
+pub type FrameTextOverlay = ResolvedTextOverlay;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -110,14 +102,25 @@ pub fn resolve_frame_state(
                 draft_model::TrackKind::Text => {
                     if let Some(stack_index) = track.stack_index {
                         if let Some(text) = &segment.text {
-                            text_overlays.push(FrameTextOverlay {
-                                track_id: track.track_id.clone(),
-                                segment_id: segment.segment_id.clone(),
-                                content: text.content.clone(),
+                            let text_layout =
+                                normalized.profile.text_layout.as_ref().ok_or_else(|| {
+                                    EngineError::new(
+                                        EngineErrorKind::MissingTextLayoutProfile,
+                                        "active text segment requires a deterministic text layout profile",
+                                    )
+                                    .with_segment_id(segment.segment_id.clone())
+                                    .with_material_id(segment.material.material_id.clone())
+                                })?;
+                            text_overlays.push(resolve_text_overlay(
+                                &track.track_id,
+                                segment,
+                                text,
                                 stack_index,
                                 source_position,
-                                target_timerange: segment.target_timerange.clone(),
-                            });
+                                text_layout,
+                                normalized.profile.canvas_width,
+                                normalized.profile.canvas_height,
+                            )?);
                         }
                     }
                 }
@@ -258,8 +261,8 @@ fn source_position_at(
                 EngineErrorKind::TimerangeOverflow,
                 "frame position precedes segment targetTimerange start",
             )
-            .with_segment_id_public(segment.segment_id.clone())
-            .with_material_id_public(segment.material.material_id.clone())
+            .with_segment_id(segment.segment_id.clone())
+            .with_material_id(segment.material.material_id.clone())
         })?;
     segment
         .source_timerange
@@ -272,8 +275,8 @@ fn source_position_at(
                 EngineErrorKind::TimerangeOverflow,
                 "sourceTimerange start plus timeline offset overflowed",
             )
-            .with_segment_id_public(segment.segment_id.clone())
-            .with_material_id_public(segment.material.material_id.clone())
+            .with_segment_id(segment.segment_id.clone())
+            .with_material_id(segment.material.material_id.clone())
         })
 }
 
@@ -285,21 +288,4 @@ fn validate_frame_rate(frame_rate: &RationalFrameRate) -> Result<(), EngineError
         ));
     }
     Ok(())
-}
-
-trait EngineErrorPublicContext {
-    fn with_segment_id_public(self, segment_id: SegmentId) -> Self;
-    fn with_material_id_public(self, material_id: MaterialId) -> Self;
-}
-
-impl EngineErrorPublicContext for EngineError {
-    fn with_segment_id_public(mut self, segment_id: SegmentId) -> Self {
-        self.segment_id = Some(segment_id);
-        self
-    }
-
-    fn with_material_id_public(mut self, material_id: MaterialId) -> Self {
-        self.material_id = Some(material_id);
-        self
-    }
 }

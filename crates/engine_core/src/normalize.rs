@@ -9,12 +9,15 @@ use draft_model::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::TextLayoutProfile;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EngineProfile {
     pub frame_rate: RationalFrameRate,
     pub canvas_width: u32,
     pub canvas_height: u32,
+    pub text_layout: Option<TextLayoutProfile>,
 }
 
 impl EngineProfile {
@@ -23,6 +26,7 @@ impl EngineProfile {
             frame_rate: RationalFrameRate::new(30, 1),
             canvas_width: 1920,
             canvas_height: 1080,
+            text_layout: Some(TextLayoutProfile::mvp_default()),
         }
     }
 
@@ -38,6 +42,9 @@ impl EngineProfile {
                 EngineErrorKind::InvalidEngineProfile,
                 "engine profile canvas dimensions must be greater than zero",
             ));
+        }
+        if let Some(text_layout) = &self.text_layout {
+            text_layout.validate(self.canvas_width, self.canvas_height)?;
         }
         Ok(())
     }
@@ -160,17 +167,17 @@ impl EngineError {
         }
     }
 
-    fn with_track_id(mut self, track_id: TrackId) -> Self {
+    pub(crate) fn with_track_id(mut self, track_id: TrackId) -> Self {
         self.track_id = Some(track_id);
         self
     }
 
-    fn with_segment_id(mut self, segment_id: SegmentId) -> Self {
+    pub(crate) fn with_segment_id(mut self, segment_id: SegmentId) -> Self {
         self.segment_id = Some(segment_id);
         self
     }
 
-    fn with_material_id(mut self, material_id: MaterialId) -> Self {
+    pub(crate) fn with_material_id(mut self, material_id: MaterialId) -> Self {
         self.material_id = Some(material_id);
         self
     }

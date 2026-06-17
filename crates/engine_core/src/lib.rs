@@ -6,6 +6,7 @@
 
 pub mod frame_state;
 pub mod normalize;
+pub mod text_layout;
 
 pub use frame_state::{
     FrameAudioSegment, FrameState, FrameTextOverlay, FrameVisualLayer, RenderRange,
@@ -14,6 +15,9 @@ pub use frame_state::{
 pub use normalize::{
     EngineDiagnostic, EngineError, EngineErrorKind, EngineProfile, MaterialRenderableState,
     NormalizedDraft, NormalizedMaterialRef, NormalizedSegment, NormalizedTrack, normalize_draft,
+};
+pub use text_layout::{
+    ResolvedTextOverlay, TextFontPolicy, TextLayoutProfile, TextSafeArea, TextWrappingPolicy,
 };
 
 /// Boundary marker for the semantic engine crate.

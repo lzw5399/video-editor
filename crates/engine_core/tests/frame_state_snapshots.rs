@@ -3,8 +3,8 @@ use draft_model::{
     TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
 };
 use engine_core::{
-    EngineProfile, frame_index_to_microseconds, normalize_draft, resolve_frame_state,
-    resolve_render_range, EngineErrorKind, TextLayoutProfile,
+    EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,
+    normalize_draft, resolve_frame_state, resolve_render_range,
 };
 
 #[test]
