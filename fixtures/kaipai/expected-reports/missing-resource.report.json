@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiFormulaBundle",
+  "sourceId": "template:tpl-redacted-basic-001",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "degraded": 0,
+    "unsupported": 0,
+    "missingResource": 1,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "missingResource",
+      "severity": "error",
+      "category": "resource",
+      "externalPath": "resources[0]",
+      "externalId": "missing-font-default",
+      "message": "Referenced resource is not available in the offline formula bundle.",
+      "details": "resources/missing/redacted-default.ttf"
+    }
+  ],
+  "provenanceDigest": "sha256:redacted-compatibility-fixture"
+}

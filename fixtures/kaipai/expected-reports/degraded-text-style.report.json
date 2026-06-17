@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiFormulaBundle",
+  "sourceId": "template:tpl-redacted-basic-001",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "degraded": 1,
+    "unsupported": 0,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "degraded",
+      "severity": "warning",
+      "category": "text",
+      "externalPath": "formula.textStyleFallback",
+      "canonicalTarget": "text",
+      "message": "Text style has unsupported provider-specific attributes and will use a simpler draft text style.",
+      "details": "Preserves text content and basic style only."
+    }
+  ],
+  "provenanceDigest": "sha256:redacted-compatibility-fixture"
+}

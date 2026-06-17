@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiFormulaBundle",
+  "sourceId": "template:tpl-redacted-basic-001",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "summary": {
+    "supported": 1,
+    "degraded": 0,
+    "unsupported": 0,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "material",
+      "externalPath": "sourceMedia",
+      "externalId": "media/source-main.mp4",
+      "canonicalTarget": "material",
+      "message": "Source media can map to a Jianying-style draft material.",
+      "details": "1080x1920, durationMs=6000"
+    }
+  ],
+  "provenanceDigest": "sha256:redacted-compatibility-fixture"
+}

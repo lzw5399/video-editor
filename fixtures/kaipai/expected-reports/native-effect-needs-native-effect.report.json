@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiFormulaBundle",
+  "sourceId": "template:tpl-redacted-basic-001",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "degraded": 0,
+    "unsupported": 0,
+    "missingResource": 0,
+    "needsNativeEffect": 1
+  },
+  "items": [
+    {
+      "status": "needsNativeEffect",
+      "severity": "warning",
+      "category": "nativeEffect",
+      "externalPath": "formula.effects[0]",
+      "externalId": "kaipai-native-beauty-glow",
+      "message": "Provider-native effect requires explicit compatibility handling before it can be represented locally.",
+      "details": "Do not smuggle native effect data into generic filter parameters."
+    }
+  ],
+  "provenanceDigest": "sha256:redacted-compatibility-fixture"
+}

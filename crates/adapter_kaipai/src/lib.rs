@@ -12,7 +12,7 @@ mod formula_bundle;
 pub use compatibility_report::{
     CompatibilityCanonicalTarget, CompatibilityCategory, CompatibilityReport,
     CompatibilityReportItem, CompatibilityReportSchemaVersion, CompatibilityReportSummary,
-    CompatibilitySeverity, CompatibilityStatus,
+    CompatibilitySeverity, CompatibilityStatus, classify_formula_bundle_compatibility,
 };
 pub use error::AdapterKaipaiError;
 pub use formula_bundle::{

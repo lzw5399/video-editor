@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiFormulaBundle",
+  "sourceId": "template:tpl-redacted-basic-001",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "degraded": 0,
+    "unsupported": 1,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "unsupported",
+      "severity": "error",
+      "category": "formula",
+      "externalPath": "formula.unsupportedBlocks[0]",
+      "externalId": "smartBeatSync",
+      "message": "Formula block has no supported Jianying-style draft semantic target yet.",
+      "details": "Mapper work must not claim support for this provider block."
+    }
+  ],
+  "provenanceDigest": "sha256:redacted-compatibility-fixture"
+}

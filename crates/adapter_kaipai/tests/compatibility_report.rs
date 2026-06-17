@@ -7,9 +7,10 @@ use std::{
 use adapter_kaipai::{
     CompatibilityCanonicalTarget, CompatibilityCategory, CompatibilityReport,
     CompatibilityReportItem, CompatibilityReportSchemaVersion, CompatibilityReportSummary,
-    CompatibilitySeverity, CompatibilityStatus,
+    CompatibilitySeverity, CompatibilityStatus, KaipaiFormulaBundle,
+    classify_formula_bundle_compatibility,
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -86,7 +87,15 @@ fn compatibility_report_contract_contains_stable_diagnostic_fields() {
 
 #[test]
 fn compatibility_report_snapshots_cover_locked_statuses() {
-    let report_dir = project_root().join("fixtures/kaipai/expected-reports");
+    let root = project_root();
+    let report_dir = root.join("fixtures/kaipai/expected-reports");
+    let schema = compatibility_report_schema_validator();
+
+    if env::var_os("VE_UPDATE_COMPATIBILITY_REPORTS").as_deref() == Some(std::ffi::OsStr::new("1"))
+    {
+        write_expected_report_snapshots(&root, &report_dir);
+    }
+
     let actual = report_snapshot_paths(&report_dir);
     let expected = expected_report_snapshots()
         .iter()
@@ -100,12 +109,40 @@ fn compatibility_report_snapshots_cover_locked_statuses() {
 
     let mut statuses = BTreeSet::new();
     for case in expected_report_snapshots() {
-        let report = read_report_snapshot(&report_dir, case.path);
-        let item = report["items"]
+        let expected_report = case.report(&root);
+        let expected_json = serde_json::to_string_pretty(&expected_report)
+            .expect("expected report should serialize")
+            + "\n";
+        let actual_json = fs::read_to_string(report_dir.join(case.path)).unwrap_or_else(|error| {
+            panic!("report snapshot should be readable: {}: {error}", case.path)
+        });
+        assert_eq!(
+            actual_json, expected_json,
+            "report snapshot drifted: {}",
+            case.path
+        );
+
+        let report_value = read_report_snapshot(&report_dir, case.path);
+        schema.validate(&report_value).unwrap_or_else(|error| {
+            panic!(
+                "report snapshot should validate against generated schema: {}: {error}",
+                case.path
+            )
+        });
+        let report: CompatibilityReport = serde_json::from_value(report_value.clone())
+            .unwrap_or_else(|error| {
+                panic!(
+                    "report snapshot should deserialize through Rust contract: {}: {error}",
+                    case.path
+                )
+            });
+
+        let item = report_value["items"]
             .as_array()
             .and_then(|items| items.first())
             .unwrap_or_else(|| panic!("snapshot should contain at least one item: {}", case.path));
         assert_eq!(item["status"], Value::String(case.status.to_owned()));
+        assert_eq!(report.items[0].status, case.expected_status);
         statuses.insert(case.status);
     }
 
@@ -124,6 +161,8 @@ fn compatibility_report_snapshots_cover_locked_statuses() {
 struct ExpectedReportSnapshot {
     path: &'static str,
     status: &'static str,
+    expected_status: CompatibilityStatus,
+    build: fn(&Path) -> CompatibilityReport,
 }
 
 fn expected_report_snapshots() -> Vec<ExpectedReportSnapshot> {
@@ -131,24 +170,40 @@ fn expected_report_snapshots() -> Vec<ExpectedReportSnapshot> {
         ExpectedReportSnapshot {
             path: "supported-source-material.report.json",
             status: "supported",
+            expected_status: CompatibilityStatus::Supported,
+            build: supported_source_material_report,
         },
         ExpectedReportSnapshot {
             path: "degraded-text-style.report.json",
             status: "degraded",
+            expected_status: CompatibilityStatus::Degraded,
+            build: degraded_text_style_report,
         },
         ExpectedReportSnapshot {
             path: "unsupported-formula-block.report.json",
             status: "unsupported",
+            expected_status: CompatibilityStatus::Unsupported,
+            build: unsupported_formula_block_report,
         },
         ExpectedReportSnapshot {
             path: "missing-resource.report.json",
             status: "missingResource",
+            expected_status: CompatibilityStatus::MissingResource,
+            build: missing_resource_report,
         },
         ExpectedReportSnapshot {
             path: "native-effect-needs-native-effect.report.json",
             status: "needsNativeEffect",
+            expected_status: CompatibilityStatus::NeedsNativeEffect,
+            build: native_effect_report,
         },
     ]
+}
+
+impl ExpectedReportSnapshot {
+    fn report(&self, root: &Path) -> CompatibilityReport {
+        (self.build)(root)
+    }
 }
 
 fn report_snapshot_paths(report_dir: &Path) -> BTreeSet<String> {
@@ -178,4 +233,120 @@ fn read_report_snapshot(report_dir: &Path, snapshot_path: &str) -> Value {
         }),
     )
     .unwrap_or_else(|error| panic!("report snapshot should parse: {snapshot_path}: {error}"))
+}
+
+fn write_expected_report_snapshots(root: &Path, report_dir: &Path) {
+    fs::create_dir_all(report_dir).expect("report snapshot directory should be created");
+    for case in expected_report_snapshots() {
+        let report = case.report(root);
+        let json = serde_json::to_string_pretty(&report)
+            .expect("compatibility report should serialize")
+            + "\n";
+        fs::write(report_dir.join(case.path), json).unwrap_or_else(|error| {
+            panic!("report snapshot should be written: {}: {error}", case.path)
+        });
+    }
+}
+
+fn supported_source_material_report(root: &Path) -> CompatibilityReport {
+    classify_fixture(root, base_fixture_value(root))
+}
+
+fn degraded_text_style_report(root: &Path) -> CompatibilityReport {
+    classify_fixture(
+        root,
+        patch(base_fixture_value(root), |value| {
+            value["formula"]["textStyleFallback"] = json!({
+                "source": "kaipaiNativeTextStyle",
+                "fallback": "basicTextStyle"
+            });
+        }),
+    )
+}
+
+fn unsupported_formula_block_report(root: &Path) -> CompatibilityReport {
+    classify_fixture(
+        root,
+        patch(base_fixture_value(root), |value| {
+            value["formula"]["unsupportedBlocks"] = json!(["smartBeatSync"]);
+        }),
+    )
+}
+
+fn missing_resource_report(root: &Path) -> CompatibilityReport {
+    classify_fixture(
+        root,
+        patch(base_fixture_value(root), |value| {
+            value["resources"] = json!([
+                {
+                    "resourceId": "missing-font-default",
+                    "kind": "font",
+                    "uri": "resources/missing/redacted-default.ttf",
+                    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+                    "displayName": "redacted-default.ttf"
+                }
+            ]);
+        }),
+    )
+}
+
+fn native_effect_report(root: &Path) -> CompatibilityReport {
+    classify_fixture(
+        root,
+        patch(base_fixture_value(root), |value| {
+            value["formula"]["effects"] = json!([
+                {
+                    "nativeEffectId": "kaipai-native-beauty-glow",
+                    "name": "Kaipai native beauty glow",
+                    "requiresNativeEffect": true
+                }
+            ]);
+        }),
+    )
+}
+
+fn classify_fixture(_root: &Path, value: Value) -> CompatibilityReport {
+    let bundle = KaipaiFormulaBundle::from_json_value(value)
+        .expect("compatibility report fixture evidence should validate through formula bundle");
+    classify_formula_bundle_compatibility(&bundle, "2026-06-17T00:00:00Z")
+}
+
+fn base_fixture_value(root: &Path) -> Value {
+    serde_json::from_slice(
+        &fs::read(root.join("fixtures/kaipai/positive/sanitized-formula-bundle.json"))
+            .expect("base formula fixture should be readable"),
+    )
+    .expect("base formula fixture should parse")
+}
+
+fn patch(mut value: Value, update: impl FnOnce(&mut Value)) -> Value {
+    update(&mut value);
+    value
+}
+
+fn compatibility_report_schema_validator() -> jsonschema::Validator {
+    let schema_path = project_root().join("schemas/compatibility-report.schema.json");
+    let schema_json: Value = serde_json::from_slice(
+        &fs::read(&schema_path).expect("generated compatibility report schema should be readable"),
+    )
+    .expect("generated compatibility report schema should parse");
+    jsonschema::validator_for(&schema_json)
+        .expect("generated compatibility report schema should compile")
+}
+
+#[test]
+fn compatibility_report_native_effects_are_not_smuggled_into_filter_parameters() {
+    let root = project_root();
+    let report = native_effect_report(&root);
+    assert_eq!(
+        report.items[0].status,
+        CompatibilityStatus::NeedsNativeEffect
+    );
+    assert_eq!(report.items[0].external_path, "formula.effects[0]");
+    assert_eq!(report.items[0].canonical_target, None);
+
+    let serialized = serde_json::to_string(&report).expect("native effect report should serialize");
+    let forbidden_filter_parameters = ["Filter", "parameters"].join(".");
+    assert!(!serialized.contains(&forbidden_filter_parameters));
+    assert!(!serialized.contains("\"parameters\""));
 }
