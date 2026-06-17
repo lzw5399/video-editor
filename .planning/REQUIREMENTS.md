@@ -56,8 +56,8 @@
 
 - [x] **EXP-01**: User can export the draft to H.264 MP4 with a small preset set.
 - [x] **EXP-02**: Export uses the same normalized draft, resolved frame state, render graph, and FFmpeg compilation path as preview.
-- [ ] **EXP-03**: Export reports progress, supports cancel, captures logs, and classifies common FFmpeg errors.
-- [ ] **EXP-04**: Export output is validated for duration, fps, resolution, audio stream, and file existence.
+- [x] **EXP-03**: Export reports progress, supports cancel, captures logs, and classifies common FFmpeg errors.
+- [x] **EXP-04**: Export output is validated for duration, fps, resolution, audio stream, and file existence.
 
 ### Desktop UI
 
@@ -180,8 +180,8 @@
 | PREV-04 | Phase 5 | Complete |
 | EXP-01 | Phase 5 | Complete |
 | EXP-02 | Phase 5 | Complete |
-| EXP-03 | Phase 5 | Pending |
-| EXP-04 | Phase 5 | Pending |
+| EXP-03 | Phase 5 | Complete |
+| EXP-04 | Phase 5 | Complete |
 | UI-01 | Phase 4 | Complete |
 | UI-02 | Phase 4 | Complete |
 | UI-03 | Phase 4 | Complete |
