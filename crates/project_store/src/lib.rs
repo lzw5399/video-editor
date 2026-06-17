@@ -5,8 +5,22 @@
 //! waveforms, render graphs, FFmpeg scripts, and exports remain derived
 //! artifacts outside the semantic draft model.
 
+mod bundle;
+mod error;
+mod paths;
+
 use std::io;
 use std::path::{Path, PathBuf};
+
+pub use bundle::{
+    ProjectBundle, ProjectBundleOpenResult, autosave_project_bundle, create_project_bundle,
+    open_project_bundle, save_project_bundle,
+};
+pub use error::{ProjectStoreError, ProjectStoreWarning};
+pub use paths::{
+    MaterialUri, MaterialUriKind, PROJECT_JSON_FILE_NAME, classify_material_uri,
+    material_uri_for_save, project_json_path, resolve_material_uri,
+};
 
 /// Filesystem boundary consumed by project persistence code.
 pub trait PlatformFileSystem {

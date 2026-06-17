@@ -771,6 +771,12 @@ dependencies = [
 [[package]]
 name = "project_store"
 version = "0.1.0"
+dependencies = [
+ "draft_model",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "quote"
