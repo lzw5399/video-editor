@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures (completed 2026-06-16)
 - [x] **Phase 2: Draft And Material System** - `.veproj` draft bundle, Jianying-aligned schema, material import/probing, and save/open validation (completed 2026-06-17)
 - [x] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics (completed 2026-06-17)
-- [ ] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration
+- [x] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration (completed 2026-06-17)
 - [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
 - [ ] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness
 
@@ -148,7 +148,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-04-PLAN.md - Add Electron IPC contracts, Playwright smoke flow, and visual layout checks
+- [x] 04-04-PLAN.md - Add Electron IPC contracts, Playwright smoke flow, and visual layout checks
 
 ### Phase 5: Preview And Export Pipeline
 
@@ -202,6 +202,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
-| 4. Jianying-Style Desktop Workspace | 3/4 | In Progress|  |
+| 4. Jianying-Style Desktop Workspace | 4/4 | Complete   | 2026-06-17 |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |

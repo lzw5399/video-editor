@@ -75,7 +75,7 @@
 - [ ] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
 - [ ] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
 - [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
-- [ ] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
+- [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
 - [ ] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
 
 ## v2 Requirements
@@ -159,7 +159,7 @@
 | TEST-03 | Phase 5 | Pending |
 | TEST-04 | Phase 5 | Pending |
 | TEST-05 | Phase 5 | Pending |
-| TEST-06 | Phase 6 | Pending |
+| TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Pending |
 | ADV-01 | Post-MVP | Deferred |
 | ADV-02 | Post-MVP | Deferred |
