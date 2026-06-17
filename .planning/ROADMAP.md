@@ -190,10 +190,10 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: Implement normalization, resolved frame state, and text layout determinism
-- [ ] 05-02: Implement typed render graph and FFmpeg compiler snapshots
-- [ ] 05-03: Implement preview frame/segment generation and cache invalidation
-- [ ] 05-04: Implement MP4 export job, progress/cancel/errors, and render golden tests
+- [ ] 05-01-PLAN.md - Implement normalization, resolved frame state, and text layout determinism
+- [ ] 05-02-PLAN.md - Implement typed render graph and FFmpeg compiler snapshots
+- [ ] 05-03-PLAN.md - Implement preview frame/segment cache, bindings/UI integration, and source guards
+- [ ] 05-04-PLAN.md - Implement MP4 export runtime, bindings/UI integration, parity gates, and final validation
 
 ### Phase 6: MVP Hardening And Packaging
 
