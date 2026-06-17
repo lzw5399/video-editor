@@ -322,12 +322,13 @@ fn parse_decimal_seconds_to_microseconds(value: &str) -> Result<u64, String> {
     let whole_micros = whole
         .parse::<u64>()
         .map_err(|error| format!("invalid duration seconds `{value}`: {error}"))?
-        .saturating_mul(1_000_000);
-    let mut fraction = fractional
-        .chars()
-        .take(6)
-        .filter(|character| character.is_ascii_digit())
-        .collect::<String>();
+        .checked_mul(1_000_000)
+        .ok_or_else(|| format!("duration is too large `{value}`"))?;
+    if !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(format!("invalid duration fraction `{value}`"));
+    }
+
+    let mut fraction = fractional.chars().take(6).collect::<String>();
 
     while fraction.len() < 6 {
         fraction.push('0');
@@ -341,7 +342,9 @@ fn parse_decimal_seconds_to_microseconds(value: &str) -> Result<u64, String> {
             .map_err(|error| format!("invalid duration fraction `{value}`: {error}"))?
     };
 
-    Ok(whole_micros.saturating_add(fraction_micros))
+    whole_micros
+        .checked_add(fraction_micros)
+        .ok_or_else(|| format!("duration is too large `{value}`"))
 }
 
 fn parse_rational_frame_rate(value: &str) -> Result<RationalFrameRate, String> {
@@ -354,6 +357,10 @@ fn parse_rational_frame_rate(value: &str) -> Result<RationalFrameRate, String> {
     let denominator = denominator
         .parse::<u32>()
         .map_err(|error| format!("invalid frame rate denominator `{value}`: {error}"))?;
+
+    if numerator == 0 {
+        return Err("frame rate numerator cannot be zero".to_string());
+    }
 
     if denominator == 0 {
         return Err("frame rate denominator cannot be zero".to_string());

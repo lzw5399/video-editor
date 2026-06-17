@@ -36,6 +36,7 @@ pub fn save_project_bundle(
     let project_json_path = project_json_path(bundle_path);
 
     validate_draft(draft).map_err(|source| semantic_error(&project_json_path, source))?;
+    validate_material_uris(bundle_path, draft)?;
     let contents = serde_json::to_string_pretty(draft).map_err(|error| {
         ProjectStoreError::InvalidProjectJson {
             path: project_json_path.clone(),
@@ -61,6 +62,14 @@ pub fn autosave_project_bundle(
     draft: &Draft,
 ) -> Result<ProjectBundle, ProjectStoreError> {
     save_project_bundle(fs, bundle_path, draft)
+}
+
+fn validate_material_uris(bundle_path: &Path, draft: &Draft) -> Result<(), ProjectStoreError> {
+    for material in &draft.materials {
+        classify_material_uri(bundle_path, &material.uri)?;
+    }
+
+    Ok(())
 }
 
 pub fn open_project_bundle(

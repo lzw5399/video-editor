@@ -135,6 +135,18 @@ fn material_probe_rejects_malformed_json_and_invalid_frame_rates() {
 
     assert_eq!(malformed_error.kind, MaterialProbeErrorKind::MalformedJson);
 
+    let invalid_duration = FakeExecutor::successful(
+        br#"{"streams":[{"codec_type":"video","width":1,"height":1,"r_frame_rate":"1/1","duration":"1.-5"}]}"#
+            .to_vec(),
+    );
+    let invalid_duration_error = probe_material_metadata(&invalid_duration, &runtime, &input)
+        .expect_err("invalid duration should fail");
+
+    assert_eq!(
+        invalid_duration_error.kind,
+        MaterialProbeErrorKind::InvalidDuration
+    );
+
     let invalid_rate = FakeExecutor::successful(
         br#"{"streams":[{"codec_type":"video","width":1,"height":1,"r_frame_rate":"1/0"}]}"#
             .to_vec(),
@@ -144,6 +156,18 @@ fn material_probe_rejects_malformed_json_and_invalid_frame_rates() {
 
     assert_eq!(
         invalid_rate_error.kind,
+        MaterialProbeErrorKind::InvalidFrameRate
+    );
+
+    let zero_numerator_rate = FakeExecutor::successful(
+        br#"{"streams":[{"codec_type":"video","width":1,"height":1,"r_frame_rate":"0/1"}]}"#
+            .to_vec(),
+    );
+    let zero_numerator_rate_error = probe_material_metadata(&zero_numerator_rate, &runtime, &input)
+        .expect_err("zero numerator fps should fail");
+
+    assert_eq!(
+        zero_numerator_rate_error.kind,
         MaterialProbeErrorKind::InvalidFrameRate
     );
 }

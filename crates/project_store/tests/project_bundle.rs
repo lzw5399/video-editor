@@ -80,6 +80,27 @@ fn save_project_bundle_preserves_existing_project_json_when_temp_write_fails() {
 }
 
 #[test]
+fn save_project_bundle_rejects_invalid_material_uri_before_replacing_project_json() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("invalid-material-uri.veproj");
+    let original = populated_draft("media/original.mp4");
+    let invalid = populated_draft("../outside.mp4");
+
+    save_project_bundle(&StdPlatformFileSystem, &bundle_path, &original)
+        .expect("original draft should save");
+    let error = save_project_bundle(&StdPlatformFileSystem, &bundle_path, &invalid)
+        .expect_err("invalid material URI should fail before save");
+
+    assert!(
+        matches!(error, ProjectStoreError::InvalidMaterialUri { .. }),
+        "unexpected error: {error}"
+    );
+    let opened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("original project should remain readable after rejected save");
+    assert_eq!(opened.bundle.draft, original);
+}
+
+#[test]
 fn open_project_bundle_rejects_malformed_json() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("malformed.veproj");
