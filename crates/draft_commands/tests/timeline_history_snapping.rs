@@ -1,11 +1,13 @@
 use draft_commands::{
     TimelineCommandErrorKind,
     history::{DEFAULT_HISTORY_LIMIT, redo_timeline_edit, undo_timeline_edit},
-    timeline::{add_segment, delete_segment, move_segment},
+    snapping::DEFAULT_SNAP_THRESHOLD_US,
+    timeline::{add_segment, delete_segment, move_segment, trim_segment},
 };
 use draft_model::{
-    CommandHistorySnapshot, CommandState, Draft, Material, MaterialKind, Microseconds, Segment,
-    SourceTimerange, TargetTimerange, TimelineSelection, Track, TrackKind,
+    CommandHistorySnapshot, CommandState, Draft, MainTrackMagnet, Material, MaterialKind,
+    Microseconds, Segment, SourceTimerange, TargetTimerange, TimelineSelection, Track, TrackKind,
+    TrimSegmentDirection,
 };
 
 #[test]
@@ -163,6 +165,81 @@ fn invalid_edits_are_atomic() {
     assert_eq!(selection, draft_with_existing_segment_and_history().2);
 }
 
+#[test]
+fn snapping() {
+    assert_eq!(DEFAULT_SNAP_THRESHOLD_US, 100_000);
+
+    let (draft, state, selection) = draft_with_two_video_segments();
+    let snapped = move_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-b".into(),
+        "video-track".into(),
+        Microseconds::new(410_000),
+    )
+    .expect("move within default threshold should snap to previous segment end");
+    let moved = segment_by_id(&snapped.draft, "segment-b");
+    assert_eq!(moved.target_timerange.start, Microseconds::new(400_000));
+    assert!(snapped.events.iter().any(|event| event.kind == "snapped"));
+
+    let not_snapped = move_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-b".into(),
+        "video-track".into(),
+        Microseconds::new(550_000),
+    )
+    .expect("move outside default threshold should not snap");
+    let moved = segment_by_id(&not_snapped.draft, "segment-b");
+    assert_eq!(moved.target_timerange.start, Microseconds::new(550_000));
+    assert!(!not_snapped.events.iter().any(|event| event.kind == "snapped"));
+
+    let mut override_state = state.clone();
+    override_state.snapping.threshold = Microseconds::new(200_000);
+    let override_snapped = move_segment(
+        &draft,
+        &override_state,
+        &selection,
+        "segment-b".into(),
+        "video-track".into(),
+        Microseconds::new(550_000),
+    )
+    .expect("larger threshold should snap");
+    let moved = segment_by_id(&override_snapped.draft, "segment-b");
+    assert_eq!(moved.target_timerange.start, Microseconds::new(400_000));
+
+    let trim_snapped = trim_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-a".into(),
+        TrimSegmentDirection::Right,
+        TargetTimerange::new(0, 650_000),
+    )
+    .expect("right trim near next segment start should snap boundary");
+    let trimmed = segment_by_id(&trim_snapped.draft, "segment-a");
+    assert_eq!(trimmed.target_timerange.duration, Microseconds::new(700_000));
+    assert!(trim_snapped.events.iter().any(|event| event.kind == "snapped"));
+}
+
+#[test]
+fn main_track_magnet() {
+    let (draft, state, selection) = draft_with_main_track_magnet_segments();
+    let deleted = delete_segment(&draft, &state, &selection, "segment-a".into())
+        .expect("main track magnet should close the gap after deletion");
+
+    let remaining = segment_by_id(&deleted.draft, "segment-b");
+    assert_eq!(remaining.target_timerange.start, Microseconds::new(0));
+    assert!(
+        deleted
+            .events
+            .iter()
+            .any(|event| event.kind == "mainTrackMagnetApplied")
+    );
+}
+
 fn draft_with_existing_segment_and_history() -> (Draft, CommandState, TimelineSelection) {
     let mut draft = draft_with_tracks_and_materials();
     draft.tracks[0].segments.push(segment(
@@ -189,6 +266,51 @@ fn draft_with_existing_segment_and_history() -> (Draft, CommandState, TimelineSe
         label: Some("seed redo".to_owned()),
     });
     (draft, state, selection)
+}
+
+fn draft_with_two_video_segments() -> (Draft, CommandState, TimelineSelection) {
+    let mut draft = draft_with_tracks_and_materials();
+    draft.tracks[0].segments.push(segment(
+        "segment-a",
+        "video-material",
+        0,
+        400_000,
+        0,
+        400_000,
+    ));
+    draft.tracks[0].segments.push(segment(
+        "segment-b",
+        "video-material",
+        700_000,
+        200_000,
+        700_000,
+        200_000,
+    ));
+    (
+        draft,
+        CommandState::empty(),
+        TimelineSelection {
+            segment_ids: vec!["segment-b".into()],
+            track_ids: vec!["video-track".into()],
+        },
+    )
+}
+
+fn draft_with_main_track_magnet_segments() -> (Draft, CommandState, TimelineSelection) {
+    let (mut draft, state, selection) = draft_with_two_video_segments();
+    for segment in &mut draft.tracks[0].segments {
+        segment.main_track_magnet = MainTrackMagnet::enabled();
+    }
+    (draft, state, selection)
+}
+
+fn segment_by_id<'a>(draft: &'a Draft, segment_id: &str) -> &'a Segment {
+    draft
+        .tracks
+        .iter()
+        .flat_map(|track| &track.segments)
+        .find(|segment| segment.segment_id.as_str() == segment_id)
+        .expect("segment should exist")
 }
 
 fn draft_with_tracks_and_materials() -> Draft {
