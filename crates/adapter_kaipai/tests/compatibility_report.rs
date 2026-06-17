@@ -66,8 +66,5 @@ fn compatibility_report_contract_contains_stable_diagnostic_fields() {
     assert_eq!(value["generatedAt"], "2026-06-17T00:00:00Z");
     assert_eq!(value["items"][0]["externalPath"], "sourceMedia");
     assert_eq!(value["items"][0]["canonicalTarget"], "material");
-    assert_eq!(
-        value["provenanceDigest"],
-        "sha256:redacted-fixture-digest"
-    );
+    assert_eq!(value["provenanceDigest"], "sha256:redacted-fixture-digest");
 }

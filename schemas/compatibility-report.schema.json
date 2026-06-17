@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CompatibilityReport",
+  "type": "object",
+  "properties": {
+    "generatedAt": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CompatibilityReportItem"
+      }
+    },
+    "provenanceDigest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/CompatibilityReportSchemaVersion"
+    },
+    "sourceId": {
+      "type": "string"
+    },
+    "sourceKind": {
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/CompatibilityReportSummary"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceKind",
+    "sourceId",
+    "generatedAt",
+    "summary",
+    "items"
+  ],
+  "$defs": {
+    "CompatibilityCanonicalTarget": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "material",
+        "track",
+        "segment",
+        "text",
+        "sticker",
+        "keyframe",
+        "filter",
+        "transition"
+      ]
+    },
+    "CompatibilityCategory": {
+      "type": "string",
+      "enum": [
+        "source",
+        "material",
+        "track",
+        "segment",
+        "text",
+        "sticker",
+        "filter",
+        "transition",
+        "resource",
+        "nativeEffect",
+        "formula"
+      ]
+    },
+    "CompatibilityReportItem": {
+      "type": "object",
+      "properties": {
+        "canonicalTarget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompatibilityCanonicalTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "category": {
+          "$ref": "#/$defs/CompatibilityCategory"
+        },
+        "details": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "externalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "externalPath": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/CompatibilitySeverity"
+        },
+        "status": {
+          "$ref": "#/$defs/CompatibilityStatus"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "severity",
+        "category",
+        "externalPath",
+        "message"
+      ]
+    },
+    "CompatibilityReportSchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "CompatibilityReportSummary": {
+      "type": "object",
+      "properties": {
+        "degraded": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "missingResource": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "needsNativeEffect": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "supported": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "unsupported": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "supported",
+        "degraded",
+        "unsupported",
+        "missingResource",
+        "needsNativeEffect"
+      ]
+    },
+    "CompatibilitySeverity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "CompatibilityStatus": {
+      "type": "string",
+      "enum": [
+        "supported",
+        "degraded",
+        "unsupported",
+        "missingResource",
+        "needsNativeEffect"
+      ]
+    }
+  }
+}
