@@ -80,6 +80,25 @@ for `.veproj` persistence. `.veproj/project.json` remains the canonical source o
 truth. Render graphs, FFmpeg scripts, thumbnails, waveform data, proxy files,
 preview caches, and exported videos are derived artifacts.
 
+`project_store` classifies and resolves material URIs for `.veproj` bundles, but
+it does not import materials, assign material IDs, mutate the material registry,
+run ffprobe, or decide editing behavior. Binding-facing command/API services
+coordinate those operations by combining `project_store` path helpers,
+`media_runtime` probing, pure `draft_model` registry helpers, draft validation,
+and project-bundle saves.
+
+Material import persists normalized semantic material fields only: stable ID,
+URI, display name, material kind, duration, dimensions, rational frame rate,
+stream flags, audio sample rate/channel count, status, and bounded probe error
+text. Thumbnails, waveform data, raw probe JSON, preview caches, render graphs,
+FFmpeg scripts, proxy files, and export outputs are derived artifacts outside
+`.veproj/project.json`.
+
+Missing local materials are recoverable draft state. The material entry remains
+in the draft with its original URI and status, while binding-facing services
+return classified diagnostics with last-known resolved path details for future
+relink UI.
+
 ## Preview Runtime
 
 `preview_service::PreviewRenderer` is boundary-only in Phase 1. It reserves where

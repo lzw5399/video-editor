@@ -43,11 +43,15 @@ version = "0.1.0"
 dependencies = [
  "draft_model",
  "media_runtime",
+ "media_runtime_desktop",
  "napi",
  "napi-build",
  "napi-derive",
+ "project_store",
  "serde",
  "serde_json",
+ "tempfile",
+ "testkit",
 ]
 
 [[package]]

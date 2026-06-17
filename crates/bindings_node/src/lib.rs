@@ -11,6 +11,8 @@ use media_runtime::{DiscoveryError, discover_runtime_config};
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
 
+pub mod material_service;
+
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[napi]
