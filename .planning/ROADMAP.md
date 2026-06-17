@@ -108,7 +108,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-PLAN.md - Implement undo/redo, snapping/main-track magnet, and command event output
+- [x] 03-03-PLAN.md - Implement undo/redo, snapping/main-track magnet, and command event output
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -191,7 +191,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
-| 3. Timeline Command Core | 2/5 | In Progress|  |
+| 3. Timeline Command Core | 3/5 | In Progress|  |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |

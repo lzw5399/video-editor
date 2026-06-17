@@ -32,8 +32,8 @@
 - [x] **TIME-01**: Draft supports at least one sequence with video, audio, and text tracks.
 - [x] **TIME-02**: User can add material segments to tracks with explicit source and target time ranges.
 - [x] **TIME-03**: User can select, move, split, trim, and delete timeline segments.
-- [ ] **TIME-04**: User can undo and redo every committed timeline edit.
-- [ ] **TIME-05**: Main-track magnet/snapping behavior is implemented in the Rust core, not in UI-only state.
+- [x] **TIME-04**: User can undo and redo every committed timeline edit.
+- [x] **TIME-05**: Main-track magnet/snapping behavior is implemented in the Rust core, not in UI-only state.
 - [x] **TIME-06**: Invalid edits are rejected atomically without partially mutating the draft.
 - [x] **TIME-07**: Track stacking/z-index and per-track mute state are represented in the draft model.
 
@@ -130,8 +130,8 @@
 | TIME-01 | Phase 3 | Complete |
 | TIME-02 | Phase 3 | Complete |
 | TIME-03 | Phase 3 | Complete |
-| TIME-04 | Phase 3 | Pending |
-| TIME-05 | Phase 3 | Pending |
+| TIME-04 | Phase 3 | Complete |
+| TIME-05 | Phase 3 | Complete |
 | TIME-06 | Phase 3 | Complete |
 | TIME-07 | Phase 3 | Complete |
 | TEXT-01 | Phase 3 | Pending |
