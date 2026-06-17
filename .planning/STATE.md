@@ -10,8 +10,8 @@ progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 33
-  completed_plans: 28
-  percent: 85
+  completed_plans: 29
+  percent: 88
 ---
 
 # Project State
@@ -30,13 +30,13 @@ Plan: Not started
 Status: Ready for planning
 Last activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 
-Progress: [████████--] 85%
+Progress: [█████████-] 88%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 7 min
 - Total execution time: 201 min
 
@@ -77,6 +77,7 @@ Progress: [████████--] 85%
 | Phase 04 P03 | 10min | 2 tasks | 6 files |
 | Phase 04 P04 | 45min | 3 tasks | 6 files |
 | Phase 03.1 P01 | 8 min | 2 tasks | 10 files |
+| Phase 03.1 P02 | 10 min | 2 tasks | 11 files |
 | Phase 04.1 P01 | 7 min | 2 tasks | 5 files |
 | Phase 04.1 P02 | 7 min | 2 tasks | 3 files |
 | Phase 04.1 P03 | 9 min | 2 tasks | 4 files |
@@ -141,6 +142,9 @@ Recent decisions affecting current work:
 - [Phase 03.1]: Revised planning into five scoped plans. — Adapter contract/schema work, sanitized fixture corpus, compatibility reports, resource localization, and source-guard/gap-inventory gates are now separate waves so no plan carries oversized file scope.
 - [Phase 03.1]: Raw Kaipai formula JSON is modeled as serde_json::Value only inside adapter_kaipai input/provenance contracts. — Plan 03.1-01 establishes the adapter-owned formula evidence boundary while keeping raw provider semantics out of draft_model and render crates.
 - [Phase 03.1]: Kaipai formula bundle schema and TypeScript artifacts are generated from Rust tests and drift only under VE_UPDATE_GENERATED_CONTRACTS=1. — This follows the existing draft_model generated-contract pattern and gives future fixture/report plans a stable contract gate.
+- [Phase 03.1]: Committed Kaipai formula fixtures use only local-relative/redacted evidence; unsafe provider URLs and credential cases are generated in memory by tests. — Plan 03.1-02 establishes the sanitized offline fixture corpus without live API or Android worker runtime data.
+- [Phase 03.1]: safeArea.source is accepted only as redacted local fixture evidence at the adapter boundary. — Plan 03.1-02 keeps safeArea as provider provenance rather than core draft semantics.
+- [Phase 03.1]: Remote resource references and remote formula URLs are rejected by KaipaiFormulaBundle validation. — This protects fixture and adapter inputs before mapper or resource-localizer work consumes them.
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.

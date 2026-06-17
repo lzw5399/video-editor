@@ -133,7 +133,7 @@ Plans:
   4. Source guards prevent Kaipai provider/API/Android worker dependencies from leaking into `draft_model`, `engine_core`, `render_graph`, or `ffmpeg_compiler`.
   5. Draft v2/template-semantics gaps are explicitly planned before any offline mapper POC claims preview/export support.
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 Plans:
 
@@ -143,7 +143,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03.1-02-PLAN.md - Create sanitized offline fixture corpus and sanitizer validation tests
+- [x] 03.1-02-PLAN.md - Create sanitized offline fixture corpus and sanitizer validation tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -264,7 +264,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 03.1 -> 4 -> 04.1 -> 5 -> 6
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
-| 3.1. Kaipai Compatibility Foundation | 1/5 | In Progress|  |
+| 3.1. Kaipai Compatibility Foundation | 2/5 | In Progress|  |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
