@@ -54,6 +54,12 @@ pub enum CommandName {
     ImportMaterial,
     ListMaterials,
     ListMissingMaterials,
+    AddSegment,
+    SelectTimelineSegments,
+    MoveSegment,
+    SplitSegment,
+    TrimSegment,
+    DeleteSegment,
 }
 
 /// Command payloads.
@@ -66,6 +72,12 @@ pub enum CommandPayload {
     ImportMaterial(ImportMaterialCommandPayload),
     ListMaterials(ListMaterialsCommandPayload),
     ListMissingMaterials(ListMissingMaterialsCommandPayload),
+    AddSegment(AddSegmentCommandPayload),
+    SelectTimelineSegments(SelectTimelineSegmentsCommandPayload),
+    MoveSegment(MoveSegmentCommandPayload),
+    SplitSegment(SplitSegmentCommandPayload),
+    TrimSegment(TrimSegmentCommandPayload),
+    DeleteSegment(DeleteSegmentCommandPayload),
 }
 
 impl CommandPayload {
@@ -78,6 +90,12 @@ impl CommandPayload {
             Self::ImportMaterial(_) => CommandName::ImportMaterial,
             Self::ListMaterials(_) => CommandName::ListMaterials,
             Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
+            Self::AddSegment(_) => CommandName::AddSegment,
+            Self::SelectTimelineSegments(_) => CommandName::SelectTimelineSegments,
+            Self::MoveSegment(_) => CommandName::MoveSegment,
+            Self::SplitSegment(_) => CommandName::SplitSegment,
+            Self::TrimSegment(_) => CommandName::TrimSegment,
+            Self::DeleteSegment(_) => CommandName::DeleteSegment,
         }
     }
 }
@@ -157,6 +175,85 @@ pub struct ListMaterialsCommandPayload {
 pub struct ListMissingMaterialsCommandPayload {
     pub draft: Draft,
     pub bundle_path: String,
+}
+
+/// Payload accepted by the Phase 3 timeline add command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub source_timerange: SourceTimerange,
+    pub target_timerange: TargetTimerange,
+}
+
+/// Payload accepted by the Phase 3 timeline selection command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SelectTimelineSegmentsCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_ids: Vec<SegmentId>,
+    pub track_ids: Vec<TrackId>,
+}
+
+/// Payload accepted by the Phase 3 timeline move command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MoveSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub target_track_id: TrackId,
+    pub target_start: Microseconds,
+}
+
+/// Payload accepted by the Phase 3 timeline split command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SplitSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub right_segment_id: SegmentId,
+    pub split_at: Microseconds,
+}
+
+/// Trim edge controlled by the Phase 3 timeline trim command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TrimSegmentDirection {
+    Left,
+    Right,
+}
+
+/// Payload accepted by the Phase 3 timeline trim command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TrimSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub direction: TrimSegmentDirection,
+    pub target_timerange: TargetTimerange,
+}
+
+/// Payload accepted by the Phase 3 timeline delete command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeleteSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
 }
 
 /// Segment and track selection returned by Rust-owned timeline commands.

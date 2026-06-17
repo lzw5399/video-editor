@@ -1,8 +1,9 @@
 //! Timeline command validation helpers.
 
 use draft_model::{
-    Draft, Material, MaterialId, MaterialKind, Microseconds, SourceTimerange, TargetTimerange,
-    Track, TrackId, TrackKind, validate_draft,
+    CommandEvent, CommandState, Draft, Material, MaterialId, MaterialKind, Microseconds, Segment,
+    SegmentId, SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track,
+    TrackId, TrackKind, TrimSegmentDirection, validate_draft,
 };
 
 use crate::{TimelineCommandError, TimelineCommandErrorKind};
@@ -126,6 +127,286 @@ pub fn main_video_track_id(draft: &Draft) -> Option<TrackId> {
         .map(|track| track.track_id.clone())
 }
 
+pub fn add_segment(
+    draft: &Draft,
+    command_state: &CommandState,
+    _selection: &TimelineSelection,
+    track_id: TrackId,
+    segment_id: SegmentId,
+    material_id: MaterialId,
+    source_timerange: SourceTimerange,
+    target_timerange: TargetTimerange,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let track_index = find_track_index(&next_draft, &track_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+
+    let material = find_material(&next_draft, &material_id)?.clone();
+    validate_track_material_compatibility(&next_draft.tracks[track_index], &material)?;
+
+    next_draft.tracks[track_index].segments.push(Segment::new(
+        segment_id.clone(),
+        material_id,
+        source_timerange,
+        target_timerange,
+    ));
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state.clone(),
+        TimelineSelection {
+            segment_ids: vec![segment_id],
+            track_ids: vec![track_id],
+        },
+        "segmentAdded",
+    ))
+}
+
+pub fn select_timeline_segments(
+    draft: &Draft,
+    command_state: &CommandState,
+    _selection: &TimelineSelection,
+    segment_ids: Vec<SegmentId>,
+    track_ids: Vec<TrackId>,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    for track_id in &track_ids {
+        find_track_index(draft, track_id)?;
+    }
+    for segment_id in &segment_ids {
+        find_segment_location(draft, segment_id)?;
+    }
+
+    Ok(response(
+        draft.clone(),
+        command_state.clone(),
+        TimelineSelection {
+            segment_ids,
+            track_ids,
+        },
+        "timelineSelectionChanged",
+    ))
+}
+
+pub fn move_segment(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+    target_track_id: TrackId,
+    target_start: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (source_track_index, source_segment_index) =
+        find_segment_location(&next_draft, &segment_id)?;
+    let target_track_index = find_track_index(&next_draft, &target_track_id)?;
+
+    validate_track_unlocked(&next_draft.tracks[source_track_index])?;
+    if target_track_index != source_track_index {
+        validate_track_unlocked(&next_draft.tracks[target_track_index])?;
+    }
+
+    let mut segment = next_draft.tracks[source_track_index].segments[source_segment_index].clone();
+    segment.target_timerange.start = target_start;
+
+    if target_track_index == source_track_index {
+        next_draft.tracks[source_track_index].segments[source_segment_index] = segment;
+    } else {
+        let material = find_material(&next_draft, &segment.material_id)?.clone();
+        validate_track_material_compatibility(&next_draft.tracks[target_track_index], &material)?;
+        next_draft.tracks[source_track_index]
+            .segments
+            .remove(source_segment_index);
+        next_draft.tracks[target_track_index].segments.push(segment);
+    }
+
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state.clone(),
+        TimelineSelection {
+            segment_ids: vec![segment_id],
+            track_ids: vec![target_track_id],
+        },
+        "segmentMoved",
+    )
+    .with_selection_fallback(selection))
+}
+
+pub fn split_segment(
+    draft: &Draft,
+    command_state: &CommandState,
+    _selection: &TimelineSelection,
+    segment_id: SegmentId,
+    right_segment_id: SegmentId,
+    split_at: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+
+    let original = next_draft.tracks[track_index].segments[segment_index].clone();
+    let target_start = original.target_timerange.start.get();
+    let target_end = checked_target_end(&original.target_timerange)?.get();
+    let split = split_at.get();
+    if split <= target_start || split >= target_end {
+        return Err(TimelineCommandError::new(
+            TimelineCommandErrorKind::InvalidSplitPoint {
+                segment_id,
+                split_at,
+            },
+        ));
+    }
+
+    let left_duration = Microseconds::new(split - target_start);
+    let right_duration = Microseconds::new(target_end - split);
+    let right_source_start = original
+        .source_timerange
+        .start
+        .get()
+        .checked_add(left_duration.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
+                field: "sourceTimerange".to_owned(),
+            })
+        })?;
+
+    next_draft.tracks[track_index].segments[segment_index]
+        .source_timerange
+        .duration = left_duration;
+    next_draft.tracks[track_index].segments[segment_index]
+        .target_timerange
+        .duration = left_duration;
+
+    let mut right_segment = original;
+    right_segment.segment_id = right_segment_id.clone();
+    right_segment.source_timerange = SourceTimerange {
+        start: right_source_start,
+        duration: right_duration,
+    };
+    right_segment.target_timerange = TargetTimerange {
+        start: split_at,
+        duration: right_duration,
+    };
+    next_draft.tracks[track_index]
+        .segments
+        .insert(segment_index + 1, right_segment);
+
+    validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+
+    Ok(response(
+        next_draft,
+        command_state.clone(),
+        TimelineSelection {
+            segment_ids: vec![segment_id, right_segment_id],
+            track_ids: vec![track_id],
+        },
+        "segmentSplit",
+    ))
+}
+
+pub fn trim_segment(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+    direction: TrimSegmentDirection,
+    target_timerange: TargetTimerange,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    checked_target_end(&target_timerange)?;
+
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+
+    let original = next_draft.tracks[track_index].segments[segment_index].clone();
+    let old_target_start = original.target_timerange.start.get();
+    let old_target_end = checked_target_end(&original.target_timerange)?.get();
+    let new_target_start = target_timerange.start.get();
+    let new_target_end = checked_target_end(&target_timerange)?.get();
+
+    match direction {
+        TrimSegmentDirection::Left => {
+            if new_target_start < old_target_start || new_target_end != old_target_end {
+                return invalid_trim(&segment_id, target_timerange.start);
+            }
+            let source_delta = new_target_start - old_target_start;
+            let new_source_start = original
+                .source_timerange
+                .start
+                .get()
+                .checked_add(source_delta)
+                .map(Microseconds::new)
+                .ok_or_else(|| {
+                    TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
+                        field: "sourceTimerange".to_owned(),
+                    })
+                })?;
+            next_draft.tracks[track_index].segments[segment_index].source_timerange =
+                SourceTimerange {
+                    start: new_source_start,
+                    duration: target_timerange.duration,
+                };
+        }
+        TrimSegmentDirection::Right => {
+            if new_target_start != old_target_start || new_target_end > old_target_end {
+                return invalid_trim(&segment_id, target_timerange.start);
+            }
+            next_draft.tracks[track_index].segments[segment_index]
+                .source_timerange
+                .duration = target_timerange.duration;
+        }
+    }
+
+    next_draft.tracks[track_index].segments[segment_index].target_timerange = target_timerange;
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state.clone(),
+        TimelineSelection {
+            segment_ids: vec![segment_id],
+            track_ids: if selection.track_ids.is_empty() {
+                vec![draft.tracks[track_index].track_id.clone()]
+            } else {
+                selection.track_ids.clone()
+            },
+        },
+        "segmentTrimmed",
+    ))
+}
+
+pub fn delete_segment(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+
+    next_draft.tracks[track_index]
+        .segments
+        .remove(segment_index);
+    validate_timeline_rules(&next_draft)?;
+
+    let mut next_selection = selection.clone();
+    next_selection
+        .segment_ids
+        .retain(|selected| selected != &segment_id);
+
+    Ok(response(
+        next_draft,
+        command_state.clone(),
+        next_selection,
+        "segmentDeleted",
+    ))
+}
+
 fn checked_timerange_end(
     field: &str,
     duration_field: &str,
@@ -149,6 +430,48 @@ fn checked_timerange_end(
                 field: field.to_owned(),
             })
         })
+}
+
+fn response(
+    draft: Draft,
+    command_state: CommandState,
+    selection: TimelineSelection,
+    event_kind: &str,
+) -> TimelineCommandResponse {
+    TimelineCommandResponse {
+        draft,
+        command_state,
+        selection,
+        events: vec![CommandEvent {
+            kind: event_kind.to_owned(),
+            message: None,
+        }],
+    }
+}
+
+trait ResponseSelectionFallback {
+    fn with_selection_fallback(self, previous: &TimelineSelection) -> Self;
+}
+
+impl ResponseSelectionFallback for TimelineCommandResponse {
+    fn with_selection_fallback(mut self, previous: &TimelineSelection) -> Self {
+        if self.selection.track_ids.is_empty() {
+            self.selection.track_ids = previous.track_ids.clone();
+        }
+        self
+    }
+}
+
+fn invalid_trim<T>(
+    segment_id: &SegmentId,
+    split_at: Microseconds,
+) -> Result<T, TimelineCommandError> {
+    Err(TimelineCommandError::new(
+        TimelineCommandErrorKind::InvalidSplitPoint {
+            segment_id: segment_id.clone(),
+            split_at,
+        },
+    ))
 }
 
 fn validate_timeranges(draft: &Draft) -> Result<(), TimelineCommandError> {
@@ -206,6 +529,40 @@ fn find_material<'a>(
         .ok_or_else(|| {
             TimelineCommandError::new(TimelineCommandErrorKind::MaterialNotFound {
                 material_id: material_id.clone(),
+            })
+        })
+}
+
+fn find_track_index(draft: &Draft, track_id: &TrackId) -> Result<usize, TimelineCommandError> {
+    draft
+        .tracks
+        .iter()
+        .position(|track| &track.track_id == track_id)
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::TrackNotFound {
+                track_id: track_id.clone(),
+            })
+        })
+}
+
+fn find_segment_location(
+    draft: &Draft,
+    segment_id: &SegmentId,
+) -> Result<(usize, usize), TimelineCommandError> {
+    draft
+        .tracks
+        .iter()
+        .enumerate()
+        .find_map(|(track_index, track)| {
+            track
+                .segments
+                .iter()
+                .position(|segment| &segment.segment_id == segment_id)
+                .map(|segment_index| (track_index, segment_index))
+        })
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::SegmentNotFound {
+                segment_id: segment_id.clone(),
             })
         })
 }

@@ -27,13 +27,22 @@ fn add_segment() {
     )
     .expect("add segment should commit on a valid unlocked compatible track");
 
-    assert!(draft.tracks[0].segments.is_empty(), "input draft stays unchanged");
+    assert!(
+        draft.tracks[0].segments.is_empty(),
+        "input draft stays unchanged"
+    );
     assert_eq!(response.draft.tracks[0].segments.len(), 1);
     let segment = &response.draft.tracks[0].segments[0];
     assert_eq!(segment.segment_id.as_str(), "intro-segment");
     assert_eq!(segment.material_id.as_str(), "video-material");
-    assert_eq!(segment.source_timerange, SourceTimerange::new(100_000, 400_000));
-    assert_eq!(segment.target_timerange, TargetTimerange::new(1_000_000, 400_000));
+    assert_eq!(
+        segment.source_timerange,
+        SourceTimerange::new(100_000, 400_000)
+    );
+    assert_eq!(
+        segment.target_timerange,
+        TargetTimerange::new(1_000_000, 400_000)
+    );
     assert_eq!(response.selection.segment_ids, vec!["intro-segment".into()]);
     assert_eq!(response.events[0].kind, "segmentAdded");
 }
@@ -65,8 +74,14 @@ fn timeline_edits() {
     )
     .expect("move should change target start only");
     let moved_segment = &moved.draft.tracks[0].segments[0];
-    assert_eq!(moved_segment.source_timerange, SourceTimerange::new(100_000, 400_000));
-    assert_eq!(moved_segment.target_timerange, TargetTimerange::new(500_000, 400_000));
+    assert_eq!(
+        moved_segment.source_timerange,
+        SourceTimerange::new(100_000, 400_000)
+    );
+    assert_eq!(
+        moved_segment.target_timerange,
+        TargetTimerange::new(500_000, 400_000)
+    );
     assert_eq!(moved.events[0].kind, "segmentMoved");
 
     let split = command_split_segment(
@@ -134,13 +149,8 @@ fn timeline_edits() {
     );
     assert_eq!(right_trimmed.events[0].kind, "segmentTrimmed");
 
-    let deleted = command_delete_segment(
-        &draft,
-        &state,
-        &selected.selection,
-        "segment-a".into(),
-    )
-    .expect("delete should remove the segment and clean selection");
+    let deleted = command_delete_segment(&draft, &state, &selected.selection, "segment-a".into())
+        .expect("delete should remove the segment and clean selection");
     assert!(deleted.draft.tracks[0].segments.is_empty());
     assert!(deleted.selection.segment_ids.is_empty());
     assert_eq!(deleted.events[0].kind, "segmentDeleted");
@@ -161,7 +171,10 @@ fn invalid_edits_are_atomic() {
         TargetTimerange::new(100_000, 250_000),
     )
     .expect_err("same-track overlap should reject");
-    assert!(matches!(overlap.kind, TimelineCommandErrorKind::OverlappingSegment { .. }));
+    assert!(matches!(
+        overlap.kind,
+        TimelineCommandErrorKind::OverlappingSegment { .. }
+    ));
 
     let locked = {
         let mut locked = draft.clone();
@@ -176,7 +189,10 @@ fn invalid_edits_are_atomic() {
         )
         .expect_err("locked track mutation should reject")
     };
-    assert!(matches!(locked.kind, TimelineCommandErrorKind::LockedTrack { .. }));
+    assert!(matches!(
+        locked.kind,
+        TimelineCommandErrorKind::LockedTrack { .. }
+    ));
 
     let material_overrun = command_add_segment(
         &draft,
