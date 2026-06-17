@@ -63,10 +63,10 @@ Plans:
 
 Plans:
 
-- [ ] 02-01: Define draft/material/track/segment schema and migration hooks
-- [ ] 02-02: Implement project bundle open/save/autosave and round-trip tests
-- [ ] 02-03: Implement material import, ffprobe metadata, IDs, thumbnails, and missing-material checks
-- [ ] 02-04: Add draft/material golden fixtures and schema/model tests
+- [ ] 02-01-PLAN.md - Define draft/material/track/segment schema and migration hooks
+- [ ] 02-02-PLAN.md - Implement project bundle open/save/autosave and round-trip tests
+- [ ] 02-03-PLAN.md - Implement material import, ffprobe metadata, IDs, thumbnails/derived-cache decision, and missing-material checks
+- [ ] 02-04-PLAN.md - Add draft/material golden fixtures and schema/model tests
 
 ### Phase 3: Timeline Command Core
 
