@@ -14,7 +14,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
         .expect("draft should normalize");
     let range = resolve_render_range(
         &normalized,
-        TargetTimerange::new(Microseconds::new(0), Microseconds::new(100_000)),
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
     )
     .expect("range state should resolve");
 
@@ -25,7 +25,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
         serde_json::json!({
             "draftId": "draft-render-graph",
             "canvas": { "width": 1920, "height": 1080 },
-            "targetTimerange": { "start": 0, "duration": 100000 },
+            "targetTimerange": { "start": 600000, "duration": 100000 },
             "frameRate": { "numerator": 30, "denominator": 1 },
             "materials": [
                 {
@@ -142,11 +142,40 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     ]
                 }
             ],
-            "textOverlays": [],
+            "textOverlays": [
+                {
+                    "overlay": {
+                        "trackId": "text-track",
+                        "segmentId": "text-a",
+                        "content": "标题",
+                        "stackIndex": 2,
+                        "sourcePosition": 100000,
+                        "targetTimerange": { "start": 500000, "duration": 500000 },
+                        "fontFamily": "PingFang SC",
+                        "fontCandidate": "VE_TEXT_FONT_PATH",
+                        "fallbackCandidates": [
+                            "VE_TEXT_FONT_PATH",
+                            "/System/Library/Fonts/PingFang.ttc",
+                            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+                            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+                        ],
+                        "alignment": "center",
+                        "safeArea": { "left": 96, "right": 96, "top": 54, "bottom": 54 },
+                        "wrappingPolicy": "boundedWidth",
+                        "fontSize": 48,
+                        "layoutWidth": 1728,
+                        "layoutHeight": 58
+                    },
+                    "materialId": "text-material",
+                    "filters": [],
+                    "transition": null
+                }
+            ],
             "sampledFrames": [
-                { "frameIndex": 0, "at": 0 },
-                { "frameIndex": 1, "at": 33333 },
-                { "frameIndex": 2, "at": 66666 }
+                { "frameIndex": 0, "at": 600000 },
+                { "frameIndex": 1, "at": 633333 },
+                { "frameIndex": 2, "at": 666666 }
             ]
         })
     );
@@ -158,7 +187,7 @@ fn render_graph_preserves_filter_and_transition_intents_without_ffmpeg_syntax() 
         .expect("draft should normalize");
     let range = resolve_render_range(
         &normalized,
-        TargetTimerange::new(Microseconds::new(0), Microseconds::new(100_000)),
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
     )
     .expect("range state should resolve");
 
@@ -194,7 +223,11 @@ fn render_graph_draft() -> Draft {
     let mut draft = Draft::new("draft-render-graph", "Render Graph");
     draft.materials = vec![
         material("video-material", MaterialKind::Video, "file://video.mp4"),
-        material("overlay-material", MaterialKind::Image, "file://overlay.png"),
+        material(
+            "overlay-material",
+            MaterialKind::Image,
+            "file://overlay.png",
+        ),
         material("audio-material", MaterialKind::Audio, "file://audio.wav"),
         material("text-material", MaterialKind::Text, "text://title"),
     ];
