@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-06-17T17:48:40.353Z"
-last_activity: 2026-06-17 -- Phase 05 execution started
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-06-17T18:13:08Z"
+last_activity: 2026-06-17 -- Completed Phase 05 Plan 03 FFmpeg compiler
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 37
-  completed_plans: 30
-  percent: 81
+  completed_plans: 31
+  percent: 84
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 05 (preview-and-export-pipeline) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 05 execution started
+Last activity: 2026-06-17 -- Completed Phase 05 Plan 03 FFmpeg compiler
 
-Progress: [████████░░] 81%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 30
+- Total plans completed: 31
 - Average duration: 7 min
 - Total execution time: 222 min
 
@@ -82,6 +82,7 @@ Progress: [████████░░] 81%
 | Phase 04.1 P04 | 18 min | 2 tasks | 6 files |
 | Phase 05 P01 | 12 min | 3 tasks | 8 files |
 | Phase 05 P02 | 9 min | 2 tasks | 6 files |
+| Phase 05 P03 | 21 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -157,6 +158,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 01 pinned MVP text layout policy in engine_core. — Text overlays resolve with explicit PingFang SC fallback candidate identities, safe-area, wrapping, alignment, and integer dimensions while filesystem font probing remains outside pure engine_core.
 - [Phase 05]: Plan 02 builds render_graph only from engine_core NormalizedDraft and RenderRangeState, with classified errors for foreign range-state references. — This preserves the shared semantic preview/export path and keeps render_graph from duplicating timeline semantics.
 - [Phase 05]: Plan 02 represents preview frame, preview segment, and export MP4 as output profiles over one shared RenderGraphPlan shape. — Later compiler and service plans should vary profile metadata rather than creating separate preview/export graph models.
+- [Phase 05]: Plan 03 compiles RenderGraphPlan into structured FfmpegJob data with Vec<OsString> args, derived filter/ASS sidecars, encode settings, and validation expectations. — media_runtime can execute jobs later without deciding editing semantics or parsing renderer-owned command strings.
+- [Phase 05]: Plan 03 carries text style data through engine_core resolved overlays and clips filter/ASS timing to the output profile target range. — This prevents preview/export text style drift and wrong source-time rendering for partial ranges.
 
 ### Pending Todos
 
@@ -184,6 +187,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T17:46:36.677Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-06-17T18:13:08Z
+Stopped at: Completed 05-03-PLAN.md
 Resume file: None
