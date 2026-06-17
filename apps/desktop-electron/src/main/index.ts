@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
-import type { CommandResultEnvelope, PreviewArtifactResponse } from "../generated/CommandResultEnvelope";
+import type { CommandResultEnvelope, ExportJobStatusResponse, PreviewArtifactResponse } from "../generated/CommandResultEnvelope";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
@@ -12,6 +12,9 @@ type TestExecuteCommandCall = {
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
+  outputPath: string | null;
+  preset: string | null;
+  jobId: string | null;
 };
 
 declare global {
@@ -39,6 +42,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
     return testPreviewResponse;
+  }
+  const testExportResponse = maybeBuildTestExportResponse(command);
+  if (testExportResponse !== null) {
+    return testExportResponse;
   }
   return executeCommand(command);
 });
@@ -133,6 +140,12 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
 
   const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
   const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
+  const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
+  const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
+  const jobId =
+    command.payload.kind === "getExportJobStatus" || command.payload.kind === "cancelExport"
+      ? command.payload.jobId
+      : null;
 
   globalThis.__videoEditorTestExecuteCommandCalls ??= [];
   globalThis.__videoEditorTestExecuteCommandCalls.push({
@@ -140,7 +153,10 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     kind: command.payload.kind,
     requestId: command.requestId ?? null,
     targetTime,
-    targetTimerange
+    targetTimerange,
+    outputPath,
+    preset,
+    jobId
   });
 }
 
@@ -178,6 +194,84 @@ function maybeBuildTestPreviewResponse(command: CommandEnvelope): CommandResultE
         status: "cached",
         targetTimerange: command.payload.targetTimerange,
         diagnostic: null
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  return null;
+}
+
+function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEnvelope<ExportJobStatusResponse> | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS !== "1") {
+    return null;
+  }
+
+  if (command.payload.kind === "startExport") {
+    return {
+      ok: true,
+      data: {
+        jobId: "test-export-job",
+        phase: "running",
+        outputPath: command.payload.outputPath,
+        preset: command.payload.preset,
+        progressPerMille: 120,
+        outTime: 960_000,
+        logSummary: "导出任务已启动",
+        validation: null,
+        diagnostic: null
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "getExportJobStatus") {
+    return {
+      ok: true,
+      data: {
+        jobId: command.payload.jobId,
+        phase: "completed",
+        outputPath: "/tmp/video-editor-export.mp4",
+        preset: "h264AacBalanced",
+        progressPerMille: 1000,
+        outTime: 8_000_000,
+        logSummary: "导出完成，输出校验通过",
+        validation: {
+          path: "/tmp/video-editor-export.mp4",
+          fileSizeBytes: 123456,
+          duration: 8_000_000,
+          frameRate: { numerator: 30, denominator: 1 },
+          width: 1920,
+          height: 1080,
+          hasAudio: true
+        },
+        diagnostic: null
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "cancelExport") {
+    return {
+      ok: true,
+      data: {
+        jobId: command.payload.jobId,
+        phase: "cancelled",
+        outputPath: "/tmp/video-editor-export.mp4",
+        preset: "h264AacBalanced",
+        progressPerMille: 120,
+        outTime: 960_000,
+        logSummary: "导出任务已取消",
+        validation: null,
+        diagnostic: {
+          kind: "cancelled",
+          message: "导出任务已取消",
+          stdoutSummary: null,
+          stderrSummary: null
+        }
       },
       error: null,
       events: []

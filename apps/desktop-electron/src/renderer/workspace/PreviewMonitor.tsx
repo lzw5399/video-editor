@@ -1,4 +1,13 @@
-import { formatMicroseconds, type BindingStatus, type PreviewDisplayState } from "../viewModel";
+import type { ExportPreset } from "../../generated/CommandEnvelope";
+import {
+  formatExportPhase,
+  formatExportPreset,
+  formatExportProgress,
+  formatMicroseconds,
+  type BindingStatus,
+  type ExportDisplayState,
+  type PreviewDisplayState
+} from "../viewModel";
 
 import "./preview-inspector.css";
 
@@ -6,11 +15,17 @@ type PreviewMonitorProps = {
   draftName: string;
   bindingStatus: BindingStatus;
   preview: PreviewDisplayState;
+  exportState: ExportDisplayState;
   pending: boolean;
   playheadUs?: number;
   onPlayheadChange: (value: number) => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
+  onExportOutputPathChange: (value: string) => void;
+  onExportPresetChange: (value: ExportPreset) => void;
+  onStartExport: () => void;
+  onRefreshExportStatus: () => void;
+  onCancelExport: () => void;
 };
 
 type MonitorControl = {
@@ -32,13 +47,22 @@ export function PreviewMonitor({
   draftName,
   bindingStatus,
   preview,
+  exportState,
   pending,
   playheadUs = 0,
   onPlayheadChange,
   onRequestPreviewFrame,
-  onRequestPreviewSegment
+  onRequestPreviewSegment,
+  onExportOutputPathChange,
+  onExportPresetChange,
+  onStartExport,
+  onRefreshExportStatus,
+  onCancelExport
 }: PreviewMonitorProps): React.ReactElement {
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
+  const exportCanCancel =
+    exportState.jobId !== null &&
+    (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
 
   return (
     <div className="preview-shell">
@@ -124,6 +148,69 @@ export function PreviewMonitor({
           metadata={preview.segmentMetadataLabel}
           path={preview.segmentArtifactPath}
         />
+      </div>
+
+      <div className="export-panel" aria-label="导出面板">
+        <label className="export-path-control">
+          <span>输出路径</span>
+          <input
+            aria-label="输出路径"
+            type="text"
+            value={exportState.outputPath}
+            onChange={(event) => onExportOutputPathChange(event.currentTarget.value)}
+            disabled={pending}
+          />
+        </label>
+        <label className="export-preset-control">
+          <span>导出预设</span>
+          <select
+            aria-label="导出预设"
+            value={exportState.preset}
+            onChange={(event) => onExportPresetChange(event.currentTarget.value as ExportPreset)}
+            disabled={pending}
+          >
+            <option value="h264AacBalanced">{formatExportPreset("h264AacBalanced")}</option>
+            <option value="h264AacDraft">{formatExportPreset("h264AacDraft")}</option>
+          </select>
+        </label>
+        <div className="export-actions" role="group" aria-label="导出操作">
+          <button type="button" aria-label="开始导出" title="开始导出" onClick={onStartExport} disabled={pending}>
+            导出
+          </button>
+          <button
+            type="button"
+            aria-label="查询导出状态"
+            title="查询导出状态"
+            onClick={onRefreshExportStatus}
+            disabled={pending || exportState.jobId === null}
+          >
+            状态
+          </button>
+          <button
+            type="button"
+            aria-label="取消导出"
+            title="取消导出"
+            onClick={onCancelExport}
+            disabled={pending || !exportCanCancel}
+          >
+            取消
+          </button>
+        </div>
+        <div className="export-progress" aria-label="导出进度">
+          <span>{formatExportPhase(exportState.phase)}</span>
+          <progress max={1000} value={exportState.progressPerMille ?? 0} />
+          <strong>{formatExportProgress(exportState.progressPerMille)}</strong>
+        </div>
+        <div className="export-log" aria-label="导出日志">
+          {exportState.error ?? exportState.diagnosticLabel ?? exportState.logSummary}
+        </div>
+        <div className="export-validation" aria-label="输出校验">
+          {exportState.validation === null
+            ? "输出校验待完成"
+            : `${exportState.validation.width ?? "-"}x${exportState.validation.height ?? "-"} · ${
+                exportState.validation.hasAudio ? "含音频" : "无音频"
+              }`}
+        </div>
       </div>
 
       <div className="preview-status-line" aria-live="polite">

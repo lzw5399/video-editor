@@ -1,4 +1,5 @@
 import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
+import type { ExportPreset } from "../../generated/CommandEnvelope";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
@@ -16,6 +17,11 @@ type WorkspaceShellProps = {
   onPlayheadChange: (value: number) => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
+  onExportOutputPathChange: (value: string) => void;
+  onExportPresetChange: (value: ExportPreset) => void;
+  onStartExport: () => void;
+  onRefreshExportStatus: () => void;
+  onCancelExport: () => void;
   onImportMaterial: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -47,6 +53,11 @@ export function WorkspaceShell({
   onPlayheadChange,
   onRequestPreviewFrame,
   onRequestPreviewSegment,
+  onExportOutputPathChange,
+  onExportPresetChange,
+  onStartExport,
+  onRefreshExportStatus,
+  onCancelExport,
   onImportMaterial,
   onRefreshMaterials,
   onListMissingMaterials,
@@ -116,11 +127,17 @@ export function WorkspaceShell({
           draftName={workspace.draft.metadata.name}
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
+          exportState={workspace.export}
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
           onPlayheadChange={onPlayheadChange}
           onRequestPreviewFrame={onRequestPreviewFrame}
           onRequestPreviewSegment={onRequestPreviewSegment}
+          onExportOutputPathChange={onExportOutputPathChange}
+          onExportPresetChange={onExportPresetChange}
+          onStartExport={onStartExport}
+          onRefreshExportStatus={onRefreshExportStatus}
+          onCancelExport={onCancelExport}
         />
       </section>
 

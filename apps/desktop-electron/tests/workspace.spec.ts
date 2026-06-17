@@ -10,6 +10,9 @@ type ExecuteCommandCall = {
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
+  outputPath: string | null;
+  preset: string | null;
+  jobId: string | null;
 };
 
 type RegionBox = {
@@ -34,13 +37,16 @@ declare global {
   }
 }
 
-async function launchWorkspaceApp(options: { mockPreviewCommands?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchWorkspaceApp(
+  options: { mockPreviewCommands?: boolean; mockExportCommands?: boolean; env?: NodeJS.ProcessEnv } = {}
+): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
       ...options.env
     }
   });
@@ -229,7 +235,9 @@ async function expectPreviewControlsFit(page: Page, label: string): Promise<void
   const clippedItems = await page.locator(".preview-shell").evaluate((shell) => {
     const shellBox = shell.getBoundingClientRect();
     return Array.from(
-      shell.querySelectorAll(".preview-canvas, .preview-transport, .preview-status-line, .preview-artifact-panel, button, input")
+      shell.querySelectorAll(
+        ".preview-canvas, .preview-transport, .preview-status-line, .preview-artifact-panel, .export-panel, .export-progress, .export-log, .export-validation, button, input, select, progress"
+      )
     )
       .map((element) => {
         const box = element.getBoundingClientRect();
@@ -600,6 +608,61 @@ test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async 
     await expect(page.getByRole("button", { name: "请求预览帧" })).toBeVisible();
     await expect(page.getByRole("button", { name: "生成预览片段" })).toBeVisible();
     await expect(page.getByLabel("预览产物")).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("导出命令通过 executeCommand 更新导出状态并保存截图", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await expect(page.getByLabel("导出面板")).toBeVisible();
+    await expect(page.getByLabel("输出路径")).toHaveValue("/tmp/video-editor-export.mp4");
+    await expect(page.getByLabel("导出预设")).toHaveValue("h264AacBalanced");
+    await expect(page.getByRole("button", { name: "开始导出" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "取消导出" })).toBeDisabled();
+
+    await page.getByLabel("输出路径").fill("/tmp/video-editor-export.mp4");
+    await page.getByRole("button", { name: "开始导出" }).click();
+    await expectCommandCall(app, "startExport");
+    await expect(page.getByLabel("导出进度")).toContainText("导出中");
+    await expect(page.getByLabel("导出进度")).toContainText("12%");
+    await expect(page.getByLabel("导出日志")).toContainText("导出任务已启动");
+    await expect(page.getByRole("button", { name: "取消导出" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "取消导出" }).click();
+    await expectCommandCall(app, "cancelExport");
+    await expect(page.getByLabel("导出进度")).toContainText("已取消");
+    await expect(page.getByLabel("导出日志")).toContainText("导出已取消");
+
+    await page.getByRole("button", { name: "开始导出" }).click();
+    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await expectCommandCall(app, "getExportJobStatus");
+    await expect(page.getByLabel("导出进度")).toContainText("已完成");
+    await expect(page.getByLabel("导出进度")).toContainText("100%");
+    await expect(page.getByLabel("导出日志")).toContainText("导出完成，输出校验通过");
+    await expect(page.getByLabel("输出校验")).toContainText("1920x1080");
+    await expect(page.getByLabel("输出校验")).toContainText("含音频");
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toEqual(
+      expect.arrayContaining(["startExport", "cancelExport", "getExportJobStatus"])
+    );
+    const startCall = calls.find((call) => call.command === "startExport");
+    expect(startCall?.outputPath).toBe("/tmp/video-editor-export.mp4");
+    expect(startCall?.preset).toBe("h264AacBalanced");
+
+    await expectProfessionalWorkspaceAtViewport(page, app, 1280, 800);
+    await expectCompactScrollbarBaseline();
+    await savePhase5PreviewScreenshot(page, "export-1280x800.png");
+
+    await expectProfessionalWorkspaceAtViewport(page, app, 1120, 720);
+    await expectCompactScrollbarBaseline();
+    await savePhase5PreviewScreenshot(page, "export-1120x720.png");
   } finally {
     await app.close();
   }

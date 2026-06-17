@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
+  ExportJobStatusResponse,
   ImportMaterialResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
   PreviewArtifactResponse,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
+import type { ExportPreset } from "../generated/CommandEnvelope";
 import type { Draft, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
@@ -17,6 +19,8 @@ import {
   buildAddTextSegmentCommand,
   buildDeleteSegmentCommand,
   buildEditTextSegmentCommand,
+  buildCancelExportCommand,
+  buildGetExportJobStatusCommand,
   buildImportMaterialCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
@@ -28,6 +32,7 @@ import {
   buildSetSegmentVolumeCommand,
   buildSetTrackMuteCommand,
   buildSplitSegmentCommand,
+  buildStartExportCommand,
   buildTrimSegmentCommand,
   buildUndoTimelineEditCommand,
   commandErrorMessage
@@ -36,6 +41,7 @@ import {
   createInitialWorkspaceState,
   findFirstMaterialByKind,
   findTrackByKind,
+  formatExportDiagnostic,
   formatCommandError,
   formatMicroseconds,
   formatPreviewStatus,
@@ -62,6 +68,10 @@ type VideoEditorCoreApi = {
 
 type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
 type DraftCommandResultApplier<T> = (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState;
+type ExportCommandResultApplier = (
+  current: WorkspaceState,
+  result: CommandResultEnvelope<ExportJobStatusResponse>
+) => WorkspaceState;
 
 declare global {
   interface Window {
@@ -279,6 +289,78 @@ export function App(): React.ReactElement {
             error: message,
             frameStatusLabel: pendingCommand === "请求预览帧" ? "预览帧失败" : current.preview.frameStatusLabel,
             segmentStatusLabel: pendingCommand === "生成预览片段" ? "预览片段失败" : current.preview.segmentStatusLabel
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
+  async function executeExportCommand(
+    buildCommand: DraftCommandBuilder,
+    pendingCommand: string,
+    applyResult: ExportCommandResultApplier
+  ): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
+        const next = {
+          ...current,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    commandInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand,
+        commandError: null,
+        export: {
+          ...current.export,
+          error: null,
+          logSummary:
+            pendingCommand === "开始导出"
+              ? "正在开始导出"
+              : pendingCommand === "查询导出状态"
+                ? "正在查询导出状态"
+                : "正在取消导出"
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const command = buildCommand(workspaceRef.current);
+      const result = await window.videoEditorCore.executeCommand<ExportJobStatusResponse>(command);
+      setWorkspace((current) => {
+        const next = applyResult(current, result);
+        workspaceRef.current = next;
+        return next;
+      });
+    } catch (error: unknown) {
+      const message = exportCommandErrorMessage(error instanceof Error ? error.message : String(error), pendingCommand);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: null,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message,
+            logSummary: message
           }
         };
         workspaceRef.current = next;
@@ -708,6 +790,65 @@ export function App(): React.ReactElement {
     );
   }
 
+  function handleExportOutputPathChange(value: string): void {
+    setWorkspace((current) => ({
+      ...current,
+      export: {
+        ...current.export,
+        outputPath: value
+      }
+    }));
+  }
+
+  function handleExportPresetChange(value: ExportPreset): void {
+    setWorkspace((current) => ({
+      ...current,
+      export: {
+        ...current.export,
+        preset: value
+      }
+    }));
+  }
+
+  function handleStartExport(): void {
+    void executeExportCommand(
+      (current) =>
+        buildStartExportCommand({
+          draft: current.draft,
+          outputPath: current.export.outputPath,
+          preset: current.export.preset
+        }),
+      "开始导出",
+      (current, result) => applyExportCommandResult(current, result, "开始导出")
+    );
+  }
+
+  function handleRefreshExportStatus(): void {
+    void executeExportCommand(
+      (current) => {
+        if (current.export.jobId === null) {
+          throw new Error("请先开始导出");
+        }
+        return buildGetExportJobStatusCommand(current.export.jobId);
+      },
+      "查询导出状态",
+      (current, result) => applyExportCommandResult(current, result, "查询导出状态")
+    );
+  }
+
+  function handleCancelExport(): void {
+    void executeExportCommand(
+      (current) => {
+        if (current.export.jobId === null) {
+          throw new Error("请先开始导出");
+        }
+        return buildCancelExportCommand(current.export.jobId);
+      },
+      "取消导出",
+      (current, result) => applyExportCommandResult(current, result, "取消导出")
+    );
+  }
+
   return (
     <WorkspaceShell
       workspace={workspace}
@@ -721,6 +862,11 @@ export function App(): React.ReactElement {
       onPlayheadChange={setPlayheadUs}
       onRequestPreviewFrame={handleRequestPreviewFrame}
       onRequestPreviewSegment={handleRequestPreviewSegment}
+      onExportOutputPathChange={handleExportOutputPathChange}
+      onExportPresetChange={handleExportPresetChange}
+      onStartExport={handleStartExport}
+      onRefreshExportStatus={handleRefreshExportStatus}
+      onCancelExport={handleCancelExport}
       onImportMaterial={handleImportMaterial}
       onRefreshMaterials={handleRefreshMaterials}
       onListMissingMaterials={handleListMissingMaterials}
@@ -742,6 +888,38 @@ export function App(): React.ReactElement {
   );
 }
 
+function applyExportCommandResult(
+  current: WorkspaceState,
+  result: CommandResultEnvelope<ExportJobStatusResponse>,
+  actionLabel: string
+): WorkspaceState {
+  const response = result.data;
+  const message = result.ok ? null : exportCommandErrorMessage(result, actionLabel);
+  const diagnosticLabel =
+    response?.diagnostic === null || response?.diagnostic === undefined
+      ? null
+      : `${formatExportDiagnostic(response.diagnostic.kind) ?? response.diagnostic.kind}：${response.diagnostic.message}`;
+
+  return {
+    ...current,
+    pendingCommand: null,
+    commandError: message,
+    export: {
+      ...current.export,
+      outputPath: response?.outputPath && response.outputPath.length > 0 ? response.outputPath : current.export.outputPath,
+      preset: response?.preset ?? current.export.preset,
+      jobId: response?.jobId && response.jobId !== "unavailable" ? response.jobId : current.export.jobId,
+      phase: response?.phase ?? current.export.phase,
+      progressPerMille: response?.progressPerMille ?? current.export.progressPerMille,
+      outTime: response?.outTime ?? current.export.outTime,
+      logSummary: response?.logSummary ?? message ?? current.export.logSummary,
+      validation: response?.validation ?? current.export.validation,
+      diagnosticLabel,
+      error: message
+    }
+  };
+}
+
 function previewCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string, actionLabel: string): string {
   const kindLabels: Record<string, string> = {
     previewServiceFailed: "预览服务失败",
@@ -756,6 +934,24 @@ function previewCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unkno
       ? resultOrMessage
       : resultOrMessage.error?.message ?? "剪辑核心返回未知预览错误";
   const kindLabel = commandError === null ? "预览命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
+
+  return `${actionLabel}失败（${kindLabel}）：${message}`;
+}
+
+function exportCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string, actionLabel: string): string {
+  const kindLabels: Record<string, string> = {
+    exportServiceFailed: "导出服务失败",
+    runtimeDiscoveryFailed: "运行时发现失败",
+    invalidPayload: "命令参数无效",
+    internal: "内部错误"
+  };
+  const commandError =
+    typeof resultOrMessage === "string" ? null : resultOrMessage.error;
+  const message =
+    typeof resultOrMessage === "string"
+      ? resultOrMessage
+      : resultOrMessage.error?.message ?? "剪辑核心返回未知导出错误";
+  const kindLabel = commandError === null ? "导出命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
 
   return `${actionLabel}失败（${kindLabel}）：${message}`;
 }

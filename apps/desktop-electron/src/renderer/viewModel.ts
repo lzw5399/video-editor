@@ -1,7 +1,13 @@
 import type { CSSProperties } from "react";
 
-import type { CommandState, TimelineSelection } from "../generated/CommandEnvelope";
-import type { MissingMaterialCommandDiagnostic, PreviewStatus } from "../generated/CommandResultEnvelope";
+import type { CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
+import type {
+  ExportDiagnosticKind,
+  ExportJobPhase,
+  ExportValidationReport,
+  MissingMaterialCommandDiagnostic,
+  PreviewStatus
+} from "../generated/CommandResultEnvelope";
 import type {
   Draft,
   Material,
@@ -60,6 +66,7 @@ export type WorkspaceState = {
   materials: Material[];
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
   preview: PreviewDisplayState;
+  export: ExportDisplayState;
   bindingStatus: BindingStatus;
   pendingCommand: string | null;
   commandError: string | null;
@@ -75,6 +82,19 @@ export type PreviewDisplayState = {
   error: string | null;
   lastRequestedPlayhead: Microseconds | null;
   lastRequestedRangeLabel: string | null;
+};
+
+export type ExportDisplayState = {
+  outputPath: string;
+  preset: ExportPreset;
+  jobId: string | null;
+  phase: ExportJobPhase | null;
+  progressPerMille: number | null;
+  outTime: Microseconds | null;
+  logSummary: string;
+  validation: ExportValidationReport | null;
+  diagnosticLabel: string | null;
+  error: string | null;
 };
 
 export type SelectedTrackView = {
@@ -308,6 +328,18 @@ export function createInitialWorkspaceState(): WorkspaceState {
       lastRequestedPlayhead: null,
       lastRequestedRangeLabel: null
     },
+    export: {
+      outputPath: "/tmp/video-editor-export.mp4",
+      preset: "h264AacBalanced",
+      jobId: null,
+      phase: null,
+      progressPerMille: null,
+      outTime: null,
+      logSummary: "等待开始导出",
+      validation: null,
+      diagnosticLabel: null,
+      error: null
+    },
     bindingStatus: {
       kind: "checking",
       label: "正在连接剪辑核心"
@@ -402,6 +434,61 @@ export function formatPreviewStatus(status: PreviewStatus): string {
   };
 
   return labels[status];
+}
+
+export function formatExportPreset(preset: ExportPreset): string {
+  const labels: Record<ExportPreset, string> = {
+    h264AacDraft: "草稿 720P",
+    h264AacBalanced: "标准 1080P"
+  };
+
+  return labels[preset];
+}
+
+export function formatExportPhase(phase: ExportJobPhase | null | undefined): string {
+  if (phase === null || phase === undefined) {
+    return "未开始";
+  }
+
+  const labels: Record<ExportJobPhase, string> = {
+    queued: "排队中",
+    running: "导出中",
+    validating: "校验中",
+    completed: "已完成",
+    cancelled: "已取消",
+    failed: "导出失败",
+    validationFailed: "校验失败"
+  };
+
+  return labels[phase];
+}
+
+export function formatExportDiagnostic(kind: ExportDiagnosticKind | null | undefined): string | null {
+  if (kind === null || kind === undefined) {
+    return null;
+  }
+
+  const labels: Record<ExportDiagnosticKind, string> = {
+    invalidOutputPath: "输出路径无效",
+    engineFailed: "剪辑语义失败",
+    renderGraphFailed: "渲染图失败",
+    compileFailed: "导出编译失败",
+    runtimeUnavailable: "运行时不可用",
+    runtimeFailed: "运行时失败",
+    cancelled: "导出已取消",
+    validationFailed: "输出校验失败"
+  };
+
+  return labels[kind];
+}
+
+export function formatExportProgress(progressPerMille: number | null | undefined): string {
+  if (progressPerMille === null || progressPerMille === undefined) {
+    return "0%";
+  }
+
+  const percent = Math.max(0, Math.min(100, Math.round(progressPerMille / 10)));
+  return `${percent}%`;
 }
 
 export function materialStatusMessage(material: Material): string | null {
