@@ -205,7 +205,12 @@ fn negative_formula_fixtures() -> Vec<(&'static str, &'static str, bool)> {
 fn formula_fixture_paths(fixture_dir: &Path) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
     if fixture_dir.exists() {
-        collect_formula_fixtures(fixture_dir, fixture_dir, &mut paths);
+        for formula_dir in ["positive", "negative"] {
+            let path = fixture_dir.join(formula_dir);
+            if path.exists() {
+                collect_formula_fixtures(fixture_dir, &path, &mut paths);
+            }
+        }
     }
     paths
 }
