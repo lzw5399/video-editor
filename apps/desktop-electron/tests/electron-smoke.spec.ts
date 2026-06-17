@@ -26,10 +26,27 @@ async function launchSmokeApp(): Promise<{ app: ElectronApplication; page: Page 
   return { app, page };
 }
 
+async function launchSmokeAppWithEnv(
+  env: NodeJS.ProcessEnv
+): Promise<{ app: ElectronApplication; page: Page }> {
+  const app = await electron.launch({
+    args: [join(process.cwd(), "dist/main/index.cjs")],
+    env: {
+      ...process.env,
+      ...env
+    }
+  });
+  const page = await app.firstWindow();
+  await page.waitForLoadState("domcontentloaded");
+  return { app, page };
+}
+
 test("renderer reaches Rust binding only through the typed preload bridge", async () => {
   const { app, page } = await launchSmokeApp();
 
   try {
+    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+
     const exposedKeys = await page.evaluate(() => Object.keys(window));
     expect(exposedKeys).toContain("videoEditorCore");
     expect(exposedKeys).not.toContain("ipcRenderer");
@@ -76,6 +93,20 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       error: null,
       events: []
     });
+  } finally {
+    await app.close();
+  }
+});
+
+test("main process ignores non-loopback dev server URLs", async () => {
+  const { app, page } = await launchSmokeAppWithEnv({
+    VITE_DEV_SERVER_URL: "https://example.com"
+  });
+
+  try {
+    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+    const location = await page.evaluate(() => window.location.href);
+    expect(location).not.toContain("example.com");
   } finally {
     await app.close();
   }

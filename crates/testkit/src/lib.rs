@@ -4,6 +4,7 @@
 //! and FFmpeg render smoke helpers here. This shell exists so downstream plans
 //! can depend on a stable testkit crate without introducing media behavior early.
 
+use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -152,13 +153,13 @@ pub fn probe_media_metadata(path: impl AsRef<Path>) -> SmokeResult<SmokeMetadata
     let runtime = discover_runtime_config()?;
     let executor = DesktopFfmpegExecutor::default();
     let args = vec![
-        "-v".to_string(),
-        "error".to_string(),
-        "-output_format".to_string(),
-        "json".to_string(),
-        "-show_entries".to_string(),
-        "stream=codec_type,width,height,r_frame_rate,duration:format=duration".to_string(),
-        path.display().to_string(),
+        OsString::from("-v"),
+        OsString::from("error"),
+        OsString::from("-output_format"),
+        OsString::from("json"),
+        OsString::from("-show_entries"),
+        OsString::from("stream=codec_type,width,height,r_frame_rate,duration:format=duration"),
+        path.as_os_str().to_owned(),
     ];
     let output = executor
         .run(&runtime.ffprobe.path, &args)
@@ -224,26 +225,28 @@ fn run_ffmpeg_generate(
     output_path: &Path,
 ) -> SmokeResult<()> {
     let args = vec![
-        "-hide_banner".to_string(),
-        "-y".to_string(),
-        "-f".to_string(),
-        "lavfi".to_string(),
-        "-i".to_string(),
-        format!(
+        OsString::from("-hide_banner"),
+        OsString::from("-y"),
+        OsString::from("-f"),
+        OsString::from("lavfi"),
+        OsString::from("-i"),
+        OsString::from(format!(
             "testsrc2=size={TINY_WIDTH}x{TINY_HEIGHT}:rate={TINY_FPS}:duration={TINY_DURATION_SECONDS}"
-        ),
-        "-f".to_string(),
-        "lavfi".to_string(),
-        "-i".to_string(),
-        format!("sine=frequency=440:duration={TINY_DURATION_SECONDS}"),
-        "-shortest".to_string(),
-        "-c:v".to_string(),
-        "libx264".to_string(),
-        "-pix_fmt".to_string(),
-        "yuv420p".to_string(),
-        "-c:a".to_string(),
-        "aac".to_string(),
-        output_path.display().to_string(),
+        )),
+        OsString::from("-f"),
+        OsString::from("lavfi"),
+        OsString::from("-i"),
+        OsString::from(format!(
+            "sine=frequency=440:duration={TINY_DURATION_SECONDS}"
+        )),
+        OsString::from("-shortest"),
+        OsString::from("-c:v"),
+        OsString::from("libx264"),
+        OsString::from("-pix_fmt"),
+        OsString::from("yuv420p"),
+        OsString::from("-c:a"),
+        OsString::from("aac"),
+        output_path.as_os_str().to_owned(),
     ];
 
     let output = executor.run(&runtime.ffmpeg.path, &args).map_err(|error| {

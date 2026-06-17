@@ -3,6 +3,7 @@
 //! This crate owns the service boundary for FFmpeg and ffprobe execution. Pure
 //! draft and timeline semantic crates must not depend on this trait.
 
+use std::ffi::OsString;
 use std::path::Path;
 use std::process::Output;
 
@@ -34,5 +35,5 @@ pub trait FfmpegExecutor {
     fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output>;
 
     /// Run an FFmpeg-family process with explicit process arguments.
-    fn run(&self, binary: &Path, args: &[String]) -> std::io::Result<Output>;
+    fn run(&self, binary: &Path, args: &[OsString]) -> std::io::Result<Output>;
 }

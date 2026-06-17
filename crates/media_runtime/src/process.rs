@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::io;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
@@ -10,7 +11,7 @@ pub const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(5);
 /// Run an external process with explicit arguments and a bounded wait time.
 pub fn run_process_with_timeout(
     binary: &Path,
-    args: &[String],
+    args: &[OsString],
     timeout: Duration,
 ) -> io::Result<Output> {
     let mut child = Command::new(binary)

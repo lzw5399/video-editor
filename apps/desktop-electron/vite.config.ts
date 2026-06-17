@@ -46,6 +46,7 @@ function preloadConfig(): UserConfig {
 function rendererConfig(): UserConfig {
   return {
     root: rootDir,
+    base: "./",
     plugins: [react()],
     build: {
       emptyOutDir: false,

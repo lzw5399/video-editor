@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -112,7 +113,7 @@ pub fn probe_binary_version_with_timeout(
     source: DiscoverySource,
     timeout: Duration,
 ) -> Result<DiscoveredBinary, DiscoveryError> {
-    let args = vec!["-version".to_string()];
+    let args = vec![OsString::from("-version")];
     let output = run_process_with_timeout(&path, &args, timeout).map_err(|error| {
         DiscoveryError::version_probe_failed(
             kind,

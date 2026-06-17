@@ -4,6 +4,7 @@
 //! Electron can inject this service at the app shell boundary. It does not
 //! download, bundle, or redistribute FFmpeg in this plan.
 
+use std::ffi::OsString;
 use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
@@ -41,11 +42,11 @@ impl FfmpegExecutor for DesktopFfmpegExecutor {
     }
 
     fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output> {
-        let args = vec!["-version".to_string()];
+        let args = vec![OsString::from("-version")];
         run_process_with_timeout(binary, &args, self.timeout)
     }
 
-    fn run(&self, binary: &Path, args: &[String]) -> std::io::Result<Output> {
+    fn run(&self, binary: &Path, args: &[OsString]) -> std::io::Result<Output> {
         run_process_with_timeout(binary, args, self.timeout)
     }
 }
