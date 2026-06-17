@@ -5,21 +5,21 @@ use std::{
 };
 
 use draft_model::{
-    AddSegmentCommandPayload, AddTextSegmentCommandPayload, CommandEnvelope, CommandError,
-    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
-    CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload, Draft, DraftId,
-    DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, Filter,
+    AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
+    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
+    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload,
+    Draft, DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, Filter,
     ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
     ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
     Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     MoveSegmentCommandPayload, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
-    RationalFrameRate, RedoTimelineEditCommandPayload, Segment, SegmentId,
-    SelectTimelineSegmentsCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
-    TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
-    TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
-    VersionCommandPayload,
+    RationalFrameRate, RedoTimelineEditCommandPayload, Segment, SegmentId, SegmentVolume,
+    SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
+    SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow, TextStroke, TextStyle,
+    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind, Transition,
+    TrimSegmentCommandPayload, UndoTimelineEditCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -49,7 +49,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -68,6 +68,9 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -127,6 +130,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<TextBackground>(),
         export_decl::<TextStyle>(),
         export_decl::<TextSegment>(),
+        export_decl::<SegmentVolume>(),
         export_decl::<Segment>(),
         export_decl::<Track>(),
         export_decl::<Draft>(),
@@ -159,7 +163,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -178,6 +182,9 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -297,6 +304,35 @@ fn schema_exports_include_text_command_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_audio_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let draft_ts = ts_contract(&[export_decl::<SegmentVolume>()]);
+
+    for expected_contract in [
+        "SegmentVolume",
+        "AddAudioSegmentCommandPayload",
+        "SetSegmentVolumeCommandPayload",
+        "SetTrackMuteCommandPayload",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
+            "schema or draft TypeScript should include {expected_contract}"
+        );
+    }
+    for expected_contract in [
+        "AddAudioSegmentCommandPayload",
+        "SetSegmentVolumeCommandPayload",
+        "SetTrackMuteCommandPayload",
+    ] {
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -310,7 +346,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -329,6 +365,9 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<TimelineSelection>(),
             export_decl::<SnappingSettings>(),
             export_decl::<CommandHistorySnapshot>(),
@@ -509,6 +548,18 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<EditTextSegmentCommandPayload>(
         &mut schema_value,
         "EditTextSegmentCommandPayload",
+    );
+    include_command_contract_schema::<AddAudioSegmentCommandPayload>(
+        &mut schema_value,
+        "AddAudioSegmentCommandPayload",
+    );
+    include_command_contract_schema::<SetSegmentVolumeCommandPayload>(
+        &mut schema_value,
+        "SetSegmentVolumeCommandPayload",
+    );
+    include_command_contract_schema::<SetTrackMuteCommandPayload>(
+        &mut schema_value,
+        "SetTrackMuteCommandPayload",
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
@@ -852,6 +903,39 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "editTextSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "addAudioSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addAudioSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "setSegmentVolume" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "setSegmentVolume" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "setTrackMute" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "setTrackMute" }
                     },
                     "required": ["kind"]
                 }

@@ -1,11 +1,12 @@
 use draft_commands::{
+    audio::{add_audio_segment, set_segment_volume, set_track_mute},
     history::{redo_timeline_edit, undo_timeline_edit},
     text::{add_text_segment, edit_text_segment},
 };
 use draft_model::{
-    CommandState, Draft, MaterialKind, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, TimelineSelection, Track,
-    TrackKind,
+    CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, Material, MaterialKind, Microseconds,
+    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment,
+    TextShadow, TextStroke, TextStyle, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -93,12 +94,148 @@ fn text_commands() {
     assert_eq!(edited.command_state.undo_stack.len(), 2);
 }
 
+#[test]
+fn audio_commands() {
+    assert_eq!(MAX_SEGMENT_VOLUME_MILLIS, 4_000);
+
+    let draft = draft_with_audio_track();
+    let selection = TimelineSelection::empty();
+    let state = CommandState::empty();
+
+    let added = add_audio_segment(
+        &draft,
+        &state,
+        &selection,
+        "audio-track".into(),
+        "audio-segment".into(),
+        "audio-material".into(),
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    )
+    .expect("audio materials should be accepted on audio tracks");
+
+    assert_eq!(added.events[0].kind, "audioSegmentAdded");
+    assert_eq!(added.command_state.undo_stack.len(), 1);
+    assert_eq!(
+        added.draft.tracks[0].segments[0].volume,
+        SegmentVolume::unity()
+    );
+
+    let volume_changed = set_segment_volume(
+        &added.draft,
+        &added.command_state,
+        &added.selection,
+        "audio-segment".into(),
+        SegmentVolume {
+            level_millis: 1_500,
+        },
+    )
+    .expect("segment volume should be integer millivolume semantics");
+
+    assert_eq!(volume_changed.events[0].kind, "segmentVolumeChanged");
+    assert_eq!(
+        volume_changed.draft.tracks[0].segments[0]
+            .volume
+            .level_millis,
+        1_500
+    );
+    assert_eq!(
+        volume_changed.draft.tracks[0].segments[0].target_timerange,
+        TargetTimerange::new(0, 1_000_000)
+    );
+
+    let muted = set_track_mute(
+        &volume_changed.draft,
+        &volume_changed.command_state,
+        &volume_changed.selection,
+        "audio-track".into(),
+        true,
+    )
+    .expect("track mute should be a Rust command semantic");
+
+    assert_eq!(muted.events[0].kind, "trackMuteChanged");
+    assert!(muted.draft.tracks[0].muted);
+    assert_eq!(muted.command_state.undo_stack.len(), 3);
+
+    let undone = undo_timeline_edit(&muted.draft, &muted.command_state, &muted.selection)
+        .expect("track mute should enter undo history");
+    assert!(!undone.draft.tracks[0].muted);
+    let redone = redo_timeline_edit(&undone.draft, &undone.command_state, &undone.selection)
+        .expect("track mute should enter redo history");
+    assert!(redone.draft.tracks[0].muted);
+
+    let invalid_volume = set_segment_volume(
+        &muted.draft,
+        &muted.command_state,
+        &muted.selection,
+        "audio-segment".into(),
+        SegmentVolume {
+            level_millis: MAX_SEGMENT_VOLUME_MILLIS + 1,
+        },
+    )
+    .expect_err("volume above the max should reject");
+    assert!(invalid_volume.to_string().contains("volume"));
+    assert_eq!(muted.command_state.undo_stack.len(), 3);
+
+    let incompatible = add_audio_segment(
+        &draft_with_video_track_and_audio_material(),
+        &CommandState::empty(),
+        &TimelineSelection::empty(),
+        "video-track".into(),
+        "bad-audio-segment".into(),
+        "audio-material".into(),
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    )
+    .expect_err("audio material should reject video track targets");
+    assert!(incompatible.to_string().contains("incompatible"));
+}
+
 fn draft_with_text_track() -> Draft {
     let mut draft = Draft::new("text-command-draft", "Text Commands");
     draft
         .tracks
         .push(Track::new("text-track", TrackKind::Text, "Text"));
     draft
+}
+
+fn draft_with_audio_track() -> Draft {
+    let mut draft = Draft::new("audio-command-draft", "Audio Commands");
+    draft.materials.push(material_with_duration(
+        "audio-material",
+        MaterialKind::Audio,
+        "media/audio.wav",
+        2_000_000,
+    ));
+    draft
+        .tracks
+        .push(Track::new("audio-track", TrackKind::Audio, "Audio"));
+    draft
+}
+
+fn draft_with_video_track_and_audio_material() -> Draft {
+    let mut draft = Draft::new("bad-audio-command-draft", "Bad Audio Commands");
+    draft.materials.push(material_with_duration(
+        "audio-material",
+        MaterialKind::Audio,
+        "media/audio.wav",
+        2_000_000,
+    ));
+    draft
+        .tracks
+        .push(Track::new("video-track", TrackKind::Video, "Video"));
+    draft
+}
+
+fn material_with_duration(
+    material_id: &str,
+    kind: MaterialKind,
+    uri: &str,
+    duration: u64,
+) -> Material {
+    let mut material = Material::new(material_id, kind, uri, material_id);
+    material.metadata.duration = Some(Microseconds::new(duration));
+    material
 }
 
 fn text_segment(content: &str, font_size: u32, alignment: TextAlignment) -> TextSegment {
