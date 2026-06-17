@@ -7,7 +7,7 @@ stopped_at: Completed 05-03-PLAN.md
 last_updated: "2026-06-17T18:13:08Z"
 last_activity: 2026-06-17 -- Completed Phase 05 Plan 03 FFmpeg compiler
 progress:
-  total_phases: 7
+  total_phases: 14
   completed_phases: 5
   total_plans: 37
   completed_plans: 31
@@ -89,6 +89,7 @@ Progress: [████████░░] 84%
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
+- Phases 7-13 added after Phase 6 for post-MVP core editing capability expansion: project canvas space, segment transform/compositing, complete text, typed keyframes, retiming, effect semantics, and transition semantics. These phases are core Rust/domain/render/UI capabilities, not adapter-only compatibility work.
 
 ### Decisions
 
@@ -160,6 +161,7 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 02 represents preview frame, preview segment, and export MP4 as output profiles over one shared RenderGraphPlan shape. — Later compiler and service plans should vary profile metadata rather than creating separate preview/export graph models.
 - [Phase 05]: Plan 03 compiles RenderGraphPlan into structured FfmpegJob data with Vec<OsString> args, derived filter/ASS sidecars, encode settings, and validation expectations. — media_runtime can execute jobs later without deciding editing semantics or parsing renderer-owned command strings.
 - [Phase 05]: Plan 03 carries text style data through engine_core resolved overlays and clips filter/ASS timing to the output profile target range. — This prevents preview/export text style drift and wrong source-time rendering for partial ranges.
+- [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
 
 ### Pending Todos
 
@@ -175,7 +177,7 @@ None yet.
 |----------|------|--------|-------------|
 | Compatibility | Jianying/CapCut/Kaipai adapters | Post-MVP | Initialization |
 | Platform | Mobile apps and server renderer | Post-MVP | Initialization |
-| Effects | Advanced effects, masks, text bubbles, text effects, transitions | Post-MVP | Initialization |
+| Effects | Proprietary effect/preset parity beyond first-party supported/degraded semantics | Post-MVP | Initialization |
 
 ## Quick Tasks Completed
 
@@ -183,6 +185,7 @@ None yet.
 |------|------|---------|
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
 | 2026-06-18 | 260618-mit-license | Switched project license metadata and README license sections to MIT, and added the standard MIT LICENSE file. |
+| 2026-06-18 | 260618-366-phase-6 | Added Phase 7-13 post-MVP core editing roadmap phases and detailed requirements for canvas, transform, compositing, text, keyframes, retiming, effects, and transitions. |
 | 2026-06-17 | 260618-2lz-left-panel-menu-fix | Removed the standalone left-side secondary menu, tightened workspace proportions, and made dark scrollbars slimmer. |
 
 ## Session Continuity

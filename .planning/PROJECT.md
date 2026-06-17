@@ -25,6 +25,7 @@ Users can reliably import media, edit clips on a familiar Jianying-style timelin
 - [ ] Support an MVP editor flow: import video/image/audio, arrange clips on tracks, split/trim/move/delete, add text/subtitle and BGM, preview, save/open, and export MP4.
 - [ ] Keep preview and export on the same semantic path: project -> command -> normalized timeline -> resolved frame state -> render graph -> FFmpeg job.
 - [ ] Add test gates at every phase, including schema/model tests, command tests, render graph snapshots, FFmpeg smoke renders, preview/export parity, and Electron E2E tests.
+- [ ] After MVP packaging, expand core editor semantics for project canvas space, transform/compositing, complete text, typed keyframes, retiming, effects, and transitions with Jianying-aligned terminology across Rust, schema, IPC, docs, and UI.
 
 ### Out of Scope
 
@@ -68,6 +69,7 @@ The Electron desktop UI should use Simplified Chinese as the default user-facing
 | Use Simplified Chinese for the desktop UI | The first desktop product targets a Chinese Jianying-style editing experience, so visible copy should match the user's language and editing vocabulary | Phase 4 validated Simplified Chinese visible copy and source guards |
 | Treat Kdenlive and MLT as references, not runtimes | Their architecture and abstractions are useful, but direct integration creates licensing, mobility, and product-control problems | - Pending |
 | Test every layer of the pipeline | A video editor fails through subtle time, render, preview, and packaging drift; phase gates must catch this early | Phase 1 established `just build`, `just test`, schema drift checks, Electron smoke, FFmpeg discovery tests, and render smoke |
+| Treat canvas, transform, compositing, text, keyframes, retiming, effects, and transitions as core semantics | Template fidelity depends on shared draft/render behavior, not adapter-only strings or renderer-local state | Phases 7-13 added after MVP packaging to build these capabilities in Rust/domain/schema/IPC/UI with Jianying-aligned terms |
 
 ## Evolution
 
@@ -87,4 +89,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after Phase 4 verification*
+*Last updated: 2026-06-18 after post-MVP core editing roadmap expansion*

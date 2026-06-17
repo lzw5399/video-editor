@@ -87,13 +87,40 @@
 
 ## v2 Requirements
 
-### Advanced Editing
+### Core Editing Expansion
 
-- **ADV-01**: User can work with multiple sequences or nested drafts.
-- **ADV-02**: User can add sticker segments and image/GIF/WebP/video overlays.
-- **ADV-03**: User can add transform keyframes for position, scale, rotation, opacity, and volume.
-- **ADV-04**: User can add masks, blend modes, segment filters, track filters, and transitions.
-- **ADV-05**: User can use text bubbles and text effects with local fallback rendering.
+- **CANVAS-01**: Draft has a canonical project canvas/profile model for aspect ratio, canvas width/height, and rational frame rate.
+- **CANVAS-02**: Draft supports semantic canvas background modes: black, solid color, blur fill, and image background.
+- **CANVAS-03**: Visual coordinate semantics are documented and shared by transform, sticker, text, PIP, keyframe, preview, and export paths.
+- **CANVAS-04**: Desktop UI exposes project canvas settings with Simplified Chinese Jianying-style terminology and Rust command ownership.
+
+- **XFORM-01**: Segment-level 画面/基础/变换 semantics support position x/y, scale, rotation, opacity, crop, and anchor using typed persisted values.
+- **XFORM-02**: Segment transform supports fit, fill, stretch, and background fill behavior for aspect-ratio mismatches.
+- **XFORM-03**: Transform edits are Rust-owned commands with validation, undo/redo, generated contracts, and no renderer-owned draft mutation.
+
+- **LAYER-01**: Visual layer semantics distinguish video, image, sticker, and text layers with explicit layer ordering and visibility.
+- **LAYER-02**: engine_core and render_graph evaluate visual composition order deterministically for preview/export.
+- **LAYER-03**: Blend mode and mask are represented with supported/degraded/unsupported capability boundaries even when full rendering is deferred.
+
+- **TEXT2-01**: Complete text semantics include font references, text box width/height, line height, letter spacing, safe area/layout region, font size, color, stroke, shadow, background, and alignment.
+- **TEXT2-02**: Multiple text/subtitle segments render through the shared preview/export path with stable layout snapshots.
+- **TEXT2-03**: Unsupported proprietary text bubbles, text effects, or font resources produce degraded/unsupported reports rather than silent fake support.
+
+- **ANIM-01**: Draft stores typed animated values for position, scale, rotation, opacity, text parameters, sticker parameters, filter parameters, and volume where applicable.
+- **ANIM-02**: Keyframes include integer/rational time, typed values, interpolation policy, and easing curve.
+- **ANIM-03**: engine_core and render_graph evaluate animated values at frame time without UI-owned interpolation or naked floating-point persisted semantics.
+
+- **SPEED-01**: Segment speed/变速 is represented as typed semantics that define source/target time mapping after retiming.
+- **SPEED-02**: Reverse playback and curve speed have explicit deferred/degraded capability boundaries until implemented.
+- **SPEED-03**: Audio follow-speed behavior is explicit and renderable/degradable through the shared preview/export path.
+
+- **FX-01**: Draft distinguishes filter, adjustment, effect, and transition concepts with Jianying-aligned names and typed parameter schemas.
+- **FX-02**: First-party filter/adjustment/effect parameters report supported, degraded, or unsupported capabilities through render_graph/compiler outputs.
+- **FX-03**: Jianying/Kaipai private native effect IDs remain external compatibility references and are not treated as internal render semantics.
+
+- **TRN-01**: Transitions attach to the correct adjacent or overlapping segment relationship with type, duration, and typed parameters.
+- **TRN-02**: Timeline validation defines transition effects on overlap, trim, snapping, and main-track magnet behavior.
+- **TRN-03**: render_graph represents transition windows deterministically for preview/export, with unsupported proprietary transitions classified.
 
 ### Compatibility
 
@@ -175,11 +202,31 @@
 | TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Pending |
 | TEST-08 | Phase 04.1 | Complete |
-| ADV-01 | Post-MVP | Deferred |
-| ADV-02 | Post-MVP | Deferred |
-| ADV-03 | Post-MVP | Deferred |
-| ADV-04 | Post-MVP | Deferred |
-| ADV-05 | Post-MVP | Deferred |
+| CANVAS-01 | Phase 7 | Planned |
+| CANVAS-02 | Phase 7 | Planned |
+| CANVAS-03 | Phase 7 | Planned |
+| CANVAS-04 | Phase 7 | Planned |
+| XFORM-01 | Phase 8 | Planned |
+| XFORM-02 | Phase 8 | Planned |
+| XFORM-03 | Phase 8 | Planned |
+| LAYER-01 | Phase 8 | Planned |
+| LAYER-02 | Phase 8 | Planned |
+| LAYER-03 | Phase 8 | Planned |
+| TEXT2-01 | Phase 9 | Planned |
+| TEXT2-02 | Phase 9 | Planned |
+| TEXT2-03 | Phase 9 | Planned |
+| ANIM-01 | Phase 10 | Planned |
+| ANIM-02 | Phase 10 | Planned |
+| ANIM-03 | Phase 10 | Planned |
+| SPEED-01 | Phase 11 | Planned |
+| SPEED-02 | Phase 11 | Planned |
+| SPEED-03 | Phase 11 | Planned |
+| FX-01 | Phase 12 | Planned |
+| FX-02 | Phase 12 | Planned |
+| FX-03 | Phase 12 | Planned |
+| TRN-01 | Phase 13 | Planned |
+| TRN-02 | Phase 13 | Planned |
+| TRN-03 | Phase 13 | Planned |
 | COMP-01 | Post-MVP | Deferred |
 | COMP-02 | Post-MVP | Deferred |
 | COMP-03 | Post-MVP | Deferred |
@@ -192,8 +239,8 @@
 - v1 requirements: 52 total
 - Mapped to phases: 52
 - Unmapped: 0
-- v2/post-MVP requirements: 11 total, deferred
+- v2/post-MVP requirements: 31 total, 25 planned in Phases 7-13 and 6 deferred
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after Phase 02 completion*
+*Last updated: 2026-06-18 after post-MVP core editing roadmap expansion*

@@ -4,6 +4,8 @@
 
 This milestone builds a desktop-first Jianying-style video editor MVP on a Rust-owned core. The path is intentionally layered: establish the engineering and test harness, define the draft/material model, implement command-driven timeline editing, build the desktop workspace, connect preview/export through one render path, then harden and package the app.
 
+After the MVP is packaged, the roadmap continues with core editor capability phases needed for Jianying/Kaipai-like template fidelity: project canvas space, segment transform, visual compositing, complete text, typed keyframes, retiming, effects, and transitions. These are core semantics, not adapter-only compatibility shims.
+
 ## Phases
 
 **Phase Numbering:**
@@ -20,6 +22,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 04.1: Professional Jianying Workspace UI Refinement** - Higher-density Jianying Pro-like desktop workspace refinement (completed 2026-06-17)
 - [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
 - [ ] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness
+- [ ] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics
+- [ ] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics
+- [ ] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity
+- [ ] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters
+- [ ] **Phase 11: Retiming And Speed System** - Segment speed, source/target time mapping, audio follow-speed policy, and deferred reverse/curve-speed boundaries
+- [ ] **Phase 12: Filter Adjustment And Effect Semantics** - First-party filter/adjustment/effect parameter schemas plus supported/degraded/unsupported capability boundaries
+- [ ] **Phase 13: Transition Semantics And Timeline Integration** - Transition attachment, duration/type/params, overlap/trim/snapping effects, and render graph representation
 
 ## Phase Details
 
@@ -200,7 +209,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-03-PLAN.md - Implement FFmpeg compiler jobs, filters, ASS sidecars, and snapshots
+- [x] 05-03-PLAN.md - Implement FFmpeg compiler jobs, filters, ASS sidecars, and snapshots
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -244,10 +253,116 @@ Plans:
 - [ ] 06-02: Add packaged import-preview-export smoke tests and release gates
 - [ ] 06-03: Document known limits, license posture, and post-MVP backlog
 
+### Phase 7: Project Canvas Space And Coordinate System
+
+**Goal**: Establish the draft-level project canvas space that all later transform, sticker, text, PIP, background, and render graph behavior depends on.
+**Depends on**: Phase 6
+**Requirements**: CANVAS-01, CANVAS-02, CANVAS-03, CANVAS-04
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Draft schema has a canonical project canvas/profile model for aspect ratio, canvas width/height, frame rate, and background.
+  2. Canvas background supports black, solid color, blur fill, and image background as semantic options, with unsupported render modes classified.
+  3. All visual coordinates use one documented normalized coordinate system that later sticker/text/PIP/transform/keyframe behavior can share.
+  4. Desktop UI exposes Chinese project canvas settings using Jianying-style terms and routes changes through Rust commands.
+
+**Plans**: TBD
+
+### Phase 8: Segment Transform And Visual Compositing
+
+**Goal**: Implement Jianying-style segment-level 画面 / 基础 / 变换 semantics and deterministic visual layer composition.
+**Depends on**: Phase 7
+**Requirements**: XFORM-01, XFORM-02, XFORM-03, LAYER-01, LAYER-02, LAYER-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Segment semantics support position x/y, scale, rotation, opacity, crop, anchor, and fit/fill/stretch modes using typed persisted values.
+  2. Background fill handles vertical media in horizontal canvases and similar aspect-ratio mismatches without renderer-owned layout math.
+  3. Video, image, sticker, and text layers have explicit stacking and visibility semantics that render_graph can compile deterministically.
+  4. Blend mode and mask are represented as capability-aware semantic boundaries even if first implementation degrades or defers them.
+  5. UI inspector controls use Jianying-style Chinese labels and all edits route through Rust commands with undo/redo coverage.
+
+**Plans**: TBD
+
+### Phase 9: Complete Text And Subtitle System
+
+**Goal**: Upgrade MVP text into a complete Jianying-style text/subtitle model suitable for real templates.
+**Depends on**: Phase 8
+**Requirements**: TEXT2-01, TEXT2-02, TEXT2-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Text semantics include font references, font size, color, stroke, shadow, background, alignment, text box width/height, line height, letter spacing, and safe-area/layout region.
+  2. Multiple text and subtitle segments render through the shared preview/export path with stable layout snapshots.
+  3. Text inspector UI uses Chinese Jianying-style terms and does not invent a separate internal vocabulary.
+  4. Unsupported text effects or proprietary text bubbles are classified as degraded/unsupported rather than silently treated as supported.
+
+**Plans**: TBD
+
+### Phase 10: Typed Keyframe And Animation System
+
+**Goal**: Replace string-like keyframe placeholders with typed animated values and easing so templates can express dynamic motion.
+**Depends on**: Phase 9
+**Requirements**: ANIM-01, ANIM-02, ANIM-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Draft schema supports typed animated values for position, scale, rotation, opacity, text parameters, sticker parameters, filter parameters, and volume where applicable.
+  2. Keyframes include time, value type, interpolation policy, and easing curve with deterministic evaluation at frame time.
+  3. engine_core and render_graph evaluate animation without UI-owned interpolation or naked floating-point persisted time.
+  4. Desktop UI exposes keyframe controls in the inspector and timeline while routing all mutations through Rust commands.
+
+**Plans**: TBD
+
+### Phase 11: Retiming And Speed System
+
+**Goal**: Add segment speed semantics so templates can express rhythm changes beyond trim/split/move.
+**Depends on**: Phase 10
+**Requirements**: SPEED-01, SPEED-02, SPEED-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Segment speed changes are represented as typed semantics that define source/target time mapping after retiming.
+  2. Audio follow-speed policy is explicit and renderable/degradable through the shared preview/export path.
+  3. Reverse playback and curve speed have explicit deferred or degraded capability boundaries until implemented.
+  4. Timeline trim/split/move validation understands retimed segments and remains atomic/undoable.
+
+**Plans**: TBD
+
+### Phase 12: Filter Adjustment And Effect Semantics
+
+**Goal**: Define first-party effect semantics and capability reporting instead of stuffing native effects into opaque strings.
+**Depends on**: Phase 11
+**Requirements**: FX-01, FX-02, FX-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Draft schema distinguishes filter, adjustment, effect, and transition concepts using Jianying-aligned names and typed parameter schemas.
+  2. render_graph and ffmpeg_compiler classify each effect parameter as supported, degraded, or unsupported.
+  3. Jianying/Kaipai private native effect IDs are external references with compatibility reports, not internal render semantics.
+  4. Desktop UI can show deferred/unsupported states in Chinese without pretending the effect is fully renderable.
+
+**Plans**: TBD
+
+### Phase 13: Transition Semantics And Timeline Integration
+
+**Goal**: Implement transition semantics as first-class timeline relationships with deterministic edit and render behavior.
+**Depends on**: Phase 12
+**Requirements**: TRN-01, TRN-02, TRN-03
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Transitions attach to the correct adjacent or overlapping segment relationship with type, duration, and parameters.
+  2. Timeline validation defines how transitions affect overlap, trim, snapping, and main-track magnet behavior.
+  3. render_graph represents transition windows deterministically for preview/export compilation.
+  4. Unsupported proprietary transitions degrade or report incompatibility rather than becoming opaque supported strings.
+
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -256,5 +371,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 2/9 | In Progress|  |
+| 5. Preview And Export Pipeline | 3/9 | In Progress|  |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
+| 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
+| 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
+| 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
+| 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
+| 11. Retiming And Speed System | 0/TBD | Not started | - |
+| 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
+| 13. Transition Semantics And Timeline Integration | 0/TBD | Not started | - |
