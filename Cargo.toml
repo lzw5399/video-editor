@@ -9,6 +9,7 @@ members = [
   "crates/media_runtime_desktop",
   "crates/project_store",
   "crates/preview_service",
+  "crates/adapter_kaipai",
   "crates/testkit",
   "crates/bindings_node",
 ]
