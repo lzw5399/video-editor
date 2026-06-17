@@ -74,17 +74,34 @@ function loadNativeBinding(): NativeBinding | null {
   }
 }
 
-function resolveNativeBindingPath(): string {
+export function resolveNativeBindingPath(): string {
+  const candidates = resolveNativeBindingCandidates();
+  const firstExistingCandidate = candidates.find((candidate) => existsSync(candidate));
+  if (firstExistingCandidate !== undefined) {
+    return firstExistingCandidate;
+  }
+  return candidates[0] ?? join(__dirname, "../../native/index.cjs");
+}
+
+export function resolveNativeBindingCandidates(): string[] {
   if (process.env.VE_NATIVE_BINDING_PATH !== undefined) {
-    return process.env.VE_NATIVE_BINDING_PATH;
+    return [process.env.VE_NATIVE_BINDING_PATH];
   }
 
-  const packageRootNativeEntry = join(__dirname, "../../native/index.cjs");
-  if (existsSync(packageRootNativeEntry)) {
-    return packageRootNativeEntry;
+  const candidates = [
+    join(__dirname, "../../native/index.cjs"),
+    join(__dirname, "../native/index.cjs")
+  ];
+
+  const resourcesPath = readElectronResourcesPath();
+  if (resourcesPath !== null) {
+    candidates.unshift(
+      join(resourcesPath, "app.asar.unpacked", "native", "index.cjs"),
+      join(resourcesPath, "native", "index.cjs")
+    );
   }
 
-  return join(__dirname, "../native/index.cjs");
+  return candidates;
 }
 
 function bindingLoadError(command: string): CommandResultEnvelope<never> {
@@ -94,10 +111,15 @@ function bindingLoadError(command: string): CommandResultEnvelope<never> {
     error: {
       kind: "internal",
       command,
-      message: `Native binding failed to load: ${cachedLoadError ?? "unknown load failure"}`
+      message: `剪辑核心加载失败：${cachedLoadError ?? "unknown load failure"}`
     },
     events: []
   };
+}
+
+function readElectronResourcesPath(): string | null {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  return typeof resourcesPath === "string" && resourcesPath.length > 0 ? resourcesPath : null;
 }
 
 function boundErrorMessage(error: unknown): string {
