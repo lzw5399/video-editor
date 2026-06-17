@@ -28,6 +28,16 @@ async function launchSmokeApp(): Promise<{ app: ElectronApplication; page: Page 
   return { app, page };
 }
 
+async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
+  await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+  await expect(page.locator('[aria-label="顶部功能区"]').first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "顶部功能区" })).toBeVisible();
+  await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
+  await expect(page.locator('[aria-label="预览窗口"]')).toBeVisible();
+  await expect(page.locator('[aria-label="属性检查器"]')).toBeVisible();
+  await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
+}
+
 async function launchSmokeAppWithEnv(
   env: NodeJS.ProcessEnv
 ): Promise<{ app: ElectronApplication; page: Page }> {
@@ -80,7 +90,9 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
   const { app, page } = await launchSmokeApp();
 
   try {
-    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+    await expectVisibleWorkspaceRegions(page);
+    await expect(page.getByText("预览将在下一阶段接入")).toBeVisible();
+    await expect(page.getByText("未选择片段")).toBeVisible();
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));
     expect(exposedKeys).toContain("videoEditorCore");
@@ -129,13 +141,14 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       events: []
     });
 
-    const materialRow = page.getByRole("article", { name: "Material smoke-video.mp4" });
-    await expect(materialRow).toBeVisible();
-    await expect(materialRow).toContainText("smoke-video.mp4");
-    await expect(materialRow).toContainText("video");
-    await expect(materialRow).toContainText("1000000 us");
-    await expect(materialRow).toContainText("320x180");
-    await expect(materialRow).toContainText("available");
+    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "滤镜", "调节"]) {
+      await expect(page.getByRole("button", { name: category })).toBeVisible();
+    }
+
+    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
+    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("可用");
+    await expect(page.getByRole("article", { name: "素材 封面图.png" })).toContainText("素材丢失");
+    await expect(page.getByRole("article", { name: "素材 贴纸素材.webp" })).toContainText("解析失败");
   } finally {
     await app.close();
   }
@@ -153,7 +166,7 @@ test("main process ignores non-loopback dev server URLs", async () => {
   });
 
   try {
-    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+    await expectVisibleWorkspaceRegions(page);
     const location = await page.evaluate(() => window.location.href);
     expect(location).not.toContain("example.com");
   } finally {
@@ -166,7 +179,7 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
   const { app, page } = await launchSmokeApp();
 
   try {
-    await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+    await expectVisibleWorkspaceRegions(page);
     const initialLocation = await page.evaluate(() => window.location.href);
 
     await page.goto(untrustedPage.url).catch(() => undefined);
@@ -174,7 +187,7 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
     const location = await page.evaluate(() => window.location.href);
 
     if (location === initialLocation) {
-      await expect(page.getByRole("main", { name: "Video editor smoke workbench" })).toBeVisible();
+      await expectVisibleWorkspaceRegions(page);
       expect(location).not.toContain(untrustedPage.origin);
       return;
     }
