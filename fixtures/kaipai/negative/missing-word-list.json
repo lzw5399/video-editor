@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "kaipaiSmartEditFormulaBundle",
+  "provenance": {
+    "templateId": "tpl-redacted-negative-001",
+    "recipeId": "recipe-redacted-negative-001",
+    "formulaTaskId": "task-redacted-negative-001",
+    "formulaRequestId": "request-redacted-negative-001",
+    "capturedAt": "2026-06-17T00:00:00.000Z"
+  },
+  "sourceMedia": {
+    "uri": "media/source-main.mp4",
+    "width": 1080,
+    "height": 1920,
+    "durationMs": 6000
+  },
+  "recognizerResult": {},
+  "safeArea": {
+    "value": "96,180,984,1660",
+    "status": "detected",
+    "source": "redactedLocalRecognizer"
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-video-main",
+      "uri": "media/source-main.mp4",
+      "kind": "video",
+      "displayName": "source-main.mp4"
+    }
+  ],
+  "formula": {
+    "timeline": {
+      "tracks": [],
+      "segments": []
+    }
+  },
+  "resources": []
+}

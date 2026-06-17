@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "kaipaiSmartEditFormulaBundle",
+  "provenance": {
+    "templateId": "tpl-redacted-basic-001",
+    "recipeId": "recipe-redacted-001",
+    "formulaTaskId": "task-redacted-001",
+    "formulaRequestId": "request-redacted-001",
+    "capturedAt": "2026-06-17T00:00:00.000Z"
+  },
+  "sourceMedia": {
+    "uri": "media/source-main.mp4",
+    "width": 1080,
+    "height": 1920,
+    "durationMs": 6000
+  },
+  "recognizerResult": {
+    "word_list": [
+      {
+        "text": "hello",
+        "startMs": 0,
+        "endMs": 800
+      },
+      {
+        "text": "kaipai",
+        "startMs": 900,
+        "endMs": 1500
+      }
+    ]
+  },
+  "safeArea": {
+    "value": "96,180,984,1660",
+    "status": "detected",
+    "source": "redactedLocalRecognizer"
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-video-main",
+      "uri": "media/source-main.mp4",
+      "kind": "video",
+      "displayName": "source-main.mp4"
+    }
+  ],
+  "formula": {
+    "template": {
+      "id": "tpl-redacted-basic-001",
+      "name": "redacted local template"
+    },
+    "timeline": {
+      "tracks": [
+        {
+          "id": "formula-track-video-1",
+          "type": "video"
+        }
+      ],
+      "segments": [
+        {
+          "id": "formula-segment-video-1",
+          "trackId": "formula-track-video-1",
+          "materialRef": "direct-video-main",
+          "targetStartMs": 0,
+          "durationMs": 6000
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "resourceId": "font-default",
+      "kind": "font",
+      "uri": "resources/fonts/redacted-default.ttf",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "displayName": "redacted-default.ttf"
+    },
+    {
+      "resourceId": "sticker-frame",
+      "kind": "sticker",
+      "uri": "resources/stickers/redacted-frame.webp",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "displayName": "redacted-frame.webp"
+    }
+  ]
+}
