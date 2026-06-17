@@ -22,8 +22,8 @@
 
 ### Materials
 
-- [ ] **MAT-01**: User can import video, image, and audio materials into the draft.
-- [ ] **MAT-02**: Imported materials receive stable IDs and retain URI, duration, fps, size, stream, and audio metadata from ffprobe.
+- [x] **MAT-01**: User can import video, image, and audio materials into the draft.
+- [x] **MAT-02**: Imported materials receive stable IDs and retain URI, duration, fps, size, stream, and audio metadata from ffprobe.
 - [ ] **MAT-03**: Material bin displays imported materials with basic metadata and generated thumbnails where applicable.
 - [ ] **MAT-04**: App detects missing material files and presents a recovery/error state without corrupting the draft.
 
@@ -123,8 +123,8 @@
 | DRAFT-03 | Phase 2 | Complete |
 | DRAFT-04 | Phase 2 | Complete |
 | DRAFT-05 | Phase 2 | Complete |
-| MAT-01 | Phase 2 | Pending |
-| MAT-02 | Phase 2 | Pending |
+| MAT-01 | Phase 2 | Complete |
+| MAT-02 | Phase 2 | Complete |
 | MAT-03 | Phase 2 | Pending |
 | MAT-04 | Phase 2 | Pending |
 | TIME-01 | Phase 3 | Pending |
@@ -180,4 +180,4 @@
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after Phase 02 Plan 02 completion*
+*Last updated: 2026-06-17 after Phase 02 Plan 03 completion*

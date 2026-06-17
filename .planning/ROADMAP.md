@@ -68,7 +68,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 02-02-PLAN.md - Implement project bundle persistence, path helpers, and round-trip tests
-- [ ] 02-03-PLAN.md - Implement media-runtime probing and generated material test fixtures
+- [x] 02-03-PLAN.md - Implement media-runtime probing and generated material test fixtures
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
-| 2. Draft And Material System | 2/6 | In Progress|  |
+| 2. Draft And Material System | 3/6 | In Progress|  |
 | 3. Timeline Command Core | 0/4 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
