@@ -47,10 +47,10 @@
 
 ### Preview
 
-- [ ] **PREV-01**: User can preview the current draft in the center player.
+- [x] **PREV-01**: User can preview the current draft in the center player.
 - [x] **PREV-02**: User can seek/scrub the playhead and request a deterministic preview frame.
 - [x] **PREV-03**: User can play a short preview segment using a cache generated from the same render path as export.
-- [ ] **PREV-04**: Preview cache invalidates only affected ranges after timeline or text edits.
+- [x] **PREV-04**: Preview cache invalidates only affected ranges after timeline or text edits.
 
 ### Export
 
@@ -174,10 +174,10 @@
 | TEXT-03 | Phase 5 | Complete |
 | AUD-01 | Phase 3 | Complete |
 | AUD-02 | Phase 3 | Complete |
-| PREV-01 | Phase 5 | Pending |
+| PREV-01 | Phase 5 | Complete |
 | PREV-02 | Phase 5 | Complete |
 | PREV-03 | Phase 5 | Complete |
-| PREV-04 | Phase 5 | Pending |
+| PREV-04 | Phase 5 | Complete |
 | EXP-01 | Phase 5 | Complete |
 | EXP-02 | Phase 5 | Complete |
 | EXP-03 | Phase 5 | Pending |

@@ -213,7 +213,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-04-PLAN.md - Implement preview_service cache, generation, and invalidation
+- [x] 05-04-PLAN.md - Implement preview_service cache, generation, and invalidation
 - [ ] 05-07-PLAN.md - Implement export runtime progress, cancel, logs, and output validation
 
 **Wave 5** *(blocked on Wave 4 preview completion)*
@@ -371,7 +371,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 3/9 | In Progress|  |
+| 5. Preview And Export Pipeline | 4/9 | In Progress|  |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
 | 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
