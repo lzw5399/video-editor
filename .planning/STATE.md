@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-06-17T02:33:11.000Z"
-last_activity: 2026-06-17 -- Phase 02 Plan 03 completed
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-06-17T02:48:06.000Z"
+last_activity: 2026-06-17 -- Phase 02 Plan 04 completed
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 15
-  completed_plans: 12
-  percent: 80
+  completed_plans: 13
+  percent: 87
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 02 (draft-and-material-system) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 02 Plan 03 completed
+Last activity: 2026-06-17 -- Phase 02 Plan 04 completed
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 7 min
-- Total execution time: 62 min
+- Total execution time: 71 min
 
 **By Phase:**
 
@@ -48,7 +48,7 @@ Progress: [████████░░] 80%
 
 **Recent Trend:**
 
-- Last 5 plans: 38 min
+- Last 5 plans: 42 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -60,6 +60,7 @@ Progress: [████████░░] 80%
 | Phase 02 P01 | 9 min | 2 tasks | 8 files |
 | Phase 02 P02 | 10 min | 2 tasks | 7 files |
 | Phase 02 P03 | 9 min | 2 tasks | 7 files |
+| Phase 02 P04 | 9 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Plan 02 placed `.veproj/project.json` create/open/save/autosave in `project_store`. — The filesystem boundary now validates through `draft_model`, preserves missing material entries as recoverable warnings, and keeps material import/probing out of project persistence.
 - [Phase 02]: Plan 03 placed normalized ffprobe material probing in `media_runtime`. — Video, image, and audio metadata now flow through `FfmpegExecutor` with integer durations, rational frame rates, bounded output summaries, and classified errors without persisting raw probe JSON.
 - [Phase 02]: Plan 03 moved generated media fixtures into `testkit` temp directories. — Probe tests now reuse deterministic video, image, and audio fixture helpers without committing binary media under fixtures or goldens.
+- [Phase 02]: Plan 04 placed material import orchestration in `bindings_node::material_service`. — The service coordinates project-store URI helpers, media-runtime probing, pure draft-model registry helpers, validation, save, and recoverable missing-material diagnostics without moving import ownership into `project_store`.
+- [Phase 02]: Plan 04 generated draft schema and TypeScript draft contracts from Rust semantic types. — `schemas/draft.schema.json` and `Draft.ts` now expose material metadata/status while excluding derived thumbnails, waveform data, raw probe JSON, render graphs, preview caches, and export artifacts.
 
 ### Pending Todos
 
@@ -115,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T02:33:11.000Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-06-17T02:48:06.000Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
