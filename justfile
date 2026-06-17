@@ -32,3 +32,7 @@ test:
   pnpm run test:phase4-source-guards
   pnpm run test:phase4-workspace
   pnpm run test:contracts
+  pnpm run test:phase3_1-fixtures
+  pnpm run test:phase3_1-report-snapshots
+  pnpm run test:phase3_1-resource-localizer
+  pnpm run test:phase3_1-source-guards
