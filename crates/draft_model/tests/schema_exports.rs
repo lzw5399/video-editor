@@ -162,19 +162,24 @@ fn schema_fixtures_validate_command_contracts() {
 
     let fixture_names = fs::read_dir(&fixture_dir)
         .expect("fixtures/draft directory should exist")
-        .map(|entry| {
+        .filter_map(|entry| {
             let entry = entry.expect("fixture directory entry should be readable");
             let path = entry.path();
+            if path.is_dir() {
+                return None;
+            }
             assert_eq!(
                 path.extension().and_then(|extension| extension.to_str()),
                 Some("json"),
                 "fixtures/draft should only contain JSON fixtures: {}",
                 path.display()
             );
-            entry
-                .file_name()
-                .into_string()
-                .expect("fixture names should be UTF-8")
+            Some(
+                entry
+                    .file_name()
+                    .into_string()
+                    .expect("fixture names should be UTF-8"),
+            )
         })
         .collect::<BTreeSet<_>>();
 

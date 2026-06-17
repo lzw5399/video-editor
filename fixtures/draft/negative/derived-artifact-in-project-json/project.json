@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "draftId": "draft-derived-artifact-001",
+  "metadata": {
+    "name": "Derived Artifact Leakage"
+  },
+  "materials": [],
+  "tracks": [],
+  "renderGraph": {
+    "nodes": []
+  }
+}

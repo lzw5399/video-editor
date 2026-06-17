@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "draftId": "draft-missing-material-001",
+  "metadata": {
+    "name": "Missing Material"
+  },
+  "materials": [
+    {
+      "materialId": "material-missing-001",
+      "kind": "video",
+      "uri": "media/offline.mov",
+      "displayName": "offline.mov",
+      "metadata": {
+        "hasVideo": false,
+        "hasAudio": false,
+        "probeError": "material path is missing: media/offline.mov"
+      },
+      "status": "missing"
+    }
+  ],
+  "tracks": []
+}

@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "draftId": "draft-materials-001",
+  "metadata": {
+    "name": "Materials Round Trip",
+    "description": "Video, image, and audio material metadata fixture"
+  },
+  "materials": [
+    {
+      "materialId": "material-video-001",
+      "kind": "video",
+      "uri": "media/video.mp4",
+      "displayName": "video.mp4",
+      "metadata": {
+        "duration": 5000000,
+        "width": 1920,
+        "height": 1080,
+        "frameRate": {
+          "numerator": 30000,
+          "denominator": 1001
+        },
+        "hasVideo": true,
+        "hasAudio": true,
+        "audioSampleRate": 48000,
+        "audioChannels": 2
+      },
+      "status": "available"
+    },
+    {
+      "materialId": "material-image-001",
+      "kind": "image",
+      "uri": "media/still.png",
+      "displayName": "still.png",
+      "metadata": {
+        "width": 1280,
+        "height": 720,
+        "hasVideo": true,
+        "hasAudio": false
+      },
+      "status": "available"
+    },
+    {
+      "materialId": "material-audio-001",
+      "kind": "audio",
+      "uri": "media/bgm.wav",
+      "displayName": "bgm.wav",
+      "metadata": {
+        "duration": 3000000,
+        "hasVideo": false,
+        "hasAudio": true,
+        "audioSampleRate": 44100,
+        "audioChannels": 2
+      },
+      "status": "available"
+    }
+  ],
+  "tracks": [
+    {
+      "trackId": "track-video-001",
+      "kind": "video",
+      "name": "Video 1",
+      "muted": false,
+      "locked": false,
+      "segments": [
+        {
+          "segmentId": "segment-video-001",
+          "materialId": "material-video-001",
+          "sourceTimerange": {
+            "start": 0,
+            "duration": 2000000
+          },
+          "targetTimerange": {
+            "start": 0,
+            "duration": 2000000
+          },
+          "mainTrackMagnet": {
+            "enabled": true
+          },
+          "keyframes": [
+            {
+              "at": 1000000,
+              "property": "opacity",
+              "value": "1.0"
+            }
+          ],
+          "filters": [
+            {
+              "name": "brightness",
+              "parameters": {
+                "intensity": "0.10"
+              }
+            }
+          ],
+          "transition": {
+            "name": "fade",
+            "duration": 250000
+          }
+        },
+        {
+          "segmentId": "segment-image-001",
+          "materialId": "material-image-001",
+          "sourceTimerange": {
+            "start": 0,
+            "duration": 1000000
+          },
+          "targetTimerange": {
+            "start": 2000000,
+            "duration": 1000000
+          },
+          "mainTrackMagnet": {
+            "enabled": false
+          },
+          "keyframes": [],
+          "filters": []
+        }
+      ]
+    },
+    {
+      "trackId": "track-audio-001",
+      "kind": "audio",
+      "name": "Audio 1",
+      "muted": false,
+      "locked": false,
+      "segments": [
+        {
+          "segmentId": "segment-audio-001",
+          "materialId": "material-audio-001",
+          "sourceTimerange": {
+            "start": 0,
+            "duration": 3000000
+          },
+          "targetTimerange": {
+            "start": 0,
+            "duration": 3000000
+          },
+          "mainTrackMagnet": {
+            "enabled": false
+          },
+          "keyframes": [],
+          "filters": []
+        }
+      ]
+    }
+  ]
+}

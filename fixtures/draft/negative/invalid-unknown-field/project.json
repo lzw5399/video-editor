@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "draftId": "draft-invalid-unknown-field-001",
+  "metadata": {
+    "name": "Invalid Unknown Field"
+  },
+  "materials": [],
+  "tracks": [],
+  "unexpectedField": true
+}
