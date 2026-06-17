@@ -1,8 +1,23 @@
+use std::{
+    collections::BTreeSet,
+    env, fs,
+    path::{Path, PathBuf},
+};
+
 use adapter_kaipai::{
     CompatibilityCanonicalTarget, CompatibilityCategory, CompatibilityReport,
     CompatibilityReportItem, CompatibilityReportSchemaVersion, CompatibilityReportSummary,
     CompatibilitySeverity, CompatibilityStatus,
 };
+use serde_json::Value;
+
+fn project_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("adapter_kaipai should live under crates/")
+        .to_path_buf()
+}
 
 #[test]
 fn compatibility_report_contract_status_taxonomy_is_locked() {
@@ -67,4 +82,100 @@ fn compatibility_report_contract_contains_stable_diagnostic_fields() {
     assert_eq!(value["items"][0]["externalPath"], "sourceMedia");
     assert_eq!(value["items"][0]["canonicalTarget"], "material");
     assert_eq!(value["provenanceDigest"], "sha256:redacted-fixture-digest");
+}
+
+#[test]
+fn compatibility_report_snapshots_cover_locked_statuses() {
+    let report_dir = project_root().join("fixtures/kaipai/expected-reports");
+    let actual = report_snapshot_paths(&report_dir);
+    let expected = expected_report_snapshots()
+        .iter()
+        .map(|case| case.path.to_owned())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        actual, expected,
+        "every Kaipai compatibility report snapshot must be explicitly classified"
+    );
+
+    let mut statuses = BTreeSet::new();
+    for case in expected_report_snapshots() {
+        let report = read_report_snapshot(&report_dir, case.path);
+        let item = report["items"]
+            .as_array()
+            .and_then(|items| items.first())
+            .unwrap_or_else(|| panic!("snapshot should contain at least one item: {}", case.path));
+        assert_eq!(item["status"], Value::String(case.status.to_owned()));
+        statuses.insert(case.status);
+    }
+
+    assert_eq!(
+        statuses,
+        BTreeSet::from([
+            "supported",
+            "degraded",
+            "unsupported",
+            "missingResource",
+            "needsNativeEffect",
+        ])
+    );
+}
+
+struct ExpectedReportSnapshot {
+    path: &'static str,
+    status: &'static str,
+}
+
+fn expected_report_snapshots() -> Vec<ExpectedReportSnapshot> {
+    vec![
+        ExpectedReportSnapshot {
+            path: "supported-source-material.report.json",
+            status: "supported",
+        },
+        ExpectedReportSnapshot {
+            path: "degraded-text-style.report.json",
+            status: "degraded",
+        },
+        ExpectedReportSnapshot {
+            path: "unsupported-formula-block.report.json",
+            status: "unsupported",
+        },
+        ExpectedReportSnapshot {
+            path: "missing-resource.report.json",
+            status: "missingResource",
+        },
+        ExpectedReportSnapshot {
+            path: "native-effect-needs-native-effect.report.json",
+            status: "needsNativeEffect",
+        },
+    ]
+}
+
+fn report_snapshot_paths(report_dir: &Path) -> BTreeSet<String> {
+    let mut paths = BTreeSet::new();
+    if report_dir.exists() {
+        for entry in fs::read_dir(report_dir).expect("report snapshot directory should be readable")
+        {
+            let entry = entry.expect("report snapshot directory entry should be readable");
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+                paths.insert(
+                    path.file_name()
+                        .expect("snapshot should have a file name")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    paths
+}
+
+fn read_report_snapshot(report_dir: &Path, snapshot_path: &str) -> Value {
+    serde_json::from_slice(
+        &fs::read(report_dir.join(snapshot_path)).unwrap_or_else(|error| {
+            panic!("report snapshot should be readable: {snapshot_path}: {error}")
+        }),
+    )
+    .unwrap_or_else(|error| panic!("report snapshot should parse: {snapshot_path}: {error}"))
 }
