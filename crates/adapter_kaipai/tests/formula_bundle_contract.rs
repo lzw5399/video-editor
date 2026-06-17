@@ -16,7 +16,7 @@ fn complete_formula_bundle_json() -> Value {
             "capturedAt": "2026-06-17T00:00:00.000Z"
         },
         "sourceMedia": {
-            "uri": "file:///fixtures/source.mp4",
+            "uri": "media/source.mp4",
             "width": 1080,
             "height": 1920,
             "durationMs": 3000
@@ -33,12 +33,12 @@ fn complete_formula_bundle_json() -> Value {
         "safeArea": {
             "value": "100,200,300,400",
             "status": "detected",
-            "source": "app_face_detector_frame_0ms"
+            "source": "redactedLocalRecognizer"
         },
         "directMaterials": [
             {
                 "materialId": "direct-video-1",
-                "uri": "file:///fixtures/source.mp4",
+                "uri": "media/source.mp4",
                 "kind": "video",
                 "displayName": "source.mp4"
             }
@@ -51,7 +51,7 @@ fn complete_formula_bundle_json() -> Value {
             {
                 "resourceId": "font-1",
                 "kind": "font",
-                "uri": "https://example.invalid/font.ttf",
+                "uri": "resources/fonts/example.ttf",
                 "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
                 "displayName": "Example Font"
             }

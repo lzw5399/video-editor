@@ -109,12 +109,14 @@ impl KaipaiFormulaBundle {
             &self.safe_area.source,
             "safe area evidence source is required for auditability",
         )?;
+        validate_safe_area_source(&self.safe_area.source)?;
+        reject_unsafe_external_reference("sourceMedia.uri", &self.source_media.uri)?;
 
-        for material in &self.direct_materials {
-            material.validate()?;
+        for (index, material) in self.direct_materials.iter().enumerate() {
+            material.validate(index)?;
         }
-        for resource in &self.resources {
-            resource.validate()?;
+        for (index, resource) in self.resources.iter().enumerate() {
+            resource.validate(index)?;
         }
         reject_unsafe_formula_evidence(&self.formula, "formula")?;
 
@@ -180,7 +182,7 @@ pub struct DirectMaterialRef {
 }
 
 impl DirectMaterialRef {
-    fn validate(&self) -> Result<(), AdapterKaipaiError> {
+    fn validate(&self, index: usize) -> Result<(), AdapterKaipaiError> {
         require_non_empty(
             "directMaterials[].materialId",
             &self.material_id,
@@ -195,7 +197,8 @@ impl DirectMaterialRef {
             "directMaterials[].displayName",
             &self.display_name,
             "direct material display name is required",
-        )
+        )?;
+        reject_unsafe_external_reference(&format!("directMaterials[{index}].uri"), &self.uri)
     }
 }
 
@@ -214,7 +217,7 @@ pub struct FormulaResourceRef {
 }
 
 impl FormulaResourceRef {
-    fn validate(&self) -> Result<(), AdapterKaipaiError> {
+    fn validate(&self, index: usize) -> Result<(), AdapterKaipaiError> {
         if self.resource_id.trim().is_empty() {
             return Err(AdapterKaipaiError::InvalidResourceEvidence {
                 resource_id: self.resource_id.clone(),
@@ -227,6 +230,7 @@ impl FormulaResourceRef {
                 reason: "resource URI is required",
             });
         }
+        reject_unsafe_external_reference(&format!("resources[{index}].uri"), &self.uri)?;
         Ok(())
     }
 }
@@ -265,6 +269,32 @@ fn require_positive(
     Ok(())
 }
 
+fn validate_safe_area_source(source: &str) -> Result<(), AdapterKaipaiError> {
+    match source {
+        "redactedLocalRecognizer" | "redactedFixtureMetadata" => Ok(()),
+        _ => Err(AdapterKaipaiError::UnsafeFormulaEvidence {
+            path: "safeArea.source".to_owned(),
+            reason: "safe area source must be redacted local fixture evidence",
+        }),
+    }
+}
+
+fn reject_unsafe_external_reference(path: &str, value: &str) -> Result<(), AdapterKaipaiError> {
+    if looks_like_signed_url(value) {
+        return Err(AdapterKaipaiError::UnsafeFormulaEvidence {
+            path: path.to_owned(),
+            reason: "signed URLs are not allowed in formula evidence",
+        });
+    }
+    if looks_like_remote_url(value) {
+        return Err(AdapterKaipaiError::UnsafeFormulaEvidence {
+            path: path.to_owned(),
+            reason: "remote resource references are not allowed in sanitized formula bundles",
+        });
+    }
+    Ok(())
+}
+
 fn reject_unsafe_formula_evidence(value: &Value, path: &str) -> Result<(), AdapterKaipaiError> {
     match value {
         Value::Object(object) => {
@@ -283,6 +313,12 @@ fn reject_unsafe_formula_evidence(value: &Value, path: &str) -> Result<(), Adapt
             for (index, child) in items.iter().enumerate() {
                 reject_unsafe_formula_evidence(child, &format!("{path}[{index}]"))?;
             }
+        }
+        Value::String(text) if looks_like_remote_url(text) => {
+            return Err(AdapterKaipaiError::UnsafeFormulaEvidence {
+                path: path.to_owned(),
+                reason: "remote URLs are not allowed in formula evidence",
+            });
         }
         Value::String(text) if looks_like_signed_url(text) => {
             return Err(AdapterKaipaiError::UnsafeFormulaEvidence {
@@ -310,12 +346,19 @@ fn is_credential_like_key(key: &str) -> bool {
             | "authorization"
             | "cookie"
             | "session"
+            | "sessionjson"
             | "sessionid"
             | "secret"
             | "signature"
             | "credential"
+            | "account"
             | "accountid"
     )
+}
+
+fn looks_like_remote_url(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    lower.contains("http://") || lower.contains("https://")
 }
 
 fn looks_like_signed_url(value: &str) -> bool {

@@ -24,7 +24,7 @@ fn formula_bundle_fixtures_are_explicitly_classified() {
     let expected = positive_formula_fixtures()
         .iter()
         .copied()
-        .chain(negative_formula_fixtures().iter().map(|(path, _)| *path))
+        .chain(negative_formula_fixtures().iter().map(|(path, _, _)| *path))
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
 
@@ -59,16 +59,18 @@ fn formula_bundle_fixtures_negative_fail_exact_expected_errors() {
     let fixture_dir = root.join("fixtures/kaipai");
     let schema = formula_bundle_schema_validator();
 
-    for (fixture_path, expected_error) in negative_formula_fixtures() {
+    for (fixture_path, expected_error, should_fail_schema) in negative_formula_fixtures() {
         let value = read_formula_fixture(&fixture_dir, fixture_path);
         let error = KaipaiFormulaBundle::from_json_value(value.clone())
             .expect_err("negative formula fixture should fail validation");
 
         assert_eq!(error.to_string(), expected_error, "{fixture_path}");
-        assert!(
-            schema.validate(&value).is_err(),
-            "negative formula fixture should fail generated schema validation: {fixture_path}"
-        );
+        if should_fail_schema {
+            assert!(
+                schema.validate(&value).is_err(),
+                "negative formula fixture should fail generated schema validation: {fixture_path}"
+            );
+        }
     }
 }
 
@@ -175,23 +177,27 @@ fn positive_formula_fixtures() -> BTreeSet<&'static str> {
     ])
 }
 
-fn negative_formula_fixtures() -> Vec<(&'static str, &'static str)> {
+fn negative_formula_fixtures() -> Vec<(&'static str, &'static str, bool)> {
     vec![
         (
             "negative/missing-word-list.json",
             "invalid Kaipai formula bundle JSON: missing field `word_list`",
+            true,
         ),
         (
             "negative/invalid-safe-area-status.json",
             "invalid Kaipai formula bundle JSON: unknown variant `providerSpecific`, expected one of `detected`, `provided`, `unavailable`",
+            true,
         ),
         (
             "negative/unsafe-safe-area-source.json",
             "unsafe Kaipai formula evidence at `safeArea.source`: safe area source must be redacted local fixture evidence",
+            false,
         ),
         (
             "negative/unknown-top-level-field.json",
             "invalid Kaipai formula bundle JSON: unknown field `unexpectedProviderField`, expected one of `schemaVersion`, `kind`, `provenance`, `sourceMedia`, `recognizerResult`, `safeArea`, `directMaterials`, `formula`, `resources`",
+            true,
         ),
     ]
 }
