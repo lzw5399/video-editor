@@ -29,4 +29,6 @@ test:
   pnpm run test:phase2-source-guards
   pnpm run test:phase3-commands
   pnpm run test:phase3-source-guards
+  pnpm run test:phase4-source-guards
+  pnpm run test:phase4-workspace
   pnpm run test:contracts
