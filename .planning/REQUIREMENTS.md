@@ -48,13 +48,13 @@
 ### Preview
 
 - [ ] **PREV-01**: User can preview the current draft in the center player.
-- [ ] **PREV-02**: User can seek/scrub the playhead and request a deterministic preview frame.
-- [ ] **PREV-03**: User can play a short preview segment using a cache generated from the same render path as export.
+- [x] **PREV-02**: User can seek/scrub the playhead and request a deterministic preview frame.
+- [x] **PREV-03**: User can play a short preview segment using a cache generated from the same render path as export.
 - [ ] **PREV-04**: Preview cache invalidates only affected ranges after timeline or text edits.
 
 ### Export
 
-- [ ] **EXP-01**: User can export the draft to H.264 MP4 with a small preset set.
+- [x] **EXP-01**: User can export the draft to H.264 MP4 with a small preset set.
 - [x] **EXP-02**: Export uses the same normalized draft, resolved frame state, render graph, and FFmpeg compilation path as preview.
 - [ ] **EXP-03**: Export reports progress, supports cancel, captures logs, and classifies common FFmpeg errors.
 - [ ] **EXP-04**: Export output is validated for duration, fps, resolution, audio stream, and file existence.
@@ -79,7 +79,7 @@
 - [x] **TEST-01**: Schema and model tests validate every golden draft fixture.
 - [x] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
 - [x] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
-- [ ] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
+- [x] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
 - [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
 - [ ] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
@@ -148,10 +148,10 @@
 | AUD-01 | Phase 3 | Complete |
 | AUD-02 | Phase 3 | Complete |
 | PREV-01 | Phase 5 | Pending |
-| PREV-02 | Phase 5 | Pending |
-| PREV-03 | Phase 5 | Pending |
+| PREV-02 | Phase 5 | Complete |
+| PREV-03 | Phase 5 | Complete |
 | PREV-04 | Phase 5 | Pending |
-| EXP-01 | Phase 5 | Pending |
+| EXP-01 | Phase 5 | Complete |
 | EXP-02 | Phase 5 | Complete |
 | EXP-03 | Phase 5 | Pending |
 | EXP-04 | Phase 5 | Pending |
@@ -170,7 +170,7 @@
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 3 | Complete |
 | TEST-03 | Phase 5 | Complete |
-| TEST-04 | Phase 5 | Pending |
+| TEST-04 | Phase 5 | Complete |
 | TEST-05 | Phase 5 | Pending |
 | TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Pending |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-06-17T17:30:24.847Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-06-17T17:48:40.353Z"
 last_activity: 2026-06-17 -- Phase 05 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 37
-  completed_plans: 29
-  percent: 78
+  completed_plans: 30
+  percent: 81
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 05 (preview-and-export-pipeline) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-06-17 -- Phase 05 execution started
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 29
+- Total plans completed: 30
 - Average duration: 7 min
-- Total execution time: 213 min
+- Total execution time: 222 min
 
 **By Phase:**
 
@@ -81,6 +81,7 @@ Progress: [████████░░] 78%
 | Phase 04.1 P03 | 9 min | 2 tasks | 4 files |
 | Phase 04.1 P04 | 18 min | 2 tasks | 6 files |
 | Phase 05 P01 | 12 min | 3 tasks | 8 files |
+| Phase 05 P02 | 9 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 01 established `engine_core::normalize_draft` as the shared semantic input for preview/export callers. — NormalizedDraft now carries render-ready tracks, segments, material refs, and classified non-renderable diagnostics without mutating Draft input.
 - [Phase 05]: Plan 01 established deterministic frame-state and render-range sampling over NormalizedDraft. — FrameState and RenderRangeState use integer microseconds, frame indices, and RationalFrameRate rather than renderer-derived layer lists or floating-point persisted time.
 - [Phase 05]: Plan 01 pinned MVP text layout policy in engine_core. — Text overlays resolve with explicit PingFang SC fallback candidate identities, safe-area, wrapping, alignment, and integer dimensions while filesystem font probing remains outside pure engine_core.
+- [Phase 05]: Plan 02 builds render_graph only from engine_core NormalizedDraft and RenderRangeState, with classified errors for foreign range-state references. — This preserves the shared semantic preview/export path and keeps render_graph from duplicating timeline semantics.
+- [Phase 05]: Plan 02 represents preview frame, preview segment, and export MP4 as output profiles over one shared RenderGraphPlan shape. — Later compiler and service plans should vary profile metadata rather than creating separate preview/export graph models.
+
 ### Pending Todos
 
 None yet.
@@ -179,6 +183,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T17:30:24.844Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-06-17T17:46:36.677Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None

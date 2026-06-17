@@ -196,7 +196,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md - Implement the typed renderer-neutral render graph
+- [x] 05-02-PLAN.md - Implement the typed renderer-neutral render graph
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -256,5 +256,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 1/9 | In Progress|  |
+| 5. Preview And Export Pipeline | 2/9 | In Progress|  |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
