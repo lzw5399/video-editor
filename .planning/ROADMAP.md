@@ -374,7 +374,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
-| 6. MVP Hardening And Packaging | 5/5 | Complete   | 2026-06-17 |
+| 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
 | 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
