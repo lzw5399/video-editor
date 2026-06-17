@@ -107,6 +107,7 @@ async function setViewportSizeAndVerifyLayout(app: ElectronApplication, page: Pa
   expectNoOverlap(boxes.left, boxes.timeline, "素材面板", "时间线");
   expectNoOverlap(boxes.preview, boxes.timeline, "预览窗口", "时间线");
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
+  await expectTimelineControlsInsideStrip(page, `时间线控制 ${width}x${height}`);
 }
 
 async function expectStableBox(locator: Locator, label: string): Promise<RegionBox> {
@@ -131,6 +132,32 @@ function expectNoOverlap(first: RegionBox, second: RegionBox, firstName: string,
 function expectSameSize(before: RegionBox, after: RegionBox, label: string): void {
   expect(Math.abs(before.width - after.width), `${label} width stable`).toBeLessThanOrEqual(1);
   expect(Math.abs(before.height - after.height), `${label} height stable`).toBeLessThanOrEqual(1);
+}
+
+async function expectTimelineControlsInsideStrip(page: Page, label: string): Promise<void> {
+  const clippedControls = await page.locator('[aria-label="时间线控制"]').evaluate((strip) => {
+    const stripBox = strip.getBoundingClientRect();
+    return Array.from(strip.children)
+      .map((child) => {
+        const box = child.getBoundingClientRect();
+        return {
+          label: child.textContent?.replace(/\s+/g, " ").trim() || child.getAttribute("aria-label") || child.tagName,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom
+        };
+      })
+      .filter(
+        (box) =>
+          box.left < stripBox.left - 1 ||
+          box.top < stripBox.top - 1 ||
+          box.right > stripBox.right + 1 ||
+          box.bottom > stripBox.bottom + 1
+      );
+  });
+
+  expect(clippedControls, `${label} controls clipped`).toEqual([]);
 }
 
 test("Chinese editor workspace opens with required regions and material states", async () => {

@@ -580,7 +580,7 @@ h2 {
 
 .timeline-surface {
   display: grid;
-  grid-template-rows: 36px 28px minmax(0, 1fr);
+  grid-template-rows: 80px 28px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -594,12 +594,13 @@ h2 {
 
 .transport-strip {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  height: 36px;
+  align-content: start;
+  gap: 8px 12px;
+  height: 80px;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
 .transport-buttons {
@@ -683,6 +684,15 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.playhead-time {
+  flex: 0 0 88px;
+}
+
+.timeline-status {
+  flex: 1 1 160px;
+  min-width: 120px;
 }
 
 .timeline-ruler {
