@@ -5,7 +5,6 @@ use std::{
 };
 
 use draft_model::{Draft, DraftValidationError, MaterialStatus, migrate_draft_json};
-use schemars::schema_for;
 
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -85,12 +84,10 @@ fn negative_draft_fixtures_fail_expected_gates() {
 
         assert_eq!(error, expected_error, "{fixture_path}");
 
-        if fixture_path != "negative/invalid-schema-version/project.json" {
-            assert!(
-                schema.validate(&value).is_err(),
-                "negative fixture should fail generated draft JSON Schema: {fixture_path}"
-            );
-        }
+        assert!(
+            schema.validate(&value).is_err(),
+            "negative fixture should fail generated draft JSON Schema: {fixture_path}"
+        );
     }
 }
 
@@ -163,8 +160,11 @@ fn read_project_fixture(fixture_dir: &Path, fixture_path: &str) -> serde_json::V
 }
 
 fn draft_schema_validator() -> jsonschema::Validator {
-    let schema_json =
-        serde_json::to_value(schema_for!(Draft)).expect("draft schema should serialize");
+    let schema_path = project_root().join("schemas/draft.schema.json");
+    let schema_json: serde_json::Value = serde_json::from_slice(
+        &fs::read(&schema_path).expect("generated draft schema should be readable"),
+    )
+    .expect("generated draft schema should parse");
     jsonschema::validator_for(&schema_json).expect("generated draft schema should compile")
 }
 

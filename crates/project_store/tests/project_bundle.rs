@@ -56,6 +56,30 @@ fn round_trip_autosave_preserves_semantic_draft_equality() {
 }
 
 #[test]
+fn save_project_bundle_preserves_existing_project_json_when_temp_write_fails() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("atomic-save.veproj");
+    let original = Draft::new("draft-original", "Original draft");
+    let replacement = Draft::new("draft-replacement", "Replacement draft");
+
+    save_project_bundle(&StdPlatformFileSystem, &bundle_path, &original)
+        .expect("original draft should save");
+    std::fs::create_dir(bundle_path.join(".project.json.tmp"))
+        .expect("temp path directory should force temp write failure");
+
+    let error = save_project_bundle(&StdPlatformFileSystem, &bundle_path, &replacement)
+        .expect_err("temp write failure should fail save");
+
+    assert!(
+        matches!(error, ProjectStoreError::Io { .. }),
+        "unexpected error: {error}"
+    );
+    let opened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("original project should remain readable after failed replacement");
+    assert_eq!(opened.bundle.draft, original);
+}
+
+#[test]
 fn open_project_bundle_rejects_malformed_json() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("malformed.veproj");

@@ -37,7 +37,7 @@ const smokeDraft: Draft = {
       uri: "media/smoke-video.mp4",
       displayName: "smoke-video.mp4",
       metadata: {
-        duration: microseconds(1_000_000),
+        duration: 1_000_000,
         width: 320,
         height: 180,
         frameRate: {
@@ -207,10 +207,6 @@ function MaterialRow({ material }: { material: Material }): React.ReactElement {
       </div>
     </article>
   );
-}
-
-function microseconds(value: number): Microseconds {
-  return value as unknown as Microseconds;
 }
 
 function formatDuration(duration: Microseconds | null | undefined): string {

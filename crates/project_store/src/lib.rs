@@ -9,7 +9,7 @@ mod bundle;
 mod error;
 mod paths;
 
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 pub use bundle::{
@@ -49,10 +49,30 @@ impl PlatformFileSystem for StdPlatformFileSystem {
             std::fs::create_dir_all(parent)?;
         }
 
-        std::fs::write(path, contents)
+        let temp_path = atomic_temp_path(path);
+        let write_result = (|| {
+            let mut file = std::fs::File::create(&temp_path)?;
+            file.write_all(contents.as_bytes())?;
+            file.sync_all()?;
+            std::fs::rename(&temp_path, path)
+        })();
+
+        if write_result.is_err() {
+            let _ = std::fs::remove_file(&temp_path);
+        }
+
+        write_result
     }
 
     fn exists(&self, path: &Path) -> bool {
         PathBuf::from(path).exists()
     }
+}
+
+fn atomic_temp_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(PROJECT_JSON_FILE_NAME);
+    path.with_file_name(format!(".{file_name}.tmp"))
 }

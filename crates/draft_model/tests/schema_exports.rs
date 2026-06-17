@@ -14,7 +14,7 @@ use draft_model::{
     PingCommandPayload, ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId,
     SourceTimerange, TargetTimerange, Track, TrackId, TrackKind, Transition, VersionCommandPayload,
 };
-use schemars::schema_for;
+use schemars::{Schema, schema_for};
 use serde_json::json;
 use ts_rs::{Config, TS};
 
@@ -101,6 +101,14 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<Track>(),
         export_decl::<Draft>(),
     ]);
+    assert!(
+        draft_ts.contains("export type Microseconds = number;"),
+        "Microseconds must match the JSON IPC representation"
+    );
+    assert!(
+        !draft_ts.contains("export type Microseconds = bigint;"),
+        "Microseconds must not advertise bigint over the JSON IPC boundary"
+    );
     assert_or_update_contract_file(generated_dir.join("Draft.ts"), &draft_ts);
 }
 
@@ -108,7 +116,11 @@ fn export_decl<T>() -> String
 where
     T: TS + 'static,
 {
-    format!("export {}\n", T::decl(&Config::new()))
+    format!("export {}\n", T::decl(&ts_config()))
+}
+
+fn ts_config() -> Config {
+    Config::new().with_large_int("number")
 }
 
 fn ts_contract(declarations: &[String]) -> String {
@@ -231,6 +243,7 @@ fn command_schema_json() -> String {
     let schema = schema_for!(CommandEnvelope);
     let mut schema_value =
         serde_json::to_value(schema).expect("command schema should serialize to JSON value");
+    constrain_current_draft_schema_version(&mut schema_value);
     schema_value
         .as_object_mut()
         .expect("command schema should be a JSON object")
@@ -240,8 +253,32 @@ fn command_schema_json() -> String {
 }
 
 fn draft_schema_json() -> String {
-    let schema = schema_for!(Draft);
+    let mut schema = schema_for!(Draft);
+    constrain_current_draft_schema_version_schema(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
+}
+
+fn constrain_current_draft_schema_version(schema_value: &mut serde_json::Value) {
+    schema_value["$defs"]["DraftSchemaVersion"] = current_draft_schema_version_schema();
+}
+
+fn constrain_current_draft_schema_version_schema(schema: &mut Schema) {
+    let defs = schema
+        .ensure_object()
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated draft schema should contain $defs");
+    defs.insert(
+        "DraftSchemaVersion".to_owned(),
+        current_draft_schema_version_schema(),
+    );
+}
+
+fn current_draft_schema_version_schema() -> serde_json::Value {
+    json!({
+        "type": "integer",
+        "const": DraftSchemaVersion::CURRENT_VALUE
+    })
 }
 
 fn command_payload_pairing_constraints() -> serde_json::Value {

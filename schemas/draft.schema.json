@@ -57,8 +57,7 @@
     },
     "DraftSchemaVersion": {
       "type": "integer",
-      "format": "uint32",
-      "minimum": 0
+      "const": 1
     },
     "Filter": {
       "type": "object",

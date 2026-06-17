@@ -31,20 +31,20 @@ pub fn classify_material_uri(
         return invalid_uri(uri, "URI must not be empty");
     }
 
+    let path = Path::new(trimmed);
+    if is_absolute_material_path(trimmed, path) {
+        return Ok(MaterialUri {
+            kind: MaterialUriKind::ExternalAbsolute,
+            uri: trimmed.to_owned(),
+            resolved_path: Some(path.to_path_buf()),
+        });
+    }
+
     if has_uri_scheme(trimmed) {
         return Ok(MaterialUri {
             kind: MaterialUriKind::ExternalUri,
             uri: trimmed.to_owned(),
             resolved_path: None,
-        });
-    }
-
-    let path = Path::new(trimmed);
-    if path.is_absolute() {
-        return Ok(MaterialUri {
-            kind: MaterialUriKind::ExternalAbsolute,
-            uri: trimmed.to_owned(),
-            resolved_path: Some(path.to_path_buf()),
         });
     }
 
@@ -118,6 +118,22 @@ fn has_uri_scheme(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
 }
 
+fn is_absolute_material_path(value: &str, path: &Path) -> bool {
+    path.is_absolute() || is_windows_drive_absolute_path(value) || is_windows_unc_path(value)
+}
+
+fn is_windows_drive_absolute_path(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/')
+}
+
+fn is_windows_unc_path(value: &str) -> bool {
+    value.starts_with(r"\\")
+}
+
 fn path_to_uri(path: &Path) -> Result<String, ProjectStoreError> {
     let value = path
         .to_str()
@@ -164,6 +180,27 @@ mod tests {
         assert_eq!(
             material.resolved_path.as_deref(),
             Some(Path::new("/Users/me/video.mp4"))
+        );
+    }
+
+    #[test]
+    fn path_resolution_preserves_windows_drive_material_uri() {
+        let material = classify_material_uri("C:/projects/cut.veproj", "C:\\Users\\me\\video.mp4")
+            .expect("Windows drive path should classify as absolute");
+
+        assert_eq!(material.kind, MaterialUriKind::ExternalAbsolute);
+        assert_eq!(
+            material.resolved_path.as_deref(),
+            Some(Path::new("C:\\Users\\me\\video.mp4"))
+        );
+
+        let forward_slash =
+            classify_material_uri("C:/projects/cut.veproj", "C:/Users/me/video.mp4")
+                .expect("Windows drive path with forward slashes should classify as absolute");
+        assert_eq!(forward_slash.kind, MaterialUriKind::ExternalAbsolute);
+        assert_eq!(
+            forward_slash.resolved_path.as_deref(),
+            Some(Path::new("C:/Users/me/video.mp4"))
         );
     }
 

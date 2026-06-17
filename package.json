@@ -16,7 +16,7 @@
     "test:rust": "cargo fmt --all --check && cargo check --workspace --locked && cargo test --workspace --locked",
     "test:schema": "cargo test -p draft_model schema -- --nocapture",
     "test:draft-fixtures": "cargo test -p draft_model schema_fixtures -- --nocapture && cargo test -p draft_model draft_fixtures -- --nocapture",
-    "test:project-store": "cargo test -p project_store create_project_bundle -- --nocapture && cargo test -p project_store round_trip -- --nocapture && cargo test -p project_store path_resolution -- --nocapture",
+    "test:project-store": "cargo test -p project_store create_project_bundle -- --nocapture && cargo test -p project_store round_trip -- --nocapture && cargo test -p project_store save_project_bundle -- --nocapture && cargo test -p project_store path_resolution -- --nocapture",
     "test:runtime": "cargo test -p media_runtime discovery -- --nocapture",
     "test:material-probe": "cargo test -p media_runtime material_probe -- --nocapture && cargo test -p testkit material -- --nocapture",
     "test:material-service": "cargo test -p bindings_node material_service -- --nocapture",
