@@ -70,6 +70,7 @@ fn draft_schema_serializes_material_track_and_segment_records() {
             duration: Microseconds::new(100_000),
         }),
         text: None,
+        volume: Default::default(),
     };
 
     let mut track = Track::new("track-video-001", TrackKind::Video, "Video 1");

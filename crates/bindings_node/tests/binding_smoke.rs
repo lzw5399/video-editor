@@ -485,6 +485,96 @@ fn execute_command_routes_timeline_text_segment_events() {
 }
 
 #[test]
+fn execute_command_routes_timeline_audio_volume_and_mute_events() {
+    let mut draft = timeline_draft_json();
+    draft["materials"].as_array_mut().unwrap().push(json!({
+        "materialId": "audio-material",
+        "kind": "audio",
+        "uri": "media/audio.wav",
+        "displayName": "audio.wav",
+        "metadata": {
+            "duration": 2_000_000,
+            "hasVideo": false,
+            "hasAudio": true,
+            "audioSampleRate": 48_000,
+            "audioChannels": 2
+        },
+        "status": "available"
+    }));
+    draft["tracks"].as_array_mut().unwrap().push(json!({
+        "trackId": "audio-track",
+        "kind": "audio",
+        "name": "Audio",
+        "muted": false,
+        "locked": false,
+        "segments": []
+    }));
+
+    let added = execute_command(json!({
+        "command": "addAudioSegment",
+        "payload": {
+            "kind": "addAudioSegment",
+            "draft": draft,
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "audio-track",
+            "segmentId": "audio-segment",
+            "materialId": "audio-material",
+            "sourceTimerange": { "start": 0, "duration": 1_000_000 },
+            "targetTimerange": { "start": 0, "duration": 1_000_000 }
+        },
+        "requestId": "req-add-audio-segment"
+    }))
+    .expect("add audio segment command should return a JSON envelope");
+
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["events"][0]["kind"], "audioSegmentAdded");
+    assert_eq!(
+        added["data"]["draft"]["tracks"][1]["segments"][0]["volume"]["levelMillis"],
+        1_000
+    );
+
+    let volume = execute_command(json!({
+        "command": "setSegmentVolume",
+        "payload": {
+            "kind": "setSegmentVolume",
+            "draft": added["data"]["draft"].clone(),
+            "commandState": added["data"]["commandState"].clone(),
+            "selection": added["data"]["selection"].clone(),
+            "segmentId": "audio-segment",
+            "volume": { "levelMillis": 1_500 }
+        },
+        "requestId": "req-set-segment-volume"
+    }))
+    .expect("set segment volume command should return a JSON envelope");
+
+    assert_eq!(volume["ok"], true, "{volume:#}");
+    assert_eq!(volume["data"]["events"][0]["kind"], "segmentVolumeChanged");
+    assert_eq!(
+        volume["data"]["draft"]["tracks"][1]["segments"][0]["volume"]["levelMillis"],
+        1_500
+    );
+
+    let muted = execute_command(json!({
+        "command": "setTrackMute",
+        "payload": {
+            "kind": "setTrackMute",
+            "draft": volume["data"]["draft"].clone(),
+            "commandState": volume["data"]["commandState"].clone(),
+            "selection": volume["data"]["selection"].clone(),
+            "trackId": "audio-track",
+            "muted": true
+        },
+        "requestId": "req-set-track-mute"
+    }))
+    .expect("set track mute command should return a JSON envelope");
+
+    assert_eq!(muted["ok"], true, "{muted:#}");
+    assert_eq!(muted["data"]["events"][0]["kind"], "trackMuteChanged");
+    assert_eq!(muted["data"]["draft"]["tracks"][1]["muted"], true);
+}
+
+#[test]
 fn execute_command_rejects_invalid_timeline_edit_with_standard_error() {
     let mut draft = timeline_draft_json();
     draft["tracks"][0]["segments"] = json!([{

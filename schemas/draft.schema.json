@@ -312,6 +312,12 @@
               "type": "null"
             }
           ]
+        },
+        "volume": {
+          "$ref": "#/$defs/SegmentVolume",
+          "default": {
+            "levelMillis": 1000
+          }
         }
       },
       "additionalProperties": false,
@@ -327,6 +333,20 @@
     },
     "SegmentId": {
       "type": "string"
+    },
+    "SegmentVolume": {
+      "type": "object",
+      "properties": {
+        "levelMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "levelMillis"
+      ]
     },
     "SourceTimerange": {
       "type": "object",

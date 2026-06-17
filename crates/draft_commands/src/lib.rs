@@ -5,6 +5,7 @@
 //! semantic layer: UI, filesystem, FFmpeg, preview, and platform execution
 //! details belong outside this crate.
 
+pub mod audio;
 pub mod error;
 pub mod history;
 pub mod selection;

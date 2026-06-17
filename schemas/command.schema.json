@@ -1,5 +1,47 @@
 {
   "$defs": {
+    "AddAudioSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 audio segment add command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "sourceTimerange": {
+          "$ref": "#/$defs/SourceTimerange"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "segmentId",
+        "materialId",
+        "sourceTimerange",
+        "targetTimerange"
+      ],
+      "title": "AddAudioSegmentCommandPayload",
+      "type": "object"
+    },
     "AddSegmentCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 3 timeline add command.",
@@ -148,7 +190,10 @@
         "undoTimelineEdit",
         "redoTimelineEdit",
         "addTextSegment",
-        "editTextSegment"
+        "editTextSegment",
+        "addAudioSegment",
+        "setSegmentVolume",
+        "setTrackMute"
       ],
       "type": "string"
     },
@@ -654,6 +699,120 @@
             "text"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 audio segment add command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addAudioSegment",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "sourceTimerange": {
+              "$ref": "#/$defs/SourceTimerange"
+            },
+            "targetTimerange": {
+              "$ref": "#/$defs/TargetTimerange"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "segmentId",
+            "materialId",
+            "sourceTimerange",
+            "targetTimerange"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 segment volume command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "setSegmentVolume",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "volume": {
+              "$ref": "#/$defs/SegmentVolume"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "volume"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 track mute command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "setTrackMute",
+              "type": "string"
+            },
+            "muted": {
+              "type": "boolean"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "muted"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1114,6 +1273,12 @@
               "type": "null"
             }
           ]
+        },
+        "volume": {
+          "$ref": "#/$defs/SegmentVolume",
+          "default": {
+            "levelMillis": 1000
+          }
         }
       },
       "required": [
@@ -1129,6 +1294,20 @@
     },
     "SegmentId": {
       "type": "string"
+    },
+    "SegmentVolume": {
+      "additionalProperties": false,
+      "properties": {
+        "levelMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "levelMillis"
+      ],
+      "type": "object"
     },
     "SelectTimelineSegmentsCommandPayload": {
       "additionalProperties": false,
@@ -1164,6 +1343,66 @@
         "trackIds"
       ],
       "title": "SelectTimelineSegmentsCommandPayload",
+      "type": "object"
+    },
+    "SetSegmentVolumeCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 segment volume command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "volume": {
+          "$ref": "#/$defs/SegmentVolume"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "volume"
+      ],
+      "title": "SetSegmentVolumeCommandPayload",
+      "type": "object"
+    },
+    "SetTrackMuteCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 track mute command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "muted"
+      ],
+      "title": "SetTrackMuteCommandPayload",
       "type": "object"
     },
     "SnappingSettings": {
@@ -1832,6 +2071,57 @@
           "properties": {
             "kind": {
               "const": "editTextSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "addAudioSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addAudioSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "setSegmentVolume"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "setSegmentVolume"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "setTrackMute"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "setTrackMute"
             }
           },
           "required": [

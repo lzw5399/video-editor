@@ -25,8 +25,9 @@ pub use material::{
 };
 pub use time::Microseconds;
 pub use timeline::{
-    Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind, Transition,
+    Filter, Keyframe, MAX_SEGMENT_VOLUME_MILLIS, MainTrackMagnet, Segment, SegmentVolume,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow,
+    TextStroke, TextStyle, Track, TrackKind, Transition,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
@@ -64,6 +65,9 @@ pub enum CommandName {
     RedoTimelineEdit,
     AddTextSegment,
     EditTextSegment,
+    AddAudioSegment,
+    SetSegmentVolume,
+    SetTrackMute,
 }
 
 /// Command payloads.
@@ -86,6 +90,9 @@ pub enum CommandPayload {
     RedoTimelineEdit(RedoTimelineEditCommandPayload),
     AddTextSegment(AddTextSegmentCommandPayload),
     EditTextSegment(EditTextSegmentCommandPayload),
+    AddAudioSegment(AddAudioSegmentCommandPayload),
+    SetSegmentVolume(SetSegmentVolumeCommandPayload),
+    SetTrackMute(SetTrackMuteCommandPayload),
 }
 
 impl CommandPayload {
@@ -108,6 +115,9 @@ impl CommandPayload {
             Self::RedoTimelineEdit(_) => CommandName::RedoTimelineEdit,
             Self::AddTextSegment(_) => CommandName::AddTextSegment,
             Self::EditTextSegment(_) => CommandName::EditTextSegment,
+            Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
+            Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
+            Self::SetTrackMute(_) => CommandName::SetTrackMute,
         }
     }
 }
@@ -310,6 +320,42 @@ pub struct EditTextSegmentCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub text: TextSegment,
+}
+
+/// Payload accepted by the Phase 3 audio segment add command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddAudioSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub source_timerange: SourceTimerange,
+    pub target_timerange: TargetTimerange,
+}
+
+/// Payload accepted by the Phase 3 segment volume command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSegmentVolumeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub volume: SegmentVolume,
+}
+
+/// Payload accepted by the Phase 3 track mute command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetTrackMuteCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub muted: bool,
 }
 
 /// Segment and track selection returned by Rust-owned timeline commands.

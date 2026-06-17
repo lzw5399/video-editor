@@ -61,6 +61,9 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "redoTimelineEdit"
                 | "addTextSegment"
                 | "editTextSegment"
+                | "addAudioSegment"
+                | "setSegmentVolume"
+                | "setTrackMute"
         ) {
             return to_js_value(error_envelope(
                 CommandErrorKind::UnsupportedCommand,
@@ -111,7 +114,10 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::UndoTimelineEdit
         | CommandName::RedoTimelineEdit
         | CommandName::AddTextSegment
-        | CommandName::EditTextSegment => timeline_command(envelope.command, envelope.payload),
+        | CommandName::EditTextSegment
+        | CommandName::AddAudioSegment
+        | CommandName::SetSegmentVolume
+        | CommandName::SetTrackMute => timeline_command(envelope.command, envelope.payload),
     }
 }
 

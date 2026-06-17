@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    Draft, DraftSchemaVersion, Microseconds, RationalFrameRate, SourceTimerange, TargetTimerange,
-    TextSegment,
+    Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS, Microseconds, RationalFrameRate,
+    SourceTimerange, TargetTimerange, TextSegment,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -183,6 +183,7 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
             if let Some(text) = &segment.text {
                 validate_text_segment("tracks[].segments[].text", text)?;
             }
+            validate_segment_volume("tracks[].segments[].volume", segment.volume.level_millis)?;
         }
     }
 
@@ -301,6 +302,15 @@ fn validate_text_segment(field: &str, text: &TextSegment) -> Result<(), DraftVal
 fn validate_required_text(field: &str, value: &str) -> Result<(), DraftValidationError> {
     if value.trim().is_empty() {
         return Err(missing_field(field));
+    }
+    Ok(())
+}
+
+fn validate_segment_volume(field: &str, level_millis: u32) -> Result<(), DraftValidationError> {
+    if level_millis > MAX_SEGMENT_VOLUME_MILLIS {
+        return Err(DraftValidationError::MissingRequiredSemanticField {
+            field: format!("{field} must be <= {MAX_SEGMENT_VOLUME_MILLIS}"),
+        });
     }
     Ok(())
 }

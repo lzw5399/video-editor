@@ -8,6 +8,7 @@ use draft_model::{
 
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
+    audio::{add_audio_segment, set_segment_volume, set_track_mute},
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment},
@@ -206,6 +207,30 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.text,
+        ),
+        CommandPayload::AddAudioSegment(payload) => add_audio_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.segment_id,
+            payload.material_id,
+            payload.source_timerange,
+            payload.target_timerange,
+        ),
+        CommandPayload::SetSegmentVolume(payload) => set_segment_volume(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.volume,
+        ),
+        CommandPayload::SetTrackMute(payload) => set_track_mute(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.muted,
         ),
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {

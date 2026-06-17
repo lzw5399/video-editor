@@ -6,6 +6,8 @@ use ts_rs::TS;
 
 use crate::{MaterialId, Microseconds, SegmentId, TrackId};
 
+pub const MAX_SEGMENT_VOLUME_MILLIS: u32 = 4_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum TrackKind {
@@ -140,6 +142,26 @@ pub struct TextSegment {
     pub style: TextStyle,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SegmentVolume {
+    pub level_millis: u32,
+}
+
+impl SegmentVolume {
+    pub const fn unity() -> Self {
+        Self {
+            level_millis: 1_000,
+        }
+    }
+}
+
+impl Default for SegmentVolume {
+    fn default() -> Self {
+        Self::unity()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Segment {
@@ -156,6 +178,8 @@ pub struct Segment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub text: Option<TextSegment>,
+    #[serde(default)]
+    pub volume: SegmentVolume,
 }
 
 impl Segment {
@@ -175,6 +199,7 @@ impl Segment {
             filters: Vec::new(),
             transition: None,
             text: None,
+            volume: SegmentVolume::default(),
         }
     }
 }
