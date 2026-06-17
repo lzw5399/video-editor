@@ -133,13 +133,22 @@ Plans:
   5. Timeline and panel layout remain stable during selection, hover, drag, and playback updates.
 
 **Plans**: 4 plans
-
 Plans:
+**Wave 1**
 
-- [ ] 04-01: Build desktop workspace shell, layout system, and feature category navigation
-- [ ] 04-02: Implement material, text, and audio panels plus right inspector
-- [ ] 04-03: Implement timeline interaction surface wired only through command API
-- [ ] 04-04: Add Electron IPC contracts, Playwright smoke flow, and visual layout checks
+- [ ] 04-01-PLAN.md - Build desktop workspace shell, layout system, and feature category navigation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md - Implement material, text, and audio panels plus right inspector
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-03-PLAN.md - Implement timeline interaction surface wired only through command API
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 04-04-PLAN.md - Add Electron IPC contracts, Playwright smoke flow, and visual layout checks
 
 ### Phase 5: Preview And Export Pipeline
 
