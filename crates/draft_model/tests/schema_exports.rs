@@ -6,7 +6,10 @@ use std::{
 
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope, PingCommandPayload, ProbeMediaRuntimeCommandPayload,
+    CommandResultEnvelope, Draft, DraftId, DraftMetadata, DraftSchemaVersion, Filter, Keyframe,
+    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
+    Microseconds, PingCommandPayload, ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment,
+    SegmentId, SourceTimerange, TargetTimerange, Track, TrackId, TrackKind, Transition,
     VersionCommandPayload,
 };
 use schemars::schema_for;
@@ -25,10 +28,14 @@ fn project_root() -> PathBuf {
 fn schema_exports_generated_contract_artifacts_from_rust() {
     let root = project_root();
     let schema_path = root.join("schemas/command.schema.json");
+    let draft_schema_path = root.join("schemas/draft.schema.json");
     let generated_dir = root.join("apps/desktop-electron/src/generated");
 
     let schema_json = command_schema_json();
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
+
+    let draft_schema_json = draft_schema_json();
+    assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract(&[
         export_decl::<CommandName>(),
@@ -53,6 +60,32 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         generated_dir.join("CommandResultEnvelope.ts"),
         &command_result_ts,
     );
+
+    let draft_ts = ts_contract(&[
+        export_decl::<DraftId>(),
+        export_decl::<MaterialId>(),
+        export_decl::<TrackId>(),
+        export_decl::<SegmentId>(),
+        export_decl::<Microseconds>(),
+        export_decl::<DraftSchemaVersion>(),
+        export_decl::<DraftMetadata>(),
+        export_decl::<RationalFrameRate>(),
+        export_decl::<MaterialKind>(),
+        export_decl::<MaterialStatus>(),
+        export_decl::<MaterialMetadata>(),
+        export_decl::<Material>(),
+        export_decl::<TrackKind>(),
+        export_decl::<MainTrackMagnet>(),
+        export_decl::<SourceTimerange>(),
+        export_decl::<TargetTimerange>(),
+        export_decl::<Keyframe>(),
+        export_decl::<Filter>(),
+        export_decl::<Transition>(),
+        export_decl::<Segment>(),
+        export_decl::<Track>(),
+        export_decl::<Draft>(),
+    ]);
+    assert_or_update_contract_file(generated_dir.join("Draft.ts"), &draft_ts);
 }
 
 fn export_decl<T>() -> String
@@ -178,6 +211,11 @@ fn command_schema_json() -> String {
         .insert("oneOf".to_string(), command_payload_pairing_constraints());
 
     serde_json::to_string_pretty(&schema_value).expect("command schema should serialize")
+}
+
+fn draft_schema_json() -> String {
+    let schema = schema_for!(Draft);
+    serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
 fn command_payload_pairing_constraints() -> serde_json::Value {

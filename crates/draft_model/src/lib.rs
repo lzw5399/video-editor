@@ -19,7 +19,10 @@ pub mod validation;
 
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
-pub use material::{Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate};
+pub use material::{
+    Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
+    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
+};
 pub use time::Microseconds;
 pub use timeline::{
     Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,

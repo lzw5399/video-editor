@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Draft",
+  "type": "object",
+  "properties": {
+    "draftId": {
+      "$ref": "#/$defs/DraftId"
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Material"
+      }
+    },
+    "metadata": {
+      "$ref": "#/$defs/DraftMetadata"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/DraftSchemaVersion"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Track"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "draftId",
+    "metadata",
+    "materials",
+    "tracks"
+  ],
+  "$defs": {
+    "DraftId": {
+      "type": "string"
+    },
+    "DraftMetadata": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
+    "DraftSchemaVersion": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "Filter": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "parameters"
+      ]
+    },
+    "Keyframe": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "property": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "property",
+        "value"
+      ]
+    },
+    "MainTrackMagnet": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ]
+    },
+    "Material": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MaterialKind"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "metadata": {
+          "$ref": "#/$defs/MaterialMetadata"
+        },
+        "status": {
+          "$ref": "#/$defs/MaterialStatus"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "materialId",
+        "kind",
+        "uri",
+        "displayName",
+        "metadata",
+        "status"
+      ]
+    },
+    "MaterialId": {
+      "type": "string"
+    },
+    "MaterialKind": {
+      "type": "string",
+      "enum": [
+        "video",
+        "image",
+        "audio",
+        "text",
+        "sticker"
+      ]
+    },
+    "MaterialMetadata": {
+      "type": "object",
+      "properties": {
+        "audioChannels": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "audioSampleRate": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microseconds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalFrameRate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasAudio": {
+          "type": "boolean"
+        },
+        "hasVideo": {
+          "type": "boolean"
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "probeError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "hasVideo",
+        "hasAudio"
+      ]
+    },
+    "MaterialStatus": {
+      "type": "string",
+      "enum": [
+        "available",
+        "missing",
+        "probeFailed"
+      ]
+    },
+    "Microseconds": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "RationalFrameRate": {
+      "type": "object",
+      "properties": {
+        "denominator": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "numerator": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "numerator",
+        "denominator"
+      ]
+    },
+    "Segment": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Filter"
+          }
+        },
+        "keyframes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Keyframe"
+          }
+        },
+        "mainTrackMagnet": {
+          "$ref": "#/$defs/MainTrackMagnet"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "sourceTimerange": {
+          "$ref": "#/$defs/SourceTimerange"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        },
+        "transition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Transition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "segmentId",
+        "materialId",
+        "sourceTimerange",
+        "targetTimerange",
+        "mainTrackMagnet",
+        "keyframes",
+        "filters"
+      ]
+    },
+    "SegmentId": {
+      "type": "string"
+    },
+    "SourceTimerange": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "start": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "duration"
+      ]
+    },
+    "TargetTimerange": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "start": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "duration"
+      ]
+    },
+    "Track": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TrackKind"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Segment"
+          }
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "trackId",
+        "kind",
+        "name",
+        "muted",
+        "locked",
+        "segments"
+      ]
+    },
+    "TrackId": {
+      "type": "string"
+    },
+    "TrackKind": {
+      "type": "string",
+      "enum": [
+        "video",
+        "audio",
+        "text",
+        "sticker",
+        "filter"
+      ]
+    },
+    "Transition": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "duration"
+      ]
+    }
+  }
+}

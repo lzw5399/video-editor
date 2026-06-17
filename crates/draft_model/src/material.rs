@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{MaterialId, Microseconds};
+use crate::{Draft, DraftValidationError, MaterialId, Microseconds, validate_draft};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -109,4 +109,98 @@ impl Material {
             status: MaterialStatus::Available,
         }
     }
+}
+
+pub fn add_material(draft: &mut Draft, material: Material) -> Result<(), DraftValidationError> {
+    let original_materials = draft.materials.clone();
+    draft.materials.push(material);
+
+    if let Err(error) = validate_draft(draft) {
+        draft.materials = original_materials;
+        return Err(error);
+    }
+
+    Ok(())
+}
+
+pub fn upsert_material(draft: &mut Draft, material: Material) -> Result<(), DraftValidationError> {
+    let original_materials = draft.materials.clone();
+
+    if let Some(existing) = draft
+        .materials
+        .iter_mut()
+        .find(|existing| existing.material_id == material.material_id)
+    {
+        *existing = material;
+    } else {
+        draft.materials.push(material);
+    }
+
+    if let Err(error) = validate_draft(draft) {
+        draft.materials = original_materials;
+        return Err(error);
+    }
+
+    Ok(())
+}
+
+pub fn mark_material_missing(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+    probe_error: impl Into<String>,
+) -> Result<(), DraftValidationError> {
+    update_material_status(
+        draft,
+        material_id,
+        MaterialStatus::Missing,
+        Some(probe_error.into()),
+    )
+}
+
+pub fn mark_material_probe_failed(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+    probe_error: impl Into<String>,
+) -> Result<(), DraftValidationError> {
+    update_material_status(
+        draft,
+        material_id,
+        MaterialStatus::ProbeFailed,
+        Some(probe_error.into()),
+    )
+}
+
+pub fn mark_material_available(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+) -> Result<(), DraftValidationError> {
+    update_material_status(draft, material_id, MaterialStatus::Available, None)
+}
+
+fn update_material_status(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+    status: MaterialStatus,
+    probe_error: Option<String>,
+) -> Result<(), DraftValidationError> {
+    let original_materials = draft.materials.clone();
+    let Some(material) = draft
+        .materials
+        .iter_mut()
+        .find(|material| &material.material_id == material_id)
+    else {
+        return Err(DraftValidationError::MissingRequiredSemanticField {
+            field: format!("materials[].materialId {}", material_id.as_str()),
+        });
+    };
+
+    material.status = status;
+    material.metadata.probe_error = probe_error;
+
+    if let Err(error) = validate_draft(draft) {
+        draft.materials = original_materials;
+        return Err(error);
+    }
+
+    Ok(())
 }

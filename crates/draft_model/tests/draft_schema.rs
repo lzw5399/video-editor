@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use draft_model::{
     Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, MainTrackMagnet, Material,
     MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, Track, TrackKind, Transition, migrate_draft_json,
-    validate_draft,
+    SourceTimerange, TargetTimerange, Track, TrackKind, Transition, add_material,
+    mark_material_available, mark_material_missing, mark_material_probe_failed, migrate_draft_json,
+    upsert_material, validate_draft,
 };
 use serde_json::json;
 
@@ -202,6 +203,91 @@ fn migration_rejects_duplicate_ids() {
         DraftValidationError::DuplicateId {
             id_kind: "materialId".to_owned(),
             id: "material-video-001".to_owned()
+        }
+    );
+}
+
+#[test]
+fn material_registry_helpers_add_upsert_and_mark_statuses() {
+    let mut draft = Draft::new("draft-001", "Registry draft");
+    let mut material = Material::new(
+        "material-video-001",
+        MaterialKind::Video,
+        "media/video.mp4",
+        "video.mp4",
+    );
+    material.metadata.duration = Some(Microseconds::new(1_000_000));
+    material.metadata.has_video = true;
+
+    add_material(&mut draft, material.clone()).expect("material should be added");
+    assert_eq!(draft.materials, vec![material.clone()]);
+
+    let mut updated = material.clone();
+    updated.display_name = "renamed-video.mp4".to_owned();
+    updated.metadata.width = Some(1280);
+    upsert_material(&mut draft, updated.clone()).expect("material should be replaced");
+
+    assert_eq!(draft.materials.len(), 1);
+    assert_eq!(draft.materials[0], updated);
+
+    mark_material_missing(
+        &mut draft,
+        &"material-video-001".into(),
+        "material path is missing",
+    )
+    .expect("material should be marked missing");
+    assert_eq!(draft.materials[0].status, MaterialStatus::Missing);
+    assert_eq!(
+        draft.materials[0].metadata.probe_error.as_deref(),
+        Some("material path is missing")
+    );
+
+    mark_material_probe_failed(&mut draft, &"material-video-001".into(), "ffprobe failed")
+        .expect("material should be marked probe failed");
+    assert_eq!(draft.materials[0].status, MaterialStatus::ProbeFailed);
+    assert_eq!(
+        draft.materials[0].metadata.probe_error.as_deref(),
+        Some("ffprobe failed")
+    );
+
+    mark_material_available(&mut draft, &"material-video-001".into())
+        .expect("material should be marked available");
+    assert_eq!(draft.materials[0].status, MaterialStatus::Available);
+    assert_eq!(draft.materials[0].metadata.probe_error, None);
+}
+
+#[test]
+fn material_registry_helpers_roll_back_invalid_mutations() {
+    let mut draft = valid_draft();
+    let original = draft.materials.clone();
+
+    let duplicate = Material::new(
+        "material-video-001",
+        MaterialKind::Video,
+        "media/duplicate.mp4",
+        "duplicate.mp4",
+    );
+    let error = add_material(&mut draft, duplicate).expect_err("duplicate ID should fail");
+
+    assert_eq!(
+        error,
+        DraftValidationError::DuplicateId {
+            id_kind: "materialId".to_owned(),
+            id: "material-video-001".to_owned()
+        }
+    );
+    assert_eq!(draft.materials, original);
+
+    let error = mark_material_missing(
+        &mut draft,
+        &"material-missing".into(),
+        "missing material record",
+    )
+    .expect_err("unknown material ID should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::MissingRequiredSemanticField {
+            field: "materials[].materialId material-missing".to_owned()
         }
     );
 }
