@@ -107,7 +107,7 @@ export function WorkspaceShell({
       </section>
 
       <section className="preview-monitor" aria-label="预览窗口">
-        <PreviewMonitor draftName={workspace.draft.metadata.name} bindingStatus={workspace.bindingStatus} />
+        <PreviewMonitor draftName={workspace.draft.metadata.name} bindingStatus={workspace.bindingStatus} playheadUs={playheadUs} />
       </section>
 
       <aside className="inspector-panel" aria-label="属性检查器">

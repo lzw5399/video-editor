@@ -8,6 +8,8 @@ import {
   type WorkspaceState
 } from "../viewModel";
 
+import "./timeline.css";
+
 type TimelineProps = {
   workspace: WorkspaceState;
   playheadUs: number;
@@ -117,35 +119,29 @@ function TransportStrip({
   const [moveStepUs, setMoveStepUs] = useState(500_000);
   const [splitAtUs, setSplitAtUs] = useState(playheadUs);
   const [trimStepUs, setTrimStepUs] = useState(500_000);
+  const [zoomPercent, setZoomPercent] = useState(100);
   const selectedMaterialId = materialId || (timelineMaterials[0]?.materialId ?? "");
   const hasSelection = workspace.selection.segmentIds.length > 0;
   const pending = workspace.pendingCommand !== null;
+  const snappingLabel = workspace.commandState.snapping.enabled ? "吸附 开" : "吸附 关";
 
   return (
     <div className="transport-strip" aria-label="时间线控制">
-      <div className="transport-buttons">
-        <button
-          type="button"
-          className="transport-button"
+      <div className="timeline-tool-group transport-buttons" role="group" aria-label="播放与历史">
+        <TimelineIconButton
+          label="撤销"
+          symbol="↶"
           onClick={onUndo}
           disabled={pending || workspace.commandState.undoStack.length === 0}
-        >
-          撤销
-        </button>
-        <button
-          type="button"
-          className="transport-button"
+        />
+        <TimelineIconButton
+          label="重做"
+          symbol="↷"
           onClick={onRedo}
           disabled={pending || workspace.commandState.redoStack.length === 0}
-        >
-          重做
-        </button>
-        <button type="button" className="transport-button" disabled>
-          播放
-        </button>
-        <button type="button" className="transport-button" onClick={() => onPlayheadChange(0)}>
-          停止
-        </button>
+        />
+        <TimelineIconButton label="播放" symbol="▶" disabled />
+        <TimelineIconButton label="停止" symbol="■" onClick={() => onPlayheadChange(0)} />
       </div>
       <label className="timeline-control compact-select">
         <span>素材</span>
@@ -159,7 +155,9 @@ function TransportStrip({
       </label>
       <button
         type="button"
-        className="transport-button wide"
+        className="transport-button symbol-action accent add-action"
+        aria-label="添加片段"
+        title="添加片段"
         onClick={() => onAddSegment?.(selectedMaterialId)}
         disabled={pending || selectedMaterialId.length === 0}
       >
@@ -185,22 +183,20 @@ function TransportStrip({
           onChange={(event) => setMoveStepUs(Math.max(1, event.currentTarget.valueAsNumber || 1))}
         />
       </label>
-      <button
-        type="button"
-        className="transport-button"
-        onClick={() => onMoveSelectedSegment?.(-moveStepUs)}
-        disabled={pending || !hasSelection}
-      >
-        左移
-      </button>
-      <button
-        type="button"
-        className="transport-button"
-        onClick={() => onMoveSelectedSegment?.(moveStepUs)}
-        disabled={pending || !hasSelection}
-      >
-        右移
-      </button>
+      <div className="timeline-tool-group" role="group" aria-label="移动片段">
+        <TimelineIconButton
+          label="左移所选片段"
+          symbol="←"
+          onClick={() => onMoveSelectedSegment?.(-moveStepUs)}
+          disabled={pending || !hasSelection}
+        />
+        <TimelineIconButton
+          label="右移所选片段"
+          symbol="→"
+          onClick={() => onMoveSelectedSegment?.(moveStepUs)}
+          disabled={pending || !hasSelection}
+        />
+      </div>
       <label className="timeline-control">
         <span>分割</span>
         <input
@@ -211,14 +207,12 @@ function TransportStrip({
           onChange={(event) => setSplitAtUs(Math.max(0, event.currentTarget.valueAsNumber || 0))}
         />
       </label>
-      <button
-        type="button"
-        className="transport-button"
+      <TimelineIconButton
+        label="分割所选片段"
+        symbol="⧉"
         onClick={() => onSplitSelectedSegment?.(splitAtUs)}
         disabled={pending || !hasSelection}
-      >
-        分割
-      </button>
+      />
       <label className="timeline-control">
         <span>裁剪</span>
         <input
@@ -229,33 +223,84 @@ function TransportStrip({
           onChange={(event) => setTrimStepUs(Math.max(1, event.currentTarget.valueAsNumber || 1))}
         />
       </label>
-      <button
-        type="button"
-        className="transport-button"
-        onClick={() => onTrimSelectedSegment?.("left", trimStepUs)}
-        disabled={pending || !hasSelection}
-      >
-        裁左
-      </button>
-      <button
-        type="button"
-        className="transport-button"
-        onClick={() => onTrimSelectedSegment?.("right", trimStepUs)}
-        disabled={pending || !hasSelection}
-      >
-        裁右
-      </button>
-      <button
-        type="button"
-        className="transport-button danger"
+      <div className="timeline-tool-group" role="group" aria-label="裁剪片段">
+        <TimelineIconButton
+          label="左侧裁剪"
+          symbol="["
+          onClick={() => onTrimSelectedSegment?.("left", trimStepUs)}
+          disabled={pending || !hasSelection}
+        />
+        <TimelineIconButton
+          label="右侧裁剪"
+          symbol="]"
+          onClick={() => onTrimSelectedSegment?.("right", trimStepUs)}
+          disabled={pending || !hasSelection}
+        />
+      </div>
+      <TimelineIconButton
+        label="删除所选片段"
+        symbol="⌫"
+        className="danger"
         onClick={onDeleteSelectedSegment}
         disabled={pending || !hasSelection}
-      >
-        删除
-      </button>
+      />
+      <div className="timeline-zoom-shell" aria-label="时间线缩放">
+        <TimelineIconButton
+          label="缩小时间线"
+          symbol="-"
+          onClick={() => setZoomPercent((current) => Math.max(50, current - 25))}
+          disabled={zoomPercent <= 50}
+        />
+        <input
+          aria-label="时间线缩放比例"
+          type="range"
+          min="50"
+          max="200"
+          step="25"
+          value={zoomPercent}
+          onChange={(event) => setZoomPercent(event.currentTarget.valueAsNumber)}
+        />
+        <TimelineIconButton
+          label="放大时间线"
+          symbol="+"
+          onClick={() => setZoomPercent((current) => Math.min(200, current + 25))}
+          disabled={zoomPercent >= 200}
+        />
+        <span>{zoomPercent}%</span>
+      </div>
+      <span className="snapping-status" aria-label={snappingLabel}>
+        {snappingLabel}
+      </span>
       <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
       <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
     </div>
+  );
+}
+
+function TimelineIconButton({
+  label,
+  symbol,
+  className = "",
+  disabled = false,
+  onClick
+}: {
+  label: string;
+  symbol: string;
+  className?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className={`transport-button icon-only ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span aria-hidden="true">{symbol}</span>
+    </button>
   );
 }
 
