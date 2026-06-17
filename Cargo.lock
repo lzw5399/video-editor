@@ -43,6 +43,8 @@ version = "0.1.0"
 dependencies = [
  "draft_commands",
  "draft_model",
+ "engine_core",
+ "ffmpeg_compiler",
  "media_runtime",
  "media_runtime_desktop",
  "napi",
@@ -50,6 +52,7 @@ dependencies = [
  "napi-derive",
  "preview_service",
  "project_store",
+ "render_graph",
  "serde",
  "serde_json",
  "tempfile",

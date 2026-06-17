@@ -4,12 +4,14 @@
 //! semantics remain owned by Rust contract crates and later command crates.
 
 use draft_model::{
-    CommandEnvelope, CommandError, CommandErrorKind, CommandName, CommandPayload,
-    CommandResultEnvelope, DRAFT_MODEL_VERSION, ImportMaterialCommandPayload,
-    ImportMaterialResponse, InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandName,
+    CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
+    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
+    InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload, VersionResponse,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    StartExportCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -24,7 +26,8 @@ use crate::material_service::{
     list_missing_materials,
 };
 use crate::preview_export_service::{
-    PreviewCommandError, invalidate_preview_cache_command, request_preview_frame_with_executor,
+    ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
+    invalidate_preview_cache_command, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
 };
 
@@ -72,6 +75,9 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
+                | "startExport"
+                | "getExportJobStatus"
+                | "cancelExport"
         ) {
             return to_js_value(error_envelope(
                 CommandErrorKind::UnsupportedCommand,
@@ -127,6 +133,18 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             CommandPayload::InvalidatePreviewCache(payload) => {
                 invalidate_preview_cache_binding_command(payload)
             }
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::StartExport => match envelope.payload {
+            CommandPayload::StartExport(payload) => start_export_command(payload),
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::GetExportJobStatus => match envelope.payload {
+            CommandPayload::GetExportJobStatus(payload) => get_export_job_status_command(payload),
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::CancelExport => match envelope.payload {
+            CommandPayload::CancelExport(payload) => cancel_export_command(payload),
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
         CommandName::AddSegment
@@ -307,6 +325,39 @@ fn invalidate_preview_cache_binding_command(
     to_js_value(ok_envelope(invalidate_preview_cache_command(payload)))
 }
 
+fn start_export_command(payload: StartExportCommandPayload) -> Result<serde_json::Value> {
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::ExportServiceFailed,
+                runtime_discovery_message(error),
+                Some("startExport".to_string()),
+            ));
+        }
+    };
+    match global_export_registry().start_export(runtime, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(export_error_envelope("startExport", error)),
+    }
+}
+
+fn get_export_job_status_command(
+    payload: GetExportJobStatusCommandPayload,
+) -> Result<serde_json::Value> {
+    match global_export_registry().status(&payload.job_id) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(export_error_envelope("getExportJobStatus", error)),
+    }
+}
+
+fn cancel_export_command(payload: CancelExportCommandPayload) -> Result<serde_json::Value> {
+    match global_export_registry().cancel(&payload.job_id) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(export_error_envelope("cancelExport", error)),
+    }
+}
+
 fn timeline_command(command: CommandName, payload: CommandPayload) -> Result<serde_json::Value> {
     let command = command_wire_name(&command);
     match draft_commands::timeline::execute_timeline_edit(payload) {
@@ -328,6 +379,36 @@ fn preview_error_envelope(
         error.to_string(),
         Some(command.to_string()),
     )
+}
+
+fn export_error_envelope(
+    command: &str,
+    error: ExportCommandError,
+) -> CommandResultEnvelope<serde_json::Value> {
+    let diagnostic = export_error_diagnostic(&error);
+    CommandResultEnvelope {
+        ok: false,
+        data: Some(
+            serde_json::to_value(ExportJobStatusResponse {
+                job_id: "unavailable".to_owned(),
+                phase: draft_model::ExportJobPhase::Failed,
+                output_path: String::new(),
+                preset: draft_model::ExportPreset::H264AacBalanced,
+                progress_per_mille: None,
+                out_time: None,
+                log_summary: None,
+                validation: None,
+                diagnostic: Some(diagnostic),
+            })
+            .expect("export error status should serialize"),
+        ),
+        error: Some(CommandError {
+            kind: CommandErrorKind::ExportServiceFailed,
+            message: error.to_string(),
+            command: Some(command.to_string()),
+        }),
+        events: Vec::new(),
+    }
 }
 
 fn command_diagnostic(diagnostic: MissingMaterialDiagnostic) -> MissingMaterialCommandDiagnostic {
