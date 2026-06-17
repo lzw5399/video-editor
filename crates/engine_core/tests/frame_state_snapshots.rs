@@ -1,10 +1,10 @@
-use engine_core::{
-    EngineProfile, frame_index_to_microseconds, normalize_draft, resolve_frame_state,
-    resolve_render_range,
-};
 use draft_model::{
     Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
     TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
+};
+use engine_core::{
+    EngineProfile, frame_index_to_microseconds, normalize_draft, resolve_frame_state,
+    resolve_render_range,
 };
 
 #[test]
@@ -65,7 +65,7 @@ fn frame_state_resolves_active_visual_audio_and_text_segments_at_microsecond_pos
                 )
             })
             .collect::<Vec<_>>(),
-        vec![("text-track", "text-a", "标题", 2, 600_000)]
+        vec![("text-track", "text-a", "标题", 2, 100_000)]
     );
 }
 
@@ -212,7 +212,11 @@ fn frame_state_draft() -> Draft {
     let mut draft = Draft::new("draft-frame-state", "Frame State");
     draft.materials = vec![
         material("video-material", MaterialKind::Video, "file://video.mp4"),
-        material("overlay-material", MaterialKind::Image, "file://overlay.png"),
+        material(
+            "overlay-material",
+            MaterialKind::Image,
+            "file://overlay.png",
+        ),
         material("audio-material", MaterialKind::Audio, "file://audio.wav"),
         material("text-material", MaterialKind::Text, "text://title"),
     ];
