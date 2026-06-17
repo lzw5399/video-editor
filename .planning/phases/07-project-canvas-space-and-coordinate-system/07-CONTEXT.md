@@ -29,7 +29,7 @@ This phase owns project-level canvas/profile semantics: 画布比例, 画布尺�
 - Classify background rendering capability explicitly. If blur fill or image background are not fully renderable in preview/export yet, engine/render graph should surface supported/degraded/unsupported diagnostics instead of silently faking support.
 
 ### Coordinate System
-- Document one normalized visual coordinate system now so Phase 08-13 do not invent separate coordinate spaces. Recommended model: origin at canvas center, x/y normalized to canvas half-width/half-height, with positive x right and positive y down; `0,0` is center, `-1..1` maps to canvas edges.
+- Document one normalized visual coordinate system now so Phase 08-13 do not invent separate coordinate spaces. Use the Jianying/pyJianYingDraft-compatible model: origin at canvas center, x/y normalized to canvas half-width/half-height, with positive x right and positive y up; `0,0` is center, right/top edges are `1`, and left/bottom edges are `-1`.
 - Also document how UI pixel space and render pixel space map into normalized coordinates. UI preview can display derived pixels, but persisted semantics should use normalized coordinates or typed integer/rational values, not renderer pixel offsets.
 - Text safe area and future sticker/PIP/transform/keyframe values must share this coordinate definition. If a later phase needs local material-space coordinates for crop/mask, it must explicitly convert from this canvas-space contract.
 - Keep coordinate documentation in project docs or phase docs and enforce with Rust tests that engine/profile conversion uses canvas width/height deterministically.
