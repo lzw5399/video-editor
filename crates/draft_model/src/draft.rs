@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{DraftId, Material, Track};
+use crate::{DraftCanvasConfig, DraftId, Material, Track};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 pub struct DraftSchemaVersion(pub u32);
@@ -44,6 +44,7 @@ pub struct Draft {
     pub schema_version: DraftSchemaVersion,
     pub draft_id: DraftId,
     pub metadata: DraftMetadata,
+    pub canvas_config: DraftCanvasConfig,
     pub materials: Vec<Material>,
     pub tracks: Vec<Track>,
 }
@@ -54,6 +55,7 @@ impl Draft {
             schema_version: DraftSchemaVersion::current(),
             draft_id: draft_id.into(),
             metadata: DraftMetadata::new(name),
+            canvas_config: DraftCanvasConfig::mvp_default(),
             materials: Vec::new(),
             tracks: Vec::new(),
         }

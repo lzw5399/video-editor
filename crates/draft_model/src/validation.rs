@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS, Microseconds, RationalFrameRate,
-    SourceTimerange, TargetTimerange, TextSegment,
+    CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS,
+    MaterialKind, Microseconds, RationalFrameRate, SourceTimerange, TargetTimerange, TextSegment,
+    reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -18,6 +19,7 @@ pub enum DraftValidationError {
     MissingRequiredSemanticField { field: String },
     InvalidTimerange { field: String, reason: String },
     InvalidRationalFrameRate { field: String, reason: String },
+    InvalidCanvasConfig { field: String, reason: String },
     DuplicateId { id_kind: String, id: String },
     DerivedArtifactLeakage { field: String },
     InvalidDraftJson { message: String },
@@ -40,6 +42,9 @@ impl fmt::Display for DraftValidationError {
             }
             Self::InvalidRationalFrameRate { field, reason } => {
                 write!(formatter, "invalid rational frame rate {field}: {reason}")
+            }
+            Self::InvalidCanvasConfig { field, reason } => {
+                write!(formatter, "invalid canvas config {field}: {reason}")
             }
             Self::DuplicateId { id_kind, id } => {
                 write!(formatter, "duplicate {id_kind} id {id}")
@@ -73,7 +78,7 @@ pub fn migrate_draft_json(value: serde_json::Value) -> Result<Draft, DraftValida
         });
     }
 
-    for field in ["draftId", "metadata", "materials", "tracks"] {
+    for field in ["draftId", "metadata", "canvasConfig", "materials", "tracks"] {
         if !value.get(field).is_some() {
             return Err(missing_field(field));
         }
@@ -100,6 +105,8 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
     if draft.metadata.name.trim().is_empty() {
         return Err(missing_field("metadata.name"));
     }
+
+    validate_canvas_config(draft)?;
 
     let mut material_ids = BTreeSet::new();
     for material in &draft.materials {
@@ -272,6 +279,109 @@ fn validate_frame_rate(
     Ok(())
 }
 
+fn validate_canvas_config(draft: &Draft) -> Result<(), DraftValidationError> {
+    let canvas = &draft.canvas_config;
+    if canvas.width == 0 {
+        return Err(invalid_canvas(
+            "canvasConfig.width",
+            "width must be greater than zero",
+        ));
+    }
+    if canvas.height == 0 {
+        return Err(invalid_canvas(
+            "canvasConfig.height",
+            "height must be greater than zero",
+        ));
+    }
+
+    validate_frame_rate("canvasConfig.frameRate", &canvas.frame_rate)?;
+    validate_canvas_aspect_ratio(
+        "canvasConfig.aspectRatio",
+        &canvas.aspect_ratio,
+        canvas.width,
+        canvas.height,
+    )?;
+    validate_canvas_background(draft, "canvasConfig.background", &canvas.background)
+}
+
+fn validate_canvas_aspect_ratio(
+    field: &str,
+    aspect_ratio: &CanvasAspectRatio,
+    width: u32,
+    height: u32,
+) -> Result<(), DraftValidationError> {
+    let Some(canvas_ratio) = reduce_ratio(width, height) else {
+        return Err(invalid_canvas(
+            field,
+            "canvas dimensions must have a non-zero ratio",
+        ));
+    };
+    let Some(expected_ratio) = aspect_ratio.ratio() else {
+        return Err(invalid_canvas(
+            field,
+            "custom aspect ratio numerator and denominator must be greater than zero",
+        ));
+    };
+    if canvas_ratio != expected_ratio {
+        return Err(invalid_canvas(
+            field,
+            &format!(
+                "aspect ratio {}:{} does not match canvas dimensions {}:{}",
+                expected_ratio.0, expected_ratio.1, canvas_ratio.0, canvas_ratio.1
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_canvas_background(
+    draft: &Draft,
+    field: &str,
+    background: &CanvasBackground,
+) -> Result<(), DraftValidationError> {
+    match background {
+        CanvasBackground::Black | CanvasBackground::BlurFill => Ok(()),
+        CanvasBackground::SolidColor { color } => {
+            validate_hex_color(&format!("{field}.color"), color)
+        }
+        CanvasBackground::Image { material_id } => {
+            let Some(material_id) = material_id else {
+                return Ok(());
+            };
+            let Some(material) = draft
+                .materials
+                .iter()
+                .find(|material| &material.material_id == material_id)
+            else {
+                return Err(DraftValidationError::MissingRequiredSemanticField {
+                    field: format!("{field}.materialId references {}", material_id.as_str()),
+                });
+            };
+            if material.kind != MaterialKind::Image {
+                return Err(invalid_canvas(
+                    &format!("{field}.materialId"),
+                    "image background material must reference an image material",
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_hex_color(field: &str, color: &str) -> Result<(), DraftValidationError> {
+    let color = color.trim();
+    if color.len() != 7 || !color.starts_with('#') {
+        return Err(invalid_canvas(field, "color must use #RRGGBB hex format"));
+    }
+    if !color[1..]
+        .chars()
+        .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err(invalid_canvas(field, "color must contain only hex digits"));
+    }
+    Ok(())
+}
+
 fn validate_text_segment(field: &str, text: &TextSegment) -> Result<(), DraftValidationError> {
     if text.content.trim().is_empty() {
         return Err(missing_field(&format!("{field}.content")));
@@ -318,6 +428,13 @@ fn validate_segment_volume(field: &str, level_millis: u32) -> Result<(), DraftVa
 fn missing_field(field: &str) -> DraftValidationError {
     DraftValidationError::MissingRequiredSemanticField {
         field: field.to_owned(),
+    }
+}
+
+fn invalid_canvas(field: &str, reason: &str) -> DraftValidationError {
+    DraftValidationError::InvalidCanvasConfig {
+        field: field.to_owned(),
+        reason: reason.to_owned(),
     }
 }
 

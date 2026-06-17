@@ -10,6 +10,7 @@ use serde::de;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub mod canvas;
 pub mod draft;
 pub mod ids;
 pub mod material;
@@ -17,6 +18,11 @@ pub mod time;
 pub mod timeline;
 pub mod validation;
 
+pub use canvas::{
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
+    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
+    normalized_to_canvas_pixel, reduce_ratio,
+};
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
 pub use material::{
@@ -69,6 +75,7 @@ pub enum CommandName {
     AddAudioSegment,
     SetSegmentVolume,
     SetTrackMute,
+    UpdateDraftCanvasConfig,
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
@@ -101,6 +108,7 @@ pub enum CommandPayload {
     AddAudioSegment(AddAudioSegmentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
+    UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
@@ -133,6 +141,7 @@ impl CommandPayload {
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
+            Self::UpdateDraftCanvasConfig(_) => CommandName::UpdateDraftCanvasConfig,
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
@@ -382,6 +391,16 @@ pub struct SetTrackMuteCommandPayload {
     pub selection: TimelineSelection,
     pub track_id: TrackId,
     pub muted: bool,
+}
+
+/// Payload accepted by the Phase 7 draft canvas config update command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateDraftCanvasConfigCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub canvas_config: DraftCanvasConfig,
 }
 
 /// Preview artifact profile requested through Rust-owned preview services.
