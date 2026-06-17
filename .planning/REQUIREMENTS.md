@@ -30,8 +30,8 @@
 ### Timeline And Commands
 
 - [x] **TIME-01**: Draft supports at least one sequence with video, audio, and text tracks.
-- [ ] **TIME-02**: User can add material segments to tracks with explicit source and target time ranges.
-- [ ] **TIME-03**: User can select, move, split, trim, and delete timeline segments.
+- [x] **TIME-02**: User can add material segments to tracks with explicit source and target time ranges.
+- [x] **TIME-03**: User can select, move, split, trim, and delete timeline segments.
 - [ ] **TIME-04**: User can undo and redo every committed timeline edit.
 - [ ] **TIME-05**: Main-track magnet/snapping behavior is implemented in the Rust core, not in UI-only state.
 - [x] **TIME-06**: Invalid edits are rejected atomically without partially mutating the draft.
@@ -128,8 +128,8 @@
 | MAT-03 | Phase 2 | Complete |
 | MAT-04 | Phase 2 | Complete |
 | TIME-01 | Phase 3 | Complete |
-| TIME-02 | Phase 3 | Pending |
-| TIME-03 | Phase 3 | Pending |
+| TIME-02 | Phase 3 | Complete |
+| TIME-03 | Phase 3 | Complete |
 | TIME-04 | Phase 3 | Pending |
 | TIME-05 | Phase 3 | Pending |
 | TIME-06 | Phase 3 | Complete |
