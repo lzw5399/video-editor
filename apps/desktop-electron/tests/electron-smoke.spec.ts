@@ -141,8 +141,9 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       events: []
     });
 
-    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "滤镜", "调节"]) {
-      await expect(page.getByRole("button", { name: category })).toBeVisible();
+    const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
+    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"]) {
+      await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
     }
 
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
