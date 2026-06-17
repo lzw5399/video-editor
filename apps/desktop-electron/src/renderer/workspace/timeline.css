@@ -8,6 +8,7 @@
   height: 48px;
   align-content: center;
   padding-bottom: 4px;
+  overflow: hidden;
 }
 
 .timeline-tool-group {
@@ -75,15 +76,15 @@
 }
 
 .playhead-control {
-  flex-basis: 128px;
-}
-
-.timeline-control {
   flex-basis: 112px;
 }
 
+.timeline-control {
+  flex-basis: 96px;
+}
+
 .compact-select {
-  flex-basis: 136px;
+  flex-basis: 128px;
 }
 
 .playhead-control input,
@@ -104,7 +105,7 @@
 
 .timeline-zoom-shell {
   display: flex;
-  flex: 0 0 136px;
+  flex: 0 0 112px;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -127,22 +128,22 @@
 }
 
 .timeline-zoom-shell span {
-  flex: 0 0 34px;
+  flex: 0 0 30px;
   text-align: right;
 }
 
 .snapping-status {
-  flex: 0 0 48px;
+  flex: 0 0 46px;
   color: #d8d6cf;
 }
 
 .playhead-time {
-  flex: 0 0 86px;
+  flex: 0 0 82px;
 }
 
 .timeline-status {
-  flex: 1 1 92px;
-  min-width: 72px;
+  flex: 1 1 80px;
+  min-width: 56px;
 }
 
 .track-row {
@@ -352,22 +353,27 @@
   }
 
   .compact-select {
-    flex-basis: 126px;
+    flex-basis: 112px;
   }
 
   .playhead-control {
-    flex-basis: 118px;
+    flex-basis: 100px;
   }
 
   .timeline-control {
-    flex-basis: 104px;
+    flex-basis: 84px;
   }
 
   .timeline-zoom-shell {
-    flex-basis: 122px;
+    flex-basis: 96px;
   }
 
-  .playhead-time {
-    flex-basis: 80px;
+  .snapping-status {
+    flex-basis: 42px;
+  }
+
+  .playhead-time,
+  .timeline-status {
+    display: none;
   }
 }
