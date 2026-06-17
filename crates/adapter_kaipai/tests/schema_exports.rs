@@ -4,9 +4,9 @@ use std::{
 };
 
 use adapter_kaipai::{
-    DirectMaterialRef, FormulaBundleKind, FormulaBundleSchemaVersion, FormulaProvenance,
-    FormulaResourceRef, FormulaSourceMedia, KaipaiFormulaBundle, RecognizerResult, ResourceKind,
-    SafeAreaEvidence, SafeAreaStatus,
+    CompatibilityReport, CompatibilityReportSchemaVersion, DirectMaterialRef, FormulaBundleKind,
+    FormulaBundleSchemaVersion, FormulaProvenance, FormulaResourceRef, FormulaSourceMedia,
+    KaipaiFormulaBundle, RecognizerResult, ResourceKind, SafeAreaEvidence, SafeAreaStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -42,10 +42,26 @@ fn schema_exports_generated_formula_bundle_contracts_from_rust() {
     assert_or_update_contract_file(generated_ts_path, &formula_bundle_ts);
 }
 
+#[test]
+fn schema_exports_generated_compatibility_report_contract_from_rust() {
+    let root = project_root();
+    let schema_path = root.join("schemas/compatibility-report.schema.json");
+
+    let schema_json = compatibility_report_schema_json();
+    assert_compatibility_report_schema_requires_diagnostic_fields(&schema_json);
+    assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
+}
+
 fn formula_bundle_schema_json() -> String {
     let mut schema = schema_for!(KaipaiFormulaBundle);
     constrain_current_formula_bundle_schema_version(&mut schema);
     serde_json::to_string_pretty(&schema).expect("formula bundle schema should serialize")
+}
+
+fn compatibility_report_schema_json() -> String {
+    let mut schema = schema_for!(CompatibilityReport);
+    constrain_current_compatibility_report_schema_version(&mut schema);
+    serde_json::to_string_pretty(&schema).expect("compatibility report schema should serialize")
 }
 
 fn constrain_current_formula_bundle_schema_version(schema: &mut Schema) {
@@ -59,6 +75,21 @@ fn constrain_current_formula_bundle_schema_version(schema: &mut Schema) {
         json!({
             "type": "integer",
             "const": FormulaBundleSchemaVersion::CURRENT_VALUE
+        }),
+    );
+}
+
+fn constrain_current_compatibility_report_schema_version(schema: &mut Schema) {
+    let defs = schema
+        .ensure_object()
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated compatibility report schema should contain $defs");
+    defs.insert(
+        "CompatibilityReportSchemaVersion".to_owned(),
+        json!({
+            "type": "integer",
+            "const": CompatibilityReportSchemaVersion::CURRENT_VALUE
         }),
     );
 }
@@ -95,6 +126,27 @@ fn assert_formula_bundle_schema_requires_evidence_fields(schema_json: &str) {
             .any(|value| value.as_str() == Some("word_list")),
         "recognizer result schema should require provider `word_list` evidence"
     );
+}
+
+fn assert_compatibility_report_schema_requires_diagnostic_fields(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("compatibility report schema should parse");
+    let required = schema_value["required"]
+        .as_array()
+        .expect("compatibility report schema should list required top-level fields");
+    for field in [
+        "schemaVersion",
+        "sourceKind",
+        "sourceId",
+        "generatedAt",
+        "summary",
+        "items",
+    ] {
+        assert!(
+            required.iter().any(|value| value.as_str() == Some(field)),
+            "compatibility report schema should require `{field}`"
+        );
+    }
 }
 
 fn formula_bundle_ts_contract() -> String {
