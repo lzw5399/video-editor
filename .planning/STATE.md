@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-06-17T18:52:04.597Z"
-last_activity: 2026-06-17 -- Completed Phase 05 Plan 05 preview binding commands
+stopped_at: Completed 05-06-PLAN.md
+last_updated: "2026-06-17T19:07:46.070Z"
+last_activity: 2026-06-17 -- Completed Phase 05 Plan 06 preview UI and screenshot gates
 progress:
   total_phases: 14
   completed_phases: 5
   total_plans: 37
-  completed_plans: 34
-  percent: 92
+  completed_plans: 35
+  percent: 95
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 05 (preview-and-export-pipeline) — EXECUTING
-Plan: 6 of 9
+Plan: 8 of 9
 Status: Ready to execute
-Last activity: 2026-06-17 -- Completed Phase 05 Plan 05 preview binding commands
+Last activity: 2026-06-17 -- Completed Phase 05 Plan 06 preview UI and screenshot gates
 
-Progress: [█████████░] 92%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 34
+- Total plans completed: 35
 - Average duration: 7 min
-- Total execution time: 222 min
+- Total execution time: 236 min
 
 **By Phase:**
 
@@ -85,6 +85,7 @@ Progress: [█████████░] 92%
 | Phase 05 P03 | 21 min | 3 tasks | 15 files |
 | Phase 05 P04 | resumed | 3 tasks | 7 files |
 | Phase 05 P05 | 10 min | 3 tasks | 13 files |
+| Phase 05 P06 | 14 min | 2 tasks | 10 files |
 | Phase 05 P07 | 8 min | 2 tasks | 5 files |
 
 ## Accumulated Context
@@ -164,6 +165,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 02 represents preview frame, preview segment, and export MP4 as output profiles over one shared RenderGraphPlan shape. — Later compiler and service plans should vary profile metadata rather than creating separate preview/export graph models.
 - [Phase 05]: Plan 03 compiles RenderGraphPlan into structured FfmpegJob data with Vec<OsString> args, derived filter/ASS sidecars, encode settings, and validation expectations. — media_runtime can execute jobs later without deciding editing semantics or parsing renderer-owned command strings.
 - [Phase 05]: Plan 03 carries text style data through engine_core resolved overlays and clips filter/ASS timing to the output profile target range. — This prevents preview/export text style drift and wrong source-time rendering for partial ranges.
+- [Phase 05]: Plan 06 connects the desktop preview monitor to Rust-generated preview command helpers while keeping renderer state to artifact/status/error display fields. — Source guards now block renderer FFmpeg, render graph, cache fingerprint, preview invalidation overlap, and process execution ownership.
+- [Phase 05]: Plan 06 makes 1280x800 and 1120x720 preview screenshots executable gates for the compact Jianying-style workspace baseline. — The top feature bar remains the only primary category navigation, left-panel duplicate menus stay absent, and dark 4px scrollbars remain enforced.
 - [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
 
 ### Pending Todos
@@ -193,6 +196,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T18:52:04.594Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-06-17T19:07:46.067Z
+Stopped at: Completed 05-06-PLAN.md
 Resume file: None
