@@ -34,15 +34,15 @@ Per-phase validation contract for draft durability, material probing, generated 
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 02-01-W0 | 02-01 | 1 | DRAFT-03 | T-02-01 / T-02-02 | Strict serde/schema rejects unknown draft fields; domain types use Jianying terms | unit/schema | `cargo test -p draft_model draft_schema -- --nocapture` | no W0 | pending |
 | 02-01-W1 | 02-01 | 1 | DRAFT-05 | T-02-03 | Unknown future schema versions fail with structured recoverable errors | unit | `cargo test -p draft_model migration -- --nocapture` | no W0 | pending |
-| 02-01-W2 | 02-01 | 1 | DRAFT-04 | T-02-04 | Canonical `project.json` excludes derived thumbnails, waveforms, render graphs, FFmpeg scripts, and raw probe JSON | schema/fixture | `cargo test -p draft_model schema_fixtures -- --nocapture` | no W0 | pending |
 | 02-02-W0 | 02-02 | 2 | DRAFT-01 | T-02-05 | New `.veproj/project.json` bundle is valid and saveable without UI mutation | integration | `cargo test -p project_store create_project_bundle -- --nocapture` | no W0 | pending |
 | 02-02-W1 | 02-02 | 2 | DRAFT-02 | T-02-06 | Save/open compares Rust semantic equality and preserves deterministic persisted semantics | integration | `cargo test -p project_store round_trip -- --nocapture` | no W0 | pending |
-| 02-02-W2 | 02-02 | 2 | DRAFT-04 | T-02-07 | Relative/external material URI handling is centralized in `project_store` | integration | `cargo test -p project_store path_resolution -- --nocapture` | no W0 | pending |
-| 02-03-W0 | 02-03 | 2 | MAT-01 | T-02-08 | Video, image, and audio material import is Rust-owned and uses `media_runtime`, not renderer ffprobe calls | integration | `cargo test -p project_store import_material -- --nocapture` | no W0 | pending |
-| 02-03-W1 | 02-03 | 2 | MAT-02 | T-02-09 | Material IDs and normalized metadata persist without raw ffprobe JSON | integration | `cargo test -p media_runtime material_probe -- --nocapture` | no W0 | pending |
-| 02-03-W2 | 02-03 | 2 | MAT-03 | T-02-10 | Generated contracts expose basic material metadata for the later material bin surface | contract/smoke | `pnpm --filter @video-editor/desktop test` | partial existing | pending |
-| 02-03-W3 | 02-03 | 2 | MAT-04 | T-02-11 | Missing materials remain recoverable diagnostics and do not corrupt or delete draft entries | integration | `cargo test -p project_store missing_material -- --nocapture` | no W0 | pending |
-| 02-04-W0 | 02-04 | 3 | DRAFT-01, DRAFT-02, DRAFT-03, DRAFT-04, DRAFT-05, MAT-01, MAT-02, MAT-03, MAT-04 | T-02-12 | Fixtures cover positive/negative drafts and generated schema/TS artifacts have no drift | fixture/contract | `git diff --exit-code schemas apps/desktop-electron/src/generated` | partial existing | pending |
+| 02-02-W2 | 02-02 | 2 | DRAFT-04 | T-02-07 | Relative/external material URI handling is centralized in `project_store`; project_store does not orchestrate imports | integration | `cargo test -p project_store path_resolution -- --nocapture` | no W0 | pending |
+| 02-03-W0 | 02-03 | 2 | MAT-01, MAT-02 | T-02-10 / T-02-11 | Video, image, and audio probes normalize metadata through `media_runtime`, not renderer or project-store ffprobe calls | integration | `cargo test -p media_runtime material_probe -- --nocapture` | no W0 | pending |
+| 02-03-W1 | 02-03 | 2 | MAT-01 | T-02-13 | Generated video, image, and audio material test helpers stay temp-dir backed and uncommitted | integration | `cargo test -p testkit material -- --nocapture` | no W0 | pending |
+| 02-04-W0 | 02-04 | 3 | MAT-01, MAT-02, MAT-04, DRAFT-04 | T-02-15 / T-02-16 / T-02-17 | Material import orchestration lives in the binding-facing Rust service, with pure draft_model registry helpers and project_store persistence only | integration | `cargo test -p bindings_node material_service -- --nocapture` | no W0 | pending |
+| 02-04-W1 | 02-04 | 3 | DRAFT-03, DRAFT-04 | T-02-18 | Generated draft schema/TS artifacts expose material metadata without derived cache fields | contract | `git diff --exit-code schemas apps/desktop-electron/src/generated` | partial existing | pending |
+| 02-05-W0 | 02-05 | 4 | MAT-01, MAT-02, MAT-03, MAT-04 | T-02-19 / T-02-20 / T-02-21 | Generated material commands route through the service and Electron displays smoke-level metadata only | contract/smoke | `cargo test -p bindings_node -- --nocapture` and `pnpm --filter @video-editor/desktop test` | partial existing | pending |
+| 02-06-W0 | 02-06 | 5 | DRAFT-01, DRAFT-02, DRAFT-03, DRAFT-04, DRAFT-05, MAT-01, MAT-02, MAT-03, MAT-04 | T-02-23 / T-02-24 / T-02-25 / T-02-26 | Fixtures cover positive/negative drafts and final build/test/generated drift gates pass | fixture/contract | `PATH="$HOME/.cargo/bin:$PATH" just build`, `PATH="$HOME/.cargo/bin:$PATH" just test`, and `git diff --exit-code schemas apps/desktop-electron/src/generated` | partial existing | pending |
 
 ## Wave 0 Requirements
 
@@ -50,6 +50,7 @@ Per-phase validation contract for draft durability, material probing, generated 
 - [ ] Add `crates/project_store/tests/project_bundle.rs` for create/save/open/autosave, semantic equality, path resolution, and missing-material preservation.
 - [ ] Add `crates/media_runtime/tests/material_probe.rs` for ffprobe metadata normalization across video, image, audio, and probe failure.
 - [ ] Extend `crates/testkit` with deterministic generated image and audio-only fixture helpers.
+- [ ] Add binding-facing material service tests proving import orchestration is outside `project_store`.
 - [ ] Add `fixtures/draft/positive` and `fixtures/draft/negative` or an equivalent deterministic fixture layout documented by tests.
 - [ ] Extend schema/TS generation to include draft/material contracts and fail on drift.
 

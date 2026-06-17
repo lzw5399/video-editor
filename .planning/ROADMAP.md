@@ -59,14 +59,16 @@ Plans:
   3. User can import video, image, and audio materials and see probed metadata in the material bin.
   4. Missing material detection surfaces a recoverable state without corrupting the draft.
 
-**Plans**: 4 plans
+**Plans**: 6 plans
 
 Plans:
 
 - [ ] 02-01-PLAN.md - Define draft/material/track/segment schema and migration hooks
-- [ ] 02-02-PLAN.md - Implement project bundle open/save/autosave and round-trip tests
-- [ ] 02-03-PLAN.md - Implement material import, ffprobe metadata, IDs, thumbnails/derived-cache decision, and missing-material checks
-- [ ] 02-04-PLAN.md - Add draft/material golden fixtures and schema/model tests
+- [ ] 02-02-PLAN.md - Implement project bundle persistence, path helpers, and round-trip tests
+- [ ] 02-03-PLAN.md - Implement media-runtime probing and generated material test fixtures
+- [ ] 02-04-PLAN.md - Implement material import service, missing diagnostics, and draft contracts
+- [ ] 02-05-PLAN.md - Expose material commands through bindings and Electron smoke
+- [ ] 02-06-PLAN.md - Add draft/material fixtures and final Phase 2 gates
 
 ### Phase 3: Timeline Command Core
 
@@ -161,7 +163,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
-| 2. Draft And Material System | 0/4 | Not started | - |
+| 2. Draft And Material System | 0/6 | Not started | - |
 | 3. Timeline Command Core | 0/4 | Not started | - |
 | 4. Jianying-Style Desktop Workspace | 0/4 | Not started | - |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |
