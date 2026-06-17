@@ -5,6 +5,7 @@ use std::{
 };
 
 use draft_model::{Draft, DraftValidationError, MaterialStatus, migrate_draft_json};
+use schemars::schema_for;
 
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -25,7 +26,7 @@ fn draft_fixtures_are_explicitly_classified() {
     let expected = positive
         .iter()
         .copied()
-        .chain(negative.iter().map(|(path, _)| *path))
+        .chain(negative.iter().map(|(path, _, _)| *path))
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
 
@@ -77,17 +78,22 @@ fn negative_draft_fixtures_fail_expected_gates() {
     let fixture_dir = root.join("fixtures/draft");
     let schema = draft_schema_validator();
 
-    for (fixture_path, expected_error) in negative_project_fixtures() {
+    for (fixture_path, expected_error, schema_should_fail) in negative_project_fixtures() {
         let value = read_project_fixture(&fixture_dir, fixture_path);
         let error = migrate_draft_json(value.clone())
             .expect_err("negative fixture should fail draft migration or validation");
 
         assert_eq!(error, expected_error, "{fixture_path}");
 
-        assert!(
-            schema.validate(&value).is_err(),
-            "negative fixture should fail generated draft JSON Schema: {fixture_path}"
-        );
+        let schema_result = schema.validate(&value);
+        if schema_should_fail {
+            assert!(
+                schema_result.is_err(),
+                "negative fixture should fail generated draft JSON Schema: {fixture_path}"
+            );
+        } else {
+            schema_result.expect("semantic-only negative fixture may pass JSON Schema");
+        }
     }
 }
 
@@ -99,13 +105,14 @@ fn positive_project_fixtures() -> BTreeSet<&'static str> {
     ])
 }
 
-fn negative_project_fixtures() -> Vec<(&'static str, DraftValidationError)> {
+fn negative_project_fixtures() -> Vec<(&'static str, DraftValidationError, bool)> {
     vec![
         (
             "negative/invalid-unknown-field/project.json",
             DraftValidationError::InvalidDraftJson {
-                message: "unknown field `unexpectedField`, expected one of `schemaVersion`, `draftId`, `metadata`, `materials`, `tracks`".to_owned(),
+                message: "unknown field `unexpectedField`, expected one of `schemaVersion`, `draftId`, `metadata`, `canvasConfig`, `materials`, `tracks`".to_owned(),
             },
+            true,
         ),
         (
             "negative/invalid-schema-version/project.json",
@@ -113,12 +120,29 @@ fn negative_project_fixtures() -> Vec<(&'static str, DraftValidationError)> {
                 found: "2".to_owned(),
                 expected: 1,
             },
+            true,
         ),
         (
             "negative/derived-artifact-in-project-json/project.json",
             DraftValidationError::DerivedArtifactLeakage {
                 field: "renderGraph".to_owned(),
             },
+            true,
+        ),
+        (
+            "negative/missing-canvas-config/project.json",
+            DraftValidationError::MissingRequiredSemanticField {
+                field: "canvasConfig".to_owned(),
+            },
+            true,
+        ),
+        (
+            "negative/invalid-canvas-background-reference/project.json",
+            DraftValidationError::InvalidCanvasConfig {
+                field: "canvasConfig.background.materialId".to_owned(),
+                reason: "image background material must reference an image material".to_owned(),
+            },
+            false,
         ),
     ]
 }
@@ -160,11 +184,8 @@ fn read_project_fixture(fixture_dir: &Path, fixture_path: &str) -> serde_json::V
 }
 
 fn draft_schema_validator() -> jsonschema::Validator {
-    let schema_path = project_root().join("schemas/draft.schema.json");
-    let schema_json: serde_json::Value = serde_json::from_slice(
-        &fs::read(&schema_path).expect("generated draft schema should be readable"),
-    )
-    .expect("generated draft schema should parse");
+    let schema_json =
+        serde_json::to_value(schema_for!(Draft)).expect("draft schema should serialize");
     jsonschema::validator_for(&schema_json).expect("generated draft schema should compile")
 }
 

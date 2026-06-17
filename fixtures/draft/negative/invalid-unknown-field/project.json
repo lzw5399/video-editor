@@ -4,6 +4,21 @@
   "metadata": {
     "name": "Invalid Unknown Field"
   },
+  "canvasConfig": {
+    "aspectRatio": {
+      "kind": "preset",
+      "preset": "ratio16x9"
+    },
+    "width": 1920,
+    "height": 1080,
+    "frameRate": {
+      "numerator": 30,
+      "denominator": 1
+    },
+    "background": {
+      "kind": "black"
+    }
+  },
   "materials": [],
   "tracks": [],
   "unexpectedField": true

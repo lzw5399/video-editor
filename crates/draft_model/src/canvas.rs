@@ -90,6 +90,7 @@ pub enum CanvasBackground {
     },
     BlurFill,
     Image {
+        #[serde(rename = "materialId")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         material_id: Option<MaterialId>,

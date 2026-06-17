@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "draftId": "draft-invalid-canvas-bg-001",
+  "metadata": {
+    "name": "Invalid Canvas Background Reference"
+  },
+  "canvasConfig": {
+    "aspectRatio": {
+      "kind": "preset",
+      "preset": "ratio16x9"
+    },
+    "width": 1920,
+    "height": 1080,
+    "frameRate": {
+      "numerator": 30,
+      "denominator": 1
+    },
+    "background": {
+      "kind": "image",
+      "materialId": "material-video-001"
+    }
+  },
+  "materials": [
+    {
+      "materialId": "material-video-001",
+      "kind": "video",
+      "uri": "media/video.mp4",
+      "displayName": "video.mp4",
+      "metadata": {
+        "duration": 1000000,
+        "width": 1920,
+        "height": 1080,
+        "hasVideo": true,
+        "hasAudio": true
+      },
+      "status": "available"
+    }
+  ],
+  "tracks": []
+}
