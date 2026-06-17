@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-06-17T11:12:37.472Z"
-last_activity: 2026-06-17 -- Phase 04 Plan 04 completed
+status: ready_to_plan
+stopped_at: Phase 04 verified and completed; Phase 05 ready for discussion
+last_updated: "2026-06-17T12:05:59.206Z"
+last_activity: 2026-06-17 -- Phase 04 verified and completed; Phase 05 ready for discussion
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 24
   completed_plans: 24
-  percent: 100
+  percent: 67
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 04 — jianying-style-desktop-workspace
+**Current focus:** Phase 05 — preview-and-export-pipeline
 
 ## Current Position
 
-Phase: 04 (jianying-style-desktop-workspace) — VERIFYING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-06-17 -- Phase 04 Plan 04 completed
+Phase: 05 (preview-and-export-pipeline) — READY TO PLAN
+Plan: Not started
+Status: Phase 04 verified and complete — Phase 05 ready for discussion/planning
+Last activity: 2026-06-17 -- Phase 04 verified and completed; Phase 05 ready for discussion
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: 8 min
 - Total execution time: 167 min
 
@@ -47,6 +47,7 @@ Progress: [██████████] 100%
 | 01 | 9 | - | - |
 | 02 | 6 | - | - |
 | 03 | 5 | 100 min | 20 min |
+| 04 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -124,6 +125,7 @@ Recent decisions affecting current work:
 - [Phase 04]: Plan 02 keeps unsupported sticker/effect/transition/filter/adjustment editing deferred while visible in the workspace. — Deferred categories remain Chinese panel empty states with no renderer-owned edit semantics.
 - [Phase 04]: Plan 03 keeps timeline visualization read-only and routes add/select/move/split/trim/delete/undo/redo through generated command envelopes. — The renderer now provides deterministic timeline controls while accepted draft, command state, selection, snapping, and history remain Rust-owned.
 - [Phase 04]: Phase 04 Plan 04 made Playwright workspace tests and source guards the executable closure for the Chinese desktop workspace, command-only timeline boundary, and Phase 4 public test gates. — The phase is only complete when UI language, layout, command boundary, and generated contract discipline are enforced by public gates.
+- [Phase 04]: Phase 04 verification included screenshot-based visual spot checks at 1280x800 and 1120x720, then fixed timeline toolbar clipping with a Playwright geometry regression. — The Chinese desktop workspace is verified as a compact editor surface without remaining Phase 4 visual blockers.
 
 ### Pending Todos
 
@@ -143,6 +145,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T11:12:37.429Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-06-17T12:05:59.206Z
+Stopped at: Phase 04 verified and completed; Phase 05 ready for discussion
 Resume file: None
