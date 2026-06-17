@@ -268,7 +268,26 @@ Plans:
   3. All visual coordinates use one documented normalized coordinate system that later sticker/text/PIP/transform/keyframe behavior can share.
   4. Desktop UI exposes Chinese project canvas settings using Jianying-style terms and routes changes through Rust commands.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 07-01-PLAN.md - Define draft canvas schema, validation, generated contracts, fixtures, and coordinate docs
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 07-02-PLAN.md - Add undoable Rust canvas command and binding route
+- [ ] 07-03-PLAN.md - Propagate draft canvas profile through engine, render graph, preview, and export
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 07-04-PLAN.md - Add Chinese inspector and preview canvas UI with Playwright layout gates
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 07-05-PLAN.md - Add Phase 07 source guards and public root gates
 
 ### Phase 8: Segment Transform And Visual Compositing
 
