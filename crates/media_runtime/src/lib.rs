@@ -9,6 +9,7 @@ use std::process::Output;
 
 mod discovery;
 mod error;
+mod probe;
 mod process;
 
 pub use discovery::{
@@ -17,6 +18,10 @@ pub use discovery::{
     resolve_binary,
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
+pub use probe::{
+    MaterialProbeAudio, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
+    MaterialProbeMetadata, MaterialProbeStatus, RationalFrameRate, probe_material_metadata,
+};
 pub use process::{DEFAULT_PROCESS_TIMEOUT, run_process_with_timeout};
 
 /// Service-boundary trait for executing FFmpeg-family binaries.

@@ -531,7 +531,10 @@ dependencies = [
 name = "media_runtime"
 version = "0.1.0"
 dependencies = [
+ "media_runtime_desktop",
  "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "which",
 ]
