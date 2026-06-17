@@ -33,7 +33,7 @@ button {
 .workspace {
   display: grid;
   grid-template-columns: 300px minmax(420px, 1fr) 300px;
-  grid-template-rows: 52px minmax(0, 1fr) 260px;
+  grid-template-rows: 48px minmax(0, 1fr) 252px;
   width: 100vw;
   height: 100vh;
   min-width: 1120px;
@@ -56,10 +56,10 @@ button {
 .top-feature-bar {
   grid-column: 1 / 4;
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
+  grid-template-columns: 132px minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 12px;
+  padding: 0 12px;
 }
 
 .product-mark,
@@ -86,22 +86,25 @@ h2 {
 .category-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
-  height: 52px;
+  height: 48px;
+  overflow: hidden;
 }
 
 .category-button {
   position: relative;
-  flex: 0 0 68px;
-  height: 36px;
-  padding: 0 8px;
+  display: grid;
+  flex: 0 0 60px;
+  grid-template-rows: 20px 16px;
+  align-items: center;
+  justify-items: center;
+  height: 40px;
+  padding: 2px 4px 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   color: #bfbdb6;
   background: transparent;
-  font-size: 13px;
-  line-height: 36px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -112,20 +115,38 @@ h2 {
 }
 
 .category-button.active {
-  color: #ffffff;
-  border-color: #2a5960;
-  background: #242e30;
+  color: #20c7d9;
 }
 
 .category-button.active::after {
   position: absolute;
-  right: 14px;
-  bottom: 3px;
-  left: 14px;
+  right: 10px;
+  bottom: 1px;
+  left: 10px;
   height: 2px;
   border-radius: 2px;
   background: #20c7d9;
   content: "";
+}
+
+.category-symbol,
+.category-label {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-symbol {
+  color: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.category-label {
+  font-size: 12px;
 }
 
 .material-panel,
@@ -839,12 +860,12 @@ h2 {
 
 @media (max-width: 1199px) {
   .workspace {
-    grid-template-columns: 260px minmax(420px, 1fr) 260px;
-    grid-template-rows: 52px minmax(0, 1fr) 220px;
+    grid-template-columns: 272px minmax(420px, 1fr) 272px;
+    grid-template-rows: 48px minmax(0, 1fr) 220px;
   }
 
   .top-feature-bar {
-    grid-template-columns: 136px minmax(0, 1fr);
+    grid-template-columns: 112px minmax(0, 1fr);
   }
 
   .category-nav {
@@ -852,7 +873,8 @@ h2 {
   }
 
   .category-button {
-    flex-basis: 62px;
-    padding: 0 4px;
+    flex-basis: 56px;
+    padding-right: 2px;
+    padding-left: 2px;
   }
 }

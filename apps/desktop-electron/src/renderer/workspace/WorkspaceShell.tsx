@@ -1,4 +1,4 @@
-import { WORKSPACE_CATEGORIES, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
+import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
@@ -64,17 +64,26 @@ export function WorkspaceShell({
       <header className="top-feature-bar" aria-label="顶部功能区">
         <h1 className="product-mark">视频剪辑</h1>
         <nav className="category-nav" aria-label="顶部功能区">
-          {WORKSPACE_CATEGORIES.map((category) => (
-            <button
-              key={category}
-              type="button"
-              className={category === activeCategory ? "category-button active" : "category-button"}
-              aria-pressed={category === activeCategory}
-              onClick={() => onCategoryChange(category)}
-            >
-              {category}
-            </button>
-          ))}
+          {WORKSPACE_CATEGORIES.map((category) => {
+            const metadata = WORKSPACE_CATEGORY_META[category];
+
+            return (
+              <button
+                key={category}
+                type="button"
+                className={category === activeCategory ? "category-button active" : "category-button"}
+                aria-label={metadata.label}
+                aria-pressed={category === activeCategory}
+                title={metadata.label}
+                onClick={() => onCategoryChange(category)}
+              >
+                <span className="category-symbol" aria-hidden="true">
+                  {metadata.symbol}
+                </span>
+                <span className="category-label">{metadata.label}</span>
+              </button>
+            );
+          })}
         </nav>
       </header>
 
