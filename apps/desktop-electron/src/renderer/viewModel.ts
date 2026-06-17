@@ -84,6 +84,7 @@ export type TimelineSegmentView = {
   label: string;
   sourceLabel: string;
   targetLabel: string;
+  visualKind: TimelineSegmentVisualKind;
   start: Microseconds;
   duration: Microseconds;
   selected: boolean;
@@ -91,7 +92,12 @@ export type TimelineSegmentView = {
 
 export type TimelineTrackRow = {
   track: Track;
+  symbol: string;
   kindLabel: string;
+  statusLabel: string;
+  lockLabel: string;
+  visibilityLabel: string;
+  muteLabel: string;
   rowClassName: string;
   segments: TimelineSegmentView[];
 };
@@ -101,6 +107,8 @@ export type TimelineView = {
   duration: Microseconds;
   rulerTicks: Microseconds[];
 };
+
+export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";
 
 export const initialWorkspaceDraft: Draft = {
   schemaVersion: 1,
@@ -437,35 +445,69 @@ export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): 
       track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
     )
   );
-  const rows = draft.tracks.map((track) => ({
-    track,
-    kindLabel: formatTrackKind(track.kind),
-    rowClassName: `track-row ${track.kind}`,
-    segments: track.segments.map((segment) => {
-      const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
-      const selected = selection.segmentIds.includes(segment.segmentId);
-      return {
-        segment,
-        material,
-        label: material?.displayName ?? `片段 ${segment.segmentId}`,
-        sourceLabel: `源 ${formatTimelineTime(segment.sourceTimerange.start)} / ${formatTimelineTime(
-          segment.sourceTimerange.duration
-        )}`,
-        targetLabel: `目标 ${formatTimelineTime(segment.targetTimerange.start)} / ${formatTimelineTime(
-          segment.targetTimerange.duration
-        )}`,
-        start: segment.targetTimerange.start,
-        duration: segment.targetTimerange.duration,
-        selected
-      };
-    })
-  }));
+  const rows = draft.tracks.map((track) => {
+    const kindLabel = formatTrackKind(track.kind);
+
+    return {
+      track,
+      symbol: timelineTrackSymbol(track.kind),
+      kindLabel,
+      statusLabel: `${kindLabel} · ${track.segments.length} 片段`,
+      lockLabel: track.locked ? "已锁定" : "未锁定",
+      visibilityLabel: track.kind === "audio" ? "听觉开启" : "画面可见",
+      muteLabel: track.muted ? "已静音" : "未静音",
+      rowClassName: `track-row ${track.kind}`,
+      segments: track.segments.map((segment) => {
+        const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
+        const selected = selection.segmentIds.includes(segment.segmentId);
+        return {
+          segment,
+          material,
+          label: material?.displayName ?? `片段 ${segment.segmentId}`,
+          sourceLabel: `源 ${formatTimelineTime(segment.sourceTimerange.start)} / ${formatTimelineTime(
+            segment.sourceTimerange.duration
+          )}`,
+          targetLabel: `目标 ${formatTimelineTime(segment.targetTimerange.start)} / ${formatTimelineTime(
+            segment.targetTimerange.duration
+          )}`,
+          visualKind: timelineSegmentVisualKind(track.kind, material),
+          start: segment.targetTimerange.start,
+          duration: segment.targetTimerange.duration,
+          selected
+        };
+      })
+    };
+  });
 
   return {
     rows,
     duration,
     rulerTicks: buildRulerTicks(duration)
   };
+}
+
+function timelineTrackSymbol(kind: TrackKind): string {
+  const symbols: Record<TrackKind, string> = {
+    video: "▣",
+    audio: "♪",
+    text: "T",
+    sticker: "◇",
+    filter: "◐"
+  };
+
+  return symbols[kind];
+}
+
+function timelineSegmentVisualKind(trackKind: TrackKind, material: Material | null): TimelineSegmentVisualKind {
+  if (material?.kind === "video" || material?.kind === "image" || material?.kind === "audio" || material?.kind === "text") {
+    return material.kind;
+  }
+
+  if (trackKind === "video" || trackKind === "audio" || trackKind === "text" || trackKind === "sticker" || trackKind === "filter") {
+    return trackKind;
+  }
+
+  return "video";
 }
 
 export function segmentBlockStyle(segment: TimelineSegmentView, timelineDuration: Microseconds): CSSProperties {

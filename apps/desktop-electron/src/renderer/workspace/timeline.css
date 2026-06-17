@@ -145,6 +145,202 @@
   min-width: 72px;
 }
 
+.track-row {
+  grid-template-columns: 160px minmax(0, 1fr);
+}
+
+.track-row.text {
+  height: 52px;
+}
+
+.track-header {
+  grid-template-rows: 18px 24px 16px;
+  align-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.track-header-main {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.track-kind-symbol {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #20c7d9;
+  background: #252522;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.track-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.track-state-button {
+  display: grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #3a3a36;
+  border-radius: 4px;
+  color: #aaa79f;
+  background: #1a1a18;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.track-state-button.active {
+  border-color: #d6a23f;
+  color: #d6a23f;
+}
+
+.track-state-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.track-status-line {
+  overflow: hidden;
+  color: #9b9890;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-block {
+  border-color: #3d5457;
+  background: #243336;
+  isolation: isolate;
+}
+
+.segment-block::before,
+.segment-block::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+}
+
+.segment-block::after {
+  opacity: 0.35;
+}
+
+.segment-kind-video::before,
+.segment-kind-image::before,
+.segment-kind-sticker::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(32, 199, 217, 0.08)),
+    #243336;
+  background-size: 22px 100%, 100% 100%, 100% 100%;
+}
+
+.segment-kind-image::before {
+  background:
+    linear-gradient(135deg, rgba(214, 162, 63, 0.2) 0 18%, transparent 18% 50%, rgba(255, 255, 255, 0.07) 50% 68%, transparent 68%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 24px),
+    #263b36;
+  background-size: 48px 100%, 24px 100%, 100% 100%;
+}
+
+.segment-kind-audio {
+  border-color: #45583d;
+  color: #edf7e8;
+  background: #263324;
+}
+
+.segment-kind-audio::before {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(95, 159, 115, 0.25) 0 3px,
+      transparent 3px 8px,
+      rgba(95, 159, 115, 0.55) 8px 12px,
+      transparent 12px 18px
+    ),
+    #263324;
+}
+
+.segment-kind-audio::after {
+  inset: 7px 0;
+  background:
+    linear-gradient(90deg, transparent 0 6px, rgba(240, 238, 232, 0.2) 6px 8px, transparent 8px 14px),
+    linear-gradient(180deg, transparent 0 20%, rgba(95, 159, 115, 0.35) 20% 80%, transparent 80%);
+  background-size: 14px 100%, 100% 100%;
+}
+
+.segment-kind-text {
+  border-color: #9b4b31;
+  color: #fff1e6;
+  background: #6a2f21;
+}
+
+.segment-kind-text::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 18px),
+    linear-gradient(180deg, #8a3d28, #5b281e);
+  background-size: 18px 100%, 100% 100%;
+}
+
+.segment-kind-filter {
+  border-color: #5b5368;
+  color: #f1ecff;
+  background: #2f2a38;
+}
+
+.segment-block strong,
+.segment-time-label {
+  position: relative;
+  z-index: 1;
+}
+
+.segment-block strong {
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-time-label {
+  overflow: hidden;
+  color: rgba(240, 238, 232, 0.78);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-block:hover {
+  border-color: #5f7b80;
+}
+
+.segment-kind-audio:hover {
+  border-color: #5f9f73;
+}
+
+.segment-kind-text:hover {
+  border-color: #d9794b;
+}
+
+.segment-block.selected {
+  border-color: #20c7d9;
+  outline: 1px solid #20c7d9;
+  outline-offset: -2px;
+}
+
 @media (max-width: 1199px) {
   .transport-strip {
     gap: 4px;

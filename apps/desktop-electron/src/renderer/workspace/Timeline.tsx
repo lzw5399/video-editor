@@ -316,9 +316,19 @@ function TimelineTrackRow({
   return (
     <div className={row.rowClassName}>
       <div className="track-header">
-        <strong>{row.track.name}</strong>
-        <span>
-          {row.kindLabel}轨道 · {row.track.muted ? "已静音" : "未静音"}
+        <div className="track-header-main">
+          <span className="track-kind-symbol" aria-hidden="true">
+            {row.symbol}
+          </span>
+          <strong>{row.track.name}</strong>
+        </div>
+        <div className="track-header-controls" aria-label={`${row.track.name} 状态`}>
+          <TrackStateButton label={`锁定状态：${row.lockLabel}`} symbol="锁" active={row.track.locked} />
+          <TrackStateButton label={`可见状态：${row.visibilityLabel}`} symbol={row.track.kind === "audio" ? "听" : "眼"} />
+          <TrackStateButton label={`静音状态：${row.muteLabel}`} symbol="静" active={row.track.muted} />
+        </div>
+        <span className="track-status-line">
+          {row.statusLabel} · {row.lockLabel} · {row.muteLabel}
         </span>
       </div>
       <div className="segment-lane">
@@ -347,14 +357,37 @@ function TimelineSegmentBlock({
   return (
     <button
       type="button"
-      className={segment.selected ? "segment-block selected" : "segment-block"}
+      className={`segment-block segment-kind-${segment.visualKind}${segment.selected ? " selected" : ""}`}
       style={segmentBlockStyle(segment, timelineDuration)}
       onClick={() => onSelectSegment?.(segment.segment.segmentId)}
       aria-pressed={segment.selected}
+      title={`${segment.label}，${segment.targetLabel}`}
       aria-label={`片段 ${segment.label}`}
     >
       <strong>{segment.label}</strong>
-      <span>{segment.targetLabel}</span>
+      <span className="segment-time-label">{segment.targetLabel}</span>
+    </button>
+  );
+}
+
+function TrackStateButton({
+  label,
+  symbol,
+  active = false
+}: {
+  label: string;
+  symbol: string;
+  active?: boolean;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className={active ? "track-state-button active" : "track-state-button"}
+      aria-label={label}
+      title={label}
+      disabled
+    >
+      <span aria-hidden="true">{symbol}</span>
     </button>
   );
 }
