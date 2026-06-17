@@ -17,7 +17,8 @@ pub use normalize::{
     NormalizedDraft, NormalizedMaterialRef, NormalizedSegment, NormalizedTrack, normalize_draft,
 };
 pub use text_layout::{
-    ResolvedTextOverlay, TextFontPolicy, TextLayoutProfile, TextSafeArea, TextWrappingPolicy,
+    ResolvedTextOverlay, ResolvedTextStyle, TextFontPolicy, TextLayoutProfile, TextSafeArea,
+    TextWrappingPolicy,
 };
 
 /// Boundary marker for the semantic engine crate.

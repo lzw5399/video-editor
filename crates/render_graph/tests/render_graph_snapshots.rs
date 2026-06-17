@@ -167,6 +167,9 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                         "safeArea": { "left": 96, "right": 96, "top": 54, "bottom": 54 },
                         "wrappingPolicy": "boundedWidth",
                         "fontSize": 48,
+                        "style": {
+                            "color": "#ffffff"
+                        },
                         "layoutWidth": 1728,
                         "layoutHeight": 58
                     },

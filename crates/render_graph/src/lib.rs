@@ -13,7 +13,8 @@ pub use graph::{
     RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, build_render_graph,
 };
 pub use profile::{
-    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphPlan, RenderOutputProfile,
+    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderAudioCodec, RenderContainer,
+    RenderGraphPlan, RenderOutputProfile, RenderVideoCodec,
 };
 
 /// Boundary marker for render intent graph types.

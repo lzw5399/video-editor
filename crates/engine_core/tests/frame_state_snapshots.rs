@@ -236,6 +236,10 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
     assert_eq!(overlay.safe_area.left, 96);
     assert_eq!(overlay.safe_area.top, 54);
     assert_eq!(overlay.wrapping_policy.as_str(), "boundedWidth");
+    assert_eq!(overlay.style.color, "#ffffff");
+    assert!(overlay.style.stroke.is_none());
+    assert!(overlay.style.shadow.is_none());
+    assert!(overlay.style.background.is_none());
     assert_eq!(overlay.layout_width, 1_728);
     assert_eq!(overlay.layout_height, 58);
 }

@@ -1,0 +1,213 @@
+#![allow(dead_code)]
+
+use std::collections::BTreeMap;
+
+use draft_model::{
+    Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow,
+    TextStroke, TextStyle, Track, TrackKind, Transition,
+};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
+use render_graph::{
+    ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph,
+};
+
+pub fn compile_context() -> CompileContext {
+    CompileContext::new("/derived/output.mp4", "/derived")
+        .with_capabilities(CompilerCapabilities::all_available_for_tests())
+}
+
+pub fn preview_frame_context() -> CompileContext {
+    CompileContext::new("/derived/preview.png", "/derived")
+        .with_capabilities(CompilerCapabilities::all_available_for_tests())
+}
+
+pub fn no_font_context() -> CompileContext {
+    CompileContext::new("/derived/output.mp4", "/derived").with_capabilities(
+        CompilerCapabilities::all_available_for_tests().with_text(TextRenderCapability {
+            supports_ass_filter: true,
+            supports_subtitles_filter: true,
+            env_text_font_path: None,
+            available_font_paths: Vec::new(),
+        }),
+    )
+}
+
+pub fn no_h264_context() -> CompileContext {
+    CompileContext::new("/derived/output.mp4", "/derived")
+        .with_capabilities(CompilerCapabilities::all_available_for_tests().with_h264_encoder(false))
+}
+
+pub fn no_subtitle_filter_context() -> CompileContext {
+    CompileContext::new("/derived/output.mp4", "/derived").with_capabilities(
+        CompilerCapabilities::all_available_for_tests().with_text(TextRenderCapability {
+            supports_ass_filter: false,
+            supports_subtitles_filter: true,
+            env_text_font_path: Some("/fonts/PingFang.ttc".to_owned()),
+            available_font_paths: vec!["/fonts/PingFang.ttc".to_owned()],
+        }),
+    )
+}
+
+pub fn preview_frame_plan() -> RenderGraphPlan {
+    let graph = sample_graph();
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::preview_frame_png(
+            OutputDimensions::new(960, 540),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(33_333)),
+        ),
+    )
+    .expect("preview frame plan should validate")
+}
+
+pub fn preview_segment_plan() -> RenderGraphPlan {
+    let graph = sample_graph();
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::preview_segment_mp4(
+            OutputDimensions::new(960, 540),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+        ),
+    )
+    .expect("preview segment plan should validate")
+}
+
+pub fn export_plan() -> RenderGraphPlan {
+    let graph = sample_graph();
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
+fn sample_graph() -> render_graph::RenderGraph {
+    let normalized = normalize_draft(&compiler_draft(), &EngineProfile::mvp_default())
+        .expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+    build_render_graph(&normalized, &range).expect("graph should build")
+}
+
+fn compiler_draft() -> Draft {
+    let mut draft = Draft::new("draft-compiler", "Compiler");
+    draft.materials = vec![
+        material(
+            "video-material",
+            MaterialKind::Video,
+            "file:///media/video.mp4",
+        ),
+        material(
+            "overlay-material",
+            MaterialKind::Image,
+            "file:///media/overlay.png",
+        ),
+        material(
+            "audio-material",
+            MaterialKind::Audio,
+            "file:///media/audio.wav",
+        ),
+        material("text-material", MaterialKind::Text, "text://title"),
+    ];
+
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut video = segment("video-a", "video-material", 100_000, 0, 1_000_000);
+    video.filters.push(Filter {
+        name: "lut".to_owned(),
+        parameters: BTreeMap::from([("strengthMillis".to_owned(), "500".to_owned())]),
+    });
+    video.transition = Some(Transition {
+        name: "crossfade".to_owned(),
+        duration: Microseconds::new(120_000),
+    });
+    video_track.segments.push(video);
+
+    let mut overlay_track = Track::new("overlay-track", TrackKind::Video, "叠加");
+    overlay_track
+        .segments
+        .push(segment("overlay-a", "overlay-material", 0, 0, 1_000_000));
+
+    let mut audio_track = Track::new("audio-track", TrackKind::Audio, "音频");
+    audio_track
+        .segments
+        .push(segment("audio-a", "audio-material", 0, 0, 1_000_000));
+
+    let mut text_track = Track::new("text-track", TrackKind::Text, "文字");
+    let mut text = segment("text-a", "text-material", 0, 500_000, 500_000);
+    text.text = Some(TextSegment {
+        content: "标题 {一}\n第二行".to_owned(),
+        style: TextStyle {
+            font_size: 48,
+            color: "#33ccff".to_owned(),
+            alignment: TextAlignment::Center,
+            stroke: Some(TextStroke {
+                color: "#101010".to_owned(),
+                width: 2,
+            }),
+            shadow: Some(TextShadow {
+                color: "#000000".to_owned(),
+                offset_x: 2,
+                offset_y: 2,
+                blur: 4,
+            }),
+            background: Some(TextBackground {
+                color: "#202020".to_owned(),
+            }),
+        },
+    });
+    text_track.segments.push(text);
+
+    draft.tracks = vec![video_track, overlay_track, audio_track, text_track];
+    draft
+}
+
+fn material(material_id: &str, kind: MaterialKind, uri: &str) -> Material {
+    let mut material = Material::new(material_id, kind, uri, material_id);
+    material.metadata.duration = Some(Microseconds::new(2_000_000));
+    match kind {
+        MaterialKind::Video => {
+            material.metadata.width = Some(1_920);
+            material.metadata.height = Some(1_080);
+            material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+            material.metadata.has_video = true;
+            material.metadata.has_audio = true;
+        }
+        MaterialKind::Image => {
+            material.metadata.width = Some(640);
+            material.metadata.height = Some(360);
+            material.metadata.has_video = true;
+        }
+        MaterialKind::Audio => {
+            material.metadata.has_audio = true;
+        }
+        MaterialKind::Text | MaterialKind::Sticker => {}
+    }
+    material
+}
+
+fn segment(
+    segment_id: &str,
+    material_id: &str,
+    source_start: u64,
+    target_start: u64,
+    duration: u64,
+) -> Segment {
+    Segment::new(
+        segment_id,
+        material_id,
+        SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
+        TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
+    )
+}

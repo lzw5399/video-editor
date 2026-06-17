@@ -1,4 +1,7 @@
-use draft_model::{Microseconds, SegmentId, TargetTimerange, TextAlignment, TextSegment, TrackId};
+use draft_model::{
+    Microseconds, SegmentId, TargetTimerange, TextAlignment, TextBackground, TextSegment,
+    TextShadow, TextStroke, TrackId,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{EngineError, EngineErrorKind, NormalizedSegment};
@@ -157,8 +160,21 @@ pub struct ResolvedTextOverlay {
     pub safe_area: TextSafeArea,
     pub wrapping_policy: TextWrappingPolicy,
     pub font_size: u32,
+    pub style: ResolvedTextStyle,
     pub layout_width: u32,
     pub layout_height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedTextStyle {
+    pub color: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<TextStroke>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<TextShadow>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<TextBackground>,
 }
 
 pub fn resolve_text_overlay(
@@ -200,6 +216,12 @@ pub fn resolve_text_overlay(
         safe_area: profile.safe_area.clone(),
         wrapping_policy: profile.wrapping_policy,
         font_size: text.style.font_size,
+        style: ResolvedTextStyle {
+            color: text.style.color.clone(),
+            stroke: text.style.stroke.clone(),
+            shadow: text.style.shadow.clone(),
+            background: text.style.background.clone(),
+        },
         layout_width,
         layout_height,
     })
