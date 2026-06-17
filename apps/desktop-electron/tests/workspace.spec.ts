@@ -215,6 +215,42 @@ test("command-only timeline edit calls generated command and applies Rust respon
   }
 });
 
+test("material import uses the same draft command guard as timeline edits", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
+    await page.evaluate(() => {
+      const findButton = (label: string): HTMLButtonElement => {
+        const button = Array.from(document.querySelectorAll("button")).find(
+          (candidate) => candidate.textContent?.trim() === label
+        );
+
+        if (!(button instanceof HTMLButtonElement)) {
+          throw new Error(`找不到按钮：${label}`);
+        }
+
+        return button;
+      };
+
+      findButton("添加片段").click();
+      findButton("导入素材").click();
+    });
+
+    await expectCommandCall(app, "addSegment");
+    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(2);
+
+    const draftMutatingCalls = (await readExecuteCommandCalls(app)).filter(
+      (call) => call.command === "addSegment" || call.command === "importMaterial"
+    );
+    expect(draftMutatingCalls.map((call) => call.command)).toEqual(["addSegment"]);
+  } finally {
+    await app.close();
+  }
+});
+
 test("layout stability keeps workspace regions visible and fixed at required sizes", async () => {
   const { app, page } = await launchWorkspaceApp();
 

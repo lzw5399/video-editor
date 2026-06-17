@@ -52,7 +52,8 @@ type VideoEditorCoreApi = {
   executeCommand: <T = unknown>(command: CommandEnvelope) => Promise<CommandResultEnvelope<T>>;
 };
 
-type TimelineCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
+type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
+type DraftCommandResultApplier<T> = (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState;
 
 declare global {
   interface Window {
@@ -136,7 +137,11 @@ export function App(): React.ReactElement {
     };
   }, []);
 
-  async function executeTimelineCommand(buildCommand: TimelineCommandBuilder, pendingCommand: string): Promise<void> {
+  async function executeDraftCommand<T>(
+    buildCommand: DraftCommandBuilder,
+    pendingCommand: string,
+    applyResult: DraftCommandResultApplier<T>
+  ): Promise<void> {
     if (commandInFlightRef.current) {
       setWorkspace((current) => {
         const next = {
@@ -150,34 +155,21 @@ export function App(): React.ReactElement {
     }
 
     commandInFlightRef.current = true;
-    setWorkspace((current) => ({
-      ...current,
-      pendingCommand,
-      commandError: null
-    }));
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand,
+        commandError: null
+      };
+      workspaceRef.current = next;
+      return next;
+    });
 
     try {
       const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<TimelineCommandResponse>(command);
+      const result = await window.videoEditorCore.executeCommand<T>(command);
       setWorkspace((current) => {
-        const applied = applyTimelineCommandResult(
-          {
-            draft: current.draft,
-            commandState: current.commandState,
-            selection: current.selection
-          },
-          result
-        );
-
-        const next = {
-          ...current,
-          draft: applied.state.draft,
-          commandState: applied.state.commandState,
-          selection: applied.state.selection,
-          materials: applied.state.draft.materials,
-          pendingCommand: null,
-          commandError: applied.errorMessage
-        };
+        const next = applyResult(current, result);
         workspaceRef.current = next;
         return next;
       });
@@ -197,22 +189,39 @@ export function App(): React.ReactElement {
     }
   }
 
-  async function handleImportMaterial(): Promise<void> {
-    setWorkspace((current) => ({
-      ...current,
-      pendingCommand: "导入素材",
-      commandError: null
-    }));
+  async function executeTimelineCommand(buildCommand: DraftCommandBuilder, pendingCommand: string): Promise<void> {
+    await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result) => {
+      const applied = applyTimelineCommandResult(
+        {
+          draft: current.draft,
+          commandState: current.commandState,
+          selection: current.selection
+        },
+        result
+      );
 
-    const command = buildImportMaterialCommand({
-      draft: workspace.draft,
-      bundlePath,
-      materialPath
+      return {
+        ...current,
+        draft: applied.state.draft,
+        commandState: applied.state.commandState,
+        selection: applied.state.selection,
+        materials: applied.state.draft.materials,
+        pendingCommand: null,
+        commandError: applied.errorMessage
+      };
     });
+  }
 
-    try {
-      const result = await window.videoEditorCore.executeCommand<ImportMaterialResponse>(command);
-      setWorkspace((current) => {
+  async function handleImportMaterial(): Promise<void> {
+    await executeDraftCommand<ImportMaterialResponse>(
+      (current) =>
+        buildImportMaterialCommand({
+          draft: current.draft,
+          bundlePath,
+          materialPath
+        }),
+      "导入素材",
+      (current, result) => {
         if (!result.ok || result.data === null) {
           return {
             ...current,
@@ -229,15 +238,8 @@ export function App(): React.ReactElement {
           pendingCommand: null,
           commandError: null
         };
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      setWorkspace((current) => ({
-        ...current,
-        pendingCommand: null,
-        commandError: commandErrorMessage(message)
-      }));
-    }
+      }
+    );
   }
 
   async function handleRefreshMaterials(): Promise<void> {
