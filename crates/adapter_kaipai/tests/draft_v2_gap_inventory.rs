@@ -103,7 +103,12 @@ fn collect_claim_violations(dir: &Path, violations: &mut Vec<String>) {
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
         for (line_index, line) in source.lines().enumerate() {
             if claims_preview_export_support(line) || claims_native_parity(line) {
-                violations.push(format!("{}:{}: {}", path.display(), line_index + 1, line.trim()));
+                violations.push(format!(
+                    "{}:{}: {}",
+                    path.display(),
+                    line_index + 1,
+                    line.trim()
+                ));
             }
         }
     }
