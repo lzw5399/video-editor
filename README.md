@@ -15,10 +15,6 @@ external draft compatibility adapters.
 
 ## Architecture
 
-The architecture diagram is expected at
-[`docs/assets/architecture.png`](./docs/assets/architecture.png). The README uses
-that stable path so the generated image can be replaced without editing docs.
-
 ![Video Editor architecture](./docs/assets/architecture.png)
 
 There are two different flows in the architecture:
