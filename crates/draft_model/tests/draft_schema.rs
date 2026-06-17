@@ -69,6 +69,7 @@ fn draft_schema_serializes_material_track_and_segment_records() {
             name: "fade".to_owned(),
             duration: Microseconds::new(100_000),
         }),
+        text: None,
     };
 
     let mut track = Track::new("track-video-001", TrackKind::Video, "Video 1");

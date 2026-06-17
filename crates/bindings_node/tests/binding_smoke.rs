@@ -436,6 +436,55 @@ fn execute_command_routes_timeline_snapping_undo_and_redo_events() {
 }
 
 #[test]
+fn execute_command_routes_timeline_text_segment_events() {
+    let mut draft = timeline_draft_json();
+    draft["tracks"].as_array_mut().unwrap().push(json!({
+        "trackId": "text-track",
+        "kind": "text",
+        "name": "Text",
+        "muted": false,
+        "locked": false,
+        "segments": []
+    }));
+
+    let added = execute_command(json!({
+        "command": "addTextSegment",
+        "payload": {
+            "kind": "addTextSegment",
+            "draft": draft,
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "text-track",
+            "segmentId": "text-segment",
+            "materialId": "text-material",
+            "sourceTimerange": { "start": 0, "duration": 1_000_000 },
+            "targetTimerange": { "start": 0, "duration": 1_000_000 },
+            "text": {
+                "content": "Caption",
+                "style": {
+                    "fontSize": 36,
+                    "color": "#ffffff",
+                    "alignment": "center",
+                    "stroke": { "color": "#000000", "width": 2 },
+                    "shadow": { "color": "#222222", "offsetX": 2, "offsetY": 2, "blur": 4 },
+                    "background": { "color": "#101010" }
+                }
+            }
+        },
+        "requestId": "req-add-text-segment"
+    }))
+    .expect("add text segment command should return a JSON envelope");
+
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["events"][0]["kind"], "textSegmentAdded");
+    assert_eq!(
+        added["data"]["draft"]["tracks"][1]["segments"][0]["text"]["content"],
+        "Caption"
+    );
+    assert_eq!(added["data"]["draft"]["materials"][1]["kind"], "text");
+}
+
+#[test]
 fn execute_command_rejects_invalid_timeline_edit_with_standard_error() {
     let mut draft = timeline_draft_json();
     draft["tracks"][0]["segments"] = json!([{

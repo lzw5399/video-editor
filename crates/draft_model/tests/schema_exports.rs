@@ -834,6 +834,28 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                     "required": ["kind"]
                 }
             }
+        },
+        {
+            "properties": {
+                "command": { "const": "addTextSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addTextSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "editTextSegment" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "editTextSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
         }
     ])
 }

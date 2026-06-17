@@ -293,6 +293,16 @@
         "targetTimerange": {
           "$ref": "#/$defs/TargetTimerange"
         },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSegment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "transition": {
           "anyOf": [
             {
@@ -348,6 +358,140 @@
       "required": [
         "start",
         "duration"
+      ]
+    },
+    "TextAlignment": {
+      "type": "string",
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ]
+    },
+    "TextBackground": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color"
+      ]
+    },
+    "TextSegment": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/TextStyle"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "content",
+        "style"
+      ]
+    },
+    "TextShadow": {
+      "type": "object",
+      "properties": {
+        "blur": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "color": {
+          "type": "string"
+        },
+        "offsetX": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "offsetY": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color",
+        "offsetX",
+        "offsetY",
+        "blur"
+      ]
+    },
+    "TextStroke": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color",
+        "width"
+      ]
+    },
+    "TextStyle": {
+      "type": "object",
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/TextAlignment"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextBackground"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "type": "string"
+        },
+        "fontSize": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextShadow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextStroke"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "fontSize",
+        "color",
+        "alignment"
       ]
     },
     "Track": {

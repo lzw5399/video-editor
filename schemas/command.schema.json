@@ -42,6 +42,52 @@
       "title": "AddSegmentCommandPayload",
       "type": "object"
     },
+    "AddTextSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 text segment add command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "sourceTimerange": {
+          "$ref": "#/$defs/SourceTimerange"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        },
+        "text": {
+          "$ref": "#/$defs/TextSegment"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "segmentId",
+        "materialId",
+        "sourceTimerange",
+        "targetTimerange",
+        "text"
+      ],
+      "title": "AddTextSegmentCommandPayload",
+      "type": "object"
+    },
     "CommandEvent": {
       "additionalProperties": false,
       "description": "Event emitted with a command result.",
@@ -100,7 +146,9 @@
         "trimSegment",
         "deleteSegment",
         "undoTimelineEdit",
-        "redoTimelineEdit"
+        "redoTimelineEdit",
+        "addTextSegment",
+        "editTextSegment"
       ],
       "type": "string"
     },
@@ -522,6 +570,90 @@
             "selection"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 text segment add command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addTextSegment",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "sourceTimerange": {
+              "$ref": "#/$defs/SourceTimerange"
+            },
+            "targetTimerange": {
+              "$ref": "#/$defs/TargetTimerange"
+            },
+            "text": {
+              "$ref": "#/$defs/TextSegment"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "segmentId",
+            "materialId",
+            "sourceTimerange",
+            "targetTimerange",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 3 text segment edit command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "editTextSegment",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "text": {
+              "$ref": "#/$defs/TextSegment"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "text"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -642,6 +774,36 @@
     "DraftSchemaVersion": {
       "const": 1,
       "type": "integer"
+    },
+    "EditTextSegmentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 3 text segment edit command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "text": {
+          "$ref": "#/$defs/TextSegment"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "text"
+      ],
+      "title": "EditTextSegmentCommandPayload",
+      "type": "object"
     },
     "Filter": {
       "additionalProperties": false,
@@ -933,6 +1095,16 @@
         "targetTimerange": {
           "$ref": "#/$defs/TargetTimerange"
         },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSegment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "transition": {
           "anyOf": [
             {
@@ -1074,6 +1246,140 @@
       "required": [
         "start",
         "duration"
+      ],
+      "type": "object"
+    },
+    "TextAlignment": {
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "type": "string"
+    },
+    "TextBackground": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "type": "object"
+    },
+    "TextSegment": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/TextStyle"
+        }
+      },
+      "required": [
+        "content",
+        "style"
+      ],
+      "type": "object"
+    },
+    "TextShadow": {
+      "additionalProperties": false,
+      "properties": {
+        "blur": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "color": {
+          "type": "string"
+        },
+        "offsetX": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "offsetY": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "color",
+        "offsetX",
+        "offsetY",
+        "blur"
+      ],
+      "type": "object"
+    },
+    "TextStroke": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "string"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "color",
+        "width"
+      ],
+      "type": "object"
+    },
+    "TextStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/TextAlignment"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextBackground"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "type": "string"
+        },
+        "fontSize": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextShadow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextStroke"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "fontSize",
+        "color",
+        "alignment"
       ],
       "type": "object"
     },
@@ -1492,6 +1798,40 @@
           "properties": {
             "kind": {
               "const": "redoTimelineEdit"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "addTextSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addTextSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "editTextSegment"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "editTextSegment"
             }
           },
           "required": [

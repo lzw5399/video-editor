@@ -36,18 +36,18 @@ fn text_commands() {
         "text may use an internal material source, but content must live on Segment.text"
     );
 
-    let text_segment = added.draft.tracks[0].segments[0]
+    let added_text = added.draft.tracks[0].segments[0]
         .text
         .as_ref()
         .expect("text content should be persisted on the segment");
-    assert_eq!(text_segment.content, "Hello");
-    assert_eq!(text_segment.style.font_size, 36);
-    assert_eq!(text_segment.style.color, "#ffffff");
-    assert_eq!(text_segment.style.alignment, TextAlignment::Center);
-    assert_eq!(text_segment.style.stroke.as_ref().unwrap().color, "#101010");
-    assert_eq!(text_segment.style.shadow.as_ref().unwrap().offset_x, 2);
+    assert_eq!(added_text.content, "Hello");
+    assert_eq!(added_text.style.font_size, 36);
+    assert_eq!(added_text.style.color, "#ffffff");
+    assert_eq!(added_text.style.alignment, TextAlignment::Center);
+    assert_eq!(added_text.style.stroke.as_ref().unwrap().color, "#101010");
+    assert_eq!(added_text.style.shadow.as_ref().unwrap().offset_x, 2);
     assert_eq!(
-        text_segment.style.background.as_ref().unwrap().color,
+        added_text.style.background.as_ref().unwrap().color,
         "#000000"
     );
 

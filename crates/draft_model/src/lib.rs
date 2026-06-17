@@ -25,8 +25,8 @@ pub use material::{
 };
 pub use time::Microseconds;
 pub use timeline::{
-    Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
-    Transition,
+    Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind, Transition,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
@@ -62,6 +62,8 @@ pub enum CommandName {
     DeleteSegment,
     UndoTimelineEdit,
     RedoTimelineEdit,
+    AddTextSegment,
+    EditTextSegment,
 }
 
 /// Command payloads.
@@ -82,6 +84,8 @@ pub enum CommandPayload {
     DeleteSegment(DeleteSegmentCommandPayload),
     UndoTimelineEdit(UndoTimelineEditCommandPayload),
     RedoTimelineEdit(RedoTimelineEditCommandPayload),
+    AddTextSegment(AddTextSegmentCommandPayload),
+    EditTextSegment(EditTextSegmentCommandPayload),
 }
 
 impl CommandPayload {
@@ -102,6 +106,8 @@ impl CommandPayload {
             Self::DeleteSegment(_) => CommandName::DeleteSegment,
             Self::UndoTimelineEdit(_) => CommandName::UndoTimelineEdit,
             Self::RedoTimelineEdit(_) => CommandName::RedoTimelineEdit,
+            Self::AddTextSegment(_) => CommandName::AddTextSegment,
+            Self::EditTextSegment(_) => CommandName::EditTextSegment,
         }
     }
 }
@@ -278,6 +284,32 @@ pub struct RedoTimelineEditCommandPayload {
     pub draft: Draft,
     pub command_state: CommandState,
     pub selection: TimelineSelection,
+}
+
+/// Payload accepted by the Phase 3 text segment add command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTextSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub source_timerange: SourceTimerange,
+    pub target_timerange: TargetTimerange,
+    pub text: TextSegment,
+}
+
+/// Payload accepted by the Phase 3 text segment edit command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EditTextSegmentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub text: TextSegment,
 }
 
 /// Segment and track selection returned by Rust-owned timeline commands.

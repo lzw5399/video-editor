@@ -8,6 +8,7 @@ use ts_rs::TS;
 
 use crate::{
     Draft, DraftSchemaVersion, Microseconds, RationalFrameRate, SourceTimerange, TargetTimerange,
+    TextSegment,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -179,6 +180,9 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                     transition.duration,
                 )?;
             }
+            if let Some(text) = &segment.text {
+                validate_text_segment("tracks[].segments[].text", text)?;
+            }
         }
     }
 
@@ -263,6 +267,40 @@ fn validate_frame_rate(
             field: format!("{field}.numerator"),
             reason: "numerator must be greater than zero".to_owned(),
         });
+    }
+    Ok(())
+}
+
+fn validate_text_segment(field: &str, text: &TextSegment) -> Result<(), DraftValidationError> {
+    if text.content.trim().is_empty() {
+        return Err(missing_field(&format!("{field}.content")));
+    }
+    if text.style.font_size == 0 {
+        return Err(missing_field(&format!("{field}.style.fontSize")));
+    }
+    validate_required_text(&format!("{field}.style.color"), &text.style.color)?;
+    if let Some(stroke) = &text.style.stroke {
+        validate_required_text(&format!("{field}.style.stroke.color"), &stroke.color)?;
+        if stroke.width == 0 {
+            return Err(missing_field(&format!("{field}.style.stroke.width")));
+        }
+    }
+    if let Some(shadow) = &text.style.shadow {
+        validate_required_text(&format!("{field}.style.shadow.color"), &shadow.color)?;
+    }
+    if let Some(background) = &text.style.background {
+        validate_required_text(
+            &format!("{field}.style.background.color"),
+            &background.color,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_required_text(field: &str, value: &str) -> Result<(), DraftValidationError> {
+    if value.trim().is_empty() {
+        return Err(missing_field(field));
     }
     Ok(())
 }

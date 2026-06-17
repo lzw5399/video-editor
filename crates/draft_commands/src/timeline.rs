@@ -10,6 +10,7 @@ use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
+    text::{add_text_segment, edit_text_segment},
 };
 
 pub fn checked_source_end(
@@ -188,6 +189,24 @@ pub fn execute_timeline_edit(
         CommandPayload::RedoTimelineEdit(payload) => {
             redo_timeline_edit(&payload.draft, &payload.command_state, &payload.selection)
         }
+        CommandPayload::AddTextSegment(payload) => add_text_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.segment_id,
+            payload.material_id,
+            payload.source_timerange,
+            payload.target_timerange,
+            payload.text,
+        ),
+        CommandPayload::EditTextSegment(payload) => edit_text_segment(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.text,
+        ),
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {
                 command: format!("{:?}", other.command_name()),
