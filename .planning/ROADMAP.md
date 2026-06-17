@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation And Golden Harness** - Rust/Electron workspace, binding path, FFmpeg discovery, and deterministic test fixtures (completed 2026-06-16)
 - [x] **Phase 2: Draft And Material System** - `.veproj` draft bundle, Jianying-aligned schema, material import/probing, and save/open validation (completed 2026-06-17)
 - [x] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics (completed 2026-06-17)
+- [ ] **Phase 03.1: Kaipai Compatibility Foundation** - Offline formula fixtures, compatibility report, resource bundle boundaries, and draft template semantics preparation (INSERTED)
 - [x] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration (completed 2026-06-17)
 - [x] **Phase 04.1: Professional Jianying Workspace UI Refinement** - Higher-density Jianying Pro-like desktop workspace refinement (completed 2026-06-17)
 - [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
@@ -119,6 +120,25 @@ Plans:
 
 - [x] 03-05-PLAN.md - Add fixtures, source guards, and final Phase 3 gates
 
+### Phase 03.1: Kaipai Compatibility Foundation (INSERTED)
+
+**Goal:** Establish the offline Kaipai formula compatibility foundation: sanitized formula fixtures, compatibility report semantics, resource bundle/localizer boundaries, source guards, and draft template-semantics preparation without live Kaipai API integration or Android worker runtime dependency.
+**Requirements**: COMP-02; preparation for COMP-01, ADV-02, ADV-03
+**Depends on:** Phase 3
+**Success Criteria** (what must be TRUE):
+
+  1. The project has a sanitized offline Kaipai formula bundle fixture shape that includes formula, direct materials, source media, recognizer `word_list`, `safe_area` provenance, and resource references.
+  2. Compatibility reports can classify supported, degraded, unsupported, missing-resource, and needs-native-effect items without requiring the adapter to claim full native parity.
+  3. Resource bundle/localizer boundaries are specified and tested so renderable project resources resolve to local relative paths, not remote template URLs.
+  4. Source guards prevent Kaipai provider/API/Android worker dependencies from leaking into `draft_model`, `engine_core`, `render_graph`, or `ffmpeg_compiler`.
+  5. Draft v2/template-semantics gaps are explicitly planned before any offline mapper POC claims preview/export support.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run $gsd-plan-phase 03.1 to break down)
+
 ### Phase 4: Jianying-Style Desktop Workspace
 
 **Goal**: Build the desktop editor workspace with Jianying-like structure and command-only integration to the Rust core.
@@ -219,13 +239,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 03.1 -> 4 -> 04.1 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
+| 3.1. Kaipai Compatibility Foundation | 0/0 | Not planned | - |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |

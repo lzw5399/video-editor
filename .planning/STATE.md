@@ -7,7 +7,7 @@ stopped_at: Completed Phase 04.1 verification
 last_updated: "2026-06-17T16:30:10.257Z"
 last_activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 5
   total_plans: 35
   completed_plans: 28
@@ -86,6 +86,7 @@ Progress: [███████░░░] 71%
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
+- Phase 03.1 inserted after Phase 3 (URGENT): Kaipai Compatibility Foundation for offline formula fixtures, compatibility report, resource bundle boundaries, and draft template-semantics preparation.
 
 ### Decisions
 
@@ -135,6 +136,7 @@ Recent decisions affecting current work:
 - [Phase 04]: Plan 03 keeps timeline visualization read-only and routes add/select/move/split/trim/delete/undo/redo through generated command envelopes. — The renderer now provides deterministic timeline controls while accepted draft, command state, selection, snapping, and history remain Rust-owned.
 - [Phase 04]: Phase 04 Plan 04 made Playwright workspace tests and source guards the executable closure for the Chinese desktop workspace, command-only timeline boundary, and Phase 4 public test gates. — The phase is only complete when UI language, layout, command boundary, and generated contract discipline are enforced by public gates.
 - [Phase 04]: Phase 04 verification included screenshot-based visual spot checks at 1280x800 and 1120x720, then fixed timeline toolbar clipping with a Playwright geometry regression. — The Chinese desktop workspace is verified as a compact editor surface without remaining Phase 4 visual blockers.
+- [Phase 03.1]: Inserted Kaipai Compatibility Foundation. — The compatibility branch will first define offline formula fixtures, compatibility reports, resource-localizer boundaries, source guards, and draft template-semantics preparation before live Kaipai API work or Android worker runtime dependency.
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
