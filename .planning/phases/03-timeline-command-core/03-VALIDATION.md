@@ -1,10 +1,11 @@
 ---
 phase: 03
 slug: timeline-command-core
-status: draft
+status: verified
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-06-17
+verified: 2026-06-17
 ---
 
 # Phase 03 - Validation Strategy
@@ -32,15 +33,15 @@ Per-phase validation contract for Rust-owned timeline commands, atomic invalid-e
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 03-01-W0 | 03-01 | 1 | TIME-01, TIME-07 | T-03-01 / T-03-03 | Root timeline supports video/audio/text tracks; locked tracks reject mutation; same-track overlap is rejected | unit | `cargo test -p draft_commands timeline_tracks -- --nocapture` | no W0 | pending |
-| 03-01-W1 | 03-01 | 1 | TIME-02, TIME-06 | T-03-02 / T-03-04 | Timerange helpers use checked integer microsecond math and reject source/target overflow or invalid material bounds | unit | `cargo test -p draft_commands timerange_rules -- --nocapture` | no W0 | pending |
-| 03-02-W0 | 03-02 | 2 | TIME-02, TIME-03, TIME-06 | T-03-01 / T-03-04 | Add, move, split, trim, delete, and select commands mutate only validated clone state and leave original draft unchanged on failure | unit | `cargo test -p draft_commands timeline_edits -- --nocapture` | no W0 | pending |
-| 03-02-W1 | 03-02 | 2 | TIME-02, TIME-03 | T-03-05 | Generated command payloads/responses expose Rust-owned timeline commands through the standard envelope | contract/binding | `cargo test -p draft_model schema -- --nocapture && cargo test -p bindings_node timeline -- --nocapture` | partial existing | pending |
-| 03-03-W0 | 03-03 | 3 | TIME-04, TIME-06 | T-03-04 | Undo/redo history is bounded, session-only, and updated only after committed edits | unit | `cargo test -p draft_commands undo_redo -- --nocapture` | no W0 | pending |
-| 03-03-W1 | 03-03 | 3 | TIME-05 | T-03-02 / T-03-05 | Snapping and MainTrackMagnet are computed in Rust and emit deterministic command events | unit | `cargo test -p draft_commands snapping -- --nocapture` | no W0 | pending |
-| 03-04-W0 | 03-04 | 4 | TEXT-01, TEXT-02 | T-03-01 / T-03-04 | Text segments persist editable text content and MVP style values without hiding text in a URI string | unit/contract | `cargo test -p draft_commands text_commands -- --nocapture && cargo test -p draft_model schema -- --nocapture` | no W0 | pending |
-| 03-04-W1 | 03-04 | 4 | AUD-01, AUD-02 | T-03-01 / T-03-03 | Audio commands reject incompatible tracks/materials and update segment volume plus track mute in Rust | unit | `cargo test -p draft_commands audio_commands -- --nocapture` | no W0 | pending |
-| 03-05-W0 | 03-05 | 5 | TEST-02 | T-03-01 / T-03-02 / T-03-04 / T-03-05 | Required command coverage, fixture classification, source guards, and generated contract drift gates pass before phase verification | full gate | `pnpm run test:rust && pnpm run test:contracts && pnpm run test:bindings` | partial existing | pending |
+| 03-01-W0 | 03-01 | 1 | TIME-01, TIME-07 | T-03-01 / T-03-03 | Root timeline supports video/audio/text tracks; locked tracks reject mutation; same-track overlap is rejected | unit | `cargo test -p draft_commands timeline_tracks -- --nocapture` | yes | green |
+| 03-01-W1 | 03-01 | 1 | TIME-02, TIME-06 | T-03-02 / T-03-04 | Timerange helpers use checked integer microsecond math and reject source/target overflow or invalid material bounds | unit | `cargo test -p draft_commands timerange_rules -- --nocapture` | yes | green |
+| 03-02-W0 | 03-02 | 2 | TIME-02, TIME-03, TIME-06 | T-03-01 / T-03-04 | Add, move, split, trim, delete, and select commands mutate only validated clone state and leave original draft unchanged on failure | unit | `cargo test -p draft_commands timeline_edits -- --nocapture` | yes | green |
+| 03-02-W1 | 03-02 | 2 | TIME-02, TIME-03 | T-03-05 | Generated command payloads/responses expose Rust-owned timeline commands through the standard envelope | contract/binding | `cargo test -p draft_model schema -- --nocapture && cargo test -p bindings_node timeline -- --nocapture` | yes | green |
+| 03-03-W0 | 03-03 | 3 | TIME-04, TIME-06 | T-03-04 | Undo/redo history is bounded, session-only, and updated only after committed edits | unit | `cargo test -p draft_commands undo_redo -- --nocapture` | yes | green |
+| 03-03-W1 | 03-03 | 3 | TIME-05 | T-03-02 / T-03-05 | Snapping and MainTrackMagnet are computed in Rust and emit deterministic command events | unit | `cargo test -p draft_commands snapping -- --nocapture` | yes | green |
+| 03-04-W0 | 03-04 | 4 | TEXT-01, TEXT-02 | T-03-01 / T-03-04 | Text segments persist editable text content and MVP style values without hiding text in a URI string | unit/contract | `cargo test -p draft_commands text_commands -- --nocapture && cargo test -p draft_model schema -- --nocapture` | yes | green |
+| 03-04-W1 | 03-04 | 4 | AUD-01, AUD-02 | T-03-01 / T-03-03 | Audio commands reject incompatible tracks/materials and update segment volume plus track mute in Rust | unit | `cargo test -p draft_commands audio_commands -- --nocapture` | yes | green |
+| 03-05-W0 | 03-05 | 5 | TEST-02 | T-03-01 / T-03-02 / T-03-04 / T-03-05 | Required command coverage, fixture classification, source guards, and generated contract drift gates pass before phase verification | full gate | `pnpm run test:rust && pnpm run test:contracts && pnpm run test:bindings` | yes | green |
 
 ## Threat References
 
@@ -54,15 +55,32 @@ Per-phase validation contract for Rust-owned timeline commands, atomic invalid-e
 
 ## Wave 0 Requirements
 
-- [ ] Add `draft_model = { path = "../draft_model" }` to `crates/draft_commands/Cargo.toml`.
-- [ ] Add command modules and tests under `crates/draft_commands/src/` for timeranges, track rules, timeline edits, snapping, history, text, and audio.
-- [ ] Extend `crates/draft_model/src/lib.rs`, `timeline.rs`, and schema export tests with timeline command payloads/responses, command state, selection state, text style/content, and segment volume types.
-- [ ] Extend `crates/bindings_node/src/lib.rs` or a binding command-service module with timeline command routes after pure command tests exist.
-- [ ] Extend source guards to prove `draft_commands` has no platform/runtime imports and no semantic float seconds are introduced in Rust contracts, schemas, or generated TypeScript.
+- [x] Add `draft_model = { path = "../draft_model" }` to `crates/draft_commands/Cargo.toml`.
+- [x] Add command modules and tests under `crates/draft_commands/src/` for timeranges, track rules, timeline edits, snapping, history, text, and audio.
+- [x] Extend `crates/draft_model/src/lib.rs`, `timeline.rs`, and schema export tests with timeline command payloads/responses, command state, selection state, text style/content, and segment volume types.
+- [x] Extend `crates/bindings_node/src/lib.rs` or a binding command-service module with timeline command routes after pure command tests exist.
+- [x] Extend source guards to prove `draft_commands` has no platform/runtime imports and no semantic float seconds are introduced in Rust contracts, schemas, or generated TypeScript.
 
 ## Manual-Only Verifications
 
 All Phase 3 behaviors have automated verification. Rich drag UI, visual timeline checks, preview parity, waveform caches, render graph, and export are deferred to later phases.
+
+## Validation Audit 2026-06-17
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+## Evidence
+
+- `pnpm run test:phase3-commands` - PASS
+- `pnpm run test:phase3-source-guards` - PASS
+- `cargo test -p draft_model schema_fixtures -- --nocapture` - PASS
+- `PATH="$HOME/.cargo/bin:$PATH" just build` - PASS
+- `PATH="$HOME/.cargo/bin:$PATH" just test` - PASS
+- `git diff --exit-code schemas apps/desktop-electron/src/generated` - PASS
 
 ## Validation Sign-Off
 
@@ -73,4 +91,4 @@ All Phase 3 behaviors have automated verification. Rich drag UI, visual timeline
 - [x] Feedback latency target is below 240 seconds.
 - [x] `nyquist_compliant: true` set in frontmatter.
 
-**Approval:** pending execution
+**Approval:** approved 2026-06-17
