@@ -133,25 +133,29 @@ Plans:
   4. Source guards prevent Kaipai provider/API/Android worker dependencies from leaking into `draft_model`, `engine_core`, `render_graph`, or `ffmpeg_compiler`.
   5. Draft v2/template-semantics gaps are explicitly planned before any offline mapper POC claims preview/export support.
 
-**Plans:** 4 plans
+**Plans:** 5 plans
 
 Plans:
 
 **Wave 1**
 
-- [ ] 03.1-01-PLAN.md - Create offline formula bundle contracts and sanitized fixture corpus
+- [ ] 03.1-01-PLAN.md - Create adapter crate, formula bundle contracts, and generated schema/TypeScript drift gates
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03.1-02-PLAN.md - Create compatibility report schema, snapshots, and native-effect classification
+- [ ] 03.1-02-PLAN.md - Create sanitized offline fixture corpus and sanitizer validation tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03.1-03-PLAN.md - Create resource localizer boundary and local path-safety tests
+- [ ] 03.1-03-PLAN.md - Create compatibility report schema, snapshots, and native-effect classification
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03.1-04-PLAN.md - Add source guards, phase gates, and Draft v2/template-semantics gap inventory
+- [ ] 03.1-04-PLAN.md - Create resource localizer boundary and local path-safety tests
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03.1-05-PLAN.md - Add source guards, phase gates, and Draft v2/template-semantics gap inventory
 
 ### Phase 4: Jianying-Style Desktop Workspace
 
@@ -260,7 +264,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 03.1 -> 4 -> 04.1 -> 5 -> 6
 | 1. Foundation And Golden Harness | 9/9 | Complete    | 2026-06-17 |
 | 2. Draft And Material System | 6/6 | Complete    | 2026-06-17 |
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
-| 3.1. Kaipai Compatibility Foundation | 0/4 | Planned | - |
+| 3.1. Kaipai Compatibility Foundation | 0/5 | Planned | - |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 0/4 | Not started | - |

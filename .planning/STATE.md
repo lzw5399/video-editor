@@ -9,9 +9,9 @@ last_activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 35
+  total_plans: 33
   completed_plans: 28
-  percent: 71
+  percent: 85
 ---
 
 # Project State
@@ -30,7 +30,7 @@ Plan: Not started
 Status: Ready for planning
 Last activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 
-Progress: [███████░░░] 71%
+Progress: [████████--] 85%
 
 ## Performance Metrics
 
@@ -137,6 +137,7 @@ Recent decisions affecting current work:
 - [Phase 04]: Phase 04 Plan 04 made Playwright workspace tests and source guards the executable closure for the Chinese desktop workspace, command-only timeline boundary, and Phase 4 public test gates. — The phase is only complete when UI language, layout, command boundary, and generated contract discipline are enforced by public gates.
 - [Phase 04]: Phase 04 verification included screenshot-based visual spot checks at 1280x800 and 1120x720, then fixed timeline toolbar clipping with a Playwright geometry regression. — The Chinese desktop workspace is verified as a compact editor surface without remaining Phase 4 visual blockers.
 - [Phase 03.1]: Inserted Kaipai Compatibility Foundation. — The compatibility branch will first define offline formula fixtures, compatibility reports, resource-localizer boundaries, source guards, and draft template-semantics preparation before live Kaipai API work or Android worker runtime dependency.
+- [Phase 03.1]: Revised planning into five scoped plans. — Adapter contract/schema work, sanitized fixture corpus, compatibility reports, resource localization, and source-guard/gap-inventory gates are now separate waves so no plan carries oversized file scope.
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
