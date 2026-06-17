@@ -411,22 +411,19 @@ This follows existing generated-contract command helper style. [VERIFIED: apps/d
 | A2 | A single `updateDraftCanvasConfig` command is preferable to multiple partial canvas commands. | Summary / Architecture Patterns | Fine-grained commands could be desired for UI responsiveness, but existing command history works best with atomic semantic edits. |
 | A3 | `TimelineCommandResponse` can be reused for canvas edits instead of introducing a canvas-specific response. | Summary / Architecture Patterns | If planner chooses a new response type, generated contracts and UI appliers need extra work. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `aspectRatio` be stored as preset/custom or derived from dimensions only?**
    - What we know: Phase context allows derived/validated ratio or stable presets plus custom width/height. [VERIFIED: .planning/phases/07-project-canvas-space-and-coordinate-system/07-CONTEXT.md]
-   - What's unclear: The exact persisted shape is left to planner discretion. [VERIFIED: .planning/phases/07-project-canvas-space-and-coordinate-system/07-CONTEXT.md]
-   - Recommendation: Store a typed preset/custom semantic plus width/height, and validate preset dimensions by reduced ratio. [ASSUMED]
+   - RESOLVED: Store a typed preset/custom semantic plus width/height, and validate preset dimensions by reduced ratio. This preserves Jianying-style preset behavior without making renderer-derived strings the canonical source.
 
 2. **Should preview output be full canvas dimensions or scaled preview cache dimensions?**
    - What we know: Preview currently uses fixed 960x540 while export uses preset dimensions; Phase 07 says preview requests should use the same resolved profile so preview/export stay semantic. [VERIFIED: crates/preview_service/src/service.rs, crates/bindings_node/src/preview_export_service.rs, .planning/phases/07-project-canvas-space-and-coordinate-system/07-CONTEXT.md]
-   - What's unclear: Whether preview artifacts should render at draft canvas resolution or downscaled dimensions preserving ratio. [ASSUMED]
-   - Recommendation: Use draft ratio for preview UI and derive preview cache dimensions from draft canvas with a documented max width/height, while export validation uses exact draft canvas dimensions. [ASSUMED]
+   - RESOLVED: Preview semantics derive from draft canvas width/height/fps, while preview cache artifacts may be downscaled with a documented max size that preserves draft ratio. Export validation uses exact draft canvas dimensions and rational frame rate.
 
 3. **Should image background accept a material ID now or remain disabled UI-only?**
    - What we know: UI spec allows disabled/deferred image selector if not implemented, but semantic mode list includes image background. [VERIFIED: .planning/phases/07-project-canvas-space-and-coordinate-system/07-UI-SPEC.md]
-   - What's unclear: Whether Phase 07 should validate an optional image material reference or only model unsupported image background. [ASSUMED]
-   - Recommendation: Add the enum variant with optional reference shape and reject/mark unsupported until material selection is planned; keep UI disabled with `未接入`. [ASSUMED]
+   - RESOLVED: Add the semantic image-background variant with a validation boundary. If a material reference is present, it must resolve to an image material; if material selection is not implemented in UI, the UI keeps `图片背景` visible as disabled/`未接入` and does not fabricate a local material reference.
 
 ## Environment Availability
 
