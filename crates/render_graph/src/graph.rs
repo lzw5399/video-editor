@@ -167,6 +167,7 @@ pub enum RenderGraphErrorKind {
     EmptyRenderRange,
     UnknownSegmentInRangeState,
     UnknownMaterialInRangeState,
+    UnsupportedProfileSetting,
 }
 
 pub fn build_render_graph(

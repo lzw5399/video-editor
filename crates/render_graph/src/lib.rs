@@ -5,11 +5,15 @@
 //! It does not execute FFmpeg jobs or decide editing behavior.
 
 pub mod graph;
+pub mod profile;
 
 pub use graph::{
     RenderAudioMix, RenderCanvas, RenderFilterIntent, RenderGraph, RenderGraphError,
     RenderGraphErrorKind, RenderIntentSupport, RenderMaterial, RenderSampledFrame,
     RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, build_render_graph,
+};
+pub use profile::{
+    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphPlan, RenderOutputProfile,
 };
 
 /// Boundary marker for render intent graph types.
