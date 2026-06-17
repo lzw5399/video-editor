@@ -3,12 +3,15 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
+import type { CommandResultEnvelope, PreviewArtifactResponse } from "../generated/CommandResultEnvelope";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
   command: CommandEnvelope["command"];
   kind: CommandEnvelope["payload"]["kind"];
   requestId: string | null;
+  targetTime: number | null;
+  targetTimerange: { start: number; duration: number } | null;
 };
 
 declare global {
@@ -33,6 +36,10 @@ ipcMain.handle("core:version", (event) => {
 ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   assertAllowedIpcSender(event);
   recordTestExecuteCommand(command);
+  const testPreviewResponse = maybeBuildTestPreviewResponse(command);
+  if (testPreviewResponse !== null) {
+    return testPreviewResponse;
+  }
   return executeCommand(command);
 });
 
@@ -124,10 +131,58 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     return;
   }
 
+  const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
+  const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
+
   globalThis.__videoEditorTestExecuteCommandCalls ??= [];
   globalThis.__videoEditorTestExecuteCommandCalls.push({
     command: command.command,
     kind: command.payload.kind,
-    requestId: command.requestId ?? null
+    requestId: command.requestId ?? null,
+    targetTime,
+    targetTimerange
   });
+}
+
+function maybeBuildTestPreviewResponse(command: CommandEnvelope): CommandResultEnvelope<PreviewArtifactResponse> | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS !== "1") {
+    return null;
+  }
+
+  if (command.payload.kind === "requestPreviewFrame") {
+    return {
+      ok: true,
+      data: {
+        profile: "framePng",
+        path: `/tmp/video-editor-preview-cache/test-frame-${command.payload.targetTime}.png`,
+        mimeType: "image/png",
+        status: "generated",
+        targetTimerange: {
+          start: command.payload.targetTime,
+          duration: 33_333
+        },
+        diagnostic: null
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "requestPreviewSegment") {
+    return {
+      ok: true,
+      data: {
+        profile: "segmentMp4",
+        path: `/tmp/video-editor-preview-cache/test-segment-${command.payload.targetTimerange.start}.mp4`,
+        mimeType: "video/mp4",
+        status: "cached",
+        targetTimerange: command.payload.targetTimerange,
+        diagnostic: null
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  return null;
 }

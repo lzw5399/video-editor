@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
@@ -7,6 +8,8 @@ type ExecuteCommandCall = {
   command: CommandName;
   kind: string;
   requestId: string | null;
+  targetTime: number | null;
+  targetTimerange: { start: number; duration: number } | null;
 };
 
 type RegionBox = {
@@ -18,6 +21,8 @@ type RegionBox = {
 
 const WORKSPACE_CATEGORIES = ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
 const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
+const REPO_ROOT = join(process.cwd(), "../..");
+const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 
 type VideoEditorCoreApi = {
   executeCommand: (command: unknown) => Promise<unknown>;
@@ -29,12 +34,14 @@ declare global {
   }
 }
 
-async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchWorkspaceApp(options: { mockPreviewCommands?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
-      VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1"
+      VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
+      VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
+      ...options.env
     }
   });
   const page = await app.firstWindow();
@@ -124,6 +131,12 @@ async function expectProfessionalWorkspaceAtViewport(
   await expectPreviewCanvasAspectRatio(page);
   await expectIconButtonsHaveAccessibleNames(page);
   await expectTimelineInputsFit(page);
+  await expectPreviewControlsFit(page, `预览控制 ${width}x${height}`);
+}
+
+async function savePhase5PreviewScreenshot(page: Page, filename: string): Promise<void> {
+  mkdirSync(PHASE5_SCREENSHOT_DIR, { recursive: true });
+  await page.screenshot({ path: join(PHASE5_SCREENSHOT_DIR, filename), fullPage: true });
 }
 
 async function expectStableBox(locator: Locator, label: string): Promise<RegionBox> {
@@ -212,6 +225,45 @@ async function expectPreviewCanvasAspectRatio(page: Page): Promise<void> {
   expect(Math.abs(ratio - 16 / 9), "预览画面保持 16:9").toBeLessThanOrEqual(0.04);
 }
 
+async function expectPreviewControlsFit(page: Page, label: string): Promise<void> {
+  const clippedItems = await page.locator(".preview-shell").evaluate((shell) => {
+    const shellBox = shell.getBoundingClientRect();
+    return Array.from(
+      shell.querySelectorAll(".preview-canvas, .preview-transport, .preview-status-line, .preview-artifact-panel, button, input")
+    )
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return {
+          label: element.getAttribute("aria-label") || element.textContent?.replace(/\s+/g, " ").trim() || element.tagName,
+          visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom
+        };
+      })
+      .filter(
+        (item) =>
+          item.visible &&
+          (item.left < shellBox.left - 1 ||
+            item.top < shellBox.top - 1 ||
+            item.right > shellBox.right + 1 ||
+            item.bottom > shellBox.bottom + 1)
+      );
+  });
+
+  expect(clippedItems, `${label} must stay inside preview shell`).toEqual([]);
+}
+
+function expectCompactScrollbarBaseline(): void {
+  const source = readFileSync(join(process.cwd(), "src/renderer/styles.css"), "utf8");
+
+  expect(source, "全局滚动条应保持紧凑深色基线").toContain("scrollbar-width: thin");
+  expect(source, "全局滚动条应保持 webkit 深色滑块").toContain("::-webkit-scrollbar-thumb");
+  expect(source, "滚动条宽度不能回退到默认宽度").toMatch(/::-webkit-scrollbar\s*\{[\s\S]*?width:\s*4px/);
+}
+
 async function expectNoLeftSecondaryMenu(page: Page): Promise<void> {
   await expect(page.locator(".secondary-category-rail")).toHaveCount(0);
   await expect(page.locator(".secondary-category-button")).toHaveCount(0);
@@ -292,10 +344,13 @@ test("Chinese editor workspace opens with required regions and material states",
       await expect(materialFilters.getByRole("button", { name: filter })).toBeVisible();
     }
 
-    await expect(page.getByText("预览待接入")).toBeVisible();
-    await expect(page.getByText("预览画面将在下一阶段接入")).toBeVisible();
+    await expect(page.getByText("预览命令已接入")).toBeVisible();
+    await expect(page.getByText("等待请求预览帧").first()).toBeVisible();
     await expect(page.getByText("预览将在下一阶段接入")).toHaveCount(0);
-    await expect(page.getByText("等待预览帧接入")).toBeVisible();
+    await expect(page.getByText("等待生成预览片段")).toBeVisible();
+    await expect(page.getByRole("button", { name: "请求预览帧" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成预览片段" })).toBeVisible();
+    await expect(page.getByLabel("预览时间")).toBeVisible();
     await expect(page.getByRole("button", { name: "适应窗口" })).toBeVisible();
     await expect(page.getByRole("button", { name: "画面比例" })).toBeVisible();
     await expect(page.getByRole("button", { name: "全屏" })).toBeVisible();
@@ -412,6 +467,60 @@ test("material import routes through the same executeCommand bridge", async () =
   }
 });
 
+test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByLabel("预览时间").fill("1200000");
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
+
+    await page.getByRole("button", { name: "请求预览帧" }).click();
+    await expectCommandCall(app, "requestPreviewFrame");
+    await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
+    await expect(page.getByLabel("预览产物")).toContainText("image/png");
+    await expect(page.getByLabel("预览画面")).toContainText("/tmp/video-editor-preview-cache/test-frame-1200000.png");
+
+    await page.getByRole("button", { name: "生成预览片段" }).click();
+    await expectCommandCall(app, "requestPreviewSegment");
+    await expect(page.getByLabel("预览产物")).toContainText("预览片段命中缓存");
+    await expect(page.getByLabel("预览产物")).toContainText("video/mp4");
+    await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-1200000.mp4");
+
+    const calls = await readExecuteCommandCalls(app);
+    const frameCall = calls.find((call) => call.command === "requestPreviewFrame");
+    const segmentCall = calls.find((call) => call.command === "requestPreviewSegment");
+    expect(frameCall?.targetTime).toBe(1_200_000);
+    expect(segmentCall?.targetTimerange).toEqual({ start: 1_200_000, duration: 2_000_000 });
+  } finally {
+    await app.close();
+  }
+});
+
+test("预览失败显示中文分类错误且不改草稿", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    mockPreviewCommands: false,
+    env: {
+      VE_FFMPEG_PATH: "/tmp/video-editor-missing-ffmpeg",
+      VE_FFPROBE_PATH: "/tmp/video-editor-missing-ffprobe"
+    }
+  });
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByRole("button", { name: "请求预览帧" }).click();
+    await expectCommandCall(app, "requestPreviewFrame");
+    await expect(page.getByLabel("预览状态")).toContainText("请求预览帧失败");
+    await expect(page.getByLabel("预览状态")).toContainText("预览服务失败");
+    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
+    await expect(page.getByLabel("预览产物")).toContainText("预览帧失败");
+  } finally {
+    await app.close();
+  }
+});
+
 test("concurrent material commands are blocked while a timeline edit is pending", async () => {
   const { app, page } = await launchWorkspaceApp();
 
@@ -471,6 +580,26 @@ test("layout stability keeps workspace regions visible and fixed at required siz
     expectSameSize(previewBefore, previewAfter, "预览窗口");
     expectSameSize(timelineBefore, timelineAfter, "时间线");
     expectSameSize(inspectorBefore, inspectorAfter, "属性检查器");
+  } finally {
+    await app.close();
+  }
+});
+
+test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await expectProfessionalWorkspaceAtViewport(page, app, 1280, 800);
+    await expectCompactScrollbarBaseline();
+    await savePhase5PreviewScreenshot(page, "preview-1280x800.png");
+
+    await expectProfessionalWorkspaceAtViewport(page, app, 1120, 720);
+    await expectCompactScrollbarBaseline();
+    await savePhase5PreviewScreenshot(page, "preview-1120x720.png");
+
+    await expect(page.getByRole("button", { name: "请求预览帧" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成预览片段" })).toBeVisible();
+    await expect(page.getByLabel("预览产物")).toBeVisible();
   } finally {
     await app.close();
   }

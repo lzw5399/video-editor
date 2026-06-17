@@ -7,6 +7,12 @@ rg -n "ffmpeg|ffprobe|filter_complex|renderGraph|cacheKey|cache key|child_proces
     exit 1
   } || true
 
+rg -n "invalidatePreviewCache|changedRanges|changedMaterialIds|materialDependencies|semanticFingerprint|execFile|exec\\(|process\\." \
+  apps/desktop-electron/src/renderer --glob '!commandHelpers.ts' && {
+    echo "renderer must not own preview invalidation overlap, cache fingerprint, or process execution semantics" >&2
+    exit 1
+  } || true
+
 rg -n "ffmpegArgs|filterComplex|ffmpegScripts|renderGraph|previewCache" \
   schemas/draft.schema.json fixtures/draft/positive && {
     echo "draft persistence must not contain derived render or preview cache artifacts" >&2

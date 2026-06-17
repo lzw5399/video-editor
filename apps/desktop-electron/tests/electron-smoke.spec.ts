@@ -87,11 +87,12 @@ async function startUntrustedHttpPage(): Promise<{ origin: string; url: string; 
 }
 
 test("renderer reaches Rust binding only through the typed preload bridge", async () => {
-  const { app, page } = await launchSmokeApp();
+    const { app, page } = await launchSmokeApp();
 
   try {
     await expectVisibleWorkspaceRegions(page);
-    await expect(page.getByText("预览画面将在下一阶段接入")).toBeVisible();
+    await expect(page.getByText("预览命令已接入")).toBeVisible();
+    await expect(page.getByText("等待请求预览帧").first()).toBeVisible();
     await expect(page.getByText("未选择片段")).toBeVisible();
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));
