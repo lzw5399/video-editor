@@ -6,7 +6,10 @@ use draft_model::{
     Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
-use render_graph::{RenderGraphErrorKind, build_render_graph};
+use render_graph::{
+    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphErrorKind, RenderGraphPlan,
+    RenderOutputProfile, build_render_graph,
+};
 
 #[test]
 fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_state() {
@@ -217,6 +220,141 @@ fn render_graph_rejects_range_state_from_a_different_normalized_draft() {
         .expect_err("range state must come from the same normalized draft semantics");
 
     assert_eq!(error.kind, RenderGraphErrorKind::UnknownSegmentInRangeState);
+}
+
+#[test]
+fn output_profiles_share_the_same_graph_shape_with_distinct_profile_metadata() {
+    let graph = sample_graph();
+    let preview_frame = RenderGraphPlan::new(
+        graph.clone(),
+        RenderOutputProfile::preview_frame_png(
+            OutputDimensions::new(960, 540),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(33_333)),
+        ),
+    )
+    .expect("preview frame profile should validate");
+    let preview_segment = RenderGraphPlan::new(
+        graph.clone(),
+        RenderOutputProfile::preview_segment_mp4(
+            OutputDimensions::new(960, 540),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+        ),
+    )
+    .expect("preview segment profile should validate");
+    let export = RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export profile should validate");
+
+    let frame_snapshot = serde_json::to_value(&preview_frame).expect("frame plan serializes");
+    let segment_snapshot = serde_json::to_value(&preview_segment).expect("segment plan serializes");
+    let export_snapshot = serde_json::to_value(&export).expect("export plan serializes");
+
+    assert_eq!(frame_snapshot["graph"], segment_snapshot["graph"]);
+    assert_eq!(segment_snapshot["graph"], export_snapshot["graph"]);
+    assert_eq!(
+        frame_snapshot["outputProfile"],
+        serde_json::json!({
+            "kind": "previewFrame",
+            "profileId": "preview-frame-png",
+            "dimensions": { "width": 960, "height": 540 },
+            "frameRate": { "numerator": 30, "denominator": 1 },
+            "targetTimerange": { "start": 600000, "duration": 33333 },
+            "format": "png",
+            "validationHints": [
+                "single-frame still output",
+                "preserve alpha only if compiler/runtime supports it"
+            ]
+        })
+    );
+    assert_eq!(
+        segment_snapshot["outputProfile"],
+        serde_json::json!({
+            "kind": "previewSegment",
+            "profileId": "preview-segment-mp4-h264",
+            "dimensions": { "width": 960, "height": 540 },
+            "frameRate": { "numerator": 30, "denominator": 1 },
+            "targetTimerange": { "start": 600000, "duration": 100000 },
+            "container": "mp4",
+            "videoCodec": "h264",
+            "audioCodec": "aac",
+            "presetId": "preview-segment-balanced",
+            "validationHints": [
+                "short derived preview cache artifact",
+                "compiled through the same render graph as export"
+            ]
+        })
+    );
+    assert_eq!(
+        export_snapshot["outputProfile"],
+        serde_json::json!({
+            "kind": "exportMp4",
+            "profileId": "export-mp4-h264-balanced",
+            "dimensions": { "width": 1920, "height": 1080 },
+            "frameRate": { "numerator": 30, "denominator": 1 },
+            "targetTimerange": { "start": 600000, "duration": 100000 },
+            "preset": {
+                "presetId": "h264-aac-balanced",
+                "container": "mp4",
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "crf": 20,
+                "audioBitrateKbps": 192
+            },
+            "validationHints": [
+                "validate file exists and is non-empty",
+                "validate duration, fps, resolution, and audio stream with ffprobe"
+            ]
+        })
+    );
+}
+
+#[test]
+fn output_profiles_reject_unsupported_dimensions_frame_rates_and_ranges() {
+    let graph = sample_graph();
+
+    let error = RenderGraphPlan::new(
+        graph.clone(),
+        RenderOutputProfile::preview_frame(
+            "custom-preview-frame",
+            OutputDimensions::new(0, 540),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(33_333)),
+            PreviewFrameFormat::Png,
+        ),
+    )
+    .expect_err("zero width should be classified");
+    assert_eq!(error.kind, RenderGraphErrorKind::UnsupportedProfileSetting);
+
+    let error = RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::preview_segment_mp4(
+            OutputDimensions::new(960, 540),
+            RationalFrameRate::new(0, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+        ),
+    )
+    .expect_err("zero frame-rate numerator should be classified");
+    assert_eq!(error.kind, RenderGraphErrorKind::UnsupportedProfileSetting);
+}
+
+fn sample_graph() -> render_graph::RenderGraph {
+    let normalized = normalize_draft(&render_graph_draft(), &EngineProfile::mvp_default())
+        .expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+    build_render_graph(&normalized, &range).expect("graph should build")
 }
 
 fn render_graph_draft() -> Draft {
