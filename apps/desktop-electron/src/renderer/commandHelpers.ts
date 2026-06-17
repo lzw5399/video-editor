@@ -1,19 +1,28 @@
 import type {
+  AddSegmentCommandPayload,
   AddAudioSegmentCommandPayload,
   AddTextSegmentCommandPayload,
   CommandEnvelope,
   CommandState,
+  DeleteSegmentCommandPayload,
   EditTextSegmentCommandPayload,
   ImportMaterialCommandPayload,
   ListMissingMaterialsCommandPayload,
+  MoveSegmentCommandPayload,
+  RedoTimelineEditCommandPayload,
+  SelectTimelineSegmentsCommandPayload,
+  SplitSegmentCommandPayload,
   TimelineSelection,
-  TrackId
+  TrimSegmentCommandPayload,
+  TrackId,
+  UndoTimelineEditCommandPayload
 } from "../generated/CommandEnvelope";
 import type { CommandResultEnvelope, TimelineCommandResponse } from "../generated/CommandResultEnvelope";
 import type {
   Draft,
   MaterialId,
   MaterialKind,
+  Microseconds,
   SegmentId,
   SegmentVolume,
   SourceTimerange,
@@ -65,6 +74,139 @@ export function buildListMissingMaterialsCommand(draft: Draft, bundlePath: strin
   } satisfies ListMissingMaterialsCommandPayload & { kind: "listMissingMaterials" };
 
   return envelope("listMissingMaterials", payload);
+}
+
+type AddSegmentOptions = {
+  context: CommandContext;
+  trackId: TrackId;
+  segmentId: SegmentId;
+  materialId: MaterialId;
+  sourceTimerange: SourceTimerange;
+  targetTimerange: TargetTimerange;
+};
+
+export function buildAddSegmentCommand(options: AddSegmentOptions): CommandEnvelope {
+  const payload = {
+    kind: "addSegment",
+    draft: options.context.draft,
+    commandState: options.context.commandState,
+    selection: options.context.selection,
+    trackId: options.trackId,
+    segmentId: options.segmentId,
+    materialId: options.materialId,
+    sourceTimerange: options.sourceTimerange,
+    targetTimerange: options.targetTimerange
+  } satisfies AddSegmentCommandPayload & { kind: "addSegment" };
+
+  return envelope("addSegment", payload);
+}
+
+export function buildSelectTimelineSegmentsCommand(
+  context: CommandContext,
+  segmentIds: SegmentId[],
+  trackIds: TrackId[]
+): CommandEnvelope {
+  const payload = {
+    kind: "selectTimelineSegments",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentIds,
+    trackIds
+  } satisfies SelectTimelineSegmentsCommandPayload & { kind: "selectTimelineSegments" };
+
+  return envelope("selectTimelineSegments", payload);
+}
+
+export function buildMoveSegmentCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  targetTrackId: TrackId,
+  targetStart: Microseconds
+): CommandEnvelope {
+  const payload = {
+    kind: "moveSegment",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    targetTrackId,
+    targetStart
+  } satisfies MoveSegmentCommandPayload & { kind: "moveSegment" };
+
+  return envelope("moveSegment", payload);
+}
+
+export function buildSplitSegmentCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  rightSegmentId: SegmentId,
+  splitAt: Microseconds
+): CommandEnvelope {
+  const payload = {
+    kind: "splitSegment",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    rightSegmentId,
+    splitAt
+  } satisfies SplitSegmentCommandPayload & { kind: "splitSegment" };
+
+  return envelope("splitSegment", payload);
+}
+
+export function buildTrimSegmentCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  direction: "left" | "right",
+  targetTimerange: TargetTimerange
+): CommandEnvelope {
+  const payload = {
+    kind: "trimSegment",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    direction,
+    targetTimerange
+  } satisfies TrimSegmentCommandPayload & { kind: "trimSegment" };
+
+  return envelope("trimSegment", payload);
+}
+
+export function buildDeleteSegmentCommand(context: CommandContext, segmentId: SegmentId): CommandEnvelope {
+  const payload = {
+    kind: "deleteSegment",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId
+  } satisfies DeleteSegmentCommandPayload & { kind: "deleteSegment" };
+
+  return envelope("deleteSegment", payload);
+}
+
+export function buildUndoTimelineEditCommand(context: CommandContext): CommandEnvelope {
+  const payload = {
+    kind: "undoTimelineEdit",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection
+  } satisfies UndoTimelineEditCommandPayload & { kind: "undoTimelineEdit" };
+
+  return envelope("undoTimelineEdit", payload);
+}
+
+export function buildRedoTimelineEditCommand(context: CommandContext): CommandEnvelope {
+  const payload = {
+    kind: "redoTimelineEdit",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection
+  } satisfies RedoTimelineEditCommandPayload & { kind: "redoTimelineEdit" };
+
+  return envelope("redoTimelineEdit", payload);
 }
 
 type TextCommandOptions = {

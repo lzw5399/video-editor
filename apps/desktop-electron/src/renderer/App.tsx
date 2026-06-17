@@ -8,17 +8,25 @@ import type {
   ListMissingMaterialsResponse,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
-import type { SegmentVolume, TextSegment } from "../generated/Draft";
+import type { Draft, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
+  buildAddSegmentCommand,
   buildAddAudioSegmentCommand,
   buildAddTextSegmentCommand,
+  buildDeleteSegmentCommand,
   buildEditTextSegmentCommand,
   buildImportMaterialCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
+  buildMoveSegmentCommand,
+  buildRedoTimelineEditCommand,
+  buildSelectTimelineSegmentsCommand,
   buildSetSegmentVolumeCommand,
   buildSetTrackMuteCommand,
+  buildSplitSegmentCommand,
+  buildTrimSegmentCommand,
+  buildUndoTimelineEditCommand,
   commandErrorMessage
 } from "./commandHelpers";
 import {
@@ -362,6 +370,153 @@ export function App(): React.ReactElement {
     void executeTimelineCommand(buildSetTrackMuteCommand(workspace, resolvedTrackId, muted), "切换轨道静音");
   }
 
+  function handleSelectTimelineSegment(segmentId: string): void {
+    const selected = getSelectedSegmentView(
+      workspace.draft,
+      {
+        segmentIds: [segmentId],
+        trackIds: []
+      }
+    );
+
+    void executeTimelineCommand(
+      buildSelectTimelineSegmentsCommand(workspace, [segmentId], selected === null ? [] : [selected.track.trackId]),
+      "选择片段"
+    );
+  }
+
+  function handleAddTimelineSegment(materialId: string): void {
+    const material = resolveTimelineMaterial(workspace.draft, materialId);
+    const track = material === null ? null : findTrackByKind(workspace.draft, compatibleTrackKind(material.kind));
+
+    if (material === null || track === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("没有可添加到时间线的兼容素材或轨道")
+      }));
+      return;
+    }
+
+    const duration = Math.max(1_000_000, material.metadata.duration ?? 3_000_000);
+    void executeTimelineCommand(
+      buildAddSegmentCommand({
+        context: workspace,
+        trackId: track.trackId,
+        segmentId: `segment-${Date.now().toString(36)}`,
+        materialId: material.materialId,
+        sourceTimerange: {
+          start: 0,
+          duration
+        },
+        targetTimerange: {
+          start: nextTrackStart(track),
+          duration
+        }
+      }),
+      "添加片段"
+    );
+  }
+
+  function handleMoveSelectedSegment(deltaUs: number): void {
+    const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+
+    if (selected === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个片段")
+      }));
+      return;
+    }
+
+    void executeTimelineCommand(
+      buildMoveSegmentCommand(
+        workspace,
+        selected.segment.segmentId,
+        selected.track.trackId,
+        Math.max(0, selected.segment.targetTimerange.start + Math.round(deltaUs))
+      ),
+      "移动片段"
+    );
+  }
+
+  function handleSplitSelectedSegment(splitAt: number): void {
+    const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+
+    if (selected === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个片段")
+      }));
+      return;
+    }
+
+    void executeTimelineCommand(
+      buildSplitSegmentCommand(
+        workspace,
+        selected.segment.segmentId,
+        `segment-right-${Date.now().toString(36)}`,
+        Math.max(0, Math.round(splitAt))
+      ),
+      "分割片段"
+    );
+  }
+
+  function handleTrimSelectedSegment(direction: "left" | "right", deltaUs: number): void {
+    const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+
+    if (selected === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个片段")
+      }));
+      return;
+    }
+
+    const safeDelta = Math.max(1, Math.round(deltaUs));
+    const currentRange = selected.segment.targetTimerange;
+    const targetTimerange =
+      direction === "left"
+        ? {
+            start: currentRange.start + safeDelta,
+            duration: Math.max(1, currentRange.duration - safeDelta)
+          }
+        : {
+            start: currentRange.start,
+            duration: Math.max(1, currentRange.duration - safeDelta)
+          };
+
+    void executeTimelineCommand(
+      buildTrimSegmentCommand(workspace, selected.segment.segmentId, direction, targetTimerange),
+      direction === "left" ? "左侧裁剪" : "右侧裁剪"
+    );
+  }
+
+  function handleDeleteSelectedSegment(): void {
+    const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+
+    if (selected === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个片段")
+      }));
+      return;
+    }
+
+    if (!window.confirm("删除片段：确定删除所选片段？此操作可通过撤销恢复。")) {
+      return;
+    }
+
+    void executeTimelineCommand(buildDeleteSegmentCommand(workspace, selected.segment.segmentId), "删除片段");
+  }
+
+  function handleUndoTimelineEdit(): void {
+    void executeTimelineCommand(buildUndoTimelineEditCommand(workspace), "撤销");
+  }
+
+  function handleRedoTimelineEdit(): void {
+    void executeTimelineCommand(buildRedoTimelineEditCommand(workspace), "重做");
+  }
+
   return (
     <WorkspaceShell
       workspace={workspace}
@@ -381,6 +536,44 @@ export function App(): React.ReactElement {
       onEditSelectedText={handleEditSelectedText}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
+      onSelectTimelineSegment={handleSelectTimelineSegment}
+      onAddTimelineSegment={handleAddTimelineSegment}
+      onMoveSelectedSegment={handleMoveSelectedSegment}
+      onSplitSelectedSegment={handleSplitSelectedSegment}
+      onTrimSelectedSegment={handleTrimSelectedSegment}
+      onDeleteSelectedSegment={handleDeleteSelectedSegment}
+      onUndoTimelineEdit={handleUndoTimelineEdit}
+      onRedoTimelineEdit={handleRedoTimelineEdit}
     />
   );
+}
+
+function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {
+  if (materialId.length > 0) {
+    return draft.materials.find((material) => material.materialId === materialId && material.status === "available") ?? null;
+  }
+
+  return (
+    draft.materials.find(
+      (material) =>
+        material.status === "available" &&
+        (material.kind === "video" || material.kind === "image" || material.kind === "audio")
+    ) ?? null
+  );
+}
+
+function compatibleTrackKind(materialKind: MaterialKind): TrackKind {
+  if (materialKind === "audio") {
+    return "audio";
+  }
+
+  if (materialKind === "text") {
+    return "text";
+  }
+
+  if (materialKind === "sticker") {
+    return "sticker";
+  }
+
+  return "video";
 }

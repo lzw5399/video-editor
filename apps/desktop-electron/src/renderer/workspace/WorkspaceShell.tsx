@@ -22,6 +22,14 @@ type WorkspaceShellProps = {
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
+  onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
+  onAddTimelineSegment: Parameters<typeof Timeline>[0]["onAddSegment"];
+  onMoveSelectedSegment: Parameters<typeof Timeline>[0]["onMoveSelectedSegment"];
+  onSplitSelectedSegment: Parameters<typeof Timeline>[0]["onSplitSelectedSegment"];
+  onTrimSelectedSegment: Parameters<typeof Timeline>[0]["onTrimSelectedSegment"];
+  onDeleteSelectedSegment: Parameters<typeof Timeline>[0]["onDeleteSelectedSegment"];
+  onUndoTimelineEdit: Parameters<typeof Timeline>[0]["onUndo"];
+  onRedoTimelineEdit: Parameters<typeof Timeline>[0]["onRedo"];
 };
 
 export function WorkspaceShell({
@@ -41,7 +49,15 @@ export function WorkspaceShell({
   onAddAudioSegment,
   onEditSelectedText,
   onSetSelectedSegmentVolume,
-  onSetSelectedTrackMute
+  onSetSelectedTrackMute,
+  onSelectTimelineSegment,
+  onAddTimelineSegment,
+  onMoveSelectedSegment,
+  onSplitSelectedSegment,
+  onTrimSelectedSegment,
+  onDeleteSelectedSegment,
+  onUndoTimelineEdit,
+  onRedoTimelineEdit
 }: WorkspaceShellProps): React.ReactElement {
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
@@ -94,7 +110,19 @@ export function WorkspaceShell({
       </aside>
 
       <section className="timeline-panel" aria-label="时间线">
-        <Timeline workspace={workspace} playheadUs={playheadUs} onPlayheadChange={onPlayheadChange} />
+        <Timeline
+          workspace={workspace}
+          playheadUs={playheadUs}
+          onPlayheadChange={onPlayheadChange}
+          onSelectSegment={onSelectTimelineSegment}
+          onAddSegment={onAddTimelineSegment}
+          onMoveSelectedSegment={onMoveSelectedSegment}
+          onSplitSelectedSegment={onSplitSelectedSegment}
+          onTrimSelectedSegment={onTrimSelectedSegment}
+          onDeleteSelectedSegment={onDeleteSelectedSegment}
+          onUndo={onUndoTimelineEdit}
+          onRedo={onRedoTimelineEdit}
+        />
       </section>
     </main>
   );
