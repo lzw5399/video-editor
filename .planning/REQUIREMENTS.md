@@ -80,7 +80,7 @@
 - [x] **TEST-02**: Command tests cover split, trim, move, delete, snapping, undo, redo, text edit, and volume edit.
 - [x] **TEST-03**: Engine tests cover normalization, time mapping, track stacking, text layout, and frame-state snapshots.
 - [x] **TEST-04**: Render graph and FFmpeg compiler outputs have snapshot tests.
-- [ ] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
+- [x] **TEST-05**: Preview frame and exported frame match within documented tolerance for golden drafts.
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
 - [ ] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
 - [x] **TEST-08**: Electron workspace tests and source guards verify the professional UI at 1280x800 and 1120x720, including five-region visibility, command-only timeline updates, and no renderer-owned media/render semantics.
@@ -198,7 +198,7 @@
 | TEST-02 | Phase 3 | Complete |
 | TEST-03 | Phase 5 | Complete |
 | TEST-04 | Phase 5 | Complete |
-| TEST-05 | Phase 5 | Pending |
+| TEST-05 | Phase 5 | Complete |
 | TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Pending |
 | TEST-08 | Phase 04.1 | Complete |

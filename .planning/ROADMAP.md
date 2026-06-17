@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Timeline Command Core** - Track/segment model, command API, undo/redo, snapping, text/audio basics (completed 2026-06-17)
 - [x] **Phase 4: Jianying-Style Desktop Workspace** - Editor UI shell matching Jianying workspace structure and command-only core integration (completed 2026-06-17)
 - [x] **Phase 04.1: Professional Jianying Workspace UI Refinement** - Higher-density Jianying Pro-like desktop workspace refinement (completed 2026-06-17)
-- [ ] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export
+- [x] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export (completed 2026-06-18)
 - [ ] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness
 - [ ] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics
 - [ ] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics
@@ -195,7 +195,7 @@ Plans:
   3. User can export H.264 MP4 with progress, cancellation, logs, and classified errors.
   4. Golden tests cover normalized draft, frame state, render graph, FFmpeg script, preview/export parity, and output metadata.
 
-**Plans**: 9 plans
+**Plans**: 9/9 plans complete
 
 Plans:
 
@@ -230,7 +230,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 05-09-PLAN.md - Add preview/export parity, final source guards, and root gates
+- [x] 05-09-PLAN.md - Add preview/export parity, final source guards, and root gates
 
 ### Phase 6: MVP Hardening And Packaging
 
@@ -371,7 +371,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 8/9 | In Progress|  |
+| 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
 | 7. Project Canvas Space And Coordinate System | 0/TBD | Not started | - |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
