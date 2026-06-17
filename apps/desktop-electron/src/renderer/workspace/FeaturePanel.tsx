@@ -1,9 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Material, TextAlignment, TextSegment } from "../../generated/Draft";
 import {
-  WORKSPACE_CATEGORIES,
-  WORKSPACE_CATEGORY_META,
   findFirstMaterialByKind,
   findTrackByKind,
   formatMaterialDetail,
@@ -25,7 +23,6 @@ type FeaturePanelProps = {
   materialPath: string;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
-  onCategoryChange: (category: WorkspaceCategory) => void;
   onImportMaterial: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -38,6 +35,19 @@ type FeaturePanelProps = {
 type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
+const SECONDARY_CATEGORY_GROUPS: Record<WorkspaceCategory, readonly string[]> = {
+  媒体: ["导入", "我的", "AI生成", "云素材", "官方素材", "即梦AI"],
+  音频: ["BGM", "音效", "提取音频", "收藏"],
+  文字: ["默认", "花字", "模板", "智能字幕"],
+  贴纸: ["热门", "收藏", "贴纸库"],
+  特效: ["视频特效", "人物特效", "收藏"],
+  转场: ["基础", "运镜", "遮罩"],
+  字幕: ["识别字幕", "本地字幕", "样式"],
+  滤镜: ["人像", "风景", "电影"],
+  调节: ["基础", "HSL", "曲线"],
+  模板: ["本地", "收藏", "在线"],
+  数字人: ["形象", "声音", "项目"]
+};
 
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   let content: React.ReactElement;
@@ -54,41 +64,35 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
 
   return (
     <div className="resource-panel-shell">
-      <ResourceCategoryTree activeCategory={props.category} onCategoryChange={props.onCategoryChange} />
+      <SecondaryCategoryRail category={props.category} />
       <div className="resource-content-panel">{content}</div>
     </div>
   );
 }
 
-function ResourceCategoryTree({
-  activeCategory,
-  onCategoryChange
-}: {
-  activeCategory: WorkspaceCategory;
-  onCategoryChange: (category: WorkspaceCategory) => void;
-}): React.ReactElement {
-  return (
-    <nav className="resource-category-tree" aria-label="资源分类">
-      {WORKSPACE_CATEGORIES.map((category) => {
-        const metadata = WORKSPACE_CATEGORY_META[category];
+function SecondaryCategoryRail({ category }: { category: WorkspaceCategory }): React.ReactElement {
+  const groups = SECONDARY_CATEGORY_GROUPS[category];
+  const [activeGroup, setActiveGroup] = useState(groups[0]);
 
-        return (
-          <button
-            key={category}
-            type="button"
-            className={category === activeCategory ? "resource-category-button active" : "resource-category-button"}
-            aria-label={metadata.label}
-            aria-pressed={category === activeCategory}
-            title={metadata.label}
-            onClick={() => onCategoryChange(category)}
-          >
-            <span className="resource-category-symbol" aria-hidden="true">
-              {metadata.symbol}
-            </span>
-            <span className="resource-category-label">{metadata.label}</span>
-          </button>
-        );
-      })}
+  useEffect(() => {
+    setActiveGroup(groups[0]);
+  }, [category, groups]);
+
+  return (
+    <nav className="secondary-category-rail" aria-label={`${category}二级分类`}>
+      {groups.map((group) => (
+        <button
+          key={group}
+          type="button"
+          className={group === activeGroup ? "secondary-category-button active" : "secondary-category-button"}
+          aria-label={`${category}二级分类：${group}`}
+          aria-pressed={group === activeGroup}
+          title={`${category}二级分类：${group}`}
+          onClick={() => setActiveGroup(group)}
+        >
+          {group}
+        </button>
+      ))}
     </nav>
   );
 }

@@ -20,6 +20,7 @@ type TimelineProps = {
   onSplitSelectedSegment?: (splitAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   onDeleteSelectedSegment?: () => void;
+  onSetTrackMute?: (trackId: string, muted: boolean) => void;
   onUndo?: () => void;
   onRedo?: () => void;
 };
@@ -34,6 +35,7 @@ export function Timeline({
   onSplitSelectedSegment,
   onTrimSelectedSegment,
   onDeleteSelectedSegment,
+  onSetTrackMute,
   onUndo,
   onRedo
 }: TimelineProps): React.ReactElement {
@@ -76,6 +78,8 @@ export function Timeline({
             row={row}
             timelineDuration={timeline.duration}
             onSelectSegment={onSelectSegment}
+            onSetTrackMute={onSetTrackMute}
+            pending={workspace.pendingCommand !== null}
           />
         ))}
       </div>
@@ -307,11 +311,15 @@ function TimelineIconButton({
 function TimelineTrackRow({
   row,
   timelineDuration,
-  onSelectSegment
+  onSelectSegment,
+  onSetTrackMute,
+  pending
 }: {
   row: ReturnType<typeof deriveTimelineRows>["rows"][number];
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
+  onSetTrackMute?: (trackId: string, muted: boolean) => void;
+  pending: boolean;
 }): React.ReactElement {
   return (
     <div className={row.rowClassName}>
@@ -323,9 +331,19 @@ function TimelineTrackRow({
           <strong>{row.track.name}</strong>
         </div>
         <div className="track-header-controls" aria-label={`${row.track.name} 状态`}>
-          <TrackStateButton label={`锁定状态：${row.lockLabel}`} symbol="锁" active={row.track.locked} />
-          <TrackStateButton label={`可见状态：${row.visibilityLabel}`} symbol={row.track.kind === "audio" ? "听" : "眼"} />
-          <TrackStateButton label={`静音状态：${row.muteLabel}`} symbol="静" active={row.track.muted} />
+          <TrackStateButton label={`${row.track.name} 锁定状态：${row.lockLabel}`} symbol="锁" active={row.track.locked} disabled />
+          <TrackStateButton
+            label={`${row.track.name} 可见状态：${row.visibilityLabel}`}
+            symbol={row.track.kind === "audio" ? "听" : "眼"}
+            disabled
+          />
+          <TrackStateButton
+            label={`${row.track.name} 静音状态：${row.muteLabel}`}
+            symbol="静"
+            active={row.track.muted}
+            disabled={pending || onSetTrackMute === undefined}
+            onClick={() => onSetTrackMute?.(row.track.trackId, !row.track.muted)}
+          />
         </div>
         <span className="track-status-line">
           {row.statusLabel} · {row.lockLabel} · {row.muteLabel}
@@ -373,11 +391,15 @@ function TimelineSegmentBlock({
 function TrackStateButton({
   label,
   symbol,
-  active = false
+  active = false,
+  disabled = false,
+  onClick
 }: {
   label: string;
   symbol: string;
   active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
 }): React.ReactElement {
   return (
     <button
@@ -385,7 +407,8 @@ function TrackStateButton({
       className={active ? "track-state-button active" : "track-state-button"}
       aria-label={label}
       title={label}
-      disabled
+      onClick={onClick}
+      disabled={disabled}
     >
       <span aria-hidden="true">{symbol}</span>
     </button>

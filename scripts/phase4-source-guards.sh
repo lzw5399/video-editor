@@ -43,6 +43,11 @@ fail_if_matches \
   "${renderer_files[@]}"
 
 fail_if_matches \
+  "renderer must not mutate Draft.tracks or Track.segments by index or bracket access" \
+  '(?:draft|current|nextDraft|workspace\.draft)(?:\.tracks|\["tracks"\])\s*\[[^]]+\]\s*=|(?:track|candidate)(?:\.segments|\["segments"\])\s*\[[^]]+\]\s*=|(?:\.tracks|\["tracks"\])\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\(|(?:\.segments|\["segments"\])\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\(' \
+  "${renderer_files[@]}"
+
+fail_if_matches \
   "renderer must not assign timeline timeranges or main-track magnet semantics directly" \
   '\.(?:sourceTimerange|targetTimerange|mainTrackMagnet)\s*=|(?:sourceTimerange|targetTimerange|mainTrackMagnet)\.(?:start|duration|enabled)\s*=' \
   "${renderer_files[@]}"

@@ -153,6 +153,12 @@
   background: #252522;
 }
 
+.inspector-tab-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .inspector-section-title {
   display: flex;
   align-items: center;

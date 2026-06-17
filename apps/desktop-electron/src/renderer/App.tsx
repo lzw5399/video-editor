@@ -559,6 +559,7 @@ export function App(): React.ReactElement {
       onSplitSelectedSegment={handleSplitSelectedSegment}
       onTrimSelectedSegment={handleTrimSelectedSegment}
       onDeleteSelectedSegment={handleDeleteSelectedSegment}
+      onSetTimelineTrackMute={handleSetSelectedTrackMute}
       onUndoTimelineEdit={handleUndoTimelineEdit}
       onRedoTimelineEdit={handleRedoTimelineEdit}
     />

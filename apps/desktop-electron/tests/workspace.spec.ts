@@ -215,7 +215,7 @@ async function expectPreviewCanvasAspectRatio(page: Page): Promise<void> {
 async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
-    ".resource-category-button",
+    ".secondary-category-button",
     ".preview-icon-button",
     ".transport-button.icon-only",
     ".track-state-button",
@@ -275,6 +275,12 @@ test("Chinese editor workspace opens with required regions and material states",
     await expectIconButtonsHaveAccessibleNames(page);
 
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "媒体二级分类" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "媒体二级分类：导入" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "媒体二级分类：我的" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "媒体二级分类：AI生成" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "媒体二级分类：云素材" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "资源分类" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
     await expect(page.getByRole("button", { name: "检查丢失" })).toBeVisible();
     await expect(page.getByPlaceholder("搜索素材")).toBeVisible();
@@ -285,6 +291,7 @@ test("Chinese editor workspace opens with required regions and material states",
 
     await expect(page.getByText("预览待接入")).toBeVisible();
     await expect(page.getByText("预览画面将在下一阶段接入")).toBeVisible();
+    await expect(page.getByText("预览将在下一阶段接入")).toHaveCount(0);
     await expect(page.getByText("等待预览帧接入")).toBeVisible();
     await expect(page.getByRole("button", { name: "适应窗口" })).toBeVisible();
     await expect(page.getByRole("button", { name: "画面比例" })).toBeVisible();
@@ -318,21 +325,28 @@ test("workspace panels switch categories without losing Chinese empty states", a
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    const resourceTree = page.getByRole("navigation", { name: "资源分类" });
+    const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
 
-    await resourceTree.getByRole("button", { name: "文字" }).click();
+    await topFeatureNav.getByRole("button", { name: "文字" }).click();
     await expect(page.getByRole("heading", { name: "文字" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "文字二级分类" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "文字二级分类：默认" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "文字二级分类：智能字幕" })).toBeVisible();
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
     await expect(page.getByLabel("文字对齐")).toBeVisible();
 
-    await resourceTree.getByRole("button", { name: "音频" }).click();
+    await topFeatureNav.getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "音频二级分类" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "音频二级分类：BGM" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "音频二级分类：提取音频" })).toBeVisible();
     await expect(page.getByRole("button", { name: "添加音频" })).toBeVisible();
     await expect(page.getByText("音量与静音")).toBeVisible();
 
     for (const category of DEFERRED_CATEGORIES) {
-      await resourceTree.getByRole("button", { name: category }).click();
+      await topFeatureNav.getByRole("button", { name: category }).click();
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: `${category}二级分类` })).toBeVisible();
       await expect(page.getByText(`${category}功能已预留`)).toBeVisible();
       await expect(page.getByText(`当前阶段暂不提供${category}编辑，后续会通过剪辑核心命令接入对应能力。`)).toBeVisible();
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
@@ -355,7 +369,13 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByText("segment-main-video")).toBeVisible();
     await expect(page.getByLabel("片段信息")).toContainText("片段参数");
     await expect(page.getByLabel("画面变换")).toContainText("位置");
-    await expect(page.getByRole("button", { name: "关键帧功能待接入" })).toHaveCount(4);
+    await expect(page.getByRole("button", { name: "关键帧功能待接入" })).toHaveCount(3);
+
+    await page.getByRole("tab", { name: "音频" }).click();
+    await expect(page.getByLabel("音频参数")).toContainText("应用音量");
+    await expect(page.getByLabel("画面变换")).toHaveCount(0);
+    await page.getByRole("tab", { name: "画面" }).click();
+    await expect(page.getByLabel("画面变换")).toContainText("位置");
 
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
     const callsBeforeAdd = await readExecuteCommandCalls(app);
@@ -377,7 +397,23 @@ test("command-only timeline edit calls generated command and applies Rust respon
   }
 });
 
-test("material import uses the same draft command guard as timeline edits", async () => {
+test("material import routes through the same executeCommand bridge", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByRole("button", { name: "导入素材" }).click();
+    await expectCommandCall(app, "importMaterial");
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toContain("importMaterial");
+  } finally {
+    await app.close();
+  }
+});
+
+test("concurrent material commands are blocked while a timeline edit is pending", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -473,7 +509,12 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await expect(page.locator(".segment-kind-video")).toHaveCount(1);
     await expect(page.locator(".segment-kind-audio")).toHaveCount(1);
 
-    await page.getByRole("navigation", { name: "资源分类" }).getByRole("button", { name: "文字" }).click();
+    await spyExecuteCommandCalls(app, page);
+    await page.getByRole("button", { name: "音频轨道 1 静音状态：未静音" }).click();
+    await expectCommandCall(app, "setTrackMute");
+    await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
+
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByRole("button", { name: "添加文字" }).click();
     await expect(page.locator(".segment-kind-text")).toHaveCount(1);
 

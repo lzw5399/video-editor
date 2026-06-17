@@ -34,7 +34,6 @@ export function PreviewMonitor({ draftName, bindingStatus, playheadUs = 0 }: Pre
       <div className="preview-canvas" aria-label="预览画面">
         <div className="preview-placeholder">
           <span>预览画面将在下一阶段接入</span>
-          <span>预览将在下一阶段接入</span>
         </div>
       </div>
 

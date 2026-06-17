@@ -28,6 +28,7 @@ type WorkspaceShellProps = {
   onSplitSelectedSegment: Parameters<typeof Timeline>[0]["onSplitSelectedSegment"];
   onTrimSelectedSegment: Parameters<typeof Timeline>[0]["onTrimSelectedSegment"];
   onDeleteSelectedSegment: Parameters<typeof Timeline>[0]["onDeleteSelectedSegment"];
+  onSetTimelineTrackMute: Parameters<typeof Timeline>[0]["onSetTrackMute"];
   onUndoTimelineEdit: Parameters<typeof Timeline>[0]["onUndo"];
   onRedoTimelineEdit: Parameters<typeof Timeline>[0]["onRedo"];
 };
@@ -56,6 +57,7 @@ export function WorkspaceShell({
   onSplitSelectedSegment,
   onTrimSelectedSegment,
   onDeleteSelectedSegment,
+  onSetTimelineTrackMute,
   onUndoTimelineEdit,
   onRedoTimelineEdit
 }: WorkspaceShellProps): React.ReactElement {
@@ -95,7 +97,6 @@ export function WorkspaceShell({
           materialPath={materialPath}
           onBundlePathChange={onBundlePathChange}
           onMaterialPathChange={onMaterialPathChange}
-          onCategoryChange={onCategoryChange}
           onImportMaterial={onImportMaterial}
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}
@@ -130,6 +131,7 @@ export function WorkspaceShell({
           onSplitSelectedSegment={onSplitSelectedSegment}
           onTrimSelectedSegment={onTrimSelectedSegment}
           onDeleteSelectedSegment={onDeleteSelectedSegment}
+          onSetTrackMute={onSetTimelineTrackMute}
           onUndo={onUndoTimelineEdit}
           onRedo={onRedoTimelineEdit}
         />

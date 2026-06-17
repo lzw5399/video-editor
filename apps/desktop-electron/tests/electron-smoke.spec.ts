@@ -91,7 +91,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
 
   try {
     await expectVisibleWorkspaceRegions(page);
-    await expect(page.getByText("预览将在下一阶段接入")).toBeVisible();
+    await expect(page.getByText("预览画面将在下一阶段接入")).toBeVisible();
     await expect(page.getByText("未选择片段")).toBeVisible();
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));
