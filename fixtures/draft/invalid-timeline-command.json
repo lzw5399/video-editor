@@ -1,0 +1,62 @@
+{
+  "command": "addSegment",
+  "payload": {
+    "kind": "addSegment",
+    "draft": {
+      "schemaVersion": 1,
+      "draftId": "draft-invalid-timeline-command",
+      "metadata": {
+        "name": "Invalid Timeline Command"
+      },
+      "materials": [
+        {
+          "materialId": "material-video-001",
+          "kind": "video",
+          "uri": "media/video.mp4",
+          "displayName": "video.mp4",
+          "metadata": {
+            "duration": 5000000,
+            "hasVideo": true,
+            "hasAudio": true
+          },
+          "status": "available"
+        }
+      ],
+      "tracks": [
+        {
+          "trackId": "track-video-001",
+          "kind": "video",
+          "name": "Video 1",
+          "muted": false,
+          "locked": false,
+          "segments": []
+        }
+      ]
+    },
+    "commandState": {
+      "undoStack": [],
+      "redoStack": [],
+      "maxHistoryEntries": 100,
+      "snapping": {
+        "enabled": true,
+        "threshold": 100000
+      }
+    },
+    "selection": {
+      "segmentIds": [],
+      "trackIds": []
+    },
+    "trackId": "track-video-001",
+    "segmentId": "segment-video-001",
+    "materialId": "material-video-001",
+    "sourceTimerange": {
+      "start": 0,
+      "duration": 2000000
+    },
+    "targetTimerangeSeconds": {
+      "start": 0,
+      "duration": 2
+    }
+  },
+  "requestId": "phase-3-invalid-timeline-command"
+}

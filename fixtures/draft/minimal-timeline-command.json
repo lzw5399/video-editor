@@ -1,0 +1,70 @@
+{
+  "command": "addSegment",
+  "payload": {
+    "kind": "addSegment",
+    "draft": {
+      "schemaVersion": 1,
+      "draftId": "draft-timeline-command-001",
+      "metadata": {
+        "name": "Minimal Timeline Command"
+      },
+      "materials": [
+        {
+          "materialId": "material-video-001",
+          "kind": "video",
+          "uri": "media/video.mp4",
+          "displayName": "video.mp4",
+          "metadata": {
+            "duration": 5000000,
+            "width": 1920,
+            "height": 1080,
+            "frameRate": {
+              "numerator": 30000,
+              "denominator": 1001
+            },
+            "hasVideo": true,
+            "hasAudio": true,
+            "audioSampleRate": 48000,
+            "audioChannels": 2
+          },
+          "status": "available"
+        }
+      ],
+      "tracks": [
+        {
+          "trackId": "track-video-001",
+          "kind": "video",
+          "name": "Video 1",
+          "muted": false,
+          "locked": false,
+          "segments": []
+        }
+      ]
+    },
+    "commandState": {
+      "undoStack": [],
+      "redoStack": [],
+      "maxHistoryEntries": 100,
+      "snapping": {
+        "enabled": true,
+        "threshold": 100000
+      }
+    },
+    "selection": {
+      "segmentIds": [],
+      "trackIds": []
+    },
+    "trackId": "track-video-001",
+    "segmentId": "segment-video-001",
+    "materialId": "material-video-001",
+    "sourceTimerange": {
+      "start": 0,
+      "duration": 2000000
+    },
+    "targetTimerange": {
+      "start": 0,
+      "duration": 2000000
+    }
+  },
+  "requestId": "phase-3-minimal-timeline-command"
+}
