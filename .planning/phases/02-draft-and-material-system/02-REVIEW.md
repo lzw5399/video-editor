@@ -1,6 +1,6 @@
 ---
 phase: 02-draft-and-material-system
-reviewed: 2026-06-17T04:24:25Z
+reviewed: 2026-06-17T04:34:35Z
 depth: standard
 files_reviewed: 44
 files_reviewed_list:
@@ -49,16 +49,16 @@ files_reviewed_list:
   - schemas/command.schema.json
   - schemas/draft.schema.json
 findings:
-  critical: 2
+  critical: 0
   warning: 2
   info: 0
-  total: 4
+  total: 2
 status: issues_found
 ---
 
 # Phase 02: Code Review Report
 
-**Reviewed:** 2026-06-17T04:24:25Z
+**Reviewed:** 2026-06-17T04:34:35Z
 **Depth:** standard
 **Files Reviewed:** 44
 **Status:** issues_found
@@ -67,79 +67,50 @@ status: issues_found
 
 ## Summary
 
-Reviewed the Phase 2 draft/material model, project-store persistence and path helpers, media probe boundary, Node binding commands, generated TypeScript/JSON Schema contracts, renderer smoke surface, fixtures, tests, `justfile`, package scripts, and runtime-boundary docs.
+Reviewed the Phase 2 generated TypeScript and JSON Schema contracts, renderer smoke UI, Electron smoke tests, Node binding commands, material service, draft model/schema/validation, media probe runtime, project-store persistence/path helpers, testkit media helpers, fixtures, package scripts, and runtime boundary documentation.
 
-The prior findings for in-place writes, Windows drive-path classification, Microseconds JSON/TS mismatch, and draft schema version const semantics are substantially addressed: writes now use temp-file replacement, Windows drive paths are checked before URI schemes, `Microseconds` is generated as `number`, and both committed schemas constrain the draft schema version to `const: 1`. The remaining blockers are still in persistence correctness: the store can write material URIs that it later refuses to open, and the current temp-file rename does not replace existing `project.json` on Windows.
+The four prior findings are closed in the reviewed code: `save_project_bundle` validates material URIs before serializing/writing, project replacement uses a Windows `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)` path, `media_runtime` duration parsing rejects malformed fractions and overflow with checked arithmetic, and `media_runtime` frame-rate normalization rejects zero numerators. Targeted verification passed:
 
-## Critical Issues
+- `cargo test -p project_store save_project_bundle -- --nocapture`
+- `cargo test -p media_runtime material_probe_rejects_malformed_json_and_invalid_frame_rates -- --nocapture`
+- `cargo test -p draft_model schema_exports_generated_contract_artifacts_from_rust -- --nocapture`
 
-### CR-01: Save accepts invalid material URIs that make the project unopenable
-
-**Classification:** BLOCKER
-**File:** `crates/project_store/src/bundle.rs:38`
-
-**Issue:** `save_project_bundle` validates draft semantics but never runs the project-store material URI classifier before serializing and writing `.veproj/project.json`. That means callers can save a draft containing a traversal URI such as `../outside.mp4`; the save succeeds, but `open_project_bundle` later calls `collect_warnings` and fails through `classify_material_uri`. The persistence boundary can therefore create a canonical project file it cannot reopen.
-
-**Fix:**
-```rust
-validate_draft(draft).map_err(|source| semantic_error(&project_json_path, source))?;
-for material in &draft.materials {
-    classify_material_uri(bundle_path, &material.uri)?;
-}
-```
-Add a project-store regression test that `save_project_bundle` rejects `../...` material URIs and preserves the previously readable `project.json`.
-
-### CR-02: Existing project saves fail on Windows
-
-**Classification:** BLOCKER
-**File:** `crates/project_store/src/lib.rs:57`
-
-**Issue:** `StdPlatformFileSystem::write_string` finishes the atomic write with `std::fs::rename(&temp_path, path)`. Rust documents replacement behavior for an existing destination as platform-specific; on Windows, `rename` fails if `project.json` already exists. The first project save can work, but autosave or a normal save over an existing `.veproj/project.json` fails on Windows, which is a desktop target for this Electron app.
-
-**Fix:** Use a cross-platform atomic replace implementation instead of raw `std::fs::rename`, for example a vetted crate or a small platform-specific replacement helper. Keep the same-directory temp file and file sync, and add a Windows-covered test or abstraction-level fake proving replacement of an existing destination succeeds.
+Remaining issues are contract/test-harness robustness gaps, not direct project-data loss in the current save/open path.
 
 ## Warnings
 
-### WR-01: Duration parsing silently accepts malformed ffprobe values
+### WR-01: Testkit still accepts malformed and overflowing ffprobe durations
 
 **Classification:** WARNING
-**File:** `crates/media_runtime/src/probe.rs:326`
-
-**Issue:** `parse_decimal_seconds_to_microseconds` filters non-digit characters out of the fractional component and uses saturating arithmetic. A malformed ffprobe duration like `1.-5` becomes `1_500_000` microseconds instead of `InvalidDuration`, and an overflowing whole-second value clamps to `u64::MAX`. That can persist incorrect material duration metadata instead of surfacing a classified probe error.
-
-**Fix:** Reject any non-digit fractional character and use checked arithmetic.
-
+**File:** `crates/testkit/src/lib.rs:626`
+**Issue:** The production probe parser was hardened, but the public testkit parser still uses `saturating_mul`/`saturating_add` and filters non-digits out of the fractional component. A value like `1.-5` is interpreted as `1_500_000` microseconds, and an overflowing whole-second value clamps instead of failing. Because `probe_media_metadata` is a reusable smoke helper, this can let malformed ffprobe metadata pass testkit gates and mask regressions in runtime normalization.
+**Fix:**
 ```rust
-if !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
-    return Err(format!("invalid duration fraction `{value}`"));
-}
 let whole_micros = whole
     .parse::<u64>()
-    .map_err(|error| format!("invalid duration seconds `{value}`: {error}"))?
+    .map_err(|error| SmokeError::new(format!("invalid duration seconds `{value}`: {error}")))?
     .checked_mul(1_000_000)
-    .ok_or_else(|| format!("duration is too large `{value}`"))?;
+    .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))?;
+if !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
+    return Err(SmokeError::new(format!("invalid duration fraction `{value}`")));
+}
+let fraction_micros = fraction.parse::<u64>().map_err(|error| {
+    SmokeError::new(format!("invalid duration fraction `{value}`: {error}"))
+})?;
+whole_micros
+    .checked_add(fraction_micros)
+    .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))
 ```
 
-### WR-02: Zero-numerator frame rates pass the runtime probe layer
+### WR-02: JSON Schema contracts allow frame rates the Rust model rejects
 
 **Classification:** WARNING
-**File:** `crates/media_runtime/src/probe.rs:358`
-
-**Issue:** `parse_rational_frame_rate` rejects a zero denominator but accepts `0/1`. The draft model later rejects zero frame-rate numerators, so an import can succeed at the runtime normalization layer and then fail as an invalid project mutation. This makes the error classification unstable and can turn malformed probe metadata into a project-validation error.
-
-**Fix:** Reject zero numerators in `parse_rational_frame_rate` and add a probe test for `r_frame_rate: "0/1"`.
-
-```rust
-if numerator == 0 {
-    return Err("frame rate numerator cannot be zero".to_string());
-}
-if denominator == 0 {
-    return Err("frame rate denominator cannot be zero".to_string());
-}
-```
+**File:** `schemas/draft.schema.json:249`
+**Issue:** The committed draft schema and command schema define `RationalFrameRate.numerator` and `denominator` with `"minimum": 0`, while `validate_draft` rejects either field when it is zero. A `.veproj/project.json` containing `{"frameRate":{"numerator":0,"denominator":1}}` therefore passes the published JSON Schema but fails Rust migration/validation. That makes the contract artifacts unreliable for clients and fixture validation.
+**Fix:** Patch the schema export step to rewrite `RationalFrameRate.numerator` and `RationalFrameRate.denominator` to `"minimum": 1` in both schema outputs, update `schemas/draft.schema.json` and `schemas/command.schema.json`, and add a negative schema fixture or unit assertion proving zero numerator and zero denominator fail schema validation.
 
 ---
 
-_Reviewed: 2026-06-17T04:24:25Z_
+_Reviewed: 2026-06-17T04:34:35Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
