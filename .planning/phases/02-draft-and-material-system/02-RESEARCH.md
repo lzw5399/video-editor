@@ -447,22 +447,22 @@ Relink UI, interactive recovery, and advanced compatibility reports are out of s
 | A3 | Exact crate age/download counts are not required for existing dependencies because crates.io API returned 403 and `cargo info` confirmed registry metadata. | Package Legitimacy Audit | Audit table has weaker legitimacy evidence than desired. |
 | A4 | A grep-style terminology guard is useful for preventing `Asset`/`Clip` drift. | Common Pitfalls | The guard may need exceptions for external docs, generated comments, or third-party references. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should Phase 2 add `uuid` or require caller-supplied deterministic IDs?**
    - What we know: stable IDs are required; `uuid` 1.23.3 exists on crates.io and supports serde/v4 features. [VERIFIED: 02-CONTEXT.md D-02; cargo info uuid]
    - What's unclear: package legitimacy could not be validated with Rust-aware slopcheck in this environment. [VERIFIED: slopcheck output]
-   - Recommendation: prefer deterministic ID newtypes and test-supplied IDs unless the planner inserts a human verification checkpoint before adding `uuid`. [ASSUMED]
+   - RESOLVED: Phase 2 will use deterministic string ID newtypes with caller/test-supplied IDs and will not add `uuid`. Runtime-generated IDs can be revisited later through a dependency review checkpoint if product needs require it. [VERIFIED: 90cf451 revised plans]
 
 2. **Should thumbnails be implemented in Phase 2?**
    - What we know: thumbnails are allowed only as derived artifacts outside `project.json`; metadata import must not depend on thumbnails. [VERIFIED: 02-CONTEXT.md D-13]
    - What's unclear: whether Phase 2 time budget should include cache file generation and invalidation. [ASSUMED]
-   - Recommendation: defer thumbnail generation unless a plan can keep it entirely behind `preview_service`/derived cache tests without expanding UI scope. [VERIFIED: 02-CONTEXT.md D-13/D-19]
+   - RESOLVED: Phase 2 defers thumbnail generation. It will document thumbnail/probe/waveform outputs as derived artifacts outside `project.json` and implement material metadata/status only. Preview/cache generation remains later `preview_service` work. [VERIFIED: 90cf451 revised plans]
 
 3. **What exact `.veproj` fixture directory shape should be used?**
    - What we know: fixtures must be deterministic and classified positive/negative. [VERIFIED: 02-CONTEXT.md D-17]
    - What's unclear: whether to store nested `.veproj/project.json` directories or flat `*.project.json` fixtures for easier schema validation. [ASSUMED]
-   - Recommendation: use nested `.veproj/project.json` for project-store round trips and flat JSON fixtures for model/schema tests if needed. [ASSUMED]
+   - RESOLVED: Phase 2 will use nested `.veproj/project.json` fixtures for project-store round trips and flat positive/negative JSON fixtures for schema/model validation where useful. All fixtures must be explicitly classified in tests. [VERIFIED: 90cf451 revised plans]
 
 ## Environment Availability
 
