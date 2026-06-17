@@ -1,10 +1,12 @@
 import type { CommandState, TimelineSelection } from "../generated/CommandEnvelope";
+import type { MissingMaterialCommandDiagnostic } from "../generated/CommandResultEnvelope";
 import type {
   Draft,
   Material,
   MaterialKind,
   MaterialStatus,
   Microseconds,
+  Segment,
   TrackKind
 } from "../generated/Draft";
 
@@ -31,8 +33,24 @@ export type WorkspaceState = {
   commandState: CommandState;
   selection: TimelineSelection;
   materials: Material[];
+  materialDiagnostics: MissingMaterialCommandDiagnostic[];
   bindingStatus: BindingStatus;
+  pendingCommand: string | null;
   commandError: string | null;
+};
+
+export type SelectedTrackView = {
+  trackId: string;
+  name: string;
+  kindLabel: string;
+  muted: boolean;
+  locked: boolean;
+};
+
+export type SelectedSegmentView = {
+  segment: Segment;
+  track: SelectedTrackView;
+  material: Material | null;
 };
 
 export const initialWorkspaceDraft: Draft = {
@@ -90,6 +108,29 @@ export const initialWorkspaceDraft: Draft = {
         hasAudio: false
       },
       status: "missing"
+    },
+    {
+      materialId: "material-workspace-sticker-failed",
+      kind: "sticker",
+      uri: "media/sticker.webp",
+      displayName: "贴纸素材.webp",
+      metadata: {
+        hasVideo: true,
+        hasAudio: false,
+        probeError: "无法读取素材头信息"
+      },
+      status: "probeFailed"
+    },
+    {
+      materialId: "material-workspace-title",
+      kind: "text",
+      uri: "text://material-workspace-title",
+      displayName: "标题文字",
+      metadata: {
+        hasVideo: false,
+        hasAudio: false
+      },
+      status: "available"
     }
   ],
   tracks: [
@@ -152,6 +193,14 @@ export const initialWorkspaceDraft: Draft = {
           }
         }
       ]
+    },
+    {
+      trackId: "track-title",
+      kind: "text",
+      name: "文字轨道 1",
+      muted: false,
+      locked: false,
+      segments: []
     }
   ]
 };
@@ -177,10 +226,12 @@ export function createInitialWorkspaceState(): WorkspaceState {
     commandState: initialCommandState,
     selection: initialTimelineSelection,
     materials: initialWorkspaceDraft.materials,
+    materialDiagnostics: [],
     bindingStatus: {
       kind: "checking",
       label: "正在连接剪辑核心"
     },
+    pendingCommand: null,
     commandError: null
   };
 }
@@ -256,6 +307,89 @@ export function formatMaterialDetail(material: Material): string {
 
 export function formatCommandError(message: string): string {
   return `操作失败：${message}。请检查素材或撤销上一步后重试。`;
+}
+
+export function materialStatusMessage(material: Material): string | null {
+  if (material.status === "missing") {
+    return "素材丢失：请重新定位文件后继续编辑。";
+  }
+
+  if (material.status === "probeFailed") {
+    return "素材解析失败：请检查文件格式或重新导入。";
+  }
+
+  return null;
+}
+
+export function formatMaterialDiagnostic(diagnostic: MissingMaterialCommandDiagnostic): string {
+  return `${diagnostic.materialId}：${diagnostic.message}`;
+}
+
+export function getSelectedTrackView(draft: Draft, selection: TimelineSelection): SelectedTrackView | null {
+  const selectedTrackId = selection.trackIds[0];
+  const selectedSegmentId = selection.segmentIds[0];
+  const track =
+    draft.tracks.find((candidate) => candidate.trackId === selectedTrackId) ??
+    draft.tracks.find((candidate) =>
+      candidate.segments.some((segment) => segment.segmentId === selectedSegmentId)
+    ) ??
+    null;
+
+  if (track === null) {
+    return null;
+  }
+
+  return {
+    trackId: track.trackId,
+    name: track.name,
+    kindLabel: formatTrackKind(track.kind),
+    muted: track.muted,
+    locked: track.locked
+  };
+}
+
+export function getSelectedSegmentView(draft: Draft, selection: TimelineSelection): SelectedSegmentView | null {
+  const selectedSegmentId = selection.segmentIds[0];
+
+  if (selectedSegmentId === undefined) {
+    return null;
+  }
+
+  for (const track of draft.tracks) {
+    const segment = track.segments.find((candidate) => candidate.segmentId === selectedSegmentId);
+
+    if (segment !== undefined) {
+      const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
+      return {
+        segment,
+        track: {
+          trackId: track.trackId,
+          name: track.name,
+          kindLabel: formatTrackKind(track.kind),
+          muted: track.muted,
+          locked: track.locked
+        },
+        material
+      };
+    }
+  }
+
+  return null;
+}
+
+export function findTrackByKind(draft: Draft, kind: TrackKind) {
+  return draft.tracks.find((track) => track.kind === kind) ?? null;
+}
+
+export function findFirstMaterialByKind(draft: Draft, kind: MaterialKind) {
+  return draft.materials.find((material) => material.kind === kind && material.status === "available") ?? null;
+}
+
+export function nextTrackStart(track: { segments: Segment[] }): Microseconds {
+  return track.segments.reduce(
+    (latest, segment) => Math.max(latest, segment.targetTimerange.start + segment.targetTimerange.duration),
+    0
+  );
 }
 
 function padTime(value: number): string {

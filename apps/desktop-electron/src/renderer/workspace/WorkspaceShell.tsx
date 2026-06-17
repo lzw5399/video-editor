@@ -1,26 +1,45 @@
-import type { Material } from "../../generated/Draft";
 import {
-  formatMaterialDetail,
-  formatMaterialKind,
-  formatMaterialStatus,
   formatMicroseconds,
   formatTrackKind,
   WORKSPACE_CATEGORIES,
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
+import { FeaturePanel } from "./FeaturePanel";
 import { PreviewMonitor } from "./PreviewMonitor";
 
 type WorkspaceShellProps = {
   workspace: WorkspaceState;
   activeCategory: WorkspaceCategory;
+  bundlePath: string;
+  materialPath: string;
   onCategoryChange: (category: WorkspaceCategory) => void;
+  onBundlePathChange: (value: string) => void;
+  onMaterialPathChange: (value: string) => void;
+  onImportMaterial: () => void;
+  onRefreshMaterials: () => void;
+  onListMissingMaterials: () => void;
+  onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
+  onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
+  onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
+  onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
 };
 
 export function WorkspaceShell({
   workspace,
   activeCategory,
-  onCategoryChange
+  bundlePath,
+  materialPath,
+  onCategoryChange,
+  onBundlePathChange,
+  onMaterialPathChange,
+  onImportMaterial,
+  onRefreshMaterials,
+  onListMissingMaterials,
+  onAddTextSegment,
+  onAddAudioSegment,
+  onSetSelectedSegmentVolume,
+  onSetSelectedTrackMute
 }: WorkspaceShellProps): React.ReactElement {
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
@@ -42,13 +61,21 @@ export function WorkspaceShell({
       </header>
 
       <section className="material-panel" aria-label="素材面板">
-        <div className="panel-header">
-          <h2>{activeCategory}</h2>
-          <button type="button" className="primary-action">
-            导入素材
-          </button>
-        </div>
-        {activeCategory === "媒体" ? <MaterialList materials={workspace.materials} /> : <DeferredPanel category={activeCategory} />}
+        <FeaturePanel
+          category={activeCategory}
+          workspace={workspace}
+          bundlePath={bundlePath}
+          materialPath={materialPath}
+          onBundlePathChange={onBundlePathChange}
+          onMaterialPathChange={onMaterialPathChange}
+          onImportMaterial={onImportMaterial}
+          onRefreshMaterials={onRefreshMaterials}
+          onListMissingMaterials={onListMissingMaterials}
+          onAddTextSegment={onAddTextSegment}
+          onAddAudioSegment={onAddAudioSegment}
+          onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
+          onSetSelectedTrackMute={onSetSelectedTrackMute}
+        />
       </section>
 
       <section className="preview-monitor" aria-label="预览窗口">
@@ -105,46 +132,6 @@ export function WorkspaceShell({
         </div>
       </section>
     </main>
-  );
-}
-
-function MaterialList({ materials }: { materials: Material[] }): React.ReactElement {
-  if (materials.length === 0) {
-    return (
-      <div className="empty-state">
-        <strong>还没有素材</strong>
-        <span>导入视频、图片或音频后，可添加到时间线开始剪辑。</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="material-list">
-      {materials.map((material) => (
-        <article className="material-row" aria-label={`素材 ${material.displayName}`} key={material.materialId}>
-          <div className="material-thumb">{formatMaterialKind(material.kind)}</div>
-          <div className="material-copy">
-            <div className="material-title">
-              <strong>{material.displayName}</strong>
-              <span className={`material-status ${material.status}`}>{formatMaterialStatus(material.status)}</span>
-            </div>
-            <div className="material-metadata">
-              <span>{formatMicroseconds(material.metadata.duration)}</span>
-              <span>{formatMaterialDetail(material)}</span>
-            </div>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function DeferredPanel({ category }: { category: WorkspaceCategory }): React.ReactElement {
-  return (
-    <div className="empty-state">
-      <strong>{category}面板已预留</strong>
-      <span>后续阶段会接入对应的素材、效果与剪辑命令。</span>
-    </div>
   );
 }
 
