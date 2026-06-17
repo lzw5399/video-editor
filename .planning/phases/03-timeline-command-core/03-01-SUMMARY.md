@@ -46,7 +46,7 @@ patterns-established:
   - "Track order helpers return semantic TrackId order for visual stacking, audio mixing, and first-video main track selection."
   - "TimelineCommandError carries exact TimelineCommandErrorKind values for invalid edit rejection tests."
 
-requirements-completed: [TIME-01, TIME-02, TIME-06, TIME-07]
+requirements-completed: [TIME-01, TIME-06, TIME-07]
 
 duration: 15 min
 completed: 2026-06-17
