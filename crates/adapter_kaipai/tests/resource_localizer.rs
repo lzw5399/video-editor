@@ -5,8 +5,8 @@ use std::{
 };
 
 use adapter_kaipai::{
-    CompatibilityStatus, KaipaiFormulaBundle, LocalizedResourceStatus, ResourceKind,
-    ResourceLocalizationMode, ResourceLocalizationRequest, ResourceLocalizer,
+    CompatibilityStatus, FormulaResourceRef, KaipaiFormulaBundle, LocalizedResourceStatus,
+    ResourceKind, ResourceLocalizationMode, ResourceLocalizationRequest, ResourceLocalizer,
 };
 use serde_json::{Value, json};
 
@@ -80,6 +80,7 @@ fn resource_localizer_reports_missing_and_sha256_mismatch() {
         let temp = temp_case_dir(expected_id);
         let source_root = temp.join("formula-bundle");
         let bundle_path = temp.join("localized.veproj");
+        fs::create_dir_all(&source_root).expect("source root should create");
         seed_local_assets(&source_root, &bundle);
         fs::create_dir_all(&bundle_path).expect("project bundle dir should create");
 
@@ -141,6 +142,7 @@ fn resource_localizer_rejects_traversal_and_remote_render_urls_without_writes() 
         let temp = temp_case_dir(expected_id);
         let source_root = temp.join("formula-bundle");
         let bundle_path = temp.join("localized.veproj");
+        fs::create_dir_all(&source_root).expect("source root should create");
         seed_local_assets(&source_root, &bundle);
         fs::create_dir_all(&bundle_path).expect("project bundle dir should create");
 
@@ -210,6 +212,158 @@ fn resource_localizer_mode_makes_source_media_handling_explicit() {
     );
 }
 
+#[test]
+#[cfg(unix)]
+fn resource_localizer_rejects_source_symlink_escape() {
+    use std::os::unix::fs::symlink;
+
+    let temp = temp_case_dir("source-symlink");
+    let source_root = temp.join("formula-bundle");
+    let bundle_path = temp.join("localized.veproj");
+    let outside_path = temp.join("outside-secret.ttf");
+    fs::create_dir_all(source_root.join("resources/fonts")).expect("source dir should create");
+    fs::create_dir_all(&bundle_path).expect("bundle dir should create");
+    fs::write(&outside_path, b"must-not-copy").expect("outside file should write");
+    symlink(
+        &outside_path,
+        source_root.join("resources/fonts/leaked-font.ttf"),
+    )
+    .expect("source symlink should create");
+
+    let result = ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path: bundle_path.clone(),
+            source_root,
+            resources: vec![resource_ref(
+                "font-symlink",
+                ResourceKind::Font,
+                "resources/fonts/leaked-font.ttf",
+            )],
+            mode: ResourceLocalizationMode::CopyRenderableResources,
+        })
+        .expect("symlink source should report diagnostic");
+
+    assert_eq!(
+        result.manifest.resources[0].status,
+        LocalizedResourceStatus::UnsafePath
+    );
+    assert_eq!(result.diagnostics.len(), 1);
+    assert!(
+        !bundle_path.join("resources/fonts/leaked-font.ttf").exists(),
+        "source symlink target must not be copied"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn resource_localizer_rejects_destination_symlink_escape() {
+    use std::os::unix::fs::symlink;
+
+    let temp = temp_case_dir("destination-symlink");
+    let source_root = temp.join("formula-bundle");
+    let bundle_path = temp.join("localized.veproj");
+    let outside_dir = temp.join("outside-bundle");
+    fs::create_dir_all(source_root.join("template-a")).expect("source dir should create");
+    fs::create_dir_all(&bundle_path).expect("bundle dir should create");
+    fs::create_dir_all(&outside_dir).expect("outside dir should create");
+    fs::write(source_root.join("template-a/overlay.png"), b"overlay")
+        .expect("source resource should write");
+    symlink(&outside_dir, bundle_path.join("resources"))
+        .expect("destination symlink should create");
+
+    let result = ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path,
+            source_root,
+            resources: vec![resource_ref(
+                "overlay-symlink",
+                ResourceKind::Image,
+                "template-a/overlay.png",
+            )],
+            mode: ResourceLocalizationMode::CopyRenderableResources,
+        })
+        .expect("destination symlink should report diagnostic");
+
+    assert_eq!(
+        result.manifest.resources[0].status,
+        LocalizedResourceStatus::UnsafePath
+    );
+    assert!(
+        !outside_dir.join("images/overlay-symlink").exists(),
+        "destination symlink must not receive copied resources"
+    );
+}
+
+#[test]
+fn resource_localizer_preserves_non_kind_paths_and_rejects_duplicate_destinations() {
+    let temp = temp_case_dir("destination-collisions");
+    let source_root = temp.join("formula-bundle");
+    let bundle_path = temp.join("localized.veproj");
+    fs::create_dir_all(source_root.join("template-a")).expect("source dir should create");
+    fs::create_dir_all(source_root.join("template-b")).expect("source dir should create");
+    fs::create_dir_all(&bundle_path).expect("bundle dir should create");
+    fs::write(source_root.join("template-a/overlay.png"), b"overlay-a")
+        .expect("source a should write");
+    fs::write(source_root.join("template-b/overlay.png"), b"overlay-b")
+        .expect("source b should write");
+
+    let result = ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path: bundle_path.clone(),
+            source_root: source_root.clone(),
+            resources: vec![
+                resource_ref("overlay-a", ResourceKind::Image, "template-a/overlay.png"),
+                resource_ref("overlay-b", ResourceKind::Image, "template-b/overlay.png"),
+            ],
+            mode: ResourceLocalizationMode::CopyRenderableResources,
+        })
+        .expect("same file names in different template dirs should localize");
+
+    assert!(result.diagnostics.is_empty());
+    assert_eq!(
+        result.manifest.resources[0].bundle_relative_uri.as_deref(),
+        Some("resources/images/overlay-a/template-a/overlay.png")
+    );
+    assert_eq!(
+        result.manifest.resources[1].bundle_relative_uri.as_deref(),
+        Some("resources/images/overlay-b/template-b/overlay.png")
+    );
+    assert_eq!(
+        fs::read(bundle_path.join("resources/images/overlay-a/template-a/overlay.png"))
+            .expect("overlay a should read"),
+        b"overlay-a"
+    );
+    assert_eq!(
+        fs::read(bundle_path.join("resources/images/overlay-b/template-b/overlay.png"))
+            .expect("overlay b should read"),
+        b"overlay-b"
+    );
+
+    let duplicate_bundle_path = temp.join("duplicate.veproj");
+    fs::create_dir_all(&duplicate_bundle_path).expect("duplicate bundle dir should create");
+    let duplicate = ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path: duplicate_bundle_path,
+            source_root,
+            resources: vec![
+                resource_ref("overlay-a", ResourceKind::Image, "template-a/overlay.png"),
+                resource_ref("overlay-a", ResourceKind::Image, "template-a/overlay.png"),
+            ],
+            mode: ResourceLocalizationMode::CopyRenderableResources,
+        })
+        .expect("duplicate destination should report diagnostic");
+
+    assert_eq!(
+        duplicate.manifest.resources[0].status,
+        LocalizedResourceStatus::Available
+    );
+    assert_eq!(
+        duplicate.manifest.resources[1].status,
+        LocalizedResourceStatus::UnsafePath
+    );
+    assert_eq!(duplicate.diagnostics.len(), 1);
+}
+
 fn read_bundle_fixture(path: &str) -> KaipaiFormulaBundle {
     let value: Value = serde_json::from_slice(
         &fs::read(project_root().join("fixtures/kaipai").join(path))
@@ -218,6 +372,16 @@ fn read_bundle_fixture(path: &str) -> KaipaiFormulaBundle {
     .unwrap_or_else(|error| panic!("fixture should parse as JSON: {path}: {error}"));
     KaipaiFormulaBundle::from_json_value(value)
         .unwrap_or_else(|error| panic!("fixture should validate: {path}: {error}"))
+}
+
+fn resource_ref(resource_id: &str, kind: ResourceKind, uri: &str) -> FormulaResourceRef {
+    FormulaResourceRef {
+        resource_id: resource_id.to_owned(),
+        kind,
+        uri: uri.to_owned(),
+        sha256: None,
+        display_name: None,
+    }
 }
 
 fn seed_local_assets(source_root: &Path, bundle: &KaipaiFormulaBundle) {

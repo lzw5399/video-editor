@@ -52,16 +52,19 @@
       "type": "object",
       "properties": {
         "displayName": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "kind": {
           "$ref": "#/$defs/ResourceKind"
         },
         "materialId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "uri": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
@@ -104,10 +107,12 @@
           ]
         },
         "recipeId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "templateId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
@@ -129,7 +134,8 @@
           "$ref": "#/$defs/ResourceKind"
         },
         "resourceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "sha256": {
           "type": [
@@ -138,7 +144,8 @@
           ]
         },
         "uri": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
@@ -154,20 +161,21 @@
         "durationMs": {
           "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 1
         },
         "height": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 1
         },
         "uri": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "width": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 1
         }
       },
       "additionalProperties": false,
@@ -207,13 +215,15 @@
       "type": "object",
       "properties": {
         "source": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "status": {
           "$ref": "#/$defs/SafeAreaStatus"
         },
         "value": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,

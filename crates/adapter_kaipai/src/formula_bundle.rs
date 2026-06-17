@@ -338,22 +338,26 @@ fn is_credential_like_key(key: &str) -> bool {
         .filter(|character| character.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect::<String>();
-    matches!(
-        normalized.as_str(),
-        "token"
-            | "accesstoken"
-            | "refreshtoken"
-            | "authorization"
-            | "cookie"
-            | "session"
-            | "sessionjson"
-            | "sessionid"
-            | "secret"
-            | "signature"
-            | "credential"
-            | "account"
-            | "accountid"
-    )
+    const SENSITIVE_KEY_TERMS: &[&str] = &[
+        "apikey",
+        "authorization",
+        "bearer",
+        "cookie",
+        "credential",
+        "password",
+        "privatekey",
+        "secret",
+        "session",
+        "signature",
+        "token",
+    ];
+
+    normalized == "auth"
+        || normalized == "oauth"
+        || normalized.starts_with("account")
+        || SENSITIVE_KEY_TERMS
+            .iter()
+            .any(|term| normalized.contains(term))
 }
 
 fn looks_like_remote_url(value: &str) -> bool {

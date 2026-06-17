@@ -126,6 +126,48 @@ fn formula_bundle_fixtures_reject_in_memory_unsafe_payloads() {
             "unsafe Kaipai formula evidence at `formula.access_token`: credential-like fields are not allowed in formula evidence",
         ),
         (
+            "api key",
+            patch(&base, |value| {
+                value["formula"]["apiKey"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.apiKey`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
+            "password key",
+            patch(&base, |value| {
+                value["formula"]["password"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.password`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
+            "secret key",
+            patch(&base, |value| {
+                value["formula"]["secretKey"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.secretKey`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
+            "private key",
+            patch(&base, |value| {
+                value["formula"]["privateKey"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.privateKey`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
+            "bearer token",
+            patch(&base, |value| {
+                value["formula"]["bearerToken"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.bearerToken`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
+            "authorization header",
+            patch(&base, |value| {
+                value["formula"]["authorizationHeader"] = json!("redacted");
+            }),
+            "unsafe Kaipai formula evidence at `formula.authorizationHeader`: credential-like fields are not allowed in formula evidence",
+        ),
+        (
             "refresh token key",
             patch(&base, |value| {
                 value["formula"]["refresh_token"] = json!("redacted");

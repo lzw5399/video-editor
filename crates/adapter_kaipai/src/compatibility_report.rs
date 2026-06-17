@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{FormulaResourceRef, KaipaiFormulaBundle};
+use crate::{KaipaiFormulaBundle, resource_localizer::ResourceLocalizationResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CompatibilityReportSchemaVersion(pub u32);
@@ -129,14 +129,15 @@ pub enum CompatibilityCanonicalTarget {
 
 pub fn classify_formula_bundle_compatibility(
     bundle: &KaipaiFormulaBundle,
+    localization: Option<&ResourceLocalizationResult>,
     generated_at: impl Into<String>,
 ) -> CompatibilityReport {
     let mut items = Vec::new();
 
-    collect_degraded_text_style_items(&bundle.formula, &mut items);
-    collect_unsupported_formula_block_items(&bundle.formula, &mut items);
-    collect_missing_resource_items(&bundle.resources, &mut items);
-    collect_native_effect_items(&bundle.formula, &mut items);
+    if let Some(localization) = localization {
+        items.extend(localization.diagnostics.iter().cloned());
+    }
+    collect_formula_semantic_items(&bundle.formula, "formula", &mut items);
 
     if items.is_empty() {
         items.push(CompatibilityReportItem {
@@ -167,98 +168,163 @@ pub fn classify_formula_bundle_compatibility(
     }
 }
 
-fn collect_degraded_text_style_items(formula: &Value, items: &mut Vec<CompatibilityReportItem>) {
-    if formula.get("textStyleFallback").is_some() {
-        items.push(CompatibilityReportItem {
-            status: CompatibilityStatus::Degraded,
-            severity: CompatibilitySeverity::Warning,
-            category: CompatibilityCategory::Text,
-            external_path: "formula.textStyleFallback".to_owned(),
-            external_id: None,
-            canonical_target: Some(CompatibilityCanonicalTarget::Text),
-            message: "Text style has unsupported provider-specific attributes and will use a simpler draft text style.".to_owned(),
-            details: Some("Preserves text content and basic style only.".to_owned()),
-        });
+fn collect_formula_semantic_items(
+    value: &Value,
+    path: &str,
+    items: &mut Vec<CompatibilityReportItem>,
+) {
+    match value {
+        Value::Object(object) => {
+            if is_native_effect_evidence(value) {
+                items.push(native_effect_item(path, value));
+                return;
+            }
+            for (key, child) in object {
+                let child_path = format!("{path}.{key}");
+                if key == "textStyleFallback" {
+                    items.push(degraded_text_style_item(&child_path));
+                    continue;
+                }
+                if key == "unsupportedBlocks" {
+                    collect_unsupported_formula_block_items(child, &child_path, items);
+                    continue;
+                }
+                if !is_allowed_formula_key(path, key) {
+                    items.push(unsupported_formula_item(&child_path, key));
+                    continue;
+                }
+                collect_formula_semantic_items(child, &child_path, items);
+            }
+        }
+        Value::Array(values) => {
+            for (index, child) in values.iter().enumerate() {
+                collect_formula_semantic_items(child, &format!("{path}[{index}]"), items);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn degraded_text_style_item(path: &str) -> CompatibilityReportItem {
+    CompatibilityReportItem {
+        status: CompatibilityStatus::Degraded,
+        severity: CompatibilitySeverity::Warning,
+        category: CompatibilityCategory::Text,
+        external_path: path.to_owned(),
+        external_id: None,
+        canonical_target: Some(CompatibilityCanonicalTarget::Text),
+        message: "Text style has unsupported provider-specific attributes and will use a simpler draft text style.".to_owned(),
+        details: Some("Preserves text content and basic style only.".to_owned()),
     }
 }
 
 fn collect_unsupported_formula_block_items(
-    formula: &Value,
+    value: &Value,
+    path: &str,
     items: &mut Vec<CompatibilityReportItem>,
 ) {
-    let Some(blocks) = formula.get("unsupportedBlocks").and_then(Value::as_array) else {
+    let Some(blocks) = value.as_array() else {
+        items.push(unsupported_formula_item(path, "unsupportedBlocks"));
         return;
     };
 
     for (index, block) in blocks.iter().enumerate() {
         let name = block.as_str().unwrap_or("unknownProviderBlock");
-        items.push(CompatibilityReportItem {
-            status: CompatibilityStatus::Unsupported,
-            severity: CompatibilitySeverity::Error,
-            category: CompatibilityCategory::Formula,
-            external_path: format!("formula.unsupportedBlocks[{index}]"),
-            external_id: Some(name.to_owned()),
-            canonical_target: None,
-            message: "Formula block has no supported Jianying-style draft semantic target yet."
-                .to_owned(),
-            details: Some("Mapper work must not claim support for this provider block.".to_owned()),
-        });
+        items.push(unsupported_formula_item(&format!("{path}[{index}]"), name));
     }
 }
 
-fn collect_missing_resource_items(
-    resources: &[FormulaResourceRef],
-    items: &mut Vec<CompatibilityReportItem>,
-) {
-    for (index, resource) in resources.iter().enumerate() {
-        if !is_missing_resource_evidence(resource) {
-            continue;
+fn unsupported_formula_item(path: &str, external_id: &str) -> CompatibilityReportItem {
+    CompatibilityReportItem {
+        status: CompatibilityStatus::Unsupported,
+        severity: CompatibilitySeverity::Error,
+        category: CompatibilityCategory::Formula,
+        external_path: path.to_owned(),
+        external_id: Some(external_id.to_owned()),
+        canonical_target: None,
+        message: "Formula block has no supported Jianying-style draft semantic target yet."
+            .to_owned(),
+        details: Some("Mapper work must not claim support for this provider block.".to_owned()),
+    }
+}
+
+fn native_effect_item(path: &str, effect: &Value) -> CompatibilityReportItem {
+    let external_id = effect
+        .get("nativeEffectId")
+        .or_else(|| effect.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("nativeEffect");
+    CompatibilityReportItem {
+        status: CompatibilityStatus::NeedsNativeEffect,
+        severity: CompatibilitySeverity::Warning,
+        category: CompatibilityCategory::NativeEffect,
+        external_path: path.to_owned(),
+        external_id: Some(external_id.to_owned()),
+        canonical_target: None,
+        message: "Provider-native effect requires explicit compatibility handling before it can be represented locally.".to_owned(),
+        details: Some("Do not smuggle native effect data into generic filter parameters.".to_owned()),
+    }
+}
+
+fn is_allowed_formula_key(parent_path: &str, key: &str) -> bool {
+    let normalized_parent = normalize_formula_path(parent_path);
+    matches!(
+        (normalized_parent.as_str(), key),
+        (
+            "formula",
+            "effects"
+                | "resourceUse"
+                | "segments"
+                | "template"
+                | "timeline"
+                | "tracks"
+                | "unsupportedBlocks"
+                | "textStyleFallback"
+        ) | ("formula.template", "id" | "name")
+            | ("formula.timeline", "segments" | "tracks")
+            | ("formula.timeline.tracks[]", "id" | "type")
+            | (
+                "formula.timeline.segments[]",
+                "durationMs"
+                    | "effects"
+                    | "id"
+                    | "materialRef"
+                    | "sourceDurationMs"
+                    | "sourceStartMs"
+                    | "targetStartMs"
+                    | "trackId"
+            )
+            | ("formula.tracks[]", "id" | "type")
+            | (
+                "formula.segments[]",
+                "durationMs"
+                    | "effects"
+                    | "id"
+                    | "materialRef"
+                    | "sourceDurationMs"
+                    | "sourceStartMs"
+                    | "targetStartMs"
+                    | "trackId"
+            )
+    )
+}
+
+fn normalize_formula_path(path: &str) -> String {
+    let mut normalized = String::with_capacity(path.len());
+    let mut chars = path.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character == '[' {
+            normalized.push_str("[]");
+            for next in chars.by_ref() {
+                if next == ']' {
+                    break;
+                }
+            }
+        } else {
+            normalized.push(character);
         }
-
-        items.push(CompatibilityReportItem {
-            status: CompatibilityStatus::MissingResource,
-            severity: CompatibilitySeverity::Error,
-            category: CompatibilityCategory::Resource,
-            external_path: format!("resources[{index}]"),
-            external_id: Some(resource.resource_id.clone()),
-            canonical_target: None,
-            message: "Referenced resource is not available in the offline formula bundle."
-                .to_owned(),
-            details: Some(resource.uri.clone()),
-        });
     }
-}
-
-fn collect_native_effect_items(formula: &Value, items: &mut Vec<CompatibilityReportItem>) {
-    let Some(effects) = formula.get("effects").and_then(Value::as_array) else {
-        return;
-    };
-
-    for (index, effect) in effects.iter().enumerate() {
-        if !is_native_effect_evidence(effect) {
-            continue;
-        }
-
-        let external_id = effect
-            .get("nativeEffectId")
-            .or_else(|| effect.get("name"))
-            .and_then(Value::as_str)
-            .unwrap_or("nativeEffect");
-        items.push(CompatibilityReportItem {
-            status: CompatibilityStatus::NeedsNativeEffect,
-            severity: CompatibilitySeverity::Warning,
-            category: CompatibilityCategory::NativeEffect,
-            external_path: format!("formula.effects[{index}]"),
-            external_id: Some(external_id.to_owned()),
-            canonical_target: None,
-            message: "Provider-native effect requires explicit compatibility handling before it can be represented locally.".to_owned(),
-            details: Some("Do not smuggle native effect data into generic filter parameters.".to_owned()),
-        });
-    }
-}
-
-fn is_missing_resource_evidence(resource: &FormulaResourceRef) -> bool {
-    resource.resource_id.starts_with("missing-") || resource.uri.contains("/missing/")
+    normalized
 }
 
 fn is_native_effect_evidence(effect: &Value) -> bool {

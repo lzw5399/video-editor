@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    collections::BTreeSet,
+    fs, io,
     path::{Component, Path, PathBuf},
 };
 
@@ -73,9 +74,25 @@ impl ResourceLocalizer {
     ) -> Result<ResourceLocalizationResult, AdapterKaipaiError> {
         let mut resources = Vec::new();
         let mut diagnostics = Vec::new();
+        let mut seen_destinations = BTreeSet::new();
+        let canonical_source_root = canonicalize_existing_dir(&request.source_root)?;
+        let canonical_bundle_path = match request.mode {
+            ResourceLocalizationMode::CopyRenderableResources
+            | ResourceLocalizationMode::ReferenceExistingBundleResources => {
+                Some(canonicalize_existing_dir(&request.bundle_path)?)
+            }
+            ResourceLocalizationMode::PreserveExternalSourceMedia => None,
+        };
 
         for (index, resource) in request.resources.iter().enumerate() {
-            let localized = localize_resource(&request, resource, index)?;
+            let localized = localize_resource(
+                &request,
+                &canonical_source_root,
+                canonical_bundle_path.as_deref(),
+                &mut seen_destinations,
+                resource,
+                index,
+            )?;
             if localized.status != LocalizedResourceStatus::Available {
                 diagnostics.push(missing_resource_diagnostic(resource, index, &localized));
             }
@@ -91,6 +108,9 @@ impl ResourceLocalizer {
 
 fn localize_resource(
     request: &ResourceLocalizationRequest,
+    canonical_source_root: &Path,
+    canonical_bundle_path: Option<&Path>,
+    seen_destinations: &mut BTreeSet<String>,
     resource: &FormulaResourceRef,
     index: usize,
 ) -> Result<LocalizedResource, AdapterKaipaiError> {
@@ -118,9 +138,16 @@ fn localize_resource(
             None,
         ));
     };
+    if !seen_destinations.insert(bundle_relative_uri.clone()) {
+        return Ok(failed_resource(
+            resource,
+            LocalizedResourceStatus::UnsafePath,
+            None,
+        ));
+    }
 
-    let source_path = match source_path_for_uri(&request.source_root, source_uri) {
-        Some(path) => path,
+    let source_path = match relative_path_for_uri(source_uri) {
+        Some(path) => canonical_source_root.join(path),
         None => {
             return Ok(failed_resource(
                 resource,
@@ -130,13 +157,23 @@ fn localize_resource(
         }
     };
 
-    if !source_path.exists() {
-        return Ok(failed_resource(
-            resource,
-            LocalizedResourceStatus::Missing,
-            None,
-        ));
-    }
+    let source_path = match trusted_existing_file_path(canonical_source_root, &source_path)? {
+        TrustedFilePath::Available(path) => path,
+        TrustedFilePath::Missing => {
+            return Ok(failed_resource(
+                resource,
+                LocalizedResourceStatus::Missing,
+                None,
+            ));
+        }
+        TrustedFilePath::Unsafe => {
+            return Ok(failed_resource(
+                resource,
+                LocalizedResourceStatus::UnsafePath,
+                None,
+            ));
+        }
+    };
 
     if let Some(expected) = resource.sha256.as_deref() {
         let actual = sha256_file_hex(&source_path).map_err(|source| {
@@ -156,15 +193,22 @@ fn localize_resource(
 
     match request.mode {
         ResourceLocalizationMode::CopyRenderableResources => {
-            let destination_path = request.bundle_path.join(&bundle_relative_uri);
-            if let Some(parent) = destination_path.parent() {
-                fs::create_dir_all(parent).map_err(|source| {
-                    AdapterKaipaiError::ResourceLocalizationIo {
-                        path: parent.to_path_buf(),
-                        source,
-                    }
-                })?;
-            }
+            let Some(canonical_bundle_path) = canonical_bundle_path else {
+                return Ok(failed_resource(
+                    resource,
+                    LocalizedResourceStatus::UnsafePath,
+                    None,
+                ));
+            };
+            let Some(destination_path) =
+                writable_destination_path(canonical_bundle_path, &bundle_relative_uri)?
+            else {
+                return Ok(failed_resource(
+                    resource,
+                    LocalizedResourceStatus::UnsafePath,
+                    None,
+                ));
+            };
             fs::copy(&source_path, &destination_path).map_err(|source| {
                 AdapterKaipaiError::ResourceLocalizationIo {
                     path: destination_path,
@@ -173,12 +217,30 @@ fn localize_resource(
             })?;
         }
         ResourceLocalizationMode::ReferenceExistingBundleResources => {
-            if !request.bundle_path.join(&bundle_relative_uri).exists() {
+            let Some(canonical_bundle_path) = canonical_bundle_path else {
                 return Ok(failed_resource(
                     resource,
-                    LocalizedResourceStatus::Missing,
+                    LocalizedResourceStatus::UnsafePath,
                     None,
                 ));
+            };
+            let destination_path = canonical_bundle_path.join(Path::new(&bundle_relative_uri));
+            match trusted_existing_file_path(canonical_bundle_path, &destination_path)? {
+                TrustedFilePath::Available(_) => {}
+                TrustedFilePath::Missing => {
+                    return Ok(failed_resource(
+                        resource,
+                        LocalizedResourceStatus::Missing,
+                        None,
+                    ));
+                }
+                TrustedFilePath::Unsafe => {
+                    return Ok(failed_resource(
+                        resource,
+                        LocalizedResourceStatus::UnsafePath,
+                        None,
+                    ));
+                }
             }
         }
         ResourceLocalizationMode::PreserveExternalSourceMedia => {}
@@ -220,12 +282,12 @@ fn destination_uri_for_resource(resource: &FormulaResourceRef, index: usize) -> 
         return None;
     }
 
-    let fallback_name = format!("resource-{index}");
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or(&fallback_name);
+    if match path.file_name().and_then(|name| name.to_str()) {
+        Some(name) => name.trim().is_empty(),
+        None => true,
+    } {
+        return None;
+    }
     let subdir = match resource.kind {
         ResourceKind::Font => "fonts",
         ResourceKind::Sticker => "stickers",
@@ -247,12 +309,15 @@ fn destination_uri_for_resource(resource: &FormulaResourceRef, index: usize) -> 
     let destination = if path_has_kind_dir {
         PathBuf::from("resources").join(path)
     } else {
-        PathBuf::from("resources").join(subdir).join(file_name)
+        PathBuf::from("resources")
+            .join(subdir)
+            .join(safe_resource_stem(&resource.resource_id, index))
+            .join(path)
     };
     path_to_uri(&destination).filter(|uri| validate_bundle_relative_resource_uri(uri))
 }
 
-fn source_path_for_uri(source_root: &Path, source_uri: &str) -> Option<PathBuf> {
+fn relative_path_for_uri(source_uri: &str) -> Option<PathBuf> {
     let normalized = source_uri.trim().replace('\\', "/");
     let path = Path::new(&normalized);
     if path.is_absolute()
@@ -264,7 +329,157 @@ fn source_path_for_uri(source_root: &Path, source_uri: &str) -> Option<PathBuf> 
     if !is_safe_relative_path(path) {
         return None;
     }
-    Some(source_root.join(path))
+    Some(path.to_path_buf())
+}
+
+enum TrustedFilePath {
+    Available(PathBuf),
+    Missing,
+    Unsafe,
+}
+
+fn canonicalize_existing_dir(path: &Path) -> Result<PathBuf, AdapterKaipaiError> {
+    let canonical =
+        path.canonicalize()
+            .map_err(|source| AdapterKaipaiError::ResourceLocalizationIo {
+                path: path.to_path_buf(),
+                source,
+            })?;
+    if !canonical.is_dir() {
+        return Err(AdapterKaipaiError::ResourceLocalizationIo {
+            path: path.to_path_buf(),
+            source: io::Error::new(io::ErrorKind::InvalidInput, "path is not a directory"),
+        });
+    }
+    Ok(canonical)
+}
+
+fn trusted_existing_file_path(
+    canonical_root: &Path,
+    path: &Path,
+) -> Result<TrustedFilePath, AdapterKaipaiError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {
+            return Ok(TrustedFilePath::Missing);
+        }
+        Err(source) => {
+            return Err(AdapterKaipaiError::ResourceLocalizationIo {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
+        return Ok(TrustedFilePath::Unsafe);
+    }
+    let canonical =
+        path.canonicalize()
+            .map_err(|source| AdapterKaipaiError::ResourceLocalizationIo {
+                path: path.to_path_buf(),
+                source,
+            })?;
+    if !canonical.starts_with(canonical_root) {
+        return Ok(TrustedFilePath::Unsafe);
+    }
+    Ok(TrustedFilePath::Available(canonical))
+}
+
+fn writable_destination_path(
+    canonical_bundle_root: &Path,
+    bundle_relative_uri: &str,
+) -> Result<Option<PathBuf>, AdapterKaipaiError> {
+    if !validate_bundle_relative_resource_uri(bundle_relative_uri) {
+        return Ok(None);
+    }
+    let relative_path = Path::new(bundle_relative_uri);
+    let Some(parent) = relative_path.parent() else {
+        return Ok(None);
+    };
+    let Some(file_name) = relative_path.file_name() else {
+        return Ok(None);
+    };
+    let Some(parent) = ensure_directory_without_symlink(canonical_bundle_root, parent)? else {
+        return Ok(None);
+    };
+    let destination = parent.join(file_name);
+    match fs::symlink_metadata(&destination) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || metadata.file_type().is_dir() {
+                return Ok(None);
+            }
+            let canonical = destination.canonicalize().map_err(|source| {
+                AdapterKaipaiError::ResourceLocalizationIo {
+                    path: destination.clone(),
+                    source,
+                }
+            })?;
+            if !canonical.starts_with(canonical_bundle_root) {
+                return Ok(None);
+            }
+        }
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(AdapterKaipaiError::ResourceLocalizationIo {
+                path: destination.clone(),
+                source,
+            });
+        }
+    }
+    Ok(Some(destination))
+}
+
+fn ensure_directory_without_symlink(
+    canonical_root: &Path,
+    relative_path: &Path,
+) -> Result<Option<PathBuf>, AdapterKaipaiError> {
+    if !is_safe_relative_path(relative_path) {
+        return Ok(None);
+    }
+
+    let mut current = canonical_root.to_path_buf();
+    for component in relative_path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(part) => {
+                let next = current.join(part);
+                match fs::symlink_metadata(&next) {
+                    Ok(metadata) => {
+                        if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
+                            return Ok(None);
+                        }
+                    }
+                    Err(source) if source.kind() == io::ErrorKind::NotFound => {
+                        fs::create_dir(&next).map_err(|source| {
+                            AdapterKaipaiError::ResourceLocalizationIo {
+                                path: next.clone(),
+                                source,
+                            }
+                        })?;
+                    }
+                    Err(source) => {
+                        return Err(AdapterKaipaiError::ResourceLocalizationIo {
+                            path: next,
+                            source,
+                        });
+                    }
+                }
+                let canonical = next.canonicalize().map_err(|source| {
+                    AdapterKaipaiError::ResourceLocalizationIo {
+                        path: next.clone(),
+                        source,
+                    }
+                })?;
+                if !canonical.starts_with(canonical_root) {
+                    return Ok(None);
+                }
+                current = canonical;
+            }
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return Ok(None),
+        }
+    }
+
+    Ok(Some(current))
 }
 
 fn missing_resource_diagnostic(
@@ -323,6 +538,23 @@ fn is_safe_relative_path(path: &Path) -> bool {
 
 fn path_to_uri(path: &Path) -> Option<String> {
     path.to_str().map(|value| value.replace('\\', "/"))
+}
+
+fn safe_resource_stem(resource_id: &str, index: usize) -> String {
+    let mut stem = String::new();
+    for character in resource_id.trim().chars() {
+        if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+            stem.push(character.to_ascii_lowercase());
+        } else if !stem.ends_with('-') {
+            stem.push('-');
+        }
+    }
+    let stem = stem.trim_matches('-');
+    if stem.is_empty() {
+        format!("resource-{index}")
+    } else {
+        stem.to_owned()
+    }
 }
 
 fn has_uri_scheme(value: &str) -> bool {

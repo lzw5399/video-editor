@@ -9,7 +9,7 @@ use adapter_kaipai::{
     KaipaiFormulaBundle, RecognizerResult, ResourceKind, SafeAreaEvidence, SafeAreaStatus,
 };
 use schemars::{Schema, schema_for};
-use serde_json::json;
+use serde_json::{Value, json};
 use ts_rs::{Config, TS};
 
 fn project_root() -> PathBuf {
@@ -52,9 +52,84 @@ fn schema_exports_generated_compatibility_report_contract_from_rust() {
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
 }
 
+#[test]
+fn schema_exports_formula_bundle_rejects_values_rust_rejects() {
+    let schema_json: Value = serde_json::from_str(&formula_bundle_schema_json())
+        .expect("formula bundle schema should parse");
+    let validator =
+        jsonschema::validator_for(&schema_json).expect("formula bundle schema should compile");
+    let base = valid_formula_bundle_payload();
+
+    for (case_name, invalid) in [
+        (
+            "empty template id",
+            patch(&base, |value| value["provenance"]["templateId"] = json!("")),
+        ),
+        (
+            "empty recipe id",
+            patch(&base, |value| value["provenance"]["recipeId"] = json!("")),
+        ),
+        (
+            "empty source media uri",
+            patch(&base, |value| value["sourceMedia"]["uri"] = json!("")),
+        ),
+        (
+            "zero source width",
+            patch(&base, |value| value["sourceMedia"]["width"] = json!(0)),
+        ),
+        (
+            "zero source height",
+            patch(&base, |value| value["sourceMedia"]["height"] = json!(0)),
+        ),
+        (
+            "zero source duration",
+            patch(&base, |value| value["sourceMedia"]["durationMs"] = json!(0)),
+        ),
+        (
+            "empty safe area value",
+            patch(&base, |value| value["safeArea"]["value"] = json!("")),
+        ),
+        (
+            "empty safe area source",
+            patch(&base, |value| value["safeArea"]["source"] = json!("")),
+        ),
+        (
+            "empty direct material id",
+            patch(&base, |value| {
+                value["directMaterials"] = json!([
+                    {
+                        "materialId": "",
+                        "uri": "media/source.mp4",
+                        "kind": "video",
+                        "displayName": "source.mp4"
+                    }
+                ]);
+            }),
+        ),
+        (
+            "empty resource id",
+            patch(&base, |value| {
+                value["resources"] = json!([
+                    {
+                        "resourceId": "",
+                        "kind": "font",
+                        "uri": "resources/fonts/redacted.ttf"
+                    }
+                ]);
+            }),
+        ),
+    ] {
+        assert!(
+            validator.validate(&invalid).is_err(),
+            "generated schema should reject {case_name}"
+        );
+    }
+}
+
 fn formula_bundle_schema_json() -> String {
     let mut schema = schema_for!(KaipaiFormulaBundle);
     constrain_current_formula_bundle_schema_version(&mut schema);
+    constrain_formula_bundle_value_contract(&mut schema);
     serde_json::to_string_pretty(&schema).expect("formula bundle schema should serialize")
 }
 
@@ -77,6 +152,52 @@ fn constrain_current_formula_bundle_schema_version(schema: &mut Schema) {
             "const": FormulaBundleSchemaVersion::CURRENT_VALUE
         }),
     );
+}
+
+fn constrain_formula_bundle_value_contract(schema: &mut Schema) {
+    let defs = schema
+        .ensure_object()
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated formula bundle schema should contain $defs");
+
+    for (def_name, property) in [
+        ("FormulaProvenance", "templateId"),
+        ("FormulaProvenance", "recipeId"),
+        ("FormulaSourceMedia", "uri"),
+        ("SafeAreaEvidence", "value"),
+        ("SafeAreaEvidence", "source"),
+        ("DirectMaterialRef", "materialId"),
+        ("DirectMaterialRef", "uri"),
+        ("DirectMaterialRef", "displayName"),
+        ("FormulaResourceRef", "resourceId"),
+        ("FormulaResourceRef", "uri"),
+    ] {
+        property_schema_mut(defs, def_name, property)
+            .as_object_mut()
+            .expect("string property schema should be an object")
+            .insert("minLength".to_owned(), json!(1));
+    }
+
+    for property in ["width", "height", "durationMs"] {
+        property_schema_mut(defs, "FormulaSourceMedia", property)
+            .as_object_mut()
+            .expect("numeric property schema should be an object")
+            .insert("minimum".to_owned(), json!(1));
+    }
+}
+
+fn property_schema_mut<'a>(
+    defs: &'a mut serde_json::Map<String, Value>,
+    def_name: &str,
+    property: &str,
+) -> &'a mut Value {
+    defs.get_mut(def_name)
+        .and_then(Value::as_object_mut)
+        .and_then(|definition| definition.get_mut("properties"))
+        .and_then(Value::as_object_mut)
+        .and_then(|properties| properties.get_mut(property))
+        .unwrap_or_else(|| panic!("generated schema should expose {def_name}.{property}"))
 }
 
 fn constrain_current_compatibility_report_schema_version(schema: &mut Schema) {
@@ -125,6 +246,31 @@ fn assert_formula_bundle_schema_requires_evidence_fields(schema_json: &str) {
             .iter()
             .any(|value| value.as_str() == Some("word_list")),
         "recognizer result schema should require provider `word_list` evidence"
+    );
+    assert_eq!(
+        schema_value["$defs"]["FormulaSourceMedia"]["properties"]["width"]["minimum"],
+        json!(1),
+        "formula bundle schema should reject zero source media width"
+    );
+    assert_eq!(
+        schema_value["$defs"]["FormulaSourceMedia"]["properties"]["height"]["minimum"],
+        json!(1),
+        "formula bundle schema should reject zero source media height"
+    );
+    assert_eq!(
+        schema_value["$defs"]["FormulaSourceMedia"]["properties"]["durationMs"]["minimum"],
+        json!(1),
+        "formula bundle schema should reject zero source media duration"
+    );
+    assert_eq!(
+        schema_value["$defs"]["FormulaProvenance"]["properties"]["templateId"]["minLength"],
+        json!(1),
+        "formula bundle schema should reject empty template id"
+    );
+    assert_eq!(
+        schema_value["$defs"]["SafeAreaEvidence"]["properties"]["value"]["minLength"],
+        json!(1),
+        "formula bundle schema should reject empty safe area evidence"
     );
 }
 
@@ -209,4 +355,38 @@ fn assert_or_update_contract_file(path: impl AsRef<Path>, expected: &str) {
         "generated contract artifact is stale: {}. Run with VE_UPDATE_GENERATED_CONTRACTS=1 to refresh.",
         path.display()
     );
+}
+
+fn valid_formula_bundle_payload() -> Value {
+    json!({
+        "schemaVersion": FormulaBundleSchemaVersion::CURRENT_VALUE,
+        "kind": "kaipaiSmartEditFormulaBundle",
+        "provenance": {
+            "templateId": "tpl-redacted-schema",
+            "recipeId": "recipe-redacted-schema"
+        },
+        "sourceMedia": {
+            "uri": "media/source.mp4",
+            "width": 1,
+            "height": 1,
+            "durationMs": 1
+        },
+        "recognizerResult": {
+            "word_list": []
+        },
+        "safeArea": {
+            "value": "0,0,1,1",
+            "status": "detected",
+            "source": "redactedLocalRecognizer"
+        },
+        "directMaterials": [],
+        "formula": {},
+        "resources": []
+    })
+}
+
+fn patch(base: &Value, update: impl FnOnce(&mut Value)) -> Value {
+    let mut value = base.clone();
+    update(&mut value);
+    value
 }

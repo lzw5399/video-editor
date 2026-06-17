@@ -2,13 +2,14 @@ use std::{
     collections::BTreeSet,
     env, fs,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use adapter_kaipai::{
     CompatibilityCanonicalTarget, CompatibilityCategory, CompatibilityReport,
     CompatibilityReportItem, CompatibilityReportSchemaVersion, CompatibilityReportSummary,
-    CompatibilitySeverity, CompatibilityStatus, KaipaiFormulaBundle,
-    classify_formula_bundle_compatibility,
+    CompatibilitySeverity, CompatibilityStatus, KaipaiFormulaBundle, ResourceLocalizationMode,
+    ResourceLocalizationRequest, ResourceLocalizer, classify_formula_bundle_compatibility,
 };
 use serde_json::{Value, json};
 
@@ -274,20 +275,20 @@ fn unsupported_formula_block_report(root: &Path) -> CompatibilityReport {
 }
 
 fn missing_resource_report(root: &Path) -> CompatibilityReport {
-    classify_fixture(
-        root,
-        patch(base_fixture_value(root), |value| {
-            value["resources"] = json!([
-                {
-                    "resourceId": "missing-font-default",
-                    "kind": "font",
-                    "uri": "resources/missing/redacted-default.ttf",
-                    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
-                    "displayName": "redacted-default.ttf"
-                }
-            ]);
-        }),
-    )
+    let value = patch(base_fixture_value(root), |value| {
+        value["resources"] = json!([
+            {
+                "resourceId": "missing-font-default",
+                "kind": "font",
+                "uri": "resources/missing/redacted-default.ttf",
+                "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+                "displayName": "redacted-default.ttf"
+            }
+        ]);
+    });
+    let bundle = formula_bundle(value);
+    let localization = localize_for_report(&bundle, "missing-resource-report");
+    classify_formula_bundle_compatibility(&bundle, Some(&localization), "2026-06-17T00:00:00Z")
 }
 
 fn native_effect_report(root: &Path) -> CompatibilityReport {
@@ -306,9 +307,32 @@ fn native_effect_report(root: &Path) -> CompatibilityReport {
 }
 
 fn classify_fixture(_root: &Path, value: Value) -> CompatibilityReport {
-    let bundle = KaipaiFormulaBundle::from_json_value(value)
-        .expect("compatibility report fixture evidence should validate through formula bundle");
-    classify_formula_bundle_compatibility(&bundle, "2026-06-17T00:00:00Z")
+    let bundle = formula_bundle(value);
+    classify_formula_bundle_compatibility(&bundle, None, "2026-06-17T00:00:00Z")
+}
+
+fn formula_bundle(value: Value) -> KaipaiFormulaBundle {
+    KaipaiFormulaBundle::from_json_value(value)
+        .expect("compatibility report fixture evidence should validate through formula bundle")
+}
+
+fn localize_for_report(
+    bundle: &KaipaiFormulaBundle,
+    case_name: &str,
+) -> adapter_kaipai::ResourceLocalizationResult {
+    let temp = temp_case_dir(case_name);
+    let source_root = temp.join("formula-bundle");
+    let bundle_path = temp.join("draft.veproj");
+    fs::create_dir_all(&source_root).expect("source root should create");
+    fs::create_dir_all(&bundle_path).expect("bundle dir should create");
+    ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path,
+            source_root,
+            resources: bundle.resources.clone(),
+            mode: ResourceLocalizationMode::PreserveExternalSourceMedia,
+        })
+        .expect("compatibility report localization should complete")
 }
 
 fn base_fixture_value(root: &Path) -> Value {
@@ -349,4 +373,131 @@ fn compatibility_report_native_effects_are_not_smuggled_into_filter_parameters()
     let forbidden_filter_parameters = ["Filter", "parameters"].join(".");
     assert!(!serialized.contains(&forbidden_filter_parameters));
     assert!(!serialized.contains("\"parameters\""));
+}
+
+#[test]
+fn compatibility_report_detects_nested_native_effects() {
+    let root = project_root();
+    let bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["formula"]["timeline"]["segments"][0]["effects"] = json!([
+            {
+                "nativeEffectId": "kaipai-native-segment-glow",
+                "requiresNativeEffect": true
+            }
+        ]);
+    }));
+
+    let report = classify_formula_bundle_compatibility(&bundle, None, "2026-06-17T00:00:00Z");
+
+    assert_eq!(report.items.len(), 1);
+    assert_eq!(
+        report.items[0].status,
+        CompatibilityStatus::NeedsNativeEffect
+    );
+    assert_eq!(
+        report.items[0].external_path,
+        "formula.timeline.segments[0].effects[0]"
+    );
+}
+
+#[test]
+fn compatibility_report_rejects_unknown_nested_formula_blocks() {
+    let root = project_root();
+    let bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["formula"]["timeline"]["segments"][0]["providerSmartCut"] = json!({
+            "mode": "redacted"
+        });
+    }));
+
+    let report = classify_formula_bundle_compatibility(&bundle, None, "2026-06-17T00:00:00Z");
+
+    assert_eq!(report.items.len(), 1);
+    assert_eq!(report.items[0].status, CompatibilityStatus::Unsupported);
+    assert_eq!(
+        report.items[0].external_path,
+        "formula.timeline.segments[0].providerSmartCut"
+    );
+}
+
+#[test]
+fn compatibility_report_uses_localization_diagnostics_for_missing_resources() {
+    let root = project_root();
+    let missing_bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["resources"] = json!([
+            {
+                "resourceId": "font-normal-id",
+                "kind": "font",
+                "uri": "resources/fonts/not-present.ttf",
+                "displayName": "not-present.ttf"
+            }
+        ]);
+    }));
+    let missing_localization = localize_for_report(&missing_bundle, "normal-missing-resource");
+    let missing_report = classify_formula_bundle_compatibility(
+        &missing_bundle,
+        Some(&missing_localization),
+        "2026-06-17T00:00:00Z",
+    );
+    assert_eq!(
+        missing_report.items[0].status,
+        CompatibilityStatus::MissingResource
+    );
+    assert_eq!(
+        missing_report.items[0].external_id.as_deref(),
+        Some("font-normal-id")
+    );
+
+    let present_bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["resources"] = json!([
+            {
+                "resourceId": "font-present-id",
+                "kind": "font",
+                "uri": "resources/missing/actually-present.ttf",
+                "displayName": "actually-present.ttf"
+            }
+        ]);
+    }));
+    let temp = temp_case_dir("present-resource-with-missing-path-name");
+    let source_root = temp.join("formula-bundle");
+    let bundle_path = temp.join("draft.veproj");
+    fs::create_dir_all(source_root.join("resources/missing")).expect("source dir should create");
+    fs::create_dir_all(&bundle_path).expect("bundle dir should create");
+    fs::write(
+        source_root.join("resources/missing/actually-present.ttf"),
+        b"local-font-fixture",
+    )
+    .expect("source resource should write");
+    let present_localization = ResourceLocalizer::default()
+        .localize(ResourceLocalizationRequest {
+            bundle_path,
+            source_root,
+            resources: present_bundle.resources.clone(),
+            mode: ResourceLocalizationMode::PreserveExternalSourceMedia,
+        })
+        .expect("present resource should localize");
+    let present_report = classify_formula_bundle_compatibility(
+        &present_bundle,
+        Some(&present_localization),
+        "2026-06-17T00:00:00Z",
+    );
+    assert!(
+        present_report
+            .items
+            .iter()
+            .all(|item| item.status != CompatibilityStatus::MissingResource),
+        "resource paths containing `/missing/` must not be classified by name heuristic"
+    );
+}
+
+fn temp_case_dir(name: &str) -> PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after epoch")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("adapter-kaipai-compat-{name}-{nonce}"));
+    if path.exists() {
+        fs::remove_dir_all(&path).expect("old temp dir should remove");
+    }
+    fs::create_dir_all(&path).expect("temp dir should create");
+    path
 }
