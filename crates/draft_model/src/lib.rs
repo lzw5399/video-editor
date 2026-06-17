@@ -10,6 +10,21 @@ use serde::de;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub mod draft;
+pub mod ids;
+pub mod material;
+pub mod time;
+pub mod timeline;
+
+pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
+pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
+pub use material::{Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate};
+pub use time::Microseconds;
+pub use timeline::{
+    Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    Transition,
+};
+
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
 
