@@ -168,6 +168,11 @@ dependencies = [
 [[package]]
 name = "engine_core"
 version = "0.1.0"
+dependencies = [
+ "draft_model",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "equivalent"
