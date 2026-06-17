@@ -18,3 +18,4 @@ which = "8.0.4"
 [dev-dependencies]
 media_runtime_desktop = { path = "../media_runtime_desktop" }
 tempfile = "3.27.0"
+testkit = { path = "../testkit" }

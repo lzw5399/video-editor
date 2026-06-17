@@ -9,7 +9,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use media_runtime::{
-    FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig, discover_runtime_config,
+    FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, MaterialProbeKind, MaterialProbeMetadata,
+    RationalFrameRate, RuntimeConfig, discover_runtime_config,
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
 
@@ -19,9 +20,18 @@ pub const TESTKIT_BOUNDARY: &str = "fixtures-goldens-render-smoke-shell";
 const TINY_WIDTH: u32 = 160;
 const TINY_HEIGHT: u32 = 90;
 const TINY_FPS: u32 = 10;
-const TINY_DURATION_SECONDS: f64 = 1.0;
+const TINY_DURATION_SECONDS: &str = "1";
 const TINY_DURATION_MIN_MICROS: u64 = 900_000;
 const TINY_DURATION_MAX_MICROS: u64 = 1_200_000;
+
+const MATERIAL_VIDEO_WIDTH: u32 = 160;
+const MATERIAL_VIDEO_HEIGHT: u32 = 90;
+const MATERIAL_VIDEO_FPS: u32 = 10;
+const MATERIAL_IMAGE_WIDTH: u32 = 80;
+const MATERIAL_IMAGE_HEIGHT: u32 = 60;
+const MATERIAL_AUDIO_SAMPLE_RATE: u32 = 44_100;
+const MATERIAL_AUDIO_CHANNELS: u16 = 1;
+const MATERIAL_DURATION_MICROS: u64 = 1_000_000;
 
 /// Result type for deterministic smoke helpers.
 pub type SmokeResult<T> = Result<T, SmokeError>;
@@ -105,6 +115,101 @@ impl TinyRenderSmoke {
     }
 }
 
+/// Temporary media fixture for material import/probe tests.
+#[derive(Debug)]
+pub struct GeneratedMaterialFixture {
+    _temp_dir: tempfile::TempDir,
+    path: PathBuf,
+    expected: ExpectedMaterialMetadata,
+}
+
+impl GeneratedMaterialFixture {
+    /// Path to the generated media file. The file is removed when this value is dropped.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Expected metadata contract for this generated fixture.
+    pub fn expected(&self) -> &ExpectedMaterialMetadata {
+        &self.expected
+    }
+
+    /// Assert that normalized `media_runtime` probe output matches this fixture.
+    pub fn assert_probe_metadata(&self, metadata: &MaterialProbeMetadata) -> SmokeResult<()> {
+        self.expected.assert_probe_metadata(metadata)
+    }
+}
+
+/// Expected normalized probe metadata for a generated material fixture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExpectedMaterialMetadata {
+    pub kind: MaterialProbeKind,
+    pub duration_microseconds: Option<u64>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub frame_rate: Option<RationalFrameRate>,
+    pub has_video_stream: bool,
+    pub has_audio_stream: bool,
+    pub audio_sample_rate: Option<u32>,
+    pub audio_channels: Option<u16>,
+}
+
+impl ExpectedMaterialMetadata {
+    /// Assert normalized material probe metadata against this fixture contract.
+    pub fn assert_probe_metadata(&self, metadata: &MaterialProbeMetadata) -> SmokeResult<()> {
+        if metadata.kind != self.kind {
+            return Err(SmokeError::new(format!(
+                "expected material kind {:?}, got {:?}",
+                self.kind, metadata.kind
+            )));
+        }
+
+        if metadata.duration_microseconds != self.duration_microseconds {
+            return Err(SmokeError::new(format!(
+                "expected duration {:?}, got {:?}",
+                self.duration_microseconds, metadata.duration_microseconds
+            )));
+        }
+
+        if metadata.width != self.width || metadata.height != self.height {
+            return Err(SmokeError::new(format!(
+                "expected dimensions {:?}x{:?}, got {:?}x{:?}",
+                self.width, self.height, metadata.width, metadata.height
+            )));
+        }
+
+        if metadata.frame_rate != self.frame_rate {
+            return Err(SmokeError::new(format!(
+                "expected frame rate {:?}, got {:?}",
+                self.frame_rate, metadata.frame_rate
+            )));
+        }
+
+        if metadata.has_video_stream != self.has_video_stream
+            || metadata.has_audio_stream != self.has_audio_stream
+        {
+            return Err(SmokeError::new(format!(
+                "expected stream flags video={} audio={}, got video={} audio={}",
+                self.has_video_stream,
+                self.has_audio_stream,
+                metadata.has_video_stream,
+                metadata.has_audio_stream
+            )));
+        }
+
+        let actual_sample_rate = metadata.audio.map(|audio| audio.sample_rate);
+        let actual_channels = metadata.audio.map(|audio| audio.channels);
+        if actual_sample_rate != self.audio_sample_rate || actual_channels != self.audio_channels {
+            return Err(SmokeError::new(format!(
+                "expected audio {:?}Hz {:?}ch, got {:?}Hz {:?}ch",
+                self.audio_sample_rate, self.audio_channels, actual_sample_rate, actual_channels
+            )));
+        }
+
+        Ok(())
+    }
+}
+
 /// Generate a tiny deterministic MP4 using FFmpeg lavfi sources.
 pub fn generate_tiny_lavfi_media() -> SmokeResult<TinyLavfiMedia> {
     let runtime = discover_runtime_config()?;
@@ -138,6 +243,143 @@ pub fn run_tiny_render_smoke() -> SmokeResult<TinyRenderSmoke> {
     assert_tiny_smoke_metadata(&metadata)?;
 
     Ok(TinyRenderSmoke { media, metadata })
+}
+
+/// Generate deterministic video material for probe/import tests.
+pub fn generate_video_material_fixture(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+) -> SmokeResult<GeneratedMaterialFixture> {
+    let fixture = GeneratedMaterialFixture::new(
+        "video",
+        "mp4",
+        ExpectedMaterialMetadata {
+            kind: MaterialProbeKind::Video,
+            duration_microseconds: Some(MATERIAL_DURATION_MICROS),
+            width: Some(MATERIAL_VIDEO_WIDTH),
+            height: Some(MATERIAL_VIDEO_HEIGHT),
+            frame_rate: Some(RationalFrameRate {
+                numerator: MATERIAL_VIDEO_FPS,
+                denominator: 1,
+            }),
+            has_video_stream: true,
+            has_audio_stream: true,
+            audio_sample_rate: Some(MATERIAL_AUDIO_SAMPLE_RATE),
+            audio_channels: Some(MATERIAL_AUDIO_CHANNELS),
+        },
+    )?;
+    fixture.run_ffmpeg(
+        executor,
+        runtime,
+        &[
+            "-hide_banner",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=160x90:rate=10:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=1",
+            "-shortest",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-ac",
+            "1",
+        ],
+    )
+}
+
+/// Generate deterministic still image material for probe/import tests.
+pub fn generate_image_material_fixture(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+) -> SmokeResult<GeneratedMaterialFixture> {
+    let fixture = GeneratedMaterialFixture::new(
+        "image",
+        "png",
+        ExpectedMaterialMetadata {
+            kind: MaterialProbeKind::Image,
+            duration_microseconds: None,
+            width: Some(MATERIAL_IMAGE_WIDTH),
+            height: Some(MATERIAL_IMAGE_HEIGHT),
+            frame_rate: Some(RationalFrameRate {
+                numerator: 25,
+                denominator: 1,
+            }),
+            has_video_stream: true,
+            has_audio_stream: false,
+            audio_sample_rate: None,
+            audio_channels: None,
+        },
+    )?;
+    fixture.run_ffmpeg(
+        executor,
+        runtime,
+        &[
+            "-hide_banner",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:size=80x60",
+            "-frames:v",
+            "1",
+        ],
+    )
+}
+
+/// Generate deterministic audio-only material for probe/import tests.
+pub fn generate_audio_material_fixture(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+) -> SmokeResult<GeneratedMaterialFixture> {
+    let fixture = GeneratedMaterialFixture::new(
+        "audio",
+        "wav",
+        ExpectedMaterialMetadata {
+            kind: MaterialProbeKind::Audio,
+            duration_microseconds: Some(MATERIAL_DURATION_MICROS),
+            width: None,
+            height: None,
+            frame_rate: None,
+            has_video_stream: false,
+            has_audio_stream: true,
+            audio_sample_rate: Some(MATERIAL_AUDIO_SAMPLE_RATE),
+            audio_channels: Some(MATERIAL_AUDIO_CHANNELS),
+        },
+    )?;
+    fixture.run_ffmpeg(
+        executor,
+        runtime,
+        &[
+            "-hide_banner",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:sample_rate=44100:duration=1",
+            "-ac",
+            "1",
+        ],
+    )
+}
+
+/// Generate all supported deterministic material fixture kinds.
+pub fn generate_material_fixtures(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+) -> SmokeResult<Vec<GeneratedMaterialFixture>> {
+    Ok(vec![
+        generate_video_material_fixture(executor, runtime)?,
+        generate_image_material_fixture(executor, runtime)?,
+        generate_audio_material_fixture(executor, runtime)?,
+    ])
 }
 
 /// Probe an existing media file with ffprobe and return metadata needed by the smoke gate.
@@ -265,6 +507,61 @@ fn run_ffmpeg_generate(
     }
 
     Ok(())
+}
+
+impl GeneratedMaterialFixture {
+    fn new(kind: &str, extension: &str, expected: ExpectedMaterialMetadata) -> SmokeResult<Self> {
+        let temp_dir = tempfile::Builder::new()
+            .prefix("material-fixture-")
+            .tempdir()?;
+        let media_dir = temp_dir.path().join("media-generated");
+        std::fs::create_dir_all(&media_dir)?;
+        let path = media_dir.join(format!("{kind}.{extension}"));
+
+        Ok(Self {
+            _temp_dir: temp_dir,
+            path,
+            expected,
+        })
+    }
+
+    fn run_ffmpeg(
+        self,
+        executor: &impl FfmpegExecutor,
+        runtime: &RuntimeConfig,
+        args: &[&str],
+    ) -> SmokeResult<Self> {
+        let mut ffmpeg_args = args
+            .iter()
+            .map(|argument| OsString::from(*argument))
+            .collect::<Vec<_>>();
+        ffmpeg_args.push(self.path.as_os_str().to_owned());
+        let output = executor
+            .run(&runtime.ffmpeg.path, &ffmpeg_args)
+            .map_err(|error| {
+                SmokeError::new(format!(
+                    "failed to launch ffmpeg at {}: {error}",
+                    runtime.ffmpeg.path.display()
+                ))
+            })?;
+
+        if !output.status.success() {
+            return Err(SmokeError::new(format!(
+                "ffmpeg material fixture generation failed: stdout=`{}` stderr=`{}`",
+                bounded_summary(&output.stdout),
+                bounded_summary(&output.stderr)
+            )));
+        }
+
+        if !self.path.is_file() {
+            return Err(SmokeError::new(format!(
+                "ffmpeg completed but did not create {}",
+                self.path.display()
+            )));
+        }
+
+        Ok(self)
+    }
 }
 
 fn parse_ffprobe_metadata(bytes: &[u8]) -> SmokeResult<SmokeMetadata> {
@@ -410,5 +707,37 @@ mod tests {
                     == Some("media-generated")),
             "generated media should live under a media-generated temp directory"
         );
+    }
+
+    #[test]
+    fn generated_material_fixtures_probe_to_expected_metadata() {
+        let runtime = discover_runtime_config().expect(
+            "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        );
+        let executor = DesktopFfmpegExecutor::default();
+
+        for fixture in generate_material_fixtures(&executor, &runtime)
+            .expect("material fixtures should generate")
+        {
+            assert!(
+                fixture.path().is_file(),
+                "generated material fixture should exist"
+            );
+            assert!(
+                fixture
+                    .path()
+                    .ancestors()
+                    .any(|path| path.file_name().and_then(|value| value.to_str())
+                        == Some("media-generated")),
+                "generated media should live under a media-generated temp directory"
+            );
+
+            let metadata =
+                media_runtime::probe_material_metadata(&executor, &runtime, fixture.path())
+                    .expect("generated material fixture should probe");
+            fixture
+                .assert_probe_metadata(&metadata)
+                .expect("generated fixture metadata should match expectations");
+        }
     }
 }

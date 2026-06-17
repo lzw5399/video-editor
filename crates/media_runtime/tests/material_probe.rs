@@ -6,10 +6,13 @@ use std::process::{ExitStatus, Output};
 
 use media_runtime::{
     BinaryKind, DiscoveredBinary, DiscoverySource, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES,
-    MaterialProbeErrorKind, MaterialProbeKind, RationalFrameRate, RuntimeConfig,
-    discover_runtime_config, probe_material_metadata,
+    MaterialProbeErrorKind, RuntimeConfig, discover_runtime_config, probe_material_metadata,
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
+use testkit::{
+    generate_audio_material_fixture, generate_image_material_fixture,
+    generate_video_material_fixture,
+};
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -20,25 +23,15 @@ fn material_probe_normalizes_generated_video_metadata() {
         "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
     );
     let executor = DesktopFfmpegExecutor::default();
-    let media = GeneratedMedia::video(&executor, &runtime).expect("video fixture should generate");
+    let media = generate_video_material_fixture(&executor, &runtime)
+        .expect("video fixture should generate");
 
     let metadata = probe_material_metadata(&executor, &runtime, media.path())
         .expect("generated video should probe");
 
-    assert_eq!(metadata.kind, MaterialProbeKind::Video);
-    assert_eq!(metadata.duration_microseconds, Some(1_000_000));
-    assert_eq!(metadata.width, Some(160));
-    assert_eq!(metadata.height, Some(90));
-    assert_eq!(
-        metadata.frame_rate,
-        Some(RationalFrameRate {
-            numerator: 10,
-            denominator: 1,
-        })
-    );
-    assert!(metadata.has_video_stream);
-    assert!(metadata.has_audio_stream);
-    assert!(metadata.audio.is_some());
+    media
+        .assert_probe_metadata(&metadata)
+        .expect("generated video metadata should match fixture expectations");
 }
 
 #[test]
@@ -47,18 +40,15 @@ fn material_probe_normalizes_generated_image_metadata() {
         "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
     );
     let executor = DesktopFfmpegExecutor::default();
-    let media = GeneratedMedia::image(&executor, &runtime).expect("image fixture should generate");
+    let media = generate_image_material_fixture(&executor, &runtime)
+        .expect("image fixture should generate");
 
     let metadata = probe_material_metadata(&executor, &runtime, media.path())
         .expect("generated image should probe");
 
-    assert_eq!(metadata.kind, MaterialProbeKind::Image);
-    assert_eq!(metadata.duration_microseconds, None);
-    assert_eq!(metadata.width, Some(80));
-    assert_eq!(metadata.height, Some(60));
-    assert!(metadata.has_video_stream);
-    assert!(!metadata.has_audio_stream);
-    assert!(metadata.audio.is_none());
+    media
+        .assert_probe_metadata(&metadata)
+        .expect("generated image metadata should match fixture expectations");
 }
 
 #[test]
@@ -67,21 +57,15 @@ fn material_probe_normalizes_generated_audio_metadata() {
         "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
     );
     let executor = DesktopFfmpegExecutor::default();
-    let media = GeneratedMedia::audio(&executor, &runtime).expect("audio fixture should generate");
+    let media = generate_audio_material_fixture(&executor, &runtime)
+        .expect("audio fixture should generate");
 
     let metadata = probe_material_metadata(&executor, &runtime, media.path())
         .expect("generated audio should probe");
 
-    assert_eq!(metadata.kind, MaterialProbeKind::Audio);
-    assert_eq!(metadata.duration_microseconds, Some(1_000_000));
-    assert_eq!(metadata.width, None);
-    assert_eq!(metadata.height, None);
-    assert_eq!(metadata.frame_rate, None);
-    assert!(!metadata.has_video_stream);
-    assert!(metadata.has_audio_stream);
-    let audio = metadata.audio.expect("audio stream metadata should exist");
-    assert_eq!(audio.sample_rate, 44_100);
-    assert_eq!(audio.channels, 1);
+    media
+        .assert_probe_metadata(&metadata)
+        .expect("generated audio metadata should match fixture expectations");
 }
 
 #[test]
@@ -162,113 +146,6 @@ fn material_probe_rejects_malformed_json_and_invalid_frame_rates() {
         invalid_rate_error.kind,
         MaterialProbeErrorKind::InvalidFrameRate
     );
-}
-
-struct GeneratedMedia {
-    _temp_dir: tempfile::TempDir,
-    path: PathBuf,
-}
-
-impl GeneratedMedia {
-    fn path(&self) -> &Path {
-        &self.path
-    }
-
-    fn video(executor: &impl FfmpegExecutor, runtime: &RuntimeConfig) -> io::Result<Self> {
-        let media = Self::new("video", "mp4")?;
-        media.run_ffmpeg(
-            executor,
-            runtime,
-            &[
-                "-hide_banner",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "testsrc2=size=160x90:rate=10:duration=1",
-                "-f",
-                "lavfi",
-                "-i",
-                "sine=frequency=440:sample_rate=44100:duration=1",
-                "-shortest",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                "-c:a",
-                "aac",
-            ],
-        )
-    }
-
-    fn image(executor: &impl FfmpegExecutor, runtime: &RuntimeConfig) -> io::Result<Self> {
-        let media = Self::new("image", "png")?;
-        media.run_ffmpeg(
-            executor,
-            runtime,
-            &[
-                "-hide_banner",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "color=c=blue:size=80x60",
-                "-frames:v",
-                "1",
-            ],
-        )
-    }
-
-    fn audio(executor: &impl FfmpegExecutor, runtime: &RuntimeConfig) -> io::Result<Self> {
-        let media = Self::new("audio", "wav")?;
-        media.run_ffmpeg(
-            executor,
-            runtime,
-            &[
-                "-hide_banner",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "sine=frequency=880:sample_rate=44100:duration=1",
-                "-ac",
-                "1",
-            ],
-        )
-    }
-
-    fn new(kind: &str, extension: &str) -> io::Result<Self> {
-        let temp_dir = tempfile::Builder::new()
-            .prefix("material-probe-")
-            .tempdir()?;
-        let path = temp_dir
-            .path()
-            .join("media-generated")
-            .join(format!("{kind}.{extension}"));
-        fs::create_dir_all(path.parent().expect("media path should have parent"))?;
-        Ok(Self {
-            _temp_dir: temp_dir,
-            path,
-        })
-    }
-
-    fn run_ffmpeg(
-        self,
-        executor: &impl FfmpegExecutor,
-        runtime: &RuntimeConfig,
-        args: &[&str],
-    ) -> io::Result<Self> {
-        let mut ffmpeg_args = args.iter().map(OsString::from).collect::<Vec<_>>();
-        ffmpeg_args.push(self.path.as_os_str().to_owned());
-        let output = executor.run(&runtime.ffmpeg.path, &ffmpeg_args)?;
-        if !output.status.success() {
-            return Err(io::Error::other(format!(
-                "ffmpeg generation failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            )));
-        }
-        Ok(self)
-    }
 }
 
 #[derive(Clone)]
