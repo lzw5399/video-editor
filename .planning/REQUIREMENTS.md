@@ -39,11 +39,11 @@
 
 ### Text And Audio
 
-- [ ] **TEXT-01**: User can add text/subtitle segments to a text track.
-- [ ] **TEXT-02**: User can edit text content, font size, color, alignment, stroke, shadow, and background for MVP text segments.
+- [x] **TEXT-01**: User can add text/subtitle segments to a text track.
+- [x] **TEXT-02**: User can edit text content, font size, color, alignment, stroke, shadow, and background for MVP text segments.
 - [ ] **TEXT-03**: Text layout uses pinned fonts and deterministic settings for preview/export parity.
-- [ ] **AUD-01**: User can add audio/BGM materials to an audio track.
-- [ ] **AUD-02**: User can adjust segment volume and track mute state.
+- [x] **AUD-01**: User can add audio/BGM materials to an audio track.
+- [x] **AUD-02**: User can adjust segment volume and track mute state.
 
 ### Preview
 
@@ -134,11 +134,11 @@
 | TIME-05 | Phase 3 | Complete |
 | TIME-06 | Phase 3 | Complete |
 | TIME-07 | Phase 3 | Complete |
-| TEXT-01 | Phase 3 | Pending |
-| TEXT-02 | Phase 3 | Pending |
+| TEXT-01 | Phase 3 | Complete |
+| TEXT-02 | Phase 3 | Complete |
 | TEXT-03 | Phase 5 | Pending |
-| AUD-01 | Phase 3 | Pending |
-| AUD-02 | Phase 3 | Pending |
+| AUD-01 | Phase 3 | Complete |
+| AUD-02 | Phase 3 | Complete |
 | PREV-01 | Phase 5 | Pending |
 | PREV-02 | Phase 5 | Pending |
 | PREV-03 | Phase 5 | Pending |
