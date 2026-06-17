@@ -173,6 +173,10 @@ fn collect_formula_semantic_items(
     path: &str,
     items: &mut Vec<CompatibilityReportItem>,
 ) {
+    if collect_supported_subset_value_item(value, path, items) {
+        return;
+    }
+
     match value {
         Value::Object(object) => {
             if is_native_effect_evidence(value) {
@@ -202,6 +206,105 @@ fn collect_formula_semantic_items(
             }
         }
         _ => {}
+    }
+}
+
+fn collect_supported_subset_value_item(
+    value: &Value,
+    path: &str,
+    items: &mut Vec<CompatibilityReportItem>,
+) -> bool {
+    match normalize_formula_path(path).as_str() {
+        "formula.effects[]"
+        | "formula.timeline.segments[].effects[]"
+        | "formula.segments[].effects[]" => {
+            if is_native_effect_evidence(value) {
+                items.push(native_effect_item(path, value));
+            } else {
+                items.push(unsupported_formula_item(
+                    path,
+                    unsupported_value_id(value, "effect"),
+                ));
+            }
+            true
+        }
+        "formula.effects"
+        | "formula.timeline.segments[].effects"
+        | "formula.segments[].effects" => {
+            if !value.is_array() {
+                items.push(unsupported_formula_item(path, "effects"));
+                true
+            } else {
+                false
+            }
+        }
+        "formula.tracks"
+        | "formula.timeline.tracks"
+        | "formula.segments"
+        | "formula.timeline.segments" => {
+            if !value.is_array() {
+                items.push(unsupported_formula_item(path, path_leaf(path)));
+                true
+            } else {
+                false
+            }
+        }
+        "formula.tracks[]"
+        | "formula.timeline.tracks[]"
+        | "formula.segments[]"
+        | "formula.timeline.segments[]" => {
+            if !value.is_object() {
+                items.push(unsupported_formula_item(path, path_leaf(path)));
+                true
+            } else {
+                false
+            }
+        }
+        "formula.tracks[].type" | "formula.timeline.tracks[].type" => {
+            if matches!(value.as_str(), Some("video" | "audio" | "text" | "sticker")) {
+                true
+            } else {
+                items.push(unsupported_formula_item(
+                    path,
+                    unsupported_value_id(value, "trackType"),
+                ));
+                true
+            }
+        }
+        "formula.template.id"
+        | "formula.template.name"
+        | "formula.resourceUse"
+        | "formula.tracks[].id"
+        | "formula.timeline.tracks[].id"
+        | "formula.segments[].id"
+        | "formula.segments[].materialRef"
+        | "formula.segments[].trackId"
+        | "formula.timeline.segments[].id"
+        | "formula.timeline.segments[].materialRef"
+        | "formula.timeline.segments[].trackId" => {
+            if value.as_str().is_some() {
+                true
+            } else {
+                items.push(unsupported_formula_item(path, path_leaf(path)));
+                true
+            }
+        }
+        "formula.segments[].durationMs"
+        | "formula.segments[].sourceDurationMs"
+        | "formula.segments[].sourceStartMs"
+        | "formula.segments[].targetStartMs"
+        | "formula.timeline.segments[].durationMs"
+        | "formula.timeline.segments[].sourceDurationMs"
+        | "formula.timeline.segments[].sourceStartMs"
+        | "formula.timeline.segments[].targetStartMs" => {
+            if value.as_u64().is_some() {
+                true
+            } else {
+                items.push(unsupported_formula_item(path, path_leaf(path)));
+                true
+            }
+        }
+        _ => false,
     }
 }
 
@@ -264,6 +367,25 @@ fn native_effect_item(path: &str, effect: &Value) -> CompatibilityReportItem {
         message: "Provider-native effect requires explicit compatibility handling before it can be represented locally.".to_owned(),
         details: Some("Do not smuggle native effect data into generic filter parameters.".to_owned()),
     }
+}
+
+fn unsupported_value_id<'a>(value: &'a Value, fallback: &'static str) -> &'a str {
+    if let Some(text) = value.as_str() {
+        return text;
+    }
+    for key in ["nativeEffectId", "type", "name", "id"] {
+        if let Some(text) = value.get(key).and_then(Value::as_str) {
+            return text;
+        }
+    }
+    fallback
+}
+
+fn path_leaf(path: &str) -> &str {
+    path.rsplit(['.', '['])
+        .next()
+        .unwrap_or(path)
+        .trim_end_matches(']')
 }
 
 fn is_allowed_formula_key(parent_path: &str, key: &str) -> bool {

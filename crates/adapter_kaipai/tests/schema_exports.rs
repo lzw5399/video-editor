@@ -66,12 +66,28 @@ fn schema_exports_formula_bundle_rejects_values_rust_rejects() {
             patch(&base, |value| value["provenance"]["templateId"] = json!("")),
         ),
         (
+            "whitespace template id",
+            patch(&base, |value| {
+                value["provenance"]["templateId"] = json!("   ")
+            }),
+        ),
+        (
             "empty recipe id",
             patch(&base, |value| value["provenance"]["recipeId"] = json!("")),
         ),
         (
+            "whitespace recipe id",
+            patch(&base, |value| {
+                value["provenance"]["recipeId"] = json!("\t\n")
+            }),
+        ),
+        (
             "empty source media uri",
             patch(&base, |value| value["sourceMedia"]["uri"] = json!("")),
+        ),
+        (
+            "whitespace source media uri",
+            patch(&base, |value| value["sourceMedia"]["uri"] = json!("   ")),
         ),
         (
             "zero source width",
@@ -90,8 +106,16 @@ fn schema_exports_formula_bundle_rejects_values_rust_rejects() {
             patch(&base, |value| value["safeArea"]["value"] = json!("")),
         ),
         (
+            "whitespace safe area value",
+            patch(&base, |value| value["safeArea"]["value"] = json!("   ")),
+        ),
+        (
             "empty safe area source",
             patch(&base, |value| value["safeArea"]["source"] = json!("")),
+        ),
+        (
+            "whitespace safe area source",
+            patch(&base, |value| value["safeArea"]["source"] = json!("   ")),
         ),
         (
             "empty direct material id",
@@ -107,11 +131,36 @@ fn schema_exports_formula_bundle_rejects_values_rust_rejects() {
             }),
         ),
         (
+            "whitespace direct material id",
+            patch(&base, |value| {
+                value["directMaterials"] = json!([
+                    {
+                        "materialId": "   ",
+                        "uri": "media/source.mp4",
+                        "kind": "video",
+                        "displayName": "source.mp4"
+                    }
+                ]);
+            }),
+        ),
+        (
             "empty resource id",
             patch(&base, |value| {
                 value["resources"] = json!([
                     {
                         "resourceId": "",
+                        "kind": "font",
+                        "uri": "resources/fonts/redacted.ttf"
+                    }
+                ]);
+            }),
+        ),
+        (
+            "whitespace resource id",
+            patch(&base, |value| {
+                value["resources"] = json!([
+                    {
+                        "resourceId": "   ",
                         "kind": "font",
                         "uri": "resources/fonts/redacted.ttf"
                     }
@@ -173,10 +222,11 @@ fn constrain_formula_bundle_value_contract(schema: &mut Schema) {
         ("FormulaResourceRef", "resourceId"),
         ("FormulaResourceRef", "uri"),
     ] {
-        property_schema_mut(defs, def_name, property)
+        let property_schema = property_schema_mut(defs, def_name, property)
             .as_object_mut()
-            .expect("string property schema should be an object")
-            .insert("minLength".to_owned(), json!(1));
+            .expect("string property schema should be an object");
+        property_schema.insert("minLength".to_owned(), json!(1));
+        property_schema.insert("pattern".to_owned(), json!(r"\S"));
     }
 
     for property in ["width", "height", "durationMs"] {
@@ -268,9 +318,19 @@ fn assert_formula_bundle_schema_requires_evidence_fields(schema_json: &str) {
         "formula bundle schema should reject empty template id"
     );
     assert_eq!(
+        schema_value["$defs"]["FormulaProvenance"]["properties"]["templateId"]["pattern"],
+        json!(r"\S"),
+        "formula bundle schema should reject whitespace-only template id"
+    );
+    assert_eq!(
         schema_value["$defs"]["SafeAreaEvidence"]["properties"]["value"]["minLength"],
         json!(1),
         "formula bundle schema should reject empty safe area evidence"
+    );
+    assert_eq!(
+        schema_value["$defs"]["SafeAreaEvidence"]["properties"]["value"]["pattern"],
+        json!(r"\S"),
+        "formula bundle schema should reject whitespace-only safe area evidence"
     );
 }
 

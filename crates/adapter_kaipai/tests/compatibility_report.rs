@@ -420,6 +420,48 @@ fn compatibility_report_rejects_unknown_nested_formula_blocks() {
 }
 
 #[test]
+fn compatibility_report_rejects_unsupported_values_under_allowed_formula_keys() {
+    let root = project_root();
+    let effect_bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["formula"]["timeline"]["segments"][0]["effects"] = json!(["smartBeatSync"]);
+    }));
+    let effect_report =
+        classify_formula_bundle_compatibility(&effect_bundle, None, "2026-06-17T00:00:00Z");
+    assert_eq!(effect_report.items.len(), 1);
+    assert_eq!(
+        effect_report.items[0].status,
+        CompatibilityStatus::Unsupported
+    );
+    assert_eq!(
+        effect_report.items[0].external_path,
+        "formula.timeline.segments[0].effects[0]"
+    );
+    assert_eq!(
+        effect_report.items[0].external_id.as_deref(),
+        Some("smartBeatSync")
+    );
+
+    let track_type_bundle = formula_bundle(patch(base_fixture_value(&root), |value| {
+        value["formula"]["timeline"]["tracks"][0]["type"] = json!("providerNativeOverlay");
+    }));
+    let track_type_report =
+        classify_formula_bundle_compatibility(&track_type_bundle, None, "2026-06-17T00:00:00Z");
+    assert_eq!(track_type_report.items.len(), 1);
+    assert_eq!(
+        track_type_report.items[0].status,
+        CompatibilityStatus::Unsupported
+    );
+    assert_eq!(
+        track_type_report.items[0].external_path,
+        "formula.timeline.tracks[0].type"
+    );
+    assert_eq!(
+        track_type_report.items[0].external_id.as_deref(),
+        Some("providerNativeOverlay")
+    );
+}
+
+#[test]
 fn compatibility_report_uses_localization_diagnostics_for_missing_resources() {
     let root = project_root();
     let missing_bundle = formula_bundle(patch(base_fixture_value(&root), |value| {

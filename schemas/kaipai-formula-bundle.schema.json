@@ -53,18 +53,21 @@
       "properties": {
         "displayName": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "kind": {
           "$ref": "#/$defs/ResourceKind"
         },
         "materialId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "uri": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "additionalProperties": false,
@@ -108,11 +111,13 @@
         },
         "recipeId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "templateId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "additionalProperties": false,
@@ -135,7 +140,8 @@
         },
         "resourceId": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "sha256": {
           "type": [
@@ -145,7 +151,8 @@
         },
         "uri": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "additionalProperties": false,
@@ -170,7 +177,8 @@
         },
         "uri": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "width": {
           "type": "integer",
@@ -216,14 +224,16 @@
       "properties": {
         "source": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         },
         "status": {
           "$ref": "#/$defs/SafeAreaStatus"
         },
         "value": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "additionalProperties": false,
