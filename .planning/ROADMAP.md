@@ -164,12 +164,12 @@ Plans:
   4. Preview and export UI shells are ready for Phase 5 integration but do not implement real render graph or FFmpeg execution in the renderer.
   5. Playwright Electron checks cover 1280x800 and 1120x720 with no region overlap/clipping and source guards enforce the UI/Rust/render boundary.
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 
 - [x] 04.1-01: Refine top feature area and left resource/function panel density
-- [ ] 04.1-02: Refine preview monitor shell and Jianying-style inspector tabs/controls
+- [x] 04.1-02: Refine preview monitor shell and Jianying-style inspector tabs/controls
 - [ ] 04.1-03: Refine timeline toolbar, track headers, segment visuals, ruler, playhead, snapping, and zoom states
 - [ ] 04.1-04: Add professional workspace Playwright coverage, source guards, and visual regression gates
 

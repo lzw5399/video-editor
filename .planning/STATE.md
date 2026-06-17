@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04.1-01-PLAN.md
-last_updated: "2026-06-17T14:57:23.846Z"
+stopped_at: Completed 04.1-02-PLAN.md
+last_updated: "2026-06-17T15:10:34.570Z"
 last_activity: 2026-06-17 -- Phase 04.1 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 28
-  completed_plans: 25
-  percent: 89
+  completed_plans: 26
+  percent: 93
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 04.1 (professional-jianying-workspace-ui-refinement) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-17 -- Phase 04.1 execution started
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Progress: [█████████░] 89%
 | Phase 04 P03 | 10min | 2 tasks | 6 files |
 | Phase 04 P04 | 45min | 3 tasks | 6 files |
 | Phase 04.1 P01 | 7 min | 2 tasks | 5 files |
+| Phase 04.1 P02 | 7 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,9 @@ Recent decisions affecting current work:
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
+- [Phase 04.1]: Preview controls remain disabled shell buttons with Chinese accessible names until Phase 05 supplies real preview services. — Plan 04.1-02 keeps preview UI shell-only so Phase 05 can own real preview services without renderer media semantics.
+- [Phase 04.1]: Inspector transform and keyframe controls are visible but non-mutating because Rust transform/keyframe semantics are not in this phase. — Plan 04.1-02 reserves professional inspector slots while keeping committed semantics in existing Rust command callbacks.
+- [Phase 04.1]: Text and audio inspector edits continue to commit only through existing App callback props. — This preserves UI-12 and avoids renderer-owned draft mutation in Inspector.tsx.
 
 ### Pending Todos
 
@@ -153,6 +157,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T14:56:52.673Z
-Stopped at: Completed 04.1-01-PLAN.md
+Last session: 2026-06-17T15:10:02.755Z
+Stopped at: Completed 04.1-02-PLAN.md
 Resume file: None
