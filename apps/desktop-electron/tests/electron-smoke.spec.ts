@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
@@ -127,9 +128,23 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       error: null,
       events: []
     });
+
+    const materialRow = page.getByRole("article", { name: "Material smoke-video.mp4" });
+    await expect(materialRow).toBeVisible();
+    await expect(materialRow).toContainText("smoke-video.mp4");
+    await expect(materialRow).toContainText("video");
+    await expect(materialRow).toContainText("1000000 us");
+    await expect(materialRow).toContainText("320x180");
+    await expect(materialRow).toContainText("available");
   } finally {
     await app.close();
   }
+});
+
+test("renderer source does not construct FFmpeg or ffprobe commands", async () => {
+  const source = await readFile(join(process.cwd(), "src/renderer/App.tsx"), "utf8");
+
+  expect(source).not.toMatch(/ffmpeg|ffprobe/i);
 });
 
 test("main process ignores non-loopback dev server URLs", async () => {

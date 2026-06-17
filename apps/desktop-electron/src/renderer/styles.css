@@ -113,10 +113,39 @@ dl {
 }
 
 .material-row {
-  height: 44px;
-  padding: 13px;
+  display: grid;
+  gap: 7px;
+  min-height: 68px;
+  padding: 11px 12px;
   color: #bcb6aa;
   font-size: 13px;
+}
+
+.material-title,
+.material-metadata {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.material-title strong {
+  overflow: hidden;
+  color: #eee9df;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-title span,
+.material-metadata span {
+  color: #8f887c;
+  white-space: nowrap;
+}
+
+.material-metadata {
+  justify-content: flex-start;
+  font-size: 12px;
 }
 
 .monitor-frame {
