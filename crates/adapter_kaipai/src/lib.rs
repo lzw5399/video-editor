@@ -9,3 +9,8 @@ mod error;
 mod formula_bundle;
 
 pub use error::AdapterKaipaiError;
+pub use formula_bundle::{
+    DirectMaterialRef, FormulaBundleKind, FormulaBundleSchemaVersion, FormulaProvenance,
+    FormulaResourceRef, FormulaSourceMedia, KaipaiFormulaBundle, RecognizerResult, ResourceKind,
+    SafeAreaEvidence, SafeAreaStatus,
+};

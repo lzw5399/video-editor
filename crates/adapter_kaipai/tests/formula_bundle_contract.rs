@@ -63,10 +63,7 @@ fn complete_formula_bundle_json() -> Value {
 fn formula_bundle_contract_accepts_complete_sanitized_offline_evidence() {
     let bundle = KaipaiFormulaBundle::from_json_value(complete_formula_bundle_json()).unwrap();
 
-    assert_eq!(
-        bundle.schema_version,
-        FormulaBundleSchemaVersion::current()
-    );
+    assert_eq!(bundle.schema_version, FormulaBundleSchemaVersion::current());
     assert_eq!(bundle.kind, FormulaBundleKind::KaipaiSmartEditFormulaBundle);
     assert_eq!(bundle.provenance.template_id, "SEC0054");
     assert_eq!(bundle.provenance.recipe_id, "1721819614877617");
@@ -100,7 +97,10 @@ fn formula_bundle_contract_rejects_unsupported_schema_versions() {
 
     let error = KaipaiFormulaBundle::from_json_value(json).unwrap_err();
 
-    assert!(matches!(error, AdapterKaipaiError::UnsupportedSchemaVersion { .. }));
+    assert!(matches!(
+        error,
+        AdapterKaipaiError::UnsupportedSchemaVersion { .. }
+    ));
 }
 
 #[test]
@@ -139,5 +139,8 @@ fn formula_bundle_contract_rejects_empty_required_evidence() {
 
     let error = KaipaiFormulaBundle::from_json_value(json).unwrap_err();
 
-    assert!(matches!(error, AdapterKaipaiError::MissingRequiredEvidence { .. }));
+    assert!(matches!(
+        error,
+        AdapterKaipaiError::MissingRequiredEvidence { .. }
+    ));
 }
