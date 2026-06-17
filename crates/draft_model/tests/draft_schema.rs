@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, DraftSchemaVersion, Filter, Keyframe, MainTrackMagnet, Material, MaterialKind,
-    MaterialMetadata, Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange,
-    Track, TrackKind, Transition,
+    Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, MainTrackMagnet, Material,
+    MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, Track, TrackKind, Transition, migrate_draft_json,
+    validate_draft,
 };
 use serde_json::json;
 
@@ -42,7 +43,7 @@ fn draft_schema_serializes_material_track_and_segment_records() {
             audio_channels: Some(2),
             probe_error: None,
         },
-        status: draft_model::MaterialStatus::Available,
+        status: MaterialStatus::Available,
     };
 
     let mut filter_parameters = BTreeMap::new();
@@ -97,6 +98,147 @@ fn draft_schema_serializes_material_track_and_segment_records() {
     let round_tripped: Draft =
         serde_json::from_value(serialized).expect("serialized draft should deserialize");
     assert_eq!(round_tripped, draft);
+}
+
+#[test]
+fn migration_loads_version_one_json_and_validates_draft() {
+    let value = serde_json::to_value(valid_draft()).expect("draft should serialize");
+    let migrated = migrate_draft_json(value).expect("version 1 draft should migrate");
+
+    assert_eq!(migrated, valid_draft());
+    validate_draft(&migrated).expect("migrated draft should validate");
+}
+
+#[test]
+fn migration_rejects_unknown_future_schema_version() {
+    let mut value = serde_json::to_value(valid_draft()).expect("draft should serialize");
+    value["schemaVersion"] = json!(2);
+
+    let error = migrate_draft_json(value).expect_err("future schema version should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::InvalidSchemaVersion {
+            found: "2".to_owned(),
+            expected: 1
+        }
+    );
+}
+
+#[test]
+fn migration_rejects_missing_required_semantic_fields() {
+    let error = migrate_draft_json(json!({
+        "schemaVersion": 1,
+        "metadata": { "name": "Missing ID" },
+        "materials": [],
+        "tracks": []
+    }))
+    .expect_err("missing draftId should fail");
+
+    assert_eq!(
+        error,
+        DraftValidationError::MissingRequiredSemanticField {
+            field: "draftId".to_owned()
+        }
+    );
+}
+
+#[test]
+fn migration_rejects_derived_artifact_leakage() {
+    let mut value = serde_json::to_value(valid_draft()).expect("draft should serialize");
+    value["renderGraph"] = json!({ "nodes": [] });
+
+    let error = migrate_draft_json(value).expect_err("derived fields should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::DerivedArtifactLeakage {
+            field: "renderGraph".to_owned()
+        }
+    );
+}
+
+#[test]
+fn migration_rejects_invalid_timeranges() {
+    let mut draft = valid_draft();
+    draft.tracks[0].segments[0].target_timerange.duration = Microseconds::ZERO;
+
+    let error = validate_draft(&draft).expect_err("zero target duration should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::InvalidTimerange {
+            field: "tracks[].segments[].targetTimerange.duration".to_owned(),
+            reason: "duration must be greater than zero microseconds".to_owned()
+        }
+    );
+}
+
+#[test]
+fn migration_rejects_invalid_rational_frame_rate() {
+    let mut draft = valid_draft();
+    draft.materials[0].metadata.frame_rate = Some(RationalFrameRate::new(30, 0));
+
+    let error = validate_draft(&draft).expect_err("zero frame-rate denominator should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::InvalidRationalFrameRate {
+            field: "materials[].metadata.frameRate.denominator".to_owned(),
+            reason: "denominator must be greater than zero".to_owned()
+        }
+    );
+}
+
+#[test]
+fn migration_rejects_duplicate_ids() {
+    let mut draft = valid_draft();
+    draft.materials.push(Material::new(
+        "material-video-001",
+        MaterialKind::Video,
+        "b.mp4",
+        "b.mp4",
+    ));
+
+    let error = validate_draft(&draft).expect_err("duplicate material ID should fail");
+    assert_eq!(
+        error,
+        DraftValidationError::DuplicateId {
+            id_kind: "materialId".to_owned(),
+            id: "material-video-001".to_owned()
+        }
+    );
+}
+
+fn valid_draft() -> Draft {
+    let material = Material {
+        material_id: "material-video-001".into(),
+        kind: MaterialKind::Video,
+        uri: "media/video.mp4".to_owned(),
+        display_name: "video.mp4".to_owned(),
+        metadata: MaterialMetadata {
+            duration: Some(Microseconds::new(1_500_000)),
+            width: Some(1920),
+            height: Some(1080),
+            frame_rate: Some(RationalFrameRate::new(30_000, 1_001)),
+            has_video: true,
+            has_audio: true,
+            audio_sample_rate: Some(48_000),
+            audio_channels: Some(2),
+            probe_error: None,
+        },
+        status: MaterialStatus::Available,
+    };
+
+    let segment = Segment::new(
+        "segment-001",
+        material.material_id.clone(),
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    let mut track = Track::new("track-video-001", TrackKind::Video, "Video 1");
+    track.segments.push(segment);
+
+    let mut draft = Draft::new("draft-001", "Valid draft");
+    draft.materials.push(material);
+    draft.tracks.push(track);
+    draft
 }
 
 #[test]

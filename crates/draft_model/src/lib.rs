@@ -15,6 +15,7 @@ pub mod ids;
 pub mod material;
 pub mod time;
 pub mod timeline;
+pub mod validation;
 
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
@@ -24,6 +25,7 @@ pub use timeline::{
     Filter, Keyframe, MainTrackMagnet, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
     Transition,
 };
+pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";

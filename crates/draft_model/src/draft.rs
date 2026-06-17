@@ -14,6 +14,10 @@ impl DraftSchemaVersion {
     pub fn current() -> Self {
         Self::CURRENT
     }
+
+    pub fn is_current(self) -> bool {
+        self == Self::CURRENT
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
