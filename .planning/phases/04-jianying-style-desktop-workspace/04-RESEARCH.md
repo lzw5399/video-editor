@@ -522,17 +522,18 @@ Use alongside screenshot assertions because screenshots alone may not identify w
 | A1 | Content-driven CSS row heights and border changes are common causes of layout shift. [ASSUMED] | Common Pitfalls | Low; UI-SPEC fixed dimensions and Playwright geometry checks mitigate the risk. |
 | A2 | Splitting renderer files into `workspace/`, `commandHelpers.ts`, and `viewModel.ts` will reduce planning and implementation complexity. [RECOMMENDED: research] | Architecture Patterns | Low; planner may choose a different split within discretion if guards and command boundaries hold. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should Phase 4 create fixture draft data entirely in renderer tests or through real material/project commands?** [VERIFIED: 04-CONTEXT.md]
+Resolution source: Phase 4 locked decisions D-01, D-05, D-07, D-11, D-14, and D-16 through D-19. The first screen is the real Simplified Chinese desktop editor workspace, deterministic command controls are acceptable before full pointer drag editing, and preview/export execution remains assigned to Phase 5/6.
+
+1. **RESOLVED: Phase 4 test setup may use deterministic in-test draft fixtures, but accepted user-visible timeline edits must be proven through Rust command responses.** [VERIFIED: 04-CONTEXT.md]
    - What we know: Phase 4 may use mock local draft fixtures or real commands, but visible accepted timeline edits must be proven through Rust command responses. [VERIFIED: 04-CONTEXT.md]
-   - What's unclear: The best balance between deterministic test setup and real import flow is a planner choice. [VERIFIED: 04-CONTEXT.md]
-   - Recommendation: Use deterministic in-test draft fixtures for timeline command coverage and keep real `importMaterial` coverage if local media fixture paths are reliable. [RECOMMENDED: research]
+   - Decision: Use deterministic in-test draft fixtures for timeline command coverage when fixture setup is needed, keep `importMaterial`/`listMaterials` coverage where local fixture paths are reliable, and require any visible accepted timeline edit to call `window.videoEditorCore.executeCommand` and apply `TimelineCommandResponse` per D-12, D-13, D-14, and D-16. [VERIFIED: 04-CONTEXT.md]
+   - Boundary: Do not implement or fake deterministic preview frames, render graph execution, FFmpeg export, waveform generation, or packaged import-preview-export flow in Phase 4; those remain Phase 5/6 work per D-11 and the roadmap. [VERIFIED: 04-CONTEXT.md; VERIFIED: .planning/ROADMAP.md]
 
-2. **How strict should visual snapshots be across macOS/font environments?** [CITED: https://playwright.dev/docs/test-snapshots]
+2. **RESOLVED: Hard visual gates are semantic visibility and geometry stability; screenshots are optional supporting evidence.** [CITED: https://playwright.dev/docs/test-snapshots]
    - What we know: Playwright screenshot assertions compare against reference images and support options like max-diff thresholds. [CITED: https://playwright.dev/docs/test-snapshots]
-   - What's unclear: Host font rendering may vary enough to make exact snapshots noisy. [ASSUMED]
-   - Recommendation: Use semantic visibility and bounding-box assertions as hard gates; use screenshots with modest tolerance as visual regression evidence. [RECOMMENDED: research]
+   - Decision: Use Playwright role/text assertions for the real Simplified Chinese editor workspace per D-01, D-05, and D-07, and use bounding-box assertions at `1280x800` and `1120x720` as the hard layout gate per D-17. Screenshots may be added with modest tolerance as visual regression evidence, but they are not the only required proof of layout correctness. [VERIFIED: 04-CONTEXT.md; VERIFIED: 04-UI-SPEC.md]
 
 ## Environment Availability
 
