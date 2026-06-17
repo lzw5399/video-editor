@@ -9,6 +9,7 @@ pub mod error;
 pub mod selection;
 pub mod timeline;
 
+pub use error::{TimelineCommandError, TimelineCommandErrorKind};
 pub use selection::TimelineSelection;
 
 /// Boundary marker for the command semantics crate.

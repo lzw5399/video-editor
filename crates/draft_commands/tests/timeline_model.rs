@@ -40,7 +40,7 @@ fn track_rules() {
     draft.tracks[0].segments.push(segment(
         "video-segment-b",
         "video-material",
-        1_000_000,
+        500_000,
         500_000,
         500_000,
         500_000,
