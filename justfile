@@ -34,4 +34,9 @@ test:
   pnpm run test:phase5-render-core
   pnpm run test:phase5-source-guards
   pnpm run test:phase5-workspace
+  pnpm run test:phase6
   pnpm run test:contracts
+
+test-phase6-packaging:
+  pnpm install --frozen-lockfile
+  pnpm run test:phase6-packaging

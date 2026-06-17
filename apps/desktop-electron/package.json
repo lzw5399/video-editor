@@ -12,7 +12,7 @@
     "build": "pnpm run build:native && pnpm run build:electron",
     "build:native": "napi build --manifest-path ../../crates/bindings_node/Cargo.toml --platform --release --output-dir native --js index.cjs --dts index.d.ts",
     "package:dir": "pnpm run clean:build && pnpm run build && electron-builder --dir --config electron-builder.yml --publish=never",
-    "test": "pnpm run build && playwright test",
+    "test": "pnpm run build && playwright test --grep-invert \"packaged\"",
     "test:packaged": "pnpm run test:packaged-smoke && pnpm run test:packaged-real-workflow",
     "test:packaged-real-workflow": "pnpm run package:dir && playwright test tests/real-workflow.spec.ts --grep \"packaged\"",
     "test:packaged-smoke": "pnpm run package:dir && playwright test tests/packaged-smoke.spec.ts",
