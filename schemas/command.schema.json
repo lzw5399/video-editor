@@ -144,6 +144,126 @@
       "title": "CancelExportCommandPayload",
       "type": "object"
     },
+    "CanvasAspectRatio": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "preset",
+              "type": "string"
+            },
+            "preset": {
+              "$ref": "#/$defs/CanvasAspectRatioPreset"
+            }
+          },
+          "required": [
+            "kind",
+            "preset"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "denominator": {
+              "format": "uint32",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "custom",
+              "type": "string"
+            },
+            "numerator": {
+              "format": "uint32",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CanvasAspectRatioPreset": {
+      "enum": [
+        "ratio16x9",
+        "ratio9x16",
+        "ratio1x1",
+        "ratio4x3",
+        "ratio3x4"
+      ],
+      "type": "string"
+    },
+    "CanvasBackground": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "black",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "solidColor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "color"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "blurFill",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "image",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "CommandEvent": {
       "additionalProperties": false,
       "description": "Event emitted with a command result.",
@@ -209,6 +329,7 @@
         "addAudioSegment",
         "setSegmentVolume",
         "setTrackMute",
+        "updateDraftCanvasConfig",
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
@@ -851,6 +972,36 @@
         },
         {
           "additionalProperties": false,
+          "description": "Payload accepted by the Phase 7 draft canvas config update command.",
+          "properties": {
+            "canvasConfig": {
+              "$ref": "#/$defs/DraftCanvasConfig"
+            },
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "updateDraftCanvasConfig",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "canvasConfig"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Payload accepted by the Phase 5 preview frame command.",
           "properties": {
             "cacheRoot": {
@@ -1066,6 +1217,9 @@
     "Draft": {
       "additionalProperties": false,
       "properties": {
+        "canvasConfig": {
+          "$ref": "#/$defs/DraftCanvasConfig"
+        },
         "draftId": {
           "$ref": "#/$defs/DraftId"
         },
@@ -1092,8 +1246,41 @@
         "schemaVersion",
         "draftId",
         "metadata",
+        "canvasConfig",
         "materials",
         "tracks"
+      ],
+      "type": "object"
+    },
+    "DraftCanvasConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "aspectRatio": {
+          "$ref": "#/$defs/CanvasAspectRatio"
+        },
+        "background": {
+          "$ref": "#/$defs/CanvasBackground"
+        },
+        "frameRate": {
+          "$ref": "#/$defs/RationalFrameRate"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "aspectRatio",
+        "width",
+        "height",
+        "frameRate",
+        "background"
       ],
       "type": "object"
     },
@@ -2655,6 +2842,32 @@
       ],
       "title": "UndoTimelineEditCommandPayload",
       "type": "object"
+    },
+    "UpdateDraftCanvasConfigCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 7 draft canvas config update command.",
+      "properties": {
+        "canvasConfig": {
+          "$ref": "#/$defs/DraftCanvasConfig"
+        },
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "canvasConfig"
+      ],
+      "title": "UpdateDraftCanvasConfigCommandPayload",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2993,6 +3206,23 @@
           "properties": {
             "kind": {
               "const": "setTrackMute"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "updateDraftCanvasConfig"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "updateDraftCanvasConfig"
             }
           },
           "required": [

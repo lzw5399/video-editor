@@ -3,6 +3,9 @@
   "title": "Draft",
   "type": "object",
   "properties": {
+    "canvasConfig": {
+      "$ref": "#/$defs/DraftCanvasConfig"
+    },
     "draftId": {
       "$ref": "#/$defs/DraftId"
     },
@@ -30,10 +33,163 @@
     "schemaVersion",
     "draftId",
     "metadata",
+    "canvasConfig",
     "materials",
     "tracks"
   ],
   "$defs": {
+    "CanvasAspectRatio": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "preset"
+            },
+            "preset": {
+              "$ref": "#/$defs/CanvasAspectRatioPreset"
+            }
+          },
+          "required": [
+            "kind",
+            "preset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "denominator": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "custom"
+            },
+            "numerator": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "numerator",
+            "denominator"
+          ]
+        }
+      ]
+    },
+    "CanvasAspectRatioPreset": {
+      "type": "string",
+      "enum": [
+        "ratio16x9",
+        "ratio9x16",
+        "ratio1x1",
+        "ratio4x3",
+        "ratio3x4"
+      ]
+    },
+    "CanvasBackground": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "black"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "solidColor"
+            }
+          },
+          "required": [
+            "kind",
+            "color"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "blurFill"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "image"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "DraftCanvasConfig": {
+      "type": "object",
+      "properties": {
+        "aspectRatio": {
+          "$ref": "#/$defs/CanvasAspectRatio"
+        },
+        "background": {
+          "$ref": "#/$defs/CanvasBackground"
+        },
+        "frameRate": {
+          "$ref": "#/$defs/RationalFrameRate"
+        },
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "aspectRatio",
+        "width",
+        "height",
+        "frameRate",
+        "background"
+      ]
+    },
     "DraftId": {
       "type": "string"
     },

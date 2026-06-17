@@ -6,11 +6,12 @@ use std::{
 
 use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
-    CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    CanvasBackgroundCapability, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
     CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DeleteSegmentCommandPayload, Draft, DraftId, DraftMetadata, DraftSchemaVersion,
-    EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
-    ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
+    DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
+    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
+    ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     InvalidatePreviewCacheCommandPayload, Keyframe, ListMaterialsCommandPayload,
     ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
@@ -28,7 +29,7 @@ use draft_model::{
     StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
     TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
     TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
-    VersionCommandPayload,
+    UpdateDraftCanvasConfigCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -51,14 +52,16 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
 
     let schema_json = command_schema_json();
     assert_command_schema_rejects_zero_frame_rates(&schema_json);
+    assert_command_schema_rejects_invalid_canvas_config(&schema_json);
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
 
     let draft_schema_json = draft_schema_json();
     assert_draft_schema_rejects_zero_frame_rates(&draft_schema_json);
+    assert_draft_schema_rejects_invalid_canvas_config(&draft_schema_json);
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -81,6 +84,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -149,6 +153,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<DraftSchemaVersion>(),
         export_decl::<DraftMetadata>(),
         export_decl::<RationalFrameRate>(),
+        export_decl::<CanvasAspectRatioPreset>(),
+        export_decl::<CanvasAspectRatio>(),
+        export_decl::<CanvasBackgroundCapability>(),
+        export_decl::<CanvasBackground>(),
+        export_decl::<DraftCanvasConfig>(),
         export_decl::<MaterialKind>(),
         export_decl::<MaterialStatus>(),
         export_decl::<MaterialMetadata>(),
@@ -199,7 +208,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -222,6 +231,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -498,6 +508,49 @@ fn schema_exports_include_runtime_capability_command_contracts() {
     );
 }
 
+#[test]
+fn schema_exports_include_canvas_config_and_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let draft_ts = ts_contract(&[
+        export_decl::<CanvasAspectRatioPreset>(),
+        export_decl::<CanvasAspectRatio>(),
+        export_decl::<CanvasBackgroundCapability>(),
+        export_decl::<CanvasBackground>(),
+        export_decl::<DraftCanvasConfig>(),
+    ]);
+
+    for expected_contract in [
+        "DraftCanvasConfig",
+        "CanvasAspectRatio",
+        "CanvasAspectRatioPreset",
+        "CanvasBackground",
+        "CanvasBackgroundCapability",
+    ] {
+        assert!(
+            draft_ts.contains(expected_contract),
+            "draft TypeScript should include {expected_contract}"
+        );
+    }
+
+    for expected_contract in ["UpdateDraftCanvasConfigCommandPayload"] {
+        assert!(
+            schema_json.contains(expected_contract),
+            "command schema should include {expected_contract}"
+        );
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+
+    assert!(
+        schema_json.contains("updateDraftCanvasConfig")
+            && command_envelope_ts.contains("updateDraftCanvasConfig"),
+        "draft canvas update command should be generated from Rust contracts"
+    );
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -511,7 +564,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -534,6 +587,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
+            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -772,6 +826,10 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "SetTrackMuteCommandPayload",
     );
+    include_command_contract_schema::<UpdateDraftCanvasConfigCommandPayload>(
+        &mut schema_value,
+        "UpdateDraftCanvasConfigCommandPayload",
+    );
     include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
         &mut schema_value,
         "RequestPreviewFrameCommandPayload",
@@ -847,6 +905,7 @@ fn command_schema_json() -> String {
     );
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
+    constrain_canvas_config(&mut schema_value);
     schema_value
         .as_object_mut()
         .expect("command schema should be a JSON object")
@@ -859,6 +918,7 @@ fn draft_schema_json() -> String {
     let mut schema = schema_for!(Draft);
     constrain_current_draft_schema_version_schema(&mut schema);
     constrain_rational_frame_rate_schema(&mut schema);
+    constrain_canvas_config_schema(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
@@ -932,6 +992,47 @@ fn constrain_rational_frame_rate_schema(schema: &mut Schema) {
     *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
 }
 
+fn constrain_canvas_config(schema_value: &mut serde_json::Value) {
+    let defs = schema_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated schema should contain $defs");
+
+    let canvas_config = defs
+        .get_mut("DraftCanvasConfig")
+        .expect("generated schema should contain DraftCanvasConfig");
+    canvas_config["properties"]["width"]["minimum"] = json!(1);
+    canvas_config["properties"]["height"]["minimum"] = json!(1);
+    assert_eq!(canvas_config["properties"]["width"]["minimum"], json!(1));
+    assert_eq!(canvas_config["properties"]["height"]["minimum"], json!(1));
+
+    let aspect_ratio = defs
+        .get_mut("CanvasAspectRatio")
+        .expect("generated schema should contain CanvasAspectRatio");
+    let custom_ratio = aspect_ratio
+        .get_mut("oneOf")
+        .and_then(serde_json::Value::as_array_mut)
+        .and_then(|variants| {
+            variants.iter_mut().find(|variant| {
+                variant["properties"]["kind"]["const"] == serde_json::Value::String("custom".into())
+            })
+        })
+        .expect("CanvasAspectRatio should contain custom ratio variant");
+    custom_ratio["properties"]["numerator"]["minimum"] = json!(1);
+    custom_ratio["properties"]["denominator"]["minimum"] = json!(1);
+    assert_eq!(custom_ratio["properties"]["numerator"]["minimum"], json!(1));
+    assert_eq!(
+        custom_ratio["properties"]["denominator"]["minimum"],
+        json!(1)
+    );
+}
+
+fn constrain_canvas_config_schema(schema: &mut Schema) {
+    let mut schema_value = schema.as_value().clone();
+    constrain_canvas_config(&mut schema_value);
+    *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
 fn rational_frame_rate_schema_object(
     schema_value: &mut serde_json::Value,
 ) -> &mut serde_json::Value {
@@ -958,6 +1059,37 @@ fn assert_draft_schema_rejects_zero_frame_rates(schema_json: &str) {
     );
 }
 
+fn assert_draft_schema_rejects_invalid_canvas_config(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("draft schema should compile");
+
+    assert!(
+        schema
+            .validate(&draft_value_with_canvas_config(0, 1080, 16, 9))
+            .is_err(),
+        "draft schema should reject zero canvas width"
+    );
+    assert!(
+        schema
+            .validate(&draft_value_with_canvas_config(1920, 0, 16, 9))
+            .is_err(),
+        "draft schema should reject zero canvas height"
+    );
+    assert!(
+        schema
+            .validate(&draft_value_with_canvas_config(1920, 1080, 0, 9))
+            .is_err(),
+        "draft schema should reject zero custom aspect-ratio numerator"
+    );
+    assert!(
+        schema
+            .validate(&draft_value_with_canvas_config(1920, 1080, 16, 0))
+            .is_err(),
+        "draft schema should reject zero custom aspect-ratio denominator"
+    );
+}
+
 fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
     let schema_value: serde_json::Value =
         serde_json::from_str(schema_json).expect("command schema should parse");
@@ -977,6 +1109,39 @@ fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
     );
 }
 
+fn assert_command_schema_rejects_invalid_canvas_config(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("command schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
+
+    assert!(
+        schema
+            .validate(&list_materials_command_with_canvas_config(0, 1080, 16, 9))
+            .is_err(),
+        "command schema should reject zero canvas width"
+    );
+    assert!(
+        schema
+            .validate(&list_materials_command_with_canvas_config(1920, 0, 16, 9))
+            .is_err(),
+        "command schema should reject zero canvas height"
+    );
+    assert!(
+        schema
+            .validate(&list_materials_command_with_canvas_config(1920, 1080, 0, 9))
+            .is_err(),
+        "command schema should reject zero custom aspect-ratio numerator"
+    );
+    assert!(
+        schema
+            .validate(&list_materials_command_with_canvas_config(
+                1920, 1080, 16, 0
+            ))
+            .is_err(),
+        "command schema should reject zero custom aspect-ratio denominator"
+    );
+}
+
 fn list_materials_command_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
     json!({
         "command": "listMaterials",
@@ -987,11 +1152,65 @@ fn list_materials_command_with_frame_rate(numerator: u32, denominator: u32) -> s
     })
 }
 
+fn list_materials_command_with_canvas_config(
+    width: u32,
+    height: u32,
+    numerator: u32,
+    denominator: u32,
+) -> serde_json::Value {
+    json!({
+        "command": "listMaterials",
+        "payload": {
+            "kind": "listMaterials",
+            "draft": draft_value_with_canvas_config(width, height, numerator, denominator)
+        }
+    })
+}
+
+fn draft_value_with_canvas_config(
+    width: u32,
+    height: u32,
+    numerator: u32,
+    denominator: u32,
+) -> serde_json::Value {
+    json!({
+        "schemaVersion": DraftSchemaVersion::CURRENT_VALUE,
+        "draftId": "draft-schema-invalid-canvas-config",
+        "metadata": { "name": "Schema invalid canvas config" },
+        "canvasConfig": {
+            "aspectRatio": {
+                "kind": "custom",
+                "numerator": numerator,
+                "denominator": denominator
+            },
+            "width": width,
+            "height": height,
+            "frameRate": {
+                "numerator": 30,
+                "denominator": 1
+            },
+            "background": { "kind": "black" }
+        },
+        "materials": [],
+        "tracks": []
+    })
+}
+
 fn draft_value_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
     json!({
         "schemaVersion": DraftSchemaVersion::CURRENT_VALUE,
         "draftId": "draft-schema-zero-frame-rate",
         "metadata": { "name": "Schema zero frame rate" },
+        "canvasConfig": {
+            "aspectRatio": { "kind": "preset", "preset": "ratio16x9" },
+            "width": 1920,
+            "height": 1080,
+            "frameRate": {
+                "numerator": numerator,
+                "denominator": denominator
+            },
+            "background": { "kind": "black" }
+        },
         "materials": [{
             "materialId": "material-video-001",
             "kind": "video",
@@ -1231,6 +1450,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "setTrackMute" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "updateDraftCanvasConfig" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "updateDraftCanvasConfig" }
                     },
                     "required": ["kind"]
                 }
