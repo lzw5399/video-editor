@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 04 UI-SPEC approved
-last_updated: "2026-06-17T10:11:20.139Z"
-last_activity: 2026-06-17 -- Phase 04 execution started
+last_updated: "2026-06-17T10:21:44Z"
+last_activity: 2026-06-17 -- Phase 04 Plan 01 completed
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 24
-  completed_plans: 20
-  percent: 50
+  completed_plans: 21
+  percent: 54
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 04 (jianying-style-desktop-workspace) — EXECUTING
-Plan: 1 of 4
+Plan: 2 of 4
 Status: Executing Phase 04
-Last activity: 2026-06-17 -- Phase 04 execution started
+Last activity: 2026-06-17 -- Phase 04 Plan 01 completed
 
-Progress: [█████-----] 50%
+Progress: [█████-----] 54%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: 8 min
 - Total execution time: 157 min
 
@@ -70,6 +70,7 @@ Progress: [█████-----] 50%
 | Phase 03 P03 | 18 min | 3 tasks | 11 files |
 | Phase 03 P04 | 17 min | 2 tasks | 16 files |
 | Phase 03 P05 | 13 min | 2 tasks | 5 files |
+| Phase 04 P01 | 11 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 04 stores editable text semantics on Segment.text and audio gain as integer SegmentVolume values while routing all text/audio edits through draft_commands. — This keeps Phase 4 UI panels command-only and preserves the no-float semantic model while deferring rendering, waveform, preview, and export concerns.
 - [Phase 03]: Plan 05 makes command fixtures, source guards, and `just test` the executable closure for the command core. — Phase 4 can build the desktop timeline against generated Rust command contracts while guards prevent renderer-owned timeline semantics, platform leakage in draft_commands, float semantic time, and command history in `.veproj/project.json`.
 - [Phase 04]: Desktop UI language is Simplified Chinese by default. — Future UI work should use Chinese visible copy for panel titles, controls, empty states, errors, and test-visible labels while keeping Jianying-style terminology consistent with Rust/domain concepts.
+- [Phase 04]: Plan 01 replaced the Electron smoke workbench with the Chinese Jianying-style workspace shell. — The renderer now boots into top feature categories, material panel, preview shell, inspector, and timeline regions while keeping generated Rust contracts as the display state boundary.
 
 ### Pending Todos
 
@@ -134,6 +136,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T09:09:18.783Z
-Stopped at: Phase 04 UI-SPEC approved
-Resume file: .planning/phases/04-jianying-style-desktop-workspace/04-UI-SPEC.md
+Last session: 2026-06-17T10:21:44Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
