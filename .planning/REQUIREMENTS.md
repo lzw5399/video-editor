@@ -14,8 +14,8 @@
 
 ### Draft Format
 
-- [ ] **DRAFT-01**: User can create a new `.veproj` draft bundle.
-- [ ] **DRAFT-02**: User can open and save a draft without semantic changes in a round trip.
+- [x] **DRAFT-01**: User can create a new `.veproj` draft bundle.
+- [x] **DRAFT-02**: User can open and save a draft without semantic changes in a round trip.
 - [x] **DRAFT-03**: Draft schema uses Jianying-aligned concepts: draft, material, track, segment, target/source time range, main-track magnet, canvas adjustment, keyframe, sticker, text bubble, text effect, filter, and transition.
 - [x] **DRAFT-04**: Draft stores semantic state only in `project.json`; thumbnails, waveforms, preview caches, render graphs, FFmpeg scripts, and exports are derived artifacts.
 - [x] **DRAFT-05**: Draft versioning and migration hooks exist for future schema changes.
@@ -118,8 +118,8 @@
 | FOUND-02 | Phase 1 | Complete |
 | FOUND-03 | Phase 1 | Complete |
 | FOUND-04 | Phase 1 | Complete |
-| DRAFT-01 | Phase 2 | Pending |
-| DRAFT-02 | Phase 2 | Pending |
+| DRAFT-01 | Phase 2 | Complete |
+| DRAFT-02 | Phase 2 | Complete |
 | DRAFT-03 | Phase 2 | Complete |
 | DRAFT-04 | Phase 2 | Complete |
 | DRAFT-05 | Phase 2 | Complete |
@@ -180,4 +180,4 @@
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after Phase 1 completion*
+*Last updated: 2026-06-17 after Phase 02 Plan 02 completion*

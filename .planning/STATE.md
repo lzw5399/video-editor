@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 context gathered
-last_updated: "2026-06-17T02:09:57.881Z"
-last_activity: 2026-06-17 -- Phase 02 Plan 01 completed
+last_updated: "2026-06-17T02:20:29.000Z"
+last_activity: 2026-06-17 -- Phase 02 Plan 02 completed
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 15
-  completed_plans: 10
-  percent: 67
+  completed_plans: 11
+  percent: 73
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 02 (draft-and-material-system) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 02 Plan 01 completed
+Last activity: 2026-06-17 -- Phase 02 Plan 02 completed
 
-Progress: [███████░░░] 67%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 7 min
 - Total execution time: 53 min
 
@@ -58,6 +58,7 @@ Progress: [███████░░░] 67%
 | Phase 01 P07 | 5 min | 2 tasks | 8 files |
 | Phase 01 P09 | 5 min | 2 tasks | 4 files |
 | Phase 02 P01 | 9 min | 2 tasks | 8 files |
+| Phase 02 P02 | 10 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase 01]: Extended media_runtime::FfmpegExecutor with a generic argument-array process runner so render smoke helpers stay inside the runtime boundary. — The existing runtime trait only supported version probes; the render smoke needed FFmpeg/ffprobe execution without shell-concatenated commands.
 - [Phase 01]: Phase 01 Plan 09 made `just build` and `just test` the explicit local and CI gate path for Rust, native binding, Electron, generated contracts, FFmpeg discovery, and render smoke. — This completes D-01 by removing broad recursive gate ambiguity and making CI run the same top-level commands while keeping FFmpeg/ffprobe as runner-only test tools.
 - [Phase 02]: Plan 01 placed draft schema, validation, and migration hooks in pure `draft_model`. — Deterministic caller-supplied IDs, integer microseconds, strict serde fields, and structured version errors establish the canonical semantic model for later project-store and material-import plans.
+- [Phase 02]: Plan 02 placed `.veproj/project.json` create/open/save/autosave in `project_store`. — The filesystem boundary now validates through `draft_model`, preserves missing material entries as recoverable warnings, and keeps material import/probing out of project persistence.
 
 ### Pending Todos
 
@@ -110,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T02:09:57.878Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-06-17T02:20:29.000Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
