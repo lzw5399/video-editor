@@ -623,12 +623,15 @@ fn parse_decimal_seconds_to_microseconds(value: &str) -> SmokeResult<u64> {
     let whole_micros = whole
         .parse::<u64>()
         .map_err(|error| SmokeError::new(format!("invalid duration seconds `{value}`: {error}")))?
-        .saturating_mul(1_000_000);
-    let mut fraction = fractional
-        .chars()
-        .take(6)
-        .filter(|character| character.is_ascii_digit())
-        .collect::<String>();
+        .checked_mul(1_000_000)
+        .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))?;
+    if !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(SmokeError::new(format!(
+            "invalid duration fraction `{value}`"
+        )));
+    }
+
+    let mut fraction = fractional.chars().take(6).collect::<String>();
 
     while fraction.len() < 6 {
         fraction.push('0');
@@ -642,7 +645,9 @@ fn parse_decimal_seconds_to_microseconds(value: &str) -> SmokeResult<u64> {
         })?
     };
 
-    Ok(whole_micros.saturating_add(fraction_micros))
+    whole_micros
+        .checked_add(fraction_micros)
+        .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))
 }
 
 fn parse_rational_frame_rate(value: &str) -> SmokeResult<(u32, u32)> {
@@ -655,6 +660,10 @@ fn parse_rational_frame_rate(value: &str) -> SmokeResult<(u32, u32)> {
     let denominator = denominator.parse::<u32>().map_err(|error| {
         SmokeError::new(format!("invalid frame rate denominator `{value}`: {error}"))
     })?;
+
+    if numerator == 0 {
+        return Err(SmokeError::new("frame rate numerator cannot be zero"));
+    }
 
     if denominator == 0 {
         return Err(SmokeError::new("frame rate denominator cannot be zero"));
@@ -739,5 +748,20 @@ mod tests {
                 .assert_probe_metadata(&metadata)
                 .expect("generated fixture metadata should match expectations");
         }
+    }
+
+    #[test]
+    fn smoke_metadata_parsers_reject_malformed_duration_and_zero_frame_rate() {
+        let invalid_fraction = parse_decimal_seconds_to_microseconds("1.-5")
+            .expect_err("malformed duration fraction should fail");
+        assert!(invalid_fraction.to_string().contains("duration fraction"));
+
+        let overflowing_duration = parse_decimal_seconds_to_microseconds(&u64::MAX.to_string())
+            .expect_err("overflowing duration should fail");
+        assert!(overflowing_duration.to_string().contains("too large"));
+
+        let zero_numerator =
+            parse_rational_frame_rate("0/1").expect_err("zero numerator frame rate should fail");
+        assert!(zero_numerator.to_string().contains("numerator"));
     }
 }

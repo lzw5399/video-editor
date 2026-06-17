@@ -34,9 +34,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     let generated_dir = root.join("apps/desktop-electron/src/generated");
 
     let schema_json = command_schema_json();
+    assert_command_schema_rejects_zero_frame_rates(&schema_json);
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
 
     let draft_schema_json = draft_schema_json();
+    assert_draft_schema_rejects_zero_frame_rates(&draft_schema_json);
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
@@ -244,6 +246,7 @@ fn command_schema_json() -> String {
     let mut schema_value =
         serde_json::to_value(schema).expect("command schema should serialize to JSON value");
     constrain_current_draft_schema_version(&mut schema_value);
+    constrain_rational_frame_rate(&mut schema_value);
     schema_value
         .as_object_mut()
         .expect("command schema should be a JSON object")
@@ -255,6 +258,7 @@ fn command_schema_json() -> String {
 fn draft_schema_json() -> String {
     let mut schema = schema_for!(Draft);
     constrain_current_draft_schema_version_schema(&mut schema);
+    constrain_rational_frame_rate_schema(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
@@ -278,6 +282,102 @@ fn current_draft_schema_version_schema() -> serde_json::Value {
     json!({
         "type": "integer",
         "const": DraftSchemaVersion::CURRENT_VALUE
+    })
+}
+
+fn constrain_rational_frame_rate(schema_value: &mut serde_json::Value) {
+    let frame_rate = rational_frame_rate_schema_object(schema_value);
+    frame_rate["properties"]["numerator"]["minimum"] = json!(1);
+    frame_rate["properties"]["denominator"]["minimum"] = json!(1);
+    assert_eq!(frame_rate["properties"]["numerator"]["minimum"], json!(1));
+    assert_eq!(frame_rate["properties"]["denominator"]["minimum"], json!(1));
+}
+
+fn constrain_rational_frame_rate_schema(schema: &mut Schema) {
+    let mut schema_value = schema.as_value().clone();
+    constrain_rational_frame_rate(&mut schema_value);
+    *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
+fn rational_frame_rate_schema_object(
+    schema_value: &mut serde_json::Value,
+) -> &mut serde_json::Value {
+    schema_value
+        .get_mut("$defs")
+        .and_then(|defs| defs.get_mut("RationalFrameRate"))
+        .expect("generated schema should contain RationalFrameRate")
+}
+
+fn assert_draft_schema_rejects_zero_frame_rates(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("draft schema should compile");
+
+    assert!(
+        schema.validate(&draft_value_with_frame_rate(0, 1)).is_err(),
+        "draft schema should reject zero frame-rate numerator"
+    );
+    assert!(
+        schema
+            .validate(&draft_value_with_frame_rate(24, 0))
+            .is_err(),
+        "draft schema should reject zero frame-rate denominator"
+    );
+}
+
+fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("command schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
+
+    assert!(
+        schema
+            .validate(&list_materials_command_with_frame_rate(0, 1))
+            .is_err(),
+        "command schema should reject zero frame-rate numerator"
+    );
+    assert!(
+        schema
+            .validate(&list_materials_command_with_frame_rate(24, 0))
+            .is_err(),
+        "command schema should reject zero frame-rate denominator"
+    );
+}
+
+fn list_materials_command_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
+    json!({
+        "command": "listMaterials",
+        "payload": {
+            "kind": "listMaterials",
+            "draft": draft_value_with_frame_rate(numerator, denominator)
+        }
+    })
+}
+
+fn draft_value_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
+    json!({
+        "schemaVersion": DraftSchemaVersion::CURRENT_VALUE,
+        "draftId": "draft-schema-zero-frame-rate",
+        "metadata": { "name": "Schema zero frame rate" },
+        "materials": [{
+            "materialId": "material-video-001",
+            "kind": "video",
+            "uri": "media/video.mp4",
+            "displayName": "video.mp4",
+            "metadata": {
+                "duration": 1_000_000,
+                "width": 160,
+                "height": 90,
+                "frameRate": {
+                    "numerator": numerator,
+                    "denominator": denominator
+                },
+                "hasVideo": true,
+                "hasAudio": false
+            },
+            "status": "available"
+        }],
+        "tracks": []
     })
 }
 
