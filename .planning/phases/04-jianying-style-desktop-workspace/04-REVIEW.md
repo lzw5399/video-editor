@@ -1,10 +1,10 @@
 ---
 phase: 04-jianying-style-desktop-workspace
-reviewed: 2026-06-17T11:43:55Z
+reviewed: 2026-06-17T12:02:20Z
 depth: standard
 files_reviewed: 2
 files_reviewed_list:
-  - apps/desktop-electron/src/renderer/App.tsx
+  - apps/desktop-electron/src/renderer/styles.css
   - apps/desktop-electron/tests/workspace.spec.ts
 findings:
   critical: 0
@@ -16,18 +16,21 @@ status: clean
 
 # Phase 4: Code Review Report
 
-**Reviewed:** 2026-06-17T11:43:55Z
+**Reviewed:** 2026-06-17T12:02:20Z
 **Depth:** standard
 **Files Reviewed:** 2
 **Status:** clean
 
 ## Summary
 
-Targeted re-review of commit `5103590 fix(04): guard material import draft commands`, focused on the prior blocker from this artifact: material import racing with timeline commands.
+Targeted post-review of commit `8963ea3 fix(04): prevent timeline toolbar clipping`, limited to:
 
-The prior blocker is closed. `apps/desktop-electron/src/renderer/App.tsx` now routes `handleImportMaterial` through the shared `executeDraftCommand` helper, which uses the same synchronous `commandInFlightRef` guard and `workspaceRef.current` latest-state command builder path as timeline edits. Import results are applied through the guarded state updater and refresh `workspaceRef.current`, so an import command cannot be submitted concurrently with an accepted timeline edit through this path.
+- `apps/desktop-electron/src/renderer/styles.css`
+- `apps/desktop-electron/tests/workspace.spec.ts`
 
-`apps/desktop-electron/tests/workspace.spec.ts` includes an executable regression, `material import uses the same draft command guard as timeline edits`, which fires `添加片段` and `导入素材` without awaiting an intermediate React render, verifies the accepted timeline edit remains visible, and asserts that only `addSegment` reached the draft-mutating command recorder.
+The toolbar layout change addresses the clipping risk without breaking Phase 4 layout stability. `.timeline-surface` now reserves an 80px transport strip, and `.transport-strip` wraps controls into deterministic rows with hidden overflow contained inside the reserved toolbar area. At the supported minimum workspace size, the direct toolbar children fit within two 36px rows plus the 8px row gap, so the timeline ruler and track list remain on fixed grid rows instead of being pushed by dynamic toolbar height.
+
+The Playwright regression extends the existing layout stability gate by checking every direct child of `[aria-label="时间线控制"]` stays within the strip at both `1280x800` and `1120x720`. The assertion is scoped to geometry that matters for clipping, uses a 1px tolerance like the existing region-bound checks, and does not depend on screenshots or animation timing.
 
 Verification passed:
 
@@ -36,7 +39,7 @@ pnpm run test:phase4-workspace
 5 passed
 ```
 
-All reviewed files meet quality standards for the targeted prior-blocker scope. No issues found.
+All reviewed files meet quality standards for this targeted post-review scope. No issues found.
 
 ## Narrative Findings (AI reviewer)
 
@@ -44,6 +47,6 @@ No Critical, Warning, or Info findings in the targeted re-review scope.
 
 ---
 
-_Reviewed: 2026-06-17T11:43:55Z_
+_Reviewed: 2026-06-17T12:02:20Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
