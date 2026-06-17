@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 04.1-04-PLAN.md
-last_updated: "2026-06-17T15:49:44.461Z"
-last_activity: 2026-06-17 -- Phase 04.1 execution started
+status: planning
+stopped_at: Completed Phase 04.1 verification
+last_updated: "2026-06-17T16:30:10.257Z"
+last_activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 28
+  total_plans: 35
   completed_plans: 28
-  percent: 100
+  percent: 71
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 04.1 — professional-jianying-workspace-ui-refinement
+**Current focus:** Phase 05 — preview-and-export-pipeline
 
 ## Current Position
 
-Phase: 04.1 (professional-jianying-workspace-ui-refinement) — COMPLETE
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-06-17 -- Phase 04.1 execution started
+Phase: 05
+Plan: Not started
+Status: Ready for planning
+Last activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [██████████] 100%
 | 02 | 6 | - | - |
 | 03 | 5 | 100 min | 20 min |
 | 04 | 4 | - | - |
+| 04.1 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -146,6 +147,9 @@ Recent decisions affecting current work:
 - [Phase 04.1]: Phase 04.1 Plan 04 guards match direct mutation and ownership patterns instead of read-only commandState display or generated command payload fields.
 - [Phase 04.1]: Phase 04.1 Plan 04 keeps the professional UI gate dependency-free and blocks icon package imports/additions for this phase.
 - [Phase 04.1]: Phase 04.1 Plan 04 hides narrow timeline status text at 1120px so the toolbar remains a single compact row.
+- [Phase 04.1]: The top feature bar is the only primary category navigation; the left resource panel contains current-feature secondary categories such as 导入、我的、AI生成、云素材、官方素材、即梦AI. — This matches the Jianying Pro workspace hierarchy and prevents duplicated 媒体/音频/文字 primary menus in the left panel.
+- [Phase 04.1]: Timeline track mute header controls now route through the existing `setTrackMute` command path while lock and visibility remain disabled shells. — This closes the review finding without giving renderer ownership of track state semantics.
+- [Phase 04.1]: Compact dark scrollbars and 1120x720/1280x800 screenshot checks are part of the professional workspace visual baseline. — Later UI work should avoid default white scrollbars and should manually inspect proportions after significant layout changes.
 
 ### Pending Todos
 
