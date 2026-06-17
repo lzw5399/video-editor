@@ -76,6 +76,7 @@ Progress: [████████--] 85%
 | Phase 04 P02 | 10 min | 2 tasks | 7 files |
 | Phase 04 P03 | 10min | 2 tasks | 6 files |
 | Phase 04 P04 | 45min | 3 tasks | 6 files |
+| Phase 03.1 P01 | 8 min | 2 tasks | 10 files |
 | Phase 04.1 P01 | 7 min | 2 tasks | 5 files |
 | Phase 04.1 P02 | 7 min | 2 tasks | 3 files |
 | Phase 04.1 P03 | 9 min | 2 tasks | 4 files |
@@ -138,6 +139,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Phase 04 verification included screenshot-based visual spot checks at 1280x800 and 1120x720, then fixed timeline toolbar clipping with a Playwright geometry regression. — The Chinese desktop workspace is verified as a compact editor surface without remaining Phase 4 visual blockers.
 - [Phase 03.1]: Inserted Kaipai Compatibility Foundation. — The compatibility branch will first define offline formula fixtures, compatibility reports, resource-localizer boundaries, source guards, and draft template-semantics preparation before live Kaipai API work or Android worker runtime dependency.
 - [Phase 03.1]: Revised planning into five scoped plans. — Adapter contract/schema work, sanitized fixture corpus, compatibility reports, resource localization, and source-guard/gap-inventory gates are now separate waves so no plan carries oversized file scope.
+- [Phase 03.1]: Raw Kaipai formula JSON is modeled as serde_json::Value only inside adapter_kaipai input/provenance contracts. — Plan 03.1-01 establishes the adapter-owned formula evidence boundary while keeping raw provider semantics out of draft_model and render crates.
+- [Phase 03.1]: Kaipai formula bundle schema and TypeScript artifacts are generated from Rust tests and drift only under VE_UPDATE_GENERATED_CONTRACTS=1. — This follows the existing draft_model generated-contract pattern and gives future fixture/report plans a stable contract gate.
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
