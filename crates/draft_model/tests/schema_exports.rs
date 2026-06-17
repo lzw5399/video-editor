@@ -6,15 +6,17 @@ use std::{
 
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
-    CommandName, CommandPayload, CommandResultEnvelope, CommandState, Draft, DraftId,
-    DraftMetadata, DraftSchemaVersion, Filter, ImportMaterialCommandPayload,
-    ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MainTrackMagnet, Material,
-    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    AddSegmentCommandPayload, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
+    DeleteSegmentCommandPayload, Draft, DraftId, DraftMetadata, DraftSchemaVersion, Filter,
+    ImportMaterialCommandPayload, ImportMaterialResponse, Keyframe, ListMaterialsCommandPayload,
+    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
+    Microseconds, MoveSegmentCommandPayload,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingCommandPayload,
-    ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId, SnappingSettings,
-    SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection, Track, TrackId,
-    TrackKind, Transition, VersionCommandPayload,
+    ProbeMediaRuntimeCommandPayload, RationalFrameRate, Segment, SegmentId,
+    SelectTimelineSegmentsCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
+    TargetTimerange, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    Transition, TrimSegmentCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -186,6 +188,30 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 }
 
+#[test]
+fn schema_exports_include_timeline_edit_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+
+    for expected_contract in [
+        "AddSegmentCommandPayload",
+        "SelectTimelineSegmentsCommandPayload",
+        "MoveSegmentCommandPayload",
+        "SplitSegmentCommandPayload",
+        "TrimSegmentCommandPayload",
+        "DeleteSegmentCommandPayload",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract),
+            "command schema should include {expected_contract}"
+        );
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -195,6 +221,27 @@ where
 
 fn ts_config() -> Config {
     Config::new().with_large_int("number")
+}
+
+fn command_envelope_ts_contract() -> String {
+    ts_contract_with_prelude(
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TrackId } from \"./Draft\";\n\n",
+        &[
+            export_decl::<CommandName>(),
+            export_decl::<PingCommandPayload>(),
+            export_decl::<VersionCommandPayload>(),
+            export_decl::<ProbeMediaRuntimeCommandPayload>(),
+            export_decl::<ImportMaterialCommandPayload>(),
+            export_decl::<ListMaterialsCommandPayload>(),
+            export_decl::<ListMissingMaterialsCommandPayload>(),
+            export_decl::<TimelineSelection>(),
+            export_decl::<SnappingSettings>(),
+            export_decl::<CommandHistorySnapshot>(),
+            export_decl::<CommandState>(),
+            export_decl::<CommandPayload>(),
+            export_decl::<CommandEnvelope>(),
+        ],
+    )
 }
 
 fn ts_contract(declarations: &[String]) -> String {

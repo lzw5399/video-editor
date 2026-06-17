@@ -231,6 +231,126 @@ fn execute_command_rejects_mismatched_command_payload_kind() {
 }
 
 #[test]
+fn execute_command_routes_timeline_add_move_and_selection() {
+    let draft = timeline_draft_json();
+
+    let added = execute_command(json!({
+        "command": "addSegment",
+        "payload": {
+            "kind": "addSegment",
+            "draft": draft,
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "video-track",
+            "segmentId": "segment-a",
+            "materialId": "video-material",
+            "sourceTimerange": { "start": 100_000, "duration": 400_000 },
+            "targetTimerange": { "start": 0, "duration": 400_000 }
+        },
+        "requestId": "req-add-segment"
+    }))
+    .expect("add segment command should return a JSON envelope");
+
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["error"], Value::Null);
+    assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
+    assert_eq!(
+        added["data"]["draft"]["tracks"][0]["segments"][0]["segmentId"],
+        "segment-a"
+    );
+
+    let moved = execute_command(json!({
+        "command": "moveSegment",
+        "payload": {
+            "kind": "moveSegment",
+            "draft": added["data"]["draft"].clone(),
+            "commandState": added["data"]["commandState"].clone(),
+            "selection": added["data"]["selection"].clone(),
+            "segmentId": "segment-a",
+            "targetTrackId": "video-track",
+            "targetStart": 500_000
+        },
+        "requestId": "req-move-segment"
+    }))
+    .expect("move segment command should return a JSON envelope");
+
+    assert_eq!(moved["ok"], true, "{moved:#}");
+    assert_eq!(moved["data"]["events"][0]["kind"], "segmentMoved");
+    assert_eq!(
+        moved["data"]["draft"]["tracks"][0]["segments"][0]["targetTimerange"]["start"],
+        500_000
+    );
+    assert_eq!(
+        moved["data"]["draft"]["tracks"][0]["segments"][0]["sourceTimerange"],
+        json!({ "start": 100_000, "duration": 400_000 })
+    );
+
+    let selected = execute_command(json!({
+        "command": "selectTimelineSegments",
+        "payload": {
+            "kind": "selectTimelineSegments",
+            "draft": moved["data"]["draft"].clone(),
+            "commandState": moved["data"]["commandState"].clone(),
+            "selection": moved["data"]["selection"].clone(),
+            "segmentIds": ["segment-a"],
+            "trackIds": ["video-track"]
+        },
+        "requestId": "req-select-segment"
+    }))
+    .expect("select timeline segments command should return a JSON envelope");
+
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    assert_eq!(
+        selected["data"]["selection"],
+        json!({ "segmentIds": ["segment-a"], "trackIds": ["video-track"] })
+    );
+    assert_eq!(
+        selected["data"]["draft"],
+        moved["data"]["draft"],
+        "selection command must not mutate draft"
+    );
+}
+
+#[test]
+fn execute_command_rejects_invalid_timeline_edit_with_standard_error() {
+    let mut draft = timeline_draft_json();
+    draft["tracks"][0]["segments"] = json!([{
+        "segmentId": "segment-a",
+        "materialId": "video-material",
+        "sourceTimerange": { "start": 0, "duration": 400_000 },
+        "targetTimerange": { "start": 0, "duration": 400_000 },
+        "mainTrackMagnet": { "enabled": false },
+        "keyframes": [],
+        "filters": []
+    }]);
+
+    let envelope = execute_command(json!({
+        "command": "addSegment",
+        "payload": {
+            "kind": "addSegment",
+            "draft": draft,
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "video-track",
+            "segmentId": "overlap",
+            "materialId": "video-material",
+            "sourceTimerange": { "start": 400_000, "duration": 200_000 },
+            "targetTimerange": { "start": 100_000, "duration": 200_000 }
+        },
+        "requestId": "req-invalid-add-segment"
+    }))
+    .expect("invalid timeline command should return a JSON envelope");
+
+    assert_eq!(envelope["ok"], false);
+    assert_eq!(envelope["data"], Value::Null);
+    assert_eq!(
+        envelope["error"]["kind"],
+        serde_json::to_value(CommandErrorKind::InvalidTimelineEdit).unwrap()
+    );
+    assert_eq!(envelope["error"]["command"], "addSegment");
+}
+
+#[test]
 fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("binding-probe-ok");
@@ -271,6 +391,56 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
         envelope["data"]["ffprobe"]["version"],
         "ffprobe version binding-test"
     );
+}
+
+fn empty_command_state_json() -> Value {
+    json!({
+        "undoStack": [],
+        "redoStack": [],
+        "maxHistoryEntries": 100,
+        "snapping": {
+            "enabled": true,
+            "threshold": 50_000
+        }
+    })
+}
+
+fn empty_selection_json() -> Value {
+    json!({
+        "segmentIds": [],
+        "trackIds": []
+    })
+}
+
+fn timeline_draft_json() -> Value {
+    json!({
+        "schemaVersion": 1,
+        "draftId": "binding-timeline-draft",
+        "metadata": { "name": "Binding Timeline Draft" },
+        "materials": [{
+            "materialId": "video-material",
+            "kind": "video",
+            "uri": "media/video.mp4",
+            "displayName": "video.mp4",
+            "metadata": {
+                "duration": 1_000_000,
+                "width": 160,
+                "height": 90,
+                "frameRate": { "numerator": 24, "denominator": 1 },
+                "hasVideo": true,
+                "hasAudio": false
+            },
+            "status": "available"
+        }],
+        "tracks": [{
+            "trackId": "video-track",
+            "kind": "video",
+            "name": "Video",
+            "muted": false,
+            "locked": false,
+            "segments": []
+        }]
+    })
 }
 
 #[test]
