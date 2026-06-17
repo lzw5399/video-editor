@@ -13,14 +13,13 @@ path = "src/lib.rs"
 [dependencies]
 draft_model = { path = "../draft_model" }
 media_runtime = { path = "../media_runtime" }
+media_runtime_desktop = { path = "../media_runtime_desktop" }
 napi = { version = "3.9.2", features = ["serde-json"] }
 napi-derive = "3.5.6"
 project_store = { path = "../project_store" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 
-[dev-dependencies]
-media_runtime_desktop = { path = "../media_runtime_desktop" }
 tempfile = "3.27.0"
 testkit = { path = "../testkit" }
 

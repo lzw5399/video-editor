@@ -1,10 +1,14 @@
 use bindings_node::{execute_command, ping, version};
-use draft_model::CommandErrorKind;
+use draft_model::{CommandErrorKind, Draft};
+use media_runtime::discover_runtime_config;
+use media_runtime_desktop::DesktopFfmpegExecutor;
+use project_store::open_project_bundle;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use testkit::generate_video_material_fixture;
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -72,6 +76,139 @@ fn execute_command_rejects_non_phase_one_command_with_structured_error() {
     );
     assert_eq!(envelope["error"]["command"], "addSegment");
     assert_eq!(envelope["events"], json!([]));
+}
+
+#[test]
+fn execute_command_imports_and_lists_materials_through_standard_envelopes() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");
+    let executor = DesktopFfmpegExecutor::default();
+    let video = generate_video_material_fixture(&executor, &runtime)
+        .expect("video material fixture should be generated");
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("command-import.veproj");
+    let draft = Draft::new("draft-command-import", "Command import");
+
+    let imported = execute_command(json!({
+        "command": "importMaterial",
+        "payload": {
+            "kind": "importMaterial",
+            "draft": draft,
+            "bundlePath": bundle_path.display().to_string(),
+            "materialPath": video.path().display().to_string(),
+            "materialId": "material-command-video",
+            "displayName": "command-video.mp4"
+        },
+        "requestId": "req-import-material"
+    }))
+    .expect("import material command should return a JSON envelope");
+
+    assert_eq!(imported["ok"], true, "{imported:#}");
+    assert_eq!(imported["error"], Value::Null);
+    assert_eq!(imported["events"], json!([]));
+    assert_eq!(
+        imported["data"]["material"]["materialId"],
+        "material-command-video"
+    );
+    assert_eq!(imported["data"]["material"]["kind"], "video");
+    assert_eq!(imported["data"]["material"]["status"], "available");
+    assert_eq!(
+        imported["data"]["material"]["displayName"],
+        "command-video.mp4"
+    );
+    assert_eq!(
+        imported["data"]["material"]["metadata"]["duration"],
+        1_000_000
+    );
+    assert_eq!(imported["data"]["diagnostic"], Value::Null);
+
+    let reopened = open_project_bundle(&project_store::StdPlatformFileSystem, &bundle_path)
+        .expect("import command should save the project bundle");
+    assert_eq!(reopened.bundle.draft.materials.len(), 1);
+
+    let listed = execute_command(json!({
+        "command": "listMaterials",
+        "payload": {
+            "kind": "listMaterials",
+            "draft": imported["data"]["draft"].clone()
+        },
+        "requestId": "req-list-materials"
+    }))
+    .expect("list materials command should return a JSON envelope");
+
+    assert_eq!(listed["ok"], true);
+    assert_eq!(listed["error"], Value::Null);
+    assert_eq!(listed["events"], json!([]));
+    assert_eq!(listed["data"]["materials"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        listed["data"]["materials"][0]["materialId"],
+        "material-command-video"
+    );
+}
+
+#[test]
+fn execute_command_reports_missing_material_diagnostics_without_corrupting_draft() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("command-missing.veproj");
+    let missing_path = bundle_path.join("media").join("missing.mp4");
+    let draft = Draft::new("draft-command-missing", "Command missing");
+
+    let imported = execute_command(json!({
+        "command": "importMaterial",
+        "payload": {
+            "kind": "importMaterial",
+            "draft": draft,
+            "bundlePath": bundle_path.display().to_string(),
+            "materialPath": missing_path.display().to_string(),
+            "materialId": "material-command-missing",
+            "displayName": "missing.mp4",
+            "materialKindHint": "video"
+        },
+        "requestId": "req-import-missing"
+    }))
+    .expect("missing import command should return a JSON envelope");
+
+    assert_eq!(imported["ok"], true);
+    assert_eq!(imported["error"], Value::Null);
+    assert_eq!(imported["data"]["material"]["status"], "missing");
+    assert_eq!(imported["data"]["diagnostic"]["kind"], "missingFile");
+    assert_eq!(
+        imported["data"]["diagnostic"]["originalUri"],
+        "media/missing.mp4"
+    );
+
+    let diagnostics = execute_command(json!({
+        "command": "listMissingMaterials",
+        "payload": {
+            "kind": "listMissingMaterials",
+            "draft": imported["data"]["draft"].clone(),
+            "bundlePath": bundle_path.display().to_string()
+        },
+        "requestId": "req-list-missing-materials"
+    }))
+    .expect("missing list command should return a JSON envelope");
+
+    assert_eq!(diagnostics["ok"], true);
+    assert_eq!(diagnostics["error"], Value::Null);
+    assert_eq!(diagnostics["events"], json!([]));
+    assert_eq!(
+        diagnostics["data"]["diagnostics"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        diagnostics["data"]["diagnostics"][0]["materialId"],
+        "material-command-missing"
+    );
+    assert_eq!(diagnostics["data"]["diagnostics"][0]["kind"], "missingFile");
+
+    let reopened = open_project_bundle(&project_store::StdPlatformFileSystem, &bundle_path)
+        .expect("missing material command should save recoverable draft");
+    assert_eq!(reopened.bundle.draft.materials.len(), 1);
+    assert_eq!(
+        reopened.bundle.draft.materials[0].material_id.as_str(),
+        "material-command-missing"
+    );
 }
 
 #[test]

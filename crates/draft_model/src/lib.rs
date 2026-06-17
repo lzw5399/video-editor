@@ -44,22 +44,28 @@ pub struct CommandEnvelope {
     pub request_id: Option<String>,
 }
 
-/// Phase 1 command names supported by the Rust contract.
+/// Command names supported by the Rust contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CommandName {
     Ping,
     Version,
     ProbeMediaRuntime,
+    ImportMaterial,
+    ListMaterials,
+    ListMissingMaterials,
 }
 
-/// Phase 1 command payloads.
+/// Command payloads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CommandPayload {
     Ping(PingCommandPayload),
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
+    ImportMaterial(ImportMaterialCommandPayload),
+    ListMaterials(ListMaterialsCommandPayload),
+    ListMissingMaterials(ListMissingMaterialsCommandPayload),
 }
 
 impl CommandPayload {
@@ -69,6 +75,9 @@ impl CommandPayload {
             Self::Ping(_) => CommandName::Ping,
             Self::Version(_) => CommandName::Version,
             Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
+            Self::ImportMaterial(_) => CommandName::ImportMaterial,
+            Self::ListMaterials(_) => CommandName::ListMaterials,
+            Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
         }
     }
 }
@@ -117,6 +126,90 @@ pub struct VersionCommandPayload {}
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProbeMediaRuntimeCommandPayload {}
 
+/// Payload accepted by the Phase 2 material import command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportMaterialCommandPayload {
+    pub draft: Draft,
+    pub bundle_path: String,
+    pub material_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_kind_hint: Option<MaterialKind>,
+}
+
+/// Payload accepted by the Phase 2 material list command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListMaterialsCommandPayload {
+    pub draft: Draft,
+}
+
+/// Payload accepted by the Phase 2 missing-material diagnostic command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListMissingMaterialsCommandPayload {
+    pub draft: Draft,
+    pub bundle_path: String,
+}
+
+/// Response data returned by the Phase 2 material import command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportMaterialResponse {
+    pub draft: Draft,
+    pub material: Material,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<MissingMaterialCommandDiagnostic>,
+    pub bundle_path: String,
+    pub project_json_path: String,
+}
+
+/// Response data returned by the Phase 2 material list command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListMaterialsResponse {
+    pub materials: Vec<Material>,
+}
+
+/// Response data returned by the Phase 2 missing-material diagnostic command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListMissingMaterialsResponse {
+    pub diagnostics: Vec<MissingMaterialCommandDiagnostic>,
+}
+
+/// Binding-safe missing-material diagnostic returned through command envelopes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MissingMaterialCommandDiagnostic {
+    pub material_id: MaterialId,
+    pub kind: MissingMaterialCommandDiagnosticKind,
+    pub original_uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub last_known_resolved_path: Option<String>,
+    pub status: MaterialStatus,
+    pub message: String,
+}
+
+/// Stable classes of missing-material diagnostics exposed to Electron.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum MissingMaterialCommandDiagnosticKind {
+    MissingFile,
+    MarkedMissing,
+    ProbeFailed,
+    UnresolvedExternalUri,
+}
+
 /// Standard command result envelope used by binding calls.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -143,6 +236,10 @@ pub enum CommandErrorKind {
     UnsupportedCommand,
     InvalidPayload,
     RuntimeDiscoveryFailed,
+    InvalidProject,
+    ProjectIoFailed,
+    MaterialProbeFailed,
+    MissingMaterial,
     Internal,
 }
 
