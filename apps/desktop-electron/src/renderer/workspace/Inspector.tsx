@@ -3,12 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import type { TextAlignment, TextSegment } from "../../generated/Draft";
 import { formatMicroseconds, getSelectedSegmentView, type WorkspaceState } from "../viewModel";
 
+import "./preview-inspector.css";
+
 type InspectorProps = {
   workspace: WorkspaceState;
   onEditSelectedText: (text: TextSegment) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
+
+type InspectorTab = "画面" | "音频" | "变速" | "动画" | "调节" | "AI效果";
 
 type TextFormState = {
   content: string;
@@ -38,6 +42,8 @@ const DEFAULT_TEXT_STATE: TextFormState = {
   backgroundEnabled: false
 };
 
+const INSPECTOR_TABS: readonly InspectorTab[] = ["画面", "音频", "变速", "动画", "调节", "AI效果"];
+
 export function Inspector({
   workspace,
   onEditSelectedText,
@@ -45,8 +51,11 @@ export function Inspector({
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
   const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+  const [activeTab, setActiveTab] = useState<InspectorTab>("画面");
   const [textState, setTextState] = useState<TextFormState>(DEFAULT_TEXT_STATE);
   const [volume, setVolume] = useState(1000);
+  const sequenceDuration = getSequenceDuration(workspace);
+  const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
 
   useEffect(() => {
     if (selected === null) {
@@ -109,219 +118,313 @@ export function Inspector({
     [textState]
   );
 
-  if (selected === null) {
-    return (
-      <div className="inspector-content">
-        <div className="panel-header">
-          <h2>属性检查器</h2>
-        </div>
-        <div className="empty-state">
-          <strong>未选择片段</strong>
-          <span>在时间线中选择一个片段后，可在这里调整文字、音量和轨道状态。</span>
-        </div>
-        {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
-      </div>
-    );
-  }
-
-  const hasText = selected.segment.text !== null && selected.segment.text !== undefined;
-
   return (
     <div className="inspector-content">
       <div className="panel-header">
         <h2>属性检查器</h2>
       </div>
 
-      <dl className="inspector-list">
-        <div>
-          <dt>片段ID</dt>
-          <dd>{selected.segment.segmentId}</dd>
-        </div>
-        <div>
-          <dt>轨道</dt>
-          <dd>
-            {selected.track.name} / {selected.track.kindLabel}
-          </dd>
-        </div>
-        <div>
-          <dt>素材</dt>
-          <dd>{selected.material?.displayName ?? selected.segment.materialId}</dd>
-        </div>
-        <div>
-          <dt>源时间</dt>
-          <dd>
-            {formatMicroseconds(selected.segment.sourceTimerange.start)} /{" "}
-            {formatMicroseconds(selected.segment.sourceTimerange.duration)}
-          </dd>
-        </div>
-        <div>
-          <dt>目标时间</dt>
-          <dd>
-            {formatMicroseconds(selected.segment.targetTimerange.start)} /{" "}
-            {formatMicroseconds(selected.segment.targetTimerange.duration)}
-          </dd>
-        </div>
-      </dl>
+      <div className="inspector-tabs" role="tablist" aria-label="检查器分类">
+        {INSPECTOR_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            className={activeTab === tab ? "active" : ""}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-      <div className="field-stack">
-        <h3>文字</h3>
-        {hasText ? (
-          <>
-            <label className="field-row">
-              <span>文字内容</span>
-              <textarea
-                value={textState.content}
-                onChange={(event) => setTextState((current) => ({ ...current, content: event.currentTarget.value }))}
-              />
-            </label>
-            <label className="field-row">
-              <span>字号</span>
-              <input
-                type="number"
-                min="1"
-                value={textState.fontSize}
-                onChange={(event) =>
-                  setTextState((current) => ({ ...current, fontSize: event.currentTarget.valueAsNumber || 1 }))
-                }
-              />
-            </label>
-            <label className="field-row">
-              <span>颜色</span>
-              <input
-                type="color"
-                value={textState.color}
-                onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
-              />
-            </label>
-            <div className="field-row">
-              <span>对齐</span>
-              <div className="segmented-control" role="group" aria-label="检查器文字对齐">
-                {(["left", "center", "right"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={textState.alignment === value ? "active" : ""}
-                    onClick={() => setTextState((current) => ({ ...current, alignment: value }))}
-                  >
-                    {value === "left" ? "左" : value === "center" ? "中" : "右"}
-                  </button>
-                ))}
-              </div>
+      {selected === null ? (
+        <>
+          <section className="inspector-section" aria-label="草稿参数">
+            <div className="inspector-section-title">
+              <h3>草稿参数</h3>
             </div>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={textState.strokeEnabled}
-                onChange={(event) => setTextState((current) => ({ ...current, strokeEnabled: event.currentTarget.checked }))}
+            <div className="empty-state compact-empty">
+              <strong>未选择片段</strong>
+              <span>选择时间线片段后，可在这里调整画面、音频、文字和关键帧参数。</span>
+            </div>
+            <dl className="inspector-list compact">
+              <InspectorDatum label="草稿名称" value={workspace.draft.metadata.name} />
+              <InspectorDatum label="画布比例" value="16:9" />
+              <InspectorDatum label="画布尺寸" value="1920 x 1080" />
+              <InspectorDatum label="序列时长" value={formatMicroseconds(sequenceDuration)} />
+              <InspectorDatum label="轨道数量" value={`${workspace.draft.tracks.length} 条`} />
+              <InspectorDatum label="素材数量" value={`${workspace.draft.materials.length} 个`} />
+              <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
+              <InspectorDatum label="核心状态" value={workspace.bindingStatus.label} />
+            </dl>
+          </section>
+          {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
+        </>
+      ) : (
+        <>
+          <section className="inspector-section" aria-label="片段信息">
+            <div className="inspector-section-title">
+              <h3>片段参数</h3>
+              <KeyframeButton />
+            </div>
+            <dl className="inspector-list compact">
+              <InspectorDatum label="片段ID" value={selected.segment.segmentId} />
+              <InspectorDatum label="素材" value={selected.material?.displayName ?? selected.segment.materialId} />
+              <InspectorDatum label="轨道" value={`${selected.track.name} / ${selected.track.kindLabel}`} />
+              <InspectorDatum
+                label="源时间"
+                value={`${formatMicroseconds(selected.segment.sourceTimerange.start)} / ${formatMicroseconds(
+                  selected.segment.sourceTimerange.duration
+                )}`}
               />
-              <span>描边</span>
-            </label>
-            <label className="field-row">
-              <span>描边颜色</span>
+              <InspectorDatum
+                label="目标时间"
+                value={`${formatMicroseconds(selected.segment.targetTimerange.start)} / ${formatMicroseconds(
+                  selected.segment.targetTimerange.duration
+                )}`}
+              />
+            </dl>
+          </section>
+
+          <section className="inspector-section" aria-label="画面变换">
+            <div className="inspector-section-title">
+              <h3>画面</h3>
+              <KeyframeButton />
+            </div>
+            <ShellControl label="位置" value="X 0 / Y 0" />
+            <ShellControl label="缩放" value="100%" />
+            <ShellControl label="旋转" value="0°" />
+            <ShellControl label="不透明度" value="100%" />
+          </section>
+
+          <section className="inspector-section" aria-label="文字参数">
+            <div className="inspector-section-title">
+              <h3>文字</h3>
+              <KeyframeButton />
+            </div>
+            {hasText ? (
+              <>
+                <label className="field-row compact-row textarea-row">
+                  <span>文字内容</span>
+                  <textarea
+                    value={textState.content}
+                    onChange={(event) => setTextState((current) => ({ ...current, content: event.currentTarget.value }))}
+                  />
+                </label>
+                <label className="field-row compact-row">
+                  <span>字号</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={textState.fontSize}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, fontSize: event.currentTarget.valueAsNumber || 1 }))
+                    }
+                  />
+                </label>
+                <label className="field-row compact-row color-row">
+                  <span>颜色</span>
+                  <input
+                    type="color"
+                    value={textState.color}
+                    onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
+                  />
+                </label>
+                <div className="field-row compact-row">
+                  <span>对齐</span>
+                  <div className="segmented-control" role="group" aria-label="检查器文字对齐">
+                    {(["left", "center", "right"] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={textState.alignment === value ? "active" : ""}
+                        onClick={() => setTextState((current) => ({ ...current, alignment: value }))}
+                      >
+                        {value === "left" ? "左" : value === "center" ? "中" : "右"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label className="toggle-row compact-toggle">
+                  <input
+                    type="checkbox"
+                    checked={textState.strokeEnabled}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, strokeEnabled: event.currentTarget.checked }))
+                    }
+                  />
+                  <span>描边</span>
+                </label>
+                <label className="field-row compact-row color-row">
+                  <span>描边颜色</span>
+                  <input
+                    type="color"
+                    value={textState.strokeColor}
+                    disabled={!textState.strokeEnabled}
+                    onChange={(event) => setTextState((current) => ({ ...current, strokeColor: event.currentTarget.value }))}
+                  />
+                </label>
+                <label className="field-row compact-row">
+                  <span>描边宽度</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={textState.strokeWidth}
+                    disabled={!textState.strokeEnabled}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, strokeWidth: event.currentTarget.valueAsNumber || 1 }))
+                    }
+                  />
+                </label>
+                <label className="toggle-row compact-toggle">
+                  <input
+                    type="checkbox"
+                    checked={textState.shadowEnabled}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, shadowEnabled: event.currentTarget.checked }))
+                    }
+                  />
+                  <span>阴影</span>
+                </label>
+                <label className="field-row compact-row color-row">
+                  <span>阴影颜色</span>
+                  <input
+                    type="color"
+                    value={textState.shadowColor}
+                    disabled={!textState.shadowEnabled}
+                    onChange={(event) => setTextState((current) => ({ ...current, shadowColor: event.currentTarget.value }))}
+                  />
+                </label>
+                <label className="toggle-row compact-toggle">
+                  <input
+                    type="checkbox"
+                    checked={textState.backgroundEnabled}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, backgroundEnabled: event.currentTarget.checked }))
+                    }
+                  />
+                  <span>背景</span>
+                </label>
+                <label className="field-row compact-row color-row">
+                  <span>背景颜色</span>
+                  <input
+                    type="color"
+                    value={textState.backgroundColor}
+                    disabled={!textState.backgroundEnabled}
+                    onChange={(event) =>
+                      setTextState((current) => ({ ...current, backgroundColor: event.currentTarget.value }))
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="primary-action wide-action"
+                  onClick={() => onEditSelectedText(text)}
+                  disabled={workspace.pendingCommand !== null}
+                >
+                  应用文字
+                </button>
+              </>
+            ) : (
+              <p className="inspector-note">当前片段没有文字语义。</p>
+            )}
+          </section>
+
+          <section className="inspector-section" aria-label="音频参数">
+            <div className="inspector-section-title">
+              <h3>音频</h3>
+              <KeyframeButton />
+            </div>
+            <label className="field-row compact-row">
+              <span>音量</span>
               <input
-                type="color"
-                value={textState.strokeColor}
-                disabled={!textState.strokeEnabled}
-                onChange={(event) => setTextState((current) => ({ ...current, strokeColor: event.currentTarget.value }))}
+                type="range"
+                min="0"
+                max="4000"
+                step="50"
+                value={volume}
+                onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
               />
             </label>
-            <label className="field-row">
-              <span>描边宽度</span>
+            <label className="field-row compact-row">
+              <span>毫音量</span>
               <input
                 type="number"
-                min="1"
-                value={textState.strokeWidth}
-                disabled={!textState.strokeEnabled}
-                onChange={(event) =>
-                  setTextState((current) => ({ ...current, strokeWidth: event.currentTarget.valueAsNumber || 1 }))
-                }
+                min="0"
+                max="4000"
+                step="50"
+                value={volume}
+                onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
               />
             </label>
-            <label className="toggle-row">
+            <label className="toggle-row compact-toggle">
               <input
                 type="checkbox"
-                checked={textState.shadowEnabled}
-                onChange={(event) => setTextState((current) => ({ ...current, shadowEnabled: event.currentTarget.checked }))}
+                checked={selected.track.muted}
+                onChange={(event) => onSetSelectedTrackMute(selected.track.trackId, event.currentTarget.checked)}
+                disabled={workspace.pendingCommand !== null}
               />
-              <span>阴影</span>
-            </label>
-            <label className="field-row">
-              <span>阴影颜色</span>
-              <input
-                type="color"
-                value={textState.shadowColor}
-                disabled={!textState.shadowEnabled}
-                onChange={(event) => setTextState((current) => ({ ...current, shadowColor: event.currentTarget.value }))}
-              />
-            </label>
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={textState.backgroundEnabled}
-                onChange={(event) =>
-                  setTextState((current) => ({ ...current, backgroundEnabled: event.currentTarget.checked }))
-                }
-              />
-              <span>背景</span>
-            </label>
-            <label className="field-row">
-              <span>背景颜色</span>
-              <input
-                type="color"
-                value={textState.backgroundColor}
-                disabled={!textState.backgroundEnabled}
-                onChange={(event) =>
-                  setTextState((current) => ({ ...current, backgroundColor: event.currentTarget.value }))
-                }
-              />
+              <span>轨道静音</span>
             </label>
             <button
               type="button"
-              className="primary-action wide-action"
-              onClick={() => onEditSelectedText(text)}
+              className="secondary-action wide-action"
+              onClick={() => onSetSelectedSegmentVolume(volume)}
               disabled={workspace.pendingCommand !== null}
             >
-              应用文字
+              应用音量
             </button>
-          </>
-        ) : (
-          <p className="inspector-note">当前片段没有文字语义。</p>
-        )}
-      </div>
+          </section>
 
-      <div className="field-stack">
-        <h3>音频</h3>
-        <label className="field-row">
-          <span>音量（毫音量）</span>
-          <input
-            type="number"
-            min="0"
-            max="4000"
-            step="50"
-            value={volume}
-            onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
-          />
-        </label>
-        <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={selected.track.muted}
-            onChange={(event) => onSetSelectedTrackMute(selected.track.trackId, event.currentTarget.checked)}
-            disabled={workspace.pendingCommand !== null}
-          />
-          <span>轨道静音</span>
-        </label>
-        <button
-          type="button"
-          className="secondary-action wide-action"
-          onClick={() => onSetSelectedSegmentVolume(volume)}
-          disabled={workspace.pendingCommand !== null}
-        >
-          应用音量
-        </button>
-      </div>
-
-      {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
+          {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
+        </>
+      )}
     </div>
+  );
+}
+
+function InspectorDatum({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function KeyframeButton(): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className="keyframe-button"
+      aria-label="关键帧功能待接入"
+      title="关键帧功能待接入"
+      disabled
+    >
+      <span aria-hidden="true">◇+</span>
+    </button>
+  );
+}
+
+function ShellControl({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div className="field-row compact-row shell-control-row">
+      <span>{label}</span>
+      <div className="shell-control">
+        <input type="range" min="0" max="100" value="100" disabled readOnly aria-label={`${label}待接入`} />
+        <input type="text" value={value} disabled readOnly aria-label={`${label}数值待接入`} />
+      </div>
+    </div>
+  );
+}
+
+function getSequenceDuration(workspace: WorkspaceState): number {
+  return Math.max(
+    0,
+    ...workspace.draft.tracks.flatMap((track) =>
+      track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
+    )
   );
 }
