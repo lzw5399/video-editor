@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KaipaiFormulaBundle",
+  "type": "object",
+  "properties": {
+    "directMaterials": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DirectMaterialRef"
+      }
+    },
+    "formula": true,
+    "kind": {
+      "$ref": "#/$defs/FormulaBundleKind"
+    },
+    "provenance": {
+      "$ref": "#/$defs/FormulaProvenance"
+    },
+    "recognizerResult": {
+      "$ref": "#/$defs/RecognizerResult"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FormulaResourceRef"
+      }
+    },
+    "safeArea": {
+      "$ref": "#/$defs/SafeAreaEvidence"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/FormulaBundleSchemaVersion"
+    },
+    "sourceMedia": {
+      "$ref": "#/$defs/FormulaSourceMedia"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "provenance",
+    "sourceMedia",
+    "recognizerResult",
+    "safeArea",
+    "directMaterials",
+    "formula",
+    "resources"
+  ],
+  "$defs": {
+    "DirectMaterialRef": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ResourceKind"
+        },
+        "materialId": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "materialId",
+        "uri",
+        "kind",
+        "displayName"
+      ]
+    },
+    "FormulaBundleKind": {
+      "type": "string",
+      "enum": [
+        "kaipaiSmartEditFormulaBundle"
+      ]
+    },
+    "FormulaBundleSchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "FormulaProvenance": {
+      "type": "object",
+      "properties": {
+        "capturedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formulaRequestId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formulaTaskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipeId": {
+          "type": "string"
+        },
+        "templateId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "templateId",
+        "recipeId"
+      ]
+    },
+    "FormulaResourceRef": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ResourceKind"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resourceId",
+        "kind",
+        "uri"
+      ]
+    },
+    "FormulaSourceMedia": {
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "uri": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uri",
+        "width",
+        "height",
+        "durationMs"
+      ]
+    },
+    "RecognizerResult": {
+      "type": "object",
+      "properties": {
+        "word_list": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "word_list"
+      ]
+    },
+    "ResourceKind": {
+      "type": "string",
+      "enum": [
+        "video",
+        "image",
+        "audio",
+        "font",
+        "sticker",
+        "effect",
+        "other"
+      ]
+    },
+    "SafeAreaEvidence": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/SafeAreaStatus"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "status",
+        "source"
+      ]
+    },
+    "SafeAreaStatus": {
+      "type": "string",
+      "enum": [
+        "detected",
+        "provided",
+        "unavailable"
+      ]
+    }
+  }
+}
