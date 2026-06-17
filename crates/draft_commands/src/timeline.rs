@@ -9,6 +9,7 @@ use draft_model::{
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
+    snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
 };
 
 pub fn checked_source_end(
@@ -275,7 +276,17 @@ pub fn move_segment(
     }
 
     let mut segment = next_draft.tracks[source_track_index].segments[source_segment_index].clone();
-    segment.target_timerange.start = target_start;
+    let (snapped_start, snap_event) = apply_snapping(
+        &next_draft,
+        &target_track_id,
+        &segment_id,
+        target_start,
+        segment.target_timerange.duration,
+        &command_state.snapping,
+    )?;
+    let source_track_id = next_draft.tracks[source_track_index].track_id.clone();
+    let mut extra_events = optional_events([snap_event]);
+    segment.target_timerange.start = snapped_start;
 
     if target_track_index == source_track_index {
         next_draft.tracks[source_track_index].segments[source_segment_index] = segment;
@@ -288,9 +299,17 @@ pub fn move_segment(
         next_draft.tracks[target_track_index].segments.push(segment);
     }
 
+    if let Some(event) = apply_main_track_magnet(&mut next_draft, &source_track_id)? {
+        extra_events.push(event);
+    }
+    if source_track_id != target_track_id {
+        if let Some(event) = apply_main_track_magnet(&mut next_draft, &target_track_id)? {
+            extra_events.push(event);
+        }
+    }
     validate_timeline_rules(&next_draft)?;
 
-    Ok(response(
+    Ok(response_with_events(
         next_draft,
         command_state_after_commit(command_state, draft, selection, "moveSegment"),
         TimelineSelection {
@@ -298,6 +317,7 @@ pub fn move_segment(
             track_ids: vec![target_track_id],
         },
         "segmentMoved",
+        extra_events,
     )
     .with_selection_fallback(selection))
 }
@@ -384,11 +404,19 @@ pub fn trim_segment(
     direction: TrimSegmentDirection,
     target_timerange: TargetTimerange,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
-    checked_target_end(&target_timerange)?;
-
     let mut next_draft = draft.clone();
     let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
     validate_track_unlocked(&next_draft.tracks[track_index])?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let (target_timerange, snap_event) = snap_trim_boundary(
+        &next_draft,
+        &track_id,
+        &segment_id,
+        direction,
+        target_timerange,
+        &command_state.snapping,
+    )?;
+    checked_target_end(&target_timerange)?;
 
     let original = next_draft.tracks[track_index].segments[segment_index].clone();
     let old_target_start = original.target_timerange.start.get();
@@ -398,21 +426,37 @@ pub fn trim_segment(
 
     match direction {
         TrimSegmentDirection::Left => {
-            if new_target_start < old_target_start || new_target_end != old_target_end {
+            if new_target_end != old_target_end {
                 return invalid_trim(&segment_id, target_timerange.start);
             }
-            let source_delta = new_target_start - old_target_start;
-            let new_source_start = original
-                .source_timerange
-                .start
-                .get()
-                .checked_add(source_delta)
-                .map(Microseconds::new)
-                .ok_or_else(|| {
-                    TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
-                        field: "sourceTimerange".to_owned(),
-                    })
-                })?;
+            let new_source_start = if new_target_start >= old_target_start {
+                let source_delta = new_target_start - old_target_start;
+                original
+                    .source_timerange
+                    .start
+                    .get()
+                    .checked_add(source_delta)
+                    .map(Microseconds::new)
+                    .ok_or_else(|| {
+                        TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
+                            field: "sourceTimerange".to_owned(),
+                        })
+                    })?
+            } else {
+                let source_delta = old_target_start - new_target_start;
+                original
+                    .source_timerange
+                    .start
+                    .get()
+                    .checked_sub(source_delta)
+                    .map(Microseconds::new)
+                    .ok_or_else(|| {
+                        TimelineCommandError::new(TimelineCommandErrorKind::InvalidSplitPoint {
+                            segment_id: segment_id.clone(),
+                            split_at: target_timerange.start,
+                        })
+                    })?
+            };
             next_draft.tracks[track_index].segments[segment_index].source_timerange =
                 SourceTimerange {
                     start: new_source_start,
@@ -420,7 +464,7 @@ pub fn trim_segment(
                 };
         }
         TrimSegmentDirection::Right => {
-            if new_target_start != old_target_start || new_target_end > old_target_end {
+            if new_target_start != old_target_start {
                 return invalid_trim(&segment_id, target_timerange.start);
             }
             next_draft.tracks[track_index].segments[segment_index]
@@ -430,20 +474,25 @@ pub fn trim_segment(
     }
 
     next_draft.tracks[track_index].segments[segment_index].target_timerange = target_timerange;
+    let mut extra_events = optional_events([snap_event]);
+    if let Some(event) = apply_main_track_magnet(&mut next_draft, &track_id)? {
+        extra_events.push(event);
+    }
     validate_timeline_rules(&next_draft)?;
 
-    Ok(response(
+    Ok(response_with_events(
         next_draft,
         command_state_after_commit(command_state, draft, selection, "trimSegment"),
         TimelineSelection {
             segment_ids: vec![segment_id],
             track_ids: if selection.track_ids.is_empty() {
-                vec![draft.tracks[track_index].track_id.clone()]
+                vec![track_id]
             } else {
                 selection.track_ids.clone()
             },
         },
         "segmentTrimmed",
+        extra_events,
     ))
 }
 
@@ -456,10 +505,12 @@ pub fn delete_segment(
     let mut next_draft = draft.clone();
     let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
     validate_track_unlocked(&next_draft.tracks[track_index])?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
 
     next_draft.tracks[track_index]
         .segments
         .remove(segment_index);
+    let extra_events = optional_events([apply_main_track_magnet(&mut next_draft, &track_id)?]);
     validate_timeline_rules(&next_draft)?;
 
     let mut next_selection = selection.clone();
@@ -467,11 +518,12 @@ pub fn delete_segment(
         .segment_ids
         .retain(|selected| selected != &segment_id);
 
-    Ok(response(
+    Ok(response_with_events(
         next_draft,
         command_state_after_commit(command_state, draft, selection, "deleteSegment"),
         next_selection,
         "segmentDeleted",
+        extra_events,
     ))
 }
 
@@ -506,11 +558,22 @@ fn response(
     selection: TimelineSelection,
     event_kind: &str,
 ) -> TimelineCommandResponse {
+    response_with_events(draft, command_state, selection, event_kind, Vec::new())
+}
+
+fn response_with_events(
+    draft: Draft,
+    command_state: impl Into<CommandStateWithEvents>,
+    selection: TimelineSelection,
+    event_kind: &str,
+    extra_events: Vec<CommandEvent>,
+) -> TimelineCommandResponse {
     let command_state = command_state.into();
     let mut events = vec![CommandEvent {
         kind: event_kind.to_owned(),
         message: None,
     }];
+    events.extend(extra_events);
     events.extend(command_state.events);
     TimelineCommandResponse {
         draft,
@@ -518,6 +581,10 @@ fn response(
         selection,
         events,
     }
+}
+
+fn optional_events<const N: usize>(events: [Option<CommandEvent>; N]) -> Vec<CommandEvent> {
+    events.into_iter().flatten().collect()
 }
 
 struct CommandStateWithEvents {

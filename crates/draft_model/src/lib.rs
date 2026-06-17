@@ -306,7 +306,7 @@ pub struct SnappingSettings {
 }
 
 impl SnappingSettings {
-    pub const DEFAULT_THRESHOLD: Microseconds = Microseconds(50_000);
+    pub const DEFAULT_THRESHOLD: Microseconds = Microseconds(100_000);
 
     pub fn enabled() -> Self {
         Self {

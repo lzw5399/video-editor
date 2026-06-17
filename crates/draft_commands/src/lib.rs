@@ -8,6 +8,7 @@
 pub mod error;
 pub mod history;
 pub mod selection;
+pub mod snapping;
 pub mod timeline;
 
 pub use error::{TimelineCommandError, TimelineCommandErrorKind};

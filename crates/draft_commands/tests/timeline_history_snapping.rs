@@ -194,7 +194,12 @@ fn snapping() {
     .expect("move outside default threshold should not snap");
     let moved = segment_by_id(&not_snapped.draft, "segment-b");
     assert_eq!(moved.target_timerange.start, Microseconds::new(550_000));
-    assert!(!not_snapped.events.iter().any(|event| event.kind == "snapped"));
+    assert!(
+        !not_snapped
+            .events
+            .iter()
+            .any(|event| event.kind == "snapped")
+    );
 
     let mut override_state = state.clone();
     override_state.snapping.threshold = Microseconds::new(200_000);
@@ -220,8 +225,16 @@ fn snapping() {
     )
     .expect("right trim near next segment start should snap boundary");
     let trimmed = segment_by_id(&trim_snapped.draft, "segment-a");
-    assert_eq!(trimmed.target_timerange.duration, Microseconds::new(700_000));
-    assert!(trim_snapped.events.iter().any(|event| event.kind == "snapped"));
+    assert_eq!(
+        trimmed.target_timerange.duration,
+        Microseconds::new(700_000)
+    );
+    assert!(
+        trim_snapped
+            .events
+            .iter()
+            .any(|event| event.kind == "snapped")
+    );
 }
 
 #[test]
