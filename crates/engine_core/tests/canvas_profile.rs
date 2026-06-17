@@ -101,10 +101,7 @@ fn coordinate_conversion_uses_documented_center_origin_canvas_contract() {
             profile.canvas_height,
             NormalizedCanvasPoint { x: 1.0, y: 1.0 },
         ),
-        Some(CanvasPixelPoint {
-            x: 1_500.0,
-            y: 0.0
-        })
+        Some(CanvasPixelPoint { x: 1_500.0, y: 0.0 })
     );
     assert_eq!(
         normalized_to_canvas_pixel(
@@ -112,17 +109,18 @@ fn coordinate_conversion_uses_documented_center_origin_canvas_contract() {
             profile.canvas_height,
             NormalizedCanvasPoint { x: -1.0, y: -1.0 },
         ),
-        Some(CanvasPixelPoint {
-            x: 0.0,
-            y: 1_200.0
-        })
+        Some(CanvasPixelPoint { x: 0.0, y: 1_200.0 })
     );
 }
 
 fn draft_with_canvas(draft_id: &str, canvas_config: DraftCanvasConfig) -> Draft {
     let mut draft = Draft::new(draft_id, "Canvas Profile");
     draft.canvas_config = canvas_config;
-    draft.materials = vec![material("text-material", MaterialKind::Text, "text://caption")];
+    draft.materials = vec![material(
+        "text-material",
+        MaterialKind::Text,
+        "text://caption",
+    )];
 
     let mut text_track = Track::new("text-track", TrackKind::Text, "文字");
     let mut text = segment("text-a", "text-material", 0, 0, 1_000_000);

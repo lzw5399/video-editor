@@ -3,13 +3,13 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    Draft, DraftId, DraftValidationError, Filter, Keyframe, Material, MaterialId, MaterialKind,
-    MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentId, SourceTimerange,
-    TargetTimerange, TextSegment, TrackId, TrackKind, Transition, validate_draft,
+    CanvasBackground, Draft, DraftId, DraftValidationError, Filter, Keyframe, Material, MaterialId,
+    MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentId,
+    SourceTimerange, TargetTimerange, TextSegment, TrackId, TrackKind, Transition, validate_draft,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::TextLayoutProfile;
+use crate::{TextLayoutProfile, TextSafeArea};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -17,17 +17,35 @@ pub struct EngineProfile {
     pub frame_rate: RationalFrameRate,
     pub canvas_width: u32,
     pub canvas_height: u32,
+    pub canvas_background: CanvasBackground,
     pub text_layout: Option<TextLayoutProfile>,
 }
 
 impl EngineProfile {
+    /// Intentional MVP fallback for tests and fixtures. Production preview/export
+    /// callers should resolve profiles from `Draft.canvas_config`.
     pub fn mvp_default() -> Self {
         Self {
             frame_rate: RationalFrameRate::new(30, 1),
             canvas_width: 1920,
             canvas_height: 1080,
+            canvas_background: CanvasBackground::Black,
             text_layout: Some(TextLayoutProfile::mvp_default()),
         }
+    }
+
+    pub fn from_draft_canvas(draft: &Draft) -> Result<Self, EngineError> {
+        validate_draft(draft)?;
+        let canvas = &draft.canvas_config;
+        let profile = Self {
+            frame_rate: canvas.frame_rate.clone(),
+            canvas_width: canvas.width,
+            canvas_height: canvas.height,
+            canvas_background: canvas.background.clone(),
+            text_layout: Some(text_layout_for_canvas(canvas.width, canvas.height)),
+        };
+        profile.validate()?;
+        Ok(profile)
     }
 
     pub fn validate(&self) -> Result<(), EngineError> {
@@ -48,6 +66,17 @@ impl EngineProfile {
         }
         Ok(())
     }
+}
+
+fn text_layout_for_canvas(canvas_width: u32, canvas_height: u32) -> TextLayoutProfile {
+    let mut profile = TextLayoutProfile::mvp_default();
+    profile.safe_area = TextSafeArea {
+        left: canvas_width / 20,
+        right: canvas_width / 20,
+        top: canvas_height / 20,
+        bottom: canvas_height / 20,
+    };
+    profile
 }
 
 impl Default for EngineProfile {
