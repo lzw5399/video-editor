@@ -17,9 +17,14 @@ build:
 test:
   pnpm install --frozen-lockfile
   pnpm run test:rust
-  cargo test -p draft_model schema -- --nocapture
-  cargo test -p media_runtime discovery -- --nocapture
-  cargo test -p bindings_node -- --nocapture
-  pnpm --filter @video-editor/desktop test
-  cargo test -p testkit render_smoke -- --nocapture
-  git diff --exit-code schemas apps/desktop-electron/src/generated
+  pnpm run test:schema
+  pnpm run test:draft-fixtures
+  pnpm run test:project-store
+  pnpm run test:runtime
+  pnpm run test:material-probe
+  pnpm run test:material-service
+  pnpm run test:bindings
+  pnpm run test:desktop
+  pnpm run test:render-smoke
+  pnpm run test:phase2-source-guards
+  pnpm run test:contracts

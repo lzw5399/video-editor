@@ -15,11 +15,16 @@
     "build": "pnpm run build:rust && pnpm run build:desktop",
     "test:rust": "cargo fmt --all --check && cargo check --workspace --locked && cargo test --workspace --locked",
     "test:schema": "cargo test -p draft_model schema -- --nocapture",
+    "test:draft-fixtures": "cargo test -p draft_model schema_fixtures -- --nocapture && cargo test -p draft_model draft_fixtures -- --nocapture",
+    "test:project-store": "cargo test -p project_store create_project_bundle -- --nocapture && cargo test -p project_store round_trip -- --nocapture && cargo test -p project_store path_resolution -- --nocapture",
     "test:runtime": "cargo test -p media_runtime discovery -- --nocapture",
+    "test:material-probe": "cargo test -p media_runtime material_probe -- --nocapture && cargo test -p testkit material -- --nocapture",
+    "test:material-service": "cargo test -p bindings_node material_service -- --nocapture",
     "test:bindings": "cargo test -p bindings_node -- --nocapture",
     "test:desktop": "pnpm --filter @video-editor/desktop test",
     "test:render-smoke": "cargo test -p testkit render_smoke -- --nocapture",
+    "test:phase2-source-guards": "bash -lc 'set -euo pipefail; ! rg -n \"\\b(Asset|Clip)\\b\" crates/draft_model/src crates/bindings_node/src schemas/draft.schema.json apps/desktop-electron/src/generated; ! rg -n \"durationSeconds|duration_seconds|seconds: f32|seconds: f64|\\bf32\\b|\\bf64\\b\" crates/draft_model/src schemas/draft.schema.json apps/desktop-electron/src/generated; ! rg -n \"ffmpeg|ffprobe\" apps/desktop-electron/src; ! rg -n \"probe_material_metadata|FfmpegExecutor|ffprobe|ffmpeg|add_material|upsert_material|mark_material_(available|missing|probe_failed)\" crates/project_store/src; ! rg -n \"\\b(thumbnails|waveforms|previewCaches|renderGraph|ffmpegScripts|rawProbeJson|exports|proxyFiles|thumbnailPath|waveformPath|previewCachePath)\\b\" schemas/draft.schema.json apps/desktop-electron/src/generated/Draft.ts fixtures/draft/positive'",
     "test:contracts": "git diff --exit-code schemas apps/desktop-electron/src/generated",
-    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:runtime && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:contracts"
+    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:contracts"
   }
 }
