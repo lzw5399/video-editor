@@ -24,7 +24,7 @@
 
 - [x] **MAT-01**: User can import video, image, and audio materials into the draft.
 - [x] **MAT-02**: Imported materials receive stable IDs and retain URI, duration, fps, size, stream, and audio metadata from ffprobe.
-- [ ] **MAT-03**: Material bin displays imported materials with basic metadata and generated thumbnails where applicable.
+- [x] **MAT-03**: Material bin displays imported materials with basic metadata and generated thumbnails where applicable.
 - [x] **MAT-04**: App detects missing material files and presents a recovery/error state without corrupting the draft.
 
 ### Timeline And Commands
@@ -125,7 +125,7 @@
 | DRAFT-05 | Phase 2 | Complete |
 | MAT-01 | Phase 2 | Complete |
 | MAT-02 | Phase 2 | Complete |
-| MAT-03 | Phase 2 | Pending |
+| MAT-03 | Phase 2 | Complete |
 | MAT-04 | Phase 2 | Complete |
 | TIME-01 | Phase 3 | Pending |
 | TIME-02 | Phase 3 | Pending |
