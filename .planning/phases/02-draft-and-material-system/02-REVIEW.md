@@ -1,6 +1,6 @@
 ---
 phase: 02-draft-and-material-system
-reviewed: 2026-06-17T04:34:35Z
+reviewed: 2026-06-17T04:44:52Z
 depth: standard
 files_reviewed: 44
 files_reviewed_list:
@@ -50,67 +50,40 @@ files_reviewed_list:
   - schemas/draft.schema.json
 findings:
   critical: 0
-  warning: 2
+  warning: 0
   info: 0
-  total: 2
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 02: Code Review Report
 
-**Reviewed:** 2026-06-17T04:34:35Z
+**Reviewed:** 2026-06-17T04:44:52Z
 **Depth:** standard
 **Files Reviewed:** 44
-**Status:** issues_found
+**Status:** clean
 
 ## Narrative Findings (AI reviewer)
 
 ## Summary
 
-Reviewed the Phase 2 generated TypeScript and JSON Schema contracts, renderer smoke UI, Electron smoke tests, Node binding commands, material service, draft model/schema/validation, media probe runtime, project-store persistence/path helpers, testkit media helpers, fixtures, package scripts, and runtime boundary documentation.
+Reviewed the Phase 2 generated TypeScript and JSON Schema contracts, renderer smoke UI, Electron smoke tests, Node binding commands, material service, draft model/schema/validation, media probe runtime, project-store persistence/path helpers, testkit media helpers, fixtures, package scripts, and runtime boundary documentation at standard depth.
 
-The four prior findings are closed in the reviewed code: `save_project_bundle` validates material URIs before serializing/writing, project replacement uses a Windows `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)` path, `media_runtime` duration parsing rejects malformed fractions and overflow with checked arithmetic, and `media_runtime` frame-rate normalization rejects zero numerators. Targeted verification passed:
+All reviewed files meet quality standards. No Critical, Warning, or Info findings remain.
 
-- `cargo test -p project_store save_project_bundle -- --nocapture`
-- `cargo test -p media_runtime material_probe_rejects_malformed_json_and_invalid_frame_rates -- --nocapture`
-- `cargo test -p draft_model schema_exports_generated_contract_artifacts_from_rust -- --nocapture`
+The two prior warnings are closed in the current code:
 
-Remaining issues are contract/test-harness robustness gaps, not direct project-data loss in the current save/open path.
+- `crates/testkit/src/lib.rs` now rejects malformed duration fractions, overflowing duration arithmetic, and zero frame-rate numerators/denominators in smoke metadata parsing.
+- `schemas/draft.schema.json` and `schemas/command.schema.json` now require `RationalFrameRate.numerator` and `RationalFrameRate.denominator` to be at least `1`, with schema export tests proving zero values are rejected in both contracts.
 
-## Warnings
+Targeted verification passed:
 
-### WR-01: Testkit still accepts malformed and overflowing ffprobe durations
-
-**Classification:** WARNING
-**File:** `crates/testkit/src/lib.rs:626`
-**Issue:** The production probe parser was hardened, but the public testkit parser still uses `saturating_mul`/`saturating_add` and filters non-digits out of the fractional component. A value like `1.-5` is interpreted as `1_500_000` microseconds, and an overflowing whole-second value clamps instead of failing. Because `probe_media_metadata` is a reusable smoke helper, this can let malformed ffprobe metadata pass testkit gates and mask regressions in runtime normalization.
-**Fix:**
-```rust
-let whole_micros = whole
-    .parse::<u64>()
-    .map_err(|error| SmokeError::new(format!("invalid duration seconds `{value}`: {error}")))?
-    .checked_mul(1_000_000)
-    .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))?;
-if !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
-    return Err(SmokeError::new(format!("invalid duration fraction `{value}`")));
-}
-let fraction_micros = fraction.parse::<u64>().map_err(|error| {
-    SmokeError::new(format!("invalid duration fraction `{value}`: {error}"))
-})?;
-whole_micros
-    .checked_add(fraction_micros)
-    .ok_or_else(|| SmokeError::new(format!("duration is too large `{value}`")))
-```
-
-### WR-02: JSON Schema contracts allow frame rates the Rust model rejects
-
-**Classification:** WARNING
-**File:** `schemas/draft.schema.json:249`
-**Issue:** The committed draft schema and command schema define `RationalFrameRate.numerator` and `denominator` with `"minimum": 0`, while `validate_draft` rejects either field when it is zero. A `.veproj/project.json` containing `{"frameRate":{"numerator":0,"denominator":1}}` therefore passes the published JSON Schema but fails Rust migration/validation. That makes the contract artifacts unreliable for clients and fixture validation.
-**Fix:** Patch the schema export step to rewrite `RationalFrameRate.numerator` and `RationalFrameRate.denominator` to `"minimum": 1` in both schema outputs, update `schemas/draft.schema.json` and `schemas/command.schema.json`, and add a negative schema fixture or unit assertion proving zero numerator and zero denominator fail schema validation.
+- `cargo test -p testkit smoke_metadata_parsers_reject_malformed_duration_and_zero_frame_rate --locked`
+- `cargo test -p draft_model schema_exports_generated_contract_artifacts_from_rust --locked`
+- `cargo test -p media_runtime material_probe_rejects_malformed_json_and_invalid_frame_rates --locked`
 
 ---
 
-_Reviewed: 2026-06-17T04:34:35Z_
+_Reviewed: 2026-06-17T04:44:52Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
