@@ -9,6 +9,7 @@ use draft_model::{
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
     audio::{add_audio_segment, set_segment_volume, set_track_mute},
+    canvas::update_draft_canvas_config,
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment},
@@ -231,6 +232,12 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.track_id,
             payload.muted,
+        ),
+        CommandPayload::UpdateDraftCanvasConfig(payload) => update_draft_canvas_config(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.canvas_config,
         ),
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {
