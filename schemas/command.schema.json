@@ -1,8 +1,118 @@
 {
+  "$defs": {
+    "CommandName": {
+      "description": "Phase 1 command names supported by the Rust contract.",
+      "enum": [
+        "ping",
+        "version",
+        "probeMediaRuntime"
+      ],
+      "type": "string"
+    },
+    "CommandPayload": {
+      "description": "Phase 1 command payloads.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 1 `ping` command.",
+          "properties": {
+            "kind": {
+              "const": "ping",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 1 `version` command.",
+          "properties": {
+            "kind": {
+              "const": "version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 1 non-editing runtime probe command.",
+          "properties": {
+            "kind": {
+              "const": "probeMediaRuntime",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CommandEnvelope",
+  "additionalProperties": false,
   "description": "Rust-owned command envelope accepted by the Electron binding boundary.",
-  "type": "object",
+  "oneOf": [
+    {
+      "properties": {
+        "command": {
+          "const": "ping"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "ping"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "version"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "version"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "probeMediaRuntime"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "probeMediaRuntime"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    }
+  ],
   "properties": {
     "command": {
       "$ref": "#/$defs/CommandName"
@@ -17,67 +127,10 @@
       ]
     }
   },
-  "additionalProperties": false,
   "required": [
     "command",
     "payload"
   ],
-  "$defs": {
-    "CommandName": {
-      "description": "Phase 1 command names supported by the Rust contract.",
-      "type": "string",
-      "enum": [
-        "ping",
-        "version",
-        "probeMediaRuntime"
-      ]
-    },
-    "CommandPayload": {
-      "description": "Phase 1 command payloads.",
-      "oneOf": [
-        {
-          "description": "Payload accepted by the Phase 1 `ping` command.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "ping"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "description": "Payload accepted by the Phase 1 `version` command.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "version"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "description": "Payload accepted by the Phase 1 non-editing runtime probe command.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "probeMediaRuntime"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "kind"
-          ]
-        }
-      ]
-    }
-  }
+  "title": "CommandEnvelope",
+  "type": "object"
 }

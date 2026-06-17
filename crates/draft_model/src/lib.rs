@@ -6,6 +6,7 @@
 //! runtime service consumes them.
 
 use schemars::JsonSchema;
+use serde::de;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -13,11 +14,13 @@ use ts_rs::TS;
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
 
 /// Rust-owned command envelope accepted by the Electron binding boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommandEnvelope {
     pub command: CommandName,
     pub payload: CommandPayload,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub request_id: Option<String>,
 }
 
@@ -37,6 +40,46 @@ pub enum CommandPayload {
     Ping(PingCommandPayload),
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
+}
+
+impl CommandPayload {
+    /// Command name that must accompany this payload variant.
+    pub fn command_name(&self) -> CommandName {
+        match self {
+            Self::Ping(_) => CommandName::Ping,
+            Self::Version(_) => CommandName::Version,
+            Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for CommandEnvelope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct CommandEnvelopeFields {
+            command: CommandName,
+            payload: CommandPayload,
+            #[serde(default)]
+            request_id: Option<String>,
+        }
+
+        let fields = CommandEnvelopeFields::deserialize(deserializer)?;
+        if fields.payload.command_name() != fields.command {
+            return Err(de::Error::custom(
+                "command name does not match payload kind",
+            ));
+        }
+
+        Ok(Self {
+            command: fields.command,
+            payload: fields.payload,
+            request_id: fields.request_id,
+        })
+    }
 }
 
 /// Payload accepted by the Phase 1 `ping` command.

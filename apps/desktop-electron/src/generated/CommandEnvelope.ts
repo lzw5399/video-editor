@@ -5,4 +5,4 @@ export type PingCommandPayload = Record<symbol, never>;
 export type VersionCommandPayload = Record<symbol, never>;
 export type ProbeMediaRuntimeCommandPayload = Record<symbol, never>;
 export type CommandPayload = { "kind": "ping" } & PingCommandPayload | { "kind": "version" } & VersionCommandPayload | { "kind": "probeMediaRuntime" } & ProbeMediaRuntimeCommandPayload;
-export type CommandEnvelope = { command: CommandName, payload: CommandPayload, requestId: string | null, };
+export type CommandEnvelope = { command: CommandName, payload: CommandPayload, requestId?: string | null, };

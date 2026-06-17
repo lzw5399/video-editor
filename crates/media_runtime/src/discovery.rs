@@ -1,10 +1,10 @@
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::DiscoveryError;
+use crate::{DEFAULT_PROCESS_TIMEOUT, DiscoveryError, run_process_with_timeout};
 
 /// Maximum bytes retained from external process stdout/stderr summaries.
 pub const MAX_STDERR_SUMMARY_BYTES: usize = 4096;
@@ -102,17 +102,25 @@ pub fn probe_binary_version(
     path: PathBuf,
     source: DiscoverySource,
 ) -> Result<DiscoveredBinary, DiscoveryError> {
-    let output = Command::new(&path)
-        .args(["-version"])
-        .output()
-        .map_err(|error| {
-            DiscoveryError::version_probe_failed(
-                kind,
-                vec![path.clone()],
-                None,
-                Some(summarize_output(error.to_string().as_bytes())),
-            )
-        })?;
+    probe_binary_version_with_timeout(kind, path, source, DEFAULT_PROCESS_TIMEOUT)
+}
+
+/// Run a `-version` probe with an explicit timeout.
+pub fn probe_binary_version_with_timeout(
+    kind: BinaryKind,
+    path: PathBuf,
+    source: DiscoverySource,
+    timeout: Duration,
+) -> Result<DiscoveredBinary, DiscoveryError> {
+    let args = vec!["-version".to_string()];
+    let output = run_process_with_timeout(&path, &args, timeout).map_err(|error| {
+        DiscoveryError::version_probe_failed(
+            kind,
+            vec![path.clone()],
+            None,
+            Some(summarize_output(error.to_string().as_bytes())),
+        )
+    })?;
 
     let stdout_summary = optional_summary(&output.stdout);
     let stderr_summary = optional_summary(&output.stderr);

@@ -107,7 +107,7 @@ impl TinyRenderSmoke {
 /// Generate a tiny deterministic MP4 using FFmpeg lavfi sources.
 pub fn generate_tiny_lavfi_media() -> SmokeResult<TinyLavfiMedia> {
     let runtime = discover_runtime_config()?;
-    let executor = DesktopFfmpegExecutor;
+    let executor = DesktopFfmpegExecutor::default();
     let temp_dir = tempfile::Builder::new()
         .prefix("media-generated-")
         .tempdir()?;
@@ -150,7 +150,7 @@ pub fn probe_media_metadata(path: impl AsRef<Path>) -> SmokeResult<SmokeMetadata
     }
 
     let runtime = discover_runtime_config()?;
-    let executor = DesktopFfmpegExecutor;
+    let executor = DesktopFfmpegExecutor::default();
     let args = vec![
         "-v".to_string(),
         "error".to_string(),

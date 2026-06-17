@@ -60,9 +60,18 @@ constraints before shipping.
 
 `media_runtime_desktop::DesktopFfmpegExecutor` is the desktop implementation
 shell for `media_runtime::FfmpegExecutor`. It represents the Electron desktop
-backend injection point. Later discovery work will add version probes,
-structured missing-binary errors, checked paths, bounded stderr summaries, and
-argument-array process execution through this boundary.
+backend injection point.
+
+`media_runtime` already owns FFmpeg/ffprobe discovery, version probes,
+structured missing-binary and probe errors, checked paths, bounded stdout/stderr
+summaries, and command/payload-safe runtime probe contracts. Desktop execution
+uses argument-array process launches through `DesktopFfmpegExecutor`; process
+waits are bounded so renderer-triggered probes and testkit smoke runs cannot
+hang indefinitely.
+
+Deferred runtime work includes packaged binary management, per-job cancellation,
+progress streams, app-level timeout policy, and license review for any later
+redistributed FFmpeg build.
 
 ## Project Store Runtime
 

@@ -10,6 +10,7 @@ use draft_model::{
     VersionCommandPayload,
 };
 use schemars::schema_for;
+use serde_json::json;
 use ts_rs::{Config, TS};
 
 fn project_root() -> PathBuf {
@@ -150,5 +151,50 @@ fn read_fixture(fixture_dir: &Path, fixture_name: &str) -> serde_json::Value {
 
 fn command_schema_json() -> String {
     let schema = schema_for!(CommandEnvelope);
-    serde_json::to_string_pretty(&schema).expect("command schema should serialize")
+    let mut schema_value =
+        serde_json::to_value(schema).expect("command schema should serialize to JSON value");
+    schema_value
+        .as_object_mut()
+        .expect("command schema should be a JSON object")
+        .insert("oneOf".to_string(), command_payload_pairing_constraints());
+
+    serde_json::to_string_pretty(&schema_value).expect("command schema should serialize")
+}
+
+fn command_payload_pairing_constraints() -> serde_json::Value {
+    json!([
+        {
+            "properties": {
+                "command": { "const": "ping" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "ping" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "version" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "version" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "probeMediaRuntime" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "probeMediaRuntime" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        }
+    ])
 }

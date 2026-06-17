@@ -5,13 +5,31 @@
 //! download, bundle, or redistribute FFmpeg in this plan.
 
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
+use std::time::Duration;
 
-use media_runtime::FfmpegExecutor;
+use media_runtime::{DEFAULT_PROCESS_TIMEOUT, FfmpegExecutor, run_process_with_timeout};
 
 /// Desktop FFmpeg executor shell.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct DesktopFfmpegExecutor;
+#[derive(Debug, Clone, Copy)]
+pub struct DesktopFfmpegExecutor {
+    timeout: Duration,
+}
+
+impl Default for DesktopFfmpegExecutor {
+    fn default() -> Self {
+        Self {
+            timeout: DEFAULT_PROCESS_TIMEOUT,
+        }
+    }
+}
+
+impl DesktopFfmpegExecutor {
+    /// Create a desktop executor with a custom process timeout.
+    pub fn with_timeout(timeout: Duration) -> Self {
+        Self { timeout }
+    }
+}
 
 impl FfmpegExecutor for DesktopFfmpegExecutor {
     fn executor_name(&self) -> &'static str {
@@ -23,11 +41,12 @@ impl FfmpegExecutor for DesktopFfmpegExecutor {
     }
 
     fn run_version_probe(&self, binary: &Path) -> std::io::Result<Output> {
-        Command::new(binary).args(["-version"]).output()
+        let args = vec!["-version".to_string()];
+        run_process_with_timeout(binary, &args, self.timeout)
     }
 
     fn run(&self, binary: &Path, args: &[String]) -> std::io::Result<Output> {
-        Command::new(binary).args(args).output()
+        run_process_with_timeout(binary, args, self.timeout)
     }
 }
 
