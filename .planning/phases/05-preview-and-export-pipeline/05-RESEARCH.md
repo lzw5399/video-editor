@@ -515,22 +515,17 @@ Existing material probing already parses ffprobe JSON stream and format metadata
 | A2 | Font rasterization and FFmpeg builds can prevent byte-perfect cross-machine text/video assertions. | Anti-Patterns, Common Pitfalls | Planner might create brittle CI goldens that fail on another OS or FFmpeg package. |
 | A3 | Cache invalidation errors commonly come from missing range/fingerprint indexes. | Common Pitfalls | Planner might under-specify cache metadata and create stale preview bugs. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Which test font should be the Phase 5 deterministic default?**
-   - What we know: Local macOS has `/System/Library/Fonts/Supplemental/Arial Unicode.ttf`; local FFmpeg has `fontconfig`, `libfreetype`, and `libass` enabled. [VERIFIED: local font search; VERIFIED: local `ffmpeg -version`; VERIFIED: local `ffmpeg -filters`]
-   - What's unclear: CI's installed `ffmpeg` and fonts may differ after apt install. [VERIFIED: .github/workflows/ci.yml]
-   - Recommendation: Add a render capability/font probe in Wave 0; prefer `VE_TEXT_FONT_PATH` for deterministic tests and install/check a known system font in CI only if needed. [RECOMMENDED]
+1. **Which test font is the Phase 5 deterministic default?**
+   - Resolution: Phase 5 uses an explicit `TextLayoutProfile` instead of ambient font discovery. The profile default is `PingFang SC` for the desktop product language, with deterministic fallback candidates checked in order: `VE_TEXT_FONT_PATH`, `/System/Library/Fonts/PingFang.ttc`, `/System/Library/Fonts/Supplemental/Arial Unicode.ttf`, `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`, then `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf`. [RESOLVED]
+   - Behavior: if none of the configured candidates can be resolved by the runtime/compiler capability probe, preview/export returns a classified text font limitation instead of silently selecting a different font. Tests may set `VE_TEXT_FONT_PATH` to pin a host-specific font path without changing `.veproj/project.json`. [RESOLVED]
 
-2. **Where should long-running job state live?**
-   - What we know: `bindings_node` currently routes synchronous command envelopes and composes desktop runtime services. [VERIFIED: crates/bindings_node/src/lib.rs]
-   - What's unclear: Whether the planner wants export job registry inside `bindings_node` or a reusable Rust service crate. [ASSUMED]
-   - Recommendation: Put reusable job state and cancellation contracts in `media_runtime`/`preview_service`, with a thin `bindings_node` registry for Electron command IDs. [RECOMMENDED]
+2. **Where should preview/export job state live?**
+   - Resolution: preview cache/request state lives in `preview_service`; streaming export progress, cancel tokens, bounded logs, runtime error classification, and output validation primitives live in `media_runtime`; `bindings_node::preview_export_service` owns only the Electron-facing in-process job registry that maps command IDs to Rust job IDs/status. The renderer stores only display state such as playhead, selected output path, job id, and last status. [RESOLVED]
 
-3. **How strict should frame parity be?**
-   - What we know: Requirement allows documented tolerance rather than byte-perfect comparison. [VERIFIED: 05-CONTEXT.md]
-   - What's unclear: Exact tolerance threshold for pixel diffs. [ASSUMED]
-   - Recommendation: Start with dimensions, timestamp, metadata, and small mean absolute pixel tolerance within the same local runtime; avoid cross-host byte-perfect assertions. [RECOMMENDED]
+3. **How strict should preview/export parity be?**
+   - Resolution: Phase 5 parity is not byte-perfect. The documented MVP tolerance is exact width/height and expected frame index, timestamp within one output frame duration, mean absolute RGB delta <= 8.0, and 99th percentile RGB delta <= 24 when comparing preview frame output to the matching exported frame under the same local FFmpeg/runtime. Missing filters, encoders, or fonts are classified setup failures, not silent skips. [RESOLVED]
 
 ## Environment Availability
 

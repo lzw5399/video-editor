@@ -186,14 +186,42 @@ Plans:
   3. User can export H.264 MP4 with progress, cancellation, logs, and classified errors.
   4. Golden tests cover normalized draft, frame state, render graph, FFmpeg script, preview/export parity, and output metadata.
 
-**Plans**: 4 plans
+**Plans**: 9 plans
 
 Plans:
 
-- [ ] 05-01-PLAN.md - Implement normalization, resolved frame state, and text layout determinism
-- [ ] 05-02-PLAN.md - Implement typed render graph and FFmpeg compiler snapshots
-- [ ] 05-03-PLAN.md - Implement preview frame/segment cache, bindings/UI integration, and source guards
-- [ ] 05-04-PLAN.md - Implement MP4 export runtime, bindings/UI integration, parity gates, and final validation
+**Wave 1**
+
+- [ ] 05-01-PLAN.md - Implement engine_core normalization, frame state, and deterministic text layout
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md - Implement the typed renderer-neutral render graph
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-03-PLAN.md - Implement FFmpeg compiler jobs, filters, ASS sidecars, and snapshots
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-04-PLAN.md - Implement preview_service cache, generation, and invalidation
+- [ ] 05-07-PLAN.md - Implement export runtime progress, cancel, logs, and output validation
+
+**Wave 5** *(blocked on Wave 4 preview completion)*
+
+- [ ] 05-05-PLAN.md - Add preview command contracts, binding routes, and renderer envelope helpers
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 05-06-PLAN.md - Add preview UI, source guards, and automated screenshots
+
+**Wave 7** *(blocked on Wave 6 and export runtime completion)*
+
+- [ ] 05-08-PLAN.md - Add export contracts, binding registry, UI, and automated screenshots
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 05-09-PLAN.md - Add preview/export parity, final source guards, and root gates
 
 ### Phase 6: MVP Hardening And Packaging
 
@@ -228,5 +256,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6
 | 3. Timeline Command Core | 5/5 | Complete    | 2026-06-17 |
 | 4. Jianying-Style Desktop Workspace | 4/4 | Complete    | 2026-06-17 |
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
-| 5. Preview And Export Pipeline | 0/4 | Not started | - |
+| 5. Preview And Export Pipeline | 0/9 | Not started | - |
 | 6. MVP Hardening And Packaging | 0/3 | Not started | - |
