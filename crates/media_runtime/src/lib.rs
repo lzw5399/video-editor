@@ -7,6 +7,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::Output;
 
+mod capabilities;
 mod discovery;
 mod error;
 mod job;
@@ -14,6 +15,11 @@ mod probe;
 mod process;
 mod validate;
 
+pub use capabilities::{
+    RuntimeBinaryCapability, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture,
+    probe_runtime_capabilities,
+};
 pub use discovery::{
     BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
     discover_runtime_config, probe_binary_version, probe_binary_version_with_timeout,

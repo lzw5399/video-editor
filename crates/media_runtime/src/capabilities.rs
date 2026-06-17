@@ -1,0 +1,338 @@
+use std::env;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    BinaryKind, DiscoveredBinary, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeCapabilityStatus {
+    Ready,
+    Warning,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeBinaryCapability {
+    pub kind: BinaryKind,
+    pub path: PathBuf,
+    pub source: String,
+    pub version: String,
+    pub configure_summary: Option<String>,
+    pub status: RuntimeCapabilityStatus,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeFeatureCapability {
+    pub name: String,
+    pub available: bool,
+    pub status: RuntimeCapabilityStatus,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeFontCapability {
+    pub env_text_font_path: Option<PathBuf>,
+    pub available_font_paths: Vec<PathBuf>,
+    pub status: RuntimeCapabilityStatus,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeLicensePosture {
+    pub external_runtime: bool,
+    pub redistributable_build: bool,
+    pub source: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCapabilityReport {
+    pub status: RuntimeCapabilityStatus,
+    pub executor_name: String,
+    pub ffmpeg: RuntimeBinaryCapability,
+    pub ffprobe: RuntimeBinaryCapability,
+    pub h264_encoder: RuntimeFeatureCapability,
+    pub aac_encoder: RuntimeFeatureCapability,
+    pub ass_filter: RuntimeFeatureCapability,
+    pub subtitles_filter: RuntimeFeatureCapability,
+    pub font_readiness: RuntimeFontCapability,
+    pub license_posture: RuntimeLicensePosture,
+    pub diagnostics: Vec<String>,
+}
+
+pub fn probe_runtime_capabilities(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+) -> RuntimeCapabilityReport {
+    let ffmpeg = binary_capability(executor, &runtime.ffmpeg);
+    let ffprobe = binary_capability(executor, &runtime.ffprobe);
+
+    let encoders_probe = run_ffmpeg_probe(executor, runtime, &["-hide_banner", "-encoders"]);
+    let filters_probe = run_ffmpeg_probe(executor, runtime, &["-hide_banner", "-filters"]);
+
+    let h264_encoder = feature_capability(
+        "H.264",
+        probe_output_has_feature(encoders_probe.as_deref().unwrap_or_default(), "libx264")
+            || probe_output_has_feature(encoders_probe.as_deref().unwrap_or_default(), "h264"),
+        encoders_probe.as_ref().err(),
+        "当前 FFmpeg 不支持 H.264 导出，请更换可用构建。",
+    );
+    let aac_encoder = feature_capability(
+        "AAC",
+        probe_output_has_feature(encoders_probe.as_deref().unwrap_or_default(), "aac"),
+        encoders_probe.as_ref().err(),
+        "当前 FFmpeg 不支持 AAC 导出，请更换可用构建。",
+    );
+    let ass_filter = feature_capability(
+        "ASS",
+        probe_output_has_feature(filters_probe.as_deref().unwrap_or_default(), "ass"),
+        filters_probe.as_ref().err(),
+        "当前 FFmpeg 缺少 ASS 字幕滤镜，文字预览和导出可能受限。",
+    );
+    let subtitles_filter = feature_capability(
+        "subtitles",
+        probe_output_has_feature(filters_probe.as_deref().unwrap_or_default(), "subtitles"),
+        filters_probe.as_ref().err(),
+        "当前 FFmpeg 缺少 subtitles 字幕滤镜，文字预览和导出可能受限。",
+    );
+    let font_readiness = font_capability();
+
+    let mut diagnostics = Vec::new();
+    collect_diagnostic(&mut diagnostics, &ffmpeg.diagnostic);
+    collect_diagnostic(&mut diagnostics, &ffprobe.diagnostic);
+    collect_diagnostic(&mut diagnostics, &h264_encoder.diagnostic);
+    collect_diagnostic(&mut diagnostics, &aac_encoder.diagnostic);
+    collect_diagnostic(&mut diagnostics, &ass_filter.diagnostic);
+    collect_diagnostic(&mut diagnostics, &subtitles_filter.diagnostic);
+    collect_diagnostic(&mut diagnostics, &font_readiness.diagnostic);
+
+    let status = aggregate_status([
+        ffmpeg.status,
+        ffprobe.status,
+        h264_encoder.status,
+        aac_encoder.status,
+        ass_filter.status,
+        subtitles_filter.status,
+        font_readiness.status,
+    ]);
+
+    RuntimeCapabilityReport {
+        status,
+        executor_name: executor.executor_name().to_owned(),
+        ffmpeg,
+        ffprobe,
+        h264_encoder,
+        aac_encoder,
+        ass_filter,
+        subtitles_filter,
+        font_readiness,
+        license_posture: RuntimeLicensePosture {
+            external_runtime: true,
+            redistributable_build: false,
+            source: "externalRuntime".to_owned(),
+            message: "当前使用本机 FFmpeg，仅用于本地测试，不代表可再发行构建。".to_owned(),
+        },
+        diagnostics,
+    }
+}
+
+fn binary_capability(
+    executor: &impl FfmpegExecutor,
+    binary: &DiscoveredBinary,
+) -> RuntimeBinaryCapability {
+    let version_probe = executor.run_version_probe(&binary.path);
+    let configure_summary = version_probe.as_ref().ok().and_then(|output| {
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        combined
+            .lines()
+            .find(|line| line.trim_start().starts_with("configuration:"))
+            .map(|line| bound_text(line.trim()))
+    });
+
+    let diagnostic = match version_probe {
+        Ok(output) if output.status.success() => None,
+        Ok(output) => Some(format!(
+            "{} 版本探测失败：stdout=`{}` stderr=`{}`",
+            binary.kind.binary_name(),
+            bounded_summary(&output.stdout),
+            bounded_summary(&output.stderr)
+        )),
+        Err(error) => Some(format!(
+            "{} 版本探测启动失败：{error}",
+            binary.kind.binary_name()
+        )),
+    };
+
+    RuntimeBinaryCapability {
+        kind: binary.kind,
+        path: binary.path.clone(),
+        source: source_label(binary),
+        version: binary.version.clone(),
+        configure_summary,
+        status: if diagnostic.is_some() {
+            RuntimeCapabilityStatus::Warning
+        } else {
+            RuntimeCapabilityStatus::Ready
+        },
+        diagnostic,
+    }
+}
+
+fn source_label(binary: &DiscoveredBinary) -> String {
+    match &binary.source {
+        crate::DiscoverySource::Env { variable } => variable.clone(),
+        crate::DiscoverySource::Path => "PATH".to_owned(),
+    }
+}
+
+fn run_ffmpeg_probe(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+    args: &[&str],
+) -> Result<String, String> {
+    let args = args.iter().map(OsString::from).collect::<Vec<_>>();
+    let output = executor
+        .run(&runtime.ffmpeg.path, &args)
+        .map_err(|error| format!("FFmpeg 能力探测启动失败：{error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "FFmpeg 能力探测失败：stdout=`{}` stderr=`{}`",
+            bounded_summary(&output.stdout),
+            bounded_summary(&output.stderr)
+        ));
+    }
+
+    Ok(format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    ))
+}
+
+fn feature_capability(
+    name: &str,
+    available: bool,
+    probe_error: Option<&String>,
+    missing_message: &str,
+) -> RuntimeFeatureCapability {
+    let diagnostic = if let Some(error) = probe_error {
+        Some(error.clone())
+    } else if available {
+        None
+    } else {
+        Some(missing_message.to_owned())
+    };
+
+    RuntimeFeatureCapability {
+        name: name.to_owned(),
+        available,
+        status: if available {
+            RuntimeCapabilityStatus::Ready
+        } else {
+            RuntimeCapabilityStatus::Warning
+        },
+        diagnostic,
+    }
+}
+
+fn font_capability() -> RuntimeFontCapability {
+    let env_text_font_path = env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from);
+    let available_font_paths = resolved_text_font_paths()
+        .into_iter()
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    let diagnostic = if available_font_paths.is_empty() {
+        Some("字体环境未完全就绪，文字渲染可能与导出结果不一致。".to_owned())
+    } else {
+        None
+    };
+
+    RuntimeFontCapability {
+        env_text_font_path,
+        available_font_paths,
+        status: if diagnostic.is_some() {
+            RuntimeCapabilityStatus::Warning
+        } else {
+            RuntimeCapabilityStatus::Ready
+        },
+        diagnostic,
+    }
+}
+
+fn resolved_text_font_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(path) = env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from) {
+        paths.push(path);
+    }
+    paths.extend([
+        PathBuf::from("/System/Library/Fonts/PingFang.ttc"),
+        PathBuf::from("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+        PathBuf::from("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        PathBuf::from("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    ]);
+    paths
+}
+
+fn probe_output_has_feature(output: &str, feature: &str) -> bool {
+    output.lines().any(|line| {
+        line.split_whitespace()
+            .any(|field| field == feature || field == format!("{feature},"))
+    })
+}
+
+fn aggregate_status(
+    statuses: impl IntoIterator<Item = RuntimeCapabilityStatus>,
+) -> RuntimeCapabilityStatus {
+    let mut has_warning = false;
+    for status in statuses {
+        match status {
+            RuntimeCapabilityStatus::Unavailable => return RuntimeCapabilityStatus::Unavailable,
+            RuntimeCapabilityStatus::Warning => has_warning = true,
+            RuntimeCapabilityStatus::Ready => {}
+        }
+    }
+    if has_warning {
+        RuntimeCapabilityStatus::Warning
+    } else {
+        RuntimeCapabilityStatus::Ready
+    }
+}
+
+fn collect_diagnostic(diagnostics: &mut Vec<String>, diagnostic: &Option<String>) {
+    if let Some(diagnostic) = diagnostic {
+        diagnostics.push(diagnostic.clone());
+    }
+}
+
+fn bounded_summary(bytes: &[u8]) -> String {
+    bound_text(String::from_utf8_lossy(bytes).trim())
+}
+
+fn bound_text(value: &str) -> String {
+    let mut summary = String::new();
+    for character in value.chars() {
+        if summary.len() + character.len_utf8() > MAX_STDERR_SUMMARY_BYTES {
+            break;
+        }
+        summary.push(character);
+    }
+    summary
+}
+
+#[allow(dead_code)]
+fn _assert_path_send_sync(_: &Path) {}
