@@ -10,8 +10,8 @@ progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 33
-  completed_plans: 30
-  percent: 91
+  completed_plans: 31
+  percent: 94
 ---
 
 # Project State
@@ -30,15 +30,15 @@ Plan: Not started
 Status: Ready for planning
 Last activity: 2026-06-17 -- Phase 04.1 completed; Phase 05 ready for planning
 
-Progress: [█████████-] 91%
+Progress: [█████████-] 94%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 30
+- Total plans completed: 31
 - Average duration: 7 min
-- Total execution time: 227 min
+- Total execution time: 240 min
 
 **By Phase:**
 
@@ -79,6 +79,7 @@ Progress: [█████████-] 91%
 | Phase 03.1 P01 | 8 min | 2 tasks | 10 files |
 | Phase 03.1 P02 | 10 min | 2 tasks | 11 files |
 | Phase 03.1 P03 | 8 min | 2 tasks | 11 files |
+| Phase 03.1 P04 | 13min | 2 tasks | 17 files |
 | Phase 04.1 P01 | 7 min | 2 tasks | 5 files |
 | Phase 04.1 P02 | 7 min | 2 tasks | 3 files |
 | Phase 04.1 P03 | 9 min | 2 tasks | 4 files |
@@ -149,6 +150,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: Compatibility reports remain adapter-owned external import diagnostics and are not persisted into .veproj/project.json. — Plan 03.1-03 establishes report schema and snapshots without changing canonical draft persistence.
 - [Phase 03.1]: Native provider effects produce explicit needsNativeEffect diagnostics instead of generic filter parameters. — Plan 03.1-03 protects compatibility honesty before mapper work begins.
 - [Phase 03.1]: Report snapshots live under fixtures/kaipai/expected-reports and formula fixture classification remains scoped to positive/negative formula inputs. — This keeps formula fixtures and report snapshots as separate corpora.
+- [Phase 03.1]: Resource localization stays adapter-owned and emits local resources plus missingResource diagnostics without adding Kaipai concepts to project_store. — Plan 03.1-04 establishes safe .veproj/resources localization for offline formula assets.
+- [Phase 03.1]: Compatibility report snapshots use provider-neutral offlineFormulaBundle sourceKind. — This keeps fixture source guards able to reject raw kaipaiFormula leakage while preserving adapter-owned report semantics.
 - [Phase 04.1]: Used dependency-free text symbols for workspace categories to avoid package and lockfile churn. — Plan 04.1-01 explicitly prohibited new package dependencies for icons.
 - [Phase 04.1]: Kept category switching as UI-only state through onCategoryChange while material/text/audio mutations stay on App-owned callbacks. — This preserves UI-12 and the Rust-owned command boundary.
 - [Phase 04.1]: Kept media search and filters local to display state; they do not mutate Rust-owned draft or material semantics. — Search/filter UI is panel presentation only and does not change canonical draft state.
