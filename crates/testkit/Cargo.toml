@@ -10,7 +10,12 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+draft_model = { path = "../draft_model" }
+engine_core = { path = "../engine_core" }
+ffmpeg_compiler = { path = "../ffmpeg_compiler" }
 media_runtime = { path = "../media_runtime" }
 media_runtime_desktop = { path = "../media_runtime_desktop" }
+preview_service = { path = "../preview_service" }
+render_graph = { path = "../render_graph" }
 serde_json = "1.0.150"
 tempfile = "3.27.0"

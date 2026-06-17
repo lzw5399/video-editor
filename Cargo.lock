@@ -1099,8 +1099,13 @@ dependencies = [
 name = "testkit"
 version = "0.1.0"
 dependencies = [
+ "draft_model",
+ "engine_core",
+ "ffmpeg_compiler",
  "media_runtime",
  "media_runtime_desktop",
+ "preview_service",
+ "render_graph",
  "serde_json",
  "tempfile",
 ]
