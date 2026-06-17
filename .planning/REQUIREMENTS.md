@@ -71,7 +71,7 @@
 - [x] **UI-08**: Left resource/function panel uses a narrow category tree plus content area with import, search, sort/filter, compact material cards, and visible deferred feature states.
 - [x] **UI-09**: Center preview shell has a professional monitor structure with title bar, black video canvas, bottom playback controls, fit/ratio/fullscreen controls, and reserved preview-frame integration points.
 - [x] **UI-10**: Right inspector uses Jianying-style primary tabs, compact rows, sliders, numeric inputs, switches, color swatches, keyframe placeholders, draft parameters when nothing is selected, and segment-specific controls when selected.
-- [ ] **UI-11**: Timeline uses a compact icon toolbar, track headers with lock/visibility/mute state, realistic video/audio/text segment blocks, stable ruler/playhead/snapping/zoom controls, and no layout jump on hover or selection.
+- [x] **UI-11**: Timeline uses a compact icon toolbar, track headers with lock/visibility/mute state, realistic video/audio/text segment blocks, stable ruler/playhead/snapping/zoom controls, and no layout jump on hover or selection.
 - [x] **UI-12**: Professional workspace refinement preserves the command-only renderer boundary and does not introduce renderer-owned draft mutation, undo/redo semantics, FFmpeg commands, render graphs, export scripts, or preview cache semantics.
 
 ### Testing And Quality
@@ -165,7 +165,7 @@
 | UI-08 | Phase 04.1 | Complete |
 | UI-09 | Phase 04.1 | Complete |
 | UI-10 | Phase 04.1 | Complete |
-| UI-11 | Phase 04.1 | Pending |
+| UI-11 | Phase 04.1 | Complete |
 | UI-12 | Phase 04.1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 3 | Complete |
