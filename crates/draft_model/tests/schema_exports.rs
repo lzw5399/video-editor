@@ -421,9 +421,10 @@ fn assert_or_update_contract_file(path: impl AsRef<Path>, expected: &str) {
 fn schema_fixtures_validate_command_contracts() {
     let root = project_root();
     let fixture_dir = root.join("fixtures/draft");
-    let positive = BTreeSet::from(["minimal-command.json"]);
+    let positive = BTreeSet::from(["minimal-command.json", "minimal-timeline-command.json"]);
     let negative = BTreeSet::from([
         "invalid-mismatched-command-payload.json",
+        "invalid-timeline-command.json",
         "invalid-unknown-field.json",
     ]);
 
