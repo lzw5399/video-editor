@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-06-17T03:06:20.000Z"
-last_activity: 2026-06-17 -- Phase 02 Plan 05 completed
+status: verifying
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-06-17T03:32:23.000Z"
+last_activity: 2026-06-17 -- Phase 02 Plan 06 completed
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -25,20 +25,20 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 02 (draft-and-material-system) — EXECUTING
+Phase: 02 (draft-and-material-system) — VERIFYING
 Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-06-17 -- Phase 02 Plan 05 completed
+Status: Phase complete — ready for verification
+Last activity: 2026-06-17 -- Phase 02 Plan 06 completed
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: 7 min
-- Total execution time: 89 min
+- Total execution time: 109 min
 
 **By Phase:**
 
@@ -48,7 +48,7 @@ Progress: [█████████░] 93%
 
 **Recent Trend:**
 
-- Last 5 plans: 55 min
+- Last 5 plans: 66 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -62,6 +62,7 @@ Progress: [█████████░] 93%
 | Phase 02 P03 | 9 min | 2 tasks | 7 files |
 | Phase 02 P04 | 9 min | 2 tasks | 12 files |
 | Phase 02 P05 | 18 min | 2 tasks | 11 files |
+| Phase 02 P06 | 20 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Plan 04 generated draft schema and TypeScript draft contracts from Rust semantic types. — `schemas/draft.schema.json` and `Draft.ts` now expose material metadata/status while excluding derived thumbnails, waveform data, raw probe JSON, render graphs, preview caches, and export artifacts.
 - [Phase 02]: Plan 05 exposed material import/list/missing commands through `execute_command`. — The binding routes generated Rust-owned command contracts to `material_service` and returns standardized ok/error/events envelopes for material metadata and missing diagnostics.
 - [Phase 02]: Plan 05 kept Electron as a smoke surface for material metadata. — The renderer displays material rows returned by the generated `listMaterials` command without direct FFmpeg/ffprobe command construction or direct `.veproj/project.json` mutation.
+- [Phase 02]: Plan 06 made classified project fixtures and named final gates the executable proof for the draft/material system. — Positive and negative `.veproj/project.json` fixtures, Phase 2 gate scripts, source guards, and generated-contract drift checks now close DRAFT-01 through MAT-04.
 
 ### Pending Todos
 
@@ -121,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T03:06:20.000Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-06-17T03:32:23.000Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
