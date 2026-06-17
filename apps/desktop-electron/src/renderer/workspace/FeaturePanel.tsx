@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { Material, TextAlignment, TextSegment } from "../../generated/Draft";
 import {
@@ -35,19 +35,6 @@ type FeaturePanelProps = {
 type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
-const SECONDARY_CATEGORY_GROUPS: Record<WorkspaceCategory, readonly string[]> = {
-  媒体: ["导入", "我的", "AI生成", "云素材", "官方素材", "即梦AI"],
-  音频: ["BGM", "音效", "提取音频", "收藏"],
-  文字: ["默认", "花字", "模板", "智能字幕"],
-  贴纸: ["热门", "收藏", "贴纸库"],
-  特效: ["视频特效", "人物特效", "收藏"],
-  转场: ["基础", "运镜", "遮罩"],
-  字幕: ["识别字幕", "本地字幕", "样式"],
-  滤镜: ["人像", "风景", "电影"],
-  调节: ["基础", "HSL", "曲线"],
-  模板: ["本地", "收藏", "在线"],
-  数字人: ["形象", "声音", "项目"]
-};
 
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   let content: React.ReactElement;
@@ -64,36 +51,8 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
 
   return (
     <div className="resource-panel-shell">
-      <SecondaryCategoryRail category={props.category} />
       <div className="resource-content-panel">{content}</div>
     </div>
-  );
-}
-
-function SecondaryCategoryRail({ category }: { category: WorkspaceCategory }): React.ReactElement {
-  const groups = SECONDARY_CATEGORY_GROUPS[category];
-  const [activeGroup, setActiveGroup] = useState(groups[0]);
-
-  useEffect(() => {
-    setActiveGroup(groups[0]);
-  }, [category, groups]);
-
-  return (
-    <nav className="secondary-category-rail" aria-label={`${category}二级分类`}>
-      {groups.map((group) => (
-        <button
-          key={group}
-          type="button"
-          className={group === activeGroup ? "secondary-category-button active" : "secondary-category-button"}
-          aria-label={`${category}二级分类：${group}`}
-          aria-pressed={group === activeGroup}
-          title={`${category}二级分类：${group}`}
-          onClick={() => setActiveGroup(group)}
-        >
-          {group}
-        </button>
-      ))}
-    </nav>
   );
 }
 

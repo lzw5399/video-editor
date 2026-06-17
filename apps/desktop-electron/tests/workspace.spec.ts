@@ -212,10 +212,17 @@ async function expectPreviewCanvasAspectRatio(page: Page): Promise<void> {
   expect(Math.abs(ratio - 16 / 9), "预览画面保持 16:9").toBeLessThanOrEqual(0.04);
 }
 
+async function expectNoLeftSecondaryMenu(page: Page): Promise<void> {
+  await expect(page.locator(".secondary-category-rail")).toHaveCount(0);
+  await expect(page.locator(".secondary-category-button")).toHaveCount(0);
+  for (const category of WORKSPACE_CATEGORIES) {
+    await expect(page.getByRole("navigation", { name: `${category}二级分类` })).toHaveCount(0);
+  }
+}
+
 async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
-    ".secondary-category-button",
     ".preview-icon-button",
     ".transport-button.icon-only",
     ".track-state-button",
@@ -273,13 +280,9 @@ test("Chinese editor workspace opens with required regions and material states",
     }
     await expectNoCategoryLabelWrap(page);
     await expectIconButtonsHaveAccessibleNames(page);
+    await expectNoLeftSecondaryMenu(page);
 
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "媒体二级分类" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "媒体二级分类：导入" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "媒体二级分类：我的" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "媒体二级分类：AI生成" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "媒体二级分类：云素材" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "资源分类" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
     await expect(page.getByRole("button", { name: "检查丢失" })).toBeVisible();
@@ -329,24 +332,20 @@ test("workspace panels switch categories without losing Chinese empty states", a
 
     await topFeatureNav.getByRole("button", { name: "文字" }).click();
     await expect(page.getByRole("heading", { name: "文字" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "文字二级分类" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "文字二级分类：默认" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "文字二级分类：智能字幕" })).toBeVisible();
+    await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
     await expect(page.getByLabel("文字对齐")).toBeVisible();
 
     await topFeatureNav.getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "音频二级分类" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "音频二级分类：BGM" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "音频二级分类：提取音频" })).toBeVisible();
+    await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加音频" })).toBeVisible();
     await expect(page.getByText("音量与静音")).toBeVisible();
 
     for (const category of DEFERRED_CATEGORIES) {
       await topFeatureNav.getByRole("button", { name: category }).click();
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
-      await expect(page.getByRole("navigation", { name: `${category}二级分类` })).toBeVisible();
+      await expectNoLeftSecondaryMenu(page);
       await expect(page.getByText(`${category}功能已预留`)).toBeVisible();
       await expect(page.getByText(`当前阶段暂不提供${category}编辑，后续会通过剪辑核心命令接入对应能力。`)).toBeVisible();
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();

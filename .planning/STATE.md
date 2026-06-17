@@ -180,6 +180,7 @@ None yet.
 |------|------|---------|
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
 | 2026-06-18 | 260618-mit-license | Switched project license metadata and README license sections to MIT, and added the standard MIT LICENSE file. |
+| 2026-06-17 | 260618-2lz-left-panel-menu-fix | Removed the standalone left-side secondary menu, tightened workspace proportions, and made dark scrollbars slimmer. |
 
 ## Session Continuity
 

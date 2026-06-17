@@ -10,12 +10,12 @@
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: #464642 transparent;
+  scrollbar-color: #383835 transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 *::-webkit-scrollbar-track {
@@ -25,12 +25,12 @@
 *::-webkit-scrollbar-thumb {
   border: 1px solid transparent;
   border-radius: 999px;
-  background: #464642;
+  background: #383835;
   background-clip: content-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #5a5a54;
+  background: #4d4d48;
   background-clip: content-box;
 }
 
@@ -59,7 +59,7 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: 360px minmax(420px, 1fr) 280px;
+  grid-template-columns: 336px minmax(420px, 1fr) 288px;
   grid-template-rows: 48px minmax(0, 1fr) 252px;
   width: 100vw;
   height: 100vh;
@@ -194,52 +194,9 @@ h2 {
 
 .resource-panel-shell {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.secondary-category-rail {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  min-width: 0;
-  min-height: 0;
-  padding: 10px 8px;
-  overflow: hidden auto;
-  border-right: 1px solid #343431;
-  background: #1b1b19;
-}
-
-.secondary-category-button {
-  width: 100%;
-  height: 32px;
-  min-width: 0;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: #b9b6ae;
-  background: #252522;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 30px;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.secondary-category-button:hover {
-  color: #f0eee8;
-  background: #292926;
-}
-
-.secondary-category-button.active {
-  border-color: #245f66;
-  color: #20c7d9;
-  background: #171f20;
 }
 
 .resource-content-panel {
