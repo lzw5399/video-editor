@@ -1,10 +1,8 @@
-use engine_core::{
-    EngineErrorKind, EngineProfile, MaterialRenderableState, normalize_draft,
-};
 use draft_model::{
     Draft, Material, MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment,
     SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
 };
+use engine_core::{EngineErrorKind, EngineProfile, MaterialRenderableState, normalize_draft};
 
 #[test]
 fn normalization_available_material_segments_are_sorted_by_track_and_target_timerange() {
@@ -113,25 +111,45 @@ fn normalization_visual_track_stacking_uses_existing_rust_timeline_order() {
     let visual_stack = normalized
         .tracks
         .iter()
-        .filter_map(|track| track.stack_index.map(|stack| (stack, track.track_id.as_str())))
+        .filter_map(|track| {
+            track
+                .stack_index
+                .map(|stack| (stack, track.track_id.as_str()))
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         visual_stack,
-        vec![
-            (0, "text-track"),
-            (1, "image-track"),
-            (2, "video-track"),
-        ]
+        vec![(0, "text-track"), (1, "image-track"), (2, "video-track"),]
     );
 }
 
 fn complete_draft() -> Draft {
     let mut draft = Draft::new("draft-normalize", "Normalize");
     draft.materials = vec![
-        material("video-material", MaterialKind::Video, "file://video.mp4", 3_000_000),
-        material("image-material", MaterialKind::Image, "file://image.png", 3_000_000),
-        material("audio-material", MaterialKind::Audio, "file://audio.wav", 3_000_000),
-        material("text-material", MaterialKind::Text, "text://caption", 3_000_000),
+        material(
+            "video-material",
+            MaterialKind::Video,
+            "file://video.mp4",
+            3_000_000,
+        ),
+        material(
+            "image-material",
+            MaterialKind::Image,
+            "file://image.png",
+            3_000_000,
+        ),
+        material(
+            "audio-material",
+            MaterialKind::Audio,
+            "file://audio.wav",
+            3_000_000,
+        ),
+        material(
+            "text-material",
+            MaterialKind::Text,
+            "text://caption",
+            3_000_000,
+        ),
     ];
 
     let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
@@ -169,12 +187,7 @@ fn complete_draft() -> Draft {
     draft
 }
 
-fn material(
-    material_id: &str,
-    kind: MaterialKind,
-    uri: &str,
-    duration: u64,
-) -> Material {
+fn material(material_id: &str, kind: MaterialKind, uri: &str, duration: u64) -> Material {
     let mut material = Material::new(material_id, kind, uri, material_id);
     material.metadata.duration = Some(Microseconds::new(duration));
     material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
