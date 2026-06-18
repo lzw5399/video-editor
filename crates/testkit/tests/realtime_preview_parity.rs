@@ -17,7 +17,8 @@ fn realtime_preview_parity_supported_graph_has_no_export_divergence() {
     })
     .expect("supported draft prepares graph");
 
-    let report = RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
+    let report =
+        RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
@@ -36,7 +37,8 @@ fn realtime_preview_parity_golden_records_text_and_effect_divergence() {
     })
     .expect("divergent draft prepares graph");
 
-    let report = RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
+    let report =
+        RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);
@@ -72,7 +74,10 @@ fn realtime_preview_parity_golden_records_text_and_effect_divergence() {
 }
 
 fn supported_video_draft() -> Draft {
-    let mut draft = Draft::new("realtime-preview-parity-supported", "Realtime parity supported");
+    let mut draft = Draft::new(
+        "realtime-preview-parity-supported",
+        "Realtime parity supported",
+    );
     draft.materials.push(video_material());
 
     let mut track = Track::new("video-track", TrackKind::Video, "Video");

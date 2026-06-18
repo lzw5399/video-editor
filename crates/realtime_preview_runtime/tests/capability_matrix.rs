@@ -52,13 +52,13 @@ fn capability_matrix_supports_canvas_visual_transform_opacity_fit_and_keyframe_s
 }
 
 #[test]
-fn capability_matrix_degrades_text_when_gpu_text_parity_is_not_enabled() {
+fn capability_matrix_marks_text_unsupported_when_gpu_text_parity_is_not_enabled() {
     let report = classify_draft(
         text_draft(),
         RealtimePreviewCapabilityClassifier::supported_for_tests().with_gpu_text_parity(false),
     );
 
-    assert_eq!(report.support, RealtimePreviewGraphSupport::Degraded);
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);
     let text = report
         .diagnostics
         .iter()
@@ -66,9 +66,9 @@ fn capability_matrix_degrades_text_when_gpu_text_parity_is_not_enabled() {
         .expect("text diagnostic emitted");
     assert_eq!(
         text.support,
-        RealtimePreviewSupport::Degraded {
+        RealtimePreviewSupport::Unsupported {
             reason:
-                "gpu text parity disabled; realtime preview must use fallback text rasterization"
+                "gpu text parity has not been proven with repository fonts; realtime preview must use fallback text rasterization"
                     .to_owned()
         }
     );

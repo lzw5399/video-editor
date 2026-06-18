@@ -7,6 +7,7 @@ pub mod compositor;
 pub mod device;
 pub mod pipelines;
 pub mod surface;
+pub mod text;
 pub mod texture_cache;
 
 pub use compositor::{
@@ -23,6 +24,7 @@ pub use surface::{
     PreviewSurfaceHost, PreviewSurfaceStatus, RealtimePreviewGpuTarget,
     RealtimePreviewTargetFormat,
 };
+pub use text::{TEXT_PARITY_UNPROVEN_REASON, TextPreviewOutcome, classify_text_preview_outcome};
 pub use texture_cache::{
     RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
     RealtimePreviewTextureId,

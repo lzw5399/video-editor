@@ -49,7 +49,7 @@ impl RealtimePreviewServiceConfig {
             artifact_config,
             runtime_backend_available: true,
             surface_available: true,
-            gpu_text_parity: true,
+            gpu_text_parity: false,
             preferred_backend: PreviewGpuBackend::OffscreenOnly,
             gpu_backend: RealtimePreviewGpuBackend::OffscreenOnly,
             runtime: Mutex::new(runtime),

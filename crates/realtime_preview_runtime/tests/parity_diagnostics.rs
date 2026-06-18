@@ -90,8 +90,8 @@ fn parity_diagnostics_snapshot_serializes_realtime_export_divergence() {
                 "entityId": "text-a",
                 "domain": "text",
                 "previewSupport": {
-                    "degraded": {
-                        "reason": "gpu text parity disabled; realtime preview must use fallback text rasterization"
+                    "unsupported": {
+                        "reason": "gpu text parity has not been proven with repository fonts; realtime preview must use fallback text rasterization"
                     }
                 },
                 "exportSupport": "supported",

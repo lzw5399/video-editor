@@ -49,7 +49,8 @@ fn text_parity_default_classifier_never_marks_export_supported_text_as_realtime_
     })
     .expect("text draft prepares graph");
 
-    let report = RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
+    let report =
+        RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
     let text = report
         .diagnostics
         .iter()
@@ -57,7 +58,10 @@ fn text_parity_default_classifier_never_marks_export_supported_text_as_realtime_
         .expect("text diagnostic emitted");
 
     assert_ne!(report.support, RealtimePreviewGraphSupport::Supported);
-    assert!(matches!(text.support, RealtimePreviewSupport::Unsupported { .. }));
+    assert!(matches!(
+        text.support,
+        RealtimePreviewSupport::Unsupported { .. }
+    ));
     assert!(text.fallback_used);
 }
 

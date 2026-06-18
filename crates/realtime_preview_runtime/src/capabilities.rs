@@ -2,6 +2,7 @@ use draft_model::{KeyframeProperty, MaterialKind, SegmentBlendMode, SegmentFitMo
 use render_graph::{RenderGraph, RenderIntentSupport, RenderVideoLayer};
 use serde::{Deserialize, Serialize};
 
+use crate::gpu::text::text_preview_diagnostic;
 use crate::{RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewSupport};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,7 +33,7 @@ impl RealtimePreviewCapabilityClassifier {
         Self {
             runtime_backend_available: true,
             surface_available: true,
-            gpu_text_parity: true,
+            gpu_text_parity: false,
         }
     }
 
@@ -327,45 +328,7 @@ fn classify_text(
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
 ) {
     for text in &graph.text_overlays {
-        if let Some(unsupported) = text
-            .overlay
-            .diagnostics
-            .iter()
-            .find(|diagnostic| diagnostic.support == "unsupported")
-        {
-            diagnostics.push(RealtimePreviewDiagnostic::new(
-                Some(text.overlay.segment_id.as_str().to_owned()),
-                RealtimePreviewDiagnosticDomain::Text,
-                RealtimePreviewSupport::Unsupported {
-                    reason: unsupported.reason.clone(),
-                },
-                unsupported.reason.clone(),
-                None,
-                true,
-            ));
-        } else if classifier.gpu_text_parity {
-            diagnostics.push(RealtimePreviewDiagnostic::new(
-                Some(text.overlay.segment_id.as_str().to_owned()),
-                RealtimePreviewDiagnosticDomain::Text,
-                RealtimePreviewSupport::Supported,
-                "text intent is realtime supported",
-                None,
-                false,
-            ));
-        } else {
-            diagnostics.push(RealtimePreviewDiagnostic::new(
-                Some(text.overlay.segment_id.as_str().to_owned()),
-                RealtimePreviewDiagnosticDomain::Text,
-                RealtimePreviewSupport::Degraded {
-                    reason:
-                        "gpu text parity disabled; realtime preview must use fallback text rasterization"
-                            .to_owned(),
-                },
-                "gpu text parity disabled; realtime preview must use fallback text rasterization",
-                None,
-                true,
-            ));
-        }
+        diagnostics.push(text_preview_diagnostic(text, classifier.gpu_text_parity));
     }
 }
 
