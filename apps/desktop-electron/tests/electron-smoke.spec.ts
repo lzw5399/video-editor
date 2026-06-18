@@ -14,6 +14,7 @@ type VideoEditorCoreApi = {
 
 declare global {
   interface Window {
+    videoEditorAppConfig?: unknown;
     videoEditorCore?: VideoEditorCoreApi;
     ipcRenderer?: unknown;
   }
@@ -147,8 +148,28 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
     }
 
+    await expect(page.getByText("还没有素材")).toBeVisible();
+    await expect(page.getByLabel("草稿包路径")).toHaveValue("");
+    await expect(page.getByLabel("素材路径")).toHaveValue("");
+    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toHaveCount(0);
+    await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("test fixture opt-in loads demo workspace materials", async () => {
+  const { app, page } = await launchSmokeAppWithEnv({
+    VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo"
+  });
+
+  try {
+    await expectVisibleWorkspaceRegions(page);
+    await expect(page.getByLabel("草稿包路径")).toHaveValue("/tmp/phase-04-demo.veproj");
+    await expect(page.getByLabel("素材路径")).toHaveValue("/tmp/demo-material.mp4");
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("可用");
+    await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toContainText("音频");
     await expect(page.getByRole("article", { name: "素材 封面图.png" })).toContainText("素材丢失");
     await expect(page.getByRole("article", { name: "素材 贴纸素材.webp" })).toContainText("解析失败");
   } finally {
@@ -197,11 +218,13 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
     expect(location).toContain(untrustedPage.origin);
     await expect(page.getByRole("main", { name: "Untrusted page" })).toBeVisible();
     const exposure = await page.evaluate(() => ({
+      configType: typeof window.videoEditorAppConfig,
       coreType: typeof window.videoEditorCore,
       coreKeys: Object.keys(window.videoEditorCore ?? {}),
       ipcRendererType: typeof window.ipcRenderer
     }));
     expect(exposure).toEqual({
+      configType: "undefined",
       coreType: "undefined",
       coreKeys: [],
       ipcRendererType: "undefined"

@@ -170,6 +170,7 @@ export type TimelineView = {
 };
 
 export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";
+export type WorkspaceStartupFixture = "blank" | "demo";
 
 function defaultSegmentVisual(): SegmentVisual {
   return {
@@ -189,7 +190,58 @@ function defaultSegmentVisual(): SegmentVisual {
   };
 }
 
-export const initialWorkspaceDraft: Draft = {
+export const blankWorkspaceDraft: Draft = {
+  schemaVersion: 1,
+  draftId: "draft-blank-workspace",
+  metadata: {
+    name: "未命名草稿",
+    description: "空白桌面编辑草稿"
+  },
+  canvasConfig: {
+    aspectRatio: {
+      kind: "preset",
+      preset: "ratio16x9"
+    },
+    width: 1920,
+    height: 1080,
+    frameRate: {
+      numerator: 30,
+      denominator: 1
+    },
+    background: {
+      kind: "black"
+    }
+  },
+  materials: [],
+  tracks: [
+    {
+      trackId: "track-main-video",
+      kind: "video",
+      name: "视频轨道 1",
+      muted: false,
+      locked: false,
+      segments: []
+    },
+    {
+      trackId: "track-bgm",
+      kind: "audio",
+      name: "音频轨道 1",
+      muted: false,
+      locked: false,
+      segments: []
+    },
+    {
+      trackId: "track-title",
+      kind: "text",
+      name: "文字轨道 1",
+      muted: false,
+      locked: false,
+      segments: []
+    }
+  ]
+};
+
+export const demoWorkspaceDraft: Draft = {
   schemaVersion: 1,
   draftId: "draft-phase-04-workspace",
   metadata: {
@@ -358,6 +410,10 @@ export const initialWorkspaceDraft: Draft = {
   ]
 };
 
+export function resolveWorkspaceStartupDraft(fixture: WorkspaceStartupFixture = "blank"): Draft {
+  return fixture === "demo" ? demoWorkspaceDraft : blankWorkspaceDraft;
+}
+
 export const initialCommandState: CommandState = {
   undoStack: [],
   redoStack: [],
@@ -373,12 +429,12 @@ export const initialTimelineSelection: TimelineSelection = {
   trackIds: []
 };
 
-export function createInitialWorkspaceState(): WorkspaceState {
+export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft): WorkspaceState {
   return {
-    draft: initialWorkspaceDraft,
+    draft,
     commandState: initialCommandState,
     selection: initialTimelineSelection,
-    materials: initialWorkspaceDraft.materials,
+    materials: draft.materials,
     materialDiagnostics: [],
     preview: {
       frameArtifactPath: null,

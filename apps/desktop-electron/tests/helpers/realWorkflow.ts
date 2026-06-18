@@ -27,8 +27,6 @@ export async function runRealImportPreviewExportWorkflow(
   await importMaterial(page, app, fixtures.bundlePath, fixtures.videoPath, fixtures.videoName);
   await importMaterial(page, app, fixtures.bundlePath, fixtures.audioPath, fixtures.audioName);
 
-  await deleteInitialSegment(page, app, /片段 城市街景\.mp4/);
-  await deleteInitialSegment(page, app, /片段 背景音乐\.wav/);
   await addVideoSegment(page, app, fixtures.videoName);
   await addAudioSegment(page, app, fixtures.audioName);
 
@@ -41,7 +39,6 @@ export async function runRealImportPreviewExportWorkflow(
     expect.arrayContaining([
       "probeRuntimeCapabilities",
       "importMaterial",
-      "deleteSegment",
       "addSegment",
       "addAudioSegment",
       "requestPreviewFrame",
@@ -81,17 +78,6 @@ async function importMaterial(
   await page.getByRole("button", { name: "导入素材" }).click();
   await waitForCommandCount(app, "importMaterial", nextCount);
   await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", { timeout: 20_000 });
-}
-
-async function deleteInitialSegment(page: Page, app: ElectronApplication, segmentName: RegExp): Promise<void> {
-  const nextCount = (await countCommand(app, "deleteSegment")) + 1;
-  await page.getByRole("button", { name: segmentName }).click();
-  await page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
-  await page.getByRole("button", { name: "删除所选片段" }).click();
-  await waitForCommandCount(app, "deleteSegment", nextCount);
-  await expect(page.getByRole("button", { name: segmentName })).toHaveCount(0);
 }
 
 async function addVideoSegment(page: Page, app: ElectronApplication, videoName: string): Promise<void> {

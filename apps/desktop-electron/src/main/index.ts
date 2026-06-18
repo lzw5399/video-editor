@@ -43,6 +43,10 @@ const packagedRendererFile = join(__dirname, "../renderer/index.html");
 const packagedRendererUrl = pathToFileURL(packagedRendererFile).toString();
 const allowedRendererUrl = isDevelopment && devServerUrl !== undefined ? devServerUrl : packagedRendererUrl;
 const allowedRendererUrlArgument = `--video-editor-allowed-renderer-url=${allowedRendererUrl}`;
+const rendererArguments = [
+  allowedRendererUrlArgument,
+  ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : [])
+];
 
 ipcMain.handle("core:ping", (event) => {
   assertAllowedIpcSender(event);
@@ -94,7 +98,7 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
       sandbox: true,
       preload: join(__dirname, "../preload/index.cjs"),
-      additionalArguments: [allowedRendererUrlArgument]
+      additionalArguments: rendererArguments
     }
   });
 

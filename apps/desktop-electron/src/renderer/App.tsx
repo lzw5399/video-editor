@@ -64,10 +64,11 @@ import {
   formatPreviewStatus,
   getSelectedSegmentView,
   getSelectedTrackView,
-  initialWorkspaceDraft,
   nextTrackStart,
+  resolveWorkspaceStartupDraft,
   type ExportDisplayState,
   type PreviewDisplayState,
+  type WorkspaceStartupFixture,
   type WorkspaceCategory,
   type WorkspaceState
 } from "./viewModel";
@@ -129,15 +130,21 @@ const TEXT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
 
 declare global {
   interface Window {
+    videoEditorAppConfig?: {
+      workspaceFixture?: WorkspaceStartupFixture;
+    };
     videoEditorCore: VideoEditorCoreApi;
   }
 }
 
 export function App(): React.ReactElement {
-  const [workspace, setWorkspace] = useState<WorkspaceState>(() => createInitialWorkspaceState());
+  const startupFixture = readWorkspaceStartupFixture();
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
+    createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture))
+  );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
-  const [bundlePath, setBundlePath] = useState("/tmp/phase-04-demo.veproj");
-  const [materialPath, setMaterialPath] = useState("/tmp/demo-material.mp4");
+  const [bundlePath, setBundlePath] = useState(startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "");
+  const [materialPath, setMaterialPath] = useState(startupFixture === "demo" ? "/tmp/demo-material.mp4" : "");
   const [playheadUs, setPlayheadUs] = useState(0);
   const workspaceRef = useRef(workspace);
   const commandInFlightRef = useRef(false);
@@ -154,7 +161,7 @@ export function App(): React.ReactElement {
       const [ping, version, materialList] = await Promise.all([
         window.videoEditorCore.ping(),
         window.videoEditorCore.version(),
-        window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(initialWorkspaceDraft))
+        window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(workspaceRef.current.draft))
       ]);
 
       if (cancelled) {
@@ -211,6 +218,10 @@ export function App(): React.ReactElement {
       cancelled = true;
     };
   }, []);
+
+  function readWorkspaceStartupFixture(): WorkspaceStartupFixture {
+    return window.videoEditorAppConfig?.workspaceFixture === "demo" ? "demo" : "blank";
+  }
 
   async function executeDraftCommand<T>(
     buildCommand: DraftCommandBuilder,

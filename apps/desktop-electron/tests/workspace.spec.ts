@@ -56,6 +56,7 @@ async function launchWorkspaceApp(
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
+      VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
       ...options.env
