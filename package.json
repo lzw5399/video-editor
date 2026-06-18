@@ -41,7 +41,11 @@
     "test:phase7-source-guards": "bash scripts/phase7-source-guards.sh",
     "test:phase7-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"草稿参数|画布\"",
     "test:phase7": "pnpm run test:phase7-rust && pnpm run test:phase7-source-guards && pnpm run test:phase7-workspace && pnpm run test:contracts",
+    "test:phase8-rust": "cargo test -p draft_model visual -- --nocapture && cargo test -p draft_commands visual_transform -- --nocapture && cargo test -p bindings_node transform_commands -- --nocapture && cargo test -p engine_core transform -- --nocapture && cargo test -p render_graph transform -- --nocapture && cargo test -p ffmpeg_compiler transform -- --nocapture",
+    "test:phase8-source-guards": "bash scripts/phase8-source-guards.sh",
+    "test:phase8-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"画面变换|command-only transform|五大区域\"",
+    "test:phase8": "pnpm run test:phase8-rust && pnpm run test:phase8-source-guards && pnpm run test:phase8-workspace && pnpm run test:contracts",
     "test:contracts": "git diff --exit-code schemas apps/desktop-electron/src/generated",
-    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:phase5-render-core && pnpm run test:phase5-source-guards && pnpm run test:phase5-workspace && pnpm run test:phase6 && pnpm run test:phase7 && pnpm run test:contracts"
+    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:phase5-render-core && pnpm run test:phase5-source-guards && pnpm run test:phase5-workspace && pnpm run test:phase6 && pnpm run test:phase7 && pnpm run test:phase8 && pnpm run test:contracts"
   }
 }
