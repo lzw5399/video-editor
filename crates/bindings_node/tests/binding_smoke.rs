@@ -689,6 +689,7 @@ fn timeline_draft_json() -> Value {
         "schemaVersion": 1,
         "draftId": "binding-timeline-draft",
         "metadata": { "name": "Binding Timeline Draft" },
+        "canvasConfig": default_canvas_config_json(),
         "materials": [{
             "materialId": "video-material",
             "kind": "video",
@@ -712,6 +713,16 @@ fn timeline_draft_json() -> Value {
             "locked": false,
             "segments": []
         }]
+    })
+}
+
+fn default_canvas_config_json() -> Value {
+    json!({
+        "aspectRatio": { "kind": "preset", "preset": "ratio16x9" },
+        "width": 1920,
+        "height": 1080,
+        "frameRate": { "numerator": 30, "denominator": 1 },
+        "background": { "kind": "black" }
     })
 }
 
