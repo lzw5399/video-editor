@@ -95,6 +95,42 @@ export type PreviewDisplayState = {
   lastRequestedRangeLabel: string | null;
 };
 
+export type RealtimePreviewBackendUsed = "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
+
+export type RealtimePreviewFallbackReason =
+  | "noGpuAdapter"
+  | "surfaceUnavailable"
+  | "surfaceLost"
+  | "unsupportedGraphIntent"
+  | "frameProviderUnavailable"
+  | "textParityUnsupported"
+  | "nativeChildWindowFailed"
+  | "offscreenReadbackRequired"
+  | "previewArtifactCacheHit"
+  | "ffmpegArtifactGenerated"
+  | "canceled"
+  | "staleGeneration";
+
+export type RealtimePreviewDisplayModel = {
+  backend: RealtimePreviewBackendUsed;
+  firstFrameLatencyMs: number | null;
+  seekLatencyMs: number | null;
+  queueLatencyMs: number;
+  renderDurationMs: number;
+  presentedFrameCount: number;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  staleRejectedCount: number;
+  canceledRequestCount: number;
+  currentRequestCanceled: boolean;
+  fallbackReason: RealtimePreviewFallbackReason | null;
+  fallbackCount: number;
+  cacheHitCount: number;
+  targetTimeMicroseconds: Microseconds;
+  playbackGeneration: number;
+  fallbackArtifactVisible: boolean;
+};
+
 export type ExportDisplayState = {
   outputPath: string;
   preset: ExportPreset;
@@ -521,6 +557,71 @@ export function formatMicroseconds(duration: Microseconds | null | undefined): s
 
 export function formatTimelineTime(time: Microseconds | null | undefined): string {
   return formatMicroseconds(time);
+}
+
+export function formatRealtimePreviewBackendLabel(backend: RealtimePreviewBackendUsed): string {
+  const labels: Record<RealtimePreviewBackendUsed, string> = {
+    mock: "实时后端：Mock",
+    gpu: "实时后端：GPU",
+    offscreen: "实时后端：离屏",
+    previewArtifact: "备用产物：预览缓存",
+    ffmpegArtifact: "备用产物：FFmpeg",
+    none: "实时后端：未呈现"
+  };
+
+  return labels[backend];
+}
+
+export function formatRealtimePreviewFallbackReason(reason: RealtimePreviewFallbackReason): string {
+  const labels: Record<RealtimePreviewFallbackReason, string> = {
+    noGpuAdapter: "未检测到 GPU 适配器",
+    surfaceUnavailable: "预览表面不可用",
+    surfaceLost: "预览表面已丢失",
+    unsupportedGraphIntent: "当前画面超出实时支持范围",
+    frameProviderUnavailable: "素材帧暂不可用",
+    textParityUnsupported: "文字实时一致性未通过",
+    nativeChildWindowFailed: "原生预览窗口接入失败",
+    offscreenReadbackRequired: "需要离屏回读",
+    previewArtifactCacheHit: "命中预览缓存",
+    ffmpegArtifactGenerated: "已生成 FFmpeg 备用产物",
+    canceled: "请求已取消",
+    staleGeneration: "旧一代请求已拒绝"
+  };
+
+  return labels[reason];
+}
+
+export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayModel): string {
+  const latency = [
+    model.firstFrameLatencyMs === null ? "首帧 -" : `首帧 ${model.firstFrameLatencyMs} ms`,
+    model.seekLatencyMs === null ? "寻帧 -" : `寻帧 ${model.seekLatencyMs} ms`,
+    `排队 ${model.queueLatencyMs} ms`,
+    `渲染 ${model.renderDurationMs} ms`
+  ];
+  const pacing = [
+    `呈现 ${model.presentedFrameCount}`,
+    `丢帧 ${model.droppedFrameCount}`,
+    `重复 ${model.repeatedFrameCount}`,
+    `拒绝旧帧 ${model.staleRejectedCount}`
+  ];
+  const runtime = [
+    `取消 ${model.canceledRequestCount}`,
+    `缓存 ${model.cacheHitCount}`,
+    `降级 ${model.fallbackCount}`,
+    `世代 ${model.playbackGeneration}`
+  ];
+  const requestState = model.currentRequestCanceled ? ["当前请求已取消"] : [];
+  const fallback =
+    model.fallbackReason === null ? [] : [`原因 ${formatRealtimePreviewFallbackReason(model.fallbackReason)}`];
+
+  return [
+    formatRealtimePreviewBackendLabel(model.backend),
+    ...latency,
+    ...pacing,
+    ...runtime,
+    ...requestState,
+    ...fallback
+  ].join(" · ");
 }
 
 export function formatMaterialKind(kind: MaterialKind): string {
