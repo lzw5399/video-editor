@@ -103,6 +103,25 @@ fn subtitle_srt_import_targets_existing_text_track() {
 }
 
 #[test]
+fn subtitle_srt_import_splits_cues_on_whitespace_only_blank_lines() {
+    let mut payload = subtitle_payload(
+        Draft::new("subtitle-whitespace-separator-draft", "Subtitle Whitespace Separator"),
+        CommandState::empty(),
+        TimelineSelection::empty(),
+    );
+    payload.srt_content = "1\n00:00:00,000 --> 00:00:01,000\n第一行\n \t \n2\n00:00:01,000 --> 00:00:02,000\n第二行\n"
+        .to_owned();
+
+    let imported = import_subtitle_srt(payload)
+        .expect("SRT whitespace-only separator should split cue blocks");
+    let track = &imported.draft.tracks[0];
+
+    assert_eq!(track.segments.len(), 2);
+    assert_eq!(track.segments[0].text.as_ref().unwrap().content, "第一行");
+    assert_eq!(track.segments[1].text.as_ref().unwrap().content, "第二行");
+}
+
+#[test]
 fn malformed_subtitle_srt_rejects_without_mutating_history_or_draft() {
     let mut payload = subtitle_payload(
         Draft::new("bad-subtitle-import-draft", "Bad Subtitle Import"),

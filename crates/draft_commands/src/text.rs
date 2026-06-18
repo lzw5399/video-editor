@@ -222,13 +222,23 @@ struct SrtCue {
 fn parse_srt(content: &str) -> Result<Vec<SrtCue>, TimelineCommandError> {
     let normalized = content.trim_start_matches('\u{feff}').replace("\r\n", "\n");
     let mut cues = Vec::new();
+    let mut blocks = Vec::new();
+    let mut current = Vec::new();
 
-    for block in normalized.split("\n\n") {
-        let lines = block
-            .lines()
-            .map(str::trim_end)
-            .filter(|line| !line.trim().is_empty())
-            .collect::<Vec<_>>();
+    for line in normalized.lines().map(str::trim_end) {
+        if line.trim().is_empty() {
+            if !current.is_empty() {
+                blocks.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(line);
+        }
+    }
+    if !current.is_empty() {
+        blocks.push(current);
+    }
+
+    for lines in blocks {
         if lines.is_empty() {
             continue;
         }
