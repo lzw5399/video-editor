@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BinaryKind, DiscoveredBinary, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
+    BinaryKind, DiscoveredBinary, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, MediaIoFallbackReason,
+    RuntimeConfig, RuntimeDeviceId, SelectedDecodePath, TextureBackend, VideoPixelFormat,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +70,93 @@ pub struct RuntimeCapabilityReport {
     pub font_readiness: RuntimeFontCapability,
     pub license_posture: RuntimeLicensePosture,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCapabilities {
+    pub ffmpeg: RuntimeCapabilityReport,
+    pub media_io: RuntimeMediaIoCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeMediaIoCapabilities {
+    pub windows: WindowsMediaIoCapabilities,
+    pub macos: MacosMediaIoCapabilities,
+    pub codecs: Vec<CodecCapability>,
+    pub pixel_formats: Vec<PixelFormatCapability>,
+    pub texture_interop: TextureInteropCapability,
+    pub fallback_ladder: FallbackLadderCapability,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowsMediaIoCapabilities {
+    pub status: RuntimeCapabilityStatus,
+    pub media_foundation: RuntimeFeatureCapability,
+    pub dxva: RuntimeFeatureCapability,
+    pub d3d_texture_interop: RuntimeFeatureCapability,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacosMediaIoCapabilities {
+    pub status: RuntimeCapabilityStatus,
+    pub av_foundation: RuntimeFeatureCapability,
+    pub video_toolbox: RuntimeFeatureCapability,
+    pub core_video: RuntimeFeatureCapability,
+    pub metal_texture_interop: RuntimeFeatureCapability,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodecCapability {
+    pub codec: String,
+    pub containers: Vec<String>,
+    pub first_native_hardware_decode_target: bool,
+    pub status: RuntimeCapabilityStatus,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PixelFormatCapability {
+    pub pixel_format: VideoPixelFormat,
+    pub status: RuntimeCapabilityStatus,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextureInteropCapability {
+    pub status: RuntimeCapabilityStatus,
+    pub backend: Option<TextureBackend>,
+    pub device_id: Option<RuntimeDeviceId>,
+    pub compatible_with_preview_device: bool,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FallbackLadderCapability {
+    pub paths: Vec<FallbackDecodePathCapability>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FallbackDecodePathCapability {
+    pub path: SelectedDecodePath,
+    pub status: RuntimeCapabilityStatus,
+    pub fallback_reason: Option<MediaIoFallbackReason>,
+    pub diagnostic: Option<String>,
 }
 
 pub fn probe_runtime_capabilities(

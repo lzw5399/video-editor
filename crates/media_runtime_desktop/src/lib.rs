@@ -11,6 +11,11 @@ use std::time::Duration;
 
 use media_runtime::{DEFAULT_PROCESS_TIMEOUT, FfmpegExecutor, run_process_with_timeout};
 
+mod capabilities;
+mod platform;
+
+pub use capabilities::probe_desktop_runtime_capabilities;
+
 /// Desktop FFmpeg executor shell.
 #[derive(Debug, Clone, Copy)]
 pub struct DesktopFfmpegExecutor {

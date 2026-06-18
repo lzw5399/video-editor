@@ -878,6 +878,7 @@ name = "media_runtime_desktop"
 version = "0.1.0"
 dependencies = [
  "media_runtime",
+ "serde_json",
 ]
 
 [[package]]

@@ -10,7 +10,7 @@ use media_runtime::{
 use media_runtime_desktop::probe_desktop_runtime_capabilities;
 
 #[test]
-fn desktop_capability_report_preserves_ffmpeg_fields_and_adds_media_io_domains() {
+fn desktop_capabilities_report_preserves_ffmpeg_fields_and_adds_media_io_domains() {
     let runtime = fake_runtime_config();
     let executor = FakeExecutor::new()
         .with_version(
@@ -29,7 +29,10 @@ fn desktop_capability_report_preserves_ffmpeg_fields_and_adds_media_io_domains()
     let value = serde_json::to_value(&report).expect("desktop capability report serializes");
 
     assert_eq!(report.ffmpeg.executor_name, "fake-executor");
-    assert_eq!(report.ffmpeg.ffmpeg.path, PathBuf::from("/runtime/bin/ffmpeg"));
+    assert_eq!(
+        report.ffmpeg.ffmpeg.path,
+        PathBuf::from("/runtime/bin/ffmpeg")
+    );
     assert!(report.ffmpeg.h264_encoder.available);
     assert!(report.ffmpeg.aac_encoder.available);
     assert!(report.ffmpeg.ass_filter.available);
@@ -46,10 +49,13 @@ fn desktop_capability_report_preserves_ffmpeg_fields_and_adds_media_io_domains()
 
 #[test]
 #[cfg(not(windows))]
-fn desktop_capability_report_marks_windows_domain_unavailable_on_non_windows() {
+fn desktop_capabilities_report_marks_windows_domain_unavailable_on_non_windows() {
     let report = probe_desktop_runtime_capabilities(&FakeExecutor::ready(), &fake_runtime_config());
 
-    assert_eq!(report.media_io.windows.status, RuntimeCapabilityStatus::Unavailable);
+    assert_eq!(
+        report.media_io.windows.status,
+        RuntimeCapabilityStatus::Unavailable
+    );
     assert_eq!(
         report.media_io.windows.fallback_reason,
         Some(MediaIoFallbackReason::UnsupportedPlatform)
@@ -67,10 +73,13 @@ fn desktop_capability_report_marks_windows_domain_unavailable_on_non_windows() {
 
 #[test]
 #[cfg(not(target_os = "macos"))]
-fn desktop_capability_report_marks_macos_domain_unavailable_on_non_macos() {
+fn desktop_capabilities_report_marks_macos_domain_unavailable_on_non_macos() {
     let report = probe_desktop_runtime_capabilities(&FakeExecutor::ready(), &fake_runtime_config());
 
-    assert_eq!(report.media_io.macos.status, RuntimeCapabilityStatus::Unavailable);
+    assert_eq!(
+        report.media_io.macos.status,
+        RuntimeCapabilityStatus::Unavailable
+    );
     assert_eq!(
         report.media_io.macos.fallback_reason,
         Some(MediaIoFallbackReason::UnsupportedPlatform)
@@ -87,7 +96,7 @@ fn desktop_capability_report_marks_macos_domain_unavailable_on_non_macos() {
 }
 
 #[test]
-fn desktop_capability_report_keeps_h264_mp4_mov_as_first_native_acceptance_target_only() {
+fn desktop_capabilities_report_keeps_h264_mp4_mov_as_first_native_acceptance_target_only() {
     let report = probe_desktop_runtime_capabilities(&FakeExecutor::ready(), &fake_runtime_config());
 
     let h264 = report
@@ -113,7 +122,7 @@ fn desktop_capability_report_keeps_h264_mp4_mov_as_first_native_acceptance_targe
 }
 
 #[test]
-fn desktop_capability_report_orders_fallback_ladder_from_native_texture_to_preview_artifact() {
+fn desktop_capabilities_report_orders_fallback_ladder_from_native_texture_to_preview_artifact() {
     let report = probe_desktop_runtime_capabilities(&FakeExecutor::ready(), &fake_runtime_config());
     let paths = report
         .media_io

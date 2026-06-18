@@ -22,9 +22,11 @@ mod texture;
 mod validate;
 
 pub use capabilities::{
-    RuntimeBinaryCapability, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture,
-    probe_runtime_capabilities,
+    CodecCapability, FallbackDecodePathCapability, FallbackLadderCapability,
+    MacosMediaIoCapabilities, PixelFormatCapability, RuntimeBinaryCapability, RuntimeCapabilities,
+    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeFeatureCapability,
+    RuntimeFontCapability, RuntimeLicensePosture, RuntimeMediaIoCapabilities,
+    TextureInteropCapability, WindowsMediaIoCapabilities, probe_runtime_capabilities,
 };
 pub use color::{
     ColorDiagnostic, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer, VideoColorMetadata,

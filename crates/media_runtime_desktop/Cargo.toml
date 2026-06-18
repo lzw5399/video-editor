@@ -11,3 +11,6 @@ path = "src/lib.rs"
 
 [dependencies]
 media_runtime = { path = "../media_runtime" }
+
+[dev-dependencies]
+serde_json = "1.0.150"

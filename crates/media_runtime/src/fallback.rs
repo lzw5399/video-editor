@@ -12,6 +12,7 @@ pub enum MediaIoFallbackReason {
     PlatformApiFailure,
     FfmpegUnavailable,
     UserDisabledHardwareDecode,
+    UnsupportedPlatform,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

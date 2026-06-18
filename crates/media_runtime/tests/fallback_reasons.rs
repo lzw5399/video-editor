@@ -33,6 +33,10 @@ fn fallback_reasons_serialize_with_stable_camel_case_names() {
             MediaIoFallbackReason::UserDisabledHardwareDecode,
             "userDisabledHardwareDecode",
         ),
+        (
+            MediaIoFallbackReason::UnsupportedPlatform,
+            "unsupportedPlatform",
+        ),
     ];
 
     for (reason, expected) in reasons {
