@@ -48,6 +48,18 @@ type TextFormState = {
   shadowEnabled: boolean;
   backgroundColor: string;
   backgroundEnabled: boolean;
+  fontFamily: string;
+  fontRef: string | null;
+  lineHeightMillis: number;
+  letterSpacingMillis: number;
+  textBoxWidthMillis: number;
+  textBoxHeightMillis: number;
+  layoutXMillis: number;
+  layoutYMillis: number;
+  layoutWidthMillis: number;
+  layoutHeightMillis: number;
+  wrapping: TextSegment["wrapping"];
+  source: TextSegment["source"];
 };
 
 type CanvasPresetChoice = CanvasAspectRatioPreset | "custom";
@@ -93,7 +105,19 @@ const DEFAULT_TEXT_STATE: TextFormState = {
   shadowColor: "#222222",
   shadowEnabled: false,
   backgroundColor: "#101010",
-  backgroundEnabled: false
+  backgroundEnabled: false,
+  fontFamily: "PingFang SC",
+  fontRef: null,
+  lineHeightMillis: 1200,
+  letterSpacingMillis: 0,
+  textBoxWidthMillis: 800,
+  textBoxHeightMillis: 200,
+  layoutXMillis: 100,
+  layoutYMillis: 100,
+  layoutWidthMillis: 800,
+  layoutHeightMillis: 800,
+  wrapping: "auto",
+  source: "text"
 };
 
 const INSPECTOR_TABS: readonly InspectorTab[] = ["画面", "音频", "变速", "动画", "调节", "AI效果"];
@@ -174,7 +198,19 @@ export function Inspector({
       shadowEnabled: selected.segment.text.style.shadow !== null && selected.segment.text.style.shadow !== undefined,
       backgroundColor: selected.segment.text.style.background?.color ?? "#101010",
       backgroundEnabled:
-        selected.segment.text.style.background !== null && selected.segment.text.style.background !== undefined
+        selected.segment.text.style.background !== null && selected.segment.text.style.background !== undefined,
+      fontFamily: selected.segment.text.style.font.family,
+      fontRef: selected.segment.text.style.font.fontRef ?? null,
+      lineHeightMillis: selected.segment.text.style.lineHeightMillis,
+      letterSpacingMillis: selected.segment.text.style.letterSpacingMillis,
+      textBoxWidthMillis: selected.segment.text.textBox.widthMillis,
+      textBoxHeightMillis: selected.segment.text.textBox.heightMillis,
+      layoutXMillis: selected.segment.text.layoutRegion.xMillis,
+      layoutYMillis: selected.segment.text.layoutRegion.yMillis,
+      layoutWidthMillis: selected.segment.text.layoutRegion.widthMillis,
+      layoutHeightMillis: selected.segment.text.layoutRegion.heightMillis,
+      wrapping: selected.segment.text.wrapping,
+      source: selected.segment.text.source
     });
   }, [
     selected?.segment.segmentId,
@@ -189,24 +225,56 @@ export function Inspector({
     selected?.segment.text?.style.shadow !== null && selected?.segment.text?.style.shadow !== undefined,
     selected?.segment.text?.style.shadow?.color,
     selected?.segment.text?.style.background !== null && selected?.segment.text?.style.background !== undefined,
-    selected?.segment.text?.style.background?.color
+    selected?.segment.text?.style.background?.color,
+    selected?.segment.text?.style.font.family,
+    selected?.segment.text?.style.font.fontRef,
+    selected?.segment.text?.style.lineHeightMillis,
+    selected?.segment.text?.style.letterSpacingMillis,
+    selected?.segment.text?.textBox.widthMillis,
+    selected?.segment.text?.textBox.heightMillis,
+    selected?.segment.text?.layoutRegion.xMillis,
+    selected?.segment.text?.layoutRegion.yMillis,
+    selected?.segment.text?.layoutRegion.widthMillis,
+    selected?.segment.text?.layoutRegion.heightMillis,
+    selected?.segment.text?.wrapping,
+    selected?.segment.text?.source
   ]);
 
   const text = useMemo<TextSegment>(
     () => ({
       content: textState.content,
+      source: textState.source,
       style: {
+        font: {
+          family: textState.fontFamily,
+          fontRef: textState.fontRef
+        },
         fontSize: textState.fontSize,
         color: textState.color,
         alignment: textState.alignment,
+        lineHeightMillis: textState.lineHeightMillis,
+        letterSpacingMillis: textState.letterSpacingMillis,
         stroke: textState.strokeEnabled ? { color: textState.strokeColor, width: textState.strokeWidth } : null,
         shadow: textState.shadowEnabled
           ? { color: textState.shadowColor, offsetX: 2, offsetY: 2, blur: 4 }
           : null,
         background: textState.backgroundEnabled ? { color: textState.backgroundColor } : null
-      }
+      },
+      textBox: {
+        widthMillis: textState.textBoxWidthMillis,
+        heightMillis: textState.textBoxHeightMillis
+      },
+      layoutRegion: {
+        xMillis: textState.layoutXMillis,
+        yMillis: textState.layoutYMillis,
+        widthMillis: textState.layoutWidthMillis,
+        heightMillis: textState.layoutHeightMillis
+      },
+      wrapping: textState.wrapping,
+      bubble: selected?.segment.text?.bubble ?? null,
+      effect: selected?.segment.text?.effect ?? null
     }),
-    [textState]
+    [selected?.segment.text?.bubble, selected?.segment.text?.effect, textState]
   );
 
   return (

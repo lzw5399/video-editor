@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { CommandEnvelope } from "../generated/CommandEnvelope";
+import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
   ExportJobStatusResponse,
@@ -10,7 +10,7 @@ import type {
   RuntimeCapabilityReport,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
-import type { SegmentVisual } from "../generated/Draft";
+import type { Draft, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
@@ -25,6 +25,9 @@ type TestExecuteCommandCall = {
     frameRate: { numerator: number; denominator: number };
   } | null;
   visual: SegmentVisual | null;
+  textContent: string | null;
+  textSource: string | null;
+  srtContent: string | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -63,6 +66,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testVisualResponse = maybeBuildTestVisualCommandResponse(command);
   if (testVisualResponse !== null) {
     return testVisualResponse;
+  }
+  const testTextResponse = maybeBuildTestTextCommandResponse(command);
+  if (testTextResponse !== null) {
+    return testTextResponse;
   }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
@@ -167,6 +174,9 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
   const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
   const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
+  const text =
+    command.payload.kind === "addTextSegment" || command.payload.kind === "editTextSegment" ? command.payload.text : null;
+  const srtContent = command.payload.kind === "importSubtitleSrt" ? command.payload.srtContent : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const jobId =
@@ -183,6 +193,9 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     targetTimerange,
     canvasConfig,
     visual,
+    textContent: text?.content ?? null,
+    textSource: text?.source ?? null,
+    srtContent,
     outputPath,
     preset,
     jobId
@@ -240,6 +253,206 @@ function maybeBuildTestVisualCommandResponse(command: CommandEnvelope): CommandR
       }
     ]
   };
+}
+
+function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
+  if (
+    command.payload.kind !== "addTextSegment" &&
+    command.payload.kind !== "editTextSegment" &&
+    command.payload.kind !== "importSubtitleSrt"
+  ) {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return null;
+  }
+
+  if (command.payload.kind === "addTextSegment") {
+    const segment: Segment = {
+      segmentId: command.payload.segmentId,
+      materialId: command.payload.materialId,
+      sourceTimerange: command.payload.sourceTimerange,
+      targetTimerange: command.payload.targetTimerange,
+      mainTrackMagnet: { enabled: false },
+      keyframes: [],
+      filters: [],
+      transition: null,
+      text: command.payload.text,
+      volume: { levelMillis: 1000 },
+      visual: defaultTestSegmentVisual(command.payload.draft)
+    };
+    const draft = {
+      ...ensureTestTextMaterial(command.payload.draft, command.payload.materialId, "默认文字"),
+      tracks: command.payload.draft.tracks.map((track) =>
+        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
+      )
+    };
+
+    return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [command.payload.segmentId], "textSegmentAdded");
+  }
+
+  if (command.payload.kind === "editTextSegment") {
+    let trackId = command.payload.selection.trackIds[0] ?? "";
+    const draft = {
+      ...command.payload.draft,
+      tracks: command.payload.draft.tracks.map((track) => ({
+        ...track,
+        segments: track.segments.map((segment) => {
+          if (segment.segmentId !== command.payload.segmentId) {
+            return segment;
+          }
+
+          trackId = track.trackId;
+          return { ...segment, text: command.payload.text };
+        })
+      }))
+    };
+
+    return buildTestTimelineCommandResponse(command, draft, trackId, [command.payload.segmentId], "textSegmentEdited");
+  }
+
+  const subtitleText: TextSegment = {
+    content: "测试字幕",
+    source: "subtitle",
+    style: command.payload.style,
+    textBox: command.payload.textBox,
+    layoutRegion: command.payload.layoutRegion,
+    wrapping: command.payload.wrapping,
+    bubble: null,
+    effect: null
+  };
+  const materialId = `${command.payload.materialIdPrefix}-1`;
+  const segmentId = `${command.payload.segmentIdPrefix}-1`;
+  const segment: Segment = {
+    segmentId,
+    materialId,
+    sourceTimerange: { start: 0, duration: 2_000_000 },
+    targetTimerange: { start: command.payload.timeOffset, duration: 2_000_000 },
+    mainTrackMagnet: { enabled: false },
+    keyframes: [],
+    filters: [],
+    transition: null,
+    text: subtitleText,
+    volume: { levelMillis: 1000 },
+    visual: defaultTestSegmentVisual(command.payload.draft)
+  };
+  const draftWithMaterial = ensureTestTextMaterial(command.payload.draft, materialId, "导入字幕");
+  const tracks = draftWithMaterial.tracks.some((track) => track.trackId === command.payload.trackId)
+    ? draftWithMaterial.tracks.map((track) =>
+        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
+      )
+    : [
+        ...draftWithMaterial.tracks,
+        {
+          trackId: command.payload.trackId,
+          kind: "text",
+          name: command.payload.trackName,
+          muted: false,
+          locked: false,
+          segments: [segment]
+        } satisfies Track
+      ];
+  const draft = {
+    ...draftWithMaterial,
+    tracks
+  };
+
+  return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [segmentId], "subtitleSrtImported");
+}
+
+function buildTestTimelineCommandResponse(
+  command: {
+    payload: {
+      kind: string;
+      draft: Draft;
+      commandState: CommandState;
+      selection: TimelineSelection;
+    };
+  },
+  draft: Draft,
+  trackId: string,
+  segmentIds: string[],
+  eventKind: string
+): CommandResultEnvelope<TimelineCommandResponse> {
+  return {
+    ok: true,
+    data: {
+      draft,
+      commandState: {
+        ...command.payload.commandState,
+        undoStack: [
+          ...command.payload.commandState.undoStack,
+          {
+            draft: command.payload.draft,
+            selection: command.payload.selection,
+            label: command.payload.kind
+          }
+        ],
+        redoStack: []
+      },
+      selection: {
+        segmentIds,
+        trackIds: [trackId]
+      },
+      events: [
+        {
+          kind: eventKind,
+          message: null
+        }
+      ]
+    },
+    error: null,
+    events: [
+      {
+        kind: eventKind,
+        message: null
+      }
+    ]
+  };
+}
+
+function ensureTestTextMaterial(draft: Draft, materialId: string, displayName: string): Draft {
+  if (draft.materials.some((material) => material.materialId === materialId)) {
+    return draft;
+  }
+
+  const material: Material = {
+    materialId,
+    kind: "text",
+    uri: `text://${materialId}`,
+    displayName,
+    metadata: {
+      hasVideo: false,
+      hasAudio: false
+    },
+    status: "available"
+  };
+
+  return {
+    ...draft,
+    materials: [...draft.materials, material]
+  };
+}
+
+function defaultTestSegmentVisual(draft: Draft): SegmentVisual {
+  return (
+    draft.tracks.flatMap((track) => track.segments).find((segment) => segment.visual !== undefined)?.visual ?? {
+      visible: true,
+      transform: {
+        position: { x: 0, y: 0 },
+        scale: { xMillis: 1000, yMillis: 1000 },
+        rotation: { degrees: 0 },
+        opacity: { valueMillis: 1000 },
+        crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
+        anchor: { xMillis: 500, yMillis: 500 }
+      },
+      fitMode: "stretch",
+      backgroundFilling: { kind: "none" },
+      blendMode: { kind: "normal" },
+      mask: { kind: "none" }
+    }
+  );
 }
 
 function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {

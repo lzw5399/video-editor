@@ -9,6 +9,7 @@ import type {
   EditTextSegmentCommandPayload,
   ExportPreset,
   GetExportJobStatusCommandPayload,
+  ImportSubtitleSrtCommandPayload,
   ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
@@ -47,7 +48,11 @@ import type {
   SegmentVolume,
   SourceTimerange,
   TargetTimerange,
-  TextSegment
+  TextBox,
+  TextLayoutRegion,
+  TextSegment,
+  TextStyle,
+  TextWrapping
 } from "../generated/Draft";
 import type {
   RuntimeDiagnosticsDisplayState,
@@ -284,6 +289,41 @@ export function buildEditTextSegmentCommand(
   } satisfies EditTextSegmentCommandPayload & { kind: "editTextSegment" };
 
   return envelope("editTextSegment", payload);
+}
+
+type ImportSubtitleSrtOptions = {
+  context: CommandContext;
+  trackId: TrackId;
+  trackName: string;
+  srtContent: string;
+  timeOffset: Microseconds;
+  segmentIdPrefix: string;
+  materialIdPrefix: string;
+  style: TextStyle;
+  textBox: TextBox;
+  layoutRegion: TextLayoutRegion;
+  wrapping: TextWrapping;
+};
+
+export function buildImportSubtitleSrtCommand(options: ImportSubtitleSrtOptions): CommandEnvelope {
+  const payload = {
+    kind: "importSubtitleSrt",
+    draft: options.context.draft,
+    commandState: options.context.commandState,
+    selection: options.context.selection,
+    trackId: options.trackId,
+    trackName: options.trackName,
+    srtContent: options.srtContent,
+    timeOffset: options.timeOffset,
+    segmentIdPrefix: options.segmentIdPrefix,
+    materialIdPrefix: options.materialIdPrefix,
+    style: options.style,
+    textBox: options.textBox,
+    layoutRegion: options.layoutRegion,
+    wrapping: options.wrapping
+  } satisfies ImportSubtitleSrtCommandPayload & { kind: "importSubtitleSrt" };
+
+  return envelope("importSubtitleSrt", payload);
 }
 
 type AudioCommandOptions = {

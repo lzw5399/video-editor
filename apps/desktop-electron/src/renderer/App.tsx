@@ -32,6 +32,7 @@ import {
   buildCancelExportCommand,
   buildGetExportJobStatusCommand,
   buildImportMaterialCommand,
+  buildImportSubtitleSrtCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSegmentCommand,
@@ -116,6 +117,14 @@ const VISUAL_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
   segmentStatusLabel: "画面变换已更新，请重新生成预览片段",
   segmentMetadataLabel: "预览片段需要重新生成",
   exportLogSummary: "画面变换已更新，请重新开始导出"
+};
+
+const TEXT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  frameStatusLabel: "文字已更新，请重新请求预览帧",
+  frameMetadataLabel: "预览帧需要重新生成",
+  segmentStatusLabel: "文字已更新，请重新生成预览片段",
+  segmentMetadataLabel: "预览片段需要重新生成",
+  exportLogSummary: "文字已更新，请重新开始导出"
 };
 
 declare global {
@@ -281,6 +290,20 @@ export function App(): React.ReactElement {
           ...next,
           preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
           export: clearDerivedExportState(current.export, VISUAL_DERIVED_STATE_COPY.exportLogSummary)
+        };
+      }
+
+      if (
+        result.ok &&
+        result.data !== null &&
+        (command.payload.kind === "addTextSegment" ||
+          command.payload.kind === "editTextSegment" ||
+          command.payload.kind === "importSubtitleSrt")
+      ) {
+        return {
+          ...next,
+          preview: clearDerivedPreviewState(current.preview, TEXT_DERIVED_STATE_COPY),
+          export: clearDerivedExportState(current.export, TEXT_DERIVED_STATE_COPY.exportLogSummary)
         };
       }
 
@@ -584,6 +607,28 @@ export function App(): React.ReactElement {
         });
       },
       "添加文字"
+    );
+  }
+
+  function handleImportSubtitleSrt(srtContent: string, timeOffsetUs: number, textTemplate: TextSegment): void {
+    const batchId = Date.now().toString(36);
+
+    void executeTimelineCommand(
+      (current) =>
+        buildImportSubtitleSrtCommand({
+          context: current,
+          trackId: "track-subtitle",
+          trackName: "字幕",
+          srtContent,
+          timeOffset: Math.max(0, Math.round(timeOffsetUs)),
+          segmentIdPrefix: `subtitle-segment-${batchId}`,
+          materialIdPrefix: `subtitle-material-${batchId}`,
+          style: textTemplate.style,
+          textBox: textTemplate.textBox,
+          layoutRegion: textTemplate.layoutRegion,
+          wrapping: textTemplate.wrapping
+        }),
+      "导入字幕"
     );
   }
 
@@ -1076,6 +1121,7 @@ export function App(): React.ReactElement {
       onRefreshMaterials={handleRefreshMaterials}
       onListMissingMaterials={handleListMissingMaterials}
       onAddTextSegment={handleAddTextSegment}
+      onImportSubtitleSrt={handleImportSubtitleSrt}
       onAddAudioSegment={handleAddAudioSegment}
       onEditSelectedText={handleEditSelectedText}
       onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}

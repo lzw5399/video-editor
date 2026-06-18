@@ -27,6 +27,7 @@ type FeaturePanelProps = {
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
   onAddTextSegment: (text: TextSegment, durationUs: number) => void;
+  onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
   onAddAudioSegment: (materialId: string, durationUs: number) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
@@ -169,14 +170,34 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
   const text: TextSegment = useMemo(
     () => ({
       content,
+      source: "text",
       style: {
+        font: {
+          family: "PingFang SC",
+          fontRef: null
+        },
         fontSize,
         color,
         alignment,
+        lineHeightMillis: 1200,
+        letterSpacingMillis: 0,
         stroke: strokeEnabled ? { color: strokeColor, width: strokeWidth } : null,
         shadow: shadowEnabled ? { color: shadowColor, offsetX: 2, offsetY: 2, blur: 4 } : null,
         background: backgroundEnabled ? { color: backgroundColor } : null
-      }
+      },
+      textBox: {
+        widthMillis: 800,
+        heightMillis: 200
+      },
+      layoutRegion: {
+        xMillis: 100,
+        yMillis: 100,
+        widthMillis: 800,
+        heightMillis: 800
+      },
+      wrapping: "auto",
+      bubble: null,
+      effect: null
     }),
     [
       alignment,

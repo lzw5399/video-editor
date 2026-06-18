@@ -28,6 +28,7 @@ type WorkspaceShellProps = {
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
   onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
+  onImportSubtitleSrt: Parameters<typeof FeaturePanel>[0]["onImportSubtitleSrt"];
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
@@ -67,6 +68,7 @@ export function WorkspaceShell({
   onRefreshMaterials,
   onListMissingMaterials,
   onAddTextSegment,
+  onImportSubtitleSrt,
   onAddAudioSegment,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
@@ -123,6 +125,7 @@ export function WorkspaceShell({
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}
           onAddTextSegment={onAddTextSegment}
+          onImportSubtitleSrt={onImportSubtitleSrt}
           onAddAudioSegment={onAddAudioSegment}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
