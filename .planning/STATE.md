@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: active
-current_phase: 8
-current_phase_name: segment-transform-and-visual-compositing
-current_plan: 5
-total_plans_in_phase: 5
-stopped_at: Completed 08-04-PLAN.md
-last_updated: "2026-06-18T03:00:19.000Z"
+current_phase: 9
+current_phase_name: complete-text-and-subtitle-system
+current_plan: 0
+total_plans_in_phase: 0
+stopped_at: Completed Phase 08 verification; ready to plan Phase 09
+last_updated: "2026-06-18T03:12:02.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 54
-  completed_plans: 53
-  percent: 98
+  completed_plans: 54
+  percent: 100
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 08 — segment-transform-and-visual-compositing
+**Current focus:** Phase 09 — complete-text-and-subtitle-system
 
 ## Current Position
 
-Phase: 8
-Plan: 5/5
-Status: Phase 08 in progress; next 08-05 source guards, public gates, and verification closure
+Phase: 9
+Plan: 0/TBD
+Status: Phase 08 complete; next plan Phase 09 complete text and subtitle system
 Last activity: 2026-06-18
 
-Progress: [██████████] 98%
+Progress: [██████████] 100% of planned Phase 01-08 work
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 53
+- Total plans completed: 54
 - Average duration: 8 min
-- Total execution time: 405 min
+- Total execution time: 417 min
 
 **By Phase:**
 
@@ -55,7 +55,7 @@ Progress: [██████████] 98%
 | 04.1 | 4 | - | - |
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
-| 08 | 3 | 59 min | 20 min |
+| 08 | 5 | 89 min | 18 min |
 
 **Recent Trend:**
 
@@ -112,6 +112,7 @@ Progress: [██████████] 98%
 | Phase 08 P02 | 9 min | 2 tasks | 7 files |
 | Phase 08 P03 | 15 min | 2 tasks | 6 files |
 | Phase 08 P04 | 18 min | 2 tasks | 9 files |
+| Phase 08 P05 | 12 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Nonzero rotation is surfaced as unsupported visual intent until anchor-aware FFmpeg rotation is implemented. — The compiler must not silently ignore unsupported visual semantics.
 - [Phase 08]: Successful `updateSegmentVisual` command responses clear stale desktop preview/export display state. — The renderer invalidates derived artifacts only after Rust accepts the semantic edit.
 - [Phase 08]: Inspector visual controls keep local form state until the user applies 画面 changes through `updateSegmentVisual`. — This gives the desktop UI editable Jianying-style controls without making renderer state canonical.
+- [Phase 08]: Source guards and public root gates now enforce transform/compositing ownership boundaries. — Phase 08 is complete only because `pnpm run test:phase8`, root `pnpm run test`, `just test`, `just build`, and generated contract drift checks pass.
 - Initialization: Product is a general Jianying-style desktop video editor, not an oral-video product.
 - Initialization: Rust core starts from day one; Electron is the first shell.
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.

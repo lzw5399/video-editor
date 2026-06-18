@@ -206,12 +206,12 @@
 | CANVAS-02 | Phase 7 | Complete |
 | CANVAS-03 | Phase 7 | Complete |
 | CANVAS-04 | Phase 7 | Complete |
-| XFORM-01 | Phase 8 | Planned |
-| XFORM-02 | Phase 8 | Planned |
-| XFORM-03 | Phase 8 | Planned |
-| LAYER-01 | Phase 8 | Planned |
-| LAYER-02 | Phase 8 | Planned |
-| LAYER-03 | Phase 8 | Planned |
+| XFORM-01 | Phase 8 | Complete |
+| XFORM-02 | Phase 8 | Complete |
+| XFORM-03 | Phase 8 | Complete |
+| LAYER-01 | Phase 8 | Complete |
+| LAYER-02 | Phase 8 | Complete |
+| LAYER-03 | Phase 8 | Complete |
 | TEXT2-01 | Phase 9 | Planned |
 | TEXT2-02 | Phase 9 | Planned |
 | TEXT2-03 | Phase 9 | Planned |
@@ -243,4 +243,4 @@
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-18 after post-MVP core editing roadmap expansion*
+*Last updated: 2026-06-18 after Phase 08 verification*
