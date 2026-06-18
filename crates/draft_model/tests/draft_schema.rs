@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use draft_model::{
     Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, MainTrackMagnet, Material,
     MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, Track, TrackKind, Transition, add_material,
-    mark_material_available, mark_material_missing, mark_material_probe_failed, migrate_draft_json,
-    upsert_material, validate_draft,
+    SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
+    SegmentMask, SegmentOpacity, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    Track, TrackKind, Transition, add_material, mark_material_available, mark_material_missing,
+    mark_material_probe_failed, migrate_draft_json, upsert_material, validate_draft,
 };
 use serde_json::json;
 
@@ -71,6 +72,7 @@ fn draft_schema_serializes_material_track_and_segment_records() {
         }),
         text: None,
         volume: Default::default(),
+        visual: SegmentVisual::default(),
     };
 
     let mut track = Track::new("track-video-001", TrackKind::Video, "Video 1");
@@ -172,6 +174,85 @@ fn migration_rejects_invalid_timeranges() {
             reason: "duration must be greater than zero microseconds".to_owned()
         }
     );
+}
+
+#[test]
+fn segment_visual_defaults_preserve_mvp_rendering_contract() {
+    let draft = valid_draft();
+    let visual = &draft.tracks[0].segments[0].visual;
+
+    assert!(visual.visible);
+    assert_eq!(visual.fit_mode, SegmentFitMode::Stretch);
+    assert_eq!(visual.transform.position.x, 0);
+    assert_eq!(visual.transform.position.y, 0);
+    assert_eq!(visual.transform.scale.x_millis, 1_000);
+    assert_eq!(visual.transform.scale.y_millis, 1_000);
+    assert_eq!(visual.transform.rotation.degrees, 0);
+    assert_eq!(visual.transform.opacity.value_millis, 1_000);
+    assert_eq!(visual.transform.crop.left_millis, 0);
+    assert_eq!(visual.transform.anchor.x_millis, 500);
+    assert_eq!(visual.background_filling, SegmentBackgroundFilling::None);
+    assert_eq!(visual.blend_mode, SegmentBlendMode::Normal);
+    assert_eq!(visual.mask, SegmentMask::None);
+}
+
+#[test]
+fn segment_visual_validation_rejects_invalid_transform_values() {
+    for (label, mutate, expected_field) in [
+        (
+            "zero scale",
+            set_zero_scale as fn(&mut SegmentVisual),
+            "scale.xMillis",
+        ),
+        (
+            "opacity overflow",
+            set_opacity_overflow,
+            "opacity.valueMillis",
+        ),
+        ("crop overflow", set_crop_overflow, "crop"),
+        ("anchor overflow", set_anchor_overflow, "anchor.xMillis"),
+        (
+            "invalid color",
+            set_invalid_background_color,
+            "backgroundFilling.color",
+        ),
+        (
+            "missing blend name",
+            set_missing_blend_name,
+            "blendMode.name",
+        ),
+        ("missing mask name", set_missing_mask_name, "mask.name"),
+    ] {
+        let mut draft = valid_draft();
+        mutate(&mut draft.tracks[0].segments[0].visual);
+
+        let error = validate_draft(&draft).expect_err(label);
+        assert!(
+            error.to_string().contains(expected_field),
+            "{label} should mention {expected_field}: {error}"
+        );
+    }
+}
+
+#[test]
+fn segment_visual_background_filling_references_image_materials() {
+    let mut draft = valid_draft();
+    draft.materials.push(Material::new(
+        "material-image-001",
+        MaterialKind::Image,
+        "media/background.png",
+        "background.png",
+    ));
+    draft.tracks[0].segments[0].visual.background_filling = SegmentBackgroundFilling::Image {
+        material_id: Some("material-image-001".into()),
+    };
+    validate_draft(&draft).expect("image background filling may reference image materials");
+
+    draft.tracks[0].segments[0].visual.background_filling = SegmentBackgroundFilling::Image {
+        material_id: Some("material-video-001".into()),
+    };
+    let error = validate_draft(&draft).expect_err("video material should reject image filling");
+    assert!(error.to_string().contains("backgroundFilling.materialId"));
 }
 
 #[test]
@@ -327,6 +408,53 @@ fn valid_draft() -> Draft {
     draft.materials.push(material);
     draft.tracks.push(track);
     draft
+}
+
+fn set_zero_scale(visual: &mut SegmentVisual) {
+    visual.transform.scale = SegmentScale {
+        x_millis: 0,
+        y_millis: 1_000,
+    };
+}
+
+fn set_opacity_overflow(visual: &mut SegmentVisual) {
+    visual.transform.opacity = SegmentOpacity {
+        value_millis: 1_001,
+    };
+}
+
+fn set_crop_overflow(visual: &mut SegmentVisual) {
+    visual.transform.crop = SegmentCrop {
+        left_millis: 600,
+        right_millis: 400,
+        top_millis: 0,
+        bottom_millis: 0,
+    };
+}
+
+fn set_anchor_overflow(visual: &mut SegmentVisual) {
+    visual.transform.anchor = SegmentAnchor {
+        x_millis: 1_001,
+        y_millis: 500,
+    };
+}
+
+fn set_invalid_background_color(visual: &mut SegmentVisual) {
+    visual.background_filling = SegmentBackgroundFilling::SolidColor {
+        color: "ffffff".to_owned(),
+    };
+}
+
+fn set_missing_blend_name(visual: &mut SegmentVisual) {
+    visual.blend_mode = SegmentBlendMode::Unsupported {
+        name: " ".to_owned(),
+    };
+}
+
+fn set_missing_mask_name(visual: &mut SegmentVisual) {
+    visual.mask = SegmentMask::Unsupported {
+        name: String::new(),
+    };
 }
 
 #[test]

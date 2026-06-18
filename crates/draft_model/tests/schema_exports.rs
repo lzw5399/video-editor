@@ -23,13 +23,16 @@ use draft_model::{
     ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
     RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
     RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentId,
-    SegmentVolume, SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
-    SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
-    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextSegment,
-    TextShadow, TextStroke, TextStyle, TimelineCommandResponse, TimelineSelection, Track, TrackId,
-    TrackKind, Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
-    UpdateDraftCanvasConfigCommandPayload, VersionCommandPayload,
+    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
+    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange,
+    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
+    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, TimelineCommandResponse,
+    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -61,7 +64,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -85,6 +88,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
+            export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -176,6 +180,18 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<TextStyle>(),
         export_decl::<TextSegment>(),
         export_decl::<SegmentVolume>(),
+        export_decl::<SegmentPosition>(),
+        export_decl::<SegmentScale>(),
+        export_decl::<SegmentRotation>(),
+        export_decl::<SegmentOpacity>(),
+        export_decl::<SegmentCrop>(),
+        export_decl::<SegmentAnchor>(),
+        export_decl::<SegmentTransform>(),
+        export_decl::<SegmentFitMode>(),
+        export_decl::<SegmentBackgroundFilling>(),
+        export_decl::<SegmentBlendMode>(),
+        export_decl::<SegmentMask>(),
+        export_decl::<SegmentVisual>(),
         export_decl::<Segment>(),
         export_decl::<Track>(),
         export_decl::<Draft>(),
@@ -208,7 +224,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -232,6 +248,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
+            export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -551,6 +568,60 @@ fn schema_exports_include_canvas_config_and_command_contracts() {
     );
 }
 
+#[test]
+fn schema_exports_include_segment_visual_and_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+    let draft_ts = ts_contract(&[
+        export_decl::<SegmentPosition>(),
+        export_decl::<SegmentScale>(),
+        export_decl::<SegmentRotation>(),
+        export_decl::<SegmentOpacity>(),
+        export_decl::<SegmentCrop>(),
+        export_decl::<SegmentAnchor>(),
+        export_decl::<SegmentTransform>(),
+        export_decl::<SegmentFitMode>(),
+        export_decl::<SegmentBackgroundFilling>(),
+        export_decl::<SegmentBlendMode>(),
+        export_decl::<SegmentMask>(),
+        export_decl::<SegmentVisual>(),
+    ]);
+
+    for expected_contract in [
+        "SegmentPosition",
+        "SegmentScale",
+        "SegmentRotation",
+        "SegmentOpacity",
+        "SegmentCrop",
+        "SegmentAnchor",
+        "SegmentTransform",
+        "SegmentFitMode",
+        "SegmentBackgroundFilling",
+        "SegmentBlendMode",
+        "SegmentMask",
+        "SegmentVisual",
+    ] {
+        assert!(
+            draft_ts.contains(expected_contract),
+            "draft TypeScript should include {expected_contract}"
+        );
+    }
+
+    assert!(
+        schema_json.contains("UpdateSegmentVisualCommandPayload"),
+        "command schema should include UpdateSegmentVisualCommandPayload"
+    );
+    assert!(
+        command_envelope_ts.contains("export type UpdateSegmentVisualCommandPayload"),
+        "generated TypeScript contracts should export UpdateSegmentVisualCommandPayload"
+    );
+    assert!(
+        schema_json.contains("updateSegmentVisual")
+            && command_envelope_ts.contains("updateSegmentVisual"),
+        "segment visual update command should be generated from Rust contracts"
+    );
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -564,7 +635,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -588,6 +659,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
+            export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -829,6 +901,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<UpdateDraftCanvasConfigCommandPayload>(
         &mut schema_value,
         "UpdateDraftCanvasConfigCommandPayload",
+    );
+    include_command_contract_schema::<UpdateSegmentVisualCommandPayload>(
+        &mut schema_value,
+        "UpdateSegmentVisualCommandPayload",
     );
     include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
         &mut schema_value,
@@ -1461,6 +1537,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "updateDraftCanvasConfig" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "updateSegmentVisual" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "updateSegmentVisual" }
                     },
                     "required": ["kind"]
                 }

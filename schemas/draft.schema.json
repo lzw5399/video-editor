@@ -469,6 +469,48 @@
             }
           ]
         },
+        "visual": {
+          "$ref": "#/$defs/SegmentVisual",
+          "default": {
+            "backgroundFilling": {
+              "kind": "none"
+            },
+            "blendMode": {
+              "kind": "normal"
+            },
+            "fitMode": "stretch",
+            "mask": {
+              "kind": "none"
+            },
+            "transform": {
+              "anchor": {
+                "xMillis": 500,
+                "yMillis": 500
+              },
+              "crop": {
+                "bottomMillis": 0,
+                "leftMillis": 0,
+                "rightMillis": 0,
+                "topMillis": 0
+              },
+              "opacity": {
+                "valueMillis": 1000
+              },
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "rotation": {
+                "degrees": 0
+              },
+              "scale": {
+                "xMillis": 1000,
+                "yMillis": 1000
+              }
+            },
+            "visible": true
+          }
+        },
         "volume": {
           "$ref": "#/$defs/SegmentVolume",
           "default": {
@@ -487,8 +529,339 @@
         "filters"
       ]
     },
+    "SegmentAnchor": {
+      "type": "object",
+      "properties": {
+        "xMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "yMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "xMillis",
+        "yMillis"
+      ]
+    },
+    "SegmentBackgroundFilling": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "black"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "solidColor"
+            }
+          },
+          "required": [
+            "kind",
+            "color"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "blur"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "image"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "SegmentBlendMode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "normal"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "unsupported"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "SegmentCrop": {
+      "type": "object",
+      "properties": {
+        "bottomMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "leftMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "rightMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "topMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "leftMillis",
+        "rightMillis",
+        "topMillis",
+        "bottomMillis"
+      ]
+    },
+    "SegmentFitMode": {
+      "type": "string",
+      "enum": [
+        "fit",
+        "fill",
+        "stretch"
+      ]
+    },
     "SegmentId": {
       "type": "string"
+    },
+    "SegmentMask": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "unsupported"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "SegmentOpacity": {
+      "type": "object",
+      "properties": {
+        "valueMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "valueMillis"
+      ]
+    },
+    "SegmentPosition": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "y": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ]
+    },
+    "SegmentRotation": {
+      "type": "object",
+      "properties": {
+        "degrees": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "degrees"
+      ]
+    },
+    "SegmentScale": {
+      "type": "object",
+      "properties": {
+        "xMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "yMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "xMillis",
+        "yMillis"
+      ]
+    },
+    "SegmentTransform": {
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/SegmentAnchor"
+        },
+        "crop": {
+          "$ref": "#/$defs/SegmentCrop"
+        },
+        "opacity": {
+          "$ref": "#/$defs/SegmentOpacity"
+        },
+        "position": {
+          "$ref": "#/$defs/SegmentPosition"
+        },
+        "rotation": {
+          "$ref": "#/$defs/SegmentRotation"
+        },
+        "scale": {
+          "$ref": "#/$defs/SegmentScale"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "scale",
+        "rotation",
+        "opacity",
+        "crop",
+        "anchor"
+      ]
+    },
+    "SegmentVisual": {
+      "type": "object",
+      "properties": {
+        "backgroundFilling": {
+          "$ref": "#/$defs/SegmentBackgroundFilling"
+        },
+        "blendMode": {
+          "$ref": "#/$defs/SegmentBlendMode"
+        },
+        "fitMode": {
+          "$ref": "#/$defs/SegmentFitMode"
+        },
+        "mask": {
+          "$ref": "#/$defs/SegmentMask"
+        },
+        "transform": {
+          "$ref": "#/$defs/SegmentTransform"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "visible",
+        "transform",
+        "fitMode",
+        "backgroundFilling",
+        "blendMode",
+        "mask"
+      ]
     },
     "SegmentVolume": {
       "type": "object",

@@ -330,6 +330,7 @@
         "setSegmentVolume",
         "setTrackMute",
         "updateDraftCanvasConfig",
+        "updateSegmentVisual",
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
@@ -997,6 +998,40 @@
             "commandState",
             "selection",
             "canvasConfig"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 8 segment visual update command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "updateSegmentVisual",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "visual": {
+              "$ref": "#/$defs/SegmentVisual"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "visual"
           ],
           "type": "object"
         },
@@ -2293,6 +2328,48 @@
             }
           ]
         },
+        "visual": {
+          "$ref": "#/$defs/SegmentVisual",
+          "default": {
+            "backgroundFilling": {
+              "kind": "none"
+            },
+            "blendMode": {
+              "kind": "normal"
+            },
+            "fitMode": "stretch",
+            "mask": {
+              "kind": "none"
+            },
+            "transform": {
+              "anchor": {
+                "xMillis": 500,
+                "yMillis": 500
+              },
+              "crop": {
+                "bottomMillis": 0,
+                "leftMillis": 0,
+                "rightMillis": 0,
+                "topMillis": 0
+              },
+              "opacity": {
+                "valueMillis": 1000
+              },
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "rotation": {
+                "degrees": 0
+              },
+              "scale": {
+                "xMillis": 1000,
+                "yMillis": 1000
+              }
+            },
+            "visible": true
+          }
+        },
         "volume": {
           "$ref": "#/$defs/SegmentVolume",
           "default": {
@@ -2311,8 +2388,339 @@
       ],
       "type": "object"
     },
+    "SegmentAnchor": {
+      "additionalProperties": false,
+      "properties": {
+        "xMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "yMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "xMillis",
+        "yMillis"
+      ],
+      "type": "object"
+    },
+    "SegmentBackgroundFilling": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "none",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "black",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "solidColor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "color"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "blur",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "image",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SegmentBlendMode": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "normal",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "unsupported",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SegmentCrop": {
+      "additionalProperties": false,
+      "properties": {
+        "bottomMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "leftMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rightMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "topMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "leftMillis",
+        "rightMillis",
+        "topMillis",
+        "bottomMillis"
+      ],
+      "type": "object"
+    },
+    "SegmentFitMode": {
+      "enum": [
+        "fit",
+        "fill",
+        "stretch"
+      ],
+      "type": "string"
+    },
     "SegmentId": {
       "type": "string"
+    },
+    "SegmentMask": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "none",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "unsupported",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SegmentOpacity": {
+      "additionalProperties": false,
+      "properties": {
+        "valueMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "valueMillis"
+      ],
+      "type": "object"
+    },
+    "SegmentPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "y": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "SegmentRotation": {
+      "additionalProperties": false,
+      "properties": {
+        "degrees": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "degrees"
+      ],
+      "type": "object"
+    },
+    "SegmentScale": {
+      "additionalProperties": false,
+      "properties": {
+        "xMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "yMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "xMillis",
+        "yMillis"
+      ],
+      "type": "object"
+    },
+    "SegmentTransform": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/SegmentAnchor"
+        },
+        "crop": {
+          "$ref": "#/$defs/SegmentCrop"
+        },
+        "opacity": {
+          "$ref": "#/$defs/SegmentOpacity"
+        },
+        "position": {
+          "$ref": "#/$defs/SegmentPosition"
+        },
+        "rotation": {
+          "$ref": "#/$defs/SegmentRotation"
+        },
+        "scale": {
+          "$ref": "#/$defs/SegmentScale"
+        }
+      },
+      "required": [
+        "position",
+        "scale",
+        "rotation",
+        "opacity",
+        "crop",
+        "anchor"
+      ],
+      "type": "object"
+    },
+    "SegmentVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "backgroundFilling": {
+          "$ref": "#/$defs/SegmentBackgroundFilling"
+        },
+        "blendMode": {
+          "$ref": "#/$defs/SegmentBlendMode"
+        },
+        "fitMode": {
+          "$ref": "#/$defs/SegmentFitMode"
+        },
+        "mask": {
+          "$ref": "#/$defs/SegmentMask"
+        },
+        "transform": {
+          "$ref": "#/$defs/SegmentTransform"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "visible",
+        "transform",
+        "fitMode",
+        "backgroundFilling",
+        "blendMode",
+        "mask"
+      ],
+      "type": "object"
     },
     "SegmentVolume": {
       "additionalProperties": false,
@@ -2868,6 +3276,36 @@
       ],
       "title": "UpdateDraftCanvasConfigCommandPayload",
       "type": "object"
+    },
+    "UpdateSegmentVisualCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 8 segment visual update command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "visual": {
+          "$ref": "#/$defs/SegmentVisual"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "visual"
+      ],
+      "title": "UpdateSegmentVisualCommandPayload",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3223,6 +3661,23 @@
           "properties": {
             "kind": {
               "const": "updateDraftCanvasConfig"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "updateSegmentVisual"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "updateSegmentVisual"
             }
           },
           "required": [

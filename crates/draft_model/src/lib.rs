@@ -31,9 +31,12 @@ pub use material::{
 };
 pub use time::Microseconds;
 pub use timeline::{
-    Filter, Keyframe, MAX_SEGMENT_VOLUME_MILLIS, MainTrackMagnet, Segment, SegmentVolume,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow,
-    TextStroke, TextStyle, Track, TrackKind, Transition,
+    Filter, Keyframe, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MainTrackMagnet, Segment, SegmentAnchor,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentMask,
+    SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
+    TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind, Transition,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
@@ -76,6 +79,7 @@ pub enum CommandName {
     SetSegmentVolume,
     SetTrackMute,
     UpdateDraftCanvasConfig,
+    UpdateSegmentVisual,
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
@@ -109,6 +113,7 @@ pub enum CommandPayload {
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
+    UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
@@ -142,6 +147,7 @@ impl CommandPayload {
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
             Self::UpdateDraftCanvasConfig(_) => CommandName::UpdateDraftCanvasConfig,
+            Self::UpdateSegmentVisual(_) => CommandName::UpdateSegmentVisual,
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
@@ -401,6 +407,17 @@ pub struct UpdateDraftCanvasConfigCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub canvas_config: DraftCanvasConfig,
+}
+
+/// Payload accepted by the Phase 8 segment visual update command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSegmentVisualCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub visual: SegmentVisual,
 }
 
 /// Preview artifact profile requested through Rust-owned preview services.

@@ -8,8 +8,9 @@ use ts_rs::TS;
 
 use crate::{
     CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS,
-    MaterialKind, Microseconds, RationalFrameRate, SourceTimerange, TargetTimerange, TextSegment,
-    reduce_ratio,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentBackgroundFilling,
+    SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange,
+    TextSegment, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -20,6 +21,7 @@ pub enum DraftValidationError {
     InvalidTimerange { field: String, reason: String },
     InvalidRationalFrameRate { field: String, reason: String },
     InvalidCanvasConfig { field: String, reason: String },
+    InvalidSegmentVisual { field: String, reason: String },
     DuplicateId { id_kind: String, id: String },
     DerivedArtifactLeakage { field: String },
     InvalidDraftJson { message: String },
@@ -45,6 +47,9 @@ impl fmt::Display for DraftValidationError {
             }
             Self::InvalidCanvasConfig { field, reason } => {
                 write!(formatter, "invalid canvas config {field}: {reason}")
+            }
+            Self::InvalidSegmentVisual { field, reason } => {
+                write!(formatter, "invalid segment visual {field}: {reason}")
             }
             Self::DuplicateId { id_kind, id } => {
                 write!(formatter, "duplicate {id_kind} id {id}")
@@ -191,6 +196,7 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                 validate_text_segment("tracks[].segments[].text", text)?;
             }
             validate_segment_volume("tracks[].segments[].volume", segment.volume.level_millis)?;
+            validate_segment_visual(draft, "tracks[].segments[].visual", &segment.visual)?;
         }
     }
 
@@ -425,6 +431,192 @@ fn validate_segment_volume(field: &str, level_millis: u32) -> Result<(), DraftVa
     Ok(())
 }
 
+fn validate_segment_visual(
+    draft: &Draft,
+    field: &str,
+    visual: &SegmentVisual,
+) -> Result<(), DraftValidationError> {
+    validate_segment_transform(field, visual)?;
+    validate_segment_background_filling(
+        draft,
+        &format!("{field}.backgroundFilling"),
+        &visual.background_filling,
+    )?;
+    validate_segment_blend_mode(&format!("{field}.blendMode"), &visual.blend_mode)?;
+    validate_segment_mask(&format!("{field}.mask"), &visual.mask)?;
+    Ok(())
+}
+
+fn validate_segment_transform(
+    field: &str,
+    visual: &SegmentVisual,
+) -> Result<(), DraftValidationError> {
+    let transform = &visual.transform;
+    if transform.scale.x_millis == 0 {
+        return Err(invalid_segment_visual(
+            &format!("{field}.transform.scale.xMillis"),
+            "scale must be greater than zero",
+        ));
+    }
+    if transform.scale.y_millis == 0 {
+        return Err(invalid_segment_visual(
+            &format!("{field}.transform.scale.yMillis"),
+            "scale must be greater than zero",
+        ));
+    }
+    if transform.rotation.degrees < -360 || transform.rotation.degrees > 360 {
+        return Err(invalid_segment_visual(
+            &format!("{field}.transform.rotation.degrees"),
+            "rotation must be between -360 and 360 degrees",
+        ));
+    }
+    if transform.opacity.value_millis > crate::MAX_SEGMENT_OPACITY_MILLIS {
+        return Err(invalid_segment_visual(
+            &format!("{field}.transform.opacity.valueMillis"),
+            "opacity must be <= 1000",
+        ));
+    }
+    validate_segment_crop(&format!("{field}.transform.crop"), &transform.crop)?;
+    validate_millis_range(
+        &format!("{field}.transform.anchor.xMillis"),
+        transform.anchor.x_millis,
+        crate::MAX_SEGMENT_ANCHOR_MILLIS,
+        "anchor must be between 0 and 1000",
+    )?;
+    validate_millis_range(
+        &format!("{field}.transform.anchor.yMillis"),
+        transform.anchor.y_millis,
+        crate::MAX_SEGMENT_ANCHOR_MILLIS,
+        "anchor must be between 0 and 1000",
+    )
+}
+
+fn validate_segment_crop(field: &str, crop: &SegmentCrop) -> Result<(), DraftValidationError> {
+    for (name, value) in [
+        ("leftMillis", crop.left_millis),
+        ("rightMillis", crop.right_millis),
+        ("topMillis", crop.top_millis),
+        ("bottomMillis", crop.bottom_millis),
+    ] {
+        validate_millis_range(
+            &format!("{field}.{name}"),
+            value,
+            crate::MAX_SEGMENT_CROP_MILLIS,
+            "crop inset must be between 0 and 1000",
+        )?;
+    }
+
+    if crop.left_millis + crop.right_millis >= crate::MAX_SEGMENT_CROP_MILLIS {
+        return Err(invalid_segment_visual(
+            field,
+            "left and right crop insets must sum to less than 1000",
+        ));
+    }
+    if crop.top_millis + crop.bottom_millis >= crate::MAX_SEGMENT_CROP_MILLIS {
+        return Err(invalid_segment_visual(
+            field,
+            "top and bottom crop insets must sum to less than 1000",
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_segment_background_filling(
+    draft: &Draft,
+    field: &str,
+    background_filling: &SegmentBackgroundFilling,
+) -> Result<(), DraftValidationError> {
+    match background_filling {
+        SegmentBackgroundFilling::None
+        | SegmentBackgroundFilling::Black
+        | SegmentBackgroundFilling::Blur => Ok(()),
+        SegmentBackgroundFilling::SolidColor { color } => {
+            validate_segment_hex_color(&format!("{field}.color"), color)
+        }
+        SegmentBackgroundFilling::Image { material_id } => {
+            validate_optional_image_material(draft, &format!("{field}.materialId"), material_id)
+        }
+    }
+}
+
+fn validate_optional_image_material(
+    draft: &Draft,
+    field: &str,
+    material_id: &Option<MaterialId>,
+) -> Result<(), DraftValidationError> {
+    let Some(material_id) = material_id else {
+        return Ok(());
+    };
+    let Some(material) = draft
+        .materials
+        .iter()
+        .find(|material| &material.material_id == material_id)
+    else {
+        return Err(DraftValidationError::MissingRequiredSemanticField {
+            field: format!("{field} references {}", material_id.as_str()),
+        });
+    };
+    if material.kind != MaterialKind::Image {
+        return Err(invalid_segment_visual(
+            field,
+            "image background filling material must reference an image material",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_segment_blend_mode(
+    field: &str,
+    blend_mode: &SegmentBlendMode,
+) -> Result<(), DraftValidationError> {
+    match blend_mode {
+        SegmentBlendMode::Normal => Ok(()),
+        SegmentBlendMode::Unsupported { name } => {
+            validate_required_text(&format!("{field}.name"), name)
+        }
+    }
+}
+
+fn validate_segment_mask(field: &str, mask: &SegmentMask) -> Result<(), DraftValidationError> {
+    match mask {
+        SegmentMask::None => Ok(()),
+        SegmentMask::Unsupported { name } => validate_required_text(&format!("{field}.name"), name),
+    }
+}
+
+fn validate_millis_range(
+    field: &str,
+    value: u32,
+    max: u32,
+    reason: &str,
+) -> Result<(), DraftValidationError> {
+    if value > max {
+        return Err(invalid_segment_visual(field, reason));
+    }
+    Ok(())
+}
+
+fn validate_segment_hex_color(field: &str, color: &str) -> Result<(), DraftValidationError> {
+    let color = color.trim();
+    if color.len() != 7 || !color.starts_with('#') {
+        return Err(invalid_segment_visual(
+            field,
+            "color must use #RRGGBB hex format",
+        ));
+    }
+    if !color[1..]
+        .chars()
+        .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err(invalid_segment_visual(
+            field,
+            "color must contain only hex digits",
+        ));
+    }
+    Ok(())
+}
+
 fn missing_field(field: &str) -> DraftValidationError {
     DraftValidationError::MissingRequiredSemanticField {
         field: field.to_owned(),
@@ -433,6 +625,13 @@ fn missing_field(field: &str) -> DraftValidationError {
 
 fn invalid_canvas(field: &str, reason: &str) -> DraftValidationError {
     DraftValidationError::InvalidCanvasConfig {
+        field: field.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+fn invalid_segment_visual(field: &str, reason: &str) -> DraftValidationError {
+    DraftValidationError::InvalidSegmentVisual {
         field: field.to_owned(),
         reason: reason.to_owned(),
     }

@@ -13,6 +13,7 @@ pub mod selection;
 pub mod snapping;
 pub mod text;
 pub mod timeline;
+pub mod visual;
 
 pub use error::{TimelineCommandError, TimelineCommandErrorKind};
 pub use selection::TimelineSelection;

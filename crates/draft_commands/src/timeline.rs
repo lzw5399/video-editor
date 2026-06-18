@@ -13,6 +13,7 @@ use crate::{
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment},
+    visual::update_segment_visual,
 };
 
 pub fn checked_source_end(
@@ -238,6 +239,13 @@ pub fn execute_timeline_edit(
             &payload.command_state,
             &payload.selection,
             payload.canvas_config,
+        ),
+        CommandPayload::UpdateSegmentVisual(payload) => update_segment_visual(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.visual,
         ),
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {
@@ -766,7 +774,7 @@ fn find_track_index(draft: &Draft, track_id: &TrackId) -> Result<usize, Timeline
         })
 }
 
-fn find_segment_location(
+pub(crate) fn find_segment_location(
     draft: &Draft,
     segment_id: &SegmentId,
 ) -> Result<(usize, usize), TimelineCommandError> {
