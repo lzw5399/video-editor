@@ -4,10 +4,15 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 default:
-  @printf 'Available recipes:\n  dev\n  build\n  test\n'
+  @printf 'Available recipes:\n  desktop\n  dev\n  build\n  test\n'
 
 dev:
   pnpm run dev
+
+desktop:
+  pnpm install --frozen-lockfile
+  pnpm --filter @video-editor/desktop build
+  pnpm --filter @video-editor/desktop exec electron dist/main/index.cjs
 
 build:
   pnpm install --frozen-lockfile

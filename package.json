@@ -9,6 +9,7 @@
     "pnpm": "10.32.1"
   },
   "scripts": {
+    "desktop": "pnpm install --frozen-lockfile && pnpm --filter @video-editor/desktop build && pnpm --filter @video-editor/desktop exec electron dist/main/index.cjs",
     "dev": "pnpm --recursive --if-present dev",
     "build:rust": "cargo check --workspace --locked && cargo build --workspace --locked",
     "build:native": "pnpm --filter @video-editor/desktop build:native",
