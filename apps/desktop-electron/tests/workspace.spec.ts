@@ -28,6 +28,19 @@ type ExecuteCommandCall = {
   jobId: string | null;
 };
 
+type RealtimePreviewHostCall = {
+  kind: string;
+  parentHandleByteLength?: number;
+  surfaceKind?: string;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    scaleFactorMillis: number;
+  };
+};
+
 type RegionBox = {
   x: number;
   y: number;
@@ -45,9 +58,21 @@ type VideoEditorCoreApi = {
   executeCommand: (command: unknown) => Promise<unknown>;
 };
 
+type VideoEditorRealtimePreviewHostApi = {
+  updateHostRect: (rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    scaleFactorMillis: number;
+  }) => Promise<unknown>;
+  getTelemetry: () => Promise<unknown>;
+};
+
 declare global {
   interface Window {
     videoEditorCore?: VideoEditorCoreApi;
+    videoEditorRealtimePreviewHost?: VideoEditorRealtimePreviewHostApi;
   }
 }
 
@@ -104,6 +129,15 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     return (
       (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
         .__videoEditorTestExecuteCommandCalls ?? []
+    );
+  });
+}
+
+async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<RealtimePreviewHostCall[]> {
+  return app.evaluate(() => {
+    return (
+      (globalThis as typeof globalThis & { __videoEditorTestRealtimePreviewHostCalls?: RealtimePreviewHostCall[] })
+        .__videoEditorTestRealtimePreviewHostCalls ?? []
     );
   });
 }
@@ -853,6 +887,65 @@ test("播放头预览时间输入和逐帧按钮请求目标预览帧", async ()
     await page.getByRole("button", { name: "上一帧" }).click();
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
     await expectLatestPreviewFrameTarget(app, 1_200_000);
+  } finally {
+    await app.close();
+  }
+});
+
+test("native preview host bridge keeps handles in main and exposes narrow telemetry APIs", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    const bridgeShape = await page.evaluate(() => {
+      const bridge = window.videoEditorRealtimePreviewHost;
+      return bridge === undefined ? [] : Object.keys(bridge).sort();
+    });
+
+    expect(bridgeShape).toEqual(["getTelemetry", "updateHostRect"]);
+
+    const updateResult = await page.evaluate(() =>
+      window.videoEditorRealtimePreviewHost?.updateHostRect({
+        x: 12.7,
+        y: 34.2,
+        width: 320.9,
+        height: 180.1,
+        scaleFactorMillis: 1250.6
+      })
+    );
+    expect(JSON.stringify(updateResult)).not.toMatch(/native|handle|hwnd|nsview|gpu|surface|commandEncoder|cacheKey/i);
+
+    const telemetry = await page.evaluate(() => window.videoEditorRealtimePreviewHost?.getTelemetry());
+    expect(JSON.stringify(telemetry)).not.toMatch(/native|handle|hwnd|nsview|gpu|surface|commandEncoder|cacheKey/i);
+
+    await expect
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "attachSurface"))
+      .toBe(true);
+
+    const callsBeforeClose = await readRealtimePreviewHostCalls(app);
+    expect(callsBeforeClose.some((call) => call.kind === "createSession")).toBe(true);
+    expect(callsBeforeClose.some((call) => call.kind === "acquireNativeWindowHandle" && (call.parentHandleByteLength ?? 0) > 0)).toBe(true);
+    expect(callsBeforeClose.some((call) => call.kind === "attachSurface" && call.surfaceKind !== undefined)).toBe(true);
+    expect(callsBeforeClose.some((call) => call.kind === "updateSurfaceBounds")).toBe(true);
+    expect(callsBeforeClose.at(-1)?.kind).not.toBe("closeSession");
+
+    const latestBounds = callsBeforeClose.findLast((call) => call.kind === "updateSurfaceBounds")?.bounds;
+    expect(latestBounds).toEqual({
+      x: 13,
+      y: 34,
+      width: 321,
+      height: 180,
+      scaleFactorMillis: 1251
+    });
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.close();
+    });
+    await expect
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "closeSession"))
+      .toBe(true);
+
+    const callsAfterClose = await readRealtimePreviewHostCalls(app);
+    expect(callsAfterClose.some((call) => call.kind === "detachSurface")).toBe(true);
+    expect(callsAfterClose.some((call) => call.kind === "closeSession")).toBe(true);
   } finally {
     await app.close();
   }
