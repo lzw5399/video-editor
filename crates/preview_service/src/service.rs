@@ -19,8 +19,8 @@ pub struct PreviewServiceConfig {
     pub cache_root: PathBuf,
     pub ffmpeg_path: PathBuf,
     pub compiler_capabilities: CompilerCapabilities,
-    pub preview_frame_dimensions: OutputDimensions,
-    pub preview_segment_dimensions: OutputDimensions,
+    pub preview_frame_max_dimensions: OutputDimensions,
+    pub preview_segment_max_dimensions: OutputDimensions,
 }
 
 impl PreviewServiceConfig {
@@ -29,8 +29,8 @@ impl PreviewServiceConfig {
             cache_root: cache_root.into(),
             ffmpeg_path: ffmpeg_path.into(),
             compiler_capabilities: CompilerCapabilities::all_available_for_tests(),
-            preview_frame_dimensions: OutputDimensions::new(960, 540),
-            preview_segment_dimensions: OutputDimensions::new(960, 540),
+            preview_frame_max_dimensions: OutputDimensions::new(960, 540),
+            preview_segment_max_dimensions: OutputDimensions::new(960, 540),
         }
     }
 
@@ -180,7 +180,13 @@ fn prepare_preview(
     profile: PreviewCacheProfile,
     config: &PreviewServiceConfig,
 ) -> Result<PreparedPreview, PreviewServiceError> {
-    let normalized = normalize_draft(draft, &EngineProfile::mvp_default()).map_err(|error| {
+    let engine_profile = EngineProfile::from_draft_canvas(draft).map_err(|error| {
+        PreviewServiceError::new(
+            PreviewServiceErrorKind::EngineFailed,
+            format!("preview engine profile resolution failed: {error}"),
+        )
+    })?;
+    let normalized = normalize_draft(draft, &engine_profile).map_err(|error| {
         PreviewServiceError::new(
             PreviewServiceErrorKind::EngineFailed,
             format!("preview engine normalization failed: {error}"),
@@ -219,12 +225,12 @@ fn prepare_preview(
     };
     let output_profile = match profile {
         PreviewCacheProfile::FramePng => RenderOutputProfile::preview_frame_png(
-            config.preview_frame_dimensions,
+            preview_output_dimensions(&normalized.profile, config.preview_frame_max_dimensions),
             range.frame_rate.clone(),
             target_timerange,
         ),
         PreviewCacheProfile::SegmentMp4 => RenderOutputProfile::preview_segment_mp4(
-            config.preview_segment_dimensions,
+            preview_output_dimensions(&normalized.profile, config.preview_segment_max_dimensions),
             range.frame_rate.clone(),
             target_timerange,
         ),
@@ -254,6 +260,72 @@ fn prepare_preview(
         cache_entry,
         ffmpeg_job,
     })
+}
+
+fn preview_output_dimensions(
+    profile: &EngineProfile,
+    max_dimensions: OutputDimensions,
+) -> OutputDimensions {
+    fit_canvas_dimensions(profile.canvas_width, profile.canvas_height, max_dimensions)
+}
+
+fn fit_canvas_dimensions(
+    canvas_width: u32,
+    canvas_height: u32,
+    max_dimensions: OutputDimensions,
+) -> OutputDimensions {
+    if canvas_width == 0
+        || canvas_height == 0
+        || max_dimensions.width == 0
+        || max_dimensions.height == 0
+    {
+        return max_dimensions;
+    }
+
+    let width_limited = u128::from(max_dimensions.width) * u128::from(canvas_height)
+        <= u128::from(max_dimensions.height) * u128::from(canvas_width);
+    let (scale_numerator, scale_denominator) = if width_limited {
+        (max_dimensions.width, canvas_width)
+    } else {
+        (max_dimensions.height, canvas_height)
+    };
+
+    if scale_numerator >= scale_denominator {
+        return OutputDimensions::new(
+            stable_preview_dimension(canvas_width, max_dimensions.width),
+            stable_preview_dimension(canvas_height, max_dimensions.height),
+        );
+    }
+
+    let width = round_scaled_dimension(canvas_width, scale_numerator, scale_denominator)
+        .min(max_dimensions.width);
+    let height = round_scaled_dimension(canvas_height, scale_numerator, scale_denominator)
+        .min(max_dimensions.height);
+
+    OutputDimensions::new(
+        stable_preview_dimension(width, max_dimensions.width),
+        stable_preview_dimension(height, max_dimensions.height),
+    )
+}
+
+fn round_scaled_dimension(value: u32, numerator: u32, denominator: u32) -> u32 {
+    let scaled = (u128::from(value) * u128::from(numerator))
+        .saturating_add(u128::from(denominator) / 2)
+        / u128::from(denominator);
+    u32::try_from(scaled).unwrap_or(u32::MAX).max(1)
+}
+
+fn stable_preview_dimension(value: u32, max: u32) -> u32 {
+    let max = max.max(1);
+    let value = value.max(1).min(max);
+    if value <= 2 || value % 2 == 0 {
+        return value;
+    }
+    if value < max {
+        value + 1
+    } else {
+        value.saturating_sub(1).max(1)
+    }
 }
 
 fn write_sidecars_and_run(
