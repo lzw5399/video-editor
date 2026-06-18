@@ -119,7 +119,10 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
         .expect("texture handoff decodes");
 
     assert_eq!(output.storage_kind, PreviewFrameStorageKind::Texture);
-    assert_eq!(output.selected_path, SelectedDecodePath::NativeHardwareTexture);
+    assert_eq!(
+        output.selected_path,
+        SelectedDecodePath::NativeHardwareTexture
+    );
     assert_eq!(output.fallback, None);
     assert!(output.diagnostics.iter().any(|diagnostic| {
         diagnostic.texture_compatible
@@ -171,7 +174,10 @@ fn media_io_handoff_keeps_cpu_or_platform_frames_valid_when_texture_compatibilit
         .expect("platform-opaque handoff decodes");
 
     assert_eq!(output.storage_kind, PreviewFrameStorageKind::PlatformOpaque);
-    assert_eq!(output.selected_path, SelectedDecodePath::NativeHardwareCpuCopy);
+    assert_eq!(
+        output.selected_path,
+        SelectedDecodePath::NativeHardwareCpuCopy
+    );
     assert_eq!(
         output.fallback,
         Some(RealtimePreviewFallbackReason::MediaIoTextureInteropUnavailable)
@@ -221,7 +227,10 @@ fn media_io_handoff_rejects_stale_generation_after_decode_and_counts_telemetry()
         .expect("decode result is still returned with stale rejection metadata");
 
     assert!(output.stale_rejected);
-    assert_eq!(output.fallback, Some(RealtimePreviewFallbackReason::StaleGeneration));
+    assert_eq!(
+        output.fallback,
+        Some(RealtimePreviewFallbackReason::StaleGeneration)
+    );
     assert_eq!(provider.telemetry().stale_rejected_count, 1);
     assert_eq!(provider.telemetry().presentable_frame_count, 0);
 }
@@ -308,10 +317,7 @@ impl MediaReader for MockMediaReader {
 
     fn open(&self, request: MediaOpenRequest) -> Result<Box<dyn MediaSession>, MediaIoError> {
         Ok(Box::new(MockMediaSession {
-            session_id: MediaSessionId(format!(
-                "mock-session-{}",
-                request.material_uri.display()
-            )),
+            session_id: MediaSessionId(format!("mock-session-{}", request.material_uri.display())),
             streams: vec![video_stream()],
             recorded_requests: self.recorded_requests.clone(),
             storage: self.storage.clone(),
@@ -394,24 +400,26 @@ impl VideoDecoder for MockVideoDecoder {
             },
         };
 
-        self.pool.acquire_video_frame(FrameLeaseRequest {
-            playback_generation: request.playback_generation,
-            source_time_us: request.source_time_us,
-            duration_us: Some(33_333),
-            frame_index: Some(7),
-            dimensions: FrameDimensions {
-                width: 320,
-                height: 180,
-            },
-            pixel_format: VideoPixelFormat::Nv12,
-            color: VideoColorMetadata::unknown_with_diagnostic("test color metadata"),
-            storage,
-        }).map_err(|error| {
-            DecodeError::new(
-                media_runtime::DecodeErrorKind::RuntimeFailure,
-                format!("mock frame pool failed: {error}"),
-            )
-        })
+        self.pool
+            .acquire_video_frame(FrameLeaseRequest {
+                playback_generation: request.playback_generation,
+                source_time_us: request.source_time_us,
+                duration_us: Some(33_333),
+                frame_index: Some(7),
+                dimensions: FrameDimensions {
+                    width: 320,
+                    height: 180,
+                },
+                pixel_format: VideoPixelFormat::Nv12,
+                color: VideoColorMetadata::unknown_with_diagnostic("test color metadata"),
+                storage,
+            })
+            .map_err(|error| {
+                DecodeError::new(
+                    media_runtime::DecodeErrorKind::RuntimeFailure,
+                    format!("mock frame pool failed: {error}"),
+                )
+            })
     }
 
     fn flush(&mut self) -> Result<(), DecodeError> {
@@ -434,7 +442,9 @@ fn video_stream() -> MediaStreamInfo {
             height: 180,
         }),
         pixel_format: Some(VideoPixelFormat::Nv12),
-        color: Some(VideoColorMetadata::unknown_with_diagnostic("test stream color")),
+        color: Some(VideoColorMetadata::unknown_with_diagnostic(
+            "test stream color",
+        )),
         sample_rate: None,
         channels: None,
     }
