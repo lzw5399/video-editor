@@ -280,6 +280,16 @@ async function expectPreviewControlsFit(page: Page, label: string): Promise<void
   expect(clippedItems, `${label} must stay inside preview shell`).toEqual([]);
 }
 
+async function expectLocatorInsideHorizontalContainer(container: Locator, target: Locator, label: string): Promise<void> {
+  await target.scrollIntoViewIfNeeded();
+  const containerBox = await expectStableBox(container, `${label} container`);
+  const targetBox = await expectStableBox(target, label);
+
+  expect(targetBox.width, `${label} wider than container`).toBeLessThanOrEqual(containerBox.width + 1);
+  expect(targetBox.x, `${label} left clipped`).toBeGreaterThanOrEqual(containerBox.x - 1);
+  expect(targetBox.x + targetBox.width, `${label} right clipped`).toBeLessThanOrEqual(containerBox.x + containerBox.width + 1);
+}
+
 function expectCompactScrollbarBaseline(): void {
   const source = readFileSync(join(process.cwd(), "src/renderer/styles.css"), "utf8");
 
@@ -413,7 +423,8 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
-    await expect(page.getByLabel("文字对齐")).toBeVisible();
+    await expect(page.getByLabel("默认文字").getByText("字号")).toHaveCount(0);
+    await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
 
     await topFeatureNav.getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
@@ -444,11 +455,16 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
     await expectCompactScrollbarBaseline();
     await expect(page.getByLabel("默认文字")).toContainText("默认文字");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("字幕 / 导入字幕");
-    await expect(page.getByLabel("字幕 导入字幕")).toContainText("Rust 解析 SRT");
+    await expect(page.getByLabel("字幕 导入字幕")).toContainText("自动生成字幕片段");
     await expect(page.getByLabel("花字")).toContainText("暂未接入");
     await expect(page.getByLabel("气泡")).toContainText("暂未接入");
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
     await expect(page.getByRole("button", { name: "导入字幕" })).toBeVisible();
+
+    const resourcePanel = page.getByLabel("素材面板");
+    for (const label of ["默认文字", "字幕 导入字幕", "花字", "气泡"]) {
+      await expectLocatorInsideHorizontalContainer(resourcePanel, page.getByLabel(label), `文字面板 ${label}`);
+    }
   } finally {
     await app.close();
   }
@@ -472,6 +488,10 @@ test("command-only text edit routes complete text inspector changes through exec
     const textSection = page.getByRole("region", { name: "文本", exact: true });
     const textBoxSection = page.getByRole("region", { name: "文本框", exact: true });
     const layoutSection = page.getByRole("region", { name: "布局", exact: true });
+    const inspector = page.getByLabel("属性检查器");
+    for (const section of [textSection, page.getByRole("region", { name: "样式", exact: true }), textBoxSection, layoutSection]) {
+      await expectLocatorInsideHorizontalContainer(inspector, section, "文字检查器区块");
+    }
     await expect(textSection).toContainText("字幕来源");
     await textSection.getByLabel("字体").fill("PingFang SC");
     await textBoxSection.getByLabel("行高").fill("1300");

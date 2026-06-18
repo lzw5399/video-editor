@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { Material, TextAlignment, TextSegment } from "../../generated/Draft";
+import type { Material, TextSegment } from "../../generated/Draft";
 import {
   findFirstMaterialByKind,
   findTrackByKind,
@@ -154,19 +154,6 @@ function MaterialPanel({
 
 function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
-  const [fontSize, setFontSize] = useState(36);
-  const [color, setColor] = useState("#ffffff");
-  const [alignment, setAlignment] = useState<TextAlignment>("center");
-  const [fontFamily, setFontFamily] = useState("PingFang SC");
-  const [lineHeightMillis, setLineHeightMillis] = useState(1200);
-  const [letterSpacingMillis, setLetterSpacingMillis] = useState(0);
-  const [strokeEnabled, setStrokeEnabled] = useState(true);
-  const [strokeColor, setStrokeColor] = useState("#000000");
-  const [strokeWidth, setStrokeWidth] = useState(2);
-  const [shadowEnabled, setShadowEnabled] = useState(true);
-  const [shadowColor, setShadowColor] = useState("#222222");
-  const [backgroundEnabled, setBackgroundEnabled] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#101010");
   const [durationUs, setDurationUs] = useState(3_000_000);
   const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
   const [subtitleOffsetUs, setSubtitleOffsetUs] = useState(0);
@@ -178,17 +165,17 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
       source: "text",
       style: {
         font: {
-          family: fontFamily,
+          family: "PingFang SC",
           fontRef: null
         },
-        fontSize,
-        color,
-        alignment,
-        lineHeightMillis,
-        letterSpacingMillis,
-        stroke: strokeEnabled ? { color: strokeColor, width: strokeWidth } : null,
-        shadow: shadowEnabled ? { color: shadowColor, offsetX: 2, offsetY: 2, blur: 4 } : null,
-        background: backgroundEnabled ? { color: backgroundColor } : null
+        fontSize: 36,
+        color: "#ffffff",
+        alignment: "center",
+        lineHeightMillis: 1200,
+        letterSpacingMillis: 0,
+        stroke: { color: "#000000", width: 2 },
+        shadow: { color: "#222222", offsetX: 2, offsetY: 2, blur: 4 },
+        background: null
       },
       textBox: {
         widthMillis: 800,
@@ -204,22 +191,7 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
       bubble: null,
       effect: null
     }),
-    [
-      alignment,
-      backgroundColor,
-      backgroundEnabled,
-      color,
-      content,
-      fontFamily,
-      fontSize,
-      letterSpacingMillis,
-      lineHeightMillis,
-      shadowColor,
-      shadowEnabled,
-      strokeColor,
-      strokeEnabled,
-      strokeWidth
-    ]
+    [content]
   );
 
   return (
@@ -247,98 +219,6 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
             onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
           />
         </label>
-        <label className="field-row">
-          <span>字体</span>
-          <input value={fontFamily} onChange={(event) => setFontFamily(event.currentTarget.value)} />
-        </label>
-        <label className="field-row">
-          <span>字号</span>
-          <input type="number" min="1" value={fontSize} onChange={(event) => setFontSize(event.currentTarget.valueAsNumber || 1)} />
-        </label>
-        <label className="field-row">
-          <span>颜色</span>
-          <input type="color" value={color} onChange={(event) => setColor(event.currentTarget.value)} />
-        </label>
-        <div className="field-row">
-          <span>对齐</span>
-          <div className="segmented-control" role="group" aria-label="文字对齐">
-            {(["left", "center", "right"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={alignment === value ? "active" : ""}
-                onClick={() => setAlignment(value)}
-              >
-                {value === "left" ? "左" : value === "center" ? "中" : "右"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <label className="field-row">
-          <span>行高</span>
-          <input
-            type="number"
-            min="500"
-            max="3000"
-            step="50"
-            value={lineHeightMillis}
-            onChange={(event) => setLineHeightMillis(clampInteger(event.currentTarget.valueAsNumber, 500, 3000, lineHeightMillis))}
-          />
-        </label>
-        <label className="field-row">
-          <span>字间距</span>
-          <input
-            type="number"
-            min="0"
-            max="2000"
-            step="50"
-            value={letterSpacingMillis}
-            onChange={(event) => setLetterSpacingMillis(clampInteger(event.currentTarget.valueAsNumber, 0, 2000, letterSpacingMillis))}
-          />
-        </label>
-        <label className="toggle-row">
-          <input type="checkbox" checked={strokeEnabled} onChange={(event) => setStrokeEnabled(event.currentTarget.checked)} />
-          <span>描边</span>
-        </label>
-        <label className="field-row">
-          <span>描边颜色</span>
-          <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.currentTarget.value)} disabled={!strokeEnabled} />
-        </label>
-        <label className="field-row">
-          <span>描边宽度</span>
-          <input
-            type="number"
-            min="1"
-            value={strokeWidth}
-            onChange={(event) => setStrokeWidth(event.currentTarget.valueAsNumber || 1)}
-            disabled={!strokeEnabled}
-          />
-        </label>
-        <label className="toggle-row">
-          <input type="checkbox" checked={shadowEnabled} onChange={(event) => setShadowEnabled(event.currentTarget.checked)} />
-          <span>阴影</span>
-        </label>
-        <label className="field-row">
-          <span>阴影颜色</span>
-          <input type="color" value={shadowColor} onChange={(event) => setShadowColor(event.currentTarget.value)} disabled={!shadowEnabled} />
-        </label>
-        <label className="toggle-row">
-          <input
-            type="checkbox"
-            checked={backgroundEnabled}
-            onChange={(event) => setBackgroundEnabled(event.currentTarget.checked)}
-          />
-          <span>背景</span>
-        </label>
-        <label className="field-row">
-          <span>背景颜色</span>
-          <input
-            type="color"
-            value={backgroundColor}
-            onChange={(event) => setBackgroundColor(event.currentTarget.value)}
-            disabled={!backgroundEnabled}
-          />
-        </label>
         <button
           type="button"
           className="primary-action wide-action"
@@ -352,7 +232,7 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
       <section className="function-card field-stack text-feature-card" aria-label="字幕 导入字幕">
         <div className="text-card-header">
           <h3>字幕 / 导入字幕</h3>
-          <span>Rust 解析 SRT</span>
+          <span>自动生成字幕片段</span>
         </div>
         <label className="field-row">
           <span>SRT 内容</span>
@@ -550,12 +430,4 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
 
 function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
-}
-
-function clampInteger(value: number, min: number, max: number, fallback: number): number {
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.max(min, Math.min(max, Math.round(value)));
 }

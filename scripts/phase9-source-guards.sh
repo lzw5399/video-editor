@@ -89,7 +89,7 @@ done
 for text in \
   "文字" \
   "字幕 / 导入字幕" \
-  "Rust 解析 SRT" \
+  "自动生成字幕片段" \
   "文本框" \
   "行高" \
   "字间距" \
@@ -107,6 +107,11 @@ for text in \
   done
   [ "$found" = "true" ] || fail "missing required Chinese text/subtitle UI copy: ${text}"
 done
+
+fail_matches \
+  "desktop UI must not leak implementation-facing Rust/SRT parser copy" \
+  'Rust 解析 SRT' \
+  "${UI_FILES[@]}"
 
 require_fixed "crates/draft_commands/src/text.rs" "importSubtitleSrt"
 require_fixed "crates/draft_commands/src/text.rs" "parse_srt"
