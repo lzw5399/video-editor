@@ -126,3 +126,110 @@ fn validate_offscreen_target(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod native_surface_contracts {
+    use super::{
+        NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor,
+        PreviewSurfaceDiagnosticKind, PreviewSurfaceHost, PreviewSurfaceStatus,
+    };
+
+    fn valid_bounds() -> PreviewSurfaceBounds {
+        PreviewSurfaceBounds {
+            x: 10,
+            y: 20,
+            width: 1280,
+            height: 720,
+            scale_factor_millis: 2000,
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_bounds_and_scale_with_typed_diagnostics() {
+        let zero_width = PreviewSurfaceBounds {
+            width: 0,
+            ..valid_bounds()
+        };
+        let error = zero_width.validate().expect_err("zero width is invalid");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::InvalidBounds);
+
+        let zero_scale = PreviewSurfaceBounds {
+            scale_factor_millis: 0,
+            ..valid_bounds()
+        };
+        let error = zero_scale.validate().expect_err("zero scale is invalid");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::InvalidScale);
+    }
+
+    #[test]
+    fn rejects_missing_parent_handles_before_attach() {
+        let descriptor = PreviewSurfaceDescriptor::NativeChild {
+            parent_window_handle: NativeParentWindowHandle::WindowsHwnd(0),
+            bounds: valid_bounds(),
+        };
+
+        let error = descriptor
+            .validate()
+            .expect_err("zero native parent handle must be rejected");
+        assert_eq!(
+            error.kind(),
+            PreviewSurfaceDiagnosticKind::MissingParentHandle
+        );
+    }
+
+    #[test]
+    fn enforces_attach_detach_lifecycle() {
+        let mut host = PreviewSurfaceHost::new();
+        let descriptor = PreviewSurfaceDescriptor::NativeChild {
+            parent_window_handle: NativeParentWindowHandle::Mock(42),
+            bounds: valid_bounds(),
+        };
+
+        let attached = host.attach(descriptor).expect("mock surface attaches");
+        assert_eq!(attached.status, PreviewSurfaceStatus::Available);
+
+        let error = host
+            .attach(PreviewSurfaceDescriptor::Offscreen {
+                width: 640,
+                height: 360,
+                scale_factor_millis: 1000,
+            })
+            .expect_err("cannot attach twice without detach");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::AlreadyAttached);
+
+        host.update_bounds(PreviewSurfaceBounds {
+            x: 0,
+            y: 0,
+            width: 640,
+            height: 360,
+            scale_factor_millis: 1000,
+        })
+        .expect("attached host accepts bounds updates");
+
+        host.detach().expect("attached host detaches");
+        let error = host.detach().expect_err("second detach is invalid");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::NotAttached);
+    }
+
+    #[test]
+    fn reports_unavailable_and_lost_surface_statuses() {
+        let mut host = PreviewSurfaceHost::new();
+        let descriptor = PreviewSurfaceDescriptor::NativeChild {
+            parent_window_handle: NativeParentWindowHandle::Mock(42),
+            bounds: valid_bounds(),
+        };
+
+        host.attach(descriptor).expect("mock surface attaches");
+        host.mark_unavailable("native child surface not ready");
+        let error = host
+            .update_bounds(valid_bounds())
+            .expect_err("unavailable surface rejects updates");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::SurfaceUnavailable);
+
+        host.mark_lost("wgpu surface lost");
+        let error = host
+            .update_bounds(valid_bounds())
+            .expect_err("lost surface rejects updates");
+        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::SurfaceLost);
+    }
+}
