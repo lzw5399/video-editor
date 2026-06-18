@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity (completed 2026-06-18)
 - [x] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters (completed 2026-06-18)
 - [x] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (completed 2026-06-18)
-- [ ] **Phase 11: Realtime Preview Runtime And GPU Render Backend** - Production realtime preview runtime, GPU compositor backend, frame pacing, and preview/export parity diagnostics
+- [x] **Phase 11: Realtime Preview Runtime And GPU Render Backend** - Production realtime preview runtime, GPU compositor backend, frame pacing, and preview/export parity diagnostics (completed 2026-06-18)
 - [ ] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff
 - [ ] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts
 - [ ] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC
@@ -460,7 +460,7 @@ Plans:
   5. Realtime preview and export continue to share engine/render graph semantics, with parity tests and diagnostics for known divergences.
   6. Preview runtime reports measurable first-frame, seek, frame pacing, stale-generation rejection, cancellation, and fallback telemetry.
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 
@@ -473,7 +473,7 @@ Plans:
 - [x] 11-05 - Preview service realtime backend integration, no-per-frame-FFmpeg supported path, fallback ladder diagnostics
 - [x] 11-05B - Desktop telemetry/fallback display without renderer-owned fallback decisions
 - [x] 11-06 - Text parity gate and realtime/export diagnostic coverage
-- [ ] 11-07 - Source guards, runtime boundary docs, and final Phase 11 gate scripts
+- [x] 11-07 - Source guards, runtime boundary docs, and final Phase 11 gate scripts
 
 ### Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop
 
@@ -645,7 +645,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
-| 11. Realtime Preview Runtime And GPU Render Backend | 9/10 | In Progress|  |
+| 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Complete   | 2026-06-18 |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | TBD | Not planned | - |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |

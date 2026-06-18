@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-06-PLAN.md; Phase 11 Plan 07 remains next
-current_phase: 11
-current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 10
-total_plans_in_phase: 10
+status: completed
+current_phase: 12
+current_phase_name: media-io-hardware-decode-and-frame-texture-interop
+current_plan: 1
+total_plans_in_phase: 6
 stopped_at: None
-last_updated: "2026-06-18T17:53:46.828Z"
-last_activity: "2026-06-19 - Completed Phase 11 Plan 06: text preview parity fails closed through TextParityUnsupported fallback diagnostics."
+last_updated: "2026-06-18T18:06:29.849Z"
+last_activity: "2026-06-18 - Completed Phase 11 Plan 07: source guards, runtime boundary docs, and final realtime preview closeout gates."
 progress:
   total_phases: 20
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 98
-  completed_plans: 80
-  percent: 82
+  completed_plans: 81
+  percent: 83
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 11 realtime preview runtime and GPU render backend
+**Current focus:** Phase 12 media IO, hardware decode, and frame/texture interop
 
 ## Current Position
 
-Phase: 11
-Plan: 9/10 complete; next plan 11-07
-Status: Phase 11 Plan 06 complete; ready for source guards, runtime boundary docs, and final Phase 11 gate scripts.
-Last activity: 2026-06-19 - Completed Phase 11 Plan 06: text preview parity fails closed through TextParityUnsupported fallback diagnostics.
+Phase: 12
+Plan: 0/6 complete; next plan 12-01
+Status: Phase 11 complete; ready for Phase 12 media IO and hardware decode work.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 07: source guards, runtime boundary docs, and final realtime preview closeout gates.
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 74
+- Total plans completed: 81
 - Average duration: 9 min
-- Total execution time: 649 min
+- Total execution time: 661 min
 
 **By Phase:**
 
@@ -58,11 +58,11 @@ Progress: [████████░░] 82%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
-| 11 | 7 | 131 min | 19 min |
+| 11 | 10 | 159 min | 16 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 50 min
+- Last 5 plans: 45 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -136,6 +136,7 @@ Progress: [████████░░] 82%
 | Phase 11 P05 | 11 min | 2 tasks | 12 files |
 | Phase 11 P05B | 8 min | 2 tasks | 8 files |
 | Phase 11 P06 | 5min | 1 tasks | 10 files |
+| Phase 11 P07 | 12 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -284,6 +285,8 @@ Recent decisions affecting current work:
 - [Phase 11]: Plan 05B shows FFmpeg only as a fallback artifact label. — Supported realtime responses display Mock/GPU/offscreen backend labels and never present FFmpeg as active realtime backend.
 - [Phase 11]: Plan 06 keeps GPU text preview unsupported unless repository font parity is proven. — Text routes through TextParityUnsupported fallback diagnostics instead of silently approximating export output.
 - [Phase 11]: Plan 06 golden-tests realtime/export parity for supported no-divergence and divergent text/effect graphs. — This preserves shared render graph semantics while making divergence explicit.
+- [Phase 11]: Plan 07 closes realtime preview ownership with comment-filtered source guards and root `test:phase11` gates. — Renderer code remains UI-only while Rust/main own FFmpeg, render graph, GPU, fallback, cache, dirty range, timeline, and keyframe semantics.
+- [Phase 11]: Runtime-boundary docs now explicitly reserve Phase 12 media IO, Phase 15 audio, Phase 16 scheduling, and Phase 18 effects outside Phase 11. — Downstream phases can consume the contracts without relocating ownership.
 
 ### Pending Todos
 
@@ -320,6 +323,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T17:53:46.610Z
+Last session: 2026-06-18T18:06:29.844Z
 Stopped at: None
 Resume file: None
