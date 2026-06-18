@@ -1040,6 +1040,87 @@ test("实时预览 native preview fallback displays main-provided attach diagnos
   }
 });
 
+test("实时预览 telemetry shows supported backend without FFmpeg active label", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
+    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：Mock");
+    await expect(page.getByLabel("实时预览数据")).toContainText("首帧 9 ms");
+    await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 -");
+    await expect(page.getByLabel("实时预览数据")).toContainText("拒绝旧帧 0");
+    await expect(page.getByLabel("实时预览数据")).toContainText("缓存 0");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
+    await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("实时预览 fallback artifact appears only when Rust reports fallback", async () => {
+  const supported = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(supported.app, supported.page, 1280, 800);
+    await expect(supported.page.getByLabel("实时预览备用产物")).toHaveCount(0);
+  } finally {
+    await supported.app.close();
+  }
+
+  const fallback = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(fallback.app, fallback.page, 1280, 800);
+    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("备用产物：FFmpeg");
+    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("降级 1");
+    await expect(fallback.page.getByLabel("实时预览备用产物")).toContainText("已生成 FFmpeg 备用产物");
+  } finally {
+    await fallback.app.close();
+  }
+});
+
+test("实时预览 telemetry displays Rust-reported cancellation counters", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_CANCELED: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expect(page.getByLabel("实时预览数据")).toContainText("当前请求已取消");
+    await expect(page.getByLabel("实时预览数据")).toContainText("取消 1");
+    await expect(page.getByLabel("实时预览备用产物")).toContainText("请求已取消");
+  } finally {
+    await app.close();
+  }
+});
+
+test("fallback source guard keeps renderer display-only for telemetry", () => {
+  const previewMonitorSource = readFileSync(join(process.cwd(), "src/renderer/workspace/PreviewMonitor.tsx"), "utf8");
+  const viewModelSource = readFileSync(join(process.cwd(), "src/renderer/viewModel.ts"), "utf8");
+
+  expect(previewMonitorSource, "renderer must not build FFmpeg commands").not.toMatch(/ffmpeg\s*(?:-|\.|Command|Args)/i);
+  expect(previewMonitorSource, "renderer must not create render graph/cache logic").not.toMatch(/renderGraph|cacheKey|fallbackLadder/i);
+  expect(previewMonitorSource, "renderer must not assign fallback reasons").not.toMatch(/fallbackReason\s*=/i);
+  expect(viewModelSource, "display model should not inspect drafts to infer support").not.toMatch(
+    /if\s*\([^)]*(?:draft|material)[^)]*\)[\s\S]{0,160}fallback/i
+  );
+});
+
 test("telemetry display model represents Rust-owned realtime and fallback diagnostics", () => {
   const supported: RealtimePreviewDisplayModel = {
     backend: "mock",
