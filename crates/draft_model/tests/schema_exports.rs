@@ -468,6 +468,65 @@ fn schema_exports_include_phase13_incremental_harness_anchors() {
 }
 
 #[test]
+fn schema_exports_include_phase13_delta_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
+
+    for expected_contract in [
+        "ChangedEntity",
+        "DirtyDomain",
+        "DirtyRange",
+        "DirtyRangeSource",
+        "InvalidationScope",
+        "CommandDelta",
+        "TimelineCommandResponse",
+    ] {
+        assert!(
+            defs.contains_key(expected_contract),
+            "command schema should include Phase 13 delta contract {expected_contract}"
+        );
+    }
+
+    let timeline_response = defs
+        .get("TimelineCommandResponse")
+        .expect("TimelineCommandResponse should be generated");
+    assert_eq!(
+        timeline_response
+            .pointer("/properties/delta/$ref")
+            .and_then(|value| value.as_str()),
+        Some("#/$defs/CommandDelta"),
+        "TimelineCommandResponse.delta must directly reference CommandDelta"
+    );
+    assert!(
+        timeline_response
+            .get("required")
+            .and_then(|value| value.as_array())
+            .is_some_and(|required| required.iter().any(|field| field == "delta")),
+        "TimelineCommandResponse.delta must be required in the generated schema"
+    );
+
+    let command_result_ts = command_result_ts_contract();
+    for expected_export in [
+        "export type ChangedEntity",
+        "export type DirtyDomain",
+        "export type DirtyRange",
+        "export type DirtyRangeSource",
+        "export type InvalidationScope",
+        "export type CommandDelta",
+        "delta: CommandDelta",
+    ] {
+        assert!(
+            command_result_ts.contains(expected_export),
+            "generated TypeScript response contract should include {expected_export}"
+        );
+    }
+}
+
+#[test]
 fn schema_exports_include_timeline_edit_command_contracts() {
     let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
