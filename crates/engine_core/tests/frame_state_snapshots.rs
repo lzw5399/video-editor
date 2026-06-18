@@ -309,7 +309,7 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
         "#202020"
     );
     assert_eq!(overlay.layout_width, 1_152);
-    assert_eq!(overlay.layout_height, 144);
+    assert_eq!(overlay.layout_height, 72);
     assert_eq!(overlay.diagnostics.len(), 2);
     assert!(overlay.diagnostics.iter().any(|diagnostic| {
         diagnostic.property == "bubble"
@@ -393,7 +393,7 @@ fn text_layout_resolves_multiple_text_and_subtitle_overlays_in_stack_order() {
                 TextSegmentSource::Text,
                 2,
                 1_152,
-                144,
+                72,
                 1_500,
                 125
             ),

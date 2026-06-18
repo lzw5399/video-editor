@@ -208,8 +208,8 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                                 "color": "#202020"
                             }
                         },
-                        "layoutWidth": 1728,
-                        "layoutHeight": 144,
+                        "layoutWidth": 1152,
+                        "layoutHeight": 72,
                         "diagnostics": [
                             {
                                 "property": "bubble",
@@ -306,7 +306,7 @@ fn render_graph_preserves_complete_text_and_subtitle_intent_without_ffmpeg_synta
             })
             .collect::<Vec<_>>(),
         vec![
-            ("text-a", TextSegmentSource::Text, 1_152, 144, 1_500, 125, 2),
+            ("text-a", TextSegmentSource::Text, 1_152, 72, 1_500, 125, 2),
             (
                 "subtitle-a",
                 TextSegmentSource::Subtitle,

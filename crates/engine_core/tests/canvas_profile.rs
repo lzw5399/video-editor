@@ -35,9 +35,9 @@ fn vertical_draft_canvas_resolves_engine_profile_and_text_layout() {
         .text_overlays
         .first()
         .expect("active text overlay should be resolved");
-    assert_eq!(overlay.layout_width, 972);
-    assert_eq!(overlay.safe_area.left, 54);
-    assert_eq!(overlay.safe_area.top, 96);
+    assert_eq!(overlay.layout_width, 864);
+    assert_eq!(overlay.safe_area.left, 108);
+    assert_eq!(overlay.safe_area.top, 192);
 }
 
 #[test]

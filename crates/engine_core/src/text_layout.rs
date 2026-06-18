@@ -1,6 +1,6 @@
 use draft_model::{
-    Microseconds, SegmentId, TargetTimerange, TextAlignment, TextBackground, TextSegment,
-    TextShadow, TextStroke, TrackId,
+    Microseconds, SegmentId, TargetTimerange, TextAlignment, TextBackground, TextBubbleRef,
+    TextEffectRef, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextWrapping, TrackId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -153,16 +153,56 @@ pub struct ResolvedTextOverlay {
     pub stack_index: u32,
     pub source_position: Microseconds,
     pub target_timerange: TargetTimerange,
+    pub source: TextSegmentSource,
     pub font_family: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_ref: Option<String>,
     pub font_candidate: String,
     pub fallback_candidates: Vec<String>,
     pub alignment: TextAlignment,
+    pub text_box: ResolvedTextBox,
+    pub layout_region: ResolvedTextLayoutRegion,
     pub safe_area: TextSafeArea,
+    pub wrapping: TextWrapping,
     pub wrapping_policy: TextWrappingPolicy,
+    pub line_height_millis: u32,
+    pub letter_spacing_millis: u32,
     pub font_size: u32,
     pub style: ResolvedTextStyle,
     pub layout_width: u32,
     pub layout_height: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<ResolvedTextDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedTextBox {
+    pub width_millis: u32,
+    pub height_millis: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedTextLayoutRegion {
+    pub x_millis: u32,
+    pub y_millis: u32,
+    pub width_millis: u32,
+    pub height_millis: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResolvedTextDiagnostic {
+    pub property: String,
+    pub support: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,18 +229,20 @@ pub fn resolve_text_overlay(
 ) -> Result<ResolvedTextOverlay, EngineError> {
     profile.validate(canvas_width, canvas_height)?;
     let line_count = text.content.lines().count().max(1) as u32;
-    let layout_width = canvas_width
-        .checked_sub(profile.safe_area.left)
-        .and_then(|value| value.checked_sub(profile.safe_area.right))
-        .ok_or_else(|| invalid_text_layout("text layout safe-area exceeds canvas width"))?;
+    let text_box = resolve_text_box(text, canvas_width, canvas_height);
+    let layout_region = resolve_layout_region(text, canvas_width, canvas_height);
+    let safe_area = safe_area_from_region(&layout_region, canvas_width, canvas_height)?;
+    let layout_width = text_box.width.min(layout_region.width);
     let layout_height = ceil_div_u32(
         text.style
             .font_size
-            .checked_mul(profile.line_height_millis)
+            .checked_mul(text.style.line_height_millis)
             .and_then(|value| value.checked_mul(line_count))
             .ok_or_else(|| invalid_text_layout("text layout height calculation overflowed"))?,
         1_000,
-    );
+    )
+    .min(text_box.height)
+    .min(layout_region.height);
 
     Ok(ResolvedTextOverlay {
         track_id: track_id.clone(),
@@ -209,12 +251,23 @@ pub fn resolve_text_overlay(
         stack_index,
         source_position,
         target_timerange: segment.target_timerange.clone(),
-        font_family: profile.font_policy.font_family.clone(),
+        source: text.source,
+        font_family: if text.style.font.family.trim().is_empty() {
+            profile.font_policy.font_family.clone()
+        } else {
+            text.style.font.family.clone()
+        },
+        font_ref: text.style.font.font_ref.clone(),
         font_candidate: profile.font_policy.font_candidate.clone(),
         fallback_candidates: profile.font_policy.fallback_candidates.clone(),
         alignment: text.style.alignment,
-        safe_area: profile.safe_area.clone(),
+        text_box,
+        layout_region,
+        safe_area,
+        wrapping: text.wrapping,
         wrapping_policy: profile.wrapping_policy,
+        line_height_millis: text.style.line_height_millis,
+        letter_spacing_millis: text.style.letter_spacing_millis,
         font_size: text.style.font_size,
         style: ResolvedTextStyle {
             color: text.style.color.clone(),
@@ -224,7 +277,78 @@ pub fn resolve_text_overlay(
         },
         layout_width,
         layout_height,
+        diagnostics: text_diagnostics(text),
     })
+}
+
+fn resolve_text_box(text: &TextSegment, canvas_width: u32, canvas_height: u32) -> ResolvedTextBox {
+    ResolvedTextBox {
+        width_millis: text.text_box.width_millis,
+        height_millis: text.text_box.height_millis,
+        width: millis_of(canvas_width, text.text_box.width_millis),
+        height: millis_of(canvas_height, text.text_box.height_millis),
+    }
+}
+
+fn resolve_layout_region(
+    text: &TextSegment,
+    canvas_width: u32,
+    canvas_height: u32,
+) -> ResolvedTextLayoutRegion {
+    ResolvedTextLayoutRegion {
+        x_millis: text.layout_region.x_millis,
+        y_millis: text.layout_region.y_millis,
+        width_millis: text.layout_region.width_millis,
+        height_millis: text.layout_region.height_millis,
+        x: millis_of(canvas_width, text.layout_region.x_millis),
+        y: millis_of(canvas_height, text.layout_region.y_millis),
+        width: millis_of(canvas_width, text.layout_region.width_millis),
+        height: millis_of(canvas_height, text.layout_region.height_millis),
+    }
+}
+
+fn safe_area_from_region(
+    region: &ResolvedTextLayoutRegion,
+    canvas_width: u32,
+    canvas_height: u32,
+) -> Result<TextSafeArea, EngineError> {
+    let right = canvas_width
+        .checked_sub(region.x)
+        .and_then(|value| value.checked_sub(region.width))
+        .ok_or_else(|| invalid_text_layout("text layout region exceeds canvas width"))?;
+    let bottom = canvas_height
+        .checked_sub(region.y)
+        .and_then(|value| value.checked_sub(region.height))
+        .ok_or_else(|| invalid_text_layout("text layout region exceeds canvas height"))?;
+    Ok(TextSafeArea {
+        left: region.x,
+        right,
+        top: region.y,
+        bottom,
+    })
+}
+
+fn millis_of(value: u32, millis: u32) -> u32 {
+    ((u64::from(value) * u64::from(millis)) / 1_000) as u32
+}
+
+fn text_diagnostics(text: &TextSegment) -> Vec<ResolvedTextDiagnostic> {
+    let mut diagnostics = Vec::new();
+    if let Some(TextBubbleRef::Unsupported { name, .. }) = &text.bubble {
+        diagnostics.push(ResolvedTextDiagnostic {
+            property: "bubble".to_owned(),
+            support: "unsupported".to_owned(),
+            reason: format!("text bubble {name} is unsupported"),
+        });
+    }
+    if let Some(TextEffectRef::Unsupported { name, .. }) = &text.effect {
+        diagnostics.push(ResolvedTextDiagnostic {
+            property: "effect".to_owned(),
+            support: "unsupported".to_owned(),
+            reason: format!("text effect {name} is unsupported"),
+        });
+    }
+    diagnostics
 }
 
 fn ceil_div_u32(value: u32, denominator: u32) -> u32 {
