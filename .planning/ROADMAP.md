@@ -311,7 +311,29 @@ Plans:
   4. Blend mode and mask are represented as capability-aware semantic boundaries even if first implementation degrades or defers them.
   5. UI inspector controls use Jianying-style Chinese labels and all edits route through Rust commands with undo/redo coverage.
 
-**Plans**: TBD
+**Plans**: 4/5 plans complete
+
+Plans:
+
+**Wave 1**
+
+- [x] 08-01-PLAN.md - Add typed visual segment model and Rust-owned updateSegmentVisual command
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 08-02-PLAN.md - Propagate segment visual semantics through engine frame state and render graph
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 08-03-PLAN.md - Compile supported transform subset and clear stale derived UI state after visual edits
+
+**Wave 4** *(blocked on Wave 3 render/compiler completion)*
+
+- [x] 08-04-PLAN.md - Expose selected-segment visual controls in the desktop inspector
+
+**Wave 5** *(blocked on Wave 4 UI completion)*
+
+- [ ] 08-05-PLAN.md - Add Phase 08 source guards, public gates, and verification closure
 
 ### Phase 9: Complete Text And Subtitle System
 

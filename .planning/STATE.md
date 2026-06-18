@@ -5,17 +5,17 @@ milestone_name: milestone
 status: active
 current_phase: 8
 current_phase_name: segment-transform-and-visual-compositing
-current_plan: 4
+current_plan: 5
 total_plans_in_phase: 5
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-06-18T02:42:00.000Z"
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-06-18T03:00:19.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 8
   total_plans: 54
-  completed_plans: 52
-  percent: 96
+  completed_plans: 53
+  percent: 98
 ---
 
 # Project State
@@ -30,17 +30,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 8
-Plan: 4/5
-Status: Phase 08 in progress; next 08-04 desktop inspector visual controls
+Plan: 5/5
+Status: Phase 08 in progress; next 08-05 source guards, public gates, and verification closure
 Last activity: 2026-06-18
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 52
+- Total plans completed: 53
 - Average duration: 8 min
 - Total execution time: 405 min
 
@@ -59,7 +59,7 @@ Progress: [██████████] 96%
 
 **Recent Trend:**
 
-- Last 5 plans: 93 min
+- Last 5 plans: 76 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -111,6 +111,7 @@ Progress: [██████████] 96%
 | Phase 08 P01 | 35 min | 2 tasks | 14 files |
 | Phase 08 P02 | 9 min | 2 tasks | 7 files |
 | Phase 08 P03 | 15 min | 2 tasks | 6 files |
+| Phase 08 P04 | 18 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,7 @@ Recent decisions affecting current work:
 - [Phase 08]: FFmpeg compiler keeps the legacy full-canvas path for identity stretch visuals and uses transform-aware filters only for non-default visual intent. — This preserves existing snapshots while enabling crop, fit/fill/stretch, scale, opacity, and normalized placement.
 - [Phase 08]: Nonzero rotation is surfaced as unsupported visual intent until anchor-aware FFmpeg rotation is implemented. — The compiler must not silently ignore unsupported visual semantics.
 - [Phase 08]: Successful `updateSegmentVisual` command responses clear stale desktop preview/export display state. — The renderer invalidates derived artifacts only after Rust accepts the semantic edit.
+- [Phase 08]: Inspector visual controls keep local form state until the user applies 画面 changes through `updateSegmentVisual`. — This gives the desktop UI editable Jianying-style controls without making renderer state canonical.
 - Initialization: Product is a general Jianying-style desktop video editor, not an oral-video product.
 - Initialization: Rust core starts from day one; Electron is the first shell.
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.
