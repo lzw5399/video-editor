@@ -7,7 +7,8 @@ use std::sync::Mutex;
 
 use draft_model::{
     Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
+    TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextStyle, TextWrapping, Track, TrackKind,
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::{
@@ -183,6 +184,7 @@ fn preview_draft() -> Draft {
     let mut text = segment("text-a", "text-material", 0, 500_000, 500_000);
     text.text = Some(TextSegment {
         content: "标题".to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
             font_size: 48,
             color: "#ffffff".to_owned(),
@@ -190,7 +192,13 @@ fn preview_draft() -> Draft {
             stroke: None,
             shadow: None,
             background: None,
+            ..TextStyle::default()
         },
+        text_box: TextBox::default(),
+        layout_region: TextLayoutRegion::default(),
+        wrapping: TextWrapping::default(),
+        bubble: None,
+        effect: None,
     });
     text_track.segments.push(text);
 

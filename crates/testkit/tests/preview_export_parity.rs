@@ -6,7 +6,8 @@ use std::time::Duration;
 use draft_model::{
     CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig, Material, MaterialKind,
     Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind,
+    TextBackground, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
+    TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, FfmpegCompileErrorKind, compile_ffmpeg_job};
@@ -469,6 +470,7 @@ fn draft_with_canvas(
     let mut text = segment("text-a", "text-material", 0, 300_000, 600_000);
     text.text = Some(TextSegment {
         content: "标题".to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
             font_size: 48,
             color: "#ffffff".to_owned(),
@@ -486,7 +488,13 @@ fn draft_with_canvas(
             background: Some(TextBackground {
                 color: "#202020".to_owned(),
             }),
+            ..TextStyle::default()
         },
+        text_box: TextBox::default(),
+        layout_region: TextLayoutRegion::default(),
+        wrapping: TextWrapping::default(),
+        bubble: None,
+        effect: None,
     });
     text_track.segments.push(text);
 

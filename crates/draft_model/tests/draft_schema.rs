@@ -335,27 +335,15 @@ fn text_segment_validation_rejects_invalid_phase9_fields() {
         ("blank font ref", blank_font_ref, "font.fontRef"),
         ("invalid fill color", invalid_text_color, "style.color"),
         ("zero font size", zero_font_size, "style.fontSize"),
-        (
-            "low line height",
-            low_line_height,
-            "style.lineHeightMillis",
-        ),
+        ("low line height", low_line_height, "style.lineHeightMillis"),
         (
             "large letter spacing",
             large_letter_spacing,
             "style.letterSpacingMillis",
         ),
         ("zero text box", zero_text_box_width, "textBox.widthMillis"),
-        (
-            "layout overflow",
-            overflowing_layout_region,
-            "layoutRegion",
-        ),
-        (
-            "blank bubble name",
-            blank_bubble_name,
-            "bubble.name",
-        ),
+        ("layout overflow", overflowing_layout_region, "layoutRegion"),
+        ("blank bubble name", blank_bubble_name, "bubble.name"),
         (
             "blank effect external ref",
             blank_effect_external_ref,

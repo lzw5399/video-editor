@@ -410,7 +410,7 @@ test("workspace panels switch categories without losing Chinese empty states", a
     const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
 
     await topFeatureNav.getByRole("button", { name: "文字" }).click();
-    await expect(page.getByRole("heading", { name: "文字" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
     await expect(page.getByLabel("文字对齐")).toBeVisible();

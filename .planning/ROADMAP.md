@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness (completed 2026-06-17)
 - [x] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics (completed 2026-06-18)
 - [x] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics (completed 2026-06-18)
-- [ ] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity
+- [x] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity (completed 2026-06-18)
 - [ ] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters
 - [ ] **Phase 11: Retiming And Speed System** - Segment speed, source/target time mapping, audio follow-speed policy, and deferred reverse/curve-speed boundaries
 - [ ] **Phase 12: Filter Adjustment And Effect Semantics** - First-party filter/adjustment/effect parameter schemas plus supported/degraded/unsupported capability boundaries
@@ -104,7 +104,7 @@ Plans:
   3. Undo/redo works for every committed MVP edit.
   4. Main-track magnet/snapping is computed in Rust core and covered by command tests.
 
-**Plans**: 5 plans
+**Plans**: 5/5 plans complete
 
 Plans:
 
@@ -370,7 +370,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 UI completion)*
 
-- [ ] 09-05-PLAN.md - Add Phase 09 source guards, public gates, and verification closure
+- [x] 09-05-PLAN.md - Add Phase 09 source guards, public gates, and verification closure
 
 ### Phase 10: Typed Keyframe And Animation System
 
@@ -448,7 +448,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
-| 9. Complete Text And Subtitle System | 4/5 | In Progress|  |
+| 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |
 | 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |

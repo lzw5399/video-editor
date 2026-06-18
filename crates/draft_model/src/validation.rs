@@ -481,7 +481,10 @@ fn validate_text_layout_region(
         )?;
     }
     validate_positive_text_millis(&format!("{field}.widthMillis"), layout_region.width_millis)?;
-    validate_positive_text_millis(&format!("{field}.heightMillis"), layout_region.height_millis)?;
+    validate_positive_text_millis(
+        &format!("{field}.heightMillis"),
+        layout_region.height_millis,
+    )?;
     if layout_region.x_millis + layout_region.width_millis > crate::MAX_TEXT_LAYOUT_MILLIS {
         return Err(invalid_text_segment(
             field,
