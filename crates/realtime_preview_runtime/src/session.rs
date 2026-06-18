@@ -10,6 +10,9 @@ use crate::{
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
     RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewFrameResult, RealtimePreviewSupport, RealtimePreviewTelemetry, TimelineClock,
+    gpu::surface::{
+        PreviewSurfaceBounds, PreviewSurfaceDescriptor, PreviewSurfaceError, PreviewSurfaceHost,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -127,6 +130,54 @@ impl RealtimePreviewRuntime {
         Ok(session.clock.generation())
     }
 
+    pub fn attach_surface(
+        &mut self,
+        session_id: PreviewSessionId,
+        descriptor: PreviewSurfaceDescriptor,
+    ) -> Result<PlaybackGeneration, RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session
+            .surface
+            .attach(descriptor)
+            .map_err(|source| RealtimePreviewError::Surface { session_id, source })?;
+        session.clock.accepted_edit();
+        Ok(session.clock.generation())
+    }
+
+    pub fn update_surface_bounds(
+        &mut self,
+        session_id: PreviewSessionId,
+        bounds: PreviewSurfaceBounds,
+    ) -> Result<PlaybackGeneration, RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session
+            .surface
+            .update_bounds(bounds)
+            .map_err(|source| RealtimePreviewError::Surface { session_id, source })?;
+        session.clock.accepted_edit();
+        Ok(session.clock.generation())
+    }
+
+    pub fn detach_surface(
+        &mut self,
+        session_id: PreviewSessionId,
+    ) -> Result<PlaybackGeneration, RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session
+            .surface
+            .detach()
+            .map_err(|source| RealtimePreviewError::Surface { session_id, source })?;
+        session.clock.accepted_edit();
+        Ok(session.clock.generation())
+    }
+
+    pub fn telemetry(
+        &self,
+        session_id: PreviewSessionId,
+    ) -> Result<&RealtimePreviewTelemetry, RealtimePreviewError> {
+        Ok(&self.session(session_id)?.telemetry)
+    }
+
     pub fn next_cancellation_token(
         &mut self,
         session_id: PreviewSessionId,
@@ -184,6 +235,7 @@ struct RealtimePreviewSession {
     next_cancellation_token: u64,
     draft_snapshot: Option<Draft>,
     render_graph_snapshot: Option<RenderGraph>,
+    surface: PreviewSurfaceHost,
 }
 
 impl RealtimePreviewSession {
@@ -196,6 +248,7 @@ impl RealtimePreviewSession {
             next_cancellation_token: 1,
             draft_snapshot: None,
             render_graph_snapshot: None,
+            surface: PreviewSurfaceHost::new(),
         }
     }
 
@@ -311,7 +364,13 @@ fn diagnostics_for(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealtimePreviewError {
-    UnknownSession { session_id: PreviewSessionId },
+    UnknownSession {
+        session_id: PreviewSessionId,
+    },
+    Surface {
+        session_id: PreviewSessionId,
+        source: PreviewSurfaceError,
+    },
 }
 
 impl fmt::Display for RealtimePreviewError {
@@ -322,6 +381,14 @@ impl fmt::Display for RealtimePreviewError {
                     formatter,
                     "unknown realtime preview session {}",
                     session_id.get()
+                )
+            }
+            Self::Surface { session_id, source } => {
+                write!(
+                    formatter,
+                    "realtime preview session {} surface error: {}",
+                    session_id.get(),
+                    source
                 )
             }
         }

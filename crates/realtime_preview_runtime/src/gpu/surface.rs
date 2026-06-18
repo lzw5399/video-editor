@@ -2,6 +2,300 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreviewSurfaceBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub scale_factor_millis: u32,
+}
+
+impl PreviewSurfaceBounds {
+    pub fn validate(self) -> Result<Self, PreviewSurfaceError> {
+        if self.width == 0 || self.height == 0 {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::InvalidBounds,
+                "preview surface bounds must have nonzero width and height",
+            ));
+        }
+        if self.scale_factor_millis == 0 {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::InvalidScale,
+                "preview surface scale factor millis must be nonzero",
+            ));
+        }
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeParentWindowHandle {
+    WindowsHwnd(u64),
+    MacosNsView(u64),
+    Mock(u64),
+}
+
+impl NativeParentWindowHandle {
+    pub const fn raw_value(self) -> u64 {
+        match self {
+            Self::WindowsHwnd(value) | Self::MacosNsView(value) | Self::Mock(value) => value,
+        }
+    }
+
+    pub const fn platform_name(self) -> &'static str {
+        match self {
+            Self::WindowsHwnd(_) => "windows-hwnd",
+            Self::MacosNsView(_) => "macos-nsview",
+            Self::Mock(_) => "mock",
+        }
+    }
+
+    fn validate(self) -> Result<Self, PreviewSurfaceError> {
+        if self.raw_value() == 0 {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::MissingParentHandle,
+                format!("{} parent handle must be nonzero", self.platform_name()),
+            ));
+        }
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewSurfaceDescriptor {
+    NativeChild {
+        parent_window_handle: NativeParentWindowHandle,
+        bounds: PreviewSurfaceBounds,
+    },
+    Offscreen {
+        width: u32,
+        height: u32,
+        scale_factor_millis: u32,
+    },
+}
+
+impl PreviewSurfaceDescriptor {
+    pub fn validate(self) -> Result<Self, PreviewSurfaceError> {
+        match self {
+            Self::NativeChild {
+                parent_window_handle,
+                bounds,
+            } => {
+                parent_window_handle.validate()?;
+                bounds.validate()?;
+            }
+            Self::Offscreen {
+                width,
+                height,
+                scale_factor_millis,
+            } => {
+                PreviewSurfaceBounds {
+                    x: 0,
+                    y: 0,
+                    width,
+                    height,
+                    scale_factor_millis,
+                }
+                .validate()?;
+            }
+        }
+        Ok(self)
+    }
+
+    pub const fn bounds(self) -> PreviewSurfaceBounds {
+        match self {
+            Self::NativeChild { bounds, .. } => bounds,
+            Self::Offscreen {
+                width,
+                height,
+                scale_factor_millis,
+            } => PreviewSurfaceBounds {
+                x: 0,
+                y: 0,
+                width,
+                height,
+                scale_factor_millis,
+            },
+        }
+    }
+
+    pub const fn is_native_child(self) -> bool {
+        matches!(self, Self::NativeChild { .. })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewSurfaceStatus {
+    Available,
+    Unavailable,
+    Lost,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewSurfaceAttachment {
+    pub descriptor: PreviewSurfaceDescriptor,
+    pub status: PreviewSurfaceStatus,
+    pub status_message: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct PreviewSurfaceHost {
+    attachment: Option<PreviewSurfaceAttachment>,
+}
+
+impl PreviewSurfaceHost {
+    pub fn new() -> Self {
+        Self { attachment: None }
+    }
+
+    pub fn is_attached(&self) -> bool {
+        self.attachment.is_some()
+    }
+
+    pub fn attachment(&self) -> Option<&PreviewSurfaceAttachment> {
+        self.attachment.as_ref()
+    }
+
+    pub fn attach(
+        &mut self,
+        descriptor: PreviewSurfaceDescriptor,
+    ) -> Result<&PreviewSurfaceAttachment, PreviewSurfaceError> {
+        if self.attachment.is_some() {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::AlreadyAttached,
+                "preview surface is already attached",
+            ));
+        }
+        let descriptor = descriptor.validate()?;
+        self.attachment = Some(PreviewSurfaceAttachment {
+            descriptor,
+            status: PreviewSurfaceStatus::Available,
+            status_message: None,
+        });
+        Ok(self
+            .attachment
+            .as_ref()
+            .expect("attachment was just inserted"))
+    }
+
+    pub fn update_bounds(
+        &mut self,
+        bounds: PreviewSurfaceBounds,
+    ) -> Result<&PreviewSurfaceAttachment, PreviewSurfaceError> {
+        let attachment = self.attachment.as_mut().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::NotAttached,
+                "preview surface is not attached",
+            )
+        })?;
+        ensure_available(attachment)?;
+        let bounds = bounds.validate()?;
+        attachment.descriptor = match attachment.descriptor {
+            PreviewSurfaceDescriptor::NativeChild {
+                parent_window_handle,
+                ..
+            } => PreviewSurfaceDescriptor::NativeChild {
+                parent_window_handle,
+                bounds,
+            },
+            PreviewSurfaceDescriptor::Offscreen { .. } => PreviewSurfaceDescriptor::Offscreen {
+                width: bounds.width,
+                height: bounds.height,
+                scale_factor_millis: bounds.scale_factor_millis,
+            },
+        };
+        Ok(attachment)
+    }
+
+    pub fn detach(&mut self) -> Result<PreviewSurfaceAttachment, PreviewSurfaceError> {
+        self.attachment.take().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::NotAttached,
+                "preview surface is not attached",
+            )
+        })
+    }
+
+    pub fn mark_unavailable(&mut self, reason: impl Into<String>) {
+        self.mark_status(PreviewSurfaceStatus::Unavailable, reason);
+    }
+
+    pub fn mark_lost(&mut self, reason: impl Into<String>) {
+        self.mark_status(PreviewSurfaceStatus::Lost, reason);
+    }
+
+    fn mark_status(&mut self, status: PreviewSurfaceStatus, reason: impl Into<String>) {
+        if let Some(attachment) = self.attachment.as_mut() {
+            attachment.status = status;
+            attachment.status_message = Some(reason.into());
+        }
+    }
+}
+
+fn ensure_available(attachment: &PreviewSurfaceAttachment) -> Result<(), PreviewSurfaceError> {
+    match attachment.status {
+        PreviewSurfaceStatus::Available => Ok(()),
+        PreviewSurfaceStatus::Unavailable => Err(PreviewSurfaceError::new(
+            PreviewSurfaceDiagnosticKind::SurfaceUnavailable,
+            attachment
+                .status_message
+                .clone()
+                .unwrap_or_else(|| "preview surface is unavailable".to_owned()),
+        )),
+        PreviewSurfaceStatus::Lost => Err(PreviewSurfaceError::new(
+            PreviewSurfaceDiagnosticKind::SurfaceLost,
+            attachment
+                .status_message
+                .clone()
+                .unwrap_or_else(|| "preview surface is lost".to_owned()),
+        )),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewSurfaceDiagnosticKind {
+    MissingParentHandle,
+    InvalidBounds,
+    InvalidScale,
+    AlreadyAttached,
+    NotAttached,
+    SurfaceUnavailable,
+    SurfaceLost,
+    PlatformUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewSurfaceError {
+    kind: PreviewSurfaceDiagnosticKind,
+    message: String,
+}
+
+impl PreviewSurfaceError {
+    pub fn new(kind: PreviewSurfaceDiagnosticKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    pub const fn kind(&self) -> PreviewSurfaceDiagnosticKind {
+        self.kind
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for PreviewSurfaceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{:?}: {}", self.kind, self.message)
+    }
+}
+
+impl Error for PreviewSurfaceError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RealtimePreviewTargetFormat {
     Rgba8UnormSrgb,
 }
@@ -224,7 +518,10 @@ mod native_surface_contracts {
         let error = host
             .update_bounds(valid_bounds())
             .expect_err("unavailable surface rejects updates");
-        assert_eq!(error.kind(), PreviewSurfaceDiagnosticKind::SurfaceUnavailable);
+        assert_eq!(
+            error.kind(),
+            PreviewSurfaceDiagnosticKind::SurfaceUnavailable
+        );
 
         host.mark_lost("wgpu surface lost");
         let error = host

@@ -17,7 +17,12 @@ pub use device::{
     RealtimePreviewGpuError,
 };
 pub use pipelines::RealtimePreviewPipelineSet;
-pub use surface::{RealtimePreviewGpuTarget, RealtimePreviewTargetFormat};
+pub use surface::{
+    NativeParentWindowHandle, PreviewSurfaceAttachment, PreviewSurfaceBounds,
+    PreviewSurfaceDescriptor, PreviewSurfaceDiagnosticKind, PreviewSurfaceError,
+    PreviewSurfaceHost, PreviewSurfaceStatus, RealtimePreviewGpuTarget,
+    RealtimePreviewTargetFormat,
+};
 pub use texture_cache::{
     RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
     RealtimePreviewTextureId,
