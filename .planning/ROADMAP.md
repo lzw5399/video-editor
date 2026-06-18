@@ -488,7 +488,7 @@ Plans:
   4. Realtime preview can consume frame or texture handles without full 4K pixel buffers crossing the JS/Rust boundary.
   5. FFmpeg remains available as fallback/probe/export/transcode implementation, with unsupported codecs, pixel formats, color spaces, and hardware paths degrading predictably.
 
-**Plans:** 6/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 
@@ -498,7 +498,7 @@ Plans:
 - [x] 12-03 - FFmpeg CPU frame fallback decoder and structured fallback ladder
 - [x] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
 - [x] 12-05 - Windows Media Foundation/DXVA/D3D frame and texture path
-- [ ] 12-06 - Phase 11 media IO handoff adapter
+- [x] 12-06 - Phase 11 media IO handoff adapter
 - [ ] 12-06B - Handle-based preview decode binding/release contracts
 - [ ] 12-06C - Release/session-close leak tests, final Phase 12 gates, and manual platform verification notes
 
@@ -646,7 +646,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
 | 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Complete   | 2026-06-18 |
-| 12. Media IO, Hardware Decode, And Frame/Texture Interop | 6/9 | In Progress | - |
+| 12. Media IO, Hardware Decode, And Frame/Texture Interop | 7/9 | In Progress | - |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |
 | 15. Audio Engine And DSP Timeline Pipeline | TBD | Not planned | - |
