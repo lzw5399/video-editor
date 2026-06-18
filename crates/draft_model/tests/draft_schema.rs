@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, MainTrackMagnet, Material,
+    Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material,
     MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
     SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
     SegmentMask, SegmentOpacity, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
@@ -234,6 +235,124 @@ fn segment_visual_validation_rejects_invalid_transform_values() {
             "{label} should mention {expected_field}: {error}"
         );
     }
+}
+
+#[test]
+fn keyframes_serialize_as_typed_jianying_style_semantics() {
+    let mut draft = valid_draft();
+    draft.tracks[0].segments[0].keyframes = vec![
+        Keyframe {
+            at: Microseconds::new(250_000),
+            property: KeyframeProperty::VisualOpacity,
+            value: KeyframeValue::Uint { value: 760 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::EaseInOut,
+        },
+        Keyframe {
+            at: Microseconds::new(500_000),
+            property: KeyframeProperty::TextColor,
+            value: KeyframeValue::Color {
+                value: "#ffcc00".to_owned(),
+            },
+            interpolation: KeyframeInterpolation::Hold,
+            easing: KeyframeEasing::None,
+        },
+    ];
+
+    validate_draft(&draft).expect("typed keyframes should validate");
+
+    let serialized = serde_json::to_value(&draft).expect("draft should serialize");
+    assert_eq!(
+        serialized["tracks"][0]["segments"][0]["keyframes"][0],
+        json!({
+            "at": 250000,
+            "property": "visualOpacity",
+            "value": { "kind": "uint", "value": 760 },
+            "interpolation": "linear",
+            "easing": "easeInOut"
+        })
+    );
+    assert_eq!(
+        serialized["tracks"][0]["segments"][0]["keyframes"][1]["value"],
+        json!({ "kind": "color", "value": "#ffcc00" })
+    );
+
+    let round_tripped: Draft =
+        serde_json::from_value(serialized).expect("typed keyframes should deserialize");
+    assert_eq!(round_tripped, draft);
+}
+
+#[test]
+fn keyframe_validation_rejects_invalid_property_value_combinations() {
+    let mut draft = valid_draft();
+    draft.tracks[0].segments[0].keyframes = vec![Keyframe {
+        at: Microseconds::new(250_000),
+        property: KeyframeProperty::VisualOpacity,
+        value: KeyframeValue::Color {
+            value: "#ffffff".to_owned(),
+        },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }];
+
+    let error = validate_draft(&draft).expect_err("opacity requires unsigned millis");
+    assert!(
+        error.to_string().contains("keyframes"),
+        "error should mention keyframes: {error}"
+    );
+    assert!(
+        error.to_string().contains("VisualOpacity")
+            || error.to_string().contains("visualOpacity"),
+        "error should mention visual opacity: {error}"
+    );
+}
+
+#[test]
+fn keyframe_validation_rejects_out_of_range_time_and_duplicate_property_time() {
+    let mut draft = valid_draft();
+    draft.tracks[0].segments[0].keyframes = vec![Keyframe {
+        at: Microseconds::new(1_000_001),
+        property: KeyframeProperty::VisualPositionX,
+        value: KeyframeValue::Int { value: 120 },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }];
+
+    let error = validate_draft(&draft).expect_err("keyframe after segment end should fail");
+    assert!(
+        error.to_string().contains("at"),
+        "error should mention keyframe time: {error}"
+    );
+
+    draft.tracks[0].segments[0].keyframes = vec![
+        Keyframe {
+            at: Microseconds::new(400_000),
+            property: KeyframeProperty::VisualPositionX,
+            value: KeyframeValue::Int { value: 120 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::None,
+        },
+        Keyframe {
+            at: Microseconds::new(400_000),
+            property: KeyframeProperty::VisualPositionX,
+            value: KeyframeValue::Int { value: 320 },
+            interpolation: KeyframeInterpolation::Hold,
+            easing: KeyframeEasing::None,
+        },
+    ];
+
+    let error = validate_draft(&draft).expect_err("duplicate property/time should fail");
+    assert!(
+        error.to_string().contains("duplicate"),
+        "error should mention duplicate keyframe: {error}"
+    );
+}
+
+#[test]
+fn keyframe_validation_preserves_existing_segments_with_empty_keyframes() {
+    let draft = valid_draft();
+    assert!(draft.tracks[0].segments[0].keyframes.is_empty());
+    validate_draft(&draft).expect("empty keyframes remain valid");
 }
 
 #[test]
