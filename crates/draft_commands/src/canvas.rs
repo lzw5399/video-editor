@@ -1,11 +1,11 @@
 //! Draft-level canvas command semantics.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandState, Draft, DraftCanvasConfig,
-    TimelineCommandResponse, TimelineSelection, validate_draft,
+    CommandEvent, CommandState, Draft, DraftCanvasConfig, TimelineCommandResponse,
+    TimelineSelection, validate_draft,
 };
 
-use crate::{TimelineCommandError, history::push_undo_snapshot};
+use crate::{TimelineCommandError, delta::canvas_delta, history::push_undo_snapshot};
 
 pub fn update_draft_canvas_config(
     draft: &Draft,
@@ -16,6 +16,7 @@ pub fn update_draft_canvas_config(
     let mut next_draft = draft.clone();
     next_draft.canvas_config = canvas_config;
     validate_draft(&next_draft)?;
+    let delta = canvas_delta(&next_draft);
 
     let (command_state, pruned) =
         push_undo_snapshot(command_state, draft, selection, "updateDraftCanvasConfig");
@@ -35,9 +36,6 @@ pub fn update_draft_canvas_config(
         command_state,
         selection: selection.clone(),
         events,
-        delta: CommandDelta::none(
-            CommandName::UpdateDraftCanvasConfig,
-            "delta pending command-specific builder",
-        ),
+        delta,
     })
 }

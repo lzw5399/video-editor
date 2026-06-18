@@ -7,6 +7,7 @@ use draft_model::{
 
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
+    delta::keyframe_delta,
     history::push_undo_snapshot,
     timeline::{find_segment_location, validate_timeline_rules, validate_track_unlocked},
 };
@@ -21,6 +22,8 @@ pub fn set_segment_keyframe(
     let mut next_draft = draft.clone();
     let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
     validate_track_unlocked(&next_draft.tracks[track_index])?;
+    let property = keyframe.property.clone();
+    let at = keyframe.at;
 
     let segment_keyframes = &mut next_draft.tracks[track_index].segments[segment_index].keyframes;
     if let Some(existing) = segment_keyframes
@@ -33,6 +36,15 @@ pub fn set_segment_keyframe(
     }
     sort_keyframes(segment_keyframes);
     validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = keyframe_delta(
+        CommandName::SetSegmentKeyframe,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        property,
+        at,
+        "segment keyframe set",
+    );
 
     Ok(response(
         next_draft,
@@ -42,6 +54,7 @@ pub fn set_segment_keyframe(
         "setSegmentKeyframe",
         "segmentKeyframeSet",
         CommandName::SetSegmentKeyframe,
+        delta,
     ))
 }
 
@@ -77,6 +90,15 @@ pub fn remove_segment_keyframe(
     segment_keyframes.remove(index);
     sort_keyframes(segment_keyframes);
     validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = keyframe_delta(
+        CommandName::RemoveSegmentKeyframe,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        property.clone(),
+        at,
+        "segment keyframe removed",
+    );
 
     Ok(response(
         next_draft,
@@ -86,6 +108,7 @@ pub fn remove_segment_keyframe(
         "removeSegmentKeyframe",
         "segmentKeyframeRemoved",
         CommandName::RemoveSegmentKeyframe,
+        delta,
     ))
 }
 
@@ -104,7 +127,8 @@ fn response(
     previous_selection: &TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    command: CommandName,
+    _command: CommandName,
+    delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -128,6 +152,6 @@ fn response(
         command_state,
         selection: previous_selection.clone(),
         events,
-        delta: CommandDelta::none(command, "delta pending command-specific builder"),
+        delta,
     }
 }

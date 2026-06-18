@@ -1,12 +1,13 @@
 //! Segment-level visual command semantics.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandState, Draft, SegmentId, SegmentVisual,
+    CommandEvent, CommandName, CommandState, Draft, SegmentId, SegmentVisual,
     TimelineCommandResponse, TimelineSelection,
 };
 
 use crate::{
     TimelineCommandError,
+    delta::visual_segment_delta,
     history::push_undo_snapshot,
     timeline::{find_segment_location, validate_timeline_rules, validate_track_unlocked},
 };
@@ -24,6 +25,13 @@ pub fn update_segment_visual(
 
     next_draft.tracks[track_index].segments[segment_index].visual = visual;
     validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = visual_segment_delta(
+        CommandName::UpdateSegmentVisual,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        "segment visual updated",
+    );
 
     let (command_state, pruned) =
         push_undo_snapshot(command_state, draft, selection, "updateSegmentVisual");
@@ -43,9 +51,6 @@ pub fn update_segment_visual(
         command_state,
         selection: selection.clone(),
         events,
-        delta: CommandDelta::none(
-            CommandName::UpdateSegmentVisual,
-            "delta pending command-specific builder",
-        ),
+        delta,
     })
 }

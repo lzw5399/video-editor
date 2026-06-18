@@ -14,7 +14,8 @@ pub use cache::{
     PreviewInvalidationRequest, PreviewInvalidationResult, accepted_audio_edit_invalidation,
     accepted_edit_ranges_invalidation, accepted_text_edit_invalidation,
     accepted_timeline_edit_invalidation, changed_material_invalidation,
-    changed_materials_invalidation, changed_range_invalidation, invalidate_preview_cache,
+    changed_materials_invalidation, changed_range_invalidation, consumer_domains_for_dirty_domains,
+    invalidate_preview_cache,
 };
 pub use realtime_backend::{
     RealtimePreviewFallbackDecision, RealtimePreviewFrameServiceRequest,

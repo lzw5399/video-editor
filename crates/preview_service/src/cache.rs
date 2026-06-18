@@ -1,4 +1,4 @@
-use draft_model::{MaterialId, TargetTimerange};
+use draft_model::{DirtyDomain, MaterialId, TargetTimerange};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,6 +129,104 @@ pub fn accepted_edit_ranges_invalidation(
     }
 }
 
+pub fn consumer_domains_for_dirty_domains(
+    domains: impl IntoIterator<Item = DirtyDomain>,
+) -> Vec<DirtyDomain> {
+    let mut consumers = Vec::new();
+    for domain in domains {
+        match domain {
+            DirtyDomain::Timing => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Visual => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Text => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Audio => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Waveform,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Material | DirtyDomain::RuntimeCapabilities => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Waveform,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Canvas | DirtyDomain::OutputProfile => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Effect | DirtyDomain::Filter | DirtyDomain::Transition => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Preview
+            | DirtyDomain::ExportPrep
+            | DirtyDomain::Thumbnail
+            | DirtyDomain::Waveform
+            | DirtyDomain::Proxy
+            | DirtyDomain::GraphSnapshot
+            | DirtyDomain::PreviewCache => push_domain(&mut consumers, domain),
+        }
+    }
+    sort_consumer_domains(&mut consumers);
+    consumers
+}
+
 pub fn invalidate_preview_cache(
     entries: &[PreviewCacheEntry],
     request: &PreviewInvalidationRequest,
@@ -174,4 +272,30 @@ fn timeranges_overlap(first: &TargetTimerange, second: &TargetTimerange) -> bool
         return false;
     };
     first_start < second_end && second_start < first_end
+}
+
+fn push_all(domains: &mut Vec<DirtyDomain>, additions: &[DirtyDomain]) {
+    for domain in additions {
+        push_domain(domains, *domain);
+    }
+}
+
+fn push_domain(domains: &mut Vec<DirtyDomain>, domain: DirtyDomain) {
+    if !domains.contains(&domain) {
+        domains.push(domain);
+    }
+}
+
+fn sort_consumer_domains(domains: &mut [DirtyDomain]) {
+    domains.sort_by_key(|domain| match domain {
+        DirtyDomain::Preview => 0,
+        DirtyDomain::ExportPrep => 1,
+        DirtyDomain::Audio => 2,
+        DirtyDomain::Thumbnail => 3,
+        DirtyDomain::Waveform => 4,
+        DirtyDomain::Proxy => 5,
+        DirtyDomain::GraphSnapshot => 6,
+        DirtyDomain::PreviewCache => 7,
+        _ => 8,
+    });
 }

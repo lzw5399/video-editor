@@ -1,8 +1,9 @@
 //! Semantic command delta builders for accepted draft commands.
 
 use draft_model::{
-    ChangedEntity, CommandDelta, CommandName, DirtyDomain, DirtyRange, DirtyRangeSource,
-    InvalidationScope, MaterialId, Segment, SegmentId, TargetTimerange, TrackId,
+    ChangedEntity, CommandDelta, CommandName, DirtyDomain, DirtyRange, DirtyRangeSource, Draft,
+    InvalidationScope, KeyframeProperty, MaterialId, Microseconds, Segment, SegmentId,
+    TargetTimerange, TrackId,
 };
 
 const SEGMENT_DOMAINS: &[DirtyDomain] = &[
@@ -69,6 +70,45 @@ const AUDIO_CONSUMERS: &[DirtyDomain] = &[
     DirtyDomain::ExportPrep,
     DirtyDomain::Audio,
     DirtyDomain::Waveform,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const VISUAL_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Visual,
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const VISUAL_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const CANVAS_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Canvas,
+    DirtyDomain::OutputProfile,
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const CANVAS_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Proxy,
     DirtyDomain::GraphSnapshot,
     DirtyDomain::PreviewCache,
 ];
@@ -295,6 +335,178 @@ pub fn track_mute_delta(track_id: &TrackId, segments: &[Segment]) -> CommandDelt
     )
 }
 
+pub fn visual_segment_delta(
+    command: CommandName,
+    track_id: &TrackId,
+    segment: &Segment,
+    reason: &'static str,
+) -> CommandDelta {
+    CommandDelta::targeted(
+        command,
+        segment_entities(track_id, &segment.segment_id, &segment.material_id),
+        VISUAL_DOMAINS.to_vec(),
+        vec![current_range(segment.target_timerange.clone())],
+        InvalidationScope::targeted(
+            segment_material_ids(&segment.material_id),
+            VISUAL_CONSUMERS.to_vec(),
+        ),
+        reason,
+    )
+}
+
+pub fn keyframe_delta(
+    command: CommandName,
+    track_id: &TrackId,
+    segment: &Segment,
+    property: KeyframeProperty,
+    at: Microseconds,
+    reason: &'static str,
+) -> CommandDelta {
+    let mut entities = segment_entities(track_id, &segment.segment_id, &segment.material_id);
+    entities.push(ChangedEntity::Keyframe {
+        track_id: track_id.clone(),
+        segment_id: segment.segment_id.clone(),
+        property: property.clone(),
+        at,
+    });
+
+    let changed_domains = keyframe_domains(property);
+    let consumer_domains = consumer_domains_for_semantic_domains(&changed_domains);
+    CommandDelta::targeted(
+        command,
+        entities,
+        changed_domains,
+        vec![current_range(segment.target_timerange.clone())],
+        InvalidationScope::targeted(segment_material_ids(&segment.material_id), consumer_domains),
+        reason,
+    )
+}
+
+pub fn canvas_delta(draft: &Draft) -> CommandDelta {
+    let range = DirtyRange {
+        target_timerange: draft_duration_range(draft),
+        source: DirtyRangeSource::FullDraft,
+    };
+    CommandDelta {
+        command: CommandName::UpdateDraftCanvasConfig,
+        changed_entities: vec![
+            ChangedEntity::Draft {
+                draft_id: draft.draft_id.clone(),
+            },
+            ChangedEntity::Canvas {
+                draft_id: draft.draft_id.clone(),
+            },
+        ],
+        changed_domains: CANVAS_DOMAINS.to_vec(),
+        changed_ranges: vec![range],
+        invalidation: InvalidationScope {
+            full_draft: true,
+            material_ids: Vec::new(),
+            graph_node_ids: Vec::new(),
+            consumer_domains: CANVAS_CONSUMERS.to_vec(),
+        },
+        reason: "draft canvas config changed".to_owned(),
+    }
+}
+
+pub fn consumer_domains_for_semantic_domains(domains: &[DirtyDomain]) -> Vec<DirtyDomain> {
+    let mut consumers = Vec::new();
+    for domain in domains {
+        match domain {
+            DirtyDomain::Timing => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Visual => push_all(&mut consumers, VISUAL_CONSUMERS),
+            DirtyDomain::Text => push_all(&mut consumers, TEXT_CONSUMERS),
+            DirtyDomain::Audio => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Waveform,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Material | DirtyDomain::RuntimeCapabilities => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Audio,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Waveform,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Canvas | DirtyDomain::OutputProfile => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::Thumbnail,
+                    DirtyDomain::Proxy,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
+            DirtyDomain::Effect | DirtyDomain::Filter | DirtyDomain::Transition => {
+                push_all(&mut consumers, VISUAL_CONSUMERS);
+            }
+            DirtyDomain::Preview
+            | DirtyDomain::ExportPrep
+            | DirtyDomain::Thumbnail
+            | DirtyDomain::Waveform
+            | DirtyDomain::Proxy
+            | DirtyDomain::GraphSnapshot
+            | DirtyDomain::PreviewCache => push_domain(&mut consumers, *domain),
+        }
+    }
+    sort_consumer_domains(&mut consumers);
+    consumers
+}
+
+fn keyframe_domains(property: KeyframeProperty) -> Vec<DirtyDomain> {
+    match property {
+        KeyframeProperty::Volume => AUDIO_PROPERTY_DOMAINS.to_vec(),
+        KeyframeProperty::TextFontSize
+        | KeyframeProperty::TextColor
+        | KeyframeProperty::TextLineHeight
+        | KeyframeProperty::TextLetterSpacing
+        | KeyframeProperty::TextLayoutX
+        | KeyframeProperty::TextLayoutY
+        | KeyframeProperty::TextLayoutWidth
+        | KeyframeProperty::TextLayoutHeight => TEXT_DOMAINS.to_vec(),
+        KeyframeProperty::VisualPositionX
+        | KeyframeProperty::VisualPositionY
+        | KeyframeProperty::VisualScaleX
+        | KeyframeProperty::VisualScaleY
+        | KeyframeProperty::VisualRotation
+        | KeyframeProperty::VisualOpacity
+        | KeyframeProperty::StickerPositionX
+        | KeyframeProperty::StickerPositionY
+        | KeyframeProperty::StickerScaleX
+        | KeyframeProperty::StickerScaleY => VISUAL_DOMAINS.to_vec(),
+        KeyframeProperty::FilterParameterUnsupported => {
+            let mut domains = VISUAL_DOMAINS.to_vec();
+            push_domain(&mut domains, DirtyDomain::Filter);
+            domains
+        }
+    }
+}
+
 fn segment_entities(
     track_id: &TrackId,
     segment_id: &SegmentId,
@@ -322,4 +534,47 @@ fn push_material_id(material_ids: &mut Vec<MaterialId>, material_id: &MaterialId
     if !material_ids.iter().any(|existing| existing == material_id) {
         material_ids.push(material_id.clone());
     }
+}
+
+fn push_all(domains: &mut Vec<DirtyDomain>, additions: &[DirtyDomain]) {
+    for domain in additions {
+        push_domain(domains, *domain);
+    }
+}
+
+fn push_domain(domains: &mut Vec<DirtyDomain>, domain: DirtyDomain) {
+    if !domains.contains(&domain) {
+        domains.push(domain);
+    }
+}
+
+fn sort_consumer_domains(domains: &mut [DirtyDomain]) {
+    domains.sort_by_key(|domain| match domain {
+        DirtyDomain::Preview => 0,
+        DirtyDomain::ExportPrep => 1,
+        DirtyDomain::Audio => 2,
+        DirtyDomain::Thumbnail => 3,
+        DirtyDomain::Waveform => 4,
+        DirtyDomain::Proxy => 5,
+        DirtyDomain::GraphSnapshot => 6,
+        DirtyDomain::PreviewCache => 7,
+        _ => 8,
+    });
+}
+
+fn draft_duration_range(draft: &Draft) -> TargetTimerange {
+    let duration = draft
+        .tracks
+        .iter()
+        .flat_map(|track| track.segments.iter())
+        .filter_map(|segment| {
+            segment
+                .target_timerange
+                .start
+                .get()
+                .checked_add(segment.target_timerange.duration.get())
+        })
+        .max()
+        .unwrap_or(0);
+    TargetTimerange::new(Microseconds::ZERO, Microseconds::new(duration))
 }

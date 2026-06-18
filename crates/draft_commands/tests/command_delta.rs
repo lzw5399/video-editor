@@ -11,13 +11,13 @@ use draft_commands::timeline::{
 use draft_commands::visual::update_segment_visual;
 use draft_model::{
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, ChangedEntity, CommandDelta,
-    CommandName, CommandState, DirtyDomain, DirtyRange, DirtyRangeSource, Draft,
-    DraftCanvasConfig, ImportSubtitleSrtCommandPayload, InvalidationScope, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
-    MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity, SegmentPosition,
-    SegmentVolume, SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextBox,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
-    TimelineSelection, Track, TrackKind, TrimSegmentDirection,
+    CommandName, CommandState, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig,
+    ImportSubtitleSrtCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind, Microseconds,
+    RationalFrameRate, Segment, SegmentOpacity, SegmentPosition, SegmentVisual, SegmentVolume,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
+    TrimSegmentDirection,
 };
 
 #[test]
@@ -432,14 +432,9 @@ fn visual_keyframe_delta_covers_segment_influence_ranges() {
     visual.transform.position = SegmentPosition { x: 80, y: -40 };
     visual.transform.opacity = SegmentOpacity { value_millis: 750 };
 
-    let visual_updated = update_segment_visual(
-        &draft,
-        &state,
-        &selection,
-        "video-segment".into(),
-        visual,
-    )
-    .expect("visual update should commit");
+    let visual_updated =
+        update_segment_visual(&draft, &state, &selection, "video-segment".into(), visual)
+            .expect("visual update should commit");
     assert_delta_has(
         &visual_updated.delta,
         CommandName::UpdateSegmentVisual,
@@ -528,12 +523,22 @@ fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
 
     assert_eq!(updated.delta.command, CommandName::UpdateDraftCanvasConfig);
     assert!(updated.delta.invalidation.full_draft);
-    assert!(updated.delta.changed_entities.contains(&ChangedEntity::Draft {
-        draft_id: "phase13-visual-delta-draft".into(),
-    }));
-    assert!(updated.delta.changed_entities.contains(&ChangedEntity::Canvas {
-        draft_id: "phase13-visual-delta-draft".into(),
-    }));
+    assert!(
+        updated
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Draft {
+                draft_id: "phase13-visual-delta-draft".into(),
+            })
+    );
+    assert!(
+        updated
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Canvas {
+                draft_id: "phase13-visual-delta-draft".into(),
+            })
+    );
     for domain in [
         DirtyDomain::Canvas,
         DirtyDomain::OutputProfile,
