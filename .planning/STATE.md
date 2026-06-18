@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-current_phase: 12
-current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 9
-total_plans_in_phase: 9
+current_phase: 13
+current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
+current_plan: 1
+total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-18T20:58:14.000Z"
-last_activity: "2026-06-19 - Completed Phase 12 Plan 06B: preview decode handle contracts and release API."
+last_updated: "2026-06-18T21:06:18.000Z"
+last_activity: "2026-06-19 - Completed Phase 12 Plan 06C: final media IO lifetime diagnostics and Phase 12 gate."
 progress:
   total_phases: 20
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 98
-  completed_plans: 89
-  percent: 91
+  completed_plans: 90
+  percent: 92
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 12 media IO, hardware decode, and frame/texture interop
+**Current focus:** Phase 13 incremental render graph, dirty ranges, and cache coherence
 
 ## Current Position
 
-Phase: 12
-Plan: 8/9 complete; next plan 12-06C
-Status: Phase 12 in progress; preview decode handle contracts and release API are complete.
-Last activity: 2026-06-19 - Completed Phase 12 Plan 06B: preview decode handle contracts and release API.
+Phase: 13
+Plan: 0/8 complete; next plan 13-01
+Status: Phase 12 complete; Phase 13 ready to start.
+Last activity: 2026-06-19 - Completed Phase 12 Plan 06C: final media IO lifetime diagnostics and Phase 12 gate.
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 89
+- Total plans completed: 90
 - Average duration: 9 min
-- Total execution time: 822 min
+- Total execution time: 842 min
 
 **By Phase:**
 
@@ -59,11 +59,11 @@ Progress: [█████████░] 91%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
-| 12 | 8 | 161 min | 20 min |
+| 12 | 9 | 181 min | 20 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 96 min
+- Last 5 plans: 87 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -146,6 +146,7 @@ Progress: [█████████░] 91%
 | Phase 12 P05 | 22 min | 2 tasks | 4 files |
 | Phase 12 P06 | 10 min | 1 tasks | 6 files |
 | Phase 12 P06B | 20 min | 1 tasks | 8 files |
+| Phase 12 P06C | 20 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -164,6 +165,9 @@ Progress: [█████████░] 91%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12]: `FrameReleaseDiagnostic` records texture backend, runtime device ID, and compatibility for texture leak reports. — Session close can now report CPU, platform-opaque, and texture lease leaks with owner session/generation and texture device context before resources are released.
+- [Phase 12]: `pnpm run test:phase12` is the final focused Phase 12 gate. — The gate composes media runtime contracts, desktop fallback/native tests, realtime handoff, binding preview decode contracts, source guards, schema exports, and generated contract drift checks.
+- [Phase 12]: Native hardware proof is explicit and env-gated. — macOS passed with `VIDEO_EDITOR_TEST_NATIVE_MEDIA=1` on this host; Windows still requires the same command on a Windows host before Windows native hardware acceptance is claimed.
 - [Phase 12]: Preview decode binding responses expose opaque frame/texture handle IDs and metadata only. — Native pointers, platform objects, ArrayBuffer/Uint8Array values, and pixel payloads remain blocked by generated schema/tests and do not cross to JS.
 - [Phase 12]: Preview frame release validates frame handle ID, owner session, and playback generation. — Wrong-session, stale-generation, and unknown handles return `previewServiceFailed` instead of releasing retained native/Rust resources.
 - [Phase 12]: Generated schema command/payload pairing constraints include preview decode/release and existing keyframe command pairs. — The schema now rejects those mismatched envelope/payload combinations instead of relying only on Rust deserialization.

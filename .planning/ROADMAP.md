@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters (completed 2026-06-18)
 - [x] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (completed 2026-06-18)
 - [x] **Phase 11: Realtime Preview Runtime And GPU Render Backend** - Production realtime preview runtime, GPU compositor backend, frame pacing, and preview/export parity diagnostics (completed 2026-06-18)
-- [ ] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff
+- [x] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff (completed 2026-06-19)
 - [ ] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts
 - [ ] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC
 - [ ] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity
@@ -488,7 +488,7 @@ Plans:
   4. Realtime preview can consume frame or texture handles without full 4K pixel buffers crossing the JS/Rust boundary.
   5. FFmpeg remains available as fallback/probe/export/transcode implementation, with unsupported codecs, pixel formats, color spaces, and hardware paths degrading predictably.
 
-**Plans:** 7/9 plans executed
+**Plans:** 9/9 plans executed
 
 Plans:
 
@@ -499,8 +499,8 @@ Plans:
 - [x] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
 - [x] 12-05 - Windows Media Foundation/DXVA/D3D frame and texture path
 - [x] 12-06 - Phase 11 media IO handoff adapter
-- [ ] 12-06B - Handle-based preview decode binding/release contracts
-- [ ] 12-06C - Release/session-close leak tests, final Phase 12 gates, and manual platform verification notes
+- [x] 12-06B - Handle-based preview decode binding/release contracts
+- [x] 12-06C - Release/session-close leak tests, final Phase 12 gates, and manual platform verification notes
 
 ### Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence
 
