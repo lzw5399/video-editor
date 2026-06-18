@@ -1035,17 +1035,23 @@ export function App(): React.ReactElement {
   }
 
   function handleUpdateSelectedSegmentVisual(visual: SegmentVisual): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null) {
-          throw new Error("请先选择一个片段");
-        }
+    void (async () => {
+      await executeTimelineCommand(
+        (current) => {
+          const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
+          if (selectedSegment === null) {
+            throw new Error("请先选择一个片段");
+          }
 
-        return buildUpdateSegmentVisualCommand(current, selectedSegment.segment.segmentId, visual);
-      },
-      "应用画面"
-    );
+          return buildUpdateSegmentVisualCommand(current, selectedSegment.segment.segmentId, visual);
+        },
+        "应用画面"
+      );
+
+      if (workspaceRef.current.commandError === null) {
+        requestPreviewFrameAt(normalizePlayheadTime(playheadUs));
+      }
+    })();
   }
 
   function handleSetSelectedSegmentKeyframe(

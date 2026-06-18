@@ -1,4 +1,10 @@
-import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
+import {
+  WORKSPACE_CATEGORIES,
+  WORKSPACE_CATEGORY_META,
+  getSelectedSegmentView,
+  type WorkspaceCategory,
+  type WorkspaceState
+} from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, SegmentVisual } from "../../generated/Draft";
 import { FeaturePanel } from "./FeaturePanel";
@@ -95,6 +101,8 @@ export function WorkspaceShell({
   onUndoTimelineEdit,
   onRedoTimelineEdit
 }: WorkspaceShellProps): React.ReactElement {
+  const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
+
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
       <header className="top-feature-bar" aria-label="顶部功能区">
@@ -151,6 +159,7 @@ export function WorkspaceShell({
           preview={workspace.preview}
           exportState={workspace.export}
           runtimeDiagnostics={workspace.runtimeDiagnostics}
+          selectedSegment={selectedSegment}
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
           onPlayheadChange={onPlayheadChange}

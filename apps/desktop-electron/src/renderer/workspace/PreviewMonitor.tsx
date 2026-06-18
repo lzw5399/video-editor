@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig } from "../../generated/Draft";
 import {
@@ -9,6 +11,7 @@ import {
   formatExportPreset,
   formatExportProgress,
   formatMicroseconds,
+  type SelectedSegmentView,
   type BindingStatus,
   type ExportDisplayState,
   type PreviewDisplayState,
@@ -26,6 +29,7 @@ type PreviewMonitorProps = {
   preview: PreviewDisplayState;
   exportState: ExportDisplayState;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
+  selectedSegment: SelectedSegmentView | null;
   pending: boolean;
   playheadUs?: number;
   onPlayheadChange: (value: number) => void;
@@ -61,6 +65,7 @@ export function PreviewMonitor({
   preview,
   exportState,
   runtimeDiagnostics,
+  selectedSegment,
   pending,
   playheadUs = 0,
   onPlayheadChange,
@@ -89,6 +94,7 @@ export function PreviewMonitor({
   const previewFrameLabel = runtimeDiagnostics.canPreview ? "请求预览帧" : "预览暂不可用";
   const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
+  const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
 
   return (
     <div className="preview-shell">
@@ -109,6 +115,15 @@ export function PreviewMonitor({
         ) : (
           <img className="preview-frame-image" src={preview.frameDisplayUrl} alt="当前预览帧" aria-label="当前预览帧" />
         )}
+        {selectedSegment !== null && selectionOverlayStyle !== null ? (
+          <div
+            className="preview-selection-outline"
+            aria-label="预览选中框"
+            data-segment-id={selectedSegment.segment.segmentId}
+            data-fit-mode={selectedSegment.segment.visual.fitMode}
+            style={selectionOverlayStyle}
+          />
+        ) : null}
       </div>
 
       <div className="preview-transport" aria-label="预览控制">
@@ -266,6 +281,39 @@ function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
   const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
   const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
   return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
+}
+
+function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
+  if (selectedSegment === null || !selectedSegment.segment.visual.visible) {
+    return null;
+  }
+
+  const visual = selectedSegment.segment.visual;
+  const crop = visual.transform.crop;
+  const remainingWidthMillis = Math.max(1, 1000 - crop.leftMillis - crop.rightMillis);
+  const remainingHeightMillis = Math.max(1, 1000 - crop.topMillis - crop.bottomMillis);
+  const widthPercent = clampOverlayPercent((72 * visual.transform.scale.xMillis * remainingWidthMillis) / 1_000_000);
+  const heightPercent = clampOverlayPercent((72 * visual.transform.scale.yMillis * remainingHeightMillis) / 1_000_000);
+  const xPercent = clampOverlayOffsetPercent(visual.transform.position.x / 20);
+  const yPercent = clampOverlayOffsetPercent(visual.transform.position.y / 20);
+  const opacity = Math.max(0.28, Math.min(1, visual.transform.opacity.valueMillis / 1000));
+
+  return {
+    left: `calc(50% + ${xPercent}%)`,
+    top: `calc(50% - ${yPercent}%)`,
+    width: `${widthPercent}%`,
+    height: `${heightPercent}%`,
+    opacity,
+    transform: `translate(-50%, -50%) rotate(${visual.transform.rotation.degrees}deg)`
+  };
+}
+
+function clampOverlayPercent(value: number): number {
+  return Math.max(8, Math.min(98, value));
+}
+
+function clampOverlayOffsetPercent(value: number): number {
+  return Math.max(-48, Math.min(48, value));
 }
 
 function RuntimeDiagnosticsPanel({
