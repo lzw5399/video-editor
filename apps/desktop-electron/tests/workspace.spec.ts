@@ -4,6 +4,12 @@ import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
 import type { Keyframe, SegmentVisual } from "../src/generated/Draft";
+import {
+  formatRealtimePreviewBackendLabel,
+  formatRealtimePreviewFallbackReason,
+  summarizeRealtimePreviewDisplay,
+  type RealtimePreviewDisplayModel
+} from "../src/renderer/viewModel";
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -1032,6 +1038,46 @@ test("实时预览 native preview fallback displays main-provided attach diagnos
   } finally {
     await app.close();
   }
+});
+
+test("telemetry display model represents Rust-owned realtime and fallback diagnostics", () => {
+  const supported: RealtimePreviewDisplayModel = {
+    backend: "mock",
+    firstFrameLatencyMs: 18,
+    seekLatencyMs: 7,
+    queueLatencyMs: 2,
+    renderDurationMs: 5,
+    presentedFrameCount: 4,
+    droppedFrameCount: 0,
+    repeatedFrameCount: 1,
+    staleRejectedCount: 0,
+    canceledRequestCount: 0,
+    currentRequestCanceled: false,
+    fallbackReason: null,
+    fallbackCount: 0,
+    cacheHitCount: 2,
+    targetTimeMicroseconds: 1_200_000,
+    playbackGeneration: 3,
+    fallbackArtifactVisible: false
+  };
+  const fallback: RealtimePreviewDisplayModel = {
+    ...supported,
+    backend: "ffmpegArtifact",
+    presentedFrameCount: 0,
+    currentRequestCanceled: true,
+    fallbackReason: "ffmpegArtifactGenerated",
+    fallbackCount: 1,
+    fallbackArtifactVisible: true
+  };
+
+  expect(formatRealtimePreviewBackendLabel(supported.backend)).toBe("实时后端：Mock");
+  expect(formatRealtimePreviewBackendLabel(fallback.backend)).toBe("备用产物：FFmpeg");
+  expect(formatRealtimePreviewFallbackReason("previewArtifactCacheHit")).toBe("命中预览缓存");
+  expect(summarizeRealtimePreviewDisplay(supported)).toContain("首帧 18 ms");
+  expect(summarizeRealtimePreviewDisplay(supported)).toContain("重复 1");
+  expect(summarizeRealtimePreviewDisplay(supported)).toContain("缓存 2");
+  expect(summarizeRealtimePreviewDisplay(fallback)).toContain("当前请求已取消");
+  expect(fallback.fallbackArtifactVisible).toBe(true);
 });
 
 test("播放头支持时间线标尺点击和拖动请求预览帧", async () => {
