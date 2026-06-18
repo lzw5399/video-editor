@@ -169,6 +169,11 @@ export function PreviewMonitor({
   const previewFrameLabel = runtimeDiagnostics.canPreview ? "请求预览帧" : "预览暂不可用";
   const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
+  const previewPlaceholderLabel =
+    selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
+  const previewStatusLabel = showDeveloperDiagnostics
+    ? preview.error ?? preview.frameStatusLabel
+    : formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
     preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
@@ -269,7 +274,7 @@ export function PreviewMonitor({
       >
         {preview.frameDisplayUrl === null ? (
           <div className="preview-placeholder">
-            <span>{preview.frameArtifactPath === null ? "等待请求预览帧" : "预览帧已返回，正在准备显示"}</span>
+            <span>{preview.frameArtifactPath === null ? previewPlaceholderLabel : "预览帧已返回，正在准备显示"}</span>
           </div>
         ) : (
           <img className="preview-frame-image" src={preview.frameDisplayUrl} alt="当前预览帧" aria-label="当前预览帧" />
@@ -352,28 +357,30 @@ export function PreviewMonitor({
             onChange={(event) => onPlayheadChange(Math.max(0, Math.round(event.currentTarget.valueAsNumber || 0)))}
           />
         </label>
-        <div className="preview-command-group" role="group" aria-label="预览生成">
-          <button
-            type="button"
-            className="preview-command-button"
-            aria-label={previewFrameLabel}
-            title={previewFrameLabel}
-            onClick={onRequestPreviewFrame}
-            disabled={pending || !runtimeDiagnostics.canPreview}
-          >
-            帧
-          </button>
-          <button
-            type="button"
-            className="preview-command-button"
-            aria-label={previewSegmentLabel}
-            title={previewSegmentLabel}
-            onClick={onRequestPreviewSegment}
-            disabled={pending || !runtimeDiagnostics.canPreview}
-          >
-            片段
-          </button>
-        </div>
+        {showDeveloperDiagnostics ? (
+          <div className="preview-command-group" role="group" aria-label="预览生成">
+            <button
+              type="button"
+              className="preview-command-button"
+              aria-label={previewFrameLabel}
+              title={previewFrameLabel}
+              onClick={onRequestPreviewFrame}
+              disabled={pending || !runtimeDiagnostics.canPreview}
+            >
+              帧
+            </button>
+            <button
+              type="button"
+              className="preview-command-button"
+              aria-label={previewSegmentLabel}
+              title={previewSegmentLabel}
+              onClick={onRequestPreviewSegment}
+              disabled={pending || !runtimeDiagnostics.canPreview}
+            >
+              片段
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {showDeveloperDiagnostics ? (
@@ -457,7 +464,7 @@ export function PreviewMonitor({
 
       <div className="preview-status-line" aria-live="polite">
         <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
-        <span aria-label="预览状态">{preview.error ?? preview.frameStatusLabel}</span>
+        <span aria-label="预览状态">{previewStatusLabel}</span>
         <span className="canvas-readout-chip" title={canvasReadout}>
           {canvasReadout}
         </span>
@@ -467,6 +474,34 @@ export function PreviewMonitor({
       </div>
     </div>
   );
+}
+
+function formatProductPreviewStatus(preview: PreviewDisplayState, placeholderLabel: string, pending: boolean): string {
+  if (preview.error !== null) {
+    return preview.error;
+  }
+
+  if (pending) {
+    return "正在准备预览画面";
+  }
+
+  if (preview.frameStatusLabel.includes("已更新，请重新请求预览帧")) {
+    return "画面已更新，预览待刷新";
+  }
+
+  if (preview.frameStatusLabel === "预览暂不可用") {
+    return "预览暂不可用";
+  }
+
+  if (preview.frameStatusLabel === "预览帧失败") {
+    return "预览画面生成失败";
+  }
+
+  if (preview.frameDisplayUrl !== null) {
+    return "预览就绪";
+  }
+
+  return preview.frameArtifactPath === null ? placeholderLabel : "正在准备预览画面";
 }
 
 function frameDurationUs(canvasConfig: DraftCanvasConfig): number {

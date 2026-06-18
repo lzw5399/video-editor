@@ -182,6 +182,7 @@ export function WorkspaceShell({
         <Inspector
           workspace={workspace}
           playheadUs={playheadUs}
+          showDeveloperDiagnostics={showDeveloperDiagnostics}
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}

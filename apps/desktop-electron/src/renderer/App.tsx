@@ -107,6 +107,10 @@ type DraftCommandResultApplier<T> = (
   result: CommandResultEnvelope<T>,
   command: CommandEnvelope
 ) => WorkspaceState;
+type ExecutedDraftCommand<T> = {
+  command: CommandEnvelope;
+  result: CommandResultEnvelope<T>;
+};
 type ExportCommandResultApplier = (
   current: WorkspaceState,
   result: CommandResultEnvelope<ExportJobStatusResponse>
@@ -175,10 +179,25 @@ export function App(): React.ReactElement {
   const workspaceRef = useRef(workspace);
   const commandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
+  const pendingAutoPreviewTimeRef = useRef<number | null>(null);
+  const autoPreviewRetryTimerRef = useRef<number | null>(null);
+  const autoPreviewRetryCountRef = useRef(0);
 
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    flushPendingAutoPreviewFrame();
+  }, [workspace.pendingCommand, workspace.runtimeDiagnostics.canPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (autoPreviewRetryTimerRef.current !== null) {
+        window.clearTimeout(autoPreviewRetryTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const artifactPath = workspace.preview.frameArtifactPath;
@@ -307,7 +326,7 @@ export function App(): React.ReactElement {
     buildCommand: DraftCommandBuilder,
     pendingCommand: string,
     applyResult: DraftCommandResultApplier<T>
-  ): Promise<void> {
+  ): Promise<ExecutedDraftCommand<T> | null> {
     if (commandInFlightRef.current) {
       setWorkspace((current) => {
         const next = {
@@ -317,7 +336,7 @@ export function App(): React.ReactElement {
         workspaceRef.current = next;
         return next;
       });
-      return;
+      return null;
     }
 
     commandInFlightRef.current = true;
@@ -339,6 +358,7 @@ export function App(): React.ReactElement {
         workspaceRef.current = next;
         return next;
       });
+      return { command, result };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       setWorkspace((current) => {
@@ -350,13 +370,17 @@ export function App(): React.ReactElement {
         workspaceRef.current = next;
         return next;
       });
+      return null;
     } finally {
       commandInFlightRef.current = false;
     }
   }
 
-  async function executeTimelineCommand(buildCommand: DraftCommandBuilder, pendingCommand: string): Promise<void> {
-    await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result, command) => {
+  async function executeTimelineCommand(
+    buildCommand: DraftCommandBuilder,
+    pendingCommand: string
+  ): Promise<ExecutedDraftCommand<TimelineCommandResponse> | null> {
+    const executed = await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result, command) => {
       const applied = applyTimelineCommandResult(
         {
           draft: current.draft,
@@ -412,6 +436,17 @@ export function App(): React.ReactElement {
 
       return next;
     });
+
+    if (
+      executed !== null &&
+      executed.result.ok &&
+      executed.result.data !== null &&
+      executed.command.payload.kind === "addSegment"
+    ) {
+      queueAutoPreviewFrame(executed.command.payload.targetTimerange.start);
+    }
+
+    return executed;
   }
 
   async function executePreviewCommand(
@@ -892,6 +927,7 @@ export function App(): React.ReactElement {
         }
 
         const duration = toPositiveMicroseconds(material.metadata.duration ?? 3_000_000);
+        const insertedTargetStart = nextTrackStart(track);
         return buildAddSegmentCommand({
           context: current,
           trackId: track.trackId,
@@ -902,7 +938,7 @@ export function App(): React.ReactElement {
             duration
           },
           targetTimerange: {
-            start: nextTrackStart(track),
+            start: insertedTargetStart,
             duration
           }
         });
@@ -1100,6 +1136,38 @@ export function App(): React.ReactElement {
     const targetTime = normalizePlayheadTime(value);
     setPlayheadUs(targetTime);
     requestPreviewFrameAt(targetTime);
+  }
+
+  function queueAutoPreviewFrame(targetTime: number): void {
+    setPlayheadUs(targetTime);
+    pendingAutoPreviewTimeRef.current = targetTime;
+    autoPreviewRetryCountRef.current = 0;
+    schedulePendingAutoPreviewFlush();
+  }
+
+  function flushPendingAutoPreviewFrame(): void {
+    const targetTime = pendingAutoPreviewTimeRef.current;
+    if (targetTime === null || commandInFlightRef.current || !workspaceRef.current.runtimeDiagnostics.canPreview) {
+      return;
+    }
+
+    pendingAutoPreviewTimeRef.current = null;
+    requestPreviewFrameAt(targetTime);
+  }
+
+  function schedulePendingAutoPreviewFlush(): void {
+    if (autoPreviewRetryTimerRef.current !== null) {
+      return;
+    }
+
+    autoPreviewRetryTimerRef.current = window.setTimeout(() => {
+      autoPreviewRetryTimerRef.current = null;
+      flushPendingAutoPreviewFrame();
+      if (pendingAutoPreviewTimeRef.current !== null && autoPreviewRetryCountRef.current < 80) {
+        autoPreviewRetryCountRef.current += 1;
+        schedulePendingAutoPreviewFlush();
+      }
+    }, 50);
   }
 
   function handleRequestPreviewFrame(): void {

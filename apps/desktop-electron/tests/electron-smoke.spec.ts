@@ -100,7 +100,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     await expect(page.getByText("预览命令已接入")).toHaveCount(0);
     await expect(page.getByLabel("预览产物")).toHaveCount(0);
     await expect(page.getByLabel("运行环境诊断")).toHaveCount(0);
-    await expect(page.getByText("等待请求预览帧").first()).toBeVisible();
+    await expect(page.getByText("添加素材到时间线后显示预览").first()).toBeVisible();
     await expect(page.getByText("未选择片段")).toBeVisible();
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));

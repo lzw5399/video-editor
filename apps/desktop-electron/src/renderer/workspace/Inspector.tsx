@@ -37,6 +37,7 @@ import "./preview-inspector.css";
 type InspectorProps = {
   workspace: WorkspaceState;
   playheadUs: number;
+  showDeveloperDiagnostics: boolean;
   onEditSelectedText: (text: TextSegment) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
@@ -218,6 +219,7 @@ const KEYFRAME_PROPERTY_GROUPS: readonly {
 export function Inspector({
   workspace,
   playheadUs,
+  showDeveloperDiagnostics,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
@@ -414,7 +416,7 @@ export function Inspector({
                   <KeyframeButton deferredLabel="片段参数关键帧暂不支持" />
                 </div>
                 <dl className="inspector-list compact">
-                  <InspectorDatum label="片段ID" value={selected.segment.segmentId} />
+                  {showDeveloperDiagnostics ? <InspectorDatum label="片段ID" value={selected.segment.segmentId} /> : null}
                   <InspectorDatum label="素材" value={selected.material?.displayName ?? selected.segment.materialId} />
                   <InspectorDatum label="轨道" value={`${selected.track.name} / ${selected.track.kindLabel}`} />
                   <InspectorDatum
