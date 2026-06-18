@@ -1240,6 +1240,7 @@ dependencies = [
  "engine_core",
  "ffmpeg_compiler",
  "media_runtime",
+ "realtime_preview_runtime",
  "render_graph",
  "serde",
  "serde_json",
