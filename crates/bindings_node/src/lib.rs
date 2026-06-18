@@ -78,6 +78,8 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "setTrackMute"
                 | "updateDraftCanvasConfig"
                 | "updateSegmentVisual"
+                | "setSegmentKeyframe"
+                | "removeSegmentKeyframe"
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
@@ -172,7 +174,11 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::SetSegmentVolume
         | CommandName::SetTrackMute
         | CommandName::UpdateDraftCanvasConfig
-        | CommandName::UpdateSegmentVisual => timeline_command(envelope.command, envelope.payload),
+        | CommandName::UpdateSegmentVisual
+        | CommandName::SetSegmentKeyframe
+        | CommandName::RemoveSegmentKeyframe => {
+            timeline_command(envelope.command, envelope.payload)
+        }
     }
 }
 

@@ -332,6 +332,8 @@
         "setTrackMute",
         "updateDraftCanvasConfig",
         "updateSegmentVisual",
+        "setSegmentKeyframe",
+        "removeSegmentKeyframe",
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
@@ -1099,6 +1101,78 @@
             "selection",
             "segmentId",
             "visual"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 10 segment keyframe set command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "keyframe": {
+              "$ref": "#/$defs/Keyframe"
+            },
+            "kind": {
+              "const": "setSegmentKeyframe",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "keyframe"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 10 segment keyframe remove command.",
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "removeSegmentKeyframe",
+              "type": "string"
+            },
+            "property": {
+              "$ref": "#/$defs/KeyframeProperty"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId",
+            "property",
+            "at"
           ],
           "type": "object"
         },
@@ -2269,6 +2343,40 @@
       "title": "RedoTimelineEditCommandPayload",
       "type": "object"
     },
+    "RemoveSegmentKeyframeCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 10 segment keyframe remove command.",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "property": {
+          "$ref": "#/$defs/KeyframeProperty"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "property",
+        "at"
+      ],
+      "title": "RemoveSegmentKeyframeCommandPayload",
+      "type": "object"
+    },
     "RequestPreviewFrameCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 5 preview frame command.",
@@ -3004,6 +3112,36 @@
         "trackIds"
       ],
       "title": "SelectTimelineSegmentsCommandPayload",
+      "type": "object"
+    },
+    "SetSegmentKeyframeCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 10 segment keyframe set command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "keyframe": {
+          "$ref": "#/$defs/Keyframe"
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId",
+        "keyframe"
+      ],
+      "title": "SetSegmentKeyframeCommandPayload",
       "type": "object"
     },
     "SetSegmentVolumeCommandPayload": {
