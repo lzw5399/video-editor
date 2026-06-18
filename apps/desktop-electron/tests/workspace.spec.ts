@@ -1122,6 +1122,35 @@ test("fallback source guard keeps renderer display-only for telemetry", () => {
   );
 });
 
+test("Phase 11 source guard and root scripts are wired", () => {
+  const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const guardSource = readFileSync(join(REPO_ROOT, "scripts/phase11-source-guards.sh"), "utf8");
+
+  expect(packageJson.scripts["test:phase11-rust"]).toContain("realtime_preview_runtime");
+  expect(packageJson.scripts["test:phase11-source-guards"]).toBe("bash scripts/phase11-source-guards.sh");
+  expect(packageJson.scripts["test:phase11-workspace"]).toContain("实时预览|fallback|telemetry|五大区域");
+  expect(packageJson.scripts["test:phase11"]).toContain("test:phase11-rust");
+  expect(packageJson.scripts["test:phase11"]).toContain("test:phase11-source-guards");
+  expect(packageJson.scripts["test:phase11"]).toContain("test:phase11-workspace");
+  expect(packageJson.scripts["test:phase11"]).toContain("test:contracts");
+
+  for (const forbiddenToken of [
+    "GPUDevice",
+    "build_render_graph",
+    "RenderGraph",
+    "compile_ffmpeg_job",
+    "FfmpegExecutor",
+    "previewCacheKey",
+    "changedRanges",
+    "evaluateKeyframes"
+  ]) {
+    expect(guardSource).toContain(forbiddenToken);
+  }
+  expect(guardSource).toContain("strip_comments");
+});
+
 test("telemetry display model represents Rust-owned realtime and fallback diagnostics", () => {
   const supported: RealtimePreviewDisplayModel = {
     backend: "mock",
