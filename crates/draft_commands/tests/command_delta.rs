@@ -1,4 +1,6 @@
 use draft_commands::audio::{add_audio_segment, set_segment_volume, set_track_mute};
+use draft_commands::canvas::update_draft_canvas_config;
+use draft_commands::keyframe::{remove_segment_keyframe, set_segment_keyframe};
 use draft_commands::text::{add_text_segment, edit_text_segment, import_subtitle_srt};
 use draft_commands::timeline::{
     add_segment as command_add_segment, delete_segment as command_delete_segment,
@@ -6,12 +8,16 @@ use draft_commands::timeline::{
     select_timeline_segments as command_select_timeline_segments,
     split_segment as command_split_segment, trim_segment as command_trim_segment,
 };
+use draft_commands::visual::update_segment_visual;
 use draft_model::{
-    ChangedEntity, CommandDelta, CommandName, CommandState, DirtyDomain, DirtyRange,
-    DirtyRangeSource, Draft, ImportSubtitleSrtCommandPayload, InvalidationScope, Material,
-    MaterialKind, Microseconds, Segment, SegmentVolume, SourceTimerange, TargetTimerange,
-    TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle,
-    TextWrapping, TimelineSelection, Track, TrackKind, TrimSegmentDirection,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, ChangedEntity, CommandDelta,
+    CommandName, CommandState, DirtyDomain, DirtyRange, DirtyRangeSource, Draft,
+    DraftCanvasConfig, ImportSubtitleSrtCommandPayload, InvalidationScope, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
+    MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity, SegmentPosition,
+    SegmentVolume, SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextBox,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
+    TimelineSelection, Track, TrackKind, TrimSegmentDirection,
 };
 
 #[test]
@@ -419,6 +425,137 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     );
 }
 
+#[test]
+fn visual_keyframe_delta_covers_segment_influence_ranges() {
+    let (draft, state, selection) = draft_with_visual_segment();
+    let mut visual = SegmentVisual::default();
+    visual.transform.position = SegmentPosition { x: 80, y: -40 };
+    visual.transform.opacity = SegmentOpacity { value_millis: 750 };
+
+    let visual_updated = update_segment_visual(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        visual,
+    )
+    .expect("visual update should commit");
+    assert_delta_has(
+        &visual_updated.delta,
+        CommandName::UpdateSegmentVisual,
+        &[DirtyDomain::Visual],
+        &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
+        &[
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::Thumbnail,
+            DirtyDomain::Proxy,
+            DirtyDomain::GraphSnapshot,
+            DirtyDomain::PreviewCache,
+        ],
+    );
+
+    let keyframe = Keyframe {
+        at: Microseconds::new(200_000),
+        property: KeyframeProperty::VisualOpacity,
+        value: KeyframeValue::Uint { value: 500 },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    };
+    let keyframe_set = set_segment_keyframe(
+        &visual_updated.draft,
+        &visual_updated.command_state,
+        &visual_updated.selection,
+        "video-segment".into(),
+        keyframe.clone(),
+    )
+    .expect("keyframe set should commit");
+    assert_delta_has(
+        &keyframe_set.delta,
+        CommandName::SetSegmentKeyframe,
+        &[DirtyDomain::Visual],
+        &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
+        &[DirtyDomain::GraphSnapshot, DirtyDomain::PreviewCache],
+    );
+    assert!(
+        keyframe_set
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Keyframe {
+                track_id: "video-track".into(),
+                segment_id: "video-segment".into(),
+                property: KeyframeProperty::VisualOpacity,
+                at: Microseconds::new(200_000),
+            })
+    );
+
+    let keyframe_removed = remove_segment_keyframe(
+        &keyframe_set.draft,
+        &keyframe_set.command_state,
+        &keyframe_set.selection,
+        "video-segment".into(),
+        keyframe.property,
+        keyframe.at,
+    )
+    .expect("keyframe remove should commit");
+    assert_delta_has(
+        &keyframe_removed.delta,
+        CommandName::RemoveSegmentKeyframe,
+        &[DirtyDomain::Visual],
+        &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
+        &[DirtyDomain::GraphSnapshot, DirtyDomain::PreviewCache],
+    );
+}
+
+#[test]
+fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
+    let (draft, state, selection) = draft_with_visual_segment();
+    let updated = update_draft_canvas_config(
+        &draft,
+        &state,
+        &selection,
+        DraftCanvasConfig {
+            aspect_ratio: CanvasAspectRatio::preset(CanvasAspectRatioPreset::Ratio9x16),
+            width: 1080,
+            height: 1920,
+            frame_rate: RationalFrameRate::new(25, 1),
+            background: CanvasBackground::SolidColor {
+                color: "#101820".to_owned(),
+            },
+        },
+    )
+    .expect("canvas update should commit");
+
+    assert_eq!(updated.delta.command, CommandName::UpdateDraftCanvasConfig);
+    assert!(updated.delta.invalidation.full_draft);
+    assert!(updated.delta.changed_entities.contains(&ChangedEntity::Draft {
+        draft_id: "phase13-visual-delta-draft".into(),
+    }));
+    assert!(updated.delta.changed_entities.contains(&ChangedEntity::Canvas {
+        draft_id: "phase13-visual-delta-draft".into(),
+    }));
+    for domain in [
+        DirtyDomain::Canvas,
+        DirtyDomain::OutputProfile,
+        DirtyDomain::Preview,
+        DirtyDomain::ExportPrep,
+        DirtyDomain::Thumbnail,
+        DirtyDomain::Proxy,
+        DirtyDomain::GraphSnapshot,
+        DirtyDomain::PreviewCache,
+    ] {
+        assert!(
+            updated.delta.changed_domains.contains(&domain),
+            "canvas delta missing {domain:?}: {:?}",
+            updated.delta.changed_domains
+        );
+    }
+    assert_eq!(
+        updated.delta.changed_ranges,
+        vec![dirty_range(0, 1_000_000, DirtyRangeSource::FullDraft)]
+    );
+}
+
 fn assert_delta_eq(actual: &CommandDelta, expected: CommandDelta) {
     assert_eq!(actual, &expected);
     assert!(
@@ -567,6 +704,32 @@ fn draft_with_audio_track() -> Draft {
         .tracks
         .push(Track::new("audio-track", TrackKind::Audio, "Audio"));
     draft
+}
+
+fn draft_with_visual_segment() -> (Draft, CommandState, TimelineSelection) {
+    let mut draft = Draft::new("phase13-visual-delta-draft", "Phase 13 Visual Delta");
+    draft.materials.push(material(
+        "video-material",
+        MaterialKind::Video,
+        "file://video.mp4",
+        2_000_000,
+    ));
+    let mut track = Track::new("video-track", TrackKind::Video, "Video");
+    track.segments.push(segment(
+        "video-segment",
+        "video-material",
+        SourceTimerange::new(0, 700_000),
+        TargetTimerange::new(300_000, 700_000),
+    ));
+    draft.tracks.push(track);
+    (
+        draft,
+        CommandState::empty(),
+        TimelineSelection {
+            segment_ids: vec!["video-segment".into()],
+            track_ids: vec!["video-track".into()],
+        },
+    )
 }
 
 fn text_segment(content: &str, source: TextSegmentSource) -> TextSegment {

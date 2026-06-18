@@ -1,8 +1,9 @@
-use draft_model::{MaterialId, Microseconds, TargetTimerange};
+use draft_model::{DirtyDomain, MaterialId, Microseconds, TargetTimerange};
 use preview_service::{
     PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewCacheProfile,
     accepted_audio_edit_invalidation, accepted_text_edit_invalidation,
-    accepted_timeline_edit_invalidation, invalidate_preview_cache,
+    accepted_timeline_edit_invalidation, consumer_domains_for_dirty_domains,
+    invalidate_preview_cache,
 };
 
 #[test]
@@ -64,6 +65,43 @@ fn dirty_propagation_target_keeps_unrelated_material_dependencies_retained() {
 
     assert_eq!(result.invalidated[0].key.key_id, "video-hit");
     assert_eq!(result.retained[0].key.key_id, "audio-retained");
+}
+
+#[test]
+fn consumer_domain_expansion_covers_phase13_dirty_targets() {
+    assert_eq!(
+        consumer_domains_for_dirty_domains([
+            DirtyDomain::Timing,
+            DirtyDomain::Text,
+            DirtyDomain::Audio,
+            DirtyDomain::Material,
+            DirtyDomain::Canvas,
+            DirtyDomain::OutputProfile,
+            DirtyDomain::RuntimeCapabilities,
+        ]),
+        vec![
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::Audio,
+            DirtyDomain::Thumbnail,
+            DirtyDomain::Waveform,
+            DirtyDomain::Proxy,
+            DirtyDomain::GraphSnapshot,
+            DirtyDomain::PreviewCache,
+        ]
+    );
+
+    assert_eq!(
+        consumer_domains_for_dirty_domains([DirtyDomain::Visual]),
+        vec![
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::Thumbnail,
+            DirtyDomain::Proxy,
+            DirtyDomain::GraphSnapshot,
+            DirtyDomain::PreviewCache,
+        ]
+    );
 }
 
 fn entry(id: &str, start: u64, duration: u64, profile: PreviewCacheProfile) -> PreviewCacheEntry {
