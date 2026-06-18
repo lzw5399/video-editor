@@ -4,7 +4,9 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 default:
-  @printf 'Available recipes:\n  desktop\n  dev\n  build\n  test\n'
+  @printf 'Available recipes:\n  start\n  desktop\n  dev\n  build\n  test\n'
+
+start: desktop
 
 dev:
   pnpm run dev

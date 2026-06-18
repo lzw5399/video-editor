@@ -83,16 +83,18 @@ Prerequisites:
 - Rust `1.95.0`
 - Node.js `24.12.0`
 - pnpm `10.32.1`
-- `just`
+- `just` for optional root recipes
 - FFmpeg/ffprobe on `PATH`, or `VE_FFMPEG_PATH` and `VE_FFPROBE_PATH`, for
   runtime and render smoke tests
 
 ```bash
 nvm use
 corepack enable
-pnpm install --frozen-lockfile
-just dev
+pnpm start
 ```
+
+`pnpm start` installs locked dependencies when needed, builds the Electron
+desktop app, and launches the editor. If you prefer `just`, use `just start`.
 
 Build:
 

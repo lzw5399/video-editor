@@ -254,6 +254,7 @@ None yet.
 |------|------|---------|
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
 | 2026-06-18 | 260618-jwf-electron | Added `pnpm run desktop` and `just desktop` one-command launch entries for the Electron desktop editor. |
+| 2026-06-18 | 260618-l2w-add-one-command-desktop-startup-entrypoi | Added `pnpm start` and `just start` aliases and updated README quick-start instructions for opening the Electron desktop editor. |
 | 2026-06-18 | 260618-mit-license | Switched project license metadata and README license sections to MIT, and added the standard MIT LICENSE file. |
 | 2026-06-18 | 260618-366-phase-6 | Added Phase 7-13 post-MVP core editing roadmap phases and detailed requirements for canvas, transform, compositing, text, keyframes, retiming, effects, and transitions. |
 | 2026-06-18 | 260618-kgr-separate-demo-workspace-fixtures-from-re | Split real app startup from demo workspace fixtures so production opens blank while tests explicitly opt into seeded demo materials. |

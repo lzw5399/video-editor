@@ -72,16 +72,18 @@ docs/                       架构与运行时边界文档
 - Rust `1.95.0`
 - Node.js `24.12.0`
 - pnpm `10.32.1`
-- `just`
+- `just`，仅用于可选的根命令 recipe
 - 运行时和渲染冒烟测试需要 `PATH` 里有 FFmpeg/ffprobe，或配置
   `VE_FFMPEG_PATH` 和 `VE_FFPROBE_PATH`
 
 ```bash
 nvm use
 corepack enable
-pnpm install --frozen-lockfile
-just dev
+pnpm start
 ```
+
+`pnpm start` 会按锁文件安装依赖、构建 Electron 桌面端，然后启动编辑器。
+如果你习惯用 `just`，也可以运行 `just start`。
 
 构建：
 
