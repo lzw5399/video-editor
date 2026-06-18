@@ -1,6 +1,7 @@
 use draft_model::{
-    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope, CommandState, Draft, Microseconds, PingResponse, TargetTimerange,
+    ChangedEntity, CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain, DirtyRange,
+    DirtyRangeSource, Draft, InvalidationScope, Microseconds, PingResponse, TargetTimerange,
     TimelineCommandResponse, TimelineSelection, VersionResponse,
 };
 use serde_json::json;
@@ -128,6 +129,7 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
             kind: "phase13HarnessReady".to_owned(),
             message: Some("delta assertions attach here in downstream plans".to_owned()),
         }],
+        delta: CommandDelta::none(CommandName::SelectTimelineSegments, "selection only"),
     };
 
     let serialized = serde_json::to_value(&response).expect("timeline response serializes");
@@ -158,7 +160,20 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
             "events": [{
                 "kind": "phase13HarnessReady",
                 "message": "delta assertions attach here in downstream plans"
-            }]
+            }],
+            "delta": {
+                "command": "selectTimelineSegments",
+                "changedEntities": [],
+                "changedDomains": [],
+                "changedRanges": [],
+                "invalidation": {
+                    "fullDraft": false,
+                    "materialIds": [],
+                    "graphNodeIds": [],
+                    "consumerDomains": []
+                },
+                "reason": "selection only"
+            }
         })
     );
 
@@ -178,27 +193,130 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
 }
 
 #[test]
-fn contract_documents_integer_half_open_dirty_range_anchor() {
+fn contract_serializes_command_delta_as_semantic_change_facts() {
+    let delta = CommandDelta {
+        command: CommandName::MoveSegment,
+        changed_entities: vec![
+            ChangedEntity::Track {
+                track_id: "video-track".into(),
+            },
+            ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-a".into(),
+            },
+            ChangedEntity::Material {
+                material_id: "video-material".into(),
+            },
+        ],
+        changed_domains: vec![
+            DirtyDomain::Timing,
+            DirtyDomain::Visual,
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::PreviewCache,
+        ],
+        changed_ranges: vec![
+            DirtyRange {
+                target_timerange: TargetTimerange::new(0, 400_000),
+                source: DirtyRangeSource::Previous,
+            },
+            DirtyRange {
+                target_timerange: TargetTimerange::new(600_000, 400_000),
+                source: DirtyRangeSource::Current,
+            },
+        ],
+        invalidation: InvalidationScope {
+            full_draft: false,
+            material_ids: vec!["video-material".into()],
+            graph_node_ids: vec!["draft:phase13:track:video-track:segment:segment-a:video".to_owned()],
+            consumer_domains: vec![
+                DirtyDomain::Preview,
+                DirtyDomain::ExportPrep,
+                DirtyDomain::PreviewCache,
+            ],
+        },
+        reason: "segment moved".to_owned(),
+    };
+
+    assert_eq!(
+        serde_json::to_value(&delta).expect("delta serializes"),
+        json!({
+            "command": "moveSegment",
+            "changedEntities": [
+                { "kind": "track", "trackId": "video-track" },
+                { "kind": "segment", "trackId": "video-track", "segmentId": "segment-a" },
+                { "kind": "material", "materialId": "video-material" }
+            ],
+            "changedDomains": ["timing", "visual", "preview", "exportPrep", "previewCache"],
+            "changedRanges": [
+                {
+                    "targetTimerange": { "start": 0, "duration": 400000 },
+                    "source": "previous"
+                },
+                {
+                    "targetTimerange": { "start": 600000, "duration": 400000 },
+                    "source": "current"
+                }
+            ],
+            "invalidation": {
+                "fullDraft": false,
+                "materialIds": ["video-material"],
+                "graphNodeIds": ["draft:phase13:track:video-track:segment:segment-a:video"],
+                "consumerDomains": ["preview", "exportPrep", "previewCache"]
+            },
+            "reason": "segment moved"
+        })
+    );
+}
+
+#[test]
+fn contract_rejects_unknown_delta_fields() {
+    let result = serde_json::from_value::<CommandDelta>(json!({
+        "command": "moveSegment",
+        "changedEntities": [],
+        "changedDomains": ["timing"],
+        "changedRanges": [],
+        "invalidation": {
+            "fullDraft": false,
+            "materialIds": [],
+            "graphNodeIds": [],
+            "consumerDomains": []
+        },
+        "reason": "segment moved",
+        "unexpected": true
+    }));
+
+    assert!(result.is_err(), "unknown delta fields must fail");
+}
+
+#[test]
+fn contract_documents_integer_half_open_dirty_range_helpers() {
     let range = TargetTimerange::new(Microseconds::new(100_000), Microseconds::new(50_000));
     let adjacent = TargetTimerange::new(Microseconds::new(150_000), Microseconds::new(25_000));
     let overlapping = TargetTimerange::new(Microseconds::new(149_999), Microseconds::new(1));
+    let overflow = TargetTimerange::new(Microseconds::new(u64::MAX), Microseconds::new(1));
 
     assert_eq!(range.start.get(), 100_000);
     assert_eq!(range.duration.get(), 50_000);
-    assert!(!half_open_overlap(&range, &adjacent));
-    assert!(half_open_overlap(&range, &overlapping));
-}
-
-fn half_open_overlap(first: &TargetTimerange, second: &TargetTimerange) -> bool {
-    let first_end = first
-        .start
-        .get()
-        .checked_add(first.duration.get())
-        .expect("test ranges should not overflow");
-    let second_end = second
-        .start
-        .get()
-        .checked_add(second.duration.get())
-        .expect("test ranges should not overflow");
-    first.start.get() < second_end && second.start.get() < first_end
+    assert_eq!(range.checked_end(), Some(Microseconds::new(150_000)));
+    assert_eq!(overflow.checked_end(), None);
+    assert_eq!(range.overlaps_half_open(&adjacent), Some(false));
+    assert_eq!(range.overlaps_half_open(&overlapping), Some(true));
+    assert_eq!(
+        range.union(&adjacent),
+        Some(TargetTimerange::new(100_000, 75_000))
+    );
+    assert_eq!(
+        TargetTimerange::merge_sorted(vec![
+            TargetTimerange::new(400_000, 100_000),
+            TargetTimerange::new(100_000, 50_000),
+            TargetTimerange::new(150_000, 25_000),
+            TargetTimerange::new(700_000, 50_000),
+        ]),
+        Some(vec![
+            TargetTimerange::new(100_000, 75_000),
+            TargetTimerange::new(400_000, 100_000),
+            TargetTimerange::new(700_000, 50_000),
+        ])
+    );
 }
