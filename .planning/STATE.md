@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 2
+current_plan: 3
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-18T21:25:13.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 01: validation harness, source guards, and large-timeline fixtures."
+last_updated: "2026-06-18T21:39:18.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 02: CommandDelta contract and simple command delta emission."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 91
-  percent: 93
+  completed_plans: 92
+  percent: 94
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 1/8 complete; next plan 13-02
-Status: Phase 13 in progress; validation harness, source guards, and large-timeline fixtures are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 01: validation harness, source guards, and large-timeline fixtures.
+Plan: 2/8 complete; next plan 13-02B
+Status: Phase 13 in progress; CommandDelta contract and simple command delta emission are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 02: CommandDelta contract and simple command delta emission.
 
-Progress: [█████████░] 93%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 91
+- Total plans completed: 92
 - Average duration: 9 min
-- Total execution time: 852 min
+- Total execution time: 860 min
 
 **By Phase:**
 
@@ -60,11 +60,11 @@ Progress: [█████████░] 93%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 1 | 10 min | 10 min |
+| 13 | 2 | 18 min | 9 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 82 min
+- Last 5 plans: 68 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -149,6 +149,7 @@ Progress: [█████████░] 93%
 | Phase 12 P06B | 20 min | 1 tasks | 8 files |
 | Phase 12 P06C | 20 min | 2 tasks | 4 files |
 | Phase 13 P01 | 10 min | 3 tasks | 10 files |
+| Phase 13 P02 | 8 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,9 @@ Progress: [█████████░] 93%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: `CommandDelta` is a direct field on `TimelineCommandResponse`. — Accepted timeline command responses now carry Rust-owned semantic change facts instead of requiring renderer-side dirty range computation.
+- [Phase 13]: Simple timeline commands emit targeted integer dirty ranges. — Add, move, split, trim, and delete include semantic entities/domains and previous/current `TargetTimerange` facts; selection-only commands emit `CommandDelta::none`.
+- [Phase 13]: Command changed entities remain semantic. — Graph node IDs are reserved for derived invalidation scope and later render graph/cache plans, not primary command facts.
 - [Phase 13]: Phase 13 starts harness-first. — `test:phase13`, `scripts/phase13-source-guards.sh`, and focused Rust test targets now exist before behavior-heavy CommandDelta, render graph, and cache invalidation plans proceed.
 - [Phase 13]: `testkit::large_timeline` builds deterministic Rust-only drafts with stable IDs and localized edit coordinates. — Large-timeline tests avoid FFmpeg, SQLite artifact storage, Electron, and scheduler dependencies while preserving integer microsecond ranges.
 - [Phase 13]: Source guards reject renderer-owned dirty range, graph diff, graph node ID, cache key, invalidation, and FFmpeg command decisions. — The renderer remains a command/transport UI surface while Rust owns semantic and derived-cache facts.
