@@ -3,9 +3,9 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    CanvasBackground, DraftId, Filter, Keyframe, MaterialId, MaterialKind, Microseconds,
-    RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask,
-    SegmentVisual, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    CanvasBackground, DraftId, Filter, Keyframe, KeyframeProperty, MaterialId, MaterialKind,
+    Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentId,
+    SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -25,6 +25,8 @@ pub struct RenderGraph {
     pub audio_mixes: Vec<RenderAudioMix>,
     pub text_overlays: Vec<RenderTextOverlay>,
     pub sampled_frames: Vec<RenderSampledFrame>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sampled_animation_states: Vec<RenderSampledAnimationState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub visual_diagnostics: Vec<RenderVisualDiagnostic>,
 }
@@ -129,6 +131,8 @@ pub struct RenderAudioMix {
     pub material_id: MaterialId,
     pub source_timerange: SourceTimerange,
     pub target_timerange: TargetTimerange,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyframes: Vec<Keyframe>,
     pub volume_level_millis: u32,
     pub filters: Vec<RenderFilterIntent>,
 }
@@ -138,6 +142,8 @@ pub struct RenderAudioMix {
 pub struct RenderTextOverlay {
     pub overlay: FrameTextOverlay,
     pub material_id: MaterialId,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
     pub visual: SegmentVisual,
@@ -185,6 +191,46 @@ pub enum RenderIntentSupport {
 pub struct RenderSampledFrame {
     pub frame_index: u64,
     pub at: Microseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderSampledAnimationState {
+    pub frame_index: u64,
+    pub at: Microseconds,
+    pub visual_layers: Vec<RenderSampledVisualLayer>,
+    pub audio_segments: Vec<RenderSampledAudioSegment>,
+    pub text_overlays: Vec<RenderSampledTextOverlay>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderSampledVisualLayer {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub visual: SegmentVisual,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderSampledAudioSegment {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub volume_level_millis: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderSampledTextOverlay {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub font_size: u32,
+    pub color: String,
+    pub line_height_millis: u32,
+    pub letter_spacing_millis: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,8 +302,13 @@ pub fn build_render_graph(
     let active_visual_segments = active_visual_segments(range, &segments)?;
     let active_audio_segments = active_audio_segments(normalized, range, &segments)?;
     let active_text_segments = active_text_segments(range, &segments)?;
-    let visual_diagnostics =
-        render_visual_diagnostics(&active_visual_segments, &active_text_segments, &segments);
+    let visual_diagnostics = render_visual_diagnostics(
+        &active_visual_segments,
+        &active_audio_segments,
+        &active_text_segments,
+        &segments,
+    );
+    let sampled_animation_states = render_sampled_animation_states(range, &segments);
 
     let mut material_ids = BTreeSet::new();
     let mut video_layers = Vec::new();
@@ -331,6 +382,7 @@ pub fn build_render_graph(
                 at: frame.at,
             })
             .collect(),
+        sampled_animation_states,
         visual_diagnostics,
     })
 }
@@ -523,6 +575,7 @@ fn render_audio_mix(track: &NormalizedTrack, segment: &NormalizedSegment) -> Ren
         material_id: segment.material.material_id.clone(),
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
+        keyframes: segment.keyframes.clone(),
         volume_level_millis: segment.volume_level_millis,
         filters: render_filter_intents(&segment.filters),
     }
@@ -536,6 +589,7 @@ fn render_text_overlay(
     RenderTextOverlay {
         overlay,
         material_id: segment.material.material_id.clone(),
+        keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(&segment.filters),
         transition: segment.transition.as_ref().map(render_transition_intent),
         visual: segment.visual.clone(),
@@ -544,24 +598,42 @@ fn render_text_overlay(
 
 fn render_visual_diagnostics(
     active_visual_segments: &BTreeSet<(TrackId, SegmentId)>,
+    active_audio_segments: &BTreeSet<(TrackId, SegmentId)>,
     active_text_segments: &BTreeSet<(TrackId, SegmentId)>,
     segments: &BTreeMap<(TrackId, SegmentId), (&NormalizedTrack, &NormalizedSegment)>,
 ) -> Vec<RenderVisualDiagnostic> {
     active_visual_segments
         .iter()
+        .chain(active_audio_segments.iter())
         .chain(active_text_segments.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .filter_map(|segment_key| {
             segments
-                .get(segment_key)
-                .map(|value| (segment_key.clone(), *value))
+                .get(&segment_key)
+                .map(|value| (segment_key, *value))
         })
-        .flat_map(|((track_id, segment_id), (_track, segment))| {
-            visual_diagnostics_for(
-                track_id,
-                segment_id,
-                segment.material.material_id.clone(),
-                &segment.visual,
-            )
+        .flat_map(|((track_id, segment_id), (track, segment))| {
+            let mut diagnostics = Vec::new();
+            if matches!(
+                track.kind,
+                TrackKind::Video | TrackKind::Text | TrackKind::Sticker
+            ) {
+                diagnostics.extend(visual_diagnostics_for(
+                    track_id.clone(),
+                    segment_id.clone(),
+                    segment.material.material_id.clone(),
+                    &segment.visual,
+                ));
+            }
+            diagnostics.extend(keyframe_diagnostics_for(
+                &track_id,
+                &segment_id,
+                &segment.material.material_id,
+                &segment.keyframes,
+            ));
+            diagnostics
         })
         .collect()
 }
@@ -628,6 +700,93 @@ fn visual_diagnostics_for(
     diagnostics
 }
 
+fn keyframe_diagnostics_for(
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    keyframes: &[Keyframe],
+) -> Vec<RenderVisualDiagnostic> {
+    keyframes
+        .iter()
+        .map(|keyframe| keyframe.property.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|property| {
+            let (support, reason) = keyframe_support(&property);
+            render_visual_diagnostic(
+                track_id,
+                segment_id,
+                material_id,
+                keyframe_property_name(&property),
+                support,
+                reason,
+            )
+        })
+        .collect()
+}
+
+fn keyframe_support(property: &KeyframeProperty) -> (RenderIntentSupport, &'static str) {
+    match property {
+        KeyframeProperty::VisualRotation => (
+            RenderIntentSupport::Unsupported,
+            "animated visual rotation is unsupported until anchor-aware animated rotation is implemented",
+        ),
+        KeyframeProperty::StickerPositionX
+        | KeyframeProperty::StickerPositionY
+        | KeyframeProperty::StickerScaleX
+        | KeyframeProperty::StickerScaleY => (
+            RenderIntentSupport::Unsupported,
+            "sticker keyframe animation is deferred until sticker render semantics are implemented",
+        ),
+        KeyframeProperty::FilterParameterUnsupported => (
+            RenderIntentSupport::Unsupported,
+            "filter parameter keyframe animation is deferred until filter semantics are implemented",
+        ),
+        KeyframeProperty::VisualPositionX
+        | KeyframeProperty::VisualPositionY
+        | KeyframeProperty::VisualScaleX
+        | KeyframeProperty::VisualScaleY
+        | KeyframeProperty::VisualOpacity
+        | KeyframeProperty::TextFontSize
+        | KeyframeProperty::TextColor
+        | KeyframeProperty::TextLineHeight
+        | KeyframeProperty::TextLetterSpacing
+        | KeyframeProperty::TextLayoutX
+        | KeyframeProperty::TextLayoutY
+        | KeyframeProperty::TextLayoutWidth
+        | KeyframeProperty::TextLayoutHeight
+        | KeyframeProperty::Volume => (
+            RenderIntentSupport::Degraded,
+            "keyframe animation is engine-resolved and preserved as sampled render intent; continuous compiler expressions are deferred",
+        ),
+    }
+}
+
+fn keyframe_property_name(property: &KeyframeProperty) -> &'static str {
+    match property {
+        KeyframeProperty::VisualPositionX => "keyframe.visualPositionX",
+        KeyframeProperty::VisualPositionY => "keyframe.visualPositionY",
+        KeyframeProperty::VisualScaleX => "keyframe.visualScaleX",
+        KeyframeProperty::VisualScaleY => "keyframe.visualScaleY",
+        KeyframeProperty::VisualRotation => "keyframe.visualRotation",
+        KeyframeProperty::VisualOpacity => "keyframe.visualOpacity",
+        KeyframeProperty::TextFontSize => "keyframe.textFontSize",
+        KeyframeProperty::TextColor => "keyframe.textColor",
+        KeyframeProperty::TextLineHeight => "keyframe.textLineHeight",
+        KeyframeProperty::TextLetterSpacing => "keyframe.textLetterSpacing",
+        KeyframeProperty::TextLayoutX => "keyframe.textLayoutX",
+        KeyframeProperty::TextLayoutY => "keyframe.textLayoutY",
+        KeyframeProperty::TextLayoutWidth => "keyframe.textLayoutWidth",
+        KeyframeProperty::TextLayoutHeight => "keyframe.textLayoutHeight",
+        KeyframeProperty::Volume => "keyframe.volume",
+        KeyframeProperty::StickerPositionX => "keyframe.stickerPositionX",
+        KeyframeProperty::StickerPositionY => "keyframe.stickerPositionY",
+        KeyframeProperty::StickerScaleX => "keyframe.stickerScaleX",
+        KeyframeProperty::StickerScaleY => "keyframe.stickerScaleY",
+        KeyframeProperty::FilterParameterUnsupported => "keyframe.filterParameterUnsupported",
+    }
+}
+
 fn render_visual_diagnostic(
     track_id: &TrackId,
     segment_id: &SegmentId,
@@ -667,6 +826,85 @@ fn render_transition_intent(transition: &Transition) -> RenderTransitionIntent {
         reason: "transition intent is preserved for compiler/runtime capability handling"
             .to_owned(),
     }
+}
+
+fn render_sampled_animation_states(
+    range: &RenderRangeState,
+    segments: &BTreeMap<(TrackId, SegmentId), (&NormalizedTrack, &NormalizedSegment)>,
+) -> Vec<RenderSampledAnimationState> {
+    range
+        .frames
+        .iter()
+        .enumerate()
+        .filter_map(|(frame_index, frame)| {
+            let visual_layers = frame
+                .visual_layers
+                .iter()
+                .filter(|layer| segment_has_keyframes(segments, &layer.track_id, &layer.segment_id))
+                .map(|layer| RenderSampledVisualLayer {
+                    track_id: layer.track_id.clone(),
+                    segment_id: layer.segment_id.clone(),
+                    material_id: layer.material_id.clone(),
+                    visual: layer.visual.clone(),
+                })
+                .collect::<Vec<_>>();
+            let audio_segments = frame
+                .audio_segments
+                .iter()
+                .filter(|audio| segment_has_keyframes(segments, &audio.track_id, &audio.segment_id))
+                .map(|audio| RenderSampledAudioSegment {
+                    track_id: audio.track_id.clone(),
+                    segment_id: audio.segment_id.clone(),
+                    material_id: audio.material_id.clone(),
+                    volume_level_millis: audio.volume_level_millis,
+                })
+                .collect::<Vec<_>>();
+            let text_overlays = frame
+                .text_overlays
+                .iter()
+                .filter(|overlay| {
+                    segment_has_keyframes(segments, &overlay.track_id, &overlay.segment_id)
+                })
+                .filter_map(|overlay| {
+                    let material_id = segments
+                        .get(&(overlay.track_id.clone(), overlay.segment_id.clone()))
+                        .map(|(_track, segment)| segment.material.material_id.clone())?;
+                    Some(RenderSampledTextOverlay {
+                        track_id: overlay.track_id.clone(),
+                        segment_id: overlay.segment_id.clone(),
+                        material_id,
+                        font_size: overlay.font_size,
+                        color: overlay.style.color.clone(),
+                        line_height_millis: overlay.line_height_millis,
+                        letter_spacing_millis: overlay.letter_spacing_millis,
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            if visual_layers.is_empty() && audio_segments.is_empty() && text_overlays.is_empty() {
+                return None;
+            }
+
+            Some(RenderSampledAnimationState {
+                frame_index: frame_index as u64,
+                at: frame.at,
+                visual_layers,
+                audio_segments,
+                text_overlays,
+            })
+        })
+        .collect()
+}
+
+fn segment_has_keyframes(
+    segments: &BTreeMap<(TrackId, SegmentId), (&NormalizedTrack, &NormalizedSegment)>,
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+) -> bool {
+    segments
+        .get(&(track_id.clone(), segment_id.clone()))
+        .map(|(_track, segment)| !segment.keyframes.is_empty())
+        .unwrap_or(false)
 }
 
 fn render_materials(

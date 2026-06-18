@@ -1,10 +1,10 @@
 mod common;
 
 use draft_model::{
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MaterialKind, Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode,
-    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
-    SegmentScale, TargetTimerange,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MaterialKind,
+    Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop,
+    SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
+    TargetTimerange,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, compile_ffmpeg_job};
