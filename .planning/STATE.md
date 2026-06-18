@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 10
 current_phase_name: typed-keyframe-and-animation-system
-current_plan: 2
+current_plan: 3
 total_plans_in_phase: 5
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-06-18T07:17:47.374Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-06-18T07:31:34.731Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 64
-  completed_plans: 60
-  percent: 94
+  completed_plans: 61
+  percent: 95
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 10 (typed-keyframe-and-animation-system) — EXECUTING
-Plan: 2 of 5
-Status: Completed 10-01 typed keyframe schema/contracts; ready for 10-02 keyframe commands
-Last activity: 2026-06-18 - Completed Phase 10 Plan 01 typed keyframe schema/contracts
+Plan: 3 of 5
+Status: Completed 10-02 keyframe commands/bindings; ready for 10-03 engine/render graph evaluation
+Last activity: 2026-06-18 - Completed Phase 10 Plan 02 Rust keyframe commands and binding routes
 
-Progress: [█████████░] 94%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 59
+- Total plans completed: 61
 - Average duration: 8 min
-- Total execution time: 481 min
+- Total execution time: 511 min
 
 **By Phase:**
 
@@ -120,6 +120,7 @@ Progress: [█████████░] 94%
 | Phase 09 P04 | 13 min | 2 tasks | 9 files |
 | Phase 09 P05 | 17 min | 2 tasks | 11 files |
 | Phase 10 P01 | 16 min | 2 tasks | 9 files |
+| Phase 10 P02 | 14 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,8 @@ Recent decisions affecting current work:
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
 - [Phase 10]: Keyframe property/value compatibility is enforced in Rust validation, with generated schemas exposing typed contracts and color constraints. — Domain-specific ranges stay in Rust rather than being duplicated as brittle JSON Schema combinations.
+- [Phase 10]: Keyframe mutation uses dedicated `setSegmentKeyframe` and `removeSegmentKeyframe` commands. — This keeps animation edits Rust-owned and avoids overloading visual/text/audio commands with keyframe-specific behavior.
+- [Phase 10]: The Node binding remains a thin allow-list and dispatcher for keyframe commands. — Binding tests verify Rust-shaped timeline responses and malformed/mismatched envelope rejection without moving edit semantics into bindings.
 - [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
 - [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.
@@ -266,6 +269,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T07:17:47.370Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-06-18T07:31:34.727Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None

@@ -395,7 +395,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-02-PLAN.md - Add Rust-owned keyframe commands and binding coverage
+- [x] 10-02-PLAN.md - Add Rust-owned keyframe commands and binding coverage
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -471,7 +471,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
-| 10. Typed Keyframe And Animation System | 1/5 | In Progress | - |
+| 10. Typed Keyframe And Animation System | 2/5 | In Progress | - |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |
 | 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
 | 13. Transition Semantics And Timeline Integration | 0/TBD | Not started | - |
