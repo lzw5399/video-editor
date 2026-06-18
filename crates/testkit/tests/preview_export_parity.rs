@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use draft_model::{
-    Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow, TextStroke, TextStyle,
-    Track, TrackKind,
+    CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, FfmpegCompileErrorKind, compile_ffmpeg_job};
@@ -50,8 +50,8 @@ fn preview_export_parity_matches_shared_render_path_for_video_audio_text() -> Re
     let preview_cache = sandbox.path().join("preview-cache");
     let mut preview_config = PreviewServiceConfig::new(&preview_cache, &runtime.ffmpeg.path)
         .with_compiler_capabilities(capabilities.clone());
-    preview_config.preview_frame_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
-    preview_config.preview_segment_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
+    preview_config.preview_frame_max_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
+    preview_config.preview_segment_max_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
     let preview = request_preview_frame(
         &executor,
         &preview_config,
@@ -140,6 +140,41 @@ fn preview_export_parity_matches_shared_render_path_for_video_audio_text() -> Re
 }
 
 #[test]
+fn preview_export_parity_compiles_custom_canvas_metadata_from_draft() -> RenderCompareResult<()> {
+    let draft = draft_with_canvas(
+        Path::new("/tmp/video.mp4"),
+        Path::new("/tmp/audio.wav"),
+        DraftCanvasConfig {
+            aspect_ratio: CanvasAspectRatio::custom(4, 5),
+            width: 144,
+            height: 180,
+            frame_rate: RationalFrameRate::new(24, 1),
+            background: CanvasBackground::Black,
+        },
+    );
+    let sandbox = tempfile::tempdir()?;
+    let capabilities = ffmpeg_compiler::CompilerCapabilities::all_available_for_tests();
+    let preview_job =
+        compile_preview_frame_job(&draft, &capabilities, &sandbox.path().join("preview.png"))?;
+    let export_job = compile_export_job(&draft, &capabilities, &sandbox.path().join("export.mp4"))?;
+
+    assert_eq!(preview_job.validation.expected_width, 144);
+    assert_eq!(preview_job.validation.expected_height, 180);
+    assert_eq!(
+        preview_job.validation.expected_frame_rate,
+        RationalFrameRate::new(24, 1)
+    );
+    assert_eq!(export_job.validation.expected_width, 144);
+    assert_eq!(export_job.validation.expected_height, 180);
+    assert_eq!(
+        export_job.validation.expected_frame_rate,
+        RationalFrameRate::new(24, 1)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn preview_export_parity_setup_failures_are_classified() {
     let missing_encoder = compiler_capabilities_from_probe_outputs(
         "Encoders:\n A..... aac",
@@ -202,7 +237,9 @@ fn compile_export_job(
     capabilities: &ffmpeg_compiler::CompilerCapabilities,
     output_path: &Path,
 ) -> RenderCompareResult<ffmpeg_compiler::FfmpegJob> {
-    let normalized = normalize_draft(draft, &EngineProfile::mvp_default())
+    let profile = EngineProfile::from_draft_canvas(draft)
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let normalized = normalize_draft(draft, &profile)
         .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
     let range = resolve_render_range(
         &normalized,
@@ -217,8 +254,8 @@ fn compile_export_job(
     let plan = RenderGraphPlan::new(
         graph,
         RenderOutputProfile::export_mp4(
-            OutputDimensions::new(WIDTH, HEIGHT),
-            RationalFrameRate::new(FPS, 1),
+            OutputDimensions::new(profile.canvas_width, profile.canvas_height),
+            range.frame_rate.clone(),
             TargetTimerange::new(
                 Microseconds::new(TARGET_TIME),
                 Microseconds::new(EXPORT_DURATION),
@@ -237,10 +274,51 @@ fn compile_export_job(
         .map_err(|error| RenderCompareError::Runtime(error.to_string()))
 }
 
+fn compile_preview_frame_job(
+    draft: &Draft,
+    capabilities: &ffmpeg_compiler::CompilerCapabilities,
+    output_path: &Path,
+) -> RenderCompareResult<ffmpeg_compiler::FfmpegJob> {
+    let profile = EngineProfile::from_draft_canvas(draft)
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let normalized = normalize_draft(draft, &profile)
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(
+            Microseconds::new(TARGET_TIME),
+            Microseconds::new(EXPORT_DURATION),
+        ),
+    )
+    .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let graph = build_render_graph(&normalized, &range)
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let plan = RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::preview_frame_png(
+            OutputDimensions::new(profile.canvas_width, profile.canvas_height),
+            range.frame_rate.clone(),
+            TargetTimerange::new(
+                Microseconds::new(TARGET_TIME),
+                Microseconds::new(EXPORT_DURATION),
+            ),
+        ),
+    )
+    .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    let artifact_dir = output_path
+        .parent()
+        .ok_or_else(|| RenderCompareError::Runtime("preview output path has no parent".to_owned()))?
+        .join("sidecars");
+    let context =
+        CompileContext::new(output_path, &artifact_dir).with_capabilities(capabilities.clone());
+    compile_ffmpeg_job(&plan, &context)
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))
+}
+
 fn export_plan_for_compile_error() -> RenderGraphPlan {
     let draft = golden_draft(Path::new("/tmp/video.mp4"), Path::new("/tmp/audio.wav"));
-    let normalized = normalize_draft(&draft, &EngineProfile::mvp_default())
-        .expect("golden draft should normalize");
+    let profile = EngineProfile::from_draft_canvas(&draft).expect("golden draft profile");
+    let normalized = normalize_draft(&draft, &profile).expect("golden draft should normalize");
     let range = resolve_render_range(
         &normalized,
         TargetTimerange::new(
@@ -253,8 +331,8 @@ fn export_plan_for_compile_error() -> RenderGraphPlan {
     RenderGraphPlan::new(
         graph,
         RenderOutputProfile::export_mp4(
-            OutputDimensions::new(WIDTH, HEIGHT),
-            RationalFrameRate::new(FPS, 1),
+            OutputDimensions::new(profile.canvas_width, profile.canvas_height),
+            range.frame_rate.clone(),
             TargetTimerange::new(
                 Microseconds::new(TARGET_TIME),
                 Microseconds::new(EXPORT_DURATION),
@@ -351,7 +429,26 @@ fn run_ffmpeg(
 }
 
 fn golden_draft(video_path: &Path, audio_path: &Path) -> Draft {
+    draft_with_canvas(
+        video_path,
+        audio_path,
+        DraftCanvasConfig {
+            aspect_ratio: CanvasAspectRatio::custom(WIDTH, HEIGHT),
+            width: WIDTH,
+            height: HEIGHT,
+            frame_rate: RationalFrameRate::new(FPS, 1),
+            background: CanvasBackground::Black,
+        },
+    )
+}
+
+fn draft_with_canvas(
+    video_path: &Path,
+    audio_path: &Path,
+    canvas_config: DraftCanvasConfig,
+) -> Draft {
     let mut draft = Draft::new("draft-phase5-parity", "Phase 5 Parity");
+    draft.canvas_config = canvas_config;
     draft.materials = vec![
         video_material(video_path),
         audio_material(audio_path),

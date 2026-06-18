@@ -6,9 +6,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bindings_node::execute_command;
 use draft_model::{
-    CommandErrorKind, Draft, ExportDiagnosticKind, ExportJobPhase, ExportPreset, Material,
-    MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange,
-    Track, TrackKind,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CommandErrorKind, Draft,
+    DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase, ExportPreset, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use serde_json::{Value, json};
 
@@ -54,6 +54,64 @@ fn export_commands_start_status_and_complete_through_binding_registry() {
     assert_eq!(completed["data"]["validation"]["height"], 1_080);
     assert_eq!(completed["data"]["validation"]["hasAudio"], true);
     assert_eq!(completed["data"]["logSummary"], "导出完成，输出校验通过");
+}
+
+#[test]
+fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
+    for (preset, name) in [
+        (ExportPreset::H264AacDraft, "draft-preset"),
+        (ExportPreset::H264AacBalanced, "balanced-preset"),
+    ] {
+        let sandbox = Sandbox::new(name);
+        let ffmpeg = sandbox.ffmpeg_complete();
+        let ffprobe = sandbox.ffprobe_success_with_frame_rate(1080, 1920, 24, 1, true);
+        let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
+        let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+        let output = sandbox.root.join(format!("{name}.mp4"));
+
+        let started = execute_command(json!({
+            "command": "startExport",
+            "payload": {
+                "kind": "startExport",
+                "draft": export_draft_with_canvas(
+                    &format!("draft-export-canvas-{name}"),
+                    DraftCanvasConfig {
+                        aspect_ratio: CanvasAspectRatio::preset(CanvasAspectRatioPreset::Ratio9x16),
+                        width: 1080,
+                        height: 1920,
+                        frame_rate: RationalFrameRate::new(24, 1),
+                        background: CanvasBackground::Black,
+                    }
+                ),
+                "outputPath": output,
+                "preset": preset
+            },
+            "requestId": format!("req-export-canvas-{name}")
+        }))
+        .expect("start export should return envelope");
+
+        assert_eq!(started["ok"], true, "{started:#}");
+        let job_id = started["data"]["jobId"]
+            .as_str()
+            .expect("export job id should be present")
+            .to_owned();
+        let completed = wait_for_export_phase(&job_id, ExportJobPhase::Completed);
+
+        assert_eq!(completed["ok"], true, "{completed:#}");
+        assert_eq!(completed["data"]["phase"], "completed");
+        assert_eq!(completed["data"]["validation"]["width"], 1080);
+        assert_eq!(completed["data"]["validation"]["height"], 1920);
+        assert_eq!(
+            completed["data"]["validation"]["frameRate"]["numerator"],
+            24
+        );
+        assert_eq!(
+            completed["data"]["validation"]["frameRate"]["denominator"],
+            1
+        );
+    }
 }
 
 #[test]
@@ -190,6 +248,12 @@ fn export_draft(draft_id: &str) -> Draft {
     draft
 }
 
+fn export_draft_with_canvas(draft_id: &str, canvas_config: DraftCanvasConfig) -> Draft {
+    let mut draft = export_draft(draft_id);
+    draft.canvas_config = canvas_config;
+    draft
+}
+
 fn material(material_id: &str, kind: MaterialKind, uri: &str) -> Material {
     let mut material = Material::new(material_id, kind, uri, material_id);
     material.metadata.duration = Some(Microseconds::new(1_000_000));
@@ -273,6 +337,17 @@ sleep 5
     }
 
     fn ffprobe_success(&self, width: u32, height: u32, has_audio: bool) -> PathBuf {
+        self.ffprobe_success_with_frame_rate(width, height, 30, 1, has_audio)
+    }
+
+    fn ffprobe_success_with_frame_rate(
+        &self,
+        width: u32,
+        height: u32,
+        frame_rate_numerator: u32,
+        frame_rate_denominator: u32,
+        has_audio: bool,
+    ) -> PathBuf {
         let audio_stream = if has_audio {
             r#",{"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2,"duration":"1.000000"}"#
         } else {
@@ -287,7 +362,7 @@ if [ "$1" = "-version" ]; then
   exit 0
 fi
 cat <<'JSON'
-{{"streams":[{{"codec_type":"video","codec_name":"h264","width":{width},"height":{height},"r_frame_rate":"30/1","duration":"1.000000"}}{audio_stream}],"format":{{"duration":"1.000000"}}}}
+{{"streams":[{{"codec_type":"video","codec_name":"h264","width":{width},"height":{height},"r_frame_rate":"{frame_rate_numerator}/{frame_rate_denominator}","duration":"1.000000"}}{audio_stream}],"format":{{"duration":"1.000000"}}}}
 JSON
 "#
             ),
