@@ -426,6 +426,42 @@ h2 {
   padding: 10px;
 }
 
+.text-feature-card {
+  gap: 8px;
+}
+
+.text-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.text-card-header span {
+  flex: 0 0 auto;
+  color: #d6a23f;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.deferred-text-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #343431;
+  border-radius: 6px;
+  background: #252522;
+}
+
+.deferred-text-card p {
+  margin: 0;
+  color: #aaa79f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

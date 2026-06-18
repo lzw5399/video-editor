@@ -152,11 +152,14 @@ function MaterialPanel({
   );
 }
 
-function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
+function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
   const [fontSize, setFontSize] = useState(36);
   const [color, setColor] = useState("#ffffff");
   const [alignment, setAlignment] = useState<TextAlignment>("center");
+  const [fontFamily, setFontFamily] = useState("PingFang SC");
+  const [lineHeightMillis, setLineHeightMillis] = useState(1200);
+  const [letterSpacingMillis, setLetterSpacingMillis] = useState(0);
   const [strokeEnabled, setStrokeEnabled] = useState(true);
   const [strokeColor, setStrokeColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(2);
@@ -165,6 +168,8 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState("#101010");
   const [durationUs, setDurationUs] = useState(3_000_000);
+  const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
+  const [subtitleOffsetUs, setSubtitleOffsetUs] = useState(0);
   const textTrack = findTrackByKind(workspace.draft, "text");
 
   const text: TextSegment = useMemo(
@@ -173,14 +178,14 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
       source: "text",
       style: {
         font: {
-          family: "PingFang SC",
+          family: fontFamily,
           fontRef: null
         },
         fontSize,
         color,
         alignment,
-        lineHeightMillis: 1200,
-        letterSpacingMillis: 0,
+        lineHeightMillis,
+        letterSpacingMillis,
         stroke: strokeEnabled ? { color: strokeColor, width: strokeWidth } : null,
         shadow: shadowEnabled ? { color: shadowColor, offsetX: 2, offsetY: 2, blur: 4 } : null,
         background: backgroundEnabled ? { color: backgroundColor } : null
@@ -205,7 +210,10 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
       backgroundEnabled,
       color,
       content,
+      fontFamily,
       fontSize,
+      letterSpacingMillis,
+      lineHeightMillis,
       shadowColor,
       shadowEnabled,
       strokeColor,
@@ -218,23 +226,13 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
     <div className="feature-panel-content">
       <div className="panel-header">
         <h2>文字</h2>
-        <button
-          type="button"
-          className="primary-action"
-          onClick={() => onAddTextSegment(text, durationUs)}
-          disabled={workspace.pendingCommand !== null || textTrack === null}
-        >
-          添加文字
-        </button>
       </div>
 
-      <div className="function-chip-row" aria-label="文字功能">
-        <span>标题</span>
-        <span>字幕</span>
-        <span>样式</span>
-      </div>
-
-      <div className="function-card field-stack">
+      <section className="function-card field-stack text-feature-card" aria-label="默认文字">
+        <div className="text-card-header">
+          <h3>默认文字</h3>
+          <span>文字片段</span>
+        </div>
         <label className="field-row">
           <span>文字内容</span>
           <textarea value={content} onChange={(event) => setContent(event.currentTarget.value)} />
@@ -248,6 +246,10 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
             value={durationUs}
             onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
           />
+        </label>
+        <label className="field-row">
+          <span>字体</span>
+          <input value={fontFamily} onChange={(event) => setFontFamily(event.currentTarget.value)} />
         </label>
         <label className="field-row">
           <span>字号</span>
@@ -272,6 +274,28 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
             ))}
           </div>
         </div>
+        <label className="field-row">
+          <span>行高</span>
+          <input
+            type="number"
+            min="500"
+            max="3000"
+            step="50"
+            value={lineHeightMillis}
+            onChange={(event) => setLineHeightMillis(clampInteger(event.currentTarget.valueAsNumber, 500, 3000, lineHeightMillis))}
+          />
+        </label>
+        <label className="field-row">
+          <span>字间距</span>
+          <input
+            type="number"
+            min="0"
+            max="2000"
+            step="50"
+            value={letterSpacingMillis}
+            onChange={(event) => setLetterSpacingMillis(clampInteger(event.currentTarget.valueAsNumber, 0, 2000, letterSpacingMillis))}
+          />
+        </label>
         <label className="toggle-row">
           <input type="checkbox" checked={strokeEnabled} onChange={(event) => setStrokeEnabled(event.currentTarget.checked)} />
           <span>描边</span>
@@ -315,8 +339,67 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
             disabled={!backgroundEnabled}
           />
         </label>
-      </div>
+        <button
+          type="button"
+          className="primary-action wide-action"
+          onClick={() => onAddTextSegment(text, durationUs)}
+          disabled={workspace.pendingCommand !== null || textTrack === null}
+        >
+          添加文字
+        </button>
+      </section>
+
+      <section className="function-card field-stack text-feature-card" aria-label="字幕 导入字幕">
+        <div className="text-card-header">
+          <h3>字幕 / 导入字幕</h3>
+          <span>Rust 解析 SRT</span>
+        </div>
+        <label className="field-row">
+          <span>SRT 内容</span>
+          <textarea
+            aria-label="SRT 内容"
+            value={srtContent}
+            onChange={(event) => setSrtContent(event.currentTarget.value)}
+          />
+        </label>
+        <label className="field-row">
+          <span>时间偏移</span>
+          <input
+            aria-label="字幕时间偏移"
+            type="number"
+            min="0"
+            step="1000"
+            value={subtitleOffsetUs}
+            onChange={(event) =>
+              setSubtitleOffsetUs(Math.max(0, Math.round(Number.isFinite(event.currentTarget.valueAsNumber) ? event.currentTarget.valueAsNumber : 0)))
+            }
+          />
+        </label>
+        <button
+          type="button"
+          className="secondary-action wide-action"
+          onClick={() => onImportSubtitleSrt(srtContent, subtitleOffsetUs, { ...text, source: "subtitle" })}
+          disabled={workspace.pendingCommand !== null || srtContent.trim().length === 0}
+        >
+          导入字幕
+        </button>
+      </section>
+
+      <DeferredTextCapabilityCard title="花字" detail="暂未接入，导入后将以不支持能力报告显示。" />
+      <DeferredTextCapabilityCard title="气泡" detail="暂未接入，导入后将以不支持能力报告显示。" />
     </div>
+  );
+}
+
+function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: string }): React.ReactElement {
+  return (
+    <section className="function-card text-feature-card deferred-text-card" aria-label={title}>
+      <div className="text-card-header">
+        <h3>{title}</h3>
+        <span>暂未接入</span>
+      </div>
+      <p>{detail}</p>
+    </section>
   );
 }
 
@@ -467,4 +550,12 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
 
 function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
+}
+
+function clampInteger(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.round(value)));
 }

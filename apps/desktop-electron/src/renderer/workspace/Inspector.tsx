@@ -276,6 +276,7 @@ export function Inspector({
     }),
     [selected?.segment.text?.bubble, selected?.segment.text?.effect, textState]
   );
+  const textValidationMessage = validateTextForm(textState);
 
   return (
     <div className="inspector-content">
@@ -351,44 +352,111 @@ export function Inspector({
                 />
               </section>
 
-              <section className="inspector-section" aria-label="文字参数">
-                <div className="inspector-section-title">
-                  <h3>文字</h3>
-                  <KeyframeButton />
-                </div>
-                {hasText ? (
-                  <>
+              {hasText ? (
+                <>
+                  <section className="inspector-section" aria-label="文本">
+                    <div className="inspector-section-title">
+                      <h3>文本</h3>
+                      <KeyframeButton />
+                    </div>
                     <label className="field-row compact-row textarea-row">
                       <span>文字内容</span>
                       <textarea
                         value={textState.content}
-                        onChange={(event) => {
-                          const content = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, content }));
-                        }}
+                        onChange={(event) => setTextState((current) => ({ ...current, content: event.currentTarget.value }))}
                       />
                     </label>
+                    <dl className="inspector-list compact">
+                      <InspectorDatum label="字幕来源" value={textState.source === "subtitle" ? "SRT 字幕" : "默认文字"} />
+                    </dl>
                     <label className="field-row compact-row">
-                      <span>字号</span>
+                      <span>字体</span>
                       <input
-                        type="number"
-                        min="1"
-                        value={textState.fontSize}
-                        onChange={(event) => {
-                          const fontSize = event.currentTarget.valueAsNumber || 1;
-                          setTextState((current) => ({ ...current, fontSize }));
-                        }}
+                        value={textState.fontFamily}
+                        onChange={(event) => setTextState((current) => ({ ...current, fontFamily: event.currentTarget.value }))}
                       />
                     </label>
+                    <TextNumberField
+                      label="字号"
+                      value={textState.fontSize}
+                      min={1}
+                      max={400}
+                      step={1}
+                      onChange={(fontSize) => setTextState((current) => ({ ...current, fontSize }))}
+                    />
                     <label className="field-row compact-row color-row">
                       <span>颜色</span>
                       <input
                         type="color"
                         value={textState.color}
-                        onChange={(event) => {
-                          const color = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, color }));
-                        }}
+                        onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
+                      />
+                    </label>
+                  </section>
+
+                  <section className="inspector-section" aria-label="样式">
+                    <div className="inspector-section-title">
+                      <h3>样式</h3>
+                      <KeyframeButton />
+                    </div>
+                    <label className="toggle-row compact-toggle">
+                      <input
+                        type="checkbox"
+                        checked={textState.strokeEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, strokeEnabled: event.currentTarget.checked }))}
+                      />
+                      <span>描边</span>
+                    </label>
+                    <label className="field-row compact-row color-row">
+                      <span>描边颜色</span>
+                      <input
+                        type="color"
+                        value={textState.strokeColor}
+                        disabled={!textState.strokeEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, strokeColor: event.currentTarget.value }))}
+                      />
+                    </label>
+                    <TextNumberField
+                      label="描边宽度"
+                      value={textState.strokeWidth}
+                      min={1}
+                      max={120}
+                      step={1}
+                      disabled={!textState.strokeEnabled}
+                      onChange={(strokeWidth) => setTextState((current) => ({ ...current, strokeWidth }))}
+                    />
+                    <label className="toggle-row compact-toggle">
+                      <input
+                        type="checkbox"
+                        checked={textState.shadowEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, shadowEnabled: event.currentTarget.checked }))}
+                      />
+                      <span>阴影</span>
+                    </label>
+                    <label className="field-row compact-row color-row">
+                      <span>阴影颜色</span>
+                      <input
+                        type="color"
+                        value={textState.shadowColor}
+                        disabled={!textState.shadowEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, shadowColor: event.currentTarget.value }))}
+                      />
+                    </label>
+                    <label className="toggle-row compact-toggle">
+                      <input
+                        type="checkbox"
+                        checked={textState.backgroundEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, backgroundEnabled: event.currentTarget.checked }))}
+                      />
+                      <span>背景</span>
+                    </label>
+                    <label className="field-row compact-row color-row">
+                      <span>背景颜色</span>
+                      <input
+                        type="color"
+                        value={textState.backgroundColor}
+                        disabled={!textState.backgroundEnabled}
+                        onChange={(event) => setTextState((current) => ({ ...current, backgroundColor: event.currentTarget.value }))}
                       />
                     </label>
                     <div className="field-row compact-row">
@@ -406,101 +474,140 @@ export function Inspector({
                         ))}
                       </div>
                     </div>
+                  </section>
+
+                  <section className="inspector-section" aria-label="文本框">
+                    <div className="inspector-section-title">
+                      <h3>文本框</h3>
+                      <KeyframeButton />
+                    </div>
+                    <TextNumberField
+                      label="宽度"
+                      value={textState.textBoxWidthMillis}
+                      min={1}
+                      max={2000}
+                      step={10}
+                      onChange={(textBoxWidthMillis) => setTextState((current) => ({ ...current, textBoxWidthMillis }))}
+                    />
+                    <TextNumberField
+                      label="高度"
+                      value={textState.textBoxHeightMillis}
+                      min={1}
+                      max={2000}
+                      step={10}
+                      onChange={(textBoxHeightMillis) => setTextState((current) => ({ ...current, textBoxHeightMillis }))}
+                    />
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
-                        checked={textState.strokeEnabled}
-                        onChange={(event) => {
-                          const strokeEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, strokeEnabled }));
-                        }}
+                        checked={textState.wrapping === "auto"}
+                        onChange={(event) =>
+                          setTextState((current) => ({ ...current, wrapping: event.currentTarget.checked ? "auto" : "none" }))
+                        }
                       />
-                      <span>描边</span>
+                      <span>自动换行</span>
                     </label>
-                    <label className="field-row compact-row color-row">
-                      <span>描边颜色</span>
-                      <input
-                        type="color"
-                        value={textState.strokeColor}
-                        disabled={!textState.strokeEnabled}
-                        onChange={(event) => {
-                          const strokeColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, strokeColor }));
-                        }}
+                    <TextNumberField
+                      label="行高"
+                      value={textState.lineHeightMillis}
+                      min={500}
+                      max={3000}
+                      step={50}
+                      onChange={(lineHeightMillis) => setTextState((current) => ({ ...current, lineHeightMillis }))}
+                    />
+                    <TextNumberField
+                      label="字间距"
+                      value={textState.letterSpacingMillis}
+                      min={0}
+                      max={2000}
+                      step={50}
+                      onChange={(letterSpacingMillis) => setTextState((current) => ({ ...current, letterSpacingMillis }))}
+                    />
+                  </section>
+
+                  <section className="inspector-section" aria-label="布局">
+                    <div className="inspector-section-title">
+                      <h3>布局</h3>
+                      <KeyframeButton />
+                    </div>
+                    <p className="inspector-note">安全区域使用画布千分比坐标。</p>
+                    <div className="text-layout-grid">
+                      <TextNumberField
+                        label="X"
+                        value={textState.layoutXMillis}
+                        min={0}
+                        max={1000}
+                        step={10}
+                        onChange={(layoutXMillis) => setTextState((current) => ({ ...current, layoutXMillis }))}
                       />
-                    </label>
-                    <label className="field-row compact-row">
-                      <span>描边宽度</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={textState.strokeWidth}
-                        disabled={!textState.strokeEnabled}
-                        onChange={(event) => {
-                          const strokeWidth = event.currentTarget.valueAsNumber || 1;
-                          setTextState((current) => ({ ...current, strokeWidth }));
-                        }}
+                      <TextNumberField
+                        label="Y"
+                        value={textState.layoutYMillis}
+                        min={0}
+                        max={1000}
+                        step={10}
+                        onChange={(layoutYMillis) => setTextState((current) => ({ ...current, layoutYMillis }))}
                       />
-                    </label>
-                    <label className="toggle-row compact-toggle">
-                      <input
-                        type="checkbox"
-                        checked={textState.shadowEnabled}
-                        onChange={(event) => {
-                          const shadowEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, shadowEnabled }));
-                        }}
+                      <TextNumberField
+                        label="宽"
+                        value={textState.layoutWidthMillis}
+                        min={1}
+                        max={1000}
+                        step={10}
+                        onChange={(layoutWidthMillis) => setTextState((current) => ({ ...current, layoutWidthMillis }))}
                       />
-                      <span>阴影</span>
-                    </label>
-                    <label className="field-row compact-row color-row">
-                      <span>阴影颜色</span>
-                      <input
-                        type="color"
-                        value={textState.shadowColor}
-                        disabled={!textState.shadowEnabled}
-                        onChange={(event) => {
-                          const shadowColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, shadowColor }));
-                        }}
+                      <TextNumberField
+                        label="高"
+                        value={textState.layoutHeightMillis}
+                        min={1}
+                        max={1000}
+                        step={10}
+                        onChange={(layoutHeightMillis) => setTextState((current) => ({ ...current, layoutHeightMillis }))}
                       />
-                    </label>
-                    <label className="toggle-row compact-toggle">
-                      <input
-                        type="checkbox"
-                        checked={textState.backgroundEnabled}
-                        onChange={(event) => {
-                          const backgroundEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, backgroundEnabled }));
-                        }}
-                      />
-                      <span>背景</span>
-                    </label>
-                    <label className="field-row compact-row color-row">
-                      <span>背景颜色</span>
-                      <input
-                        type="color"
-                        value={textState.backgroundColor}
-                        disabled={!textState.backgroundEnabled}
-                        onChange={(event) => {
-                          const backgroundColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, backgroundColor }));
-                        }}
-                      />
-                    </label>
+                    </div>
+                    {textValidationMessage === null ? null : <p className="canvas-validation-error">{textValidationMessage}</p>}
                     <button
                       type="button"
                       className="primary-action wide-action"
-                      onClick={() => onEditSelectedText(text)}
-                      disabled={workspace.pendingCommand !== null}
+                      onClick={() => {
+                        if (textValidationMessage === null) {
+                          onEditSelectedText(text);
+                        }
+                      }}
+                      disabled={workspace.pendingCommand !== null || textValidationMessage !== null}
                     >
                       应用文字
                     </button>
-                  </>
-                ) : (
+                  </section>
+
+                  <section className="inspector-section" aria-label="花字气泡">
+                    <div className="inspector-section-title">
+                      <h3>花字 / 气泡</h3>
+                      <KeyframeButton />
+                    </div>
+                    <div className="visual-deferred-grid">
+                      <div className="visual-deferred-row">
+                        <span>花字</span>
+                        <strong>{selected.segment.text?.effect?.name ?? "无"}</strong>
+                        <em>暂未接入</em>
+                      </div>
+                      <div className="visual-deferred-row">
+                        <span>气泡</span>
+                        <strong>{selected.segment.text?.bubble?.name ?? "无"}</strong>
+                        <em>暂未接入</em>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              ) : (
+                <section className="inspector-section" aria-label="文字参数">
+                  <div className="inspector-section-title">
+                    <h3>文本</h3>
+                    <KeyframeButton />
+                  </div>
                   <p className="inspector-note">当前片段没有文字语义。</p>
-                )}
-              </section>
+                </section>
+              )}
             </div>
           ) : null}
 
@@ -864,6 +971,89 @@ function KeyframeButton(): React.ReactElement {
       <span aria-hidden="true">◇+</span>
     </button>
   );
+}
+
+function TextNumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  disabled = false,
+  onChange
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}): React.ReactElement {
+  return (
+    <label className="field-row compact-row text-number-row">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={Number.isFinite(value) ? value : ""}
+        disabled={disabled}
+        onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
+      />
+    </label>
+  );
+}
+
+function validateTextForm(state: TextFormState): string | null {
+  if (state.content.trim().length === 0) {
+    return "文字内容不能为空。";
+  }
+
+  if (state.fontFamily.trim().length === 0) {
+    return "字体名称不能为空。";
+  }
+
+  if (!isIntegerInRange(state.fontSize, 1, 400)) {
+    return "字号必须是 1 到 400 之间的整数。";
+  }
+
+  if (!isIntegerInRange(state.strokeWidth, 1, 120)) {
+    return "描边宽度必须是 1 到 120 之间的整数。";
+  }
+
+  if (!isIntegerInRange(state.lineHeightMillis, 500, 3000)) {
+    return "行高必须是 500 到 3000 之间的整数。";
+  }
+
+  if (!isIntegerInRange(state.letterSpacingMillis, 0, 2000)) {
+    return "字间距必须是 0 到 2000 之间的整数。";
+  }
+
+  if (!isIntegerInRange(state.textBoxWidthMillis, 1, 2000) || !isIntegerInRange(state.textBoxHeightMillis, 1, 2000)) {
+    return "文本框宽高必须是 1 到 2000 之间的整数。";
+  }
+
+  if (
+    !isIntegerInRange(state.layoutXMillis, 0, 1000) ||
+    !isIntegerInRange(state.layoutYMillis, 0, 1000) ||
+    !isIntegerInRange(state.layoutWidthMillis, 1, 1000) ||
+    !isIntegerInRange(state.layoutHeightMillis, 1, 1000)
+  ) {
+    return "布局安全区域必须使用 0 到 1000 之间的整数。";
+  }
+
+  if (state.layoutXMillis + state.layoutWidthMillis > 1000 || state.layoutYMillis + state.layoutHeightMillis > 1000) {
+    return "布局安全区域不能超出画布范围。";
+  }
+
+  return null;
+}
+
+function isIntegerInRange(value: number, min: number, max: number): boolean {
+  return Number.isSafeInteger(value) && value >= min && value <= max;
 }
 
 function SegmentVisualControls({

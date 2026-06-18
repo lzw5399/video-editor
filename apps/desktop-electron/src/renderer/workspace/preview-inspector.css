@@ -681,6 +681,22 @@
   min-height: 28px;
 }
 
+.text-number-row input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.text-layout-grid .compact-row {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+
 .keyframe-button {
   display: grid;
   flex: 0 0 28px;

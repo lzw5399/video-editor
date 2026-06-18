@@ -17,6 +17,9 @@ type ExecuteCommandCall = {
     frameRate: { numerator: number; denominator: number };
   } | null;
   visual: SegmentVisual | null;
+  textContent: string | null;
+  textSource: string | null;
+  srtContent: string | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -426,6 +429,91 @@ test("workspace panels switch categories without losing Chinese empty states", a
       await expect(page.getByText(`当前阶段暂不提供${category}编辑，后续会通过剪辑核心命令接入对应能力。`)).toBeVisible();
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }
+  } finally {
+    await app.close();
+  }
+});
+
+test("文字 panel keeps contextual cards, deferred states, compact scrollbars, and no duplicate left primary menu", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+
+    await expectNoLeftSecondaryMenu(page);
+    await expectCompactScrollbarBaseline();
+    await expect(page.getByLabel("默认文字")).toContainText("默认文字");
+    await expect(page.getByLabel("字幕 导入字幕")).toContainText("字幕 / 导入字幕");
+    await expect(page.getByLabel("字幕 导入字幕")).toContainText("Rust 解析 SRT");
+    await expect(page.getByLabel("花字")).toContainText("暂未接入");
+    await expect(page.getByLabel("气泡")).toContainText("暂未接入");
+    await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导入字幕" })).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("command-only text edit routes complete text inspector changes through executeCommand", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("button", { name: "添加文字" }).click();
+    await expectCommandCall(app, "addTextSegment");
+
+    await page.getByRole("button", { name: /片段 默认文字/ }).click();
+    await expectCommandCall(app, "selectTimelineSegments");
+
+    for (const section of ["文本", "样式", "文本框", "布局", "花字 / 气泡"]) {
+      await expect(page.getByRole("heading", { name: section, exact: true })).toBeVisible();
+    }
+    const textSection = page.getByRole("region", { name: "文本", exact: true });
+    const textBoxSection = page.getByRole("region", { name: "文本框", exact: true });
+    const layoutSection = page.getByRole("region", { name: "布局", exact: true });
+    await expect(textSection).toContainText("字幕来源");
+    await textSection.getByLabel("字体").fill("PingFang SC");
+    await textBoxSection.getByLabel("行高").fill("1300");
+    await textBoxSection.getByLabel("字间距").fill("120");
+    await layoutSection.getByLabel("X").fill("120");
+    await layoutSection.getByLabel("宽").fill("760");
+    await layoutSection.getByRole("button", { name: "应用文字" }).click();
+    await expectCommandCall(app, "editTextSegment");
+
+    await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新请求预览帧");
+    await expect(page.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
+
+    const calls = await readExecuteCommandCalls(app);
+    const addTextCall = calls.find((call) => call.command === "addTextSegment");
+    const editTextCall = calls.find((call) => call.command === "editTextSegment");
+    expect(addTextCall?.textSource).toBe("text");
+    expect(editTextCall?.textContent).toBe("输入文字");
+    expect(calls.filter((call) => call.command === "editTextSegment")).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("字幕 SRT import command path sends raw SRT once without renderer-created cue segments", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByLabel("SRT 内容").fill("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n\n2\n00:00:02,000 --> 00:00:04,000\n第二句字幕\n");
+    await page.getByLabel("字幕时间偏移").fill("1000000");
+    await page.getByRole("button", { name: "导入字幕" }).click();
+    await expectCommandCall(app, "importSubtitleSrt");
+
+    await expect(page.getByRole("button", { name: /片段 导入字幕/ })).toBeVisible();
+    await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新生成预览片段");
+
+    const calls = await readExecuteCommandCalls(app);
+    const importCalls = calls.filter((call) => call.command === "importSubtitleSrt");
+    expect(importCalls).toHaveLength(1);
+    expect(importCalls[0].srtContent).toContain("第二句字幕");
+    expect(calls.filter((call) => call.command === "addTextSegment")).toHaveLength(0);
   } finally {
     await app.close();
   }
