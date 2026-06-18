@@ -24,19 +24,20 @@ use draft_model::{
     PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
     PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
     ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RemoveSegmentKeyframeCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload,
     RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
     RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
     SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
     SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
-    SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
-    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
-    UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
+    SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload,
+    SnappingSettings, SourceTimerange, SplitSegmentCommandPayload, StartExportCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentVisualCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -74,7 +75,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -100,6 +101,8 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
+            export_decl::<SetSegmentKeyframeCommandPayload>(),
+            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -246,7 +249,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -272,6 +275,8 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
+            export_decl::<SetSegmentKeyframeCommandPayload>(),
+            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -661,6 +666,34 @@ fn schema_exports_include_segment_visual_and_command_contracts() {
     );
 }
 
+#[test]
+fn schema_exports_include_keyframe_command_contracts() {
+    let schema_json = command_schema_json();
+    let command_envelope_ts = command_envelope_ts_contract();
+
+    for expected_contract in [
+        "SetSegmentKeyframeCommandPayload",
+        "RemoveSegmentKeyframeCommandPayload",
+    ] {
+        assert!(
+            schema_json.contains(expected_contract),
+            "command schema should include {expected_contract}"
+        );
+        assert!(
+            command_envelope_ts.contains(&format!("export type {expected_contract}")),
+            "generated TypeScript contracts should export {expected_contract}"
+        );
+    }
+
+    assert!(
+        schema_json.contains("setSegmentKeyframe")
+            && schema_json.contains("removeSegmentKeyframe")
+            && command_envelope_ts.contains("setSegmentKeyframe")
+            && command_envelope_ts.contains("removeSegmentKeyframe"),
+        "keyframe commands should be generated from Rust contracts"
+    );
+}
+
 fn export_decl<T>() -> String
 where
     T: TS + 'static,
@@ -674,7 +707,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -700,6 +733,8 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
+            export_decl::<SetSegmentKeyframeCommandPayload>(),
+            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -949,6 +984,14 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<UpdateSegmentVisualCommandPayload>(
         &mut schema_value,
         "UpdateSegmentVisualCommandPayload",
+    );
+    include_command_contract_schema::<SetSegmentKeyframeCommandPayload>(
+        &mut schema_value,
+        "SetSegmentKeyframeCommandPayload",
+    );
+    include_command_contract_schema::<RemoveSegmentKeyframeCommandPayload>(
+        &mut schema_value,
+        "RemoveSegmentKeyframeCommandPayload",
     );
     include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
         &mut schema_value,
