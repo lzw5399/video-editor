@@ -56,11 +56,15 @@
     "test:phase10-source-guards": "bash scripts/phase10-source-guards.sh",
     "test:phase10-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"关键帧|动画|command-only keyframe|五大区域\"",
     "test:phase10": "pnpm run test:phase10-rust && pnpm run test:phase10-source-guards && pnpm run test:phase10-workspace && pnpm run test:contracts",
+    "test:phase11-rust": "cargo test -p realtime_preview_runtime -- --nocapture && cargo test -p preview_service fallback_ladder -- --nocapture && cargo test -p preview_service realtime_video_material -- --nocapture && cargo test -p preview_service realtime_backend_no_ffmpeg -- --nocapture && cargo test -p testkit realtime_preview_parity -- --nocapture && cargo test -p bindings_node realtime_preview -- --nocapture",
+    "test:phase11-source-guards": "bash scripts/phase11-source-guards.sh",
+    "test:phase11-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"实时预览|fallback|telemetry|五大区域\"",
+    "test:phase11": "pnpm run test:phase11-rust && pnpm run test:phase11-source-guards && pnpm run test:phase11-workspace && pnpm run test:contracts",
     "test:phase10-1-rust": "cargo test -p draft_commands subtitle -- --nocapture && cargo test -p draft_commands text -- --nocapture && cargo test -p draft_commands audio_commands -- --nocapture && cargo test -p bindings_node text_commands -- --nocapture && cargo test -p bindings_node transform_commands -- --nocapture",
     "test:phase10-1-source-guards": "bash scripts/phase10-1-source-guards.sh",
     "test:phase10-1-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"SRT|字幕|command-only text|画面变换|音频|预览|播放头|五大区域\"",
     "test:phase10-1": "pnpm run test:phase10-1-rust && pnpm run test:phase10-1-source-guards && pnpm run test:phase10-1-workspace && pnpm run test:contracts",
     "test:contracts": "git diff --exit-code schemas apps/desktop-electron/src/generated",
-    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:phase5-render-core && pnpm run test:phase5-source-guards && pnpm run test:phase5-workspace && pnpm run test:phase6 && pnpm run test:phase7 && pnpm run test:phase8 && pnpm run test:phase9 && pnpm run test:phase10 && pnpm run test:contracts"
+    "test": "pnpm run test:rust && pnpm run test:schema && pnpm run test:draft-fixtures && pnpm run test:project-store && pnpm run test:runtime && pnpm run test:material-probe && pnpm run test:material-service && pnpm run test:bindings && pnpm run test:desktop && pnpm run test:render-smoke && pnpm run test:phase2-source-guards && pnpm run test:phase3-commands && pnpm run test:phase3-source-guards && pnpm run test:phase4-professional-ui && pnpm run test:phase5-render-core && pnpm run test:phase5-source-guards && pnpm run test:phase5-workspace && pnpm run test:phase6 && pnpm run test:phase7 && pnpm run test:phase8 && pnpm run test:phase9 && pnpm run test:phase10 && pnpm run test:phase11 && pnpm run test:contracts"
   }
 }
