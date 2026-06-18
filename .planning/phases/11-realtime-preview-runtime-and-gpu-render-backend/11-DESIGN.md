@@ -81,6 +81,9 @@ pub struct PreviewSessionId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PlaybackGeneration(pub u64);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PreviewCancellationToken(pub u64);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaybackState {
     Stopped,
@@ -200,6 +203,7 @@ Only Electron main should acquire `BrowserWindow.getNativeWindowHandle()` and pa
 pub struct RealtimePreviewFrameRequest {
     pub target_time: Microseconds,
     pub playback_generation: PlaybackGeneration,
+    pub cancellation_token: Option<PreviewCancellationToken>,
     pub mode: PreviewRequestMode,
 }
 
@@ -215,6 +219,8 @@ pub struct RealtimePreviewFrameResult {
     pub playback_generation: PlaybackGeneration,
     pub presented: bool,
     pub stale_rejected: bool,
+    pub canceled: bool,
+    pub cancellation_token: Option<PreviewCancellationToken>,
     pub backend: RealtimePreviewBackendUsed,
     pub diagnostics: Vec<RealtimePreviewDiagnostic>,
     pub telemetry: RealtimePreviewTelemetry,
@@ -259,7 +265,7 @@ pub struct TextureHandleDescriptor {
 }
 ```
 
-Phase 11 implementation can support images, static fixture frames, and CPU upload frames. `FutureTextureHandle` is intentionally a descriptor placeholder for Phase 12; do not implement platform decode or D3D/Metal texture import in this phase.
+Phase 11 implementation must support images, static frames, and generated H.264 MP4/MOV video material frames through a session-owned software CPU frame cache. Fixture generation or cache initialization may use existing testkit/desktop media utilities, but `request_frame`, seek, scrub, and playback-tick requests for supported timeline states must not spawn FFmpeg per frame or route through preview artifact generation. `FutureTextureHandle` is intentionally a descriptor placeholder for Phase 12; do not implement platform hardware decode or D3D/Metal texture import in this phase.
 
 ## GPU Compositor Design
 
@@ -272,7 +278,7 @@ Pipeline stages:
 3. Resolve a single-frame `RenderRangeState` for target time.
 4. Build `RenderGraph`.
 5. Classify graph support against runtime capabilities.
-6. Acquire/upload source textures through `PreviewFrameProvider`.
+6. Acquire/upload source textures through `PreviewFrameProvider`, including H.264 material frames from the session-owned software frame cache.
 7. Draw canvas background.
 8. Draw visual layers in graph stack order.
 9. Apply position/scale/opacity and supported fit/fill/stretch transforms.
@@ -337,6 +343,7 @@ pub struct RealtimePreviewTelemetry {
     pub dropped_frame_count: u64,
     pub repeated_frame_count: u64,
     pub stale_rejected_count: u64,
+    pub canceled_request_count: u64,
     pub fallback_count: u64,
     pub cache_hit_count: u64,
     pub target_time: Microseconds,
@@ -472,7 +479,8 @@ Do not:
 
 - Initialize `wgpu` adapter/device/queue.
 - Add offscreen surface/texture target and mockable compositor.
-- Render black/solid canvas and textured quads from CPU frame inputs.
+- Add H.264 fixture-backed software video frame provider and session-owned CPU frame cache.
+- Render black/solid canvas and textured quads from image and video CPU frame inputs.
 - Add tests that can run with mock backend by default and real GPU only when environment allows.
 
 ### Wave 3: Desktop Native Surface Embedding
@@ -487,7 +495,7 @@ Do not:
 
 - Integrate realtime backend into preview request flow.
 - Keep current preview artifact path as fallback.
-- Add fake FFmpeg executor tests proving supported paths do not spawn FFmpeg.
+- Add fake FFmpeg executor tests proving supported canvas/image/video paths do not spawn FFmpeg per frame.
 - Add fallback ladder diagnostics.
 
 ### Wave 5: Text, Parity, And Final Gates
@@ -511,6 +519,7 @@ Do not:
 ### Rust Integration Tests
 
 - `supported_graph_does_not_call_ffmpeg_executor`
+- `h264_material_frame_provider_serves_cpu_frames_without_per_frame_ffmpeg`
 - `unsupported_graph_routes_to_preview_service_fallback`
 - `realtime_and_export_share_render_graph_snapshot`
 - `telemetry_records_first_frame_seek_fallback_stale`
@@ -519,7 +528,7 @@ Do not:
 
 - Default CI: mock/offscreen backend tests only.
 - Opt-in local: real `wgpu` adapter test behind environment flag such as `VIDEO_EDITOR_TEST_WGPU=1`.
-- Platform smoke: Windows D3D12 and macOS Metal native surface attach, resize, and present.
+- Platform compile/smoke: `cargo check` must cover platform-gated native surface modules on the current target; Windows D3D12 and macOS Metal native surface attach, resize, and present are required manual/CI platform gates before closing Phase 11.
 
 ### Electron/Playwright Tests
 
@@ -545,13 +554,13 @@ Allow:
 - Main-process native handle acquisition.
 - Binding route names and generated TypeScript command/result types.
 
-## Open Questions For Planner
+## Resolved Planning Decisions
 
-1. Should native child surface work be split into separate Windows and macOS plans to reduce risk?
-2. Should text GPU rendering be a required Phase 11 gate or a degraded diagnostic with artifact fallback if parity is not stable?
-3. Should `PreviewFrameProvider` live in `realtime_preview_runtime` for now or in `media_runtime` as the seed of Phase 12?
-4. What exact first-frame and seek latency budgets should be used for acceptance? Recommended initial gates: record telemetry and set non-regression thresholds only after baseline measurements.
-5. Should offscreen fallback return raw BGRA bytes, a temporary PNG artifact, or an object URL path through the existing artifact display bridge?
+1. Native child surface work is split by responsibility, not by platform: Rust/native surface contracts and Node-API bindings are planned separately from Electron main/preload/renderer bridge work. Windows and macOS platform modules remain in the same Rust-native plan because they share the same surface contract and validation tests.
+2. Text GPU rendering is parity-gated. Phase 11 may implement a GPU text path only when deterministic parity tests pass; otherwise text is explicitly classified as degraded or unsupported and routed through the Rust-owned fallback diagnostics. Silent approximate GPU text rendering is not an accepted outcome.
+3. `PreviewFrameProvider` lives in `realtime_preview_runtime` for Phase 11. It supports image/static CPU frames, generated H.264 video material frames from a session-owned software frame cache, and future texture descriptor placeholders. Native hardware decode and texture interop remain Phase 12 scope.
+4. First-frame and seek latency budgets are measurement gates in Phase 11, not hard pass/fail thresholds. Phase 11 must record first-frame latency, seek latency, frame pacing, dropped/repeated frames, stale-generation rejection, cancellation, fallback, and cache-hit telemetry so later phases can set production budgets from observed baselines.
+5. Offscreen fallback is a Rust-owned diagnostic/display path and must not become the production success path. It may return an existing preview artifact/display reference for UI inspection; full-resolution raw BGRA frame transport through JS is not accepted for the production path.
 
 ## Definition Of Done
 

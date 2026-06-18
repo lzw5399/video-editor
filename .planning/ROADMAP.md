@@ -460,11 +460,20 @@ Plans:
   5. Realtime preview and export continue to share engine/render graph semantics, with parity tests and diagnostics for known divergences.
   6. Preview runtime reports measurable first-frame, seek, frame pacing, stale-generation rejection, cancellation, and fallback telemetry.
 
-**Plans**: TBD
+**Plans:** 10/10 planned
 
 Plans:
 
-- [ ] TBD - Plan after Phase 10.1 completion
+- [ ] 11-01 - Realtime preview runtime crate shell, `TimelineClock`, `PlaybackGeneration`, session/request/result/telemetry contracts
+- [ ] 11-02 - Render graph preparation, capability classifier, and preview/export parity diagnostics
+- [ ] 11-03 - Frame provider contracts and H.264 software video frame cache
+- [ ] 11-03B - `wgpu` device/offscreen compositor and supported canvas/image/video textured quad subset
+- [ ] 11-04 - Rust native surface contracts and thin Node-API realtime preview bindings
+- [ ] 11-04B - Electron main/preload/renderer native preview host bridge and rect smoke tests
+- [ ] 11-05 - Preview service realtime backend integration, no-per-frame-FFmpeg supported path, fallback ladder diagnostics
+- [ ] 11-05B - Desktop telemetry/fallback display without renderer-owned fallback decisions
+- [ ] 11-06 - Text parity gate and realtime/export diagnostic coverage
+- [ ] 11-07 - Source guards, runtime boundary docs, and final Phase 11 gate scripts
 
 ### Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop
 
@@ -479,11 +488,19 @@ Plans:
   4. Realtime preview can consume frame or texture handles without full 4K pixel buffers crossing the JS/Rust boundary.
   5. FFmpeg remains available as fallback/probe/export/transcode implementation, with unsupported codecs, pixel formats, color spaces, and hardware paths degrading predictably.
 
-**Plans**: TBD
+**Plans:** 9/9 planned
 
 Plans:
 
-- [ ] TBD - Plan after Phase 11 completion
+- [ ] 12-01 - Shared media IO traits, frame pool leases, color metadata, texture/device identity, fallback reason contracts
+- [ ] 12-02 - Desktop native/FFmpeg media IO capability reporting
+- [ ] 12-02B - Binding/schema/source guards and platform dependency verification checkpoint
+- [ ] 12-03 - FFmpeg CPU frame fallback decoder and structured fallback ladder
+- [ ] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
+- [ ] 12-05 - Windows Media Foundation/DXVA/D3D frame and texture path
+- [ ] 12-06 - Phase 11 media IO handoff adapter
+- [ ] 12-06B - Handle-based preview decode binding/release contracts
+- [ ] 12-06C - Release/session-close leak tests, final Phase 12 gates, and manual platform verification notes
 
 ### Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence
 
@@ -498,11 +515,18 @@ Plans:
   4. Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
   5. Large-timeline tests cover graph diff cost, cache invalidation correctness, and preview/export consistency after edits.
 
-**Plans**: TBD
+**Plans:** 8/8 planned
 
 Plans:
 
-- [ ] TBD - Plan after Phase 12 completion
+- [ ] 13-01 - Validation harness, source guards, package scripts, and large-timeline fixture helpers
+- [ ] 13-02 - `CommandDelta` core types, range helpers, and simple command delta emission
+- [ ] 13-02B - Schema/TypeScript/generated contract export for delta types
+- [ ] 13-03 - Text/audio/visual/keyframe/canvas/material domain coverage and undo/redo invalidation
+- [ ] 13-04 - Stable render graph node IDs, fingerprints, graph snapshots, and graph diff helpers
+- [ ] 13-05 - Preview cache key v2, invalidation request v2, dirty consumer expansion, and export-prep dirty facts
+- [ ] 13-05B - Binding-safe invalidation contracts and generated schema/TypeScript updates
+- [ ] 13-06 - Large-timeline, preview/export parity, source guard, and final Phase 13 gates
 
 ### Phase 14: Asset Resource Manager And Derived Artifact Store
 
@@ -621,7 +645,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
-| 11. Realtime Preview Runtime And GPU Render Backend | TBD | Not planned | - |
+| 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Planned | - |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | TBD | Not planned | - |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |

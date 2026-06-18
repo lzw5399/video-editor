@@ -213,7 +213,7 @@ Implementation notes:
 |--------|------------------|----------|
 | Canvas black/solid background | GPU supported | none |
 | Image material layer | GPU supported by CPU upload texture | existing preview artifact if image load fails |
-| Video material layer | GPU supported only when a `PreviewFrameProvider` returns a CPU RGBA frame for source position | existing cached preview artifact / FFmpeg fallback |
+| Video material layer | GPU supported when `PreviewFrameProvider` returns a CPU RGBA frame for source position, including generated H.264 material frames from the session-owned software cache | existing cached preview artifact / FFmpeg fallback only for unsupported or unavailable frames |
 | Transform position/scale/opacity | GPU supported from engine-resolved sampled state | fallback if invalid matrix/input size |
 | Rotation/crop/fit/fill/stretch | support only where already deterministic in render graph; otherwise classify degraded/unsupported | existing preview artifact |
 | Text overlay | GPU supported if `glyphon` parity tests pass; otherwise texture/raster fallback with diagnostic | existing preview artifact |
@@ -223,7 +223,7 @@ Implementation notes:
 
 ## Fallback Ladder
 
-1. `wgpu` native surface present with supported graph intent and available CPU frame inputs. [VERIFIED: RTPREV-02]
+1. `wgpu` native surface present with supported graph intent and available CPU frame inputs from image/static/software-video frame providers. [VERIFIED: RTPREV-02]
 2. `wgpu` offscreen target, then copied display artifact for Electron fallback composition. [ASSUMED]
 3. Existing `preview_service` cached artifact if cache hit. [VERIFIED: `crates/preview_service/src/cache.rs`]
 4. Existing `preview_service` FFmpeg artifact generation for unsupported states or no GPU adapter, with telemetry reason and no claim of realtime support. [VERIFIED: `crates/preview_service/src/service.rs`]
@@ -318,7 +318,7 @@ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 |---|-------|---------|---------------|
 | A1 | Native child HWND/NSView embedding is acceptable for Phase 11 despite focus/z-order complexity. | Electron Embedding Recommendation | Planner may need a larger UI/platform spike or choose offscreen fallback first. |
 | A2 | `glyphon` can meet deterministic text parity requirements with pinned fonts. | Standard Stack, Renderable Subset | Text may need artifact fallback or a later dedicated text rendering plan. |
-| A3 | CPU frame upload is acceptable before Phase 12 hardware decode. | Minimal Renderable Subset | Large video preview may not meet performance targets until Phase 12. |
+| A3 | CPU frame upload backed by a session-owned software video frame cache is acceptable before Phase 12 hardware decode. | Minimal Renderable Subset | Large or unsupported-codec video preview may not meet Phase 12 hardware performance targets, but supported H.264 test material still has a non-per-frame-FFmpeg realtime path in Phase 11. |
 | A4 | Offscreen GPU readback fallback is sufficient for CI and unsupported native surface environments. | Fallback Ladder | Automated visual tests may need mock renderer instead of real pixels. |
 
 ## Resolved Questions
@@ -327,7 +327,7 @@ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 
 2. **[RESOLVED] Text GPU support:** Text GPU rendering is parity-gated. If the text subset passes deterministic parity tests, it may use the `glyphon` GPU path; if parity fails, text must be classified as degraded or unsupported and routed through a fallback artifact/texture path with diagnostics. Silent approximate GPU text rendering is not allowed. [VERIFIED: checker resolution, RTPREV-02, RTPREV-04]
 
-3. **[RESOLVED] Phase 11 frame provider source:** Phase 11 `PreviewFrameProvider` implements image/static/fixture CPU frames plus future texture descriptor placeholders in the API. Real video hardware decode remains Phase 12 scope and is treated as fallback/diagnostic-only until Phase 12 defines native media IO and texture interop. [VERIFIED: checker resolution, 11-CONTEXT.md]
+3. **[RESOLVED] Phase 11 frame provider source:** Phase 11 `PreviewFrameProvider` implements image/static CPU frames, a session-owned software video frame cache for generated H.264 MP4/MOV material fixtures, and future texture descriptor placeholders in the API. Real hardware decode and native texture interop remain Phase 12 scope, but supported video material preview in Phase 11 must not fall back to preview artifact generation or spawn FFmpeg per requested frame. [VERIFIED: checker revision, RTPREV-02, RTPREV-03]
 
 ## Environment Availability
 
@@ -357,14 +357,15 @@ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|--------------|
 | RTPREV-01 | Runtime consumes draft/render graph without FFmpeg compile path | unit/integration | `cargo test -p realtime_preview_runtime runtime_graph -- --nocapture` | no, Wave 0 |
-| RTPREV-02 | Supported subset classifies and renders through `wgpu`/mock backend | unit/gpu-gated | `cargo test -p realtime_preview_runtime gpu_subset -- --nocapture` | no, Wave 0 |
-| RTPREV-03 | Supported seek path does not call FFmpeg executor | integration | `cargo test -p preview_service realtime_backend_no_ffmpeg -- --nocapture` | no, Wave 0 |
+| RTPREV-02 | Supported canvas/image/video CPU-frame subset classifies and renders through `wgpu`/mock backend | unit/gpu-gated | `cargo test -p realtime_preview_runtime gpu_subset -- --nocapture` | no, Wave 0 |
+| RTPREV-03 | Supported seek path, including H.264 material frame provider cache hits, does not call FFmpeg executor per frame | integration | `cargo test -p preview_service realtime_backend_no_ffmpeg -- --nocapture` | no, Wave 0 |
 | RTPREV-04 | GPU/export parity diagnostics emitted | golden/integration | `cargo test -p testkit realtime_preview_parity -- --nocapture` | no, Wave 0 |
 | RTPREV-05 | clock/generation/telemetry/stale rejection | unit | `cargo test -p realtime_preview_runtime clock_generation telemetry -- --nocapture` | no, Wave 0 |
 
 ### Wave 0 Gaps
 
 - Add `crates/realtime_preview_runtime` crate and focused tests. [VERIFIED: workspace has no such crate]
+- Add H.264 material frame provider tests that generate deterministic fixtures through `testkit`, initialize a session-owned CPU frame cache, then prove preview frame requests do not call FFmpeg per frame. [VERIFIED: `crates/testkit/src/lib.rs` fixture generation exists]
 - Add mock/offscreen renderer so CI does not require real D3D12/Metal adapter. [ASSUMED]
 - Add source guards preventing Electron renderer from owning GPU command lists, render graphs, FFmpeg fallback selection, timeline generation, or cache keys. [VERIFIED: existing source guard pattern in `package.json`]
 

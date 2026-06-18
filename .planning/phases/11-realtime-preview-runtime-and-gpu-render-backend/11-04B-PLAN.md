@@ -2,7 +2,7 @@
 phase: "11-realtime-preview-runtime-and-gpu-render-backend"
 plan: "04B"
 type: execute
-wave: 5
+wave: 6
 depends_on:
   - "11-04"
 files_modified:

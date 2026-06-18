@@ -2,7 +2,7 @@
 phase: "11-realtime-preview-runtime-and-gpu-render-backend"
 plan: "05B"
 type: execute
-wave: 6
+wave: 7
 depends_on:
   - "11-05"
   - "11-04B"
@@ -17,7 +17,7 @@ requirements:
 user_setup: []
 must_haves:
   truths:
-    - "Desktop UI displays realtime backend, latency, frame pacing, stale rejection, cache, and fallback diagnostics returned by Rust/main."
+    - "Desktop UI displays realtime backend, latency, frame pacing, stale rejection, cancellation, cache, and fallback diagnostics returned by Rust/main."
     - "Supported preview responses do not show FFmpeg as the active realtime backend."
     - "Fallback artifact display appears only when Rust reports a fallback decision."
     - "Renderer display code formats telemetry only and does not own fallback ladder, cache key, FFmpeg, render graph, or support classification logic."
@@ -74,6 +74,7 @@ Output: renderer display model fields, PreviewMonitor telemetry/fallback UI, and
 - seek latency display
 - frame pacing/drop/repeat counters
 - stale rejection count display
+- cancellation count/state display
 - fallback reason/count display
 - fallback artifact display state
 - Playwright telemetry/fallback UI tests
@@ -88,9 +89,9 @@ Output: renderer display model fields, PreviewMonitor telemetry/fallback UI, and
     - `.planning/phases/11-realtime-preview-runtime-and-gpu-render-backend/11-05-SUMMARY.md`
     - `.planning/phases/11-realtime-preview-runtime-and-gpu-render-backend/11-DESIGN.md`
   </read_first>
-  <action>Extend renderer display models with fields for realtime backend used, first-frame latency, seek latency, frame pacing/drop/repeat counts, stale rejection count, fallback reason, fallback count, cache hit count, and fallback artifact display state. The model may format and label values; it must not decide the fallback ladder, build cache keys, construct FFmpeg commands, construct render graphs, or infer support from draft contents.</action>
+  <action>Extend renderer display models with fields for realtime backend used, first-frame latency, seek latency, frame pacing/drop/repeat counts, stale rejection count, canceled request count, current request canceled state, fallback reason, fallback count, cache hit count, and fallback artifact display state. The model may format and label values; it must not decide the fallback ladder, build cache keys, construct FFmpeg commands, construct render graphs, or infer support from draft contents.</action>
   <acceptance_criteria>
-    Display model types can represent supported realtime, offscreen/mock realtime, cache-hit fallback, FFmpeg artifact fallback, and unsupported/degraded diagnostics from Rust responses without adding renderer-owned support classification.
+    Display model types can represent supported realtime, canceled requests, offscreen/mock realtime, cache-hit fallback, FFmpeg artifact fallback, and unsupported/degraded diagnostics from Rust responses without adding renderer-owned support classification.
   </acceptance_criteria>
   <verify>
     <automated>pnpm --filter @video-editor/desktop build</automated>
@@ -107,9 +108,9 @@ Output: renderer display model fields, PreviewMonitor telemetry/fallback UI, and
     - `.planning/phases/11-realtime-preview-runtime-and-gpu-render-backend/11-04B-SUMMARY.md`
     - `.planning/phases/11-realtime-preview-runtime-and-gpu-render-backend/11-05-SUMMARY.md`
   </read_first>
-  <action>Render Chinese labels for realtime backend, first-frame latency, seek latency, frame pacing/drop/repeat counts, stale rejection count, fallback reason, fallback count, cache hits, and fallback artifact state. Use mocked main/binding responses in Playwright to verify supported preview responses do not show FFmpeg as active backend, fallback artifact display appears only when Rust reports fallback, and telemetry values remain display-only data.</action>
+  <action>Render Chinese labels for realtime backend, first-frame latency, seek latency, frame pacing/drop/repeat counts, stale rejection count, canceled request count, current request canceled state, fallback reason, fallback count, cache hits, and fallback artifact state. Use mocked main/binding responses in Playwright to verify supported preview responses do not show FFmpeg as active backend, canceled responses show Rust-reported cancellation telemetry, fallback artifact display appears only when Rust reports fallback, and telemetry values remain display-only data.</action>
   <acceptance_criteria>
-    Playwright tests verify telemetry and fallback diagnostics are displayed from mocked binding/main responses, supported preview responses do not show FFmpeg as active backend, fallback artifact display appears only when Rust reports fallback, and renderer source contains no semantic fallback decision logic.
+    Playwright tests verify telemetry, cancellation, and fallback diagnostics are displayed from mocked binding/main responses, supported preview responses do not show FFmpeg as active backend, fallback artifact display appears only when Rust reports fallback, and renderer source contains no semantic fallback decision logic.
   </acceptance_criteria>
   <verify>
     <automated>pnpm --filter @video-editor/desktop test:workspace -g "实时预览|fallback|telemetry"</automated>
@@ -146,13 +147,13 @@ Output: renderer display model fields, PreviewMonitor telemetry/fallback UI, and
 <source_audit>
 GOAL | Phase 11 | realtime preview telemetry and fallback state are visible in desktop UI | 11-05B | COVERED
 REQ | RTPREV-03 | UI distinguishes supported realtime preview from FFmpeg fallback artifacts | 11-05B | COVERED
-REQ | RTPREV-05 | latency, pacing, stale, fallback, and cache telemetry are displayed | 11-05B | COVERED
+REQ | RTPREV-05 | latency, pacing, stale, cancellation, fallback, and cache telemetry are displayed | 11-05B | COVERED
 CONTEXT | CTX-RendererUIOnly | renderer formats telemetry only and does not own fallback/cache/render semantics | 11-05B | COVERED
 RESEARCH | Fallback Ladder | fallback decisions are Rust-owned and displayed as diagnostics | 11-05B | COVERED
 </source_audit>
 
 <success_criteria>
-The desktop preview UI displays backend, telemetry, and fallback diagnostics from Rust/main responses, and tests prove the renderer remains a formatting/display layer rather than a fallback decision owner.
+The desktop preview UI displays backend, telemetry, cancellation, and fallback diagnostics from Rust/main responses, and tests prove the renderer remains a formatting/display layer rather than a fallback decision owner.
 </success_criteria>
 
 <output>
