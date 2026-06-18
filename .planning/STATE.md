@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed Phase 09; ready for Phase 10 typed keyframe and animation planning
+status: executing
 current_phase: 10
 current_phase_name: typed-keyframe-and-animation-system
-current_plan: 0
-total_plans_in_phase: 0
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-06-18T04:57:44.000Z"
+current_plan: 2
+total_plans_in_phase: 5
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-06-18T07:17:47.374Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
-  total_plans: 59
-  completed_plans: 59
-  percent: 100
+  total_plans: 64
+  completed_plans: 60
+  percent: 94
 ---
 
 # Project State
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 10
-Plan: 0/TBD
-Status: Completed Phase 09; ready for Phase 10 typed keyframe and animation planning
-Last activity: 2026-06-18 - Completed quick task 260618-kgr: Separate demo workspace fixtures from real app startup while preserving tests
+Phase: 10 (typed-keyframe-and-animation-system) — EXECUTING
+Plan: 2 of 5
+Status: Completed 10-01 typed keyframe schema/contracts; ready for 10-02 keyframe commands
+Last activity: 2026-06-18 - Completed Phase 10 Plan 01 typed keyframe schema/contracts
 
-Progress: [██████████] 98%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -119,6 +119,7 @@ Progress: [██████████] 98%
 | Phase 09 P03 | 12 min | 2 tasks | 11 files |
 | Phase 09 P04 | 13 min | 2 tasks | 9 files |
 | Phase 09 P05 | 17 min | 2 tasks | 11 files |
+| Phase 10 P01 | 16 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,9 @@ Progress: [██████████] 98%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
+- [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
+- [Phase 10]: Keyframe property/value compatibility is enforced in Rust validation, with generated schemas exposing typed contracts and color constraints. — Domain-specific ranges stay in Rust rather than being duplicated as brittle JSON Schema combinations.
 - [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
 - [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.
@@ -262,6 +266,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T04:57:44.000Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-06-18T07:17:47.370Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
