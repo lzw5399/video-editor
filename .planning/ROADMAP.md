@@ -460,7 +460,7 @@ Plans:
   5. Realtime preview and export continue to share engine/render graph semantics, with parity tests and diagnostics for known divergences.
   6. Preview runtime reports measurable first-frame, seek, frame pacing, stale-generation rejection, cancellation, and fallback telemetry.
 
-**Plans:** 8/10 plans executed
+**Plans:** 9/10 plans executed
 
 Plans:
 
@@ -472,7 +472,7 @@ Plans:
 - [x] 11-04B - Electron main/preload/renderer native preview host bridge and rect smoke tests
 - [x] 11-05 - Preview service realtime backend integration, no-per-frame-FFmpeg supported path, fallback ladder diagnostics
 - [x] 11-05B - Desktop telemetry/fallback display without renderer-owned fallback decisions
-- [ ] 11-06 - Text parity gate and realtime/export diagnostic coverage
+- [x] 11-06 - Text parity gate and realtime/export diagnostic coverage
 - [ ] 11-07 - Source guards, runtime boundary docs, and final Phase 11 gate scripts
 
 ### Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop
@@ -645,7 +645,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
-| 11. Realtime Preview Runtime And GPU Render Backend | 8/10 | In Progress|  |
+| 11. Realtime Preview Runtime And GPU Render Backend | 9/10 | In Progress|  |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | TBD | Not planned | - |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |

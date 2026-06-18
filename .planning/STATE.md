@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-05B-PLAN.md; Phase 11 Plan 06 remains next
+status: Completed 11-06-PLAN.md; Phase 11 Plan 07 remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 9
+current_plan: 10
 total_plans_in_phase: 10
-stopped_at: Completed 11-05B-PLAN.md
-last_updated: "2026-06-18T17:43:45.146Z"
-last_activity: "2026-06-19 - Completed Phase 11 Plan 05B: desktop realtime telemetry/fallback display without renderer-owned fallback decisions."
+stopped_at: None
+last_updated: "2026-06-18T17:53:46.828Z"
+last_activity: "2026-06-19 - Completed Phase 11 Plan 06: text preview parity fails closed through TextParityUnsupported fallback diagnostics."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 79
-  percent: 81
+  completed_plans: 80
+  percent: 82
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 8/10 complete; next plan 11-06
-Status: Phase 11 Plan 05B complete; ready for text parity gates and final runtime boundary checks.
-Last activity: 2026-06-19 - Completed Phase 11 Plan 05B: desktop realtime telemetry/fallback display without renderer-owned fallback decisions.
+Plan: 9/10 complete; next plan 11-07
+Status: Phase 11 Plan 06 complete; ready for source guards, runtime boundary docs, and final Phase 11 gate scripts.
+Last activity: 2026-06-19 - Completed Phase 11 Plan 06: text preview parity fails closed through TextParityUnsupported fallback diagnostics.
 
-Progress: [████████░░] 81%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -135,6 +135,7 @@ Progress: [████████░░] 81%
 | Phase 11 P04B | 9 min | 2 tasks | 8 files |
 | Phase 11 P05 | 11 min | 2 tasks | 12 files |
 | Phase 11 P05B | 8 min | 2 tasks | 8 files |
+| Phase 11 P06 | 5min | 1 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -281,6 +282,8 @@ Recent decisions affecting current work:
 - [Phase 11]: Plan 03B stores CPU frame uploads as runtime-owned opaque texture records and rejects external texture handles until Phase 12. — This preserves the media texture interop boundary without exposing native pointers.
 - [Phase 11]: Plan 05B keeps desktop realtime preview display model formatting-only. — Renderer formats backend, fallback, cancellation, cache, stale, and latency fields returned by main/Rust without owning fallback decisions.
 - [Phase 11]: Plan 05B shows FFmpeg only as a fallback artifact label. — Supported realtime responses display Mock/GPU/offscreen backend labels and never present FFmpeg as active realtime backend.
+- [Phase 11]: Plan 06 keeps GPU text preview unsupported unless repository font parity is proven. — Text routes through TextParityUnsupported fallback diagnostics instead of silently approximating export output.
+- [Phase 11]: Plan 06 golden-tests realtime/export parity for supported no-divergence and divergent text/effect graphs. — This preserves shared render graph semantics while making divergence explicit.
 
 ### Pending Todos
 
@@ -317,6 +320,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T17:43:15.759Z
-Stopped at: Completed 11-05B-PLAN.md
+Last session: 2026-06-18T17:53:46.610Z
+Stopped at: None
 Resume file: None
