@@ -1,5 +1,10 @@
 import type { ExportPreset } from "../../generated/CommandEnvelope";
+import type { DraftCanvasConfig } from "../../generated/Draft";
 import {
+  canvasBackgroundTone,
+  formatCanvasAspectRatio,
+  formatCanvasBackgroundStatus,
+  formatCanvasReadout,
   formatExportPhase,
   formatExportPreset,
   formatExportProgress,
@@ -16,6 +21,7 @@ import "./preview-inspector.css";
 
 type PreviewMonitorProps = {
   draftName: string;
+  canvasConfig: DraftCanvasConfig;
   bindingStatus: BindingStatus;
   preview: PreviewDisplayState;
   exportState: ExportDisplayState;
@@ -50,6 +56,7 @@ const MONITOR_CONTROLS: readonly MonitorControl[] = [
 
 export function PreviewMonitor({
   draftName,
+  canvasConfig,
   bindingStatus,
   preview,
   exportState,
@@ -67,6 +74,14 @@ export function PreviewMonitor({
   onCancelExport
 }: PreviewMonitorProps): React.ReactElement {
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
+  const canvasReadout = formatCanvasReadout(canvasConfig);
+  const canvasRatio = formatCanvasAspectRatio(canvasConfig);
+  const backgroundStatus = formatCanvasBackgroundStatus(canvasConfig);
+  const backgroundTone = canvasBackgroundTone(canvasConfig);
+  const canvasStyle = {
+    aspectRatio: `${Math.max(1, canvasConfig.width)} / ${Math.max(1, canvasConfig.height)}`,
+    background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
+  };
   const exportCanCancel =
     exportState.jobId !== null &&
     (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
@@ -78,10 +93,14 @@ export function PreviewMonitor({
     <div className="preview-shell">
       <div className="preview-titlebar">
         <strong>{draftName}</strong>
-        <span>预览命令已接入</span>
+        <span title={canvasReadout}>预览命令已接入 · {canvasReadout}</span>
       </div>
 
-      <div className="preview-canvas" aria-label="预览画面">
+      <div
+        className={`preview-canvas canvas-background-${backgroundTone}`}
+        aria-label="预览画面"
+        style={canvasStyle}
+      >
         <div className="preview-placeholder">
           <span>{preview.frameArtifactPath === null ? "等待请求预览帧" : "预览帧已返回"}</span>
           {preview.frameArtifactPath === null ? null : <code>{preview.frameArtifactPath}</code>}
@@ -97,7 +116,7 @@ export function PreviewMonitor({
             <button
               key={control.label}
               type="button"
-              className="preview-icon-button"
+              className={control.label === "画面比例" ? "preview-icon-button ratio-button" : "preview-icon-button"}
               aria-label={control.label}
               title={control.label}
               onClick={() => {
@@ -111,7 +130,7 @@ export function PreviewMonitor({
               }}
               disabled={pending || control.label === "播放" || control.label === "适应窗口" || control.label === "画面比例" || control.label === "全屏"}
             >
-              <span aria-hidden="true">{control.symbol}</span>
+              <span aria-hidden="true">{control.label === "画面比例" ? canvasRatio : control.symbol}</span>
             </button>
           ))}
         </div>
@@ -228,8 +247,12 @@ export function PreviewMonitor({
       <div className="preview-status-line" aria-live="polite">
         <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
         <span aria-label="预览状态">{preview.error ?? preview.frameStatusLabel}</span>
-        <span>16:9</span>
-        <span>30 fps</span>
+        <span className="canvas-readout-chip" title={canvasReadout}>
+          {canvasReadout}
+        </span>
+        <span className={`canvas-background-chip ${backgroundTone}`} title={backgroundStatus}>
+          {backgroundStatus}
+        </span>
       </div>
     </div>
   );

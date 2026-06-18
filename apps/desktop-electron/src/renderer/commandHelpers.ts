@@ -24,7 +24,8 @@ import type {
   TimelineSelection,
   TrimSegmentCommandPayload,
   TrackId,
-  UndoTimelineEditCommandPayload
+  UndoTimelineEditCommandPayload,
+  UpdateDraftCanvasConfigCommandPayload
 } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
@@ -36,6 +37,7 @@ import type {
 } from "../generated/CommandResultEnvelope";
 import type {
   Draft,
+  DraftCanvasConfig,
   MaterialId,
   MaterialKind,
   Microseconds,
@@ -331,6 +333,21 @@ export function buildSetTrackMuteCommand(context: CommandContext, trackId: Track
     trackId,
     muted
   });
+}
+
+export function buildUpdateDraftCanvasConfigCommand(
+  context: CommandContext,
+  canvasConfig: DraftCanvasConfig
+): CommandEnvelope {
+  const payload = {
+    kind: "updateDraftCanvasConfig",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    canvasConfig
+  } satisfies UpdateDraftCanvasConfigCommandPayload & { kind: "updateDraftCanvasConfig" };
+
+  return envelope("updateDraftCanvasConfig", payload);
 }
 
 type RequestPreviewFrameOptions = {

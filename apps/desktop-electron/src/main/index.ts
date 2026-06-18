@@ -7,7 +7,8 @@ import type {
   CommandResultEnvelope,
   ExportJobStatusResponse,
   PreviewArtifactResponse,
-  RuntimeCapabilityReport
+  RuntimeCapabilityReport,
+  TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import { executeCommand, ping, version } from "./nativeBinding";
 
@@ -17,6 +18,11 @@ type TestExecuteCommandCall = {
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
+  canvasConfig: {
+    width: number;
+    height: number;
+    frameRate: { numerator: number; denominator: number };
+  } | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -47,6 +53,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testRuntimeCapabilitiesResponse = maybeBuildTestRuntimeCapabilitiesResponse(command);
   if (testRuntimeCapabilitiesResponse !== null) {
     return testRuntimeCapabilitiesResponse;
+  }
+  const testCanvasResponse = maybeBuildTestCanvasCommandResponse(command);
+  if (testCanvasResponse !== null) {
+    return testCanvasResponse;
   }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
@@ -149,6 +159,7 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
 
   const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
   const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
+  const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const jobId =
@@ -163,10 +174,59 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     requestId: command.requestId ?? null,
     targetTime,
     targetTimerange,
+    canvasConfig,
     outputPath,
     preset,
     jobId
   });
+}
+
+function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
+  if (command.payload.kind !== "updateDraftCanvasConfig") {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return null;
+  }
+
+  const draft = {
+    ...command.payload.draft,
+    canvasConfig: command.payload.canvasConfig
+  };
+
+  return {
+    ok: true,
+    data: {
+      draft,
+      commandState: {
+        ...command.payload.commandState,
+        undoStack: [
+          ...command.payload.commandState.undoStack,
+          {
+            draft: command.payload.draft,
+            selection: command.payload.selection,
+            label: "updateDraftCanvasConfig"
+          }
+        ],
+        redoStack: []
+      },
+      selection: command.payload.selection,
+      events: [
+        {
+          kind: "draftCanvasConfigUpdated",
+          message: null
+        }
+      ]
+    },
+    error: null,
+    events: [
+      {
+        kind: "draftCanvasConfigUpdated",
+        message: null
+      }
+    ]
+  };
 }
 
 function maybeBuildTestRuntimeCapabilitiesResponse(

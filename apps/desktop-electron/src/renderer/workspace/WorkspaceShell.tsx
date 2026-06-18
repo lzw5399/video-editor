@@ -1,5 +1,6 @@
 import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
+import type { DraftCanvasConfig } from "../../generated/Draft";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
@@ -29,6 +30,7 @@ type WorkspaceShellProps = {
   onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
+  onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
@@ -66,6 +68,7 @@ export function WorkspaceShell({
   onAddTextSegment,
   onAddAudioSegment,
   onEditSelectedText,
+  onUpdateDraftCanvasConfig,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute,
   onSelectTimelineSegment,
@@ -127,6 +130,7 @@ export function WorkspaceShell({
       <section className="preview-monitor" aria-label="预览窗口">
         <PreviewMonitor
           draftName={workspace.draft.metadata.name}
+          canvasConfig={workspace.draft.canvasConfig}
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
           exportState={workspace.export}
@@ -149,6 +153,7 @@ export function WorkspaceShell({
         <Inspector
           workspace={workspace}
           onEditSelectedText={onEditSelectedText}
+          onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
         />

@@ -12,7 +12,7 @@ import type {
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
-import type { Draft, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
+import type { Draft, DraftCanvasConfig, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
   buildAddSegmentCommand,
@@ -37,6 +37,7 @@ import {
   buildStartExportCommand,
   buildTrimSegmentCommand,
   buildUndoTimelineEditCommand,
+  buildUpdateDraftCanvasConfigCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -751,6 +752,32 @@ export function App(): React.ReactElement {
     void executeTimelineCommand((current) => buildRedoTimelineEditCommand(current), "重做");
   }
 
+  function handleUpdateDraftCanvasConfig(canvasConfig: DraftCanvasConfig): void {
+    void executeDraftCommand<TimelineCommandResponse>(
+      (current) => buildUpdateDraftCanvasConfigCommand(current, canvasConfig),
+      "应用草稿参数",
+      (current, result) => {
+        if (!result.ok || result.data === null) {
+          return {
+            ...current,
+            pendingCommand: null,
+            commandError: canvasCommandErrorMessage(result)
+          };
+        }
+
+        return {
+          ...current,
+          draft: result.data.draft,
+          commandState: result.data.commandState,
+          selection: result.data.selection,
+          materials: result.data.draft.materials,
+          pendingCommand: null,
+          commandError: null
+        };
+      }
+    );
+  }
+
   function handleRequestPreviewFrame(): void {
     if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
       const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
@@ -986,6 +1013,7 @@ export function App(): React.ReactElement {
       onAddTextSegment={handleAddTextSegment}
       onAddAudioSegment={handleAddAudioSegment}
       onEditSelectedText={handleEditSelectedText}
+      onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
       onSelectTimelineSegment={handleSelectTimelineSegment}
@@ -1067,6 +1095,11 @@ function exportCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknow
   const kindLabel = commandError === null ? "导出命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
 
   return `${actionLabel}失败（${kindLabel}）：${message}`;
+}
+
+function canvasCommandErrorMessage(result: CommandResultEnvelope<unknown>): string {
+  const message = result.error?.message ?? "剪辑核心返回未知画布错误";
+  return `画布参数更新失败：${message}。请检查画布尺寸、帧率或背景设置后重试。`;
 }
 
 function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: string): string {

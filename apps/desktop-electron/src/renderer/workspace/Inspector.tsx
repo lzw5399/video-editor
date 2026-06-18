@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { TextAlignment, TextSegment } from "../../generated/Draft";
-import { formatMicroseconds, getSelectedSegmentView, type WorkspaceState } from "../viewModel";
+import type {
+  CanvasAspectRatioPreset,
+  CanvasBackground,
+  DraftCanvasConfig,
+  TextAlignment,
+  TextSegment
+} from "../../generated/Draft";
+import {
+  canvasAspectRatioFromSize,
+  canvasPresetLabel,
+  formatCanvasAspectRatio,
+  formatCanvasBackgroundStatus,
+  formatCanvasFrameRate,
+  formatCanvasReadout,
+  formatCanvasSize,
+  formatMicroseconds,
+  getSelectedSegmentView,
+  type WorkspaceState
+} from "../viewModel";
 
 import "./preview-inspector.css";
 
 type InspectorProps = {
   workspace: WorkspaceState;
   onEditSelectedText: (text: TextSegment) => void;
+  onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
@@ -28,6 +46,17 @@ type TextFormState = {
   backgroundEnabled: boolean;
 };
 
+type CanvasPresetChoice = CanvasAspectRatioPreset | "custom";
+
+type CanvasFormState = {
+  preset: CanvasPresetChoice;
+  width: string;
+  height: string;
+  frameRate: string;
+  backgroundKind: CanvasBackground["kind"];
+  color: string;
+};
+
 const DEFAULT_TEXT_STATE: TextFormState = {
   content: "",
   fontSize: 36,
@@ -43,10 +72,33 @@ const DEFAULT_TEXT_STATE: TextFormState = {
 };
 
 const INSPECTOR_TABS: readonly InspectorTab[] = ["画面", "音频", "变速", "动画", "调节", "AI效果"];
+const CANVAS_PRESETS: readonly CanvasPresetChoice[] = [
+  "ratio16x9",
+  "ratio9x16",
+  "ratio1x1",
+  "ratio4x3",
+  "ratio3x4",
+  "custom"
+];
+const CANVAS_PRESET_SIZES: Record<CanvasAspectRatioPreset, { width: number; height: number }> = {
+  ratio16x9: { width: 1920, height: 1080 },
+  ratio9x16: { width: 1080, height: 1920 },
+  ratio1x1: { width: 1080, height: 1080 },
+  ratio4x3: { width: 1440, height: 1080 },
+  ratio3x4: { width: 1080, height: 1440 }
+};
+const CANVAS_FRAME_RATES = [24, 25, 30, 50, 60] as const;
+const CANVAS_BACKGROUNDS: readonly { kind: CanvasBackground["kind"]; label: string }[] = [
+  { kind: "black", label: "黑色" },
+  { kind: "solidColor", label: "纯色" },
+  { kind: "blurFill", label: "模糊填充" },
+  { kind: "image", label: "图片背景" }
+];
 
 export function Inspector({
   workspace,
   onEditSelectedText,
+  onUpdateDraftCanvasConfig,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
@@ -142,25 +194,11 @@ export function Inspector({
       {selected === null ? (
         <>
           {activeTab === "画面" ? (
-            <section className="inspector-section" aria-label="草稿参数" role="tabpanel">
-              <div className="inspector-section-title">
-                <h3>草稿参数</h3>
-              </div>
-              <div className="empty-state compact-empty">
-                <strong>未选择片段</strong>
-                <span>选择时间线片段后，可在这里调整画面、音频、文字和关键帧参数。</span>
-              </div>
-              <dl className="inspector-list compact">
-                <InspectorDatum label="草稿名称" value={workspace.draft.metadata.name} />
-                <InspectorDatum label="画布比例" value="16:9" />
-                <InspectorDatum label="画布尺寸" value="1920 x 1080" />
-                <InspectorDatum label="序列时长" value={formatMicroseconds(sequenceDuration)} />
-                <InspectorDatum label="轨道数量" value={`${workspace.draft.tracks.length} 条`} />
-                <InspectorDatum label="素材数量" value={`${workspace.draft.materials.length} 个`} />
-                <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
-                <InspectorDatum label="核心状态" value={workspace.bindingStatus.label} />
-              </dl>
-            </section>
+            <CanvasDraftSettings
+              workspace={workspace}
+              sequenceDuration={sequenceDuration}
+              onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
+            />
           ) : (
             <DeferredInspectorTab tab={activeTab} selected={false} />
           )}
@@ -397,6 +435,218 @@ export function Inspector({
   );
 }
 
+function CanvasDraftSettings({
+  workspace,
+  sequenceDuration,
+  onUpdateDraftCanvasConfig
+}: {
+  workspace: WorkspaceState;
+  sequenceDuration: number;
+  onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
+}): React.ReactElement {
+  const acceptedConfig = workspace.draft.canvasConfig;
+  const [canvasState, setCanvasState] = useState<CanvasFormState>(() => canvasFormFromConfig(acceptedConfig));
+
+  useEffect(() => {
+    setCanvasState(canvasFormFromConfig(acceptedConfig));
+  }, [acceptedConfig]);
+
+  const candidate = buildCanvasConfigFromForm(canvasState);
+  const validationMessage = validateCanvasForm(canvasState);
+  const changed = candidate !== null && !canvasConfigsEqual(candidate, acceptedConfig);
+  const pending = workspace.pendingCommand !== null;
+  const canApply = candidate !== null && validationMessage === null && changed && !pending;
+  const displayConfig = candidate ?? acceptedConfig;
+  const backgroundStatus = formatCanvasBackgroundStatus(displayConfig);
+
+  function selectPreset(preset: CanvasPresetChoice): void {
+    if (preset === "custom") {
+      setCanvasState((current) => ({ ...current, preset }));
+      return;
+    }
+
+    const size = CANVAS_PRESET_SIZES[preset];
+    setCanvasState((current) => ({
+      ...current,
+      preset,
+      width: String(size.width),
+      height: String(size.height)
+    }));
+  }
+
+  function updateDimension(field: "width" | "height", value: string): void {
+    setCanvasState((current) => ({
+      ...current,
+      preset: "custom",
+      [field]: value
+    }));
+  }
+
+  return (
+    <section className="inspector-section canvas-settings-section" aria-label="草稿参数" role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>草稿参数</h3>
+      </div>
+      <div className="empty-state compact-empty">
+        <strong>未选择片段</strong>
+        <span>这里显示草稿级画布参数。选择时间线片段后，可调整片段画面、音频、文字和关键帧参数。</span>
+      </div>
+
+      <div className="canvas-form" aria-label="画布参数表单">
+        <div className="canvas-control-row">
+          <span>画布比例</span>
+          <div className="canvas-segmented" role="group" aria-label="画布比例">
+            {CANVAS_PRESETS.map((preset) => {
+              const label = preset === "custom" ? "自定义" : canvasPresetLabel(preset);
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  className={canvasState.preset === preset ? "active" : ""}
+                  aria-pressed={canvasState.preset === preset}
+                  onClick={() => selectPreset(preset)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="canvas-control-row">
+          <span>画布尺寸</span>
+          <div className="canvas-size-fields">
+            <label>
+              <span>宽</span>
+              <input
+                aria-label="画布宽度"
+                inputMode="numeric"
+                type="number"
+                min="1"
+                step="1"
+                value={canvasState.width}
+                onChange={(event) => updateDimension("width", event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>高</span>
+              <input
+                aria-label="画布高度"
+                inputMode="numeric"
+                type="number"
+                min="1"
+                step="1"
+                value={canvasState.height}
+                onChange={(event) => updateDimension("height", event.currentTarget.value)}
+              />
+            </label>
+          </div>
+        </div>
+
+        <label className="canvas-control-row">
+          <span>帧率</span>
+          <select
+            aria-label="帧率"
+            value={canvasState.frameRate}
+            onChange={(event) => setCanvasState((current) => ({ ...current, frameRate: event.currentTarget.value }))}
+          >
+            {CANVAS_FRAME_RATES.map((frameRate) => (
+              <option key={frameRate} value={String(frameRate)}>
+                {frameRate} fps
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="canvas-control-row">
+          <span>画布背景</span>
+          <div className="canvas-segmented background-modes" role="group" aria-label="画布背景">
+            {CANVAS_BACKGROUNDS.map((background) => (
+              <button
+                key={background.kind}
+                type="button"
+                className={canvasState.backgroundKind === background.kind ? "active" : ""}
+                aria-pressed={canvasState.backgroundKind === background.kind}
+                onClick={() => setCanvasState((current) => ({ ...current, backgroundKind: background.kind }))}
+              >
+                {background.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {canvasState.backgroundKind === "solidColor" ? (
+          <label className="canvas-control-row canvas-color-row">
+            <span>背景颜色</span>
+            <span className="canvas-color-controls">
+              <input
+                aria-label="画布背景颜色"
+                type="color"
+                value={isHexColor(canvasState.color) ? canvasState.color : "#000000"}
+                onChange={(event) => setCanvasState((current) => ({ ...current, color: event.currentTarget.value }))}
+              />
+              <input
+                aria-label="画布背景色值"
+                type="text"
+                value={canvasState.color}
+                onChange={(event) => setCanvasState((current) => ({ ...current, color: event.currentTarget.value }))}
+              />
+            </span>
+          </label>
+        ) : null}
+
+        <div className={`canvas-background-status ${canvasBackgroundToneClass(displayConfig.background.kind)}`}>
+          <span>{backgroundStatus}</span>
+          {displayConfig.background.kind === "blurFill" ? <em>降级</em> : null}
+          {displayConfig.background.kind === "image" ? <em>未接入</em> : null}
+        </div>
+
+        <button
+          type="button"
+          className="canvas-image-button"
+          aria-label="图片背景未接入"
+          title="图片背景未接入"
+          disabled
+        >
+          图片背景 <span>未接入</span>
+        </button>
+
+        <p className="canvas-coordinate-help">坐标以画布中心为原点，X 向右，Y 向上</p>
+        <p className="canvas-readout" aria-label="画布读数">
+          {formatCanvasReadout(displayConfig)}
+        </p>
+        {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
+
+        <button
+          type="button"
+          className="primary-action wide-action"
+          disabled={!canApply}
+          onClick={() => {
+            if (candidate !== null && validationMessage === null) {
+              onUpdateDraftCanvasConfig(candidate);
+            }
+          }}
+        >
+          应用草稿参数
+        </button>
+      </div>
+
+      <dl className="inspector-list compact">
+        <InspectorDatum label="草稿名称" value={workspace.draft.metadata.name} />
+        <InspectorDatum label="画布比例" value={formatCanvasAspectRatio(acceptedConfig)} />
+        <InspectorDatum label="画布尺寸" value={formatCanvasSize(acceptedConfig)} />
+        <InspectorDatum label="帧率" value={formatCanvasFrameRate(acceptedConfig)} />
+        <InspectorDatum label="画布背景" value={formatCanvasBackgroundStatus(acceptedConfig)} />
+        <InspectorDatum label="序列时长" value={formatMicroseconds(sequenceDuration)} />
+        <InspectorDatum label="轨道数量" value={`${workspace.draft.tracks.length} 条`} />
+        <InspectorDatum label="素材数量" value={`${workspace.draft.materials.length} 个`} />
+        <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
+        <InspectorDatum label="核心状态" value={workspace.bindingStatus.label} />
+      </dl>
+    </section>
+  );
+}
+
 function DeferredInspectorTab({ tab, selected }: { tab: InspectorTab; selected: boolean }): React.ReactElement {
   return (
     <section className="inspector-section" aria-label={`${tab}参数`} role="tabpanel">
@@ -453,4 +703,119 @@ function getSequenceDuration(workspace: WorkspaceState): number {
       track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
     )
   );
+}
+
+function canvasFormFromConfig(config: DraftCanvasConfig): CanvasFormState {
+  return {
+    preset: config.aspectRatio.kind === "preset" ? config.aspectRatio.preset : "custom",
+    width: String(config.width),
+    height: String(config.height),
+    frameRate: frameRateControlValue(config),
+    backgroundKind: config.background.kind,
+    color: config.background.kind === "solidColor" ? config.background.color : "#000000"
+  };
+}
+
+function buildCanvasConfigFromForm(state: CanvasFormState): DraftCanvasConfig | null {
+  const width = parsePositiveInteger(state.width);
+  const height = parsePositiveInteger(state.height);
+  const frameRate = parsePositiveInteger(state.frameRate);
+
+  if (width === null || height === null || frameRate === null) {
+    return null;
+  }
+
+  return {
+    aspectRatio:
+      state.preset === "custom"
+        ? canvasAspectRatioFromSize(width, height)
+        : {
+            kind: "preset",
+            preset: state.preset
+          },
+    width,
+    height,
+    frameRate: {
+      numerator: frameRate,
+      denominator: 1
+    },
+    background: canvasBackgroundFromForm(state)
+  };
+}
+
+function canvasBackgroundFromForm(state: CanvasFormState): CanvasBackground {
+  if (state.backgroundKind === "solidColor") {
+    return {
+      kind: "solidColor",
+      color: state.color.trim()
+    };
+  }
+
+  if (state.backgroundKind === "blurFill") {
+    return { kind: "blurFill" };
+  }
+
+  if (state.backgroundKind === "image") {
+    return {
+      kind: "image",
+      materialId: null
+    };
+  }
+
+  return { kind: "black" };
+}
+
+function validateCanvasForm(state: CanvasFormState): string | null {
+  const width = parsePositiveInteger(state.width);
+  const height = parsePositiveInteger(state.height);
+  const frameRate = parsePositiveInteger(state.frameRate);
+
+  if (width === null || height === null) {
+    return "画布尺寸必须是大于 0 的整数。";
+  }
+
+  if (frameRate === null) {
+    return "帧率必须是大于 0 的整数。";
+  }
+
+  if (state.backgroundKind === "solidColor" && !isHexColor(state.color)) {
+    return "纯色背景必须使用 #RRGGBB 色值。";
+  }
+
+  if (state.backgroundKind === "image") {
+    return "图片背景素材选择未接入。";
+  }
+
+  return null;
+}
+
+function canvasConfigsEqual(left: DraftCanvasConfig, right: DraftCanvasConfig): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function frameRateControlValue(config: DraftCanvasConfig): string {
+  const { numerator, denominator } = config.frameRate;
+  const fps = denominator === 0 ? 30 : Math.round(numerator / denominator);
+  return CANVAS_FRAME_RATES.includes(fps as (typeof CANVAS_FRAME_RATES)[number]) ? String(fps) : "30";
+}
+
+function parsePositiveInteger(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function isHexColor(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value.trim());
+}
+
+function canvasBackgroundToneClass(kind: CanvasBackground["kind"]): "ready" | "warning" | "muted" {
+  if (kind === "blurFill" || kind === "image") {
+    return "warning";
+  }
+
+  return kind === "solidColor" ? "ready" : "muted";
 }

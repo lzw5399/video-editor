@@ -9,7 +9,11 @@ import type {
   PreviewStatus
 } from "../generated/CommandResultEnvelope";
 import type {
+  CanvasAspectRatio,
+  CanvasAspectRatioPreset,
+  CanvasBackground,
   Draft,
+  DraftCanvasConfig,
   Material,
   MaterialKind,
   MaterialStatus,
@@ -172,6 +176,21 @@ export const initialWorkspaceDraft: Draft = {
   metadata: {
     name: "未命名草稿",
     description: "阶段四桌面工作区展示草稿"
+  },
+  canvasConfig: {
+    aspectRatio: {
+      kind: "preset",
+      preset: "ratio16x9"
+    },
+    width: 1920,
+    height: 1080,
+    frameRate: {
+      numerator: 30,
+      denominator: 1
+    },
+    background: {
+      kind: "black"
+    }
   },
   materials: [
     {
@@ -478,6 +497,77 @@ export function formatCommandError(message: string): string {
   return `操作失败：${message}。请检查素材或撤销上一步后重试。`;
 }
 
+export function formatCanvasAspectRatio(config: DraftCanvasConfig): string {
+  if (config.aspectRatio.kind === "preset") {
+    return canvasPresetLabel(config.aspectRatio.preset);
+  }
+
+  const [numerator, denominator] = reduceRatio(config.aspectRatio.numerator, config.aspectRatio.denominator);
+  return `${numerator}:${denominator}`;
+}
+
+export function formatCanvasSize(config: DraftCanvasConfig): string {
+  return `${config.width} x ${config.height}`;
+}
+
+export function formatCanvasFrameRate(config: DraftCanvasConfig): string {
+  const { numerator, denominator } = config.frameRate;
+  if (denominator === 1) {
+    return `${numerator} fps`;
+  }
+  return `${numerator}/${denominator} fps`;
+}
+
+export function formatCanvasBackground(config: DraftCanvasConfig): string {
+  const labels: Record<CanvasBackground["kind"], string> = {
+    black: "黑色",
+    solidColor: "纯色",
+    blurFill: "模糊填充",
+    image: "图片背景"
+  };
+  return labels[config.background.kind];
+}
+
+export function formatCanvasBackgroundStatus(config: DraftCanvasConfig): string {
+  if (config.background.kind === "blurFill") {
+    return "模糊填充 · 降级";
+  }
+  if (config.background.kind === "image") {
+    return "图片背景 · 未接入";
+  }
+  if (config.background.kind === "solidColor") {
+    return `纯色 · ${config.background.color}`;
+  }
+  return "黑色";
+}
+
+export function canvasBackgroundTone(config: DraftCanvasConfig): "ready" | "warning" | "muted" {
+  if (config.background.kind === "blurFill" || config.background.kind === "image") {
+    return "warning";
+  }
+  return config.background.kind === "black" ? "muted" : "ready";
+}
+
+export function formatCanvasReadout(config: DraftCanvasConfig): string {
+  return `画布 ${formatCanvasAspectRatio(config)} · ${formatCanvasSize(config)} · ${formatCanvasFrameRate(config)}`;
+}
+
+export function canvasPresetLabel(preset: CanvasAspectRatioPreset): string {
+  const labels: Record<CanvasAspectRatioPreset, string> = {
+    ratio16x9: "16:9",
+    ratio9x16: "9:16",
+    ratio1x1: "1:1",
+    ratio4x3: "4:3",
+    ratio3x4: "3:4"
+  };
+  return labels[preset];
+}
+
+export function canvasAspectRatioFromSize(width: number, height: number): CanvasAspectRatio {
+  const [numerator, denominator] = reduceRatio(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+  return { kind: "custom", numerator, denominator };
+}
+
 export function formatPreviewStatus(status: PreviewStatus): string {
   const labels: Record<PreviewStatus, string> = {
     generated: "已生成",
@@ -490,8 +580,8 @@ export function formatPreviewStatus(status: PreviewStatus): string {
 
 export function formatExportPreset(preset: ExportPreset): string {
   const labels: Record<ExportPreset, string> = {
-    h264AacDraft: "草稿 720P",
-    h264AacBalanced: "标准 1080P"
+    h264AacDraft: "草稿质量",
+    h264AacBalanced: "标准质量"
   };
 
   return labels[preset];
@@ -708,6 +798,24 @@ export function nextTrackStart(track: { segments: Segment[] }): Microseconds {
 
 function padTime(value: number): string {
   return value.toString().padStart(2, "0");
+}
+
+function reduceRatio(numerator: number, denominator: number): [number, number] {
+  const safeNumerator = Math.max(1, Math.round(numerator));
+  const safeDenominator = Math.max(1, Math.round(denominator));
+  const divisor = greatestCommonDivisor(safeNumerator, safeDenominator);
+  return [safeNumerator / divisor, safeDenominator / divisor];
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(Math.round(left));
+  let b = Math.abs(Math.round(right));
+  while (b !== 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return Math.max(1, a);
 }
 
 function buildRulerTicks(duration: Microseconds): Microseconds[] {
