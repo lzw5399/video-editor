@@ -101,7 +101,7 @@ fn sample_graph() -> render_graph::RenderGraph {
     build_render_graph(&normalized, &range).expect("graph should build")
 }
 
-fn compiler_draft() -> Draft {
+pub fn compiler_draft() -> Draft {
     let mut draft = Draft::new("draft-compiler", "Compiler");
     draft.materials = vec![
         material(

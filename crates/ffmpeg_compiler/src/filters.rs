@@ -1,7 +1,13 @@
 use std::collections::BTreeMap;
 
-use draft_model::{MaterialId, Microseconds, SourceTimerange, TargetTimerange};
-use render_graph::{RenderCanvasBackgroundMode, RenderGraphPlan, RenderOutputProfile};
+use draft_model::{
+    MaterialId, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode, SegmentScale,
+    SegmentVisual, SourceTimerange, TargetTimerange,
+};
+use render_graph::{
+    OutputDimensions, RenderCanvasBackgroundMode, RenderGraphPlan, RenderMaterial,
+    RenderOutputProfile, RenderVideoLayer,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::job::{
@@ -15,6 +21,26 @@ pub struct GeneratedFilterScript {
     pub path: String,
     pub contents: String,
     pub has_audio_output: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LayerDimensions {
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LayerPlacement {
+    x: i64,
+    y: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VisualLayerFilter {
+    label: String,
+    placement: LayerPlacement,
+    full_canvas_identity: bool,
+    lines: Vec<String>,
 }
 
 pub fn generate_filter_script(
@@ -43,7 +69,8 @@ pub fn generate_filter_script(
     };
 
     let mut lines = Vec::new();
-    let mut visual_labels = Vec::new();
+    let material_dimensions = material_dimensions_by_id(plan);
+    let mut visual_layers = Vec::new();
     for (layer_index, layer) in plan.graph.video_layers.iter().enumerate() {
         let input_index = input_indexes
             .get(&layer.material_id)
@@ -55,18 +82,24 @@ pub fn generate_filter_script(
         ) else {
             continue;
         };
-        let label = format!("v{layer_index}");
-        lines.push(format!(
-            "[{input_index}:v]trim=start={start}:duration={duration},setpts=PTS-STARTPTS,scale={width}:{height}[{label}]",
-            start = format_seconds(clip.start),
-            duration = format_seconds(clip.duration),
-            width = dimensions.width,
-            height = dimensions.height
-        ));
-        visual_labels.push(label);
+        let source_dimensions = material_dimensions
+            .get(&layer.material_id)
+            .copied()
+            .unwrap_or_else(|| output_layer_dimensions(dimensions));
+        let visual_layer = compile_visual_layer(
+            layer_index,
+            *input_index,
+            layer,
+            &clip,
+            source_dimensions,
+            output_layer_dimensions(dimensions),
+            plan,
+        );
+        lines.extend(visual_layer.lines.iter().cloned());
+        visual_layers.push(visual_layer);
     }
 
-    let mut current_video = if visual_labels.is_empty() {
+    let mut current_video = if visual_layers.is_empty() {
         let background_color = canvas_background_color_arg(plan);
         lines.push(format!(
             "color=c={background_color}:s={width}x{height}:r={rate}:d={duration}[vbase0]",
@@ -76,19 +109,10 @@ pub fn generate_filter_script(
             duration = format_seconds(output_duration(plan))
         ));
         "vbase0".to_owned()
-    } else if visual_labels.len() == 1 {
-        lines.push(format!("[{}]null[vbase0]", visual_labels[0]));
-        "vbase0".to_owned()
+    } else if visual_layers.iter().all(|layer| layer.full_canvas_identity) {
+        compose_legacy_full_canvas_layers(&mut lines, &visual_layers)
     } else {
-        let mut current = visual_labels[0].clone();
-        for (overlay_index, next) in visual_labels.iter().enumerate().skip(1) {
-            let out = format!("vbase{overlay_index}");
-            lines.push(format!(
-                "[{current}][{next}]overlay=x=0:y=0:shortest=1[{out}]"
-            ));
-            current = out;
-        }
-        current
+        compose_placed_visual_layers(&mut lines, plan, dimensions, &visual_layers)
     };
 
     for (text_index, overlay) in plan.graph.text_overlays.iter().enumerate() {
@@ -159,6 +183,174 @@ pub fn generate_filter_script(
     })
 }
 
+fn compile_visual_layer(
+    layer_index: usize,
+    input_index: u32,
+    layer: &RenderVideoLayer,
+    clip: &SourceTimerange,
+    source_dimensions: LayerDimensions,
+    output_dimensions: LayerDimensions,
+    plan: &RenderGraphPlan,
+) -> VisualLayerFilter {
+    let label = format!("v{layer_index}");
+    if is_full_canvas_identity(&layer.visual) {
+        return VisualLayerFilter {
+            label: label.clone(),
+            placement: LayerPlacement { x: 0, y: 0 },
+            full_canvas_identity: true,
+            lines: vec![format!(
+                "[{input_index}:v]trim=start={start}:duration={duration},setpts=PTS-STARTPTS,scale={width}:{height}[{label}]",
+                start = format_seconds(clip.start),
+                duration = format_seconds(clip.duration),
+                width = output_dimensions.width,
+                height = output_dimensions.height
+            )],
+        };
+    }
+
+    let cropped_dimensions = cropped_dimensions(source_dimensions, &layer.visual.transform.crop);
+    let (fit_filters, mut current_dimensions) = fit_mode_filters(
+        &layer.visual.fit_mode,
+        cropped_dimensions,
+        output_dimensions,
+    );
+    let mut source_filters = vec![
+        format!(
+            "trim=start={start}:duration={duration}",
+            start = format_seconds(clip.start),
+            duration = format_seconds(clip.duration)
+        ),
+        "setpts=PTS-STARTPTS".to_owned(),
+    ];
+    if crop_is_active(&layer.visual.transform.crop) {
+        let left = millis_of(
+            source_dimensions.width,
+            layer.visual.transform.crop.left_millis,
+        );
+        let top = millis_of(
+            source_dimensions.height,
+            layer.visual.transform.crop.top_millis,
+        );
+        source_filters.push(format!(
+            "crop={width}:{height}:{left}:{top}",
+            width = cropped_dimensions.width,
+            height = cropped_dimensions.height
+        ));
+    }
+    source_filters.extend(fit_filters);
+
+    let mut lines = Vec::new();
+    let mut current_label = format!("vstage{layer_index}a");
+    lines.push(format!(
+        "[{input_index}:v]{}[{current_label}]",
+        source_filters.join(",")
+    ));
+
+    if let Some(background_color) = segment_background_color_arg(&layer.visual.background_filling)
+        && current_dimensions != output_dimensions
+    {
+        let background_label = format!("vsegbg{layer_index}");
+        let composed_label = format!("vstage{layer_index}b");
+        let x =
+            ((i64::from(output_dimensions.width) - i64::from(current_dimensions.width)) / 2).max(0);
+        let y = ((i64::from(output_dimensions.height) - i64::from(current_dimensions.height)) / 2)
+            .max(0);
+        lines.push(format!(
+            "color=c={background_color}:s={width}x{height}:r={rate}:d={duration}[{background_label}]",
+            width = output_dimensions.width,
+            height = output_dimensions.height,
+            rate = frame_rate_arg(plan),
+            duration = format_seconds(output_duration(plan))
+        ));
+        lines.push(format!(
+            "[{background_label}][{current_label}]overlay=x={x}:y={y}:shortest=1[{composed_label}]"
+        ));
+        current_label = composed_label;
+        current_dimensions = output_dimensions;
+    }
+
+    let scaled_dimensions = scaled_dimensions(current_dimensions, &layer.visual.transform.scale);
+    let mut transform_filters = Vec::new();
+    if scaled_dimensions != current_dimensions {
+        transform_filters.push(format!(
+            "scale={}:{}",
+            scaled_dimensions.width, scaled_dimensions.height
+        ));
+    }
+    if layer.visual.transform.opacity.value_millis < 1_000 {
+        transform_filters.push("format=rgba".to_owned());
+        transform_filters.push(format!(
+            "colorchannelmixer=aa={}",
+            millis_decimal(layer.visual.transform.opacity.value_millis)
+        ));
+    }
+    if transform_filters.is_empty() {
+        lines.push(format!("[{current_label}]null[{label}]"));
+    } else {
+        lines.push(format!(
+            "[{current_label}]{}[{label}]",
+            transform_filters.join(",")
+        ));
+    }
+
+    VisualLayerFilter {
+        label,
+        placement: layer_placement(&layer.visual, output_dimensions, scaled_dimensions),
+        full_canvas_identity: false,
+        lines,
+    }
+}
+
+fn compose_legacy_full_canvas_layers(
+    lines: &mut Vec<String>,
+    layers: &[VisualLayerFilter],
+) -> String {
+    if layers.len() == 1 {
+        lines.push(format!("[{}]null[vbase0]", layers[0].label));
+        return "vbase0".to_owned();
+    }
+
+    let mut current = layers[0].label.clone();
+    for (overlay_index, next) in layers.iter().enumerate().skip(1) {
+        let out = format!("vbase{overlay_index}");
+        lines.push(format!(
+            "[{current}][{}]overlay=x=0:y=0:shortest=1[{out}]",
+            next.label
+        ));
+        current = out;
+    }
+    current
+}
+
+fn compose_placed_visual_layers(
+    lines: &mut Vec<String>,
+    plan: &RenderGraphPlan,
+    dimensions: &OutputDimensions,
+    layers: &[VisualLayerFilter],
+) -> String {
+    let background_color = canvas_background_color_arg(plan);
+    lines.push(format!(
+        "color=c={background_color}:s={width}x{height}:r={rate}:d={duration}[vbase0]",
+        width = dimensions.width,
+        height = dimensions.height,
+        rate = frame_rate_arg(plan),
+        duration = format_seconds(output_duration(plan))
+    ));
+
+    let mut current = "vbase0".to_owned();
+    for (overlay_index, layer) in layers.iter().enumerate() {
+        let out = format!("vbase{}", overlay_index + 1);
+        lines.push(format!(
+            "[{current}][{label}]overlay=x={x}:y={y}:shortest=1[{out}]",
+            label = layer.label,
+            x = layer.placement.x,
+            y = layer.placement.y
+        ));
+        current = out;
+    }
+    current
+}
+
 fn missing_input(material_id: &MaterialId) -> FfmpegCompileError {
     FfmpegCompileError::new(
         FfmpegCompileErrorKind::MissingInputMaterial,
@@ -169,6 +361,190 @@ fn missing_input(material_id: &MaterialId) -> FfmpegCompileError {
         "Ensure render_graph materials include every renderable video/audio material.",
     )
     .with_material_id(material_id.clone())
+}
+
+fn is_full_canvas_identity(visual: &SegmentVisual) -> bool {
+    visual.fit_mode == SegmentFitMode::Stretch
+        && !crop_is_active(&visual.transform.crop)
+        && visual.transform.scale.x_millis == 1_000
+        && visual.transform.scale.y_millis == 1_000
+        && visual.transform.position.x == 0
+        && visual.transform.position.y == 0
+        && visual.transform.anchor.x_millis == 500
+        && visual.transform.anchor.y_millis == 500
+        && visual.transform.opacity.value_millis == 1_000
+}
+
+fn material_dimensions_by_id(plan: &RenderGraphPlan) -> BTreeMap<MaterialId, LayerDimensions> {
+    plan.graph
+        .materials
+        .iter()
+        .map(|material| {
+            (
+                material.material_id.clone(),
+                render_material_dimensions(material),
+            )
+        })
+        .collect()
+}
+
+fn render_material_dimensions(material: &RenderMaterial) -> LayerDimensions {
+    LayerDimensions {
+        width: material.width.unwrap_or(1).max(1),
+        height: material.height.unwrap_or(1).max(1),
+    }
+}
+
+fn output_layer_dimensions(dimensions: &OutputDimensions) -> LayerDimensions {
+    LayerDimensions {
+        width: dimensions.width.max(1),
+        height: dimensions.height.max(1),
+    }
+}
+
+fn cropped_dimensions(source: LayerDimensions, crop: &SegmentCrop) -> LayerDimensions {
+    let left = millis_of(source.width, crop.left_millis);
+    let right = millis_of(source.width, crop.right_millis);
+    let top = millis_of(source.height, crop.top_millis);
+    let bottom = millis_of(source.height, crop.bottom_millis);
+    LayerDimensions {
+        width: source
+            .width
+            .saturating_sub(left)
+            .saturating_sub(right)
+            .max(1),
+        height: source
+            .height
+            .saturating_sub(top)
+            .saturating_sub(bottom)
+            .max(1),
+    }
+}
+
+fn crop_is_active(crop: &SegmentCrop) -> bool {
+    crop.left_millis > 0 || crop.right_millis > 0 || crop.top_millis > 0 || crop.bottom_millis > 0
+}
+
+fn fit_mode_filters(
+    fit_mode: &SegmentFitMode,
+    source: LayerDimensions,
+    output: LayerDimensions,
+) -> (Vec<String>, LayerDimensions) {
+    match fit_mode {
+        SegmentFitMode::Stretch => (
+            vec![format!("scale={}:{}", output.width, output.height)],
+            output,
+        ),
+        SegmentFitMode::Fit => {
+            let fitted = fit_dimensions(source, output);
+            (
+                vec![format!("scale={}:{}", fitted.width, fitted.height)],
+                fitted,
+            )
+        }
+        SegmentFitMode::Fill => {
+            let filled = fill_dimensions(source, output);
+            let x = ((i64::from(filled.width) - i64::from(output.width)) / 2).max(0);
+            let y = ((i64::from(filled.height) - i64::from(output.height)) / 2).max(0);
+            (
+                vec![
+                    format!("scale={}:{}", filled.width, filled.height),
+                    format!("crop={}:{}:{x}:{y}", output.width, output.height),
+                ],
+                output,
+            )
+        }
+    }
+}
+
+fn fit_dimensions(source: LayerDimensions, output: LayerDimensions) -> LayerDimensions {
+    if u64::from(output.width) * u64::from(source.height)
+        <= u64::from(output.height) * u64::from(source.width)
+    {
+        LayerDimensions {
+            width: output.width,
+            height: proportional_dimension(source.height, output.width, source.width),
+        }
+    } else {
+        LayerDimensions {
+            width: proportional_dimension(source.width, output.height, source.height),
+            height: output.height,
+        }
+    }
+}
+
+fn fill_dimensions(source: LayerDimensions, output: LayerDimensions) -> LayerDimensions {
+    if u64::from(output.width) * u64::from(source.height)
+        >= u64::from(output.height) * u64::from(source.width)
+    {
+        LayerDimensions {
+            width: output.width,
+            height: proportional_dimension(source.height, output.width, source.width),
+        }
+    } else {
+        LayerDimensions {
+            width: proportional_dimension(source.width, output.height, source.height),
+            height: output.height,
+        }
+    }
+}
+
+fn proportional_dimension(source_span: u32, target_span: u32, reference_span: u32) -> u32 {
+    round_div_u64(
+        u64::from(source_span) * u64::from(target_span),
+        u64::from(reference_span.max(1)),
+    )
+    .max(1)
+    .min(u64::from(u32::MAX)) as u32
+}
+
+fn scaled_dimensions(dimensions: LayerDimensions, scale: &SegmentScale) -> LayerDimensions {
+    LayerDimensions {
+        width: millis_of(dimensions.width, scale.x_millis).max(1),
+        height: millis_of(dimensions.height, scale.y_millis).max(1),
+    }
+}
+
+fn layer_placement(
+    visual: &SegmentVisual,
+    output: LayerDimensions,
+    layer: LayerDimensions,
+) -> LayerPlacement {
+    let center_x = normalized_millis_to_canvas_pixel(output.width, visual.transform.position.x);
+    let center_y = normalized_millis_to_canvas_pixel(output.height, -visual.transform.position.y);
+    LayerPlacement {
+        x: center_x - i64::from(millis_of(layer.width, visual.transform.anchor.x_millis)),
+        y: center_y - i64::from(millis_of(layer.height, visual.transform.anchor.y_millis)),
+    }
+}
+
+fn normalized_millis_to_canvas_pixel(span: u32, value_millis: i32) -> i64 {
+    (i64::from(span) * i64::from(1_000 + value_millis)) / 2_000
+}
+
+fn millis_of(span: u32, millis: u32) -> u32 {
+    round_div_u64(u64::from(span) * u64::from(millis), 1_000).min(u64::from(u32::MAX)) as u32
+}
+
+fn round_div_u64(numerator: u64, denominator: u64) -> u64 {
+    if denominator == 0 {
+        return 0;
+    }
+    (numerator + denominator / 2) / denominator
+}
+
+fn millis_decimal(millis: u32) -> String {
+    format!("{}.{:03}", millis / 1_000, millis % 1_000)
+}
+
+fn segment_background_color_arg(background: &SegmentBackgroundFilling) -> Option<String> {
+    match background {
+        SegmentBackgroundFilling::Black => Some("black".to_owned()),
+        SegmentBackgroundFilling::SolidColor { color } => hex_color_to_ffmpeg_arg(color),
+        SegmentBackgroundFilling::None
+        | SegmentBackgroundFilling::Blur
+        | SegmentBackgroundFilling::Image { .. } => None,
+    }
 }
 
 fn output_duration(plan: &RenderGraphPlan) -> Microseconds {

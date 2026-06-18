@@ -595,6 +595,16 @@ fn visual_diagnostics_for(
         )),
     }
 
+    if visual.transform.rotation.degrees != 0 {
+        diagnostics.push(render_visual_diagnostic(
+            &track_id,
+            &segment_id,
+            &material_id,
+            "rotation",
+            RenderIntentSupport::Unsupported,
+            "segment rotation is unsupported until anchor-aware FFmpeg rotation is implemented",
+        ));
+    }
     if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
         diagnostics.push(render_visual_diagnostic(
             &track_id,
