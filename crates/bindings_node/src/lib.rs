@@ -34,6 +34,7 @@ use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
 pub mod material_service;
 pub mod preview_export_service;
+pub mod realtime_preview_service;
 pub mod runtime_capability_service;
 
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
