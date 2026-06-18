@@ -104,9 +104,63 @@
   background: #050505;
 }
 
+.preview-native-host {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  align-items: end;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(32, 199, 217, 0.42);
+  background: rgba(5, 5, 5, 0.08);
+  pointer-events: none;
+}
+
+.preview-native-host-readout,
+.preview-native-host-fallback {
+  justify-self: start;
+  max-width: calc(100% - 12px);
+  margin: 0 6px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(52, 52, 49, 0.9);
+  border-radius: 4px;
+  background: rgba(13, 13, 12, 0.82);
+  color: #d8d6cf;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.preview-native-host-readout {
+  display: flex;
+  gap: 8px;
+  padding: 3px 6px;
+}
+
+.preview-native-host-readout span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-native-host-readout span:first-child {
+  color: #20c7d9;
+  font-weight: 600;
+}
+
+.preview-native-host-fallback {
+  padding: 3px 6px;
+  color: #d6a23f;
+}
+
 .preview-selection-outline {
   position: absolute;
-  z-index: 2;
+  z-index: 5;
   box-sizing: border-box;
   min-width: 18px;
   min-height: 18px;
@@ -141,7 +195,7 @@
 
 .preview-text-overlay {
   position: absolute;
-  z-index: 3;
+  z-index: 6;
   box-sizing: border-box;
   display: block;
   max-width: 100%;

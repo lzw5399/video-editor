@@ -338,7 +338,8 @@ async function expectNativePreviewHostLayout(
   app: ElectronApplication,
   page: Page,
   width: number,
-  height: number
+  height: number,
+  options: { requireBoundsUpdate?: boolean } = {}
 ): Promise<RegionBox> {
   await setViewportSizeAndVerifyLayout(app, page, width, height);
   const host = await expectStableBox(page.locator(".preview-native-host"), `实时预览宿主 ${width}x${height}`);
@@ -349,7 +350,9 @@ async function expectNativePreviewHostLayout(
   expect(host.height, `实时预览宿主高度 ${width}x${height}`).toBeGreaterThan(80);
   expectNoOverlap(host, timeline, "实时预览宿主", "时间线");
   expectNoOverlap(host, inspector, "实时预览宿主", "属性检查器");
-  await latestRealtimePreviewBounds(app);
+  if (options.requireBoundsUpdate !== false) {
+    await latestRealtimePreviewBounds(app);
+  }
   return host;
 }
 
@@ -1021,7 +1024,7 @@ test("实时预览 native preview fallback displays main-provided attach diagnos
   });
 
   try {
-    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expectNativePreviewHostLayout(app, page, 1280, 800, { requireBoundsUpdate: false });
     await expect(page.getByLabel("实时预览状态")).toContainText("实时预览降级显示");
     await expect(page.getByLabel("实时预览降级")).toContainText("实时预览降级");
     await expect(page.getByLabel("实时预览降级")).not.toContainText("HWND");

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig } from "../../generated/Draft";
@@ -49,7 +49,61 @@ type MonitorControl = {
   symbol: string;
 };
 
+type RealtimePreviewHostRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactorMillis: number;
+};
+
+type RealtimePreviewHostTelemetry = {
+  firstFrameLatencyMs: number | null;
+  seekLatencyMs: number | null;
+  queueLatencyMs: number;
+  renderDurationMs: number;
+  presentedFrameCount: number;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  staleRejectedCount: number;
+  canceledRequestCount: number;
+  fallbackCount: number;
+  cacheHitCount: number;
+  targetTimeMicroseconds: number;
+  playbackGeneration: number;
+};
+
+type RealtimePreviewHostState = {
+  ok: boolean;
+  hostAttached: boolean;
+  fallbackActive: boolean;
+  statusLabel: string;
+  fallbackLabel: string | null;
+  playbackGeneration: number | null;
+  telemetry: RealtimePreviewHostTelemetry | null;
+};
+
+type RealtimePreviewHostApi = {
+  updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
+  getTelemetry: () => Promise<RealtimePreviewHostState>;
+};
+
+declare global {
+  interface Window {
+    videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
+  }
+}
+
 const MICROSECONDS_PER_SECOND = 1_000_000;
+const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
+  ok: false,
+  hostAttached: false,
+  fallbackActive: false,
+  statusLabel: "实时预览等待接入",
+  fallbackLabel: null,
+  playbackGeneration: null,
+  telemetry: null
+};
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
   { label: "播放", symbol: "▶" },
@@ -82,6 +136,9 @@ export function PreviewMonitor({
   onRefreshExportStatus,
   onCancelExport
 }: PreviewMonitorProps): React.ReactElement {
+  const nativeHostRef = useRef<HTMLDivElement>(null);
+  const lastSentHostRectRef = useRef<string | null>(null);
+  const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const frameStepUs = frameDurationUs(canvasConfig);
   const canvasReadout = formatCanvasReadout(canvasConfig);
@@ -101,6 +158,88 @@ export function PreviewMonitor({
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
     preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
+
+  useEffect(() => {
+    const hostElement = nativeHostRef.current;
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (hostElement === null || bridge === undefined) {
+      return;
+    }
+
+    let cancelled = false;
+    let animationFrame: number | null = null;
+
+    const publishBounds = () => {
+      animationFrame = null;
+      const box = hostElement.getBoundingClientRect();
+      const rect = {
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+        scaleFactorMillis: Math.round(window.devicePixelRatio * 1000)
+      };
+      if (rect.width <= 0 || rect.height <= 0 || rect.scaleFactorMillis <= 0) {
+        return;
+      }
+
+      const rectKey = `${rect.x}:${rect.y}:${rect.width}:${rect.height}:${rect.scaleFactorMillis}`;
+      if (lastSentHostRectRef.current === rectKey) {
+        void bridge.getTelemetry().then((state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+          }
+        });
+        return;
+      }
+      lastSentHostRectRef.current = rectKey;
+
+      void bridge
+        .updateHostRect(rect)
+        .then((state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+          }
+          return bridge.getTelemetry();
+        })
+        .then((state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setNativeHostState({
+              ...INITIAL_REALTIME_PREVIEW_HOST_STATE,
+              fallbackActive: true,
+              statusLabel: "实时预览降级显示",
+              fallbackLabel: "实时预览降级：宿主通信暂不可用"
+            });
+          }
+        });
+    };
+
+    const schedulePublish = () => {
+      if (animationFrame !== null) {
+        return;
+      }
+      animationFrame = window.requestAnimationFrame(publishBounds);
+    };
+
+    const observer = new ResizeObserver(schedulePublish);
+    observer.observe(hostElement);
+    window.addEventListener("resize", schedulePublish);
+    schedulePublish();
+
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      window.removeEventListener("resize", schedulePublish);
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, []);
 
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
@@ -141,6 +280,17 @@ export function PreviewMonitor({
             {selectedSegment.segment.text.content}
           </div>
         ) : null}
+        <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
+          <div className="preview-native-host-readout">
+            <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
+            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState.telemetry)}</span>
+          </div>
+          {nativeHostState.fallbackLabel !== null ? (
+            <div className="preview-native-host-fallback" aria-label="实时预览降级">
+              {nativeHostState.fallbackLabel}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="preview-transport" aria-label="预览控制">
@@ -302,6 +452,22 @@ function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
   const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
   const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
   return Math.max(1, Math.round((denominator * MICROSECONDS_PER_SECOND) / numerator));
+}
+
+function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): string {
+  if (state.fallbackActive) {
+    return state.statusLabel;
+  }
+  return state.hostAttached ? "实时预览已接入" : "实时预览等待接入";
+}
+
+function formatRealtimePreviewTelemetry(telemetry: RealtimePreviewHostTelemetry | null): string {
+  if (telemetry === null || telemetry.presentedFrameCount === 0) {
+    return "等待首帧";
+  }
+
+  const firstFrame = telemetry.firstFrameLatencyMs === null ? "首帧 -" : `首帧 ${telemetry.firstFrameLatencyMs} ms`;
+  return `${firstFrame} · 已呈现 ${telemetry.presentedFrameCount} 帧 · 丢帧 ${telemetry.droppedFrameCount}`;
 }
 
 function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
