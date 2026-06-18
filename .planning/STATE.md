@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: active
+status: Completed 09-01; next execute 09-02 text engine/render propagation
 current_phase: 9
 current_phase_name: complete-text-and-subtitle-system
-current_plan: 0
+current_plan: 1
 total_plans_in_phase: 5
-stopped_at: Phase 09 planned; ready to execute 09-01
-last_updated: "2026-06-18T03:24:00.000Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-06-18T03:45:56.796Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 59
-  completed_plans: 54
-  percent: 92
+  completed_plans: 55
+  percent: 93
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 9
-Plan: 0/TBD
-Status: Phase 09 planned; next execute 09-01 text/subtitle schema, validation, and generated contracts
+Plan: 1/5
+Status: Completed 09-01; next execute 09-02 text engine/render propagation
 Last activity: 2026-06-18
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 54
+- Total plans completed: 55
 - Average duration: 8 min
-- Total execution time: 417 min
+- Total execution time: 429 min
 
 **By Phase:**
 
@@ -56,11 +56,11 @@ Progress: [█████████░] 92%
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
-| 09 | 0 | - | - |
+| 09 | 1 | 12 min | 12 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 76 min
+- Last 5 plans: 66 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -114,6 +114,7 @@ Progress: [█████████░] 92%
 | Phase 08 P03 | 15 min | 2 tasks | 6 files |
 | Phase 08 P04 | 18 min | 2 tasks | 9 files |
 | Phase 08 P05 | 12 min | 2 tasks | 8 files |
+| Phase 09 P01 | 12 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -217,6 +218,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Phase 5's naked-float-time guard intentionally excludes `draft_model/src/canvas.rs` because Phase 7 canvas coordinate conversion uses `f64` for spatial coordinates, not persisted timeline time. — Future guards should distinguish semantic time invariants from spatial coordinate math.
 - [Phase 07]: Command fixtures that embed drafts must include canonical `canvasConfig`. — Negative command fixtures should fail for their intended command payload shape, not for obsolete draft schema fields.
 - [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
+- [Phase 09]: Text/subtitle classification is a TextSegmentSource enum on Segment.text, not a separate subtitle object or render path. — This keeps Phase 09 aligned with the existing Segment.text command/render path while allowing subtitle imports to share text semantics.
+- [Phase 09]: Proprietary text bubble and 花字 references are represented as unsupported external refs with camelCase externalRef fields. — This records adapter-facing capability references without making proprietary IDs internal render semantics.
 
 ### Pending Todos
 
@@ -245,6 +248,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T02:25:00.850Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-06-18T03:45:56.792Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
