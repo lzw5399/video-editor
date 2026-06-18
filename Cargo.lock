@@ -1495,6 +1495,7 @@ version = "0.1.0"
 dependencies = [
  "draft_model",
  "engine_core",
+ "media_runtime",
  "pollster",
  "raw-window-handle",
  "render_graph",

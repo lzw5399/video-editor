@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dependencies]
 draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }
+media_runtime = { path = "../media_runtime" }
 render_graph = { path = "../render_graph" }
 pollster = "0.4.0"
 raw-window-handle = "0.6.2"
