@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 04.1: Professional Jianying Workspace UI Refinement** - Higher-density Jianying Pro-like desktop workspace refinement (completed 2026-06-17)
 - [x] **Phase 5: Preview And Export Pipeline** - Shared render graph path for preview frames, preview cache, and MP4 export (completed 2026-06-18)
 - [x] **Phase 6: MVP Hardening And Packaging** - End-to-end verification, packaged app smoke tests, license manifest, and release readiness (completed 2026-06-17)
-- [ ] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics
+- [x] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics (completed 2026-06-18)
 - [ ] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics
 - [ ] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity
 - [ ] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters
@@ -295,7 +295,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07-07-PLAN.md - Add Phase 07 source guards and public root gates
+- [x] 07-07-PLAN.md - Add Phase 07 source guards and public root gates
 
 ### Phase 8: Segment Transform And Visual Compositing
 
@@ -402,7 +402,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
-| 7. Project Canvas Space And Coordinate System | 6/7 | In Progress|  |
+| 7. Project Canvas Space And Coordinate System | 7/7 | Complete   | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
