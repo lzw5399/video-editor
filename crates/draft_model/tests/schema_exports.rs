@@ -15,30 +15,33 @@ use draft_model::{
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, Keyframe,
     ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
-    ListMissingMaterialsResponse, MainTrackMagnet, Material, MaterialId, MaterialKind,
-    MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload, PingCommandPayload,
-    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
-    PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
-    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RedoTimelineEditCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
-    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeFeatureCapability,
-    RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor, SegmentBackgroundFilling,
-    SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentOpacity,
-    SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume,
-    SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
-    SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
-    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextBox,
-    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
-    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection,
-    Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
+    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
+    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
+    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
+    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
+    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange,
+    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
+    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
     UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
     UpdateSegmentVisualCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
 use ts_rs::{Config, TS};
+
+const TEXT_HEX_COLOR_PATTERN: &str = "^#[0-9A-Fa-f]{6}$";
 
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,11 +61,13 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     let schema_json = command_schema_json();
     assert_command_schema_rejects_zero_frame_rates(&schema_json);
     assert_command_schema_rejects_invalid_canvas_config(&schema_json);
+    assert_command_schema_rejects_invalid_text_contracts(&schema_json);
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
 
     let draft_schema_json = draft_schema_json();
     assert_draft_schema_rejects_zero_frame_rates(&draft_schema_json);
     assert_draft_schema_rejects_invalid_canvas_config(&draft_schema_json);
+    assert_draft_schema_rejects_invalid_text_contracts(&draft_schema_json);
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
@@ -1014,6 +1019,7 @@ fn command_schema_json() -> String {
     constrain_current_draft_schema_version(&mut schema_value);
     constrain_rational_frame_rate(&mut schema_value);
     constrain_canvas_config(&mut schema_value);
+    constrain_text_contracts(&mut schema_value);
     schema_value
         .as_object_mut()
         .expect("command schema should be a JSON object")
@@ -1027,6 +1033,7 @@ fn draft_schema_json() -> String {
     constrain_current_draft_schema_version_schema(&mut schema);
     constrain_rational_frame_rate_schema(&mut schema);
     constrain_canvas_config_schema(&mut schema);
+    constrain_text_contracts_schema(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
@@ -1141,6 +1148,114 @@ fn constrain_canvas_config_schema(schema: &mut Schema) {
     *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
 }
 
+fn constrain_text_contracts(schema_value: &mut serde_json::Value) {
+    let defs = schema_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated schema should contain $defs");
+
+    let text_box = defs
+        .get_mut("TextBox")
+        .expect("generated schema should contain TextBox");
+    constrain_uint_property(text_box, "widthMillis", 1, MAX_TEXT_LAYOUT_MILLIS);
+    constrain_uint_property(text_box, "heightMillis", 1, MAX_TEXT_LAYOUT_MILLIS);
+
+    let text_layout_region = defs
+        .get_mut("TextLayoutRegion")
+        .expect("generated schema should contain TextLayoutRegion");
+    constrain_uint_property(text_layout_region, "xMillis", 0, MAX_TEXT_LAYOUT_MILLIS);
+    constrain_uint_property(text_layout_region, "yMillis", 0, MAX_TEXT_LAYOUT_MILLIS);
+    constrain_uint_property(text_layout_region, "widthMillis", 1, MAX_TEXT_LAYOUT_MILLIS);
+    constrain_uint_property(
+        text_layout_region,
+        "heightMillis",
+        1,
+        MAX_TEXT_LAYOUT_MILLIS,
+    );
+
+    let text_style = defs
+        .get_mut("TextStyle")
+        .expect("generated schema should contain TextStyle");
+    constrain_uint_min_property(text_style, "fontSize", 1);
+    constrain_uint_property(
+        text_style,
+        "lineHeightMillis",
+        MIN_TEXT_LINE_HEIGHT_MILLIS,
+        MAX_TEXT_LINE_HEIGHT_MILLIS,
+    );
+    constrain_uint_property(
+        text_style,
+        "letterSpacingMillis",
+        0,
+        MAX_TEXT_LETTER_SPACING_MILLIS,
+    );
+    constrain_string_pattern_property(text_style, "color", TEXT_HEX_COLOR_PATTERN);
+
+    let text_stroke = defs
+        .get_mut("TextStroke")
+        .expect("generated schema should contain TextStroke");
+    constrain_string_pattern_property(text_stroke, "color", TEXT_HEX_COLOR_PATTERN);
+    constrain_uint_min_property(text_stroke, "width", 1);
+
+    let text_shadow = defs
+        .get_mut("TextShadow")
+        .expect("generated schema should contain TextShadow");
+    constrain_string_pattern_property(text_shadow, "color", TEXT_HEX_COLOR_PATTERN);
+
+    let text_background = defs
+        .get_mut("TextBackground")
+        .expect("generated schema should contain TextBackground");
+    constrain_string_pattern_property(text_background, "color", TEXT_HEX_COLOR_PATTERN);
+}
+
+fn constrain_text_contracts_schema(schema: &mut Schema) {
+    let mut schema_value = schema.as_value().clone();
+    constrain_text_contracts(&mut schema_value);
+    *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
+fn constrain_uint_property(
+    object_schema: &mut serde_json::Value,
+    property: &str,
+    minimum: u32,
+    maximum: u32,
+) {
+    object_schema["properties"][property]["minimum"] = json!(minimum);
+    object_schema["properties"][property]["maximum"] = json!(maximum);
+    assert_eq!(
+        object_schema["properties"][property]["minimum"],
+        json!(minimum)
+    );
+    assert_eq!(
+        object_schema["properties"][property]["maximum"],
+        json!(maximum)
+    );
+}
+
+fn constrain_uint_min_property(
+    object_schema: &mut serde_json::Value,
+    property: &str,
+    minimum: u32,
+) {
+    object_schema["properties"][property]["minimum"] = json!(minimum);
+    assert_eq!(
+        object_schema["properties"][property]["minimum"],
+        json!(minimum)
+    );
+}
+
+fn constrain_string_pattern_property(
+    object_schema: &mut serde_json::Value,
+    property: &str,
+    pattern: &str,
+) {
+    object_schema["properties"][property]["pattern"] = json!(pattern);
+    assert_eq!(
+        object_schema["properties"][property]["pattern"],
+        json!(pattern)
+    );
+}
+
 fn rational_frame_rate_schema_object(
     schema_value: &mut serde_json::Value,
 ) -> &mut serde_json::Value {
@@ -1198,6 +1313,19 @@ fn assert_draft_schema_rejects_invalid_canvas_config(schema_json: &str) {
     );
 }
 
+fn assert_draft_schema_rejects_invalid_text_contracts(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("draft schema should compile");
+
+    for (case, value) in invalid_text_contract_drafts() {
+        assert!(
+            schema.validate(&value).is_err(),
+            "draft schema should reject invalid text contract: {case}"
+        );
+    }
+}
+
 fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
     let schema_value: serde_json::Value =
         serde_json::from_str(schema_json).expect("command schema should parse");
@@ -1250,12 +1378,36 @@ fn assert_command_schema_rejects_invalid_canvas_config(schema_json: &str) {
     );
 }
 
+fn assert_command_schema_rejects_invalid_text_contracts(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("command schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
+
+    for (case, draft) in invalid_text_contract_drafts() {
+        let value = list_materials_command_with_draft(draft);
+        assert!(
+            schema.validate(&value).is_err(),
+            "command schema should reject invalid text contract: {case}"
+        );
+    }
+}
+
 fn list_materials_command_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
     json!({
         "command": "listMaterials",
         "payload": {
             "kind": "listMaterials",
             "draft": draft_value_with_frame_rate(numerator, denominator)
+        }
+    })
+}
+
+fn list_materials_command_with_draft(draft: serde_json::Value) -> serde_json::Value {
+    json!({
+        "command": "listMaterials",
+        "payload": {
+            "kind": "listMaterials",
+            "draft": draft
         }
     })
 }
@@ -1273,6 +1425,174 @@ fn list_materials_command_with_canvas_config(
             "draft": draft_value_with_canvas_config(width, height, numerator, denominator)
         }
     })
+}
+
+fn invalid_text_contract_drafts() -> Vec<(&'static str, serde_json::Value)> {
+    vec![
+        (
+            "text box width must be greater than zero",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/textBox/widthMillis",
+                json!(0),
+            ),
+        ),
+        (
+            "text box height must be <= 1000",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/textBox/heightMillis",
+                json!(1001),
+            ),
+        ),
+        (
+            "layout width must be greater than zero",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/layoutRegion/widthMillis",
+                json!(0),
+            ),
+        ),
+        (
+            "layout x must be <= 1000",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/layoutRegion/xMillis",
+                json!(1001),
+            ),
+        ),
+        (
+            "text color must be #RRGGBB",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/color",
+                json!("ffffff"),
+            ),
+        ),
+        (
+            "font size must be greater than zero",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/fontSize",
+                json!(0),
+            ),
+        ),
+        (
+            "line height must be >= 500",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/lineHeightMillis",
+                json!(499),
+            ),
+        ),
+        (
+            "line height must be <= 3000",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/lineHeightMillis",
+                json!(3001),
+            ),
+        ),
+        (
+            "letter spacing must be <= 2000",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/letterSpacingMillis",
+                json!(2001),
+            ),
+        ),
+        (
+            "stroke color must be #RRGGBB",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/stroke/color",
+                json!("red"),
+            ),
+        ),
+        (
+            "stroke width must be greater than zero",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/stroke/width",
+                json!(0),
+            ),
+        ),
+        (
+            "shadow color must be #RRGGBB",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/shadow/color",
+                json!("#fffff"),
+            ),
+        ),
+        (
+            "background color must be #RRGGBB",
+            draft_value_with_text_contract_field(
+                "/tracks/0/segments/0/text/style/background/color",
+                json!("#gggggg"),
+            ),
+        ),
+    ]
+}
+
+fn draft_value_with_text_contract_field(
+    pointer: &str,
+    replacement: serde_json::Value,
+) -> serde_json::Value {
+    let mut value = draft_value_with_text_contract();
+    *value
+        .pointer_mut(pointer)
+        .unwrap_or_else(|| panic!("text contract pointer should exist: {pointer}")) = replacement;
+    value
+}
+
+fn draft_value_with_text_contract() -> serde_json::Value {
+    let mut draft = Draft::new("draft-schema-text-contract", "Schema text contract");
+    draft.materials.push(Material::new(
+        "text-material",
+        MaterialKind::Text,
+        "text://title",
+        "Title",
+    ));
+
+    let mut segment = Segment::new(
+        "text-a",
+        "text-material",
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    segment.text = Some(TextSegment {
+        content: "标题".to_owned(),
+        source: TextSegmentSource::Text,
+        style: TextStyle {
+            font: TextFont::system_default(),
+            font_size: 32,
+            color: "#ffffff".to_owned(),
+            alignment: TextAlignment::Center,
+            line_height_millis: 1_200,
+            letter_spacing_millis: 0,
+            stroke: Some(TextStroke {
+                color: "#000000".to_owned(),
+                width: 1,
+            }),
+            shadow: Some(TextShadow {
+                color: "#101010".to_owned(),
+                offset_x: 1,
+                offset_y: 1,
+                blur: 2,
+            }),
+            background: Some(TextBackground {
+                color: "#202020".to_owned(),
+            }),
+        },
+        text_box: TextBox {
+            width_millis: 800,
+            height_millis: 200,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 100,
+            width_millis: 800,
+            height_millis: 800,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: None,
+        effect: None,
+    });
+
+    let mut track = Track::new("text-track", TrackKind::Text, "文字");
+    track.segments.push(segment);
+    draft.tracks.push(track);
+
+    serde_json::to_value(draft).expect("text contract draft should serialize")
 }
 
 fn draft_value_with_canvas_config(

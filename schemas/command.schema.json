@@ -3078,6 +3078,7 @@
       "additionalProperties": false,
       "properties": {
         "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
           "type": "string"
         }
       },
@@ -3091,12 +3092,14 @@
       "properties": {
         "heightMillis": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 1000,
+          "minimum": 1,
           "type": "integer"
         },
         "widthMillis": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 1000,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -3181,21 +3184,25 @@
       "properties": {
         "heightMillis": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 1000,
+          "minimum": 1,
           "type": "integer"
         },
         "widthMillis": {
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 1000,
+          "minimum": 1,
           "type": "integer"
         },
         "xMillis": {
           "format": "uint32",
+          "maximum": 1000,
           "minimum": 0,
           "type": "integer"
         },
         "yMillis": {
           "format": "uint32",
+          "maximum": 1000,
           "minimum": 0,
           "type": "integer"
         }
@@ -3284,6 +3291,7 @@
           "type": "integer"
         },
         "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
           "type": "string"
         },
         "offsetX": {
@@ -3307,11 +3315,12 @@
       "additionalProperties": false,
       "properties": {
         "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
           "type": "string"
         },
         "width": {
           "format": "uint32",
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -3338,6 +3347,7 @@
           ]
         },
         "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
           "type": "string"
         },
         "font": {
@@ -3348,19 +3358,21 @@
         },
         "fontSize": {
           "format": "uint32",
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         },
         "letterSpacingMillis": {
           "default": 0,
           "format": "uint32",
+          "maximum": 2000,
           "minimum": 0,
           "type": "integer"
         },
         "lineHeightMillis": {
           "default": 1200,
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 3000,
+          "minimum": 500,
           "type": "integer"
         },
         "shadow": {

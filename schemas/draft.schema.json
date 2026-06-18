@@ -921,7 +921,8 @@
       "type": "object",
       "properties": {
         "color": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
         }
       },
       "additionalProperties": false,
@@ -935,12 +936,14 @@
         "heightMillis": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "maximum": 1000,
+          "minimum": 1
         },
         "widthMillis": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "maximum": 1000,
+          "minimum": 1
         }
       },
       "additionalProperties": false,
@@ -1025,21 +1028,25 @@
         "heightMillis": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "maximum": 1000,
+          "minimum": 1
         },
         "widthMillis": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "maximum": 1000,
+          "minimum": 1
         },
         "xMillis": {
           "type": "integer",
           "format": "uint32",
+          "maximum": 1000,
           "minimum": 0
         },
         "yMillis": {
           "type": "integer",
           "format": "uint32",
+          "maximum": 1000,
           "minimum": 0
         }
       },
@@ -1127,7 +1134,8 @@
           "minimum": 0
         },
         "color": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
         },
         "offsetX": {
           "type": "integer",
@@ -1150,12 +1158,13 @@
       "type": "object",
       "properties": {
         "color": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
         },
         "width": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 1
         }
       },
       "additionalProperties": false,
@@ -1181,7 +1190,8 @@
           ]
         },
         "color": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
         },
         "font": {
           "$ref": "#/$defs/TextFont",
@@ -1192,19 +1202,21 @@
         "fontSize": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 1
         },
         "letterSpacingMillis": {
           "type": "integer",
           "format": "uint32",
           "default": 0,
+          "maximum": 2000,
           "minimum": 0
         },
         "lineHeightMillis": {
           "type": "integer",
           "format": "uint32",
           "default": 1200,
-          "minimum": 0
+          "maximum": 3000,
+          "minimum": 500
         },
         "shadow": {
           "anyOf": [
