@@ -37,6 +37,7 @@ test:
   pnpm run test:phase6
   pnpm run test:phase7
   pnpm run test:phase8
+  pnpm run test:phase9
   pnpm run test:contracts
 
 test-phase6-packaging:
