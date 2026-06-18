@@ -4,8 +4,9 @@ use std::collections::BTreeMap;
 
 use draft_model::{
     Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment, TextShadow,
-    TextStroke, TextStyle, Track, TrackKind, Transition,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
+    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
+    TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
@@ -90,9 +91,42 @@ pub fn export_plan() -> RenderGraphPlan {
     .expect("export plan should validate")
 }
 
+pub fn export_plan_with_unsupported_text_resources() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let text = draft.tracks[3].segments[0]
+        .text
+        .as_mut()
+        .expect("compiler draft should include text");
+    text.style.font.font_ref = Some("vendor-font-ref".to_owned());
+    text.bubble = Some(TextBubbleRef::Unsupported {
+        name: "气泡".to_owned(),
+        external_ref: Some("bubble-vendor-01".to_owned()),
+    });
+    text.effect = Some(TextEffectRef::Unsupported {
+        name: "花字".to_owned(),
+        external_ref: Some("effect-vendor-01".to_owned()),
+    });
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
 fn sample_graph() -> render_graph::RenderGraph {
-    let normalized = normalize_draft(&compiler_draft(), &EngineProfile::mvp_default())
-        .expect("draft should normalize");
+    sample_graph_from_draft(&compiler_draft())
+}
+
+fn sample_graph_from_draft(draft: &Draft) -> render_graph::RenderGraph {
+    let normalized =
+        normalize_draft(draft, &EngineProfile::mvp_default()).expect("draft should normalize");
     let range = resolve_render_range(
         &normalized,
         TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
@@ -148,10 +182,17 @@ pub fn compiler_draft() -> Draft {
     let mut text = segment("text-a", "text-material", 0, 500_000, 500_000);
     text.text = Some(TextSegment {
         content: "标题 {一}\n第二行".to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
+            font: TextFont {
+                family: "PingFang SC".to_owned(),
+                font_ref: None,
+            },
             font_size: 48,
             color: "#33ccff".to_owned(),
             alignment: TextAlignment::Center,
+            line_height_millis: 1_500,
+            letter_spacing_millis: 125,
             stroke: Some(TextStroke {
                 color: "#101010".to_owned(),
                 width: 2,
@@ -166,6 +207,19 @@ pub fn compiler_draft() -> Draft {
                 color: "#202020".to_owned(),
             }),
         },
+        text_box: TextBox {
+            width_millis: 600,
+            height_millis: 260,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 700,
+            width_millis: 800,
+            height_millis: 200,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: None,
+        effect: None,
     });
     text_track.segments.push(text);
 

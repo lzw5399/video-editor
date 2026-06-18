@@ -19,10 +19,13 @@ fn ass_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() {
     assert!(ass.contents.contains("PlayResX: 1920"));
     assert!(
         ass.contents
-            .contains("Style: Default,PingFang SC,48,&H00FFCC33,&H00101010,&H80202020")
+            .contains("Style: Default,PingFang SC,48,&H00FFCC33,&H00101010,&H80202020,0,0,0,0,100,100,6,0,3,2,4,2,192,192,108,1")
     );
     assert!(ass.contents.contains(
-        "Dialogue: 2,0:00:00.000,0:00:00.100,Default,text-a,96,96,54,,标题 \\\\{一\\\\}\\\\N第二行"
+        "Dialogue: 2,0:00:00.000,0:00:00.100,Default,text-a,192,192,108,,标题 \\\\{一\\\\}\\\\N第二行"
     ));
     assert!(ass.contents.contains("FontPath: /fonts/PingFang.ttc"));
+    assert!(ass.contents.contains("; TextBox: 1152x280"));
+    assert!(ass.contents.contains("; LayoutRegion: 192,756 1536x216"));
+    assert!(ass.contents.contains("; LineHeightMillis: 1500"));
 }
