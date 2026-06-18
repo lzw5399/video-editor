@@ -77,13 +77,12 @@ docs/                       架构与运行时边界文档
   `VE_FFMPEG_PATH` 和 `VE_FFPROBE_PATH`
 
 ```bash
-nvm use
-corepack enable
-pnpm start
+corepack pnpm run desktop:open
 ```
 
-`pnpm start` 会按锁文件安装依赖、构建 Electron 桌面端，然后启动编辑器。
-如果你习惯用 `just`，也可以运行 `just start`。
+`corepack pnpm run desktop:open` 会按锁文件安装依赖、构建 Electron 桌面端，
+然后启动编辑器。`pnpm start` 保留为短别名。如果你习惯用 `just`，也可以运行
+`just desktop-open`。
 
 构建：
 

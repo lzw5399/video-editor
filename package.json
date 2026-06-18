@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "pnpm run desktop",
+    "desktop:open": "pnpm run desktop",
     "desktop": "pnpm install --frozen-lockfile && pnpm --filter @video-editor/desktop build && pnpm --filter @video-editor/desktop exec electron dist/main/index.cjs",
     "dev": "pnpm --recursive --if-present dev",
     "build:rust": "cargo check --workspace --locked && cargo build --workspace --locked",

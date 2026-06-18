@@ -88,13 +88,12 @@ Prerequisites:
   runtime and render smoke tests
 
 ```bash
-nvm use
-corepack enable
-pnpm start
+corepack pnpm run desktop:open
 ```
 
-`pnpm start` installs locked dependencies when needed, builds the Electron
-desktop app, and launches the editor. If you prefer `just`, use `just start`.
+`corepack pnpm run desktop:open` installs locked dependencies when needed,
+builds the Electron desktop app, and launches the editor. `pnpm start` is kept
+as a short alias. If you prefer `just`, use `just desktop-open`.
 
 Build:
 

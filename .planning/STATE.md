@@ -269,6 +269,7 @@ None yet.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-18 | 260618-nr3-add-a-clear-one-command-desktop-startup- | Added `pnpm run desktop:open` and `just desktop-open` as clearer one-command desktop launch entries, and updated README quick-start instructions. |
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
 | 2026-06-18 | 260618-jwf-electron | Added `pnpm run desktop` and `just desktop` one-command launch entries for the Electron desktop editor. |
 | 2026-06-18 | 260618-l2w-add-one-command-desktop-startup-entrypoi | Added `pnpm start` and `just start` aliases and updated README quick-start instructions for opening the Electron desktop editor. |
