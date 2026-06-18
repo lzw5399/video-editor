@@ -5,17 +5,17 @@ milestone_name: milestone
 status: completed
 current_phase: 12
 current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 1
-total_plans_in_phase: 6
+current_plan: 2
+total_plans_in_phase: 9
 stopped_at: None
-last_updated: "2026-06-18T18:06:29.849Z"
-last_activity: "2026-06-18 - Completed Phase 11 Plan 07: source guards, runtime boundary docs, and final realtime preview closeout gates."
+last_updated: "2026-06-18T18:54:58.923Z"
+last_activity: "2026-06-18 - Completed Phase 12 Plan 01: shared media IO contracts and frame pool leases."
 progress:
   total_phases: 20
   completed_phases: 13
   total_plans: 98
-  completed_plans: 81
-  percent: 83
+  completed_plans: 82
+  percent: 84
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 12
-Plan: 0/6 complete; next plan 12-01
-Status: Phase 11 complete; ready for Phase 12 media IO and hardware decode work.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 07: source guards, runtime boundary docs, and final realtime preview closeout gates.
+Plan: 1/9 complete; next plan 12-02
+Status: Phase 12 in progress; shared media IO contracts and frame pool lease primitives are complete.
+Last activity: 2026-06-18 - Completed Phase 12 Plan 01: shared media IO contracts and frame pool leases.
 
-Progress: [████████░░] 83%
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 81
+- Total plans completed: 82
 - Average duration: 9 min
-- Total execution time: 661 min
+- Total execution time: 701 min
 
 **By Phase:**
 
@@ -59,6 +59,7 @@ Progress: [████████░░] 83%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
+| 12 | 1 | 40 min | 40 min |
 
 **Recent Trend:**
 
@@ -137,6 +138,7 @@ Progress: [████████░░] 83%
 | Phase 11 P05B | 8 min | 2 tasks | 8 files |
 | Phase 11 P06 | 5min | 1 tasks | 10 files |
 | Phase 11 P07 | 12 min | 2 tasks | 5 files |
+| Phase 12 P01 | 40 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -155,6 +157,10 @@ Progress: [████████░░] 83%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12]: Plan 01 starts media IO with pure `media_runtime` contracts, not platform API imports, FFmpeg command construction, preview scheduling, render graph dependencies, or UI-facing native pointers. — This gives platform runtimes and FFmpeg fallback a shared boundary without moving decode ownership into the renderer.
+- [Phase 12]: Decoder traits return explicit decoded frame contracts. — Callers receive Rust-owned frame metadata and release handles instead of treating decode as an implicit side effect.
+- [Phase 12]: Texture interop uses opaque IDs plus owner session, generation, backend, device identity, dimensions, pixel format, and color metadata. — Native pointers, GPU objects, command encoders, and raw frame bytes remain outside binding-facing contracts.
+- [Phase 12]: Frame-pool close reports unreleased frame and texture leases as diagnostics. — Future platform implementations can detect lifetime leaks before native resources are dropped.
 - [Phase 11]: Plan 01 keeps realtime preview work at the Rust contract/mock-runtime layer; GPU, FFmpeg fallback execution, audio, scheduler, and platform decode remain deferred to later plans. — This establishes the shared runtime API without prematurely implementing later Phase 11/12/15/16 scope.
 - [Phase 11]: Preview frame presentation is generation-gated. — Stale request generations and canceled request tokens return non-presented results with telemetry and diagnostics instead of overwriting the current preview.
 - [Phase 11]: Plan 02 prepares realtime preview render graph intent through `engine_core` and `render_graph`, then classifies supported/degraded/unsupported capability outcomes before backend execution. — This keeps preview semantics Rust-owned and renderer-neutral while exposing serializable parity diagnostics against export graph intent.
