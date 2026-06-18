@@ -460,13 +460,13 @@ Plans:
   5. Realtime preview and export continue to share engine/render graph semantics, with parity tests and diagnostics for known divergences.
   6. Preview runtime reports measurable first-frame, seek, frame pacing, stale-generation rejection, cancellation, and fallback telemetry.
 
-**Plans:** 2/10 plans executed
+**Plans:** 3/10 plans executed
 
 Plans:
 
 - [x] 11-01 - Realtime preview runtime crate shell, `TimelineClock`, `PlaybackGeneration`, session/request/result/telemetry contracts
 - [x] 11-02 - Render graph preparation, capability classifier, and preview/export parity diagnostics
-- [ ] 11-03 - Frame provider contracts and H.264 software video frame cache
+- [x] 11-03 - Frame provider contracts and H.264 software video frame cache
 - [ ] 11-03B - `wgpu` device/offscreen compositor and supported canvas/image/video textured quad subset
 - [ ] 11-04 - Rust native surface contracts and thin Node-API realtime preview bindings
 - [ ] 11-04B - Electron main/preload/renderer native preview host bridge and rect smoke tests
@@ -645,7 +645,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
-| 11. Realtime Preview Runtime And GPU Render Backend | 2/10 | In Progress | - |
+| 11. Realtime Preview Runtime And GPU Render Backend | 3/10 | In Progress|  |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | TBD | Not planned | - |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |

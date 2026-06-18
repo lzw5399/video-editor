@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-02-PLAN.md; Phase 11 Plan 03 remains next
+status: Completed 11-03-PLAN.md; Phase 11 Plan 03B remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 3
+current_plan: 4
 total_plans_in_phase: 10
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-06-18T16:08:50Z"
-last_activity: 2026-06-18 - Completed Phase 11 Plan 02: realtime graph preparation, capability classification, and parity diagnostics.
+stopped_at: Completed 11-03-PLAN.md
+last_updated: "2026-06-18T16:25:05.316Z"
+last_activity: "2026-06-18 - Completed Phase 11 Plan 03: frame provider contracts and H.264 software video frame cache."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 73
-  percent: 74
+  completed_plans: 74
+  percent: 76
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 2/10 complete; next plan 11-03
-Status: Phase 11 Plan 02 complete; ready for frame provider contracts and H.264 software video frame cache.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 02: realtime graph preparation, capability classification, and parity diagnostics.
+Plan: 3/10 complete; next plan 11-03B
+Status: Phase 11 Plan 03 complete; ready for `wgpu` device/offscreen compositor work.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 03: frame provider contracts and H.264 software video frame cache.
 
-Progress: [███████░░░] 74%
+Progress: [████████░░] 76%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 69
+- Total plans completed: 70
 - Average duration: 9 min
-- Total execution time: 595 min
+- Total execution time: 610 min
 
 **By Phase:**
 
@@ -58,11 +58,11 @@ Progress: [███████░░░] 74%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
-| 11 | 2 | 77 min | 39 min |
+| 11 | 3 | 92 min | 31 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 69 min
+- Last 5 plans: 84 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -129,6 +129,7 @@ Progress: [███████░░░] 74%
 | Phase 10.1 P03 | 13 min | 2 tasks | 5 files |
 | Phase 11 P01 | 9 min | 2 tasks | 13 files |
 | Phase 11 P02 | 68 min | 2 tasks | 7 files |
+| Phase 11 P03 | 15 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,7 @@ Recent decisions affecting current work:
 - [Phase 11]: Plan 01 keeps realtime preview work at the Rust contract/mock-runtime layer; GPU, FFmpeg fallback execution, audio, scheduler, and platform decode remain deferred to later plans. — This establishes the shared runtime API without prematurely implementing later Phase 11/12/15/16 scope.
 - [Phase 11]: Preview frame presentation is generation-gated. — Stale request generations and canceled request tokens return non-presented results with telemetry and diagnostics instead of overwriting the current preview.
 - [Phase 11]: Plan 02 prepares realtime preview render graph intent through `engine_core` and `render_graph`, then classifies supported/degraded/unsupported capability outcomes before backend execution. — This keeps preview semantics Rust-owned and renderer-neutral while exposing serializable parity diagnostics against export graph intent.
+- [Phase 11]: Plan 03 keeps frame providers cache-only: CPU/static frames are validated contracts, generated H.264 frames are preloaded into `DecodedVideoFrameCache`, and `frame_for` maps integer microseconds to cached frame indices without per-request FFmpeg/process work. — This closes the supported video frame input prerequisite while preserving Phase 12 texture interop as an opaque descriptor boundary.
 - [Phase 10.1]: Playhead seek side effects are centralized in App.tsx, while preview and timeline controls only report target times. — This keeps seek-driven preview frame requests consistent across time input, frame stepping, ruler clicks, and playhead drag without moving draft semantics into the renderer.
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
@@ -298,6 +300,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T16:08:50Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-06-18T16:25:05.311Z
+Stopped at: Completed 11-03-PLAN.md
 Resume file: None

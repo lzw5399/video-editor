@@ -291,7 +291,7 @@
 | MVPEDIT-09 | Phase 10.1 | Complete |
 | RTPREV-01 | Phase 11 | Complete |
 | RTPREV-02 | Phase 11 | Complete |
-| RTPREV-03 | Phase 11 | Planned |
+| RTPREV-03 | Phase 11 | Complete |
 | RTPREV-04 | Phase 11 | Complete |
 | RTPREV-05 | Phase 11 | Complete |
 | MEDIAIO-01 | Phase 12 | Planned |
