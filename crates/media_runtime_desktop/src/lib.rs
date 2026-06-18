@@ -22,7 +22,8 @@ pub use ffmpeg_fallback::{
 };
 pub use platform::{
     MacosMediaReader, MacosMediaSession, MacosTextureInteropPolicy, MacosVideoDecoder,
-    select_macos_texture_interop_fallback,
+    WindowsMediaReader, WindowsMediaSession, WindowsTextureInteropPolicy, WindowsVideoDecoder,
+    select_macos_texture_interop_fallback, select_windows_texture_interop_fallback,
 };
 
 /// Desktop FFmpeg executor shell.
