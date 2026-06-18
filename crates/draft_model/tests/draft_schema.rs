@@ -5,8 +5,10 @@ use draft_model::{
     MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
     SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
     SegmentMask, SegmentOpacity, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
-    Track, TrackKind, Transition, add_material, mark_material_available, mark_material_missing,
-    mark_material_probe_failed, migrate_draft_json, upsert_material, validate_draft,
+    TextAlignment, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind, Transition, add_material,
+    mark_material_available, mark_material_missing, mark_material_probe_failed, migrate_draft_json,
+    upsert_material, validate_draft,
 };
 use serde_json::json;
 
@@ -256,6 +258,126 @@ fn segment_visual_background_filling_references_image_materials() {
 }
 
 #[test]
+fn text_segment_deserializes_existing_text_with_phase9_defaults() {
+    let text: TextSegment = serde_json::from_value(json!({
+        "content": "旧文字片段",
+        "style": {
+            "fontSize": 36,
+            "color": "#ffffff",
+            "alignment": "center"
+        }
+    }))
+    .expect("existing MVP text segment should deserialize");
+
+    assert_eq!(text.source, TextSegmentSource::Text);
+    assert_eq!(text.style.font, TextFont::default());
+    assert_eq!(text.style.line_height_millis, 1_200);
+    assert_eq!(text.style.letter_spacing_millis, 0);
+    assert_eq!(text.text_box, TextBox::default());
+    assert_eq!(text.layout_region, TextLayoutRegion::default());
+    assert_eq!(text.wrapping, TextWrapping::Auto);
+    assert_eq!(text.bubble, None);
+    assert_eq!(text.effect, None);
+}
+
+#[test]
+fn text_segment_validates_complete_subtitle_semantics() {
+    let mut draft = valid_text_draft();
+    draft.tracks[0].segments[0].text = Some(TextSegment {
+        content: "完整字幕".to_owned(),
+        source: TextSegmentSource::Subtitle,
+        style: TextStyle {
+            font: TextFont {
+                family: "PingFang SC".to_owned(),
+                font_ref: Some("font://system/pingfang-sc".to_owned()),
+            },
+            font_size: 42,
+            color: "#ffeeaa".to_owned(),
+            alignment: TextAlignment::Center,
+            line_height_millis: 1_250,
+            letter_spacing_millis: 40,
+            stroke: None,
+            shadow: None,
+            background: None,
+        },
+        text_box: TextBox {
+            width_millis: 700,
+            height_millis: 180,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 650,
+            width_millis: 800,
+            height_millis: 250,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: Some(TextBubbleRef::Unsupported {
+            name: "jianying-bubble-a".to_owned(),
+            external_ref: Some("jy://bubble/a".to_owned()),
+        }),
+        effect: Some(TextEffectRef::Unsupported {
+            name: "jianying-huazi-a".to_owned(),
+            external_ref: Some("jy://text-effect/a".to_owned()),
+        }),
+    });
+
+    validate_draft(&draft).expect("complete text semantics should validate");
+}
+
+#[test]
+fn text_segment_validation_rejects_invalid_phase9_fields() {
+    for (label, mutate, expected_field) in [
+        (
+            "blank font family",
+            blank_font_family as fn(&mut TextSegment),
+            "font.family",
+        ),
+        ("blank font ref", blank_font_ref, "font.fontRef"),
+        ("invalid fill color", invalid_text_color, "style.color"),
+        ("zero font size", zero_font_size, "style.fontSize"),
+        (
+            "low line height",
+            low_line_height,
+            "style.lineHeightMillis",
+        ),
+        (
+            "large letter spacing",
+            large_letter_spacing,
+            "style.letterSpacingMillis",
+        ),
+        ("zero text box", zero_text_box_width, "textBox.widthMillis"),
+        (
+            "layout overflow",
+            overflowing_layout_region,
+            "layoutRegion",
+        ),
+        (
+            "blank bubble name",
+            blank_bubble_name,
+            "bubble.name",
+        ),
+        (
+            "blank effect external ref",
+            blank_effect_external_ref,
+            "effect.externalRef",
+        ),
+    ] {
+        let mut draft = valid_text_draft();
+        let text = draft.tracks[0].segments[0]
+            .text
+            .as_mut()
+            .expect("test draft should contain text");
+        mutate(text);
+
+        let error = validate_draft(&draft).expect_err(label);
+        assert!(
+            error.to_string().contains(expected_field),
+            "{label} should mention {expected_field}: {error}"
+        );
+    }
+}
+
+#[test]
 fn migration_rejects_invalid_rational_frame_rate() {
     let mut draft = valid_draft();
     draft.materials[0].metadata.frame_rate = Some(RationalFrameRate::new(30, 0));
@@ -408,6 +530,87 @@ fn valid_draft() -> Draft {
     draft.materials.push(material);
     draft.tracks.push(track);
     draft
+}
+
+fn valid_text_draft() -> Draft {
+    let material = Material::new(
+        "material-text-001",
+        MaterialKind::Text,
+        "text://material-text-001",
+        "字幕",
+    );
+
+    let mut segment = Segment::new(
+        "segment-text-001",
+        material.material_id.clone(),
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    segment.text = Some(TextSegment {
+        content: "默认文字".to_owned(),
+        source: TextSegmentSource::Text,
+        style: TextStyle::default(),
+        text_box: TextBox::default(),
+        layout_region: TextLayoutRegion::default(),
+        wrapping: TextWrapping::Auto,
+        bubble: None,
+        effect: None,
+    });
+
+    let mut track = Track::new("track-text-001", TrackKind::Text, "字幕");
+    track.segments.push(segment);
+
+    let mut draft = Draft::new("draft-text-001", "Text draft");
+    draft.materials.push(material);
+    draft.tracks.push(track);
+    draft
+}
+
+fn blank_font_family(text: &mut TextSegment) {
+    text.style.font.family = " ".to_owned();
+}
+
+fn blank_font_ref(text: &mut TextSegment) {
+    text.style.font.font_ref = Some(String::new());
+}
+
+fn invalid_text_color(text: &mut TextSegment) {
+    text.style.color = "ffffff".to_owned();
+}
+
+fn zero_font_size(text: &mut TextSegment) {
+    text.style.font_size = 0;
+}
+
+fn low_line_height(text: &mut TextSegment) {
+    text.style.line_height_millis = 499;
+}
+
+fn large_letter_spacing(text: &mut TextSegment) {
+    text.style.letter_spacing_millis = 2_001;
+}
+
+fn zero_text_box_width(text: &mut TextSegment) {
+    text.text_box.width_millis = 0;
+}
+
+fn overflowing_layout_region(text: &mut TextSegment) {
+    text.layout_region.x_millis = 300;
+    text.layout_region.width_millis = 800;
+}
+
+fn blank_bubble_name(text: &mut TextSegment) {
+    text.bubble = Some(TextBubbleRef::Unsupported {
+        name: String::new(),
+        external_ref: None,
+    });
+}
+
+fn blank_effect_external_ref(text: &mut TextSegment) {
+    text.effect = Some(TextEffectRef::Unsupported {
+        name: "花字".to_owned(),
+        external_ref: Some(" ".to_owned()),
+    });
 }
 
 fn set_zero_scale(visual: &mut SegmentVisual) {
