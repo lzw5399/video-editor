@@ -4,7 +4,10 @@ use realtime_preview_runtime::{
     RealtimePreviewSessionConfig,
 };
 
-fn test_runtime() -> (RealtimePreviewRuntime, realtime_preview_runtime::PreviewSessionId) {
+fn test_runtime() -> (
+    RealtimePreviewRuntime,
+    realtime_preview_runtime::PreviewSessionId,
+) {
     let mut runtime = RealtimePreviewRuntime::new();
     let session_id = runtime
         .create_session(RealtimePreviewSessionConfig {
@@ -48,6 +51,10 @@ fn stale_frame_rejection_current_generation_presents_and_stale_generation_is_rej
     assert_eq!(presented.telemetry.presented_frame_count, 1);
     assert_eq!(presented.telemetry.cache_hit_count, 1);
     assert_eq!(presented.telemetry.seek_latency_ms, Some(7));
+
+    runtime
+        .seek(session_id, Microseconds::new(2_000_000))
+        .expect("second seek makes first generation stale");
 
     let stale = runtime
         .request_frame(
