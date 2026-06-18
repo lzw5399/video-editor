@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod fallback;
 pub mod frame_provider;
 pub mod graph_prepare;
+pub mod gpu;
 pub mod parity;
 pub mod request;
 pub mod session;
