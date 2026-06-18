@@ -6,16 +6,16 @@ status: active
 current_phase: 9
 current_phase_name: complete-text-and-subtitle-system
 current_plan: 0
-total_plans_in_phase: 0
-stopped_at: Completed Phase 08 verification; ready to plan Phase 09
-last_updated: "2026-06-18T03:12:02.000Z"
+total_plans_in_phase: 5
+stopped_at: Phase 09 planned; ready to execute 09-01
+last_updated: "2026-06-18T03:24:00.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
-  total_plans: 54
+  total_plans: 59
   completed_plans: 54
-  percent: 100
+  percent: 92
 ---
 
 # Project State
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 9
 Plan: 0/TBD
-Status: Phase 08 complete; next plan Phase 09 complete text and subtitle system
+Status: Phase 09 planned; next execute 09-01 text/subtitle schema, validation, and generated contracts
 Last activity: 2026-06-18
 
-Progress: [██████████] 100% of planned Phase 01-08 work
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100% of planned Phase 01-08 work
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
+| 09 | 0 | - | - |
 
 **Recent Trend:**
 
@@ -136,6 +137,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Successful `updateSegmentVisual` command responses clear stale desktop preview/export display state. — The renderer invalidates derived artifacts only after Rust accepts the semantic edit.
 - [Phase 08]: Inspector visual controls keep local form state until the user applies 画面 changes through `updateSegmentVisual`. — This gives the desktop UI editable Jianying-style controls without making renderer state canonical.
 - [Phase 08]: Source guards and public root gates now enforce transform/compositing ownership boundaries. — Phase 08 is complete only because `pnpm run test:phase8`, root `pnpm run test`, `just test`, `just build`, and generated contract drift checks pass.
+- [Phase 09]: Text and subtitle share the same `Segment.text` core semantics. — Subtitle import creates text segments and uses Rust-owned parsing/timing, while `Segment.visual` remains responsible for canvas placement/transform.
+- [Phase 09]: Proprietary text bubbles, 花字, and font IDs are external capability refs, not internal render semantics. — Supported/degraded/unsupported reports are required before any adapter maps those external IDs.
 - Initialization: Product is a general Jianying-style desktop video editor, not an oral-video product.
 - Initialization: Rust core starts from day one; Electron is the first shell.
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.

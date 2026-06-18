@@ -348,7 +348,29 @@ Plans:
   3. Text inspector UI uses Chinese Jianying-style terms and does not invent a separate internal vocabulary.
   4. Unsupported text effects or proprietary text bubbles are classified as degraded/unsupported rather than silently treated as supported.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 09-01-PLAN.md - Extend text/subtitle schema, validation, and generated contracts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-02-PLAN.md - Propagate complete text semantics through engine, render graph, and ASS compiler
+
+**Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
+
+- [ ] 09-03-PLAN.md - Add Rust-owned subtitle SRT import and binding coverage
+
+**Wave 4** *(blocked on Wave 1 and Wave 3 completion)*
+
+- [ ] 09-04-PLAN.md - Add Jianying-style text/subtitle desktop controls and Playwright coverage
+
+**Wave 5** *(blocked on Wave 4 UI completion)*
+
+- [ ] 09-05-PLAN.md - Add Phase 09 source guards, public gates, and verification closure
 
 ### Phase 10: Typed Keyframe And Animation System
 
@@ -426,7 +448,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
-| 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
+| 9. Complete Text And Subtitle System | 0/5 | Planned | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |
 | 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
