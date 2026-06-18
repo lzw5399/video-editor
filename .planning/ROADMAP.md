@@ -425,13 +425,13 @@ Plans:
   8. Electron renderer remains sandboxed: no direct Node/Electron access, no direct draft mutation, no FFmpeg/ffprobe/render graph/export script construction.
   9. Playwright Electron tests cover real file import, add-to-timeline, preview image display, playhead request/update, transform, audio, text, and SRT flows at 1280x800 and 1120x720.
 
-**Plans:** 2/7 plans complete
+**Plans:** 3/7 plans complete
 
 Plans:
 
 - [x] 10.1-01-PLAN.md - Add system file chooser import and material list usability gates
 - [x] 10.1-02-PLAN.md - Display real preview PNG frames and empty canvas fallback
-- [ ] 10.1-03-PLAN.md - Make timeline playhead seek/click/drag/frame-step request preview frames
+- [x] 10.1-03-PLAN.md - Make timeline playhead seek/click/drag/frame-step request preview frames
 - [ ] 10.1-04-PLAN.md - Complete video/image transform editing and preview selection overlay
 - [ ] 10.1-05-PLAN.md - Complete text add/edit/style display and preview parity
 - [ ] 10.1-06-PLAN.md - Complete audio segment volume, track mute, and waveform placeholder usability
@@ -455,4 +455,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
-| 10.1 Usable Editor MVP Completion | 2/7 | In progress | - |
+| 10.1 Usable Editor MVP Completion | 3/7 | In progress | - |

@@ -5,17 +5,17 @@ milestone_name: milestone
 status: In Progress Phase 10.1 usable editor MVP completion
 current_phase: 10.1
 current_phase_name: usable-editor-mvp-completion
-current_plan: 3
+current_plan: 4
 total_plans_in_phase: 7
-stopped_at: Completed 10.1-02-PLAN.md
-last_updated: "2026-06-18T09:45:00.000Z"
-last_activity: 2026-06-18 - Completed Phase 10.1 Plan 01 system file chooser import and Plan 02 preview PNG image display
+stopped_at: Completed 10.1-03-PLAN.md
+last_updated: "2026-06-18T09:55:05.000Z"
+last_activity: 2026-06-18 - Completed Phase 10.1 Plan 03 playhead seek/click/drag/frame-step preview requests
 progress:
   total_phases: 12
   completed_phases: 11
   total_plans: 71
-  completed_plans: 64
-  percent: 90
+  completed_plans: 65
+  percent: 91
 ---
 
 # Project State
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 10.1
-Plan: 2/7 complete; next 10.1-03
-Status: Phase 10.1 in progress; next slice is playhead seek/click/drag/frame-step preview requests
-Last activity: 2026-06-18 - Completed Phase 10.1 Plan 01 system file chooser import and Plan 02 preview PNG image display
+Plan: 3/7 complete; next 10.1-04
+Status: Phase 10.1 in progress; next slice is video/image transform editing and preview selection overlay
+Last activity: 2026-06-18 - Completed Phase 10.1 Plan 03 playhead seek/click/drag/frame-step preview requests
 
 Progress: [█████████░] 90%
 
@@ -40,9 +40,9 @@ Progress: [█████████░] 90%
 
 **Velocity:**
 
-- Total plans completed: 64
-- Average duration: 8 min
-- Total execution time: 573 min
+- Total plans completed: 65
+- Average duration: 9 min
+- Total execution time: 586 min
 
 **By Phase:**
 
@@ -61,7 +61,7 @@ Progress: [█████████░] 90%
 
 **Recent Trend:**
 
-- Last 5 plans: 92 min
+- Last 5 plans: 89 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -125,6 +125,7 @@ Progress: [█████████░] 90%
 | Phase 10 P03 | 17 min | 2 tasks | 6 files |
 | Phase 10 P04 | 20 min | 2 tasks | 10 files |
 | Phase 10 P05 | 25 min | 2 tasks | 5 files |
+| Phase 10.1 P03 | 13 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,7 @@ Progress: [█████████░] 90%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 10.1]: Playhead seek side effects are centralized in App.tsx, while preview and timeline controls only report target times. — This keeps seek-driven preview frame requests consistent across time input, frame stepping, ruler clicks, and playhead drag without moving draft semantics into the renderer.
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
 - [Phase 10]: Keyframe property/value compatibility is enforced in Rust validation, with generated schemas exposing typed contracts and color constraints. — Domain-specific ranges stay in Rust rather than being duplicated as brittle JSON Schema combinations.
@@ -283,6 +285,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T07:49:29.869Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-06-18T09:55:05.000Z
+Stopped at: Completed 10.1-03-PLAN.md
 Resume file: None
