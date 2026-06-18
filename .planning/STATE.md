@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 10
 Plan: 0/TBD
 Status: Completed Phase 09; ready for Phase 10 typed keyframe and animation planning
-Last activity: 2026-06-18
+Last activity: 2026-06-18 - Completed quick task 260618-kgr: Separate demo workspace fixtures from real app startup while preserving tests
 
 Progress: [██████████] 98%
 
@@ -256,6 +256,7 @@ None yet.
 | 2026-06-18 | 260618-jwf-electron | Added `pnpm run desktop` and `just desktop` one-command launch entries for the Electron desktop editor. |
 | 2026-06-18 | 260618-mit-license | Switched project license metadata and README license sections to MIT, and added the standard MIT LICENSE file. |
 | 2026-06-18 | 260618-366-phase-6 | Added Phase 7-13 post-MVP core editing roadmap phases and detailed requirements for canvas, transform, compositing, text, keyframes, retiming, effects, and transitions. |
+| 2026-06-18 | 260618-kgr-separate-demo-workspace-fixtures-from-re | Split real app startup from demo workspace fixtures so production opens blank while tests explicitly opt into seeded demo materials. |
 | 2026-06-17 | 260618-2lz-left-panel-menu-fix | Removed the standalone left-side secondary menu, tightened workspace proportions, and made dark scrollbars slimmer. |
 
 ## Session Continuity
