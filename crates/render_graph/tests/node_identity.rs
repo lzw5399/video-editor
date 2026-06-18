@@ -4,8 +4,8 @@ use draft_model::{
 };
 use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
-    build_render_graph, OutputDimensions, RenderGraphDiff, RenderGraphNodeId,
-    RenderGraphNodeRole, RenderGraphSnapshot, RenderOutputProfile,
+    build_render_graph, OutputDimensions, RenderGraphDiff, RenderGraphNodeId, RenderGraphNodeRole,
+    RenderGraphSnapshot, RenderOutputProfile,
 };
 
 #[test]
@@ -177,10 +177,13 @@ fn graph_diff_compares_node_id_first_then_fingerprint_and_carries_dirty_facts() 
 
 #[test]
 fn graph_diff_classifies_added_and_removed_node_ids_deterministically() {
-    let mut previous =
-        snapshot_for(&phase13_graph_draft(), output_profile(960, 540), "runtime:software:v1");
+    let previous = snapshot_for(
+        &phase13_graph_draft(),
+        output_profile(960, 540),
+        "runtime:software:v1",
+    );
     let mut current = previous.clone();
-    let removed = previous.node_fingerprints.remove(0).node_id;
+    let removed = current.node_fingerprints.remove(0).node_id;
     let mut added_fingerprint = current.node_fingerprints[0].clone();
     added_fingerprint.node_id = RenderGraphNodeId {
         role: RenderGraphNodeRole::Output,

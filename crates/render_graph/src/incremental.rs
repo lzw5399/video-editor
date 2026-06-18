@@ -1,5 +1,9 @@
+use std::collections::{BTreeMap, BTreeSet};
+
 use draft_model::{DirtyDomain, DirtyRange, DraftId, MaterialId, SegmentId, TrackId};
 use serde::{Deserialize, Serialize};
+
+use crate::{RenderGraphNodeFingerprint, RenderGraphSnapshot};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -247,8 +251,76 @@ pub struct RenderGraphDiff {
     pub dirty_domains: Vec<DirtyDomain>,
 }
 
+impl RenderGraphDiff {
+    pub fn between(
+        previous: &RenderGraphSnapshot,
+        current: &RenderGraphSnapshot,
+        dirty_ranges: &[DirtyRange],
+        dirty_domains: &[DirtyDomain],
+    ) -> Self {
+        let previous_by_key = fingerprints_by_stable_key(previous);
+        let current_by_key = fingerprints_by_stable_key(current);
+        let keys = previous_by_key
+            .keys()
+            .chain(current_by_key.keys())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        let mut added = Vec::new();
+        let mut removed = Vec::new();
+        let mut changed = Vec::new();
+        let mut unchanged = Vec::new();
+
+        for key in keys {
+            match (previous_by_key.get(&key), current_by_key.get(&key)) {
+                (None, Some(current_fingerprint)) => {
+                    added.push(current_fingerprint.node_id.clone());
+                }
+                (Some(previous_fingerprint), None) => {
+                    removed.push(previous_fingerprint.node_id.clone());
+                }
+                (Some(previous_fingerprint), Some(current_fingerprint)) => {
+                    if previous_fingerprint == current_fingerprint {
+                        unchanged.push(current_fingerprint.node_id.clone());
+                    } else {
+                        changed.push(RenderGraphNodeChange {
+                            node_id: current_fingerprint.node_id.clone(),
+                            previous_fingerprint: (*previous_fingerprint).clone(),
+                            current_fingerprint: (*current_fingerprint).clone(),
+                            domains: dirty_domains.to_vec(),
+                        });
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+
+        Self {
+            added,
+            removed,
+            changed,
+            unchanged,
+            dirty_ranges: dirty_ranges.to_vec(),
+            dirty_domains: dirty_domains.to_vec(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderGraphNodeChange {
     pub node_id: RenderGraphNodeId,
+    pub previous_fingerprint: RenderGraphNodeFingerprint,
+    pub current_fingerprint: RenderGraphNodeFingerprint,
+    pub domains: Vec<DirtyDomain>,
+}
+
+fn fingerprints_by_stable_key(
+    snapshot: &RenderGraphSnapshot,
+) -> BTreeMap<String, &RenderGraphNodeFingerprint> {
+    snapshot
+        .node_fingerprints
+        .iter()
+        .map(|fingerprint| (fingerprint.node_id.stable_key(), fingerprint))
+        .collect()
 }
