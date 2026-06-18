@@ -3,7 +3,7 @@ mod common;
 use ffmpeg_compiler::{FfmpegSidecarKind, compile_ffmpeg_job};
 
 #[test]
-fn ass_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() {
+fn ass_text_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() {
     let job = compile_ffmpeg_job(&common::export_plan(), &common::compile_context())
         .expect("export with text should compile");
     let ass = job

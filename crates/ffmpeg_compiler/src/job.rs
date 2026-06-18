@@ -236,6 +236,7 @@ pub enum FfmpegCompileErrorKind {
     MissingOutputPath,
     UnsupportedEncoder,
     MissingTextFilterSupport,
+    UnsupportedTextResource,
     MissingTextFont,
     MissingInputMaterial,
 }

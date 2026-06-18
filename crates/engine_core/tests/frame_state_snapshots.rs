@@ -326,8 +326,11 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
 #[test]
 fn text_layout_resolves_multiple_text_and_subtitle_overlays_in_stack_order() {
     let mut draft = frame_state_draft();
-    draft.materials
-        .push(material("subtitle-material", MaterialKind::Text, "text://subtitle"));
+    draft.materials.push(material(
+        "subtitle-material",
+        MaterialKind::Text,
+        "text://subtitle",
+    ));
     let mut subtitle = segment("subtitle-a", "subtitle-material", 0, 400_000, 600_000);
     subtitle.text = Some(TextSegment {
         content: "字幕第一行\n字幕第二行".to_owned(),

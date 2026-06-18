@@ -241,8 +241,11 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
 #[test]
 fn render_graph_preserves_complete_text_and_subtitle_intent_without_ffmpeg_syntax() {
     let mut draft = render_graph_draft();
-    draft.materials
-        .push(material("subtitle-material", MaterialKind::Text, "text://subtitle"));
+    draft.materials.push(material(
+        "subtitle-material",
+        MaterialKind::Text,
+        "text://subtitle",
+    ));
     let mut subtitle = segment("subtitle-a", "subtitle-material", 0, 400_000, 600_000);
     subtitle.text = Some(TextSegment {
         content: "字幕第一行\n字幕第二行".to_owned(),

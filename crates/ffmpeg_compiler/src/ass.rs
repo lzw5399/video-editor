@@ -61,6 +61,7 @@ pub fn generate_ass_sidecars(
         .text_overlays
         .iter()
         .map(|overlay| {
+            reject_unsupported_text_resources(overlay)?;
             let font = resolve_text_font(overlay, &context.capabilities.text)?;
             let segment_id = overlay.overlay.segment_id.as_str();
             let sidecar_id = format!("{job_id}-text-{}", sanitize_id(segment_id));
@@ -138,6 +139,7 @@ fn ass_contents(
     let background = style.background.as_ref();
     let alignment = ass_alignment(overlay.overlay.alignment);
     let outline_width = stroke.map(|value| value.width).unwrap_or(0);
+    let border_style = if background.is_some() { 3 } else { 1 };
     let shadow_size = shadow
         .map(|value| {
             value
@@ -146,6 +148,10 @@ fn ass_contents(
                 .max(value.offset_y.unsigned_abs())
         })
         .unwrap_or(0);
+    let spacing = letter_spacing_pixels(
+        overlay.overlay.font_size,
+        overlay.overlay.letter_spacing_millis,
+    );
     let (event_start, event_end) =
         clipped_event_timerange(output_timerange, &overlay.overlay.target_timerange);
 
@@ -157,10 +163,13 @@ fn ass_contents(
             "ScaledBorderAndShadow: yes\n",
             "PlayResX: {play_res_x}\n",
             "PlayResY: {play_res_y}\n",
-            "; FontPath: {font_path}\n\n",
+            "; FontPath: {font_path}\n",
+            "; TextBox: {text_box_width}x{text_box_height}\n",
+            "; LayoutRegion: {layout_x},{layout_y} {layout_width}x{layout_height}\n",
+            "; LineHeightMillis: {line_height_millis}\n\n",
             "[V4+ Styles]\n",
             "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n",
-            "Style: Default,{font_family},{font_size},{primary},{outline},{back},0,0,0,0,100,100,0,0,1,{outline_width},{shadow_size},{alignment},{margin_l},{margin_r},{margin_v},1\n\n",
+            "Style: Default,{font_family},{font_size},{primary},{outline},{back},0,0,0,0,100,100,{spacing},0,{border_style},{outline_width},{shadow_size},{alignment},{margin_l},{margin_r},{margin_v},1\n\n",
             "[Events]\n",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
             "Dialogue: {layer},{start},{end},Default,{name},{margin_l},{margin_r},{margin_v},,{text}\n"
@@ -168,6 +177,13 @@ fn ass_contents(
         play_res_x = graph.canvas.width,
         play_res_y = graph.canvas.height,
         font_path = font.path,
+        text_box_width = overlay.overlay.text_box.width,
+        text_box_height = overlay.overlay.text_box.height,
+        layout_x = overlay.overlay.layout_region.x,
+        layout_y = overlay.overlay.layout_region.y,
+        layout_width = overlay.overlay.layout_region.width,
+        layout_height = overlay.overlay.layout_region.height,
+        line_height_millis = overlay.overlay.line_height_millis,
         font_family = font.family,
         font_size = overlay.overlay.font_size,
         primary = ass_color(&style.color, "ffffff", 0x00),
@@ -185,6 +201,8 @@ fn ass_contents(
             "000000",
             0x80
         ),
+        spacing = spacing,
+        border_style = border_style,
         outline_width = outline_width,
         shadow_size = shadow_size,
         alignment = alignment,
@@ -197,6 +215,40 @@ fn ass_contents(
         name = overlay.overlay.segment_id.as_str(),
         text = escape_ass_text(&overlay.overlay.content)
     )
+}
+
+fn reject_unsupported_text_resources(
+    overlay: &RenderTextOverlay,
+) -> Result<(), FfmpegCompileError> {
+    let mut unsupported = Vec::new();
+    if let Some(font_ref) = &overlay.overlay.font_ref {
+        unsupported.push(format!("fontRef {font_ref}"));
+    }
+    unsupported.extend(
+        overlay
+            .overlay
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.support == "unsupported")
+            .map(|diagnostic| diagnostic.property.clone()),
+    );
+
+    if unsupported.is_empty() {
+        return Ok(());
+    }
+
+    unsupported.sort();
+    unsupported.dedup();
+    Err(FfmpegCompileError::new(
+        FfmpegCompileErrorKind::UnsupportedTextResource,
+        format!(
+            "text segment {} contains unsupported text resources: {}",
+            overlay.overlay.segment_id.as_str(),
+            unsupported.join(", ")
+        ),
+        "Remove or replace unsupported text bubble, effect, or fontRef resources before compiling ASS sidecars.",
+    )
+    .with_material_id(overlay.material_id.clone()))
 }
 
 fn output_timerange(plan: &RenderGraphPlan) -> &TargetTimerange {
@@ -245,6 +297,10 @@ fn ass_alignment(alignment: TextAlignment) -> u8 {
         TextAlignment::Center => 2,
         TextAlignment::Right => 3,
     }
+}
+
+fn letter_spacing_pixels(font_size: u32, letter_spacing_millis: u32) -> u32 {
+    ((u64::from(font_size) * u64::from(letter_spacing_millis)) / 1_000) as u32
 }
 
 fn ass_color(value: &str, fallback: &str, alpha: u8) -> String {
