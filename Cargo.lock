@@ -76,6 +76,7 @@ dependencies = [
  "napi-derive",
  "preview_service",
  "project_store",
+ "realtime_preview_runtime",
  "render_graph",
  "serde",
  "serde_json",

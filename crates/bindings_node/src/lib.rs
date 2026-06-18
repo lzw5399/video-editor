@@ -19,6 +19,7 @@ use napi::bindgen_prelude::Result;
 use napi_derive::napi;
 use project_store::{ProjectStoreError, StdPlatformFileSystem};
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use crate::material_service::{
     ImportMaterialRequest, MaterialServiceError, MissingMaterialDiagnostic,
@@ -29,6 +30,11 @@ use crate::preview_export_service::{
     ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
     invalidate_preview_cache_command, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
+};
+use crate::realtime_preview_service::{
+    RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
+    RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
+    RealtimePreviewSurfaceBoundsBindingRequest,
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
@@ -181,6 +187,74 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             timeline_command(envelope.command, envelope.payload)
         }
     }
+}
+
+#[napi(js_name = "createRealtimePreviewSession")]
+pub fn create_realtime_preview_session(config: serde_json::Value) -> Result<serde_json::Value> {
+    let config = parse_realtime_preview_payload::<RealtimePreviewSessionBindingConfig>(config)?;
+    with_realtime_preview_registry(|registry| registry.create_session(config))
+}
+
+#[napi(js_name = "closeRealtimePreviewSession")]
+pub fn close_realtime_preview_session(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.close_session(&request.session_id))
+}
+
+#[napi(js_name = "attachRealtimePreviewSurface")]
+pub fn attach_realtime_preview_surface(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSurfaceRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.attach_surface(&request.session_id, request.surface)
+    })
+}
+
+#[napi(js_name = "updateRealtimePreviewSurfaceBounds")]
+pub fn update_realtime_preview_surface_bounds(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSurfaceBoundsRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.update_surface_bounds(&request.session_id, request.bounds)
+    })
+}
+
+#[napi(js_name = "detachRealtimePreviewSurface")]
+pub fn detach_realtime_preview_surface(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.detach_surface(&request.session_id))
+}
+
+#[napi(js_name = "updateRealtimePreviewDraftSnapshot")]
+pub fn update_realtime_preview_draft_snapshot(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewDraftSnapshotRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.update_draft_snapshot(&request.session_id, request.draft)
+    })
+}
+
+#[napi(js_name = "seekRealtimePreview")]
+pub fn seek_realtime_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSeekRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.seek(&request.session_id, request.target_time_microseconds)
+    })
+}
+
+#[napi(js_name = "requestRealtimePreviewFrame")]
+pub fn request_realtime_preview_frame(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewFrameRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.request_frame(&request.session_id, request.frame)
+    })
+}
+
+#[napi(js_name = "getRealtimePreviewTelemetry")]
+pub fn get_realtime_preview_telemetry(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.telemetry(&request.session_id))
 }
 
 fn ping_envelope() -> CommandResultEnvelope<PingResponse> {
@@ -571,4 +645,72 @@ fn raw_command_name(command: &serde_json::Value) -> Option<String> {
 
 fn to_js_value<T: serde::Serialize>(value: CommandResultEnvelope<T>) -> Result<serde_json::Value> {
     serde_json::to_value(value).map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+fn global_realtime_preview_registry() -> &'static Mutex<RealtimePreviewBindingRegistry> {
+    static REGISTRY: OnceLock<Mutex<RealtimePreviewBindingRegistry>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(RealtimePreviewBindingRegistry::new()))
+}
+
+fn with_realtime_preview_registry<T: serde::Serialize>(
+    action: impl FnOnce(
+        &mut RealtimePreviewBindingRegistry,
+    )
+        -> std::result::Result<T, realtime_preview_service::RealtimePreviewBindingError>,
+) -> Result<serde_json::Value> {
+    let mut registry = global_realtime_preview_registry()
+        .lock()
+        .map_err(|_| napi::Error::from_reason("realtime preview registry lock poisoned"))?;
+    let value =
+        action(&mut registry).map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    serde_json::to_value(value).map_err(|error| napi::Error::from_reason(error.to_string()))
+}
+
+fn parse_realtime_preview_payload<T: serde::de::DeserializeOwned>(
+    payload: serde_json::Value,
+) -> Result<T> {
+    serde_json::from_value(payload).map_err(|error| {
+        napi::Error::from_reason(format!("Invalid realtime preview payload: {error}"))
+    })
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewSessionRequest {
+    session_id: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewSurfaceRequest {
+    session_id: String,
+    surface: RealtimePreviewSurfaceBindingDescriptor,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewSurfaceBoundsRequest {
+    session_id: String,
+    bounds: RealtimePreviewSurfaceBoundsBindingRequest,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewDraftSnapshotRequest {
+    session_id: String,
+    draft: draft_model::Draft,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewSeekRequest {
+    session_id: String,
+    target_time_microseconds: u64,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewFrameRequest {
+    session_id: String,
+    frame: RealtimePreviewFrameBindingRequest,
 }
