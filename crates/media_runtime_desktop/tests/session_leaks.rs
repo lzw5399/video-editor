@@ -23,7 +23,10 @@ fn session_leaks_close_reports_unreleased_cpu_frame_leases() {
     let leak = &report.leak_diagnostics[0];
     assert_eq!(leak.lease_id, frame.release);
     assert_eq!(leak.frame_handle_id, frame.handle_id);
-    assert_eq!(leak.owner_session, MediaSessionId("desktop-session-cpu".to_owned()));
+    assert_eq!(
+        leak.owner_session,
+        MediaSessionId("desktop-session-cpu".to_owned())
+    );
     assert_eq!(leak.generation, Some(11));
     assert_eq!(leak.storage_kind, FrameStorageKind::Cpu);
     assert_eq!(leak.texture_handle_id, None);
