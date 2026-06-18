@@ -2,7 +2,7 @@ use bindings_node::execute_command;
 use serde_json::{Value, json};
 
 #[test]
-fn execute_command_routes_import_subtitle_srt_success() {
+fn text_commands_execute_command_routes_import_subtitle_srt_success() {
     let envelope = execute_command(json!({
         "command": "importSubtitleSrt",
         "payload": {
@@ -59,7 +59,7 @@ fn execute_command_routes_import_subtitle_srt_success() {
 }
 
 #[test]
-fn execute_command_routes_import_subtitle_srt_malformed_failure() {
+fn text_commands_execute_command_routes_import_subtitle_srt_malformed_failure() {
     let envelope = execute_command(json!({
         "command": "importSubtitleSrt",
         "payload": {
@@ -108,19 +108,17 @@ fn execute_command_routes_import_subtitle_srt_malformed_failure() {
 
 fn draft_json() -> Value {
     json!({
+        "schemaVersion": 1,
         "draftId": "binding-subtitle-draft",
         "metadata": {
-            "schemaVersion": "0.1.0",
-            "name": "Binding Subtitle Draft",
-            "createdAt": "2026-06-18T00:00:00Z",
-            "updatedAt": "2026-06-18T00:00:00Z"
+            "name": "Binding Subtitle Draft"
         },
         "canvasConfig": {
             "width": 1920,
             "height": 1080,
             "frameRate": { "numerator": 30, "denominator": 1 },
-            "aspectRatio": { "kind": "preset", "preset": "landscape16x9" },
-            "background": { "kind": "color", "color": "#000000" }
+            "aspectRatio": { "kind": "preset", "preset": "ratio16x9" },
+            "background": { "kind": "black" }
         },
         "materials": [],
         "tracks": []

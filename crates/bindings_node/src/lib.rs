@@ -72,6 +72,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "redoTimelineEdit"
                 | "addTextSegment"
                 | "editTextSegment"
+                | "importSubtitleSrt"
                 | "addAudioSegment"
                 | "setSegmentVolume"
                 | "setTrackMute"
@@ -166,6 +167,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::RedoTimelineEdit
         | CommandName::AddTextSegment
         | CommandName::EditTextSegment
+        | CommandName::ImportSubtitleSrt
         | CommandName::AddAudioSegment
         | CommandName::SetSegmentVolume
         | CommandName::SetTrackMute

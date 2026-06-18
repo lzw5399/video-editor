@@ -13,27 +13,28 @@ use draft_model::{
     DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
     ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
-    InvalidatePreviewCacheCommandPayload, Keyframe, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
-    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
-    PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
-    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
-    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
-    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
-    SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion,
-    TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping,
-    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind, Transition,
-    TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentVisualCommandPayload, VersionCommandPayload,
+    ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, Keyframe,
+    ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
+    ListMissingMaterialsResponse, MainTrackMagnet, Material, MaterialId, MaterialKind,
+    MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload, PingCommandPayload,
+    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
+    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
+    RedoTimelineEditCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
+    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeFeatureCapability,
+    RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor, SegmentBackgroundFilling,
+    SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentOpacity,
+    SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume,
+    SelectTimelineSegmentsCommandPayload, SetSegmentVolumeCommandPayload,
+    SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange, SplitSegmentCommandPayload,
+    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextBox,
+    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection,
+    Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -65,7 +66,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -85,6 +86,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
@@ -232,7 +234,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -252,6 +254,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
@@ -399,6 +402,7 @@ fn schema_exports_include_text_command_contracts() {
         "TextAlignment",
         "AddTextSegmentCommandPayload",
         "EditTextSegmentCommandPayload",
+        "ImportSubtitleSrtCommandPayload",
     ] {
         assert!(
             schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
@@ -408,6 +412,7 @@ fn schema_exports_include_text_command_contracts() {
     for expected_contract in [
         "AddTextSegmentCommandPayload",
         "EditTextSegmentCommandPayload",
+        "ImportSubtitleSrtCommandPayload",
     ] {
         assert!(
             command_envelope_ts.contains(&format!("export type {expected_contract}")),
@@ -657,7 +662,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextSegment, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, DraftCanvasConfig, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -677,6 +682,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
+            export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
@@ -907,6 +913,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<EditTextSegmentCommandPayload>(
         &mut schema_value,
         "EditTextSegmentCommandPayload",
+    );
+    include_command_contract_schema::<ImportSubtitleSrtCommandPayload>(
+        &mut schema_value,
+        "ImportSubtitleSrtCommandPayload",
     );
     include_command_contract_schema::<AddAudioSegmentCommandPayload>(
         &mut schema_value,
@@ -1515,6 +1525,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "editTextSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "importSubtitleSrt" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "importSubtitleSrt" }
                     },
                     "required": ["kind"]
                 }

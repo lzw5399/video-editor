@@ -326,6 +326,7 @@
         "redoTimelineEdit",
         "addTextSegment",
         "editTextSegment",
+        "importSubtitleSrt",
         "addAudioSegment",
         "setSegmentVolume",
         "setTrackMute",
@@ -854,6 +855,72 @@
             "selection",
             "segmentId",
             "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 9 subtitle SRT import command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "importSubtitleSrt",
+              "type": "string"
+            },
+            "layoutRegion": {
+              "$ref": "#/$defs/TextLayoutRegion"
+            },
+            "materialIdPrefix": {
+              "type": "string"
+            },
+            "segmentIdPrefix": {
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "srtContent": {
+              "type": "string"
+            },
+            "style": {
+              "$ref": "#/$defs/TextStyle"
+            },
+            "textBox": {
+              "$ref": "#/$defs/TextBox"
+            },
+            "timeOffset": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            },
+            "trackName": {
+              "type": "string"
+            },
+            "wrapping": {
+              "$ref": "#/$defs/TextWrapping"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "trackName",
+            "srtContent",
+            "timeOffset",
+            "segmentIdPrefix",
+            "materialIdPrefix",
+            "style",
+            "textBox",
+            "layoutRegion",
+            "wrapping"
           ],
           "type": "object"
         },
@@ -1599,6 +1666,68 @@
         "jobId"
       ],
       "title": "GetExportJobStatusCommandPayload",
+      "type": "object"
+    },
+    "ImportSubtitleSrtCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 9 subtitle SRT import command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "layoutRegion": {
+          "$ref": "#/$defs/TextLayoutRegion"
+        },
+        "materialIdPrefix": {
+          "type": "string"
+        },
+        "segmentIdPrefix": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "srtContent": {
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "textBox": {
+          "$ref": "#/$defs/TextBox"
+        },
+        "timeOffset": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        },
+        "trackName": {
+          "type": "string"
+        },
+        "wrapping": {
+          "$ref": "#/$defs/TextWrapping"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "trackName",
+        "srtContent",
+        "timeOffset",
+        "segmentIdPrefix",
+        "materialIdPrefix",
+        "style",
+        "textBox",
+        "layoutRegion",
+        "wrapping"
+      ],
+      "title": "ImportSubtitleSrtCommandPayload",
       "type": "object"
     },
     "InvalidatePreviewCacheCommandPayload": {
@@ -3791,6 +3920,23 @@
           "properties": {
             "kind": {
               "const": "editTextSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "importSubtitleSrt"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "importSubtitleSrt"
             }
           },
           "required": [
