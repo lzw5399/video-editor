@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use draft_model::{
     Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
     SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
     Transition,
 };
@@ -103,7 +104,8 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                         "duration": 120000,
                         "support": "degraded",
                         "reason": "transition intent is preserved for compiler/runtime capability handling"
-                    }
+                    },
+                    "visual": default_visual_json()
                 },
                 {
                     "trackId": "overlay-track",
@@ -115,7 +117,8 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "targetTimerange": { "start": 0, "duration": 1000000 },
                     "keyframes": [],
                     "filters": [],
-                    "transition": null
+                    "transition": null,
+                    "visual": default_visual_json()
                 }
             ],
             "audioMixes": [
@@ -175,7 +178,8 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     },
                     "materialId": "text-material",
                     "filters": [],
-                    "transition": null
+                    "transition": null,
+                    "visual": default_visual_json()
                 }
             ],
             "sampledFrames": [
@@ -185,6 +189,61 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
             ]
         })
     );
+}
+
+#[test]
+fn transform_render_graph_preserves_visual_intent_without_ffmpeg_syntax() {
+    let mut draft = render_graph_draft();
+    let video = &mut draft.tracks[0].segments[0];
+    video.visual.fit_mode = SegmentFitMode::Fill;
+    video.visual.transform.position = SegmentPosition { x: 180, y: -90 };
+    video.visual.background_filling = SegmentBackgroundFilling::Blur;
+    video.visual.blend_mode = SegmentBlendMode::Unsupported {
+        name: "screen".to_owned(),
+    };
+    video.visual.mask = SegmentMask::Unsupported {
+        name: "linear".to_owned(),
+    };
+    draft.tracks[1].segments[0].visual.visible = false;
+    draft.tracks[3].segments[0].visual.transform.position = SegmentPosition { x: 24, y: 48 };
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+    assert_eq!(
+        graph.video_layers.len(),
+        1,
+        "hidden overlay should be omitted"
+    );
+    assert_eq!(graph.video_layers[0].visual.fit_mode, SegmentFitMode::Fill);
+    assert_eq!(graph.video_layers[0].visual.transform.position.x, 180);
+    assert_eq!(graph.text_overlays[0].visual.transform.position.y, 48);
+    assert_eq!(graph.visual_diagnostics.len(), 3);
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "backgroundFilling"
+            && diagnostic.support == render_graph::RenderIntentSupport::Degraded
+    }));
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "blendMode"
+            && diagnostic.support == render_graph::RenderIntentSupport::Unsupported
+    }));
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "mask"
+            && diagnostic.support == render_graph::RenderIntentSupport::Unsupported
+    }));
+
+    let snapshot = serde_json::to_string_pretty(&graph).expect("graph should serialize");
+    assert!(snapshot.contains("\"visual\""));
+    assert!(snapshot.contains("\"visualDiagnostics\""));
+    assert!(!snapshot.contains("filter_complex"));
+    assert!(!snapshot.contains("overlay="));
+    assert!(!snapshot.contains("ffmpeg"));
 }
 
 #[test]
@@ -470,4 +529,27 @@ fn segment(
         SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
         TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
     )
+}
+
+fn default_visual_json() -> serde_json::Value {
+    serde_json::json!({
+        "visible": true,
+        "transform": {
+            "position": { "x": 0, "y": 0 },
+            "scale": { "xMillis": 1000, "yMillis": 1000 },
+            "rotation": { "degrees": 0 },
+            "opacity": { "valueMillis": 1000 },
+            "crop": {
+                "leftMillis": 0,
+                "rightMillis": 0,
+                "topMillis": 0,
+                "bottomMillis": 0
+            },
+            "anchor": { "xMillis": 500, "yMillis": 500 }
+        },
+        "fitMode": "stretch",
+        "backgroundFilling": { "kind": "none" },
+        "blendMode": { "kind": "normal" },
+        "mask": { "kind": "none" }
+    })
 }

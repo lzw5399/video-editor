@@ -11,7 +11,8 @@ pub use graph::{
     RenderAudioMix, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode,
     RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph, RenderGraphError,
     RenderGraphErrorKind, RenderIntentSupport, RenderMaterial, RenderSampledFrame,
-    RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, build_render_graph,
+    RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, RenderVisualDiagnostic,
+    build_render_graph,
 };
 pub use profile::{
     ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderAudioCodec, RenderContainer,

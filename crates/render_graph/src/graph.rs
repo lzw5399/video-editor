@@ -4,7 +4,8 @@ use std::fmt;
 
 use draft_model::{
     CanvasBackground, DraftId, Filter, Keyframe, MaterialId, MaterialKind, Microseconds,
-    RationalFrameRate, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask,
+    SegmentVisual, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -24,6 +25,8 @@ pub struct RenderGraph {
     pub audio_mixes: Vec<RenderAudioMix>,
     pub text_overlays: Vec<RenderTextOverlay>,
     pub sampled_frames: Vec<RenderSampledFrame>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visual_diagnostics: Vec<RenderVisualDiagnostic>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +118,7 @@ pub struct RenderVideoLayer {
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
+    pub visual: SegmentVisual,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,6 +140,18 @@ pub struct RenderTextOverlay {
     pub material_id: MaterialId,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
+    pub visual: SegmentVisual,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderVisualDiagnostic {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub property: String,
+    pub support: RenderIntentSupport,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -240,6 +256,8 @@ pub fn build_render_graph(
     let active_visual_segments = active_visual_segments(range, &segments)?;
     let active_audio_segments = active_audio_segments(normalized, range, &segments)?;
     let active_text_segments = active_text_segments(range, &segments)?;
+    let visual_diagnostics =
+        render_visual_diagnostics(&active_visual_segments, &active_text_segments, &segments);
 
     let mut material_ids = BTreeSet::new();
     let mut video_layers = Vec::new();
@@ -313,6 +331,7 @@ pub fn build_render_graph(
                 at: frame.at,
             })
             .collect(),
+        visual_diagnostics,
     })
 }
 
@@ -493,6 +512,7 @@ fn render_video_layer(
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(&segment.filters),
         transition: segment.transition.as_ref().map(render_transition_intent),
+        visual: segment.visual.clone(),
     })
 }
 
@@ -518,6 +538,101 @@ fn render_text_overlay(
         material_id: segment.material.material_id.clone(),
         filters: render_filter_intents(&segment.filters),
         transition: segment.transition.as_ref().map(render_transition_intent),
+        visual: segment.visual.clone(),
+    }
+}
+
+fn render_visual_diagnostics(
+    active_visual_segments: &BTreeSet<(TrackId, SegmentId)>,
+    active_text_segments: &BTreeSet<(TrackId, SegmentId)>,
+    segments: &BTreeMap<(TrackId, SegmentId), (&NormalizedTrack, &NormalizedSegment)>,
+) -> Vec<RenderVisualDiagnostic> {
+    active_visual_segments
+        .iter()
+        .chain(active_text_segments.iter())
+        .filter_map(|segment_key| {
+            segments
+                .get(segment_key)
+                .map(|value| (segment_key.clone(), *value))
+        })
+        .flat_map(|((track_id, segment_id), (_track, segment))| {
+            visual_diagnostics_for(
+                track_id,
+                segment_id,
+                segment.material.material_id.clone(),
+                &segment.visual,
+            )
+        })
+        .collect()
+}
+
+fn visual_diagnostics_for(
+    track_id: TrackId,
+    segment_id: SegmentId,
+    material_id: MaterialId,
+    visual: &SegmentVisual,
+) -> Vec<RenderVisualDiagnostic> {
+    let mut diagnostics = Vec::new();
+    match &visual.background_filling {
+        SegmentBackgroundFilling::None
+        | SegmentBackgroundFilling::Black
+        | SegmentBackgroundFilling::SolidColor { .. } => {}
+        SegmentBackgroundFilling::Blur => diagnostics.push(render_visual_diagnostic(
+            &track_id,
+            &segment_id,
+            &material_id,
+            "backgroundFilling",
+            RenderIntentSupport::Degraded,
+            "segment backgroundFilling blur is preserved as degraded render intent",
+        )),
+        SegmentBackgroundFilling::Image { .. } => diagnostics.push(render_visual_diagnostic(
+            &track_id,
+            &segment_id,
+            &material_id,
+            "backgroundFilling",
+            RenderIntentSupport::Unsupported,
+            "segment backgroundFilling image is unsupported until segment background material rendering is implemented",
+        )),
+    }
+
+    if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
+        diagnostics.push(render_visual_diagnostic(
+            &track_id,
+            &segment_id,
+            &material_id,
+            "blendMode",
+            RenderIntentSupport::Unsupported,
+            format!("segment blendMode {name} is unsupported"),
+        ));
+    }
+    if let SegmentMask::Unsupported { name } = &visual.mask {
+        diagnostics.push(render_visual_diagnostic(
+            &track_id,
+            &segment_id,
+            &material_id,
+            "mask",
+            RenderIntentSupport::Unsupported,
+            format!("segment mask {name} is unsupported"),
+        ));
+    }
+    diagnostics
+}
+
+fn render_visual_diagnostic(
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    property: &str,
+    support: RenderIntentSupport,
+    reason: impl Into<String>,
+) -> RenderVisualDiagnostic {
+    RenderVisualDiagnostic {
+        track_id: track_id.clone(),
+        segment_id: segment_id.clone(),
+        material_id: material_id.clone(),
+        property: property.to_owned(),
+        support,
+        reason: reason.into(),
     }
 }
 

@@ -1,5 +1,6 @@
 use draft_model::{
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, SegmentVisual,
+    TargetTimerange, TrackId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +30,7 @@ pub struct FrameVisualLayer {
     pub stack_index: u32,
     pub source_position: Microseconds,
     pub target_timerange: TargetTimerange,
+    pub visual: SegmentVisual,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +89,9 @@ pub fn resolve_frame_state(
                     volume_level_millis: segment.volume_level_millis,
                 }),
                 draft_model::TrackKind::Video | draft_model::TrackKind::Sticker => {
+                    if !segment.visual.visible {
+                        continue;
+                    }
                     if let Some(stack_index) = track.stack_index {
                         visual_layers.push(FrameVisualLayer {
                             track_id: track.track_id.clone(),
@@ -96,10 +101,14 @@ pub fn resolve_frame_state(
                             stack_index,
                             source_position,
                             target_timerange: segment.target_timerange.clone(),
+                            visual: segment.visual.clone(),
                         });
                     }
                 }
                 draft_model::TrackKind::Text => {
+                    if !segment.visual.visible {
+                        continue;
+                    }
                     if let Some(stack_index) = track.stack_index {
                         if let Some(text) = &segment.text {
                             let text_layout =

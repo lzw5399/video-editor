@@ -4,7 +4,8 @@ use std::fmt;
 
 use draft_model::{
     CanvasBackground, Draft, DraftId, DraftValidationError, Filter, Keyframe, Material, MaterialId,
-    MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentId,
+    MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask, SegmentVisual,
     SourceTimerange, TargetTimerange, TextSegment, TrackId, TrackKind, Transition, validate_draft,
 };
 use serde::{Deserialize, Serialize};
@@ -121,6 +122,7 @@ pub struct NormalizedSegment {
     pub transition: Option<Transition>,
     pub text: Option<TextSegment>,
     pub volume_level_millis: u32,
+    pub visual: SegmentVisual,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +241,8 @@ pub enum EngineErrorKind {
     UnavailableMaterial,
     MissingTextLayoutProfile,
     InvalidTextLayoutProfile,
+    DegradedVisualIntent,
+    UnsupportedVisualIntent,
 }
 
 pub fn normalize_draft(
@@ -320,7 +324,7 @@ pub fn normalize_draft(
 
 fn normalize_segment(
     track_id: TrackId,
-    _track_kind: TrackKind,
+    track_kind: TrackKind,
     track_muted: bool,
     segment: &Segment,
     materials: &BTreeMap<MaterialId, &Material>,
@@ -401,6 +405,15 @@ fn normalize_segment(
             ),
         ));
     }
+    if is_visual_track(track_kind) {
+        collect_visual_diagnostics(
+            &track_id,
+            &segment.segment_id,
+            &material.material_id,
+            &segment.visual,
+            diagnostics,
+        );
+    }
 
     Ok(NormalizedSegment {
         segment_id: segment.segment_id.clone(),
@@ -415,7 +428,55 @@ fn normalize_segment(
         transition: segment.transition.clone(),
         text: segment.text.clone(),
         volume_level_millis: segment.volume.level_millis,
+        visual: segment.visual.clone(),
     })
+}
+
+fn collect_visual_diagnostics(
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    visual: &SegmentVisual,
+    diagnostics: &mut Vec<EngineDiagnostic>,
+) {
+    match &visual.background_filling {
+        SegmentBackgroundFilling::None
+        | SegmentBackgroundFilling::Black
+        | SegmentBackgroundFilling::SolidColor { .. } => {}
+        SegmentBackgroundFilling::Blur => diagnostics.push(EngineDiagnostic::new(
+            EngineErrorKind::DegradedVisualIntent,
+            Some(track_id.clone()),
+            Some(segment_id.clone()),
+            Some(material_id.clone()),
+            "segment backgroundFilling blur is preserved as degraded until render support is implemented",
+        )),
+        SegmentBackgroundFilling::Image { .. } => diagnostics.push(EngineDiagnostic::new(
+            EngineErrorKind::UnsupportedVisualIntent,
+            Some(track_id.clone()),
+            Some(segment_id.clone()),
+            Some(material_id.clone()),
+            "segment backgroundFilling image is unsupported until segment background material rendering is implemented",
+        )),
+    }
+
+    if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
+        diagnostics.push(EngineDiagnostic::new(
+            EngineErrorKind::UnsupportedVisualIntent,
+            Some(track_id.clone()),
+            Some(segment_id.clone()),
+            Some(material_id.clone()),
+            format!("segment blendMode {name} is unsupported"),
+        ));
+    }
+    if let SegmentMask::Unsupported { name } = &visual.mask {
+        diagnostics.push(EngineDiagnostic::new(
+            EngineErrorKind::UnsupportedVisualIntent,
+            Some(track_id.clone()),
+            Some(segment_id.clone()),
+            Some(material_id.clone()),
+            format!("segment mask {name} is unsupported"),
+        ));
+    }
 }
 
 fn checked_timerange_end(

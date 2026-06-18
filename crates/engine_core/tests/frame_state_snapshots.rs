@@ -1,6 +1,7 @@
 use draft_model::{
-    Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
+    Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
+    SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
 };
 use engine_core::{
     EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,
@@ -70,6 +71,52 @@ fn frame_state_resolves_active_visual_audio_and_text_segments_at_microsecond_pos
 }
 
 #[test]
+fn transform_frame_state_carries_visual_semantics_and_omits_hidden_segments() {
+    let mut draft = frame_state_draft();
+    let video = &mut draft.tracks[0].segments[0];
+    video.visual.fit_mode = SegmentFitMode::Fill;
+    video.visual.transform.position = SegmentPosition { x: 250, y: -125 };
+    video.visual.background_filling = SegmentBackgroundFilling::Blur;
+    video.visual.blend_mode = SegmentBlendMode::Unsupported {
+        name: "screen".to_owned(),
+    };
+    video.visual.mask = SegmentMask::Unsupported {
+        name: "linear".to_owned(),
+    };
+    draft.tracks[1].segments[0].visual.visible = false;
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    assert_eq!(normalized.diagnostics.len(), 3);
+    assert!(normalized.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == EngineErrorKind::DegradedVisualIntent
+            && diagnostic.message.contains("backgroundFilling")
+    }));
+    assert!(normalized.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == EngineErrorKind::UnsupportedVisualIntent
+            && diagnostic.message.contains("blendMode")
+    }));
+    assert!(normalized.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == EngineErrorKind::UnsupportedVisualIntent
+            && diagnostic.message.contains("mask")
+    }));
+
+    let frame = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect("frame state should resolve");
+
+    assert_eq!(
+        frame.visual_layers.len(),
+        1,
+        "hidden overlay should be omitted"
+    );
+    let layer = &frame.visual_layers[0];
+    assert_eq!(layer.segment_id.as_str(), "video-a");
+    assert_eq!(layer.visual.fit_mode, SegmentFitMode::Fill);
+    assert_eq!(layer.visual.transform.position.x, 250);
+    assert_eq!(layer.visual.transform.position.y, -125);
+}
+
+#[test]
 fn frame_index_sampling_uses_rational_frame_rate_without_floating_point_fields() {
     let ntsc = RationalFrameRate::new(30_000, 1_001);
 
@@ -111,7 +158,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "video",
                             "stackIndex": 0,
                             "sourcePosition": 100000,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         },
                         {
                             "trackId": "overlay-track",
@@ -120,7 +168,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "image",
                             "stackIndex": 1,
                             "sourcePosition": 0,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         }
                     ],
                     "audioSegments": [
@@ -145,7 +194,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "video",
                             "stackIndex": 0,
                             "sourcePosition": 133333,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         },
                         {
                             "trackId": "overlay-track",
@@ -154,7 +204,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "image",
                             "stackIndex": 1,
                             "sourcePosition": 33333,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         }
                     ],
                     "audioSegments": [
@@ -179,7 +230,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "video",
                             "stackIndex": 0,
                             "sourcePosition": 166666,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         },
                         {
                             "trackId": "overlay-track",
@@ -188,7 +240,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialKind": "image",
                             "stackIndex": 1,
                             "sourcePosition": 66666,
-                            "targetTimerange": { "start": 0, "duration": 1000000 }
+                            "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "visual": default_visual_json()
                         }
                     ],
                     "audioSegments": [
@@ -343,4 +396,27 @@ fn segment(
         SourceTimerange::new(source_start, duration),
         TargetTimerange::new(target_start, duration),
     )
+}
+
+fn default_visual_json() -> serde_json::Value {
+    serde_json::json!({
+        "visible": true,
+        "transform": {
+            "position": { "x": 0, "y": 0 },
+            "scale": { "xMillis": 1000, "yMillis": 1000 },
+            "rotation": { "degrees": 0 },
+            "opacity": { "valueMillis": 1000 },
+            "crop": {
+                "leftMillis": 0,
+                "rightMillis": 0,
+                "topMillis": 0,
+                "bottomMillis": 0
+            },
+            "anchor": { "xMillis": 500, "yMillis": 500 }
+        },
+        "fitMode": "stretch",
+        "backgroundFilling": { "kind": "none" },
+        "blendMode": { "kind": "normal" },
+        "mask": { "kind": "none" }
+    })
 }
