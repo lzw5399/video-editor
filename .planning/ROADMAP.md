@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Project Canvas Space And Coordinate System** - Draft-level aspect ratio, canvas size, frame rate, background, and normalized coordinate semantics (completed 2026-06-18)
 - [x] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics (completed 2026-06-18)
 - [x] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity (completed 2026-06-18)
-- [ ] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters
+- [x] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters (completed 2026-06-18)
 - [ ] **Phase 11: Retiming And Speed System** - Segment speed, source/target time mapping, audio follow-speed policy, and deferred reverse/curve-speed boundaries
 - [ ] **Phase 12: Filter Adjustment And Effect Semantics** - First-party filter/adjustment/effect parameter schemas plus supported/degraded/unsupported capability boundaries
 - [ ] **Phase 13: Transition Semantics And Timeline Integration** - Transition attachment, duration/type/params, overlap/trim/snapping effects, and render graph representation
@@ -407,7 +407,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 UI completion)*
 
-- [ ] 10-05-PLAN.md - Add Phase 10 source guards, public gates, and verification closure
+- [x] 10-05-PLAN.md - Add Phase 10 source guards, public gates, and verification closure
 
 ### Phase 11: Retiming And Speed System
 
@@ -471,7 +471,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
-| 10. Typed Keyframe And Animation System | 3/5 | In Progress | - |
+| 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |
 | 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
 | 13. Transition Semantics And Timeline Integration | 0/TBD | Not started | - |

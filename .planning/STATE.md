@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-current_phase: 10
-current_phase_name: typed-keyframe-and-animation-system
-current_plan: 5
-total_plans_in_phase: 5
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-06-18T08:09:54.000Z"
+status: Completed Phase 10; ready for Phase 11 retiming and speed planning
+current_phase: 11
+current_phase_name: retiming-and-speed-system
+current_plan: 0
+total_plans_in_phase: 0
+stopped_at: Completed 10-05-PLAN.md
+last_updated: "2026-06-18T08:35:00.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
-  completed_phases: 9
+  completed_phases: 11
   total_plans: 64
-  completed_plans: 63
-  percent: 98
+  completed_plans: 64
+  percent: 79
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 10 — typed-keyframe-and-animation-system
+**Current focus:** Phase 11 — retiming-and-speed-system
 
 ## Current Position
 
-Phase: 10 (typed-keyframe-and-animation-system) — EXECUTING
-Plan: 5 of 5
-Status: Completed 10-04 desktop keyframe inspector/timeline UI; ready for 10-05 Phase 10 gates and verification closure
-Last activity: 2026-06-18 - Completed Phase 10 Plan 04 command-owned desktop keyframe controls and accepted timeline markers
+Phase: 11
+Plan: 0/TBD
+Status: Completed Phase 10; ready for Phase 11 retiming and speed planning
+Last activity: 2026-06-18 - Completed Phase 10 Plan 05 source guards, public gates, and verification closure
 
-Progress: [██████████] 98%
+Progress: [████████░░] 79%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 63
+- Total plans completed: 64
 - Average duration: 8 min
-- Total execution time: 548 min
+- Total execution time: 573 min
 
 **By Phase:**
 
@@ -57,10 +57,11 @@ Progress: [██████████] 98%
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
+| 10 | 5 | 92 min | 18 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 64 min
+- Last 5 plans: 92 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -123,6 +124,7 @@ Progress: [██████████] 98%
 | Phase 10 P02 | 14 min | 2 tasks | 10 files |
 | Phase 10 P03 | 17 min | 2 tasks | 6 files |
 | Phase 10 P04 | 20 min | 2 tasks | 10 files |
+| Phase 10 P05 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -145,6 +147,8 @@ Recent decisions affecting current work:
 - [Phase 10]: render_graph preserves typed keyframe intent plus sampled animation states, while ffmpeg_compiler reports degraded/unsupported animation diagnostics instead of inventing partial continuous FFmpeg expressions. — This keeps animation semantics compiler-neutral until full animated render support is intentionally added.
 - [Phase 10]: Desktop keyframe controls route every mutation through generated `setSegmentKeyframe` and `removeSegmentKeyframe` command envelopes. — The renderer reads accepted keyframes for UI state and timeline markers, but never mutates `segment.keyframes` or evaluates animation.
 - [Phase 10]: Timeline keyframe markers are display-only diamonds inside accepted segment blocks. — Marker display updates only after Rust-shaped command responses, preserving command-owned timing and selection semantics.
+- [Phase 10]: Source guards now enforce generated keyframe contracts, required Chinese keyframe/animation UI copy, command-only tests, and renderer ownership boundaries. — The renderer may format accepted keyframe values for display but cannot mutate keyframes, evaluate easing/interpolation, or own render graph/FFmpeg/cache semantics.
+- [Phase 10]: Phase 10 completion passed `test:phase10`, root `test`, `just test`, `just build`, and generated-contract drift checks. — Phase 11 can build retiming/变速 semantics on a verified animation model and must keep source/target time mapping Rust-owned.
 - [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
 - [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.

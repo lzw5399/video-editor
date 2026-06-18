@@ -215,9 +215,9 @@
 | TEXT2-01 | Phase 9 | Complete |
 | TEXT2-02 | Phase 9 | Complete |
 | TEXT2-03 | Phase 9 | Complete |
-| ANIM-01 | Phase 10 | Planned |
-| ANIM-02 | Phase 10 | Planned |
-| ANIM-03 | Phase 10 | Planned |
+| ANIM-01 | Phase 10 | Complete |
+| ANIM-02 | Phase 10 | Complete |
+| ANIM-03 | Phase 10 | Complete |
 | SPEED-01 | Phase 11 | Planned |
 | SPEED-02 | Phase 11 | Planned |
 | SPEED-03 | Phase 11 | Planned |
@@ -243,4 +243,4 @@
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-18 after Phase 09 verification*
+*Last updated: 2026-06-18 after Phase 10 verification*
