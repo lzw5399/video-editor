@@ -251,6 +251,24 @@ pub fn request_realtime_preview_frame(request: serde_json::Value) -> Result<serd
     })
 }
 
+#[napi(js_name = "nextRealtimePreviewCancellationToken")]
+pub fn next_realtime_preview_cancellation_token(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.next_cancellation_token(&request.session_id)
+    })
+}
+
+#[napi(js_name = "cancelRealtimePreviewRequest")]
+pub fn cancel_realtime_preview_request(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewCancellationRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.cancel_request(&request.session_id, request.cancellation_token)
+    })
+}
+
 #[napi(js_name = "getRealtimePreviewTelemetry")]
 pub fn get_realtime_preview_telemetry(request: serde_json::Value) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
@@ -713,4 +731,11 @@ struct RealtimePreviewSeekRequest {
 struct RealtimePreviewFrameRequest {
     session_id: String,
     frame: RealtimePreviewFrameBindingRequest,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewCancellationRequest {
+    session_id: String,
+    cancellation_token: realtime_preview_runtime::PreviewCancellationToken,
 }

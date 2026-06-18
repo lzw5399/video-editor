@@ -11,10 +11,16 @@ import {
   formatExportPreset,
   formatExportProgress,
   formatMicroseconds,
+  formatRealtimePreviewBackendLabel,
+  formatRealtimePreviewFallbackReason,
+  summarizeRealtimePreviewDisplay,
   type SelectedSegmentView,
   type BindingStatus,
   type ExportDisplayState,
   type PreviewDisplayState,
+  type RealtimePreviewBackendUsed,
+  type RealtimePreviewDisplayModel,
+  type RealtimePreviewFallbackReason,
   type RuntimeDiagnosticsDisplayState,
   type RuntimeDiagnosticsRow,
   type RuntimeDiagnosticsTone
@@ -80,6 +86,10 @@ type RealtimePreviewHostState = {
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
+  backend: RealtimePreviewBackendUsed;
+  fallbackReason: RealtimePreviewFallbackReason | null;
+  currentRequestCanceled: boolean;
+  fallbackArtifactVisible: boolean;
   telemetry: RealtimePreviewHostTelemetry | null;
 };
 
@@ -102,6 +112,10 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   statusLabel: "实时预览等待接入",
   fallbackLabel: null,
   playbackGeneration: null,
+  backend: "none",
+  fallbackReason: null,
+  currentRequestCanceled: false,
+  fallbackArtifactVisible: false,
   telemetry: null
 };
 
@@ -283,11 +297,18 @@ export function PreviewMonitor({
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
           <div className="preview-native-host-readout">
             <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
-            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState.telemetry)}</span>
+            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState)}</span>
           </div>
           {nativeHostState.fallbackLabel !== null ? (
             <div className="preview-native-host-fallback" aria-label="实时预览降级">
               {nativeHostState.fallbackLabel}
+            </div>
+          ) : null}
+          {nativeHostState.fallbackArtifactVisible && nativeHostState.fallbackReason !== null ? (
+            <div className="preview-native-host-fallback" aria-label="实时预览备用产物">
+              {`${formatRealtimePreviewBackendLabel(nativeHostState.backend)} · ${formatRealtimePreviewFallbackReason(
+                nativeHostState.fallbackReason
+              )}`}
             </div>
           ) : null}
         </div>
@@ -461,13 +482,33 @@ function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): strin
   return state.hostAttached ? "实时预览已接入" : "实时预览等待接入";
 }
 
-function formatRealtimePreviewTelemetry(telemetry: RealtimePreviewHostTelemetry | null): string {
-  if (telemetry === null || telemetry.presentedFrameCount === 0) {
+function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState): string {
+  const { telemetry } = state;
+  if (telemetry === null) {
     return "等待首帧";
   }
 
-  const firstFrame = telemetry.firstFrameLatencyMs === null ? "首帧 -" : `首帧 ${telemetry.firstFrameLatencyMs} ms`;
-  return `${firstFrame} · 已呈现 ${telemetry.presentedFrameCount} 帧 · 丢帧 ${telemetry.droppedFrameCount}`;
+  const model: RealtimePreviewDisplayModel = {
+    backend: state.backend,
+    firstFrameLatencyMs: telemetry.firstFrameLatencyMs,
+    seekLatencyMs: telemetry.seekLatencyMs,
+    queueLatencyMs: telemetry.queueLatencyMs,
+    renderDurationMs: telemetry.renderDurationMs,
+    presentedFrameCount: telemetry.presentedFrameCount,
+    droppedFrameCount: telemetry.droppedFrameCount,
+    repeatedFrameCount: telemetry.repeatedFrameCount,
+    staleRejectedCount: telemetry.staleRejectedCount,
+    canceledRequestCount: telemetry.canceledRequestCount,
+    currentRequestCanceled: state.currentRequestCanceled,
+    fallbackReason: state.fallbackReason,
+    fallbackCount: telemetry.fallbackCount,
+    cacheHitCount: telemetry.cacheHitCount,
+    targetTimeMicroseconds: telemetry.targetTimeMicroseconds,
+    playbackGeneration: telemetry.playbackGeneration,
+    fallbackArtifactVisible: state.fallbackArtifactVisible
+  };
+
+  return summarizeRealtimePreviewDisplay(model);
 }
 
 function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {

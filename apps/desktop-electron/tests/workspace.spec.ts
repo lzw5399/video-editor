@@ -1103,7 +1103,8 @@ test("实时预览 telemetry displays Rust-reported cancellation counters", asyn
     await expectNativePreviewHostLayout(app, page, 1280, 800);
     await expect(page.getByLabel("实时预览数据")).toContainText("当前请求已取消");
     await expect(page.getByLabel("实时预览数据")).toContainText("取消 1");
-    await expect(page.getByLabel("实时预览备用产物")).toContainText("请求已取消");
+    await expect(page.getByLabel("实时预览数据")).toContainText("请求已取消");
+    await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
     await app.close();
   }

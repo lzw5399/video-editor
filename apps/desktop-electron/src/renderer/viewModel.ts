@@ -599,7 +599,7 @@ export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayMod
     `渲染 ${model.renderDurationMs} ms`
   ];
   const pacing = [
-    `呈现 ${model.presentedFrameCount}`,
+    `已呈现 ${model.presentedFrameCount} 帧`,
     `丢帧 ${model.droppedFrameCount}`,
     `重复 ${model.repeatedFrameCount}`,
     `拒绝旧帧 ${model.staleRejectedCount}`

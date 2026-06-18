@@ -176,6 +176,31 @@ impl RealtimePreviewBindingRegistry {
         })
     }
 
+    pub fn next_cancellation_token(
+        &mut self,
+        session_id: &str,
+    ) -> Result<PreviewCancellationToken, RealtimePreviewBindingError> {
+        let runtime_id = self.runtime_session_id(session_id)?;
+        self.runtime
+            .next_cancellation_token(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)
+    }
+
+    pub fn cancel_request(
+        &mut self,
+        session_id: &str,
+        cancellation_token: PreviewCancellationToken,
+    ) -> Result<RealtimePreviewCanceledBindingResponse, RealtimePreviewBindingError> {
+        let runtime_id = self.runtime_session_id(session_id)?;
+        self.runtime
+            .cancel_request(runtime_id, cancellation_token)
+            .map_err(RealtimePreviewBindingError::runtime)?;
+        Ok(RealtimePreviewCanceledBindingResponse {
+            cancellation_token,
+            canceled: true,
+        })
+    }
+
     pub fn telemetry(
         &self,
         session_id: &str,
@@ -369,6 +394,13 @@ pub struct RealtimePreviewFrameBindingResponse {
     pub fallback: Option<RealtimePreviewFallbackReason>,
     pub diagnostics: Vec<RealtimePreviewDiagnostic>,
     pub telemetry: RealtimePreviewTelemetry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewCanceledBindingResponse {
+    pub cancellation_token: PreviewCancellationToken,
+    pub canceled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

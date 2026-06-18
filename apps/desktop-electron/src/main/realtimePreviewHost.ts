@@ -2,12 +2,17 @@ import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 
 import {
   attachRealtimePreviewSurface,
+  cancelRealtimePreviewRequest,
   closeRealtimePreviewSession,
   createRealtimePreviewSession,
   detachRealtimePreviewSurface,
   getRealtimePreviewTelemetry,
+  nextRealtimePreviewCancellationToken,
   requestRealtimePreviewFrame,
   updateRealtimePreviewSurfaceBounds,
+  type RealtimePreviewBackendUsed,
+  type RealtimePreviewFallbackReason,
+  type RealtimePreviewFrameResponse,
   type RealtimePreviewSurfaceBounds,
   type RealtimePreviewSurfaceDescriptor,
   type RealtimePreviewTelemetryResponse
@@ -28,6 +33,10 @@ export type RealtimePreviewHostDisplayState = {
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
+  backend: RealtimePreviewBackendUsed;
+  fallbackReason: RealtimePreviewFallbackReason | null;
+  currentRequestCanceled: boolean;
+  fallbackArtifactVisible: boolean;
   telemetry: RealtimePreviewTelemetryResponse | null;
 };
 
@@ -88,6 +97,7 @@ export class RealtimePreviewHost {
   private attached = false;
   private fallbackLabel: string | null = null;
   private telemetry: RealtimePreviewTelemetryResponse | null = null;
+  private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private closed = false;
 
@@ -153,7 +163,7 @@ export class RealtimePreviewHost {
   getTelemetryState(): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
-      this.mockFirstFrameForTest();
+      this.mockRealtimeFrameForTest();
       this.refreshTelemetry();
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
@@ -243,29 +253,71 @@ export class RealtimePreviewHost {
     recordRealtimePreviewHostCall({ kind: "getTelemetry" });
   }
 
-  private mockFirstFrameForTest(): void {
-    if (
-      process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME !== "1" ||
-      this.sessionId === null ||
-      this.playbackGeneration === null ||
-      (this.telemetry?.presentedFrameCount ?? 0) > 0
-    ) {
+  private mockRealtimeFrameForTest(): void {
+    if (this.sessionId === null || this.playbackGeneration === null || this.lastFrame !== null) {
       return;
     }
 
-    requestRealtimePreviewFrame({
+    if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_CANCELED === "1") {
+      const cancellationToken = nextRealtimePreviewCancellationToken({ sessionId: this.sessionId });
+      cancelRealtimePreviewRequest({
+        sessionId: this.sessionId,
+        cancellationToken
+      });
+      this.lastFrame = requestRealtimePreviewFrame({
+        sessionId: this.sessionId,
+        frame: {
+          targetTimeMicroseconds: 1_200_000,
+          playbackGeneration: this.playbackGeneration,
+          queueLatencyMs: 1,
+          renderDurationMs: 3,
+          mode: "seek",
+          cancellationToken,
+          cacheHit: false
+        }
+      });
+      recordRealtimePreviewHostCall({ kind: "requestCanceledFrame" });
+      return;
+    }
+
+    if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK === "1") {
+      this.lastFrame = requestRealtimePreviewFrame({
+        sessionId: this.sessionId,
+        frame: {
+          targetTimeMicroseconds: 1_200_000,
+          playbackGeneration: this.playbackGeneration,
+          queueLatencyMs: 2,
+          renderDurationMs: 5,
+          mode: "seek",
+          fallbackReason: "ffmpegArtifactGenerated",
+          cacheHit: false
+        }
+      });
+      recordRealtimePreviewHostCall({ kind: "requestFallbackFrame" });
+      return;
+    }
+
+    if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME !== "1") {
+      return;
+    }
+
+    this.lastFrame = requestRealtimePreviewFrame({
       sessionId: this.sessionId,
       frame: {
         targetTimeMicroseconds: 0,
         playbackGeneration: this.playbackGeneration,
         queueLatencyMs: 4,
-        renderDurationMs: 9
+        renderDurationMs: 5,
+        mode: "firstFrame",
+        cacheHit: false
       }
     });
     recordRealtimePreviewHostCall({ kind: "requestFirstFrame" });
   }
 
   private state(statusLabel: string): RealtimePreviewHostDisplayState {
+    const backend = this.lastFrame?.backend ?? "none";
+    const fallbackReason = this.lastFrame?.fallback ?? null;
     return {
       ok: this.fallbackLabel === null,
       hostAttached: this.attached,
@@ -273,6 +325,10 @@ export class RealtimePreviewHost {
       statusLabel,
       fallbackLabel: this.fallbackLabel,
       playbackGeneration: this.playbackGeneration,
+      backend,
+      fallbackReason,
+      currentRequestCanceled: this.lastFrame?.canceled ?? false,
+      fallbackArtifactVisible: backend === "previewArtifact" || backend === "ffmpegArtifact",
       telemetry: this.telemetry
     };
   }

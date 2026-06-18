@@ -18,6 +18,8 @@ type NativeBinding = {
   updateRealtimePreviewSurfaceBounds: (request: RealtimePreviewSurfaceBoundsRequest) => RealtimePreviewGenerationResponse;
   detachRealtimePreviewSurface: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
   requestRealtimePreviewFrame: (request: RealtimePreviewFrameRequest) => RealtimePreviewFrameResponse;
+  nextRealtimePreviewCancellationToken: (request: RealtimePreviewSessionRequest) => number;
+  cancelRealtimePreviewRequest: (request: RealtimePreviewCancellationRequest) => RealtimePreviewCanceledResponse;
   getRealtimePreviewTelemetry: (request: RealtimePreviewSessionRequest) => RealtimePreviewTelemetryResponse;
 };
 
@@ -75,6 +77,35 @@ export type RealtimePreviewGenerationResponse = {
   playbackGeneration: number;
 };
 
+export type RealtimePreviewBackendUsed = "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
+
+export type RealtimePreviewFallbackReason =
+  | "noGpuAdapter"
+  | "surfaceUnavailable"
+  | "surfaceLost"
+  | "unsupportedGraphIntent"
+  | "frameProviderUnavailable"
+  | "textParityUnsupported"
+  | "nativeChildWindowFailed"
+  | "offscreenReadbackRequired"
+  | "previewArtifactCacheHit"
+  | "ffmpegArtifactGenerated"
+  | "canceled"
+  | "staleGeneration";
+
+export type RealtimePreviewDiagnostic = {
+  entityId?: string;
+  domain: string;
+  support: string | { degraded?: { reason: string }; unsupported?: { reason: string } };
+  reason: string;
+  fallback?: RealtimePreviewFallbackReason;
+  fallbackUsed: boolean;
+  canceled: boolean;
+  cancellationToken?: number;
+};
+
+export type RealtimePreviewRequestMode = "seek" | "scrub" | "playbackTick" | "firstFrame";
+
 export type RealtimePreviewFrameRequest = {
   sessionId: string;
   frame: {
@@ -82,6 +113,10 @@ export type RealtimePreviewFrameRequest = {
     playbackGeneration: number;
     queueLatencyMs: number;
     renderDurationMs: number;
+    mode: RealtimePreviewRequestMode;
+    cancellationToken?: number;
+    fallbackReason?: RealtimePreviewFallbackReason;
+    cacheHit: boolean;
   };
 };
 
@@ -91,7 +126,21 @@ export type RealtimePreviewFrameResponse = {
   presented: boolean;
   staleRejected: boolean;
   canceled: boolean;
-  backend: string;
+  cancellationToken?: number;
+  backend: RealtimePreviewBackendUsed;
+  fallback?: RealtimePreviewFallbackReason;
+  diagnostics: RealtimePreviewDiagnostic[];
+  telemetry: RealtimePreviewTelemetryResponse;
+};
+
+export type RealtimePreviewCancellationRequest = {
+  sessionId: string;
+  cancellationToken: number;
+};
+
+export type RealtimePreviewCanceledResponse = {
+  cancellationToken: number;
+  canceled: boolean;
 };
 
 export type RealtimePreviewTelemetryResponse = {
@@ -166,6 +215,14 @@ export function requestRealtimePreviewFrame(request: RealtimePreviewFrameRequest
   return requireLoadedBinding().requestRealtimePreviewFrame(request);
 }
 
+export function nextRealtimePreviewCancellationToken(request: RealtimePreviewSessionRequest): number {
+  return requireLoadedBinding().nextRealtimePreviewCancellationToken(request);
+}
+
+export function cancelRealtimePreviewRequest(request: RealtimePreviewCancellationRequest): RealtimePreviewCanceledResponse {
+  return requireLoadedBinding().cancelRealtimePreviewRequest(request);
+}
+
 export function getRealtimePreviewTelemetry(request: RealtimePreviewSessionRequest): RealtimePreviewTelemetryResponse {
   return requireLoadedBinding().getRealtimePreviewTelemetry(request);
 }
@@ -188,6 +245,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.updateRealtimePreviewSurfaceBounds !== "function" ||
       typeof loaded.detachRealtimePreviewSurface !== "function" ||
       typeof loaded.requestRealtimePreviewFrame !== "function" ||
+      typeof loaded.nextRealtimePreviewCancellationToken !== "function" ||
+      typeof loaded.cancelRealtimePreviewRequest !== "function" ||
       typeof loaded.getRealtimePreviewTelemetry !== "function"
     ) {
       throw new Error("Native binding does not expose the required editor and realtime preview functions");
@@ -203,6 +262,8 @@ function loadNativeBinding(): NativeBinding | null {
       updateRealtimePreviewSurfaceBounds: loaded.updateRealtimePreviewSurfaceBounds,
       detachRealtimePreviewSurface: loaded.detachRealtimePreviewSurface,
       requestRealtimePreviewFrame: loaded.requestRealtimePreviewFrame,
+      nextRealtimePreviewCancellationToken: loaded.nextRealtimePreviewCancellationToken,
+      cancelRealtimePreviewRequest: loaded.cancelRealtimePreviewRequest,
       getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry
     };
     cachedLoadError = null;
