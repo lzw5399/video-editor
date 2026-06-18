@@ -3,7 +3,10 @@ use draft_model::{
     TargetTimerange, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
-use render_graph::{RenderGraphNodeRole, build_render_graph};
+use render_graph::{
+    OutputDimensions, RenderGraphNodeRole, RenderGraphSnapshot, RenderOutputProfile,
+    build_render_graph,
+};
 
 #[test]
 fn stable_node_ids_cover_render_graph_entries_with_semantic_keys() {
@@ -54,6 +57,70 @@ fn stable_node_ids_survive_content_timing_and_material_metadata_changes() {
     assert_ne!(
         before_graph.video_layers[0].target_timerange, after_graph.video_layers[0].target_timerange,
         "timing changes should affect graph content, not the stable node ID"
+    );
+}
+
+#[test]
+fn fingerprints_change_without_changing_node_identity() {
+    let before = phase13_graph_draft();
+    let mut semantic_edit = before.clone();
+    semantic_edit.tracks[0].segments[0].visual.transform.opacity.value_millis = 750;
+    let mut input_edit = before.clone();
+    input_edit.materials[0].uri = "file://relinked-video.mp4".to_owned();
+
+    let before_snapshot = snapshot_for(&before, output_profile(960, 540), "runtime:software:v1");
+    let semantic_snapshot =
+        snapshot_for(&semantic_edit, output_profile(960, 540), "runtime:software:v1");
+    let input_snapshot = snapshot_for(&input_edit, output_profile(960, 540), "runtime:software:v1");
+    let output_snapshot = snapshot_for(&before, output_profile(1280, 720), "runtime:software:v1");
+    let runtime_snapshot = snapshot_for(&before, output_profile(960, 540), "runtime:hardware:v2");
+
+    let video_key =
+        "draft:phase13-node-identity-draft:track:video-track:segment:segment-a:video";
+    let material_key = "draft:phase13-node-identity-draft:material:video-material";
+    let before_video = before_snapshot
+        .node_fingerprint_by_key(video_key)
+        .expect("video fingerprint should exist");
+    let semantic_video = semantic_snapshot
+        .node_fingerprint_by_key(video_key)
+        .expect("semantic edit fingerprint should exist");
+    let input_material = input_snapshot
+        .node_fingerprint_by_key(material_key)
+        .expect("input edit fingerprint should exist");
+    let before_material = before_snapshot
+        .node_fingerprint_by_key(material_key)
+        .expect("material fingerprint should exist");
+    let output_video = output_snapshot
+        .node_fingerprint_by_key(video_key)
+        .expect("output fingerprint should exist");
+    let runtime_video = runtime_snapshot
+        .node_fingerprint_by_key(video_key)
+        .expect("runtime fingerprint should exist");
+
+    assert_eq!(before_video.node_id, semantic_video.node_id);
+    assert_ne!(
+        before_video.semantic_fingerprint,
+        semantic_video.semantic_fingerprint
+    );
+    assert_ne!(
+        before_material.input_fingerprint,
+        input_material.input_fingerprint
+    );
+    assert_ne!(
+        before_video.output_profile_fingerprint,
+        output_video.output_profile_fingerprint
+    );
+    assert_ne!(
+        before_video.runtime_capability_fingerprint,
+        runtime_video.runtime_capability_fingerprint
+    );
+    assert_eq!(
+        before_video.graph_schema_version,
+        render_graph::GRAPH_SCHEMA_VERSION
+    );
+    assert_eq!(
+        before_video.generator_version,
+        render_graph::GRAPH_GENERATOR_VERSION
     );
 }
 
@@ -116,6 +183,23 @@ fn graph_for(draft: &Draft) -> render_graph::RenderGraph {
     )
     .expect("range should resolve");
     build_render_graph(&normalized, &range).expect("graph should build")
+}
+
+fn snapshot_for(
+    draft: &Draft,
+    output_profile: RenderOutputProfile,
+    runtime_capability_fingerprint: &str,
+) -> RenderGraphSnapshot {
+    let graph = graph_for(draft);
+    RenderGraphSnapshot::from_graph(&graph, &output_profile, runtime_capability_fingerprint)
+}
+
+fn output_profile(width: u32, height: u32) -> RenderOutputProfile {
+    RenderOutputProfile::preview_frame_png(
+        OutputDimensions::new(width, height),
+        RationalFrameRate::new(30, 1),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(100_000)),
+    )
 }
 
 fn phase13_graph_draft() -> Draft {

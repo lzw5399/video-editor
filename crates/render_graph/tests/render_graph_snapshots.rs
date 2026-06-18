@@ -13,7 +13,7 @@ use draft_model::{
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
     ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphErrorKind, RenderGraphPlan,
-    RenderOutputProfile, build_render_graph,
+    RenderGraphSnapshot, RenderOutputProfile, build_render_graph,
 };
 
 #[test]
@@ -637,6 +637,45 @@ fn output_profiles_share_the_same_graph_shape_with_distinct_profile_metadata() {
                 "validate duration, frame rate, resolution, and audio stream with runtime metadata"
             ]
         })
+    );
+}
+
+#[test]
+fn render_graph_snapshot_collects_in_memory_node_fingerprints() {
+    let graph = sample_graph();
+    let output_profile = RenderOutputProfile::preview_frame_png(
+        OutputDimensions::new(960, 540),
+        RationalFrameRate::new(30, 1),
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(33_333)),
+    );
+
+    let snapshot = RenderGraphSnapshot::from_graph(&graph, &output_profile, "runtime:software:v1");
+
+    assert_eq!(snapshot.draft_id.as_str(), "draft-render-graph");
+    assert_eq!(snapshot.graph_schema_version, render_graph::GRAPH_SCHEMA_VERSION);
+    assert_eq!(snapshot.generator_version, render_graph::GRAPH_GENERATOR_VERSION);
+    assert!(snapshot
+        .node_fingerprint_by_key("draft:draft-render-graph:canvas")
+        .is_some());
+    assert!(snapshot
+        .node_fingerprint_by_key("draft:draft-render-graph:track:video-track:segment:video-a:video")
+        .is_some());
+    assert_eq!(
+        snapshot
+            .node_fingerprints
+            .iter()
+            .map(|fingerprint| fingerprint.node_id.stable_key())
+            .collect::<Vec<_>>(),
+        {
+            let mut keys = snapshot
+                .node_fingerprints
+                .iter()
+                .map(|fingerprint| fingerprint.node_id.stable_key())
+                .collect::<Vec<_>>();
+            keys.sort();
+            keys
+        },
+        "snapshot fingerprints should be sorted for deterministic comparisons"
     );
 }
 
