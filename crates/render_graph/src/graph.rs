@@ -3,8 +3,8 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    DraftId, Filter, Keyframe, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
-    SegmentId, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    CanvasBackground, DraftId, Filter, Keyframe, MaterialId, MaterialKind, Microseconds,
+    RationalFrameRate, SegmentId, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -31,6 +31,60 @@ pub struct RenderGraph {
 pub struct RenderCanvas {
     pub width: u32,
     pub height: u32,
+    #[serde(
+        default,
+        skip_serializing_if = "RenderCanvasBackground::is_default_black"
+    )]
+    pub background: RenderCanvasBackground,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<RenderCanvasDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderCanvasBackground {
+    pub mode: RenderCanvasBackgroundMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material_id: Option<MaterialId>,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+impl RenderCanvasBackground {
+    fn is_default_black(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+impl Default for RenderCanvasBackground {
+    fn default() -> Self {
+        Self {
+            mode: RenderCanvasBackgroundMode::Black,
+            color: None,
+            material_id: None,
+            support: RenderIntentSupport::Supported,
+            reason: "black canvas background is directly supported".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RenderCanvasBackgroundMode {
+    Black,
+    SolidColor,
+    BlurFill,
+    Image,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderCanvasDiagnostic {
+    pub mode: RenderCanvasBackgroundMode,
+    pub support: RenderIntentSupport,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +161,7 @@ pub struct RenderTransitionIntent {
 pub enum RenderIntentSupport {
     Supported,
     Degraded,
+    Unsupported,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -242,10 +297,7 @@ pub fn build_render_graph(
 
     Ok(RenderGraph {
         draft_id: normalized.draft_id.clone(),
-        canvas: RenderCanvas {
-            width: normalized.profile.canvas_width,
-            height: normalized.profile.canvas_height,
-        },
+        canvas: render_canvas(normalized),
         target_timerange: range.target_timerange.clone(),
         frame_rate: range.frame_rate.clone(),
         materials,
@@ -262,6 +314,63 @@ pub fn build_render_graph(
             })
             .collect(),
     })
+}
+
+fn render_canvas(normalized: &NormalizedDraft) -> RenderCanvas {
+    let background = render_canvas_background(&normalized.profile.canvas_background);
+    let diagnostics = canvas_background_diagnostics(&background);
+    RenderCanvas {
+        width: normalized.profile.canvas_width,
+        height: normalized.profile.canvas_height,
+        background,
+        diagnostics,
+    }
+}
+
+fn render_canvas_background(background: &CanvasBackground) -> RenderCanvasBackground {
+    match background {
+        CanvasBackground::Black => RenderCanvasBackground::default(),
+        CanvasBackground::SolidColor { color } => RenderCanvasBackground {
+            mode: RenderCanvasBackgroundMode::SolidColor,
+            color: Some(color.clone()),
+            material_id: None,
+            support: RenderIntentSupport::Supported,
+            reason: "solid color canvas background is directly supported".to_owned(),
+        },
+        CanvasBackground::BlurFill => RenderCanvasBackground {
+            mode: RenderCanvasBackgroundMode::BlurFill,
+            color: None,
+            material_id: None,
+            support: RenderIntentSupport::Degraded,
+            reason:
+                "blur fill canvas background is preserved as degraded until render support is implemented"
+                    .to_owned(),
+        },
+        CanvasBackground::Image { material_id } => RenderCanvasBackground {
+            mode: RenderCanvasBackgroundMode::Image,
+            color: None,
+            material_id: material_id.clone(),
+            support: RenderIntentSupport::Unsupported,
+            reason:
+                "image canvas background is unsupported until background material rendering is implemented"
+                    .to_owned(),
+        },
+    }
+}
+
+fn canvas_background_diagnostics(
+    background: &RenderCanvasBackground,
+) -> Vec<RenderCanvasDiagnostic> {
+    match background.support {
+        RenderIntentSupport::Supported => Vec::new(),
+        RenderIntentSupport::Degraded | RenderIntentSupport::Unsupported => {
+            vec![RenderCanvasDiagnostic {
+                mode: background.mode,
+                support: background.support,
+                reason: background.reason.clone(),
+            }]
+        }
+    }
 }
 
 fn segment_index(

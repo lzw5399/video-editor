@@ -8,7 +8,8 @@ pub mod graph;
 pub mod profile;
 
 pub use graph::{
-    RenderAudioMix, RenderCanvas, RenderFilterIntent, RenderGraph, RenderGraphError,
+    RenderAudioMix, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode,
+    RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph, RenderGraphError,
     RenderGraphErrorKind, RenderIntentSupport, RenderMaterial, RenderSampledFrame,
     RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, build_render_graph,
 };
