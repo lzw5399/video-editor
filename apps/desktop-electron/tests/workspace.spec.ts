@@ -1062,6 +1062,25 @@ test("实时预览 telemetry shows supported backend without FFmpeg active label
   }
 });
 
+test("实时预览 telemetry shows supported seek latency without fallback artifact", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_SEEK_FRAME: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1120, 720);
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
+    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：Mock");
+    await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 7 ms");
+    await expect(page.getByLabel("实时预览数据")).toContainText("已呈现 1 帧");
+    await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test("实时预览 fallback artifact appears only when Rust reports fallback", async () => {
   const supported = await launchWorkspaceApp({
     env: {
@@ -1149,6 +1168,33 @@ test("Phase 11 source guard and root scripts are wired", () => {
     expect(guardSource).toContain(forbiddenToken);
   }
   expect(guardSource).toContain("strip_comments");
+});
+
+test("Phase 11 runtime boundary docs include ownership, exclusions, and platform smoke commands", () => {
+  const docs = readFileSync(join(REPO_ROOT, "docs/runtime-boundaries.md"), "utf8");
+  const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  for (const requiredText of [
+    "## Phase 11 Realtime Preview Runtime",
+    "Rust-owned session, clock, generation, capability classification, telemetry, fallback routing, and GPU composition",
+    "H.264 software video frame provider/cache",
+    "Renderer responsibilities are UI-only",
+    "TextParityUnsupported",
+    "Phase 12 owns platform-native media IO and hardware decode",
+    "Phase 15 owns realtime audio",
+    "Phase 16 owns priority scheduling",
+    "Phase 18 owns complex effects, retiming, filters, masks, and transitions",
+    "Windows D3D12",
+    "macOS Metal",
+    "VIDEO_EDITOR_TEST_WGPU=1 cargo test -p realtime_preview_runtime real_wgpu_adapter -- --ignored --nocapture"
+  ]) {
+    expect(docs).toContain(requiredText);
+  }
+
+  expect(packageJson.scripts["test:phase11"]).toContain("test:phase11-workspace");
+  expect(packageJson.scripts["test:phase11-workspace"]).toContain("实时预览|fallback|telemetry|五大区域");
 });
 
 test("telemetry display model represents Rust-owned realtime and fallback diagnostics", () => {
