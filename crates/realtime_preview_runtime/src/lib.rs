@@ -9,6 +9,7 @@ pub mod graph_prepare;
 pub mod parity;
 pub mod request;
 pub mod session;
+pub mod software_video_provider;
 pub mod telemetry;
 
 pub use capabilities::{
@@ -37,4 +38,5 @@ pub use session::{
     PreviewGpuBackend, PreviewSessionId, RealtimePreviewError, RealtimePreviewRuntime,
     RealtimePreviewSessionConfig,
 };
+pub use software_video_provider::{DecodedVideoFrameCache, SoftwareVideoFrameProvider};
 pub use telemetry::RealtimePreviewTelemetry;

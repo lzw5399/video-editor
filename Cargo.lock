@@ -841,6 +841,7 @@ dependencies = [
  "render_graph",
  "serde",
  "serde_json",
+ "testkit",
 ]
 
 [[package]]

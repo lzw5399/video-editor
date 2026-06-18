@@ -142,6 +142,29 @@ impl GeneratedMaterialFixture {
     }
 }
 
+/// Deterministic generated H.264 material fixture for realtime preview tests.
+#[derive(Debug)]
+pub struct H264PreviewFixture {
+    inner: GeneratedMaterialFixture,
+}
+
+impl H264PreviewFixture {
+    /// Path to the generated MP4 fixture. The file is removed when this value is dropped.
+    pub fn path(&self) -> &Path {
+        self.inner.path()
+    }
+
+    /// Codec name expected by realtime preview fixture tests.
+    pub fn expected_codec(&self) -> &'static str {
+        "h264"
+    }
+
+    /// Expected normalized probe metadata for the generated material.
+    pub fn expected(&self) -> &ExpectedMaterialMetadata {
+        self.inner.expected()
+    }
+}
+
 /// Expected normalized probe metadata for a generated material fixture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpectedMaterialMetadata {
@@ -295,6 +318,14 @@ pub fn generate_video_material_fixture(
             "1",
         ],
     )
+}
+
+/// Generate a deterministic H.264 MP4 fixture for realtime preview cache tests.
+pub fn generate_h264_preview_fixture() -> SmokeResult<H264PreviewFixture> {
+    let runtime = discover_runtime_config()?;
+    let executor = DesktopFfmpegExecutor::default();
+    let fixture = generate_video_material_fixture(&executor, &runtime)?;
+    Ok(H264PreviewFixture { inner: fixture })
 }
 
 /// Generate deterministic still image material for probe/import tests.

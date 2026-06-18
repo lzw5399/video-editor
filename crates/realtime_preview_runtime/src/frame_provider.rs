@@ -258,6 +258,10 @@ impl FrameValidationError {
         }
     }
 
+    pub fn new_public(kind: FrameValidationErrorKind, message: impl Into<String>) -> Self {
+        Self::new(kind, message)
+    }
+
     pub fn kind(&self) -> FrameValidationErrorKind {
         self.kind
     }
