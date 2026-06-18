@@ -1,7 +1,7 @@
 use draft_model::{
     DraftId, MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentFitMode,
-    SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange,
-    TargetTimerange, TrackId,
+    SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    TrackId,
 };
 use realtime_preview_runtime::gpu::{
     RealtimePreviewCompositor, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
@@ -24,8 +24,14 @@ fn gpu_subset_solid_canvas_produces_deterministic_pixels() {
 
     assert_eq!(output.width, 4);
     assert_eq!(output.height, 4);
-    assert_eq!(rgba_at(&output.pixels, 0, 0, output.width), [0x11, 0x22, 0x33, 0xff]);
-    assert_eq!(rgba_at(&output.pixels, 3, 3, output.width), [0x11, 0x22, 0x33, 0xff]);
+    assert_eq!(
+        rgba_at(&output.pixels, 0, 0, output.width),
+        [0x11, 0x22, 0x33, 0xff]
+    );
+    assert_eq!(
+        rgba_at(&output.pixels, 3, 3, output.width),
+        [0x11, 0x22, 0x33, 0xff]
+    );
     assert_eq!(output.submitted_draws, 0);
     assert_eq!(output.support, RealtimePreviewGraphSupport::Supported);
 }
@@ -38,10 +44,22 @@ fn gpu_subset_textured_quads_use_graph_stack_order_and_provider_frames() {
     let provider = ImageThenSoftwareVideoProvider::new(&image_id, &video_id);
     let output = render_graph_with_provider(graph, provider);
 
-    assert_eq!(rgba_at(&output.pixels, 0, 0, output.width), [255, 0, 0, 255]);
-    assert_eq!(rgba_at(&output.pixels, 3, 3, output.width), [0, 0, 255, 255]);
-    assert_eq!(rgba_at(&output.pixels, 1, 1, output.width), [255, 0, 0, 255]);
-    assert_eq!(rgba_at(&output.pixels, 2, 2, output.width), [0, 0, 255, 255]);
+    assert_eq!(
+        rgba_at(&output.pixels, 0, 0, output.width),
+        [255, 0, 0, 255]
+    );
+    assert_eq!(
+        rgba_at(&output.pixels, 3, 3, output.width),
+        [0, 0, 255, 255]
+    );
+    assert_eq!(
+        rgba_at(&output.pixels, 1, 1, output.width),
+        [255, 0, 0, 255]
+    );
+    assert_eq!(
+        rgba_at(&output.pixels, 2, 2, output.width),
+        [0, 0, 255, 255]
+    );
     assert_eq!(output.submitted_draws, 2);
 }
 
@@ -53,7 +71,10 @@ fn gpu_subset_opacity_affects_composited_color() {
     let provider = ImageThenSoftwareVideoProvider::new(&image_id, &video_id);
     let output = render_graph_with_provider(graph, provider);
 
-    assert_eq!(rgba_at(&output.pixels, 2, 2, output.width), [0, 0, 128, 255]);
+    assert_eq!(
+        rgba_at(&output.pixels, 2, 2, output.width),
+        [0, 0, 128, 255]
+    );
     assert_eq!(output.submitted_draws, 2);
 }
 
@@ -167,7 +188,15 @@ fn textured_graph(image_id: &MaterialId, video_id: &MaterialId, video_opacity: u
         material(video_id, MaterialKind::Video),
     ];
     graph.video_layers = vec![
-        layer("image-segment", image_id, MaterialKind::Image, 0, -500, 500, 1_000),
+        layer(
+            "image-segment",
+            image_id,
+            MaterialKind::Image,
+            0,
+            -500,
+            500,
+            1_000,
+        ),
         layer(
             "video-segment",
             video_id,

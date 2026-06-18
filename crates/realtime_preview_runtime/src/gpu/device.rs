@@ -123,13 +123,8 @@ impl RealtimePreviewGpuDevice {
         format: RealtimePreviewTargetFormat,
     ) -> Result<RealtimePreviewGpuTarget, RealtimePreviewGpuError> {
         let Some(device) = &self.device else {
-            return RealtimePreviewGpuTarget::offscreen(
-                width,
-                height,
-                scale_factor_millis,
-                format,
-            )
-            .map_err(RealtimePreviewGpuError::InvalidTarget);
+            return RealtimePreviewGpuTarget::offscreen(width, height, scale_factor_millis, format)
+                .map_err(RealtimePreviewGpuError::InvalidTarget);
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
