@@ -5,8 +5,9 @@ use draft_commands::{
 };
 use draft_model::{
     CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, Material, MaterialKind, Microseconds,
-    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextSegment,
-    TextShadow, TextStroke, TextStyle, TimelineSelection, Track, TrackKind,
+    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -250,6 +251,7 @@ fn text_segment_with_color(
 ) -> TextSegment {
     TextSegment {
         content: content.to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
             font_size,
             color: color.to_owned(),
@@ -267,6 +269,12 @@ fn text_segment_with_color(
             background: Some(TextBackground {
                 color: "#000000".to_owned(),
             }),
+            ..TextStyle::default()
         },
+        text_box: TextBox::default(),
+        layout_region: TextLayoutRegion::default(),
+        wrapping: TextWrapping::default(),
+        bubble: None,
+        effect: None,
     }
 }

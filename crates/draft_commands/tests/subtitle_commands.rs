@@ -15,12 +15,15 @@ fn subtitle_srt_import_creates_text_track_and_segments_atomically() {
     let state = CommandState::empty();
     let payload = subtitle_payload(draft.clone(), state.clone(), selection.clone());
 
-    let imported = import_subtitle_srt(payload)
-        .expect("valid SRT should import as subtitle text segments");
+    let imported =
+        import_subtitle_srt(payload).expect("valid SRT should import as subtitle text segments");
 
     assert_eq!(imported.events[0].kind, "subtitleSrtImported");
     assert_eq!(imported.command_state.undo_stack.len(), 1);
-    assert_eq!(imported.command_state.undo_stack[0].label.as_deref(), Some("importSubtitleSrt"));
+    assert_eq!(
+        imported.command_state.undo_stack[0].label.as_deref(),
+        Some("importSubtitleSrt")
+    );
     assert_eq!(imported.selection.track_ids, vec!["subtitle-track".into()]);
     assert_eq!(
         imported.selection.segment_ids,
@@ -40,10 +43,19 @@ fn subtitle_srt_import_creates_text_track_and_segments_atomically() {
     let first = &track.segments[0];
     assert_eq!(first.material_id.as_str(), "subtitle-material-1");
     assert_eq!(first.source_timerange.start, Microseconds::new(0));
-    assert_eq!(first.source_timerange.duration, Microseconds::new(1_000_000));
+    assert_eq!(
+        first.source_timerange.duration,
+        Microseconds::new(1_000_000)
+    );
     assert_eq!(first.target_timerange.start, Microseconds::new(500_000));
-    assert_eq!(first.target_timerange.duration, Microseconds::new(1_000_000));
-    let first_text = first.text.as_ref().expect("subtitle text should be on Segment.text");
+    assert_eq!(
+        first.target_timerange.duration,
+        Microseconds::new(1_000_000)
+    );
+    let first_text = first
+        .text
+        .as_ref()
+        .expect("subtitle text should be on Segment.text");
     assert_eq!(first_text.content, "第一行\n继续第一行");
     assert_eq!(first_text.source, TextSegmentSource::Subtitle);
     assert_eq!(first_text.style.font_size, 32);
@@ -59,8 +71,12 @@ fn subtitle_srt_import_creates_text_track_and_segments_atomically() {
     assert_eq!(second.target_timerange.duration, Microseconds::new(750_000));
     assert_eq!(second.text.as_ref().unwrap().content, "第二行");
 
-    let undone = undo_timeline_edit(&imported.draft, &imported.command_state, &imported.selection)
-        .expect("subtitle import should undo as one command");
+    let undone = undo_timeline_edit(
+        &imported.draft,
+        &imported.command_state,
+        &imported.selection,
+    )
+    .expect("subtitle import should undo as one command");
     assert_eq!(undone.draft, draft);
     let redone = redo_timeline_edit(&undone.draft, &undone.command_state, &undone.selection)
         .expect("subtitle import should redo as one command");
@@ -113,10 +129,9 @@ fn import_subtitle_srt_payload_routes_through_timeline_command_executor() {
         TimelineSelection::empty(),
     );
 
-    let routed = draft_commands::timeline::execute_timeline_edit(CommandPayload::ImportSubtitleSrt(
-        payload,
-    ))
-    .expect("importSubtitleSrt should route through timeline command execution");
+    let routed =
+        draft_commands::timeline::execute_timeline_edit(CommandPayload::ImportSubtitleSrt(payload))
+            .expect("importSubtitleSrt should route through timeline command execution");
 
     assert_eq!(routed.events[0].kind, "subtitleSrtImported");
     assert_eq!(routed.draft.tracks[0].segments.len(), 2);

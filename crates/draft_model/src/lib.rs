@@ -36,10 +36,10 @@ pub use timeline::{
     MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
     MainTrackMagnet, Segment, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
     SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
-    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
-    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
-    TextStyle, TextWrapping, Track, TrackKind, Transition,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
+    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, Track, TrackKind, Transition,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
@@ -78,6 +78,7 @@ pub enum CommandName {
     RedoTimelineEdit,
     AddTextSegment,
     EditTextSegment,
+    ImportSubtitleSrt,
     AddAudioSegment,
     SetSegmentVolume,
     SetTrackMute,
@@ -112,6 +113,7 @@ pub enum CommandPayload {
     RedoTimelineEdit(RedoTimelineEditCommandPayload),
     AddTextSegment(AddTextSegmentCommandPayload),
     EditTextSegment(EditTextSegmentCommandPayload),
+    ImportSubtitleSrt(ImportSubtitleSrtCommandPayload),
     AddAudioSegment(AddAudioSegmentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
@@ -146,6 +148,7 @@ impl CommandPayload {
             Self::RedoTimelineEdit(_) => CommandName::RedoTimelineEdit,
             Self::AddTextSegment(_) => CommandName::AddTextSegment,
             Self::EditTextSegment(_) => CommandName::EditTextSegment,
+            Self::ImportSubtitleSrt(_) => CommandName::ImportSubtitleSrt,
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
@@ -364,6 +367,25 @@ pub struct EditTextSegmentCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub text: TextSegment,
+}
+
+/// Payload accepted by the Phase 9 subtitle SRT import command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportSubtitleSrtCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub track_name: String,
+    pub srt_content: String,
+    pub time_offset: Microseconds,
+    pub segment_id_prefix: String,
+    pub material_id_prefix: String,
+    pub style: TextStyle,
+    pub text_box: TextBox,
+    pub layout_region: TextLayoutRegion,
+    pub wrapping: TextWrapping,
 }
 
 /// Payload accepted by the Phase 3 audio segment add command.
