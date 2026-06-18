@@ -456,7 +456,10 @@ export function Inspector({
                       <span>文字内容</span>
                       <textarea
                         value={textState.content}
-                        onChange={(event) => setTextState((current) => ({ ...current, content: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const content = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, content }));
+                        }}
                       />
                     </label>
                     <dl className="inspector-list compact">
@@ -465,8 +468,12 @@ export function Inspector({
                     <label className="field-row compact-row">
                       <span>字体</span>
                       <input
+                        aria-label="字体"
                         value={textState.fontFamily}
-                        onChange={(event) => setTextState((current) => ({ ...current, fontFamily: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const fontFamily = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, fontFamily }));
+                        }}
                       />
                     </label>
                     <TextNumberField
@@ -482,9 +489,13 @@ export function Inspector({
                       <span>颜色</span>
                       <span className="field-with-action">
                         <input
+                          aria-label="颜色"
                           type="color"
                           value={textState.color}
-                          onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
+                          onChange={(event) => {
+                            const color = event.currentTarget.value;
+                            setTextState((current) => ({ ...current, color }));
+                          }}
                         />
                         {renderKeyframeButton("textColor", "颜色")}
                       </span>
@@ -500,17 +511,24 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.strokeEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, strokeEnabled: event.currentTarget.checked }))}
+                        onChange={(event) => {
+                          const strokeEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, strokeEnabled }));
+                        }}
                       />
                       <span>描边</span>
                     </label>
                     <label className="field-row compact-row color-row">
                       <span>描边颜色</span>
                       <input
+                        aria-label="描边颜色"
                         type="color"
                         value={textState.strokeColor}
                         disabled={!textState.strokeEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, strokeColor: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const strokeColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, strokeColor }));
+                        }}
                       />
                     </label>
                     <TextNumberField
@@ -526,34 +544,48 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.shadowEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, shadowEnabled: event.currentTarget.checked }))}
+                        onChange={(event) => {
+                          const shadowEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, shadowEnabled }));
+                        }}
                       />
                       <span>阴影</span>
                     </label>
                     <label className="field-row compact-row color-row">
                       <span>阴影颜色</span>
                       <input
+                        aria-label="阴影颜色"
                         type="color"
                         value={textState.shadowColor}
                         disabled={!textState.shadowEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, shadowColor: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const shadowColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, shadowColor }));
+                        }}
                       />
                     </label>
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.backgroundEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, backgroundEnabled: event.currentTarget.checked }))}
+                        onChange={(event) => {
+                          const backgroundEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, backgroundEnabled }));
+                        }}
                       />
                       <span>背景</span>
                     </label>
                     <label className="field-row compact-row color-row">
                       <span>背景颜色</span>
                       <input
+                        aria-label="背景颜色"
                         type="color"
                         value={textState.backgroundColor}
                         disabled={!textState.backgroundEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, backgroundColor: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const backgroundColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, backgroundColor }));
+                        }}
                       />
                     </label>
                     <div className="field-row compact-row">
@@ -598,9 +630,10 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.wrapping === "auto"}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, wrapping: event.currentTarget.checked ? "auto" : "none" }))
-                        }
+                        onChange={(event) => {
+                          const wrapping = event.currentTarget.checked ? "auto" : "none";
+                          setTextState((current) => ({ ...current, wrapping }));
+                        }}
                       />
                       <span>自动换行</span>
                     </label>

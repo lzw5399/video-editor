@@ -135,6 +135,17 @@
   bottom: -4px;
 }
 
+.preview-text-overlay {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  padding: 4px 8px;
+  pointer-events: none;
+  overflow-wrap: break-word;
+}
+
 .preview-transport {
   display: grid;
   grid-template-columns: 82px auto minmax(104px, 142px) auto;

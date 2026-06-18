@@ -95,6 +95,8 @@ export function PreviewMonitor({
   const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
+  const textOverlayStyle =
+    preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
 
   return (
     <div className="preview-shell">
@@ -123,6 +125,17 @@ export function PreviewMonitor({
             data-fit-mode={selectedSegment.segment.visual.fitMode}
             style={selectionOverlayStyle}
           />
+        ) : null}
+        {selectedSegment !== null && selectedSegment.segment.text !== null && textOverlayStyle !== null ? (
+          <div
+            className="preview-text-overlay"
+            aria-label="预览文字"
+            data-segment-id={selectedSegment.segment.segmentId}
+            data-text-source={selectedSegment.segment.text.source}
+            style={textOverlayStyle}
+          >
+            {selectedSegment.segment.text.content}
+          </div>
         ) : null}
       </div>
 
@@ -314,6 +327,62 @@ function clampOverlayPercent(value: number): number {
 
 function clampOverlayOffsetPercent(value: number): number {
   return Math.max(-48, Math.min(48, value));
+}
+
+function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
+  if (
+    selectedSegment === null ||
+    !selectedSegment.segment.visual.visible ||
+    selectedSegment.segment.text === null ||
+    selectedSegment.segment.text === undefined ||
+    selectedSegment.segment.text.content.trim().length === 0
+  ) {
+    return null;
+  }
+
+  const text = selectedSegment.segment.text;
+  const region = text.layoutRegion;
+  const style = text.style;
+  const textBoxWidth = clampMillis(text.textBox.widthMillis);
+  const textBoxHeight = clampMillis(text.textBox.heightMillis);
+  const widthMillis = Math.min(clampMillis(region.widthMillis), textBoxWidth);
+  const heightMillis = Math.min(clampMillis(region.heightMillis), textBoxHeight);
+  const leftMillis = clampMillis(region.xMillis);
+  const topMillis = clampMillis(region.yMillis);
+  const shadow = style.shadow;
+  const stroke = style.stroke;
+
+  return {
+    left: `${leftMillis / 10}%`,
+    top: `${topMillis / 10}%`,
+    width: `${widthMillis / 10}%`,
+    minHeight: `${Math.max(20, heightMillis / 10)}%`,
+    color: style.color,
+    backgroundColor: style.background?.color ?? "transparent",
+    fontFamily: quoteFontFamily(style.font.family),
+    fontSize: `${style.fontSize}px`,
+    lineHeight: style.lineHeightMillis / 1000,
+    letterSpacing: `${style.letterSpacingMillis / 1000}px`,
+    textAlign: style.alignment,
+    whiteSpace: text.wrapping === "auto" ? "pre-wrap" : "pre",
+    overflow: "hidden",
+    textShadow: shadow === null || shadow === undefined ? "none" : `${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${shadow.color}`,
+    WebkitTextStroke:
+      stroke === null || stroke === undefined ? undefined : `${Math.max(0, stroke.width)}px ${stroke.color}`
+  };
+}
+
+function clampMillis(value: number): number {
+  return Math.max(0, Math.min(1000, Math.round(value)));
+}
+
+function quoteFontFamily(family: string): string {
+  const trimmed = family.trim();
+  if (trimmed.length === 0) {
+    return "\"PingFang SC\", sans-serif";
+  }
+
+  return `"${trimmed.replace(/"/g, "")}", "PingFang SC", sans-serif`;
 }
 
 function RuntimeDiagnosticsPanel({

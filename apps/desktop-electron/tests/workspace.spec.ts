@@ -500,29 +500,33 @@ test("command-only text edit routes complete text inspector changes through exec
     for (const section of ["文本", "样式", "文本框", "布局", "花字 / 气泡"]) {
       await expect(page.getByRole("heading", { name: section, exact: true })).toBeVisible();
     }
-    const textSection = page.getByRole("region", { name: "文本", exact: true });
-    const styleSection = page.getByRole("region", { name: "样式", exact: true });
-    const textBoxSection = page.getByRole("region", { name: "文本框", exact: true });
-    const layoutSection = page.getByRole("region", { name: "布局", exact: true });
+    const textSection = page.locator('section[aria-label="文本"]');
+    const styleSection = page.locator('section[aria-label="样式"]');
+    const textBoxSection = page.locator('section[aria-label="文本框"]');
+    const layoutSection = page.locator('section[aria-label="布局"]');
     const inspector = page.getByLabel("属性检查器");
     for (const section of [textSection, styleSection, textBoxSection, layoutSection]) {
       await expectLocatorInsideHorizontalContainer(inspector, section, "文字检查器区块");
     }
     await expect(textSection).toContainText("字幕来源");
-    await textSection.getByLabel("文字内容").fill("开场标题 已修改");
-    await textSection.getByLabel("字体").fill("PingFang SC");
+    await textSection.scrollIntoViewIfNeeded();
+    await textSection.locator("textarea").fill("开场标题 已修改");
+    await textSection.locator('input[aria-label="字体"]').fill("PingFang SC");
     await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill("48");
-    await textSection.getByLabel("颜色").fill("#18c7ff");
-    await styleSection.getByLabel("描边").check();
-    await styleSection.getByLabel("描边颜色").fill("#111111");
+    await textSection.locator('input[aria-label="颜色"]').fill("#18c7ff");
+    await styleSection.scrollIntoViewIfNeeded();
+    await styleSection.getByRole("checkbox", { name: "描边", exact: true }).check();
+    await styleSection.locator('input[aria-label="描边颜色"]').fill("#111111");
     await styleSection.getByRole("spinbutton", { name: "描边宽度", exact: true }).fill("5");
-    await styleSection.getByLabel("阴影").check();
-    await styleSection.getByLabel("阴影颜色").fill("#333333");
-    await styleSection.getByLabel("背景").check();
-    await styleSection.getByLabel("背景颜色").fill("#202020");
+    await styleSection.getByRole("checkbox", { name: "阴影", exact: true }).check();
+    await styleSection.locator('input[aria-label="阴影颜色"]').fill("#333333");
+    await styleSection.getByRole("checkbox", { name: "背景", exact: true }).check();
+    await styleSection.locator('input[aria-label="背景颜色"]').fill("#202020");
     await styleSection.getByRole("button", { name: "右", exact: true }).click();
+    await textBoxSection.scrollIntoViewIfNeeded();
     await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).fill("1300");
     await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).fill("120");
+    await layoutSection.scrollIntoViewIfNeeded();
     await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).fill("120");
     await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).fill("180");
     await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).fill("760");
