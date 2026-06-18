@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 12
 current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 8
+current_plan: 9
 total_plans_in_phase: 9
 stopped_at: None
-last_updated: "2026-06-18T20:39:11.000Z"
-last_activity: "2026-06-18 - Completed Phase 12 Plan 06: media IO preview handoff adapter and fallback diagnostics."
+last_updated: "2026-06-18T20:58:14.000Z"
+last_activity: "2026-06-19 - Completed Phase 12 Plan 06B: preview decode handle contracts and release API."
 progress:
   total_phases: 20
   completed_phases: 13
   total_plans: 98
-  completed_plans: 88
-  percent: 90
+  completed_plans: 89
+  percent: 91
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 12
-Plan: 7/9 complete; next plan 12-06B
-Status: Phase 12 in progress; media IO preview handoff adapter and fallback diagnostics are complete.
-Last activity: 2026-06-18 - Completed Phase 12 Plan 06: media IO preview handoff adapter and fallback diagnostics.
+Plan: 8/9 complete; next plan 12-06C
+Status: Phase 12 in progress; preview decode handle contracts and release API are complete.
+Last activity: 2026-06-19 - Completed Phase 12 Plan 06B: preview decode handle contracts and release API.
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 88
+- Total plans completed: 89
 - Average duration: 9 min
-- Total execution time: 802 min
+- Total execution time: 822 min
 
 **By Phase:**
 
@@ -59,11 +59,11 @@ Progress: [█████████░] 90%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
-| 12 | 7 | 141 min | 20 min |
+| 12 | 8 | 161 min | 20 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 95 min
+- Last 5 plans: 96 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -145,6 +145,7 @@ Progress: [█████████░] 90%
 | Phase 12 P04 | 15 min | 2 tasks | 8 files |
 | Phase 12 P05 | 22 min | 2 tasks | 4 files |
 | Phase 12 P06 | 10 min | 1 tasks | 6 files |
+| Phase 12 P06B | 20 min | 1 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -163,6 +164,9 @@ Progress: [█████████░] 90%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12]: Preview decode binding responses expose opaque frame/texture handle IDs and metadata only. — Native pointers, platform objects, ArrayBuffer/Uint8Array values, and pixel payloads remain blocked by generated schema/tests and do not cross to JS.
+- [Phase 12]: Preview frame release validates frame handle ID, owner session, and playback generation. — Wrong-session, stale-generation, and unknown handles return `previewServiceFailed` instead of releasing retained native/Rust resources.
+- [Phase 12]: Generated schema command/payload pairing constraints include preview decode/release and existing keyframe command pairs. — The schema now rejects those mismatched envelope/payload combinations instead of relying only on Rust deserialization.
 - [Phase 12]: Phase 11 media IO handoff lives in `realtime_preview_runtime` and depends only on `media_runtime` traits. — The adapter converts resolved material source-time requests into decode requests without normalizing drafts, building render graphs, compiling FFmpeg, or depending on desktop concrete runtimes.
 - [Phase 12]: Preview media IO diagnostics carry selected decode path and fallback metadata at the handoff boundary. — Current `VideoDecoder` traits return frames but not selected ladder path, so the adapter stores explicit registration metadata instead of downcasting desktop sessions.
 - [Phase 12]: Windows native decode returns Media Foundation-backed platform-opaque frame leases until real D3D texture/device compatibility is proven. — The session retains native sample lifetime in Rust and exposes only metadata/release IDs, not native pointers or full-frame JS byte buffers.
