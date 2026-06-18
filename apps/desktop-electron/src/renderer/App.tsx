@@ -1088,7 +1088,17 @@ export function App(): React.ReactElement {
     );
   }
 
+  function handleSeekPlayhead(value: number): void {
+    const targetTime = normalizePlayheadTime(value);
+    setPlayheadUs(targetTime);
+    requestPreviewFrameAt(targetTime);
+  }
+
   function handleRequestPreviewFrame(): void {
+    requestPreviewFrameAt(normalizePlayheadTime(playheadUs));
+  }
+
+  function requestPreviewFrameAt(targetTime: number): void {
     if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
       const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
       setWorkspace((current) => {
@@ -1108,8 +1118,6 @@ export function App(): React.ReactElement {
       });
       return;
     }
-
-    const targetTime = Math.max(0, Math.round(playheadUs));
 
     void executePreviewCommand(
       (current) =>
@@ -1313,7 +1321,7 @@ export function App(): React.ReactElement {
       onCategoryChange={setActiveCategory}
       onBundlePathChange={setBundlePath}
       onMaterialPathChange={setMaterialPath}
-      onPlayheadChange={setPlayheadUs}
+      onPlayheadChange={handleSeekPlayhead}
       onRequestPreviewFrame={handleRequestPreviewFrame}
       onRequestPreviewSegment={handleRequestPreviewSegment}
       onProbeRuntimeCapabilities={handleProbeRuntimeCapabilities}
@@ -1465,6 +1473,10 @@ function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: strin
       : workspace.runtimeDiagnostics.statusDetail || workspace.runtimeDiagnostics.statusLabel;
 
   return `${actionLabel}：${detail}`;
+}
+
+function normalizePlayheadTime(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
 function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {

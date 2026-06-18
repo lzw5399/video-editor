@@ -74,6 +74,7 @@ export function PreviewMonitor({
   onCancelExport
 }: PreviewMonitorProps): React.ReactElement {
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
+  const frameStepUs = frameDurationUs(canvasConfig);
   const canvasReadout = formatCanvasReadout(canvasConfig);
   const canvasRatio = formatCanvasAspectRatio(canvasConfig);
   const backgroundStatus = formatCanvasBackgroundStatus(canvasConfig);
@@ -126,9 +127,9 @@ export function PreviewMonitor({
                 if (control.label === "停止") {
                   onPlayheadChange(0);
                 } else if (control.label === "上一帧") {
-                  onPlayheadChange(Math.max(0, safePlayheadUs - 33_333));
+                  onPlayheadChange(Math.max(0, safePlayheadUs - frameStepUs));
                 } else if (control.label === "下一帧") {
-                  onPlayheadChange(safePlayheadUs + 33_333);
+                  onPlayheadChange(safePlayheadUs + frameStepUs);
                 }
               }}
               disabled={pending || control.label === "播放" || control.label === "适应窗口" || control.label === "画面比例" || control.label === "全屏"}
@@ -259,6 +260,12 @@ export function PreviewMonitor({
       </div>
     </div>
   );
+}
+
+function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
+  const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
+  const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
+  return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
 }
 
 function RuntimeDiagnosticsPanel({
