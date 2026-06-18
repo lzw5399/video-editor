@@ -1,5 +1,6 @@
 use draft_model::{
-    Draft, Material, MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment,
+    Draft, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    Material, MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment,
     SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
 };
 use engine_core::{EngineErrorKind, EngineProfile, MaterialRenderableState, normalize_draft};
@@ -98,6 +99,23 @@ fn normalization_rejects_checked_timerange_overflow_and_out_of_bounds_material_r
         bounds_error.kind,
         EngineErrorKind::SourceRangeExceedsMaterialDuration
     );
+}
+
+#[test]
+fn keyframe_normalization_rejects_invalid_persisted_keyframes_before_frame_state() {
+    let mut draft = complete_draft();
+    draft.tracks[0].segments[0].keyframes.push(Keyframe {
+        at: Microseconds::new(1_500_000),
+        property: KeyframeProperty::VisualOpacity,
+        value: KeyframeValue::Uint { value: 800 },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    });
+
+    let error = normalize_draft(&draft, &EngineProfile::mvp_default())
+        .expect_err("invalid persisted keyframe should be rejected by draft validation");
+
+    assert_eq!(error.kind, EngineErrorKind::DraftValidationFailed);
 }
 
 #[test]

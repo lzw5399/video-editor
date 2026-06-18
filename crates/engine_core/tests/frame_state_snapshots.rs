@@ -1,9 +1,10 @@
 use draft_model::{
-    Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
-    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
-    TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    Draft, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentBackgroundFilling,
+    SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
+    TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{
     EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,
@@ -70,6 +71,160 @@ fn frame_state_resolves_active_visual_audio_and_text_segments_at_microsecond_pos
             .collect::<Vec<_>>(),
         vec![("text-track", "text-a", "标题", 2, 100_000)]
     );
+}
+
+#[test]
+fn keyframe_frame_state_resolves_visual_audio_and_text_at_segment_relative_time() {
+    let mut draft = frame_state_draft();
+    let video = &mut draft.tracks[0].segments[0];
+    video.visual.transform.position.x = -50;
+    video.visual.transform.position.y = 20;
+    video.visual.transform.scale.x_millis = 900;
+    video.visual.transform.opacity.value_millis = 900;
+    video.keyframes.extend([
+        int_keyframe(KeyframeProperty::VisualPositionX, 200_000, 0),
+        int_keyframe(KeyframeProperty::VisualPositionX, 700_000, 500),
+        int_keyframe(KeyframeProperty::VisualPositionY, 200_000, 20),
+        int_keyframe(KeyframeProperty::VisualPositionY, 700_000, -80),
+        uint_keyframe(KeyframeProperty::VisualScaleX, 200_000, 1_000),
+        uint_keyframe(KeyframeProperty::VisualScaleX, 700_000, 1_500),
+        uint_keyframe(KeyframeProperty::VisualOpacity, 200_000, 1_000),
+        uint_keyframe(KeyframeProperty::VisualOpacity, 700_000, 500),
+    ]);
+
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.volume.level_millis = 500;
+    audio.keyframes.extend([
+        uint_keyframe(KeyframeProperty::Volume, 200_000, 1_000),
+        uint_keyframe(KeyframeProperty::Volume, 700_000, 2_000),
+    ]);
+
+    let text = &mut draft.tracks[3].segments[0];
+    text.text
+        .as_mut()
+        .expect("fixture should include text")
+        .style
+        .font_size = 48;
+    text.keyframes.extend([
+        uint_keyframe(KeyframeProperty::TextFontSize, 100_000, 40),
+        uint_keyframe(KeyframeProperty::TextFontSize, 400_000, 80),
+    ]);
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+
+    let before_first = resolve_frame_state(&normalized, Microseconds::new(100_000))
+        .expect("before-first frame should resolve");
+    let before_layer = before_first
+        .visual_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video layer should be active");
+    assert_eq!(before_layer.visual.transform.position.x, -50);
+    assert_eq!(before_layer.visual.transform.position.y, 20);
+    assert_eq!(before_layer.visual.transform.scale.x_millis, 900);
+    assert_eq!(before_layer.visual.transform.opacity.value_millis, 900);
+    assert_eq!(before_first.audio_segments[0].volume_level_millis, 500);
+
+    let exact = resolve_frame_state(&normalized, Microseconds::new(200_000))
+        .expect("exact keyframe should resolve");
+    let exact_layer = exact
+        .visual_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video layer should be active");
+    assert_eq!(exact_layer.visual.transform.position.x, 0);
+    assert_eq!(exact_layer.visual.transform.position.y, 20);
+    assert_eq!(exact_layer.visual.transform.scale.x_millis, 1_000);
+    assert_eq!(exact_layer.visual.transform.opacity.value_millis, 1_000);
+    assert_eq!(exact.audio_segments[0].volume_level_millis, 1_000);
+
+    let between = resolve_frame_state(&normalized, Microseconds::new(450_000))
+        .expect("between keyframes should resolve");
+    let between_layer = between
+        .visual_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video layer should be active");
+    assert_eq!(between_layer.visual.transform.position.x, 250);
+    assert_eq!(between_layer.visual.transform.position.y, -30);
+    assert_eq!(between_layer.visual.transform.scale.x_millis, 1_250);
+    assert_eq!(between_layer.visual.transform.opacity.value_millis, 750);
+    assert_eq!(between.audio_segments[0].volume_level_millis, 1_500);
+
+    let text_before = resolve_frame_state(&normalized, Microseconds::new(550_000))
+        .expect("text before-first frame should resolve");
+    assert_eq!(text_before.text_overlays[0].font_size, 48);
+
+    let text_exact = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect("text exact keyframe should resolve");
+    assert_eq!(text_exact.text_overlays[0].font_size, 40);
+
+    let text_between = resolve_frame_state(&normalized, Microseconds::new(750_000))
+        .expect("text between keyframes should resolve");
+    assert_eq!(text_between.text_overlays[0].font_size, 60);
+
+    let after_last = resolve_frame_state(&normalized, Microseconds::new(950_000))
+        .expect("after-last frame should resolve");
+    let after_layer = after_last
+        .visual_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video layer should be active");
+    assert_eq!(after_layer.visual.transform.position.x, 500);
+    assert_eq!(after_layer.visual.transform.position.y, -80);
+    assert_eq!(after_layer.visual.transform.scale.x_millis, 1_500);
+    assert_eq!(after_layer.visual.transform.opacity.value_millis, 500);
+    assert_eq!(after_last.audio_segments[0].volume_level_millis, 2_000);
+    assert_eq!(after_last.text_overlays[0].font_size, 80);
+}
+
+#[test]
+fn keyframe_frame_state_applies_hold_color_and_integer_easing_without_floats() {
+    let mut draft = frame_state_draft();
+    let video = &mut draft.tracks[0].segments[0];
+    video.keyframes.extend([
+        Keyframe {
+            at: Microseconds::new(200_000),
+            property: KeyframeProperty::VisualRotation,
+            value: KeyframeValue::Int { value: 0 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::EaseIn,
+        },
+        Keyframe {
+            at: Microseconds::new(700_000),
+            property: KeyframeProperty::VisualRotation,
+            value: KeyframeValue::Int { value: 100 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::EaseIn,
+        },
+    ]);
+
+    let text = draft.tracks[3].segments[0]
+        .text
+        .as_mut()
+        .expect("fixture should include text");
+    text.style.color = "#ffffff".to_owned();
+    draft.tracks[3].segments[0].keyframes.extend([
+        color_keyframe(KeyframeProperty::TextColor, 100_000, "#ff0000"),
+        color_keyframe(KeyframeProperty::TextColor, 400_000, "#00ff00"),
+    ]);
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+
+    let eased = resolve_frame_state(&normalized, Microseconds::new(450_000))
+        .expect("eased frame should resolve");
+    let layer = eased
+        .visual_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video layer should be active");
+    assert_eq!(layer.visual.transform.rotation.degrees, 25);
+
+    let text_between = resolve_frame_state(&normalized, Microseconds::new(750_000))
+        .expect("text color frame should resolve");
+    assert_eq!(text_between.text_overlays[0].style.color, "#ff0000");
 }
 
 #[test]
@@ -573,6 +728,38 @@ fn segment(
         SourceTimerange::new(source_start, duration),
         TargetTimerange::new(target_start, duration),
     )
+}
+
+fn int_keyframe(property: KeyframeProperty, at: u64, value: i32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Int { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
+}
+
+fn uint_keyframe(property: KeyframeProperty, at: u64, value: u32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Uint { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
+}
+
+fn color_keyframe(property: KeyframeProperty, at: u64, value: &str) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Color {
+            value: value.to_owned(),
+        },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
 }
 
 fn default_visual_json() -> serde_json::Value {
