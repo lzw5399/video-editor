@@ -4,16 +4,21 @@
 //! graph of materials, tracks, segments, filters, transitions, and text intents.
 //! It does not execute FFmpeg jobs or decide editing behavior.
 
+pub mod fingerprint;
 pub mod graph;
 pub mod incremental;
 pub mod profile;
 
+pub use fingerprint::{
+    deterministic_fingerprint, RenderGraphNodeFingerprint, RenderGraphSnapshot,
+    GRAPH_GENERATOR_VERSION, GRAPH_SCHEMA_VERSION,
+};
 pub use graph::{
-    RenderAudioMix, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode,
-    RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph, RenderGraphError,
-    RenderGraphErrorKind, RenderIntentSupport, RenderMaterial, RenderSampledFrame,
-    RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, RenderVisualDiagnostic,
-    build_render_graph,
+    build_render_graph, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
+    RenderCanvasBackgroundMode, RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph,
+    RenderGraphError, RenderGraphErrorKind, RenderIntentSupport, RenderMaterial,
+    RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer,
+    RenderVisualDiagnostic,
 };
 pub use incremental::{
     RenderGraphDiff, RenderGraphNodeChange, RenderGraphNodeId, RenderGraphNodeRole,

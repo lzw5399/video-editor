@@ -10,10 +10,10 @@ use draft_model::{
     TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
     TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
-use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
-    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphErrorKind, RenderGraphPlan,
-    RenderGraphSnapshot, RenderOutputProfile, build_render_graph,
+    build_render_graph, ExportMp4Preset, OutputDimensions, PreviewFrameFormat,
+    RenderGraphErrorKind, RenderGraphPlan, RenderGraphSnapshot, RenderOutputProfile,
 };
 
 #[test]
@@ -652,8 +652,14 @@ fn render_graph_snapshot_collects_in_memory_node_fingerprints() {
     let snapshot = RenderGraphSnapshot::from_graph(&graph, &output_profile, "runtime:software:v1");
 
     assert_eq!(snapshot.draft_id.as_str(), "draft-render-graph");
-    assert_eq!(snapshot.graph_schema_version, render_graph::GRAPH_SCHEMA_VERSION);
-    assert_eq!(snapshot.generator_version, render_graph::GRAPH_GENERATOR_VERSION);
+    assert_eq!(
+        snapshot.graph_schema_version,
+        render_graph::GRAPH_SCHEMA_VERSION
+    );
+    assert_eq!(
+        snapshot.generator_version,
+        render_graph::GRAPH_GENERATOR_VERSION
+    );
     assert!(snapshot
         .node_fingerprint_by_key("draft:draft-render-graph:canvas")
         .is_some());

@@ -2,10 +2,10 @@ use draft_model::{
     Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
     TargetTimerange, Track, TrackKind,
 };
-use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
-    OutputDimensions, RenderGraphNodeRole, RenderGraphSnapshot, RenderOutputProfile,
-    build_render_graph,
+    build_render_graph, OutputDimensions, RenderGraphNodeRole, RenderGraphSnapshot,
+    RenderOutputProfile,
 };
 
 #[test]
@@ -64,19 +64,25 @@ fn stable_node_ids_survive_content_timing_and_material_metadata_changes() {
 fn fingerprints_change_without_changing_node_identity() {
     let before = phase13_graph_draft();
     let mut semantic_edit = before.clone();
-    semantic_edit.tracks[0].segments[0].visual.transform.opacity.value_millis = 750;
+    semantic_edit.tracks[0].segments[0]
+        .visual
+        .transform
+        .opacity
+        .value_millis = 750;
     let mut input_edit = before.clone();
     input_edit.materials[0].uri = "file://relinked-video.mp4".to_owned();
 
     let before_snapshot = snapshot_for(&before, output_profile(960, 540), "runtime:software:v1");
-    let semantic_snapshot =
-        snapshot_for(&semantic_edit, output_profile(960, 540), "runtime:software:v1");
+    let semantic_snapshot = snapshot_for(
+        &semantic_edit,
+        output_profile(960, 540),
+        "runtime:software:v1",
+    );
     let input_snapshot = snapshot_for(&input_edit, output_profile(960, 540), "runtime:software:v1");
     let output_snapshot = snapshot_for(&before, output_profile(1280, 720), "runtime:software:v1");
     let runtime_snapshot = snapshot_for(&before, output_profile(960, 540), "runtime:hardware:v2");
 
-    let video_key =
-        "draft:phase13-node-identity-draft:track:video-track:segment:segment-a:video";
+    let video_key = "draft:phase13-node-identity-draft:track:video-track:segment:segment-a:video";
     let material_key = "draft:phase13-node-identity-draft:material:video-material";
     let before_video = before_snapshot
         .node_fingerprint_by_key(video_key)
