@@ -485,7 +485,7 @@ export function Inspector({
                       label="宽度"
                       value={textState.textBoxWidthMillis}
                       min={1}
-                      max={2000}
+                      max={1000}
                       step={10}
                       onChange={(textBoxWidthMillis) => setTextState((current) => ({ ...current, textBoxWidthMillis }))}
                     />
@@ -493,7 +493,7 @@ export function Inspector({
                       label="高度"
                       value={textState.textBoxHeightMillis}
                       min={1}
-                      max={2000}
+                      max={1000}
                       step={10}
                       onChange={(textBoxHeightMillis) => setTextState((current) => ({ ...current, textBoxHeightMillis }))}
                     />
@@ -1032,8 +1032,8 @@ function validateTextForm(state: TextFormState): string | null {
     return "字间距必须是 0 到 2000 之间的整数。";
   }
 
-  if (!isIntegerInRange(state.textBoxWidthMillis, 1, 2000) || !isIntegerInRange(state.textBoxHeightMillis, 1, 2000)) {
-    return "文本框宽高必须是 1 到 2000 之间的整数。";
+  if (!isIntegerInRange(state.textBoxWidthMillis, 1, 1000) || !isIntegerInRange(state.textBoxHeightMillis, 1, 1000)) {
+    return "文本框宽高必须是 1 到 1000 之间的整数。";
   }
 
   if (
