@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 09-02; next execute 09-03 subtitle import
+status: Completed 09-03; next execute 09-04 desktop text/subtitle UI
 current_phase: 9
 current_phase_name: complete-text-and-subtitle-system
-current_plan: 2
+current_plan: 3
 total_plans_in_phase: 5
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-06-18T04:03:32.692Z"
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-06-18T04:20:51.261Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 59
-  completed_plans: 56
-  percent: 95
+  completed_plans: 57
+  percent: 97
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 9
-Plan: 2/5
-Status: Completed 09-02; next execute 09-03 subtitle import
+Plan: 3/5
+Status: Completed 09-03; next execute 09-04 desktop text/subtitle UI
 Last activity: 2026-06-18
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 56
+- Total plans completed: 57
 - Average duration: 8 min
-- Total execution time: 439 min
+- Total execution time: 451 min
 
 **By Phase:**
 
@@ -56,11 +56,11 @@ Progress: [██████████] 95%
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
-| 09 | 2 | 22 min | 11 min |
+| 09 | 3 | 34 min | 11 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 66 min
+- Last 5 plans: 68 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -116,6 +116,7 @@ Progress: [██████████] 95%
 | Phase 08 P05 | 12 min | 2 tasks | 8 files |
 | Phase 09 P01 | 12 min | 2 tasks | 8 files |
 | Phase 09 P02 | 10 min | 2 tasks | 10 files |
+| Phase 09 P03 | 12 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -223,6 +224,7 @@ Recent decisions affecting current work:
 - [Phase 09]: Proprietary text bubble and 花字 references are represented as unsupported external refs with camelCase externalRef fields. — This records adapter-facing capability references without making proprietary IDs internal render semantics.
 - [Phase 09]: Segment-level text box and layout region fields take precedence over profile safe-area defaults during frame-state resolution.
 - [Phase 09]: Unsupported text font refs, bubbles, and effects stop ASS compilation with an explicit UnsupportedTextResource error instead of silently approximating proprietary resources.
+- [Phase 09]: importSubtitleSrt is a Rust-owned timeline command that parses SRT into subtitle TextSegment batches with one undo snapshot. — Renderer code can provide file content, but parsing, timing, track creation, segment creation, and malformed rejection stay in Rust command semantics.
 
 ### Pending Todos
 
@@ -251,6 +253,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T04:02:45.481Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-06-18T04:20:51.258Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None

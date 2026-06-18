@@ -362,7 +362,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
 
-- [ ] 09-03-PLAN.md - Add Rust-owned subtitle SRT import and binding coverage
+- [x] 09-03-PLAN.md - Add Rust-owned subtitle SRT import and binding coverage
 
 **Wave 4** *(blocked on Wave 1 and Wave 3 completion)*
 
@@ -448,7 +448,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
-| 9. Complete Text And Subtitle System | 2/5 | In Progress|  |
+| 9. Complete Text And Subtitle System | 3/5 | In Progress|  |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |
 | 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
