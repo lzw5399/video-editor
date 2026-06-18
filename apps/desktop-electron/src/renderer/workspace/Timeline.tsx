@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import type { SegmentId } from "../../generated/Draft";
 import {
   deriveTimelineRows,
+  formatKeyframeEasing,
+  formatKeyframeProperty,
   formatTimelineTime,
   segmentBlockStyle,
   type WorkspaceState
@@ -372,6 +374,8 @@ function TimelineSegmentBlock({
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
 }): React.ReactElement {
+  const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
+
   return (
     <button
       type="button"
@@ -384,6 +388,23 @@ function TimelineSegmentBlock({
     >
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
+      {segment.segment.keyframes.length > 0 && showKeyframeStrip ? (
+        <span className="segment-keyframe-strip" aria-label="关键帧标记">
+          {segment.segment.keyframes.map((keyframe) => (
+            <span
+              key={`${keyframe.property}-${keyframe.at}`}
+              className="segment-keyframe-marker"
+              style={{
+                left: `${(Math.max(0, Math.min(segment.duration, keyframe.at)) / Math.max(1, segment.duration)) * 100}%`
+              }}
+              title={`${formatKeyframeProperty(keyframe.property)}关键帧 ${formatTimelineTime(keyframe.at)} · ${formatKeyframeEasing(
+                keyframe.easing
+              )}`}
+              aria-label={`${segment.label} ${formatKeyframeProperty(keyframe.property)}关键帧 ${formatTimelineTime(keyframe.at)}`}
+            />
+          ))}
+        </span>
+      ) : null}
     </button>
   );
 }

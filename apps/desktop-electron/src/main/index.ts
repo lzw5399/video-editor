@@ -10,7 +10,7 @@ import type {
   RuntimeCapabilityReport,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
-import type { Draft, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
+import type { Draft, Keyframe, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
@@ -25,6 +25,9 @@ type TestExecuteCommandCall = {
     frameRate: { numerator: number; denominator: number };
   } | null;
   visual: SegmentVisual | null;
+  keyframe: Keyframe | null;
+  keyframeProperty: string | null;
+  keyframeAt: number | null;
   textContent: string | null;
   textSource: string | null;
   srtContent: string | null;
@@ -74,6 +77,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testTextResponse = maybeBuildTestTextCommandResponse(command);
   if (testTextResponse !== null) {
     return testTextResponse;
+  }
+  const testKeyframeResponse = maybeBuildTestKeyframeCommandResponse(command);
+  if (testKeyframeResponse !== null) {
+    return testKeyframeResponse;
   }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
@@ -178,6 +185,19 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
   const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
   const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
+  const keyframe = command.payload.kind === "setSegmentKeyframe" ? command.payload.keyframe : null;
+  const keyframeProperty =
+    command.payload.kind === "setSegmentKeyframe"
+      ? command.payload.keyframe.property
+      : command.payload.kind === "removeSegmentKeyframe"
+        ? command.payload.property
+        : null;
+  const keyframeAt =
+    command.payload.kind === "setSegmentKeyframe"
+      ? command.payload.keyframe.at
+      : command.payload.kind === "removeSegmentKeyframe"
+        ? command.payload.at
+        : null;
   const text =
     command.payload.kind === "addTextSegment" || command.payload.kind === "editTextSegment" ? command.payload.text : null;
   const srtContent = command.payload.kind === "importSubtitleSrt" ? command.payload.srtContent : null;
@@ -197,6 +217,9 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     targetTimerange,
     canvasConfig,
     visual,
+    keyframe,
+    keyframeProperty,
+    keyframeAt,
     textContent: text?.content ?? null,
     textSource: text?.source ?? null,
     srtContent,
@@ -363,6 +386,66 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
   };
 
   return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [segmentId], "subtitleSrtImported");
+}
+
+function maybeBuildTestKeyframeCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
+  if (command.payload.kind !== "setSegmentKeyframe" && command.payload.kind !== "removeSegmentKeyframe") {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return null;
+  }
+
+  let trackId = command.payload.selection.trackIds[0] ?? "";
+  const draft: Draft = {
+    ...command.payload.draft,
+    tracks: command.payload.draft.tracks.map((track) => ({
+      ...track,
+      segments: track.segments.map((segment) => {
+        if (segment.segmentId !== command.payload.segmentId) {
+          return segment;
+        }
+
+        trackId = track.trackId;
+
+        if (command.payload.kind === "setSegmentKeyframe") {
+          const keyframes = [
+            ...segment.keyframes.filter(
+              (keyframe) =>
+                keyframe.property !== command.payload.keyframe.property || keyframe.at !== command.payload.keyframe.at
+            ),
+            command.payload.keyframe
+          ].sort(compareKeyframes);
+
+          return {
+            ...segment,
+            keyframes
+          };
+        }
+
+        return {
+          ...segment,
+          keyframes: segment.keyframes
+            .filter((keyframe) => keyframe.property !== command.payload.property || keyframe.at !== command.payload.at)
+            .sort(compareKeyframes)
+        };
+      })
+    }))
+  };
+
+  return buildTestTimelineCommandResponse(
+    command,
+    draft,
+    trackId,
+    command.payload.selection.segmentIds,
+    command.payload.kind === "setSegmentKeyframe" ? "segmentKeyframeSet" : "segmentKeyframeRemoved"
+  );
+}
+
+function compareKeyframes(left: Keyframe, right: Keyframe): number {
+  const propertyOrder = left.property.localeCompare(right.property);
+  return propertyOrder === 0 ? left.at - right.at : propertyOrder;
 }
 
 function buildTestTimelineCommandResponse(

@@ -14,6 +14,10 @@ import type {
   CanvasBackground,
   Draft,
   DraftCanvasConfig,
+  KeyframeEasing,
+  KeyframeInterpolation,
+  KeyframeProperty,
+  KeyframeValue,
   Material,
   MaterialKind,
   MaterialStatus,
@@ -549,6 +553,61 @@ export function formatTrackKind(kind: TrackKind): string {
   };
 
   return labels[kind];
+}
+
+export function formatKeyframeProperty(property: KeyframeProperty): string {
+  const labels: Record<KeyframeProperty, string> = {
+    visualPositionX: "位置 X",
+    visualPositionY: "位置 Y",
+    visualScaleX: "缩放 X",
+    visualScaleY: "缩放 Y",
+    visualRotation: "旋转",
+    visualOpacity: "不透明度",
+    textFontSize: "字号",
+    textColor: "颜色",
+    textLineHeight: "行高",
+    textLetterSpacing: "字间距",
+    textLayoutX: "布局 X",
+    textLayoutY: "布局 Y",
+    textLayoutWidth: "布局宽",
+    textLayoutHeight: "布局高",
+    volume: "音量",
+    stickerPositionX: "贴纸位置 X",
+    stickerPositionY: "贴纸位置 Y",
+    stickerScaleX: "贴纸缩放 X",
+    stickerScaleY: "贴纸缩放 Y",
+    filterParameterUnsupported: "滤镜参数"
+  };
+
+  return labels[property];
+}
+
+export function formatKeyframeValue(value: KeyframeValue): string {
+  if (value.kind === "color") {
+    return value.value;
+  }
+
+  return String(value.value);
+}
+
+export function formatKeyframeInterpolation(interpolation: KeyframeInterpolation): string {
+  const labels: Record<KeyframeInterpolation, string> = {
+    hold: "保持",
+    linear: "线性"
+  };
+
+  return labels[interpolation];
+}
+
+export function formatKeyframeEasing(easing: KeyframeEasing): string {
+  const labels: Record<KeyframeEasing, string> = {
+    none: "无",
+    easeIn: "缓入",
+    easeOut: "缓出",
+    easeInOut: "缓入缓出"
+  };
+
+  return labels[easing];
 }
 
 export function formatMaterialDetail(material: Material): string {

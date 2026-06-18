@@ -17,6 +17,11 @@ import type {
   DraftCanvasConfig,
   Material,
   MaterialKind,
+  Keyframe,
+  KeyframeEasing,
+  KeyframeInterpolation,
+  KeyframeProperty,
+  KeyframeValue,
   SegmentVisual,
   SegmentVolume,
   TextSegment,
@@ -40,7 +45,9 @@ import {
   buildRequestPreviewFrameCommand,
   buildRequestPreviewSegmentCommand,
   buildRedoTimelineEditCommand,
+  buildRemoveSegmentKeyframeCommand,
   buildSelectTimelineSegmentsCommand,
+  buildSetSegmentKeyframeCommand,
   buildSetSegmentVolumeCommand,
   buildSetTrackMuteCommand,
   buildSplitSegmentCommand,
@@ -126,6 +133,14 @@ const TEXT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
   segmentStatusLabel: "文字已更新，请重新生成预览片段",
   segmentMetadataLabel: "预览片段需要重新生成",
   exportLogSummary: "文字已更新，请重新开始导出"
+};
+
+const KEYFRAME_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  frameStatusLabel: "关键帧已更新，请重新请求预览帧",
+  frameMetadataLabel: "预览帧需要重新生成",
+  segmentStatusLabel: "关键帧已更新，请重新生成预览片段",
+  segmentMetadataLabel: "预览片段需要重新生成",
+  exportLogSummary: "关键帧已更新，请重新开始导出"
 };
 
 declare global {
@@ -315,6 +330,18 @@ export function App(): React.ReactElement {
           ...next,
           preview: clearDerivedPreviewState(current.preview, TEXT_DERIVED_STATE_COPY),
           export: clearDerivedExportState(current.export, TEXT_DERIVED_STATE_COPY.exportLogSummary)
+        };
+      }
+
+      if (
+        result.ok &&
+        result.data !== null &&
+        (command.payload.kind === "setSegmentKeyframe" || command.payload.kind === "removeSegmentKeyframe")
+      ) {
+        return {
+          ...next,
+          preview: clearDerivedPreviewState(current.preview, KEYFRAME_DERIVED_STATE_COPY),
+          export: clearDerivedExportState(current.export, KEYFRAME_DERIVED_STATE_COPY.exportLogSummary)
         };
       }
 
@@ -899,6 +926,46 @@ export function App(): React.ReactElement {
     );
   }
 
+  function handleSetSelectedSegmentKeyframe(
+    property: KeyframeProperty,
+    interpolation: KeyframeInterpolation = "linear",
+    easing: KeyframeEasing = "none"
+  ): void {
+    void executeTimelineCommand(
+      (current) => {
+        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
+        if (selectedSegment === null) {
+          throw new Error("请先选择一个片段");
+        }
+
+        const keyframe: Keyframe = {
+          at: resolveSegmentRelativePlayhead(selectedSegment.segment.targetTimerange.start, selectedSegment.segment.targetTimerange.duration, playheadUs),
+          property,
+          value: keyframeValueForSegmentProperty(selectedSegment.segment, property),
+          interpolation,
+          easing
+        };
+
+        return buildSetSegmentKeyframeCommand(current, selectedSegment.segment.segmentId, keyframe);
+      },
+      "设置关键帧"
+    );
+  }
+
+  function handleRemoveSelectedSegmentKeyframe(property: KeyframeProperty, at: number): void {
+    void executeTimelineCommand(
+      (current) => {
+        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
+        if (selectedSegment === null) {
+          throw new Error("请先选择一个片段");
+        }
+
+        return buildRemoveSegmentKeyframeCommand(current, selectedSegment.segment.segmentId, property, Math.max(0, Math.round(at)));
+      },
+      "删除关键帧"
+    );
+  }
+
   function handleRequestPreviewFrame(): void {
     if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
       const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
@@ -1137,6 +1204,8 @@ export function App(): React.ReactElement {
       onEditSelectedText={handleEditSelectedText}
       onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}
       onUpdateSelectedSegmentVisual={handleUpdateSelectedSegmentVisual}
+      onSetSelectedSegmentKeyframe={handleSetSelectedSegmentKeyframe}
+      onRemoveSelectedSegmentKeyframe={handleRemoveSelectedSegmentKeyframe}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
       onSelectTimelineSegment={handleSelectTimelineSegment}
@@ -1297,6 +1366,72 @@ function compatibleTrackKind(materialKind: MaterialKind): TrackKind {
   }
 
   return "video";
+}
+
+function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {
+  const relative = Math.round(playhead) - segmentStart;
+  return Math.max(0, Math.min(Math.max(0, segmentDuration), relative));
+}
+
+function keyframeValueForSegmentProperty(
+  segment: Draft["tracks"][number]["segments"][number],
+  property: KeyframeProperty
+): KeyframeValue {
+  switch (property) {
+    case "visualPositionX":
+      return { kind: "int", value: segment.visual.transform.position.x };
+    case "visualPositionY":
+      return { kind: "int", value: segment.visual.transform.position.y };
+    case "visualScaleX":
+      return { kind: "uint", value: segment.visual.transform.scale.xMillis };
+    case "visualScaleY":
+      return { kind: "uint", value: segment.visual.transform.scale.yMillis };
+    case "visualRotation":
+      return { kind: "int", value: segment.visual.transform.rotation.degrees };
+    case "visualOpacity":
+      return { kind: "uint", value: segment.visual.transform.opacity.valueMillis };
+    case "volume":
+      return { kind: "uint", value: segment.volume.levelMillis };
+    case "textFontSize":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.style.fontSize };
+    case "textColor":
+      assertSegmentHasText(segment, property);
+      return { kind: "color", value: segment.text.style.color };
+    case "textLineHeight":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.style.lineHeightMillis };
+    case "textLetterSpacing":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.style.letterSpacingMillis };
+    case "textLayoutX":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.layoutRegion.xMillis };
+    case "textLayoutY":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.layoutRegion.yMillis };
+    case "textLayoutWidth":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.layoutRegion.widthMillis };
+    case "textLayoutHeight":
+      assertSegmentHasText(segment, property);
+      return { kind: "uint", value: segment.text.layoutRegion.heightMillis };
+    case "stickerPositionX":
+    case "stickerPositionY":
+    case "stickerScaleX":
+    case "stickerScaleY":
+    case "filterParameterUnsupported":
+      throw new Error("当前阶段暂不支持该参数动画");
+  }
+}
+
+function assertSegmentHasText(
+  segment: Draft["tracks"][number]["segments"][number],
+  property: KeyframeProperty
+): asserts segment is Draft["tracks"][number]["segments"][number] & { text: TextSegment } {
+  if (segment.text === null || segment.text === undefined) {
+    throw new Error(`当前片段没有可用于 ${property} 的文字参数`);
+  }
 }
 
 function toPositiveMicroseconds(value: number): number {

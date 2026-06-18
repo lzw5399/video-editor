@@ -1,6 +1,6 @@
 import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
+import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, SegmentVisual } from "../../generated/Draft";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
@@ -33,6 +33,12 @@ type WorkspaceShellProps = {
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
+  onSetSelectedSegmentKeyframe: (
+    property: KeyframeProperty,
+    interpolation?: KeyframeInterpolation,
+    easing?: KeyframeEasing
+  ) => void;
+  onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty, at: number) => void;
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
@@ -73,6 +79,8 @@ export function WorkspaceShell({
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
+  onSetSelectedSegmentKeyframe,
+  onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute,
   onSelectTimelineSegment,
@@ -157,9 +165,12 @@ export function WorkspaceShell({
       <aside className="inspector-panel" aria-label="属性检查器">
         <Inspector
           workspace={workspace}
+          playheadUs={playheadUs}
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
+          onSetSelectedSegmentKeyframe={onSetSelectedSegmentKeyframe}
+          onRemoveSelectedSegmentKeyframe={onRemoveSelectedSegmentKeyframe}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
         />

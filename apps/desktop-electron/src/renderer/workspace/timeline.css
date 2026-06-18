@@ -324,6 +324,31 @@
   white-space: nowrap;
 }
 
+.segment-keyframe-strip {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  left: 5px;
+  z-index: 2;
+  height: 8px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.segment-keyframe-marker {
+  position: absolute;
+  bottom: 1px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(6, 19, 20, 0.76);
+  background: #d6a23f;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.segment-block.selected .segment-keyframe-marker {
+  background: #20c7d9;
+}
+
 .segment-block:hover {
   border-color: #5f7b80;
 }

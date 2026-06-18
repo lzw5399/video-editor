@@ -17,9 +17,11 @@ import type {
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
   RedoTimelineEditCommandPayload,
+  RemoveSegmentKeyframeCommandPayload,
   RequestPreviewFrameCommandPayload,
   RequestPreviewSegmentCommandPayload,
   SelectTimelineSegmentsCommandPayload,
+  SetSegmentKeyframeCommandPayload,
   SplitSegmentCommandPayload,
   StartExportCommandPayload,
   TimelineSelection,
@@ -40,6 +42,8 @@ import type {
 import type {
   Draft,
   DraftCanvasConfig,
+  Keyframe,
+  KeyframeProperty,
   MaterialId,
   MaterialKind,
   Microseconds,
@@ -407,6 +411,42 @@ export function buildUpdateSegmentVisualCommand(
   } satisfies UpdateSegmentVisualCommandPayload & { kind: "updateSegmentVisual" };
 
   return envelope("updateSegmentVisual", payload);
+}
+
+export function buildSetSegmentKeyframeCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  keyframe: Keyframe
+): CommandEnvelope {
+  const payload = {
+    kind: "setSegmentKeyframe",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    keyframe
+  } satisfies SetSegmentKeyframeCommandPayload & { kind: "setSegmentKeyframe" };
+
+  return envelope("setSegmentKeyframe", payload);
+}
+
+export function buildRemoveSegmentKeyframeCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  property: KeyframeProperty,
+  at: Microseconds
+): CommandEnvelope {
+  const payload = {
+    kind: "removeSegmentKeyframe",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    property,
+    at
+  } satisfies RemoveSegmentKeyframeCommandPayload & { kind: "removeSegmentKeyframe" };
+
+  return envelope("removeSegmentKeyframe", payload);
 }
 
 type RequestPreviewFrameOptions = {

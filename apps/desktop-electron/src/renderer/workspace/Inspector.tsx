@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   CanvasAspectRatioPreset,
   CanvasBackground,
   DraftCanvasConfig,
+  Keyframe,
+  KeyframeEasing,
+  KeyframeInterpolation,
+  KeyframeProperty,
   SegmentBackgroundFilling,
   SegmentFitMode,
   SegmentVisual,
@@ -18,8 +22,13 @@ import {
   formatCanvasFrameRate,
   formatCanvasReadout,
   formatCanvasSize,
+  formatKeyframeEasing,
+  formatKeyframeInterpolation,
+  formatKeyframeProperty,
+  formatKeyframeValue,
   formatMicroseconds,
   getSelectedSegmentView,
+  type SelectedSegmentView,
   type WorkspaceState
 } from "../viewModel";
 
@@ -27,9 +36,16 @@ import "./preview-inspector.css";
 
 type InspectorProps = {
   workspace: WorkspaceState;
+  playheadUs: number;
   onEditSelectedText: (text: TextSegment) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
+  onSetSelectedSegmentKeyframe: (
+    property: KeyframeProperty,
+    interpolation?: KeyframeInterpolation,
+    easing?: KeyframeEasing
+  ) => void;
+  onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty, at: number) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
@@ -156,21 +172,87 @@ const VISUAL_BACKGROUND_LABELS: Record<VisualBackgroundChoice, string> = {
   image: "图片"
 };
 const VISUAL_BACKGROUND_CHOICES: readonly VisualBackgroundChoice[] = ["none", "black", "solidColor", "blur", "image"];
+const KEYFRAME_INTERPOLATIONS: readonly KeyframeInterpolation[] = ["hold", "linear"];
+const KEYFRAME_EASINGS: readonly KeyframeEasing[] = ["none", "easeIn", "easeOut", "easeInOut"];
+const TEXT_KEYFRAME_PROPERTIES: readonly KeyframeProperty[] = [
+  "textFontSize",
+  "textColor",
+  "textLineHeight",
+  "textLetterSpacing",
+  "textLayoutX",
+  "textLayoutY",
+  "textLayoutWidth",
+  "textLayoutHeight"
+];
+const DEFERRED_KEYFRAME_PROPERTIES: readonly KeyframeProperty[] = [
+  "stickerPositionX",
+  "stickerPositionY",
+  "stickerScaleX",
+  "stickerScaleY",
+  "filterParameterUnsupported"
+];
+const KEYFRAME_PROPERTY_GROUPS: readonly {
+  name: string;
+  properties: readonly KeyframeProperty[];
+  deferred?: boolean;
+}[] = [
+  {
+    name: "画面",
+    properties: ["visualPositionX", "visualPositionY", "visualScaleX", "visualScaleY", "visualRotation", "visualOpacity"]
+  },
+  {
+    name: "文本",
+    properties: TEXT_KEYFRAME_PROPERTIES
+  },
+  {
+    name: "音频",
+    properties: ["volume"]
+  },
+  {
+    name: "特效",
+    properties: DEFERRED_KEYFRAME_PROPERTIES,
+    deferred: true
+  }
+];
 
 export function Inspector({
   workspace,
+  playheadUs,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
+  onSetSelectedSegmentKeyframe,
+  onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
   const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
   const [activeTab, setActiveTab] = useState<InspectorTab>("画面");
+  const [focusedKeyframeProperty, setFocusedKeyframeProperty] = useState<KeyframeProperty>("visualPositionX");
   const [textState, setTextState] = useState<TextFormState>(DEFAULT_TEXT_STATE);
   const [volume, setVolume] = useState(1000);
   const sequenceDuration = getSequenceDuration(workspace);
   const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
+  const relativePlayheadUs =
+    selected === null
+      ? 0
+      : resolveSegmentRelativePlayhead(selected.segment.targetTimerange.start, selected.segment.targetTimerange.duration, playheadUs);
+  const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
+  const renderKeyframeButton = (property: KeyframeProperty, label: string): React.ReactElement => (
+    <KeyframeButton
+      property={property}
+      propertyLabel={label}
+      selected={selected}
+      playheadAt={relativePlayheadUs}
+      pending={workspace.pendingCommand !== null}
+      onSet={() => onSetSelectedSegmentKeyframe(property)}
+      onRemove={(at) => onRemoveSelectedSegmentKeyframe(property, at)}
+      onFocusProperty={() => {
+        setFocusedKeyframeProperty(property);
+        setActiveTab("动画");
+      }}
+    />
+  );
 
   useEffect(() => {
     if (selected === null) {
@@ -307,6 +389,16 @@ export function Inspector({
               sequenceDuration={sequenceDuration}
               onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
             />
+          ) : activeTab === "动画" ? (
+            <AnimationInspectorTab
+              selected={null}
+              playheadAt={0}
+              focusedProperty={focusedKeyframeProperty}
+              pending={pendingKeyframe}
+              onFocusProperty={setFocusedKeyframeProperty}
+              onSetKeyframe={onSetSelectedSegmentKeyframe}
+              onRemoveKeyframe={onRemoveSelectedSegmentKeyframe}
+            />
           ) : (
             <DeferredInspectorTab tab={activeTab} selected={false} />
           )}
@@ -319,7 +411,7 @@ export function Inspector({
               <section className="inspector-section" aria-label="片段信息">
                 <div className="inspector-section-title">
                   <h3>片段参数</h3>
-                  <KeyframeButton />
+                  <KeyframeButton deferredLabel="片段参数关键帧暂不支持" />
                 </div>
                 <dl className="inspector-list compact">
                   <InspectorDatum label="片段ID" value={selected.segment.segmentId} />
@@ -343,11 +435,12 @@ export function Inspector({
               <section className="inspector-section" aria-label="画面变换">
                 <div className="inspector-section-title">
                   <h3>基础</h3>
-                  <KeyframeButton />
+                  {renderKeyframeButton("visualPositionX", "位置 X")}
                 </div>
                 <SegmentVisualControls
                   visual={selected.segment.visual}
                   pending={workspace.pendingCommand !== null}
+                  renderKeyframeButton={renderKeyframeButton}
                   onUpdateVisual={onUpdateSelectedSegmentVisual}
                 />
               </section>
@@ -357,7 +450,7 @@ export function Inspector({
                   <section className="inspector-section" aria-label="文本">
                     <div className="inspector-section-title">
                       <h3>文本</h3>
-                      <KeyframeButton />
+                      {renderKeyframeButton("textFontSize", "字号")}
                     </div>
                     <label className="field-row compact-row textarea-row">
                       <span>文字内容</span>
@@ -382,22 +475,26 @@ export function Inspector({
                       min={1}
                       max={400}
                       step={1}
+                      action={renderKeyframeButton("textFontSize", "字号")}
                       onChange={(fontSize) => setTextState((current) => ({ ...current, fontSize }))}
                     />
                     <label className="field-row compact-row color-row">
                       <span>颜色</span>
-                      <input
-                        type="color"
-                        value={textState.color}
-                        onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
-                      />
+                      <span className="field-with-action">
+                        <input
+                          type="color"
+                          value={textState.color}
+                          onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
+                        />
+                        {renderKeyframeButton("textColor", "颜色")}
+                      </span>
                     </label>
                   </section>
 
                   <section className="inspector-section" aria-label="样式">
                     <div className="inspector-section-title">
                       <h3>样式</h3>
-                      <KeyframeButton />
+                      <KeyframeButton deferredLabel="样式关键帧暂不支持" />
                     </div>
                     <label className="toggle-row compact-toggle">
                       <input
@@ -479,7 +576,7 @@ export function Inspector({
                   <section className="inspector-section" aria-label="文本框">
                     <div className="inspector-section-title">
                       <h3>文本框</h3>
-                      <KeyframeButton />
+                      {renderKeyframeButton("textLineHeight", "行高")}
                     </div>
                     <TextNumberField
                       label="宽度"
@@ -513,6 +610,7 @@ export function Inspector({
                       min={500}
                       max={3000}
                       step={50}
+                      action={renderKeyframeButton("textLineHeight", "行高")}
                       onChange={(lineHeightMillis) => setTextState((current) => ({ ...current, lineHeightMillis }))}
                     />
                     <TextNumberField
@@ -521,6 +619,7 @@ export function Inspector({
                       min={0}
                       max={2000}
                       step={50}
+                      action={renderKeyframeButton("textLetterSpacing", "字间距")}
                       onChange={(letterSpacingMillis) => setTextState((current) => ({ ...current, letterSpacingMillis }))}
                     />
                   </section>
@@ -528,7 +627,7 @@ export function Inspector({
                   <section className="inspector-section" aria-label="布局">
                     <div className="inspector-section-title">
                       <h3>布局</h3>
-                      <KeyframeButton />
+                      {renderKeyframeButton("textLayoutX", "布局 X")}
                     </div>
                     <p className="inspector-note">安全区域使用画布千分比坐标。</p>
                     <div className="text-layout-grid">
@@ -538,6 +637,7 @@ export function Inspector({
                         min={0}
                         max={1000}
                         step={10}
+                        action={renderKeyframeButton("textLayoutX", "布局 X")}
                         onChange={(layoutXMillis) => setTextState((current) => ({ ...current, layoutXMillis }))}
                       />
                       <TextNumberField
@@ -546,6 +646,7 @@ export function Inspector({
                         min={0}
                         max={1000}
                         step={10}
+                        action={renderKeyframeButton("textLayoutY", "布局 Y")}
                         onChange={(layoutYMillis) => setTextState((current) => ({ ...current, layoutYMillis }))}
                       />
                       <TextNumberField
@@ -554,6 +655,7 @@ export function Inspector({
                         min={1}
                         max={1000}
                         step={10}
+                        action={renderKeyframeButton("textLayoutWidth", "布局宽")}
                         onChange={(layoutWidthMillis) => setTextState((current) => ({ ...current, layoutWidthMillis }))}
                       />
                       <TextNumberField
@@ -562,6 +664,7 @@ export function Inspector({
                         min={1}
                         max={1000}
                         step={10}
+                        action={renderKeyframeButton("textLayoutHeight", "布局高")}
                         onChange={(layoutHeightMillis) => setTextState((current) => ({ ...current, layoutHeightMillis }))}
                       />
                     </div>
@@ -583,7 +686,7 @@ export function Inspector({
                   <section className="inspector-section" aria-label="花字气泡">
                     <div className="inspector-section-title">
                       <h3>花字 / 气泡</h3>
-                      <KeyframeButton />
+                      <KeyframeButton deferredLabel="花字气泡关键帧暂不支持" />
                     </div>
                     <div className="visual-deferred-grid">
                       <div className="visual-deferred-row">
@@ -603,7 +706,7 @@ export function Inspector({
                 <section className="inspector-section" aria-label="文字参数">
                   <div className="inspector-section-title">
                     <h3>文本</h3>
-                    <KeyframeButton />
+                    <KeyframeButton deferredLabel="文本关键帧需要文字片段" />
                   </div>
                   <p className="inspector-note">当前片段没有文字语义。</p>
                 </section>
@@ -615,18 +718,21 @@ export function Inspector({
             <section className="inspector-section" aria-label="音频参数" role="tabpanel">
               <div className="inspector-section-title">
                 <h3>音频</h3>
-                <KeyframeButton />
+                {renderKeyframeButton("volume", "音量")}
               </div>
               <label className="field-row compact-row">
                 <span>音量</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="4000"
-                  step="50"
-                  value={volume}
-                  onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
-                />
+                <span className="field-with-action">
+                  <input
+                    type="range"
+                    min="0"
+                    max="4000"
+                    step="50"
+                    value={volume}
+                    onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
+                  />
+                  {renderKeyframeButton("volume", "音量")}
+                </span>
               </label>
               <label className="field-row compact-row">
                 <span>毫音量</span>
@@ -659,7 +765,21 @@ export function Inspector({
             </section>
           ) : null}
 
-          {activeTab !== "画面" && activeTab !== "音频" ? <DeferredInspectorTab tab={activeTab} selected /> : null}
+          {activeTab === "动画" ? (
+            <AnimationInspectorTab
+              selected={selected}
+              playheadAt={relativePlayheadUs}
+              focusedProperty={focusedKeyframeProperty}
+              pending={pendingKeyframe}
+              onFocusProperty={setFocusedKeyframeProperty}
+              onSetKeyframe={onSetSelectedSegmentKeyframe}
+              onRemoveKeyframe={onRemoveSelectedSegmentKeyframe}
+            />
+          ) : null}
+
+          {activeTab !== "画面" && activeTab !== "音频" && activeTab !== "动画" ? (
+            <DeferredInspectorTab tab={activeTab} selected />
+          ) : null}
 
           {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
         </>
@@ -950,6 +1070,190 @@ function DeferredInspectorTab({ tab, selected }: { tab: InspectorTab; selected: 
   );
 }
 
+function AnimationInspectorTab({
+  selected,
+  playheadAt,
+  focusedProperty,
+  pending,
+  onFocusProperty,
+  onSetKeyframe,
+  onRemoveKeyframe
+}: {
+  selected: SelectedSegmentView | null;
+  playheadAt: number;
+  focusedProperty: KeyframeProperty;
+  pending: boolean;
+  onFocusProperty: (property: KeyframeProperty) => void;
+  onSetKeyframe: (property: KeyframeProperty, interpolation?: KeyframeInterpolation, easing?: KeyframeEasing) => void;
+  onRemoveKeyframe: (property: KeyframeProperty, at: number) => void;
+}): React.ReactElement {
+  if (selected === null) {
+    return (
+      <section className="inspector-section animation-panel" aria-label="动画参数" role="tabpanel">
+        <div className="inspector-section-title">
+          <h3>动画</h3>
+        </div>
+        <div className="empty-state compact-empty">
+          <strong>未选择片段</strong>
+          <span>选择时间线片段后，可查看动画参数和关键帧。</span>
+        </div>
+      </section>
+    );
+  }
+
+  const supportedFocused = isSupportedPropertyForSegment(selected, focusedProperty);
+  const focusedKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === focusedProperty);
+  const segmentName = selected.material?.displayName ?? selected.segment.segmentId;
+
+  return (
+    <section className="inspector-section animation-panel" aria-label="动画参数" role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>动画</h3>
+      </div>
+
+      <div className="animation-summary" aria-label="关键帧概览">
+        <strong>{segmentName}</strong>
+        <span>{selected.segment.keyframes.length} 个关键帧</span>
+        <span>播放头 {formatMicroseconds(playheadAt)}</span>
+        <em>当前 {formatKeyframeProperty(focusedProperty)}</em>
+      </div>
+
+      {pending ? <p className="keyframe-pending">关键帧命令处理中</p> : null}
+
+      {selected.segment.keyframes.length === 0 ? (
+        <div className="empty-state compact-empty keyframe-empty">
+          <strong>还没有关键帧</strong>
+          <span>在画面、文本或音频参数旁点击菱形，可在当前播放头添加关键帧。</span>
+        </div>
+      ) : null}
+
+      <div className="animation-property-groups" aria-label="属性关键帧">
+        {KEYFRAME_PROPERTY_GROUPS.map((group) => (
+          <div className="animation-property-group" key={group.name} aria-label={`${group.name}关键帧`}>
+            <div className="animation-group-title">
+              <strong>{group.name}</strong>
+              {group.deferred ? <span>暂未接入</span> : null}
+            </div>
+            {group.properties.map((property) => {
+              const count = selected.segment.keyframes.filter((keyframe) => keyframe.property === property).length;
+              const supported = isSupportedPropertyForSegment(selected, property);
+              return (
+                <button
+                  key={property}
+                  type="button"
+                  className={focusedProperty === property ? "animation-property-row active" : "animation-property-row"}
+                  aria-label={`${formatKeyframeProperty(property)}关键帧`}
+                  onClick={() => onFocusProperty(property)}
+                >
+                  <span>{formatKeyframeProperty(property)}</span>
+                  <em>{supported ? `${count} 个` : "暂不支持"}</em>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="animation-detail" aria-label={`${formatKeyframeProperty(focusedProperty)}关键帧`}>
+        <div className="animation-detail-title">
+          <strong>{formatKeyframeProperty(focusedProperty)}关键帧</strong>
+          <KeyframeButton
+            property={focusedProperty}
+            propertyLabel={formatKeyframeProperty(focusedProperty)}
+            selected={selected}
+            playheadAt={playheadAt}
+            pending={pending}
+            onSet={() => onSetKeyframe(focusedProperty)}
+            onRemove={(at) => onRemoveKeyframe(focusedProperty, at)}
+            onFocusProperty={() => onFocusProperty(focusedProperty)}
+          />
+        </div>
+        {!supportedFocused ? (
+          <div className="empty-state compact-empty deferred-animation">
+            <strong>特效动画暂未接入</strong>
+            <span>当前阶段仅显示特效动画能力边界，不会创建关键帧。</span>
+          </div>
+        ) : focusedKeyframes.length === 0 ? (
+          <p className="inspector-note">当前属性还没有关键帧。</p>
+        ) : (
+          <div className="keyframe-row-list" aria-label="关键帧列表">
+            {focusedKeyframes.map((keyframe) => (
+              <KeyframeDetailRow
+                key={`${keyframe.property}-${keyframe.at}`}
+                keyframe={keyframe}
+                active={keyframe.at === playheadAt}
+                pending={pending}
+                onRemove={() => onRemoveKeyframe(keyframe.property, keyframe.at)}
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="animation-controls" aria-label="关键帧插值与缓动">
+          <span>插值</span>
+          <div className="segmented-control keyframe-segmented" role="group" aria-label="关键帧插值">
+            {KEYFRAME_INTERPOLATIONS.map((interpolation) => (
+              <button
+                key={interpolation}
+                type="button"
+                onClick={() => onSetKeyframe(focusedProperty, interpolation)}
+                disabled={pending || !supportedFocused}
+              >
+                {formatKeyframeInterpolation(interpolation)}
+              </button>
+            ))}
+          </div>
+          <span>缓动</span>
+          <div className="segmented-control keyframe-segmented" role="group" aria-label="关键帧缓动">
+            {KEYFRAME_EASINGS.map((easing) => (
+              <button
+                key={easing}
+                type="button"
+                onClick={() => onSetKeyframe(focusedProperty, "linear", easing)}
+                disabled={pending || !supportedFocused}
+              >
+                {formatKeyframeEasing(easing)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="animation-presets" aria-label="动画预设">
+        {["入场", "出场", "循环"].map((label) => (
+          <button key={label} type="button" disabled>
+            {label}<span>未接入</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KeyframeDetailRow({
+  keyframe,
+  active,
+  pending,
+  onRemove
+}: {
+  keyframe: Keyframe;
+  active: boolean;
+  pending: boolean;
+  onRemove: () => void;
+}): React.ReactElement {
+  return (
+    <div className={active ? "keyframe-detail-row active" : "keyframe-detail-row"}>
+      <span>{formatMicroseconds(keyframe.at)}</span>
+      <span>{formatKeyframeValue(keyframe.value)}</span>
+      <span>{formatKeyframeInterpolation(keyframe.interpolation)}</span>
+      <span>{formatKeyframeEasing(keyframe.easing)}</span>
+      <button type="button" onClick={onRemove} disabled={pending} aria-label={`删除${formatKeyframeProperty(keyframe.property)}关键帧`}>
+        删除
+      </button>
+    </div>
+  );
+}
+
 function InspectorDatum({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div>
@@ -959,14 +1263,90 @@ function InspectorDatum({ label, value }: { label: string; value: string }): Rea
   );
 }
 
-function KeyframeButton(): React.ReactElement {
+function KeyframeButton({
+  property,
+  propertyLabel,
+  selected = null,
+  playheadAt = 0,
+  pending = false,
+  deferredLabel,
+  onSet,
+  onRemove,
+  onFocusProperty
+}: {
+  property?: KeyframeProperty;
+  propertyLabel?: string;
+  selected?: SelectedSegmentView | null;
+  playheadAt?: number;
+  pending?: boolean;
+  deferredLabel?: string;
+  onSet?: () => void;
+  onRemove?: (at: number) => void;
+  onFocusProperty?: () => void;
+}): React.ReactElement {
+  if (deferredLabel !== undefined || property === undefined || propertyLabel === undefined) {
+    const label = deferredLabel ?? "关键帧功能待接入";
+    return (
+      <button type="button" className="keyframe-button deferred" aria-label={label} title={label} disabled>
+        <span aria-hidden="true">◇</span>
+      </button>
+    );
+  }
+
+  if (selected === null || !isSupportedPropertyForSegment(selected, property)) {
+    const label = `${propertyLabel}关键帧暂不支持`;
+    return (
+      <button type="button" className="keyframe-button deferred" aria-label={label} title={label} disabled>
+        <span aria-hidden="true">◇</span>
+      </button>
+    );
+  }
+
+  const propertyKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === property);
+  const activeKeyframe = propertyKeyframes.find((keyframe) => keyframe.at === playheadAt);
+  const disabled = pending;
+
+  if (activeKeyframe !== undefined) {
+    const label = `删除${propertyLabel}关键帧`;
+    return (
+      <button
+        type="button"
+        className="keyframe-button active"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={() => onRemove?.(activeKeyframe.at)}
+      >
+        <span aria-hidden="true">◆</span>
+      </button>
+    );
+  }
+
+  if (propertyKeyframes.length > 0) {
+    const label = `查看${propertyLabel}关键帧`;
+    return (
+      <button
+        type="button"
+        className="keyframe-button has-keyframes"
+        aria-label={label}
+        title={`已有${propertyKeyframes.length}个${propertyLabel}关键帧`}
+        disabled={disabled}
+        onClick={onFocusProperty}
+      >
+        <span aria-hidden="true">◇</span>
+      </button>
+    );
+  }
+
+  const label = `添加${propertyLabel}关键帧`;
   return (
     <button
       type="button"
       className="keyframe-button"
-      aria-label="关键帧功能待接入"
-      title="关键帧功能待接入"
-      disabled
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onSet}
     >
       <span aria-hidden="true">◇+</span>
     </button>
@@ -980,6 +1360,7 @@ function TextNumberField({
   max,
   step,
   disabled = false,
+  action,
   onChange
 }: {
   label: string;
@@ -988,10 +1369,11 @@ function TextNumberField({
   max: number;
   step: number;
   disabled?: boolean;
+  action?: ReactNode;
   onChange: (value: number) => void;
 }): React.ReactElement {
   return (
-    <label className="field-row compact-row text-number-row">
+    <div className={action === undefined ? "field-row compact-row text-number-row" : "field-row compact-row text-number-row with-action"}>
       <span>{label}</span>
       <input
         aria-label={label}
@@ -1003,8 +1385,26 @@ function TextNumberField({
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
       />
-    </label>
+      {action}
+    </div>
   );
+}
+
+function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {
+  const relative = Math.round(playhead) - segmentStart;
+  return Math.max(0, Math.min(Math.max(0, segmentDuration), relative));
+}
+
+function isSupportedPropertyForSegment(selected: SelectedSegmentView, property: KeyframeProperty): boolean {
+  if (DEFERRED_KEYFRAME_PROPERTIES.includes(property)) {
+    return false;
+  }
+
+  if (TEXT_KEYFRAME_PROPERTIES.includes(property)) {
+    return selected.segment.text !== null && selected.segment.text !== undefined;
+  }
+
+  return true;
 }
 
 function validateTextForm(state: TextFormState): string | null {
@@ -1059,10 +1459,12 @@ function isIntegerInRange(value: number, min: number, max: number): boolean {
 function SegmentVisualControls({
   visual,
   pending,
+  renderKeyframeButton,
   onUpdateVisual
 }: {
   visual: SegmentVisual;
   pending: boolean;
+  renderKeyframeButton: (property: KeyframeProperty, label: string) => React.ReactElement;
   onUpdateVisual: (visual: SegmentVisual) => void;
 }): React.ReactElement {
   const visualKey = useMemo(() => JSON.stringify(visual), [visual]);
@@ -1105,6 +1507,8 @@ function SegmentVisualControls({
         disabled={pending}
         onFirstChange={(value) => updateVisualField("positionX", value)}
         onSecondChange={(value) => updateVisualField("positionY", value)}
+        firstAction={renderKeyframeButton("visualPositionX", "位置 X")}
+        secondAction={renderKeyframeButton("visualPositionY", "位置 Y")}
       />
 
       <VisualPairControl
@@ -1119,6 +1523,8 @@ function SegmentVisualControls({
         disabled={pending}
         onFirstChange={(value) => updateVisualField("scaleXMillis", value)}
         onSecondChange={(value) => updateVisualField("scaleYMillis", value)}
+        firstAction={renderKeyframeButton("visualScaleX", "缩放 X")}
+        secondAction={renderKeyframeButton("visualScaleY", "缩放 Y")}
       />
 
       <VisualSingleControl
@@ -1129,6 +1535,7 @@ function SegmentVisualControls({
         value={visualState.rotationDegrees}
         disabled={pending}
         onChange={(value) => updateVisualField("rotationDegrees", value)}
+        action={renderKeyframeButton("visualRotation", "旋转")}
       />
 
       <VisualSingleControl
@@ -1139,6 +1546,7 @@ function SegmentVisualControls({
         value={visualState.opacityMillis}
         disabled={pending}
         onChange={(value) => updateVisualField("opacityMillis", value)}
+        action={renderKeyframeButton("visualOpacity", "不透明度")}
       />
 
       <div className="visual-control-row">
@@ -1287,7 +1695,9 @@ function VisualPairControl({
   secondValue,
   disabled,
   onFirstChange,
-  onSecondChange
+  onSecondChange,
+  firstAction,
+  secondAction
 }: {
   label: string;
   firstLabel: string;
@@ -1300,6 +1710,8 @@ function VisualPairControl({
   disabled: boolean;
   onFirstChange: (value: string) => void;
   onSecondChange: (value: string) => void;
+  firstAction?: ReactNode;
+  secondAction?: ReactNode;
 }): React.ReactElement {
   return (
     <div className="visual-control-row" role="group" aria-label={label}>
@@ -1314,6 +1726,7 @@ function VisualPairControl({
           value={firstValue}
           disabled={disabled}
           onChange={onFirstChange}
+          action={firstAction}
         />
         <VisualRangeNumber
           label={label}
@@ -1324,6 +1737,7 @@ function VisualPairControl({
           value={secondValue}
           disabled={disabled}
           onChange={onSecondChange}
+          action={secondAction}
         />
       </div>
     </div>
@@ -1337,7 +1751,8 @@ function VisualSingleControl({
   step,
   value,
   disabled,
-  onChange
+  onChange,
+  action
 }: {
   label: string;
   min: number;
@@ -1346,6 +1761,7 @@ function VisualSingleControl({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  action?: ReactNode;
 }): React.ReactElement {
   return (
     <div className="visual-control-row" role="group" aria-label={label}>
@@ -1359,6 +1775,7 @@ function VisualSingleControl({
         value={value}
         disabled={disabled}
         onChange={onChange}
+        action={action}
       />
     </div>
   );
@@ -1372,7 +1789,8 @@ function VisualRangeNumber({
   step,
   value,
   disabled,
-  onChange
+  onChange,
+  action
 }: {
   label: string;
   shortLabel: string;
@@ -1382,12 +1800,13 @@ function VisualRangeNumber({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  action?: ReactNode;
 }): React.ReactElement {
   const rangeValue = clamp(Number.parseInt(value, 10) || 0, min, max);
   const numberAriaLabel = shortLabel === "数值" ? label : `${label} ${shortLabel}`;
 
   return (
-    <label className="visual-range-number">
+    <div className={action === undefined ? "visual-range-number" : "visual-range-number with-keyframe"}>
       <span>{shortLabel}</span>
       <input
         aria-label={`${numberAriaLabel}滑杆`}
@@ -1409,7 +1828,8 @@ function VisualRangeNumber({
         onChange={(event) => onChange(event.currentTarget.value)}
         disabled={disabled}
       />
-    </label>
+      {action}
+    </div>
   );
 }
 
