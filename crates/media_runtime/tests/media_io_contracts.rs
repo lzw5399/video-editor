@@ -2,10 +2,11 @@ use std::path::PathBuf;
 
 use media_runtime::{
     AudioDecodeRequest, AudioDecoder, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer,
-    DecodeError, DecodeErrorKind, FrameDimensions, MediaIoError, MediaIoErrorKind,
-    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
-    RationalFrameRate, RuntimeDeviceId, StreamId, TextureBackend, TextureHandle, TextureHandleId,
-    VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
+    DecodedAudioFrame, DecodedVideoFrame, DecodeError, DecodeErrorKind, FrameDimensions,
+    MediaIoError, MediaIoErrorKind, MediaOpenRequest, MediaReader, MediaSession, MediaSessionId,
+    MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId, StreamId,
+    TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata, VideoDecodeRequest,
+    VideoDecoder, VideoPixelFormat,
 };
 
 #[test]
@@ -183,7 +184,10 @@ impl VideoDecoder for FakeVideoDecoder {
         "fake-video-decoder"
     }
 
-    fn decode_at(&mut self, _request: VideoDecodeRequest) -> Result<(), DecodeError> {
+    fn decode_at(
+        &mut self,
+        _request: VideoDecodeRequest,
+    ) -> Result<DecodedVideoFrame, DecodeError> {
         Err(DecodeError::new(
             DecodeErrorKind::Unsupported,
             "fake decoder does not decode frames",
@@ -202,7 +206,10 @@ impl AudioDecoder for FakeAudioDecoder {
         "fake-audio-decoder"
     }
 
-    fn read_range(&mut self, _request: AudioDecodeRequest) -> Result<(), DecodeError> {
+    fn read_range(
+        &mut self,
+        _request: AudioDecodeRequest,
+    ) -> Result<DecodedAudioFrame, DecodeError> {
         Err(DecodeError::new(
             DecodeErrorKind::Unsupported,
             "fake decoder does not decode audio",

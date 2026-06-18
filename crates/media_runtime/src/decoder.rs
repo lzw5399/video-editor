@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::{DecodedAudioFrame, DecodedVideoFrame};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DecodeErrorKind {
@@ -43,12 +45,15 @@ pub struct AudioDecodeRequest {
 
 pub trait VideoDecoder {
     fn decoder_name(&self) -> &'static str;
-    fn decode_at(&mut self, request: VideoDecodeRequest) -> Result<(), DecodeError>;
+    fn decode_at(&mut self, request: VideoDecodeRequest) -> Result<DecodedVideoFrame, DecodeError>;
     fn flush(&mut self) -> Result<(), DecodeError>;
 }
 
 pub trait AudioDecoder {
     fn decoder_name(&self) -> &'static str;
-    fn read_range(&mut self, request: AudioDecodeRequest) -> Result<(), DecodeError>;
+    fn read_range(
+        &mut self,
+        request: AudioDecodeRequest,
+    ) -> Result<DecodedAudioFrame, DecodeError>;
     fn flush(&mut self) -> Result<(), DecodeError>;
 }

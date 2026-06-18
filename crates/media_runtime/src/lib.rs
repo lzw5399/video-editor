@@ -41,7 +41,12 @@ pub use discovery::{
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
 pub use fallback::{MediaIoFallbackReason, SelectedDecodePath};
-pub use frame::{FrameDimensions, FrameHandleId};
+pub use frame::{
+    CpuFrameHandle, DecodedAudioFrame, DecodedVideoFrame, FrameDimensions, FrameHandleId,
+    FrameLeaseId, FrameLeaseRequest, FramePool, FramePoolCloseReport, FramePoolError,
+    FramePoolErrorKind, FramePoolLimits, FrameReleaseDiagnostic, FrameStorageKind,
+    FrameStorageRequest, PlatformFrameHandle, VideoFrameStorage,
+};
 pub use job::{
     CancelToken, FfmpegJobEvent, FfmpegJobId, FfmpegJobResult, FfmpegJobState, FfmpegProgress,
     FfmpegRuntimeError, FfmpegRuntimeErrorKind, FfmpegRuntimeJob, parse_progress_lines,
