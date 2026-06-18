@@ -5,17 +5,17 @@ milestone_name: milestone
 status: active
 current_phase: 8
 current_phase_name: segment-transform-and-visual-compositing
-current_plan: null
-total_plans_in_phase: null
-stopped_at: Phase 07 complete; Phase 08 ready for discussion
-last_updated: "2026-06-18T01:40:23.063Z"
+current_plan: 2
+total_plans_in_phase: 5
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-06-18T02:16:20.751Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 8
-  total_plans: 49
-  completed_plans: 49
-  percent: 57
+  total_plans: 54
+  completed_plans: 50
+  percent: 93
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 8
-Plan: Not started
-Status: Phase 08 ready for discussion and planning
+Plan: 2/5
+Status: Phase 08 in progress; next 08-02 engine/render graph propagation
 Last activity: 2026-06-18
 
-Progress: [██████░░░░] 57%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 49
-- Average duration: 7 min
-- Total execution time: 346 min
+- Total plans completed: 50
+- Average duration: 8 min
+- Total execution time: 381 min
 
 **By Phase:**
 
@@ -55,6 +55,7 @@ Progress: [██████░░░░] 57%
 | 04.1 | 4 | - | - |
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
+| 08 | 1 | 35 min | 35 min |
 
 **Recent Trend:**
 
@@ -107,6 +108,7 @@ Progress: [██████░░░░] 57%
 | Phase 07 P05 | 21 min | 2 tasks | 5 files |
 | Phase 07 P06 | 22 min | 3 tasks | 9 files |
 | Phase 07 P07 | 12 min | 2 tasks | 7 files |
+| Phase 08 P01 | 35 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -120,6 +122,9 @@ Progress: [██████░░░░] 57%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
+- [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
+- [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.
 - Initialization: Product is a general Jianying-style desktop video editor, not an oral-video product.
 - Initialization: Rust core starts from day one; Electron is the first shell.
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.
@@ -226,6 +231,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T01:05:07.888Z
-Stopped at: Completed 07-07-PLAN.md
+Last session: 2026-06-18T02:16:20.748Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
