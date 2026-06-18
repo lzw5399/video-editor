@@ -75,11 +75,38 @@ type VideoEditorCoreApi = {
 };
 
 type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
-type DraftCommandResultApplier<T> = (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState;
+type DraftCommandResultApplier<T> = (
+  current: WorkspaceState,
+  result: CommandResultEnvelope<T>,
+  command: CommandEnvelope
+) => WorkspaceState;
 type ExportCommandResultApplier = (
   current: WorkspaceState,
   result: CommandResultEnvelope<ExportJobStatusResponse>
 ) => WorkspaceState;
+type DerivedStateInvalidationCopy = {
+  frameStatusLabel: string;
+  frameMetadataLabel: string;
+  segmentStatusLabel: string;
+  segmentMetadataLabel: string;
+  exportLogSummary: string;
+};
+
+const CANVAS_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  frameStatusLabel: "画布已更新，请重新请求预览帧",
+  frameMetadataLabel: "预览帧需要重新生成",
+  segmentStatusLabel: "画布已更新，请重新生成预览片段",
+  segmentMetadataLabel: "预览片段需要重新生成",
+  exportLogSummary: "草稿已更新，请重新开始导出"
+};
+
+const VISUAL_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  frameStatusLabel: "画面变换已更新，请重新请求预览帧",
+  frameMetadataLabel: "预览帧需要重新生成",
+  segmentStatusLabel: "画面变换已更新，请重新生成预览片段",
+  segmentMetadataLabel: "预览片段需要重新生成",
+  exportLogSummary: "画面变换已更新，请重新开始导出"
+};
 
 declare global {
   interface Window {
@@ -198,7 +225,7 @@ export function App(): React.ReactElement {
       const command = buildCommand(workspaceRef.current);
       const result = await window.videoEditorCore.executeCommand<T>(command);
       setWorkspace((current) => {
-        const next = applyResult(current, result);
+        const next = applyResult(current, result, command);
         workspaceRef.current = next;
         return next;
       });
@@ -219,7 +246,7 @@ export function App(): React.ReactElement {
   }
 
   async function executeTimelineCommand(buildCommand: DraftCommandBuilder, pendingCommand: string): Promise<void> {
-    await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result) => {
+    await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result, command) => {
       const applied = applyTimelineCommandResult(
         {
           draft: current.draft,
@@ -229,7 +256,7 @@ export function App(): React.ReactElement {
         result
       );
 
-      return {
+      const next = {
         ...current,
         draft: applied.state.draft,
         commandState: applied.state.commandState,
@@ -238,6 +265,16 @@ export function App(): React.ReactElement {
         pendingCommand: null,
         commandError: applied.errorMessage
       };
+
+      if (result.ok && result.data !== null && command.payload.kind === "updateSegmentVisual") {
+        return {
+          ...next,
+          preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
+          export: clearDerivedExportState(current.export, VISUAL_DERIVED_STATE_COPY.exportLogSummary)
+        };
+      }
+
+      return next;
     });
   }
 
@@ -284,7 +321,7 @@ export function App(): React.ReactElement {
       const command = buildCommand(workspaceRef.current);
       const result = await window.videoEditorCore.executeCommand<PreviewArtifactResponse>(command);
       setWorkspace((current) => {
-        const next = applyResult(current, result);
+        const next = applyResult(current, result, command);
         workspaceRef.current = next;
         return next;
       });
@@ -1065,29 +1102,35 @@ function applyExportCommandResult(
   };
 }
 
-function clearDerivedPreviewState(preview: PreviewDisplayState): PreviewDisplayState {
+function clearDerivedPreviewState(
+  preview: PreviewDisplayState,
+  copy: DerivedStateInvalidationCopy = CANVAS_DERIVED_STATE_COPY
+): PreviewDisplayState {
   return {
     ...preview,
     frameArtifactPath: null,
-    frameStatusLabel: "画布已更新，请重新请求预览帧",
-    frameMetadataLabel: "预览帧需要重新生成",
+    frameStatusLabel: copy.frameStatusLabel,
+    frameMetadataLabel: copy.frameMetadataLabel,
     segmentArtifactPath: null,
-    segmentStatusLabel: "画布已更新，请重新生成预览片段",
-    segmentMetadataLabel: "预览片段需要重新生成",
+    segmentStatusLabel: copy.segmentStatusLabel,
+    segmentMetadataLabel: copy.segmentMetadataLabel,
     error: null,
     lastRequestedPlayhead: null,
     lastRequestedRangeLabel: null
   };
 }
 
-function clearDerivedExportState(exportState: ExportDisplayState): ExportDisplayState {
+function clearDerivedExportState(
+  exportState: ExportDisplayState,
+  logSummary = CANVAS_DERIVED_STATE_COPY.exportLogSummary
+): ExportDisplayState {
   return {
     ...exportState,
     jobId: null,
     phase: null,
     progressPerMille: null,
     outTime: null,
-    logSummary: "草稿已更新，请重新开始导出",
+    logSummary,
     validation: null,
     diagnosticLabel: null,
     error: null
