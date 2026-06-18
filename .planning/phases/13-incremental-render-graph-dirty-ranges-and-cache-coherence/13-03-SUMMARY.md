@@ -9,6 +9,7 @@ requires:
     provides: CommandDelta core types and simple timeline command delta emission
 provides:
   - domain-aware deltas for text, subtitle, audio, visual, keyframe, canvas, track mute, and undo/redo commands
+  - material dependency dirty expansion that maps material IDs to dependent segment ranges or material-wide fallback scope
   - deterministic consumer-domain expansion for Phase 13 preview/export/audio/thumb/wave/proxy/snapshot/cache targets
   - restored-draft undo/redo invalidation deltas with targeted ranges when semantic segment changes can be identified
 affects: [phase-13, draft_commands, preview_service, render-graph-cache-coherence]
@@ -66,6 +67,7 @@ completed: 2026-06-18T21:54:40Z
 ## Accomplishments
 
 - Added targeted deltas for text, subtitle import, audio segment, volume, track mute, visual, keyframe, and canvas/profile commands.
+- Added material dependency dirty expansion for material-scoped changes, including dependent segment ranges and conservative material-wide fallback.
 - Added consumer-domain expansion covering preview, export prep, audio, thumbnail, waveform, proxy, graph snapshot, and preview cache consumers.
 - Updated undo/redo to compare current and restored draft snapshots, returning targeted previous/current ranges when segment-level changes are identifiable.
 
@@ -77,10 +79,11 @@ completed: 2026-06-18T21:54:40Z
 4. **Task 13-03-02 GREEN:** `afa73c4` feat - visual, keyframe, canvas, and consumer expansion deltas.
 5. **Task 13-03-03 RED:** `2bfdacf` test - failing undo/redo restored-range coverage.
 6. **Task 13-03-03 GREEN:** `a35c91b` feat - deterministic undo/redo restored-draft deltas.
+7. **Acceptance fix:** `049a242` fix - material dependency range helper and material-wide fallback coverage.
 
 ## Files Created/Modified
 
-- `crates/draft_commands/src/delta.rs` - Added domain-specific delta builders, consumer expansion, canvas full-draft helper, and restored-draft diff helper.
+- `crates/draft_commands/src/delta.rs` - Added domain-specific delta builders, material dependency expansion, consumer expansion, canvas full-draft helper, and restored-draft diff helper.
 - `crates/draft_commands/src/text.rs` - Text and subtitle commands now attach targeted text deltas.
 - `crates/draft_commands/src/audio.rs` - Audio add, volume, and track mute commands now attach targeted audio deltas.
 - `crates/draft_commands/src/visual.rs` - Visual updates now attach segment-scoped visual deltas.
@@ -100,7 +103,7 @@ completed: 2026-06-18T21:54:40Z
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+- The orchestrator found one missing acceptance item after subagent completion: material dependency expansion existed only as preview cache material-id invalidation, not as a draft semantic delta helper. Added `049a242` to close that gap before marking the plan complete.
 
 ## Issues Encountered
 
@@ -123,10 +126,14 @@ None.
 - `cargo test -p draft_commands canvas -- --nocapture` - passed
 - `cargo test -p preview_service --test dirty_propagation consumer_domain_expansion -- --nocapture` - passed
 - `cargo test -p draft_commands --test command_delta undo_redo_delta -- --nocapture` - passed
+- `cargo test -p draft_commands --test command_delta material_dependency_delta -- --nocapture` - passed
 - `cargo test -p draft_commands undo_redo -- --nocapture` - passed
 - `pnpm run test:phase13-source-guards` - passed
 - `cargo test -p draft_commands --test command_delta -- --nocapture` - passed
 - `cargo test -p preview_service --test dirty_propagation -- --nocapture` - passed
+- `pnpm run test:phase13` - passed
+- `cargo check --workspace --locked` - passed
+- `git diff --check` - passed
 
 ## User Setup Required
 
@@ -139,7 +146,7 @@ Plan 13-04 can consume the richer semantic deltas for stable render graph node i
 ## Self-Check: PASSED
 
 - Summary file exists.
-- Task commits exist: `f22eb22`, `e5f0d25`, `5367129`, `afa73c4`, `2bfdacf`, `a35c91b`.
+- Task commits exist: `f22eb22`, `e5f0d25`, `5367129`, `afa73c4`, `2bfdacf`, `a35c91b`, `049a242`.
 - Required verification commands passed.
 
 ---

@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 4
+current_plan: 5
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-18T21:43:00.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 02B: generated CommandDelta schema and TypeScript contract assertions."
+last_updated: "2026-06-18T22:00:56.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 03: domain-aware command deltas, material dependency expansion, and undo/redo invalidation."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 93
-  percent: 95
+  completed_plans: 94
+  percent: 96
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 3/8 complete; next plan 13-03
-Status: Phase 13 in progress; generated CommandDelta schema and TypeScript contract assertions are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 02B: generated CommandDelta schema and TypeScript contract assertions.
+Plan: 4/8 complete; next plan 13-04
+Status: Phase 13 in progress; command delta domain coverage and undo/redo invalidation are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 03: domain-aware command deltas, material dependency expansion, and undo/redo invalidation.
 
-Progress: [██████████] 95%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 93
+- Total plans completed: 94
 - Average duration: 9 min
-- Total execution time: 864 min
+- Total execution time: 873 min
 
 **By Phase:**
 
@@ -60,11 +60,11 @@ Progress: [██████████] 95%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 3 | 22 min | 7 min |
+| 13 | 4 | 31 min | 8 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 62 min
+- Last 5 plans: 51 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -151,6 +151,7 @@ Progress: [██████████] 95%
 | Phase 13 P01 | 10 min | 3 tasks | 10 files |
 | Phase 13 P02 | 8 min | 2 tasks | 17 files |
 | Phase 13 P02B | 4 min | 2 tasks | 1 files |
+| Phase 13 P03 | 9 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -169,6 +170,9 @@ Progress: [██████████] 95%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: Domain-aware command deltas now cover text, subtitle, audio, visual, keyframe, canvas/profile, track mute, and material dependency changes. — Plan 03 added Rust-owned delta builders and tests for every accepted semantic edit family before downstream graph/cache reuse.
+- [Phase 13]: Material dependency invalidation maps changed material IDs to dependent segment ranges when possible and falls back to material-wide scope when not. — This preserves correctness without putting cache or renderer decisions into command code.
+- [Phase 13]: Undo/redo restores semantic snapshots first, then emits deterministic invalidation ranges or full-draft fallback. — Stale cache reuse is blocked unless later graph snapshot plans prove exact fingerprints.
 - [Phase 13]: Generated contracts now have explicit delta export assertions. — Schema export tests parse `$defs`, require `TimelineCommandResponse.delta -> CommandDelta`, and verify generated TypeScript exports the delta surface.
 - [Phase 13]: `CommandDelta` is a direct field on `TimelineCommandResponse`. — Accepted timeline command responses now carry Rust-owned semantic change facts instead of requiring renderer-side dirty range computation.
 - [Phase 13]: Simple timeline commands emit targeted integer dirty ranges. — Add, move, split, trim, and delete include semantic entities/domains and previous/current `TargetTimerange` facts; selection-only commands emit `CommandDelta::none`.

@@ -515,14 +515,14 @@ Plans:
   4. Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
   5. Large-timeline tests cover graph diff cost, cache invalidation correctness, and preview/export consistency after edits.
 
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 
 - [x] 13-01 - Validation harness, source guards, package scripts, and large-timeline fixture helpers
 - [x] 13-02 - `CommandDelta` core types, range helpers, and simple command delta emission
 - [x] 13-02B - Schema/TypeScript/generated contract export for delta types
-- [ ] 13-03 - Text/audio/visual/keyframe/canvas/material domain coverage and undo/redo invalidation
+- [x] 13-03 - Text/audio/visual/keyframe/canvas/material domain coverage and undo/redo invalidation
 - [ ] 13-04 - Stable render graph node IDs, fingerprints, graph snapshots, and graph diff helpers
 - [ ] 13-05 - Preview cache key v2, invalidation request v2, dirty consumer expansion, and export-prep dirty facts
 - [ ] 13-05B - Binding-safe invalidation contracts and generated schema/TypeScript updates
@@ -646,8 +646,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
 | 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Complete   | 2026-06-18 |
-| 12. Media IO, Hardware Decode, And Frame/Texture Interop | 7/9 | In Progress | - |
-| 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
+| 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
+| 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 4/8 | In Progress | - |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |
 | 15. Audio Engine And DSP Timeline Pipeline | TBD | Not planned | - |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
