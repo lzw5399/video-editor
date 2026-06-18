@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 09-03; next execute 09-04 desktop text/subtitle UI
+status: Completed 09-04; next execute 09-05 phase verification closure
 current_phase: 9
 current_phase_name: complete-text-and-subtitle-system
-current_plan: 3
+current_plan: 4
 total_plans_in_phase: 5
-stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-06-18T04:20:51.261Z"
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-06-18T04:41:18.187Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 59
-  completed_plans: 57
-  percent: 97
+  completed_plans: 58
+  percent: 98
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 9
-Plan: 3/5
-Status: Completed 09-03; next execute 09-04 desktop text/subtitle UI
+Plan: 4/5
+Status: Completed 09-04; next execute 09-05 phase verification closure
 Last activity: 2026-06-18
 
-Progress: [██████████] 97%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 57
+- Total plans completed: 58
 - Average duration: 8 min
-- Total execution time: 451 min
+- Total execution time: 464 min
 
 **By Phase:**
 
@@ -56,7 +56,7 @@ Progress: [██████████] 97%
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
-| 09 | 3 | 34 min | 11 min |
+| 09 | 4 | 47 min | 12 min |
 
 **Recent Trend:**
 
@@ -117,6 +117,7 @@ Progress: [██████████] 97%
 | Phase 09 P01 | 12 min | 2 tasks | 8 files |
 | Phase 09 P02 | 10 min | 2 tasks | 10 files |
 | Phase 09 P03 | 12 min | 2 tasks | 11 files |
+| Phase 09 P04 | 13 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -225,6 +226,9 @@ Recent decisions affecting current work:
 - [Phase 09]: Segment-level text box and layout region fields take precedence over profile safe-area defaults during frame-state resolution.
 - [Phase 09]: Unsupported text font refs, bubbles, and effects stop ASS compilation with an explicit UnsupportedTextResource error instead of silently approximating proprietary resources.
 - [Phase 09]: importSubtitleSrt is a Rust-owned timeline command that parses SRT into subtitle TextSegment batches with one undo snapshot. — Renderer code can provide file content, but parsing, timing, track creation, segment creation, and malformed rejection stay in Rust command semantics.
+- [Phase 09]: Desktop subtitle import sends raw SRT to importSubtitleSrt; renderer code does not parse cues or create subtitle segments. — This preserves the Rust-owned command boundary and keeps subtitle timing, parsing, track creation, undo/redo, and validation in draft_commands.
+- [Phase 09]: Successful desktop text/subtitle timeline responses invalidate preview/export display state only after accepted Rust-shaped command responses. — Derived preview/export artifacts must stay tied to accepted core semantic edits, not optimistic renderer-local mutations.
+- [Phase 09]: Text/subtitle Electron tests use main-process Rust-shaped mock timeline responses while renderer code remains generated command-envelope-only. — This lets Playwright verify desktop UI behavior without moving draft mutation or subtitle parsing into renderer code.
 
 ### Pending Todos
 
@@ -253,6 +257,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T04:20:51.258Z
-Stopped at: Completed 09-03-PLAN.md
+Last session: 2026-06-18T04:40:43.878Z
+Stopped at: Completed 09-04-PLAN.md
 Resume file: None
