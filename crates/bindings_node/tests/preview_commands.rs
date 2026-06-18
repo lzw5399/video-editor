@@ -242,14 +242,27 @@ fn preview_decode_command_returns_handle_metadata_without_full_frame_payloads() 
         data.selected_path,
         RuntimeSelectedDecodePath::NativeHardwareTexture
     );
-    assert_eq!(data.frame.frame_handle_id, "preview-frame-1");
+    assert!(
+        data.frame.frame_handle_id.starts_with("preview-frame-"),
+        "preview frame handle IDs must be opaque binding-owned IDs"
+    );
     assert_eq!(data.frame.owner_session, "preview-session-1");
     assert_eq!(data.frame.generation, 7);
-    assert_eq!(data.texture.as_ref().expect("texture metadata").generation, 7);
+    assert_eq!(
+        data.texture.as_ref().expect("texture metadata").generation,
+        7
+    );
     assert!(data.texture_compatible);
 
     let serialized = serde_json::to_string(&envelope).expect("response serializes");
-    for forbidden in ["nativePointer", "rawHandle", "ArrayBuffer", "Uint8Array", "bytes", "pixels"] {
+    for forbidden in [
+        "nativePointer",
+        "rawHandle",
+        "ArrayBuffer",
+        "Uint8Array",
+        "bytes",
+        "pixels",
+    ] {
         assert!(
             !serialized.contains(forbidden),
             "preview decode response must not expose {forbidden}"

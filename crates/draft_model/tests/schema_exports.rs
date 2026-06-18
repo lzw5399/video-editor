@@ -9,42 +9,47 @@ use draft_model::{
     CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
     CanvasBackgroundCapability, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
     CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
-    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
-    ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
-    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
-    ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    DecodedPreviewFrameResponse, DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, DraftId,
+    DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
+    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPreset,
+    ExportValidationReport, Filter, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
+    ImportMaterialResponse, ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
-    ListMissingMaterialsResponse, MainTrackMagnet, Material, MaterialId, MaterialKind,
-    MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload, PingCommandPayload,
-    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
-    PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
+    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
+    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
+    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
+    PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
     ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RedoTimelineEditCommandPayload, RemoveSegmentKeyframeCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeCodecCapability, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
+    RedoTimelineEditCommandPayload, ReleasePreviewFrameCommandPayload,
+    RemoveSegmentKeyframeCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
+    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
+    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
+    RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
     RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
     RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
     RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
     RuntimePixelFormatCapability, RuntimeSelectedDecodePath, RuntimeTextureBackend,
-    RuntimeTextureHandleMetadata, RuntimeTextureInteropCapability, RuntimeVideoPixelFormat,
-    RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor, SegmentBackgroundFilling,
-    SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentOpacity,
-    SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume,
-    SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
-    SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
-    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
-    UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload, MAX_TEXT_LAYOUT_MILLIS,
-    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
+    RuntimeTextureHandleMetadata, RuntimeTextureInteropCapability, RuntimeVideoColorMetadata,
+    RuntimeVideoPixelFormat, RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
+    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload,
+    SnappingSettings, SourceTimerange, SplitSegmentCommandPayload, StartExportCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentVisualCommandPayload,
+    VersionCommandPayload,
 };
-use schemars::{schema_for, Schema};
+use schemars::{Schema, schema_for};
 use serde_json::json;
 use ts_rs::{Config, TS};
 
@@ -164,6 +169,12 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RuntimeSelectedDecodePath>(),
             export_decl::<RuntimeTextureBackend>(),
             export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeColorPrimaries>(),
+            export_decl::<RuntimeColorTransfer>(),
+            export_decl::<RuntimeColorMatrix>(),
+            export_decl::<RuntimeColorRange>(),
+            export_decl::<RuntimeColorDiagnostic>(),
+            export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
             export_decl::<RuntimeFrameDimensions>(),
             export_decl::<RuntimeDecodedFrameHandleMetadata>(),
@@ -305,6 +316,9 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<SetSegmentKeyframeCommandPayload>(),
             export_decl::<RemoveSegmentKeyframeCommandPayload>(),
+            export_decl::<PreviewFrameStoragePreference>(),
+            export_decl::<PreviewDecodeRequest>(),
+            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -333,6 +347,10 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewFrameStorageKind>(),
+            export_decl::<PreviewDecodeDiagnostic>(),
+            export_decl::<DecodedPreviewFrameResponse>(),
+            export_decl::<PreviewFrameReleaseResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
@@ -349,6 +367,12 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RuntimeSelectedDecodePath>(),
             export_decl::<RuntimeTextureBackend>(),
             export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeColorPrimaries>(),
+            export_decl::<RuntimeColorTransfer>(),
+            export_decl::<RuntimeColorMatrix>(),
+            export_decl::<RuntimeColorRange>(),
+            export_decl::<RuntimeColorDiagnostic>(),
+            export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
             export_decl::<RuntimeFrameDimensions>(),
             export_decl::<RuntimeDecodedFrameHandleMetadata>(),
@@ -518,12 +542,19 @@ fn schema_exports_include_preview_command_contracts() {
     let command_result_ts = command_result_ts_contract();
 
     for expected_contract in [
+        "PreviewDecodeRequest",
+        "ReleasePreviewFrameCommandPayload",
+        "PreviewFrameStoragePreference",
         "RequestPreviewFrameCommandPayload",
         "RequestPreviewSegmentCommandPayload",
         "InvalidatePreviewCacheCommandPayload",
         "PreviewCacheEntryRef",
         "PreviewOutputProfile",
         "PreviewArtifactResponse",
+        "DecodedPreviewFrameResponse",
+        "PreviewFrameReleaseResponse",
+        "PreviewFrameStorageKind",
+        "PreviewDecodeDiagnostic",
         "PreviewCacheInvalidationResponse",
         "PreviewStatus",
         "PreviewDiagnosticKind",
@@ -536,7 +567,17 @@ fn schema_exports_include_preview_command_contracts() {
         );
     }
 
-    for forbidden in ["ffmpegArgs", "filterComplex", "cacheKeyFormula"] {
+    for forbidden in [
+        "ffmpegArgs",
+        "filterComplex",
+        "cacheKeyFormula",
+        "nativePointer",
+        "rawHandle",
+        "ArrayBuffer",
+        "Uint8Array",
+        "bytes",
+        "pixels",
+    ] {
         assert!(
             !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
             "preview contracts must not expose renderer-owned {forbidden}"
@@ -610,6 +651,12 @@ fn schema_exports_include_runtime_capability_command_contracts() {
         "RuntimeTextureBackend",
         "RuntimeDeviceId",
         "RuntimeVideoPixelFormat",
+        "RuntimeColorPrimaries",
+        "RuntimeColorTransfer",
+        "RuntimeColorMatrix",
+        "RuntimeColorRange",
+        "RuntimeColorDiagnostic",
+        "RuntimeVideoColorMetadata",
         "RuntimeFrameDimensions",
         "RuntimeDecodedFrameHandleMetadata",
         "RuntimeTextureHandleMetadata",
@@ -851,6 +898,9 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<SetSegmentKeyframeCommandPayload>(),
             export_decl::<RemoveSegmentKeyframeCommandPayload>(),
+            export_decl::<PreviewFrameStoragePreference>(),
+            export_decl::<PreviewDecodeRequest>(),
+            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -882,6 +932,10 @@ fn command_result_ts_contract() -> String {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewFrameStorageKind>(),
+            export_decl::<PreviewDecodeDiagnostic>(),
+            export_decl::<DecodedPreviewFrameResponse>(),
+            export_decl::<PreviewFrameReleaseResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
@@ -898,6 +952,12 @@ fn command_result_ts_contract() -> String {
             export_decl::<RuntimeSelectedDecodePath>(),
             export_decl::<RuntimeTextureBackend>(),
             export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeColorPrimaries>(),
+            export_decl::<RuntimeColorTransfer>(),
+            export_decl::<RuntimeColorMatrix>(),
+            export_decl::<RuntimeColorRange>(),
+            export_decl::<RuntimeColorDiagnostic>(),
+            export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
             export_decl::<RuntimeFrameDimensions>(),
             export_decl::<RuntimeDecodedFrameHandleMetadata>(),
@@ -1263,6 +1323,24 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<RuntimeVideoPixelFormat>(
         &mut schema_value,
         "RuntimeVideoPixelFormat",
+    );
+    include_command_contract_schema::<RuntimeColorPrimaries>(
+        &mut schema_value,
+        "RuntimeColorPrimaries",
+    );
+    include_command_contract_schema::<RuntimeColorTransfer>(
+        &mut schema_value,
+        "RuntimeColorTransfer",
+    );
+    include_command_contract_schema::<RuntimeColorMatrix>(&mut schema_value, "RuntimeColorMatrix");
+    include_command_contract_schema::<RuntimeColorRange>(&mut schema_value, "RuntimeColorRange");
+    include_command_contract_schema::<RuntimeColorDiagnostic>(
+        &mut schema_value,
+        "RuntimeColorDiagnostic",
+    );
+    include_command_contract_schema::<RuntimeVideoColorMetadata>(
+        &mut schema_value,
+        "RuntimeVideoColorMetadata",
     );
     include_command_contract_schema::<RuntimeDeviceId>(&mut schema_value, "RuntimeDeviceId");
     include_command_contract_schema::<RuntimeFrameDimensions>(
@@ -2398,6 +2476,50 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "updateSegmentVisual" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "setSegmentKeyframe" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "setSegmentKeyframe" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "removeSegmentKeyframe" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "removeSegmentKeyframe" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "requestPreviewDecode" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "requestPreviewDecode" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "releasePreviewFrame" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "releasePreviewFrame" }
                     },
                     "required": ["kind"]
                 }

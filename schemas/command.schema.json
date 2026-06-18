@@ -334,6 +334,8 @@
         "updateSegmentVisual",
         "setSegmentKeyframe",
         "removeSegmentKeyframe",
+        "requestPreviewDecode",
+        "releasePreviewFrame",
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
@@ -1178,6 +1180,84 @@
         },
         {
           "additionalProperties": false,
+          "description": "Payload accepted by the handle-based preview decode command.",
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "requestPreviewDecode",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "preferredStorage": {
+              "$ref": "#/$defs/PreviewFrameStoragePreference"
+            },
+            "previewDevice": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RuntimeDeviceId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "sourceTime": {
+              "$ref": "#/$defs/Microseconds"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "draft",
+            "materialId",
+            "sourceTime",
+            "playbackGeneration",
+            "preferredStorage"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the preview frame release command.",
+          "properties": {
+            "frameHandleId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "releasePreviewFrame",
+              "type": "string"
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "frameHandleId",
+            "playbackGeneration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Payload accepted by the Phase 5 preview frame command.",
           "properties": {
             "cacheRoot": {
@@ -1362,6 +1442,67 @@
         "maxHistoryEntries",
         "snapping"
       ],
+      "type": "object"
+    },
+    "DecodedPreviewFrameResponse": {
+      "additionalProperties": false,
+      "description": "Handle-based preview decode response. Frame payloads remain native/Rust-owned.",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/RuntimeVideoColorMetadata"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/PreviewDecodeDiagnostic"
+          },
+          "type": "array"
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/RuntimeDecodedFrameHandleMetadata"
+        },
+        "selectedPath": {
+          "$ref": "#/$defs/RuntimeSelectedDecodePath"
+        },
+        "sourceTime": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "storageKind": {
+          "$ref": "#/$defs/PreviewFrameStorageKind"
+        },
+        "texture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeTextureHandleMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "textureCompatible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "frame",
+        "storageKind",
+        "sourceTime",
+        "selectedPath",
+        "textureCompatible",
+        "color",
+        "diagnostics"
+      ],
+      "title": "DecodedPreviewFrameResponse",
       "type": "object"
     },
     "DeleteSegmentCommandPayload": {
@@ -2237,6 +2378,111 @@
       "title": "PreviewCacheInvalidationResponse",
       "type": "object"
     },
+    "PreviewDecodeDiagnostic": {
+      "additionalProperties": false,
+      "description": "Decode route diagnostic returned with handle-based preview frames.",
+      "properties": {
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "message": {
+          "type": "string"
+        },
+        "nativeDevice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeDeviceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previewDevice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeDeviceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedPath": {
+          "$ref": "#/$defs/RuntimeSelectedDecodePath"
+        },
+        "storageKind": {
+          "$ref": "#/$defs/PreviewFrameStorageKind"
+        },
+        "textureCompatible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "materialId",
+        "selectedPath",
+        "storageKind",
+        "textureCompatible",
+        "message"
+      ],
+      "type": "object"
+    },
+    "PreviewDecodeRequest": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the handle-based preview decode command.",
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "materialId": {
+          "$ref": "#/$defs/MaterialId"
+        },
+        "playbackGeneration": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "preferredStorage": {
+          "$ref": "#/$defs/PreviewFrameStoragePreference"
+        },
+        "previewDevice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeDeviceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "sourceTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "sessionId",
+        "draft",
+        "materialId",
+        "sourceTime",
+        "playbackGeneration",
+        "preferredStorage"
+      ],
+      "title": "PreviewDecodeRequest",
+      "type": "object"
+    },
     "PreviewDiagnostic": {
       "additionalProperties": false,
       "description": "Preview diagnostic details suitable for UI display and logs.",
@@ -2275,6 +2521,53 @@
         "ioFailed",
         "runtimeUnavailable",
         "runtimeFailed"
+      ],
+      "type": "string"
+    },
+    "PreviewFrameReleaseResponse": {
+      "additionalProperties": false,
+      "description": "Response returned when a retained preview frame handle is released.",
+      "properties": {
+        "frameHandleId": {
+          "type": "string"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ownerSession": {
+          "type": "string"
+        },
+        "released": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "frameHandleId",
+        "ownerSession",
+        "generation",
+        "released"
+      ],
+      "title": "PreviewFrameReleaseResponse",
+      "type": "object"
+    },
+    "PreviewFrameStorageKind": {
+      "description": "Binding-visible storage returned for a decoded preview frame.",
+      "enum": [
+        "cpu",
+        "texture",
+        "platformOpaque",
+        "artifactFallback"
+      ],
+      "type": "string"
+    },
+    "PreviewFrameStoragePreference": {
+      "description": "Storage preference requested by a preview decode caller.",
+      "enum": [
+        "any",
+        "cpu",
+        "texture"
       ],
       "type": "string"
     },
@@ -2341,6 +2634,30 @@
         "selection"
       ],
       "title": "RedoTimelineEditCommandPayload",
+      "type": "object"
+    },
+    "ReleasePreviewFrameCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the preview frame release command.",
+      "properties": {
+        "frameHandleId": {
+          "type": "string"
+        },
+        "playbackGeneration": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "frameHandleId",
+        "playbackGeneration"
+      ],
+      "title": "ReleasePreviewFrameCommandPayload",
       "type": "object"
     },
     "RemoveSegmentKeyframeCommandPayload": {
@@ -2584,10 +2901,66 @@
       ],
       "type": "object"
     },
+    "RuntimeColorDiagnostic": {
+      "additionalProperties": false,
+      "description": "Bounded color metadata diagnostic suitable for binding responses.",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "RuntimeColorMatrix": {
+      "description": "Runtime video color matrix exposed without platform sample attachments.",
+      "enum": [
+        "bt709",
+        "bt2020NonConstant",
+        "identity",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RuntimeColorPrimaries": {
+      "description": "Runtime video color primaries exposed without platform sample attachments.",
+      "enum": [
+        "bt709",
+        "bt2020",
+        "displayP3",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RuntimeColorRange": {
+      "description": "Runtime video color range exposed without platform sample attachments.",
+      "enum": [
+        "limited",
+        "full",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RuntimeColorTransfer": {
+      "description": "Runtime video transfer function exposed without platform sample attachments.",
+      "enum": [
+        "bt709",
+        "srgb",
+        "pq",
+        "hlg",
+        "unknown"
+      ],
+      "type": "string"
+    },
     "RuntimeDecodedFrameHandleMetadata": {
       "additionalProperties": false,
       "description": "Binding-safe decoded frame metadata. The frame payload stays owned by Rust/native runtime.",
       "properties": {
+        "color": {
+          "$ref": "#/$defs/RuntimeVideoColorMetadata"
+        },
         "dimensions": {
           "$ref": "#/$defs/RuntimeFrameDimensions"
         },
@@ -2611,7 +2984,8 @@
         "ownerSession",
         "generation",
         "dimensions",
-        "pixelFormat"
+        "pixelFormat",
+        "color"
       ],
       "title": "RuntimeDecodedFrameHandleMetadata",
       "type": "object"
@@ -2952,6 +3326,9 @@
         "backend": {
           "$ref": "#/$defs/RuntimeTextureBackend"
         },
+        "color": {
+          "$ref": "#/$defs/RuntimeVideoColorMetadata"
+        },
         "deviceId": {
           "$ref": "#/$defs/RuntimeDeviceId"
         },
@@ -2980,7 +3357,8 @@
         "backend",
         "deviceId",
         "dimensions",
-        "pixelFormat"
+        "pixelFormat",
+        "color"
       ],
       "title": "RuntimeTextureHandleMetadata",
       "type": "object"
@@ -3038,8 +3416,40 @@
       ],
       "type": "object"
     },
+    "RuntimeVideoColorMetadata": {
+      "additionalProperties": false,
+      "description": "Binding-safe color metadata for decoded frames and textures.",
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/RuntimeColorDiagnostic"
+          },
+          "type": "array"
+        },
+        "matrix": {
+          "$ref": "#/$defs/RuntimeColorMatrix"
+        },
+        "primaries": {
+          "$ref": "#/$defs/RuntimeColorPrimaries"
+        },
+        "range": {
+          "$ref": "#/$defs/RuntimeColorRange"
+        },
+        "transfer": {
+          "$ref": "#/$defs/RuntimeColorTransfer"
+        }
+      },
+      "required": [
+        "primaries",
+        "transfer",
+        "matrix",
+        "range",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
     "RuntimeVideoPixelFormat": {
-      "description": "Decoded frame pixel format exposed without raw frame bytes.",
+      "description": "Decoded frame pixel format exposed without frame payload data.",
       "enum": [
         "nv12",
         "bgra8",
@@ -24762,6 +25172,74 @@
           "properties": {
             "kind": {
               "const": "updateSegmentVisual"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "setSegmentKeyframe"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "setSegmentKeyframe"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "removeSegmentKeyframe"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "removeSegmentKeyframe"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "requestPreviewDecode"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "requestPreviewDecode"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "releasePreviewFrame"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "releasePreviewFrame"
             }
           },
           "required": [

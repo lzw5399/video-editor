@@ -10,8 +10,8 @@ use draft_model::{
     InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
     ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    StartExportCommandPayload, VersionResponse,
+    PreviewDecodeRequest, ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, StartExportCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -28,8 +28,8 @@ use crate::material_service::{
 };
 use crate::preview_export_service::{
     ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
-    invalidate_preview_cache_command, request_preview_frame_with_executor,
-    request_preview_segment_with_executor,
+    global_preview_frame_handle_registry, invalidate_preview_cache_command,
+    request_preview_frame_with_executor, request_preview_segment_with_executor,
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
@@ -87,6 +87,8 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "updateSegmentVisual"
                 | "setSegmentKeyframe"
                 | "removeSegmentKeyframe"
+                | "requestPreviewDecode"
+                | "releasePreviewFrame"
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
@@ -136,6 +138,16 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             CommandPayload::ListMissingMaterials(payload) => {
                 list_missing_materials_command(payload)
             }
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::RequestPreviewDecode => match envelope.payload {
+            CommandPayload::RequestPreviewDecode(payload) => {
+                request_preview_decode_command(payload)
+            }
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::ReleasePreviewFrame => match envelope.payload {
+            CommandPayload::ReleasePreviewFrame(payload) => release_preview_frame_command(payload),
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
         CommandName::RequestPreviewFrame => match envelope.payload {
@@ -256,9 +268,7 @@ pub fn next_realtime_preview_cancellation_token(
     request: serde_json::Value,
 ) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
-    with_realtime_preview_registry(|registry| {
-        registry.next_cancellation_token(&request.session_id)
-    })
+    with_realtime_preview_registry(|registry| registry.next_cancellation_token(&request.session_id))
 }
 
 #[napi(js_name = "cancelRealtimePreviewRequest")]
@@ -394,6 +404,22 @@ fn list_missing_materials_command(
             "listMissingMaterials",
             error,
         )),
+    }
+}
+
+fn request_preview_decode_command(payload: PreviewDecodeRequest) -> Result<serde_json::Value> {
+    match global_preview_frame_handle_registry().request_decode(payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope("requestPreviewDecode", error)),
+    }
+}
+
+fn release_preview_frame_command(
+    payload: ReleasePreviewFrameCommandPayload,
+) -> Result<serde_json::Value> {
+    match global_preview_frame_handle_registry().release(payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope("releasePreviewFrame", error)),
     }
 }
 

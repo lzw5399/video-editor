@@ -19,29 +19,30 @@ pub mod timeline;
 pub mod validation;
 
 pub use canvas::{
-    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAspectRatio,
-    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, CanvasPixelPoint,
-    DraftCanvasConfig, NormalizedCanvasPoint,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
+    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
+    normalized_to_canvas_pixel, reduce_ratio,
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
 pub use material::{
-    add_material, mark_material_available, mark_material_missing, mark_material_probe_failed,
-    upsert_material, Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate,
+    Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
+    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
 };
 pub use time::Microseconds;
 pub use timeline::{
     Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MainTrackMagnet, Segment, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
-    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
-    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
-    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, Track, TrackKind, Transition, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
-    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
-    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
+    MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_OPACITY_MILLIS,
+    MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
+    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment,
+    SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
+    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
+    TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    Transition,
 };
-pub use validation::{migrate_draft_json, validate_draft, DraftValidationError};
+pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
@@ -86,6 +87,8 @@ pub enum CommandName {
     UpdateSegmentVisual,
     SetSegmentKeyframe,
     RemoveSegmentKeyframe,
+    RequestPreviewDecode,
+    ReleasePreviewFrame,
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
@@ -123,6 +126,8 @@ pub enum CommandPayload {
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
     SetSegmentKeyframe(SetSegmentKeyframeCommandPayload),
     RemoveSegmentKeyframe(RemoveSegmentKeyframeCommandPayload),
+    RequestPreviewDecode(PreviewDecodeRequest),
+    ReleasePreviewFrame(ReleasePreviewFrameCommandPayload),
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
@@ -160,6 +165,8 @@ impl CommandPayload {
             Self::UpdateSegmentVisual(_) => CommandName::UpdateSegmentVisual,
             Self::SetSegmentKeyframe(_) => CommandName::SetSegmentKeyframe,
             Self::RemoveSegmentKeyframe(_) => CommandName::RemoveSegmentKeyframe,
+            Self::RequestPreviewDecode(_) => CommandName::RequestPreviewDecode,
+            Self::ReleasePreviewFrame(_) => CommandName::ReleasePreviewFrame,
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
@@ -507,6 +514,98 @@ pub struct RequestPreviewSegmentCommandPayload {
     pub draft: Draft,
     pub cache_root: String,
     pub target_timerange: TargetTimerange,
+}
+
+/// Storage preference requested by a preview decode caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PreviewFrameStoragePreference {
+    Any,
+    Cpu,
+    Texture,
+}
+
+/// Payload accepted by the handle-based preview decode command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewDecodeRequest {
+    pub session_id: String,
+    pub draft: Draft,
+    pub material_id: MaterialId,
+    pub source_time: Microseconds,
+    pub playback_generation: u64,
+    pub preferred_storage: PreviewFrameStoragePreference,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub preview_device: Option<RuntimeDeviceId>,
+}
+
+/// Payload accepted by the preview frame release command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReleasePreviewFrameCommandPayload {
+    pub session_id: String,
+    pub frame_handle_id: String,
+    pub playback_generation: u64,
+}
+
+/// Binding-visible storage returned for a decoded preview frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PreviewFrameStorageKind {
+    Cpu,
+    Texture,
+    PlatformOpaque,
+    ArtifactFallback,
+}
+
+/// Decode route diagnostic returned with handle-based preview frames.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewDecodeDiagnostic {
+    pub material_id: MaterialId,
+    pub selected_path: RuntimeSelectedDecodePath,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    pub storage_kind: PreviewFrameStorageKind,
+    pub texture_compatible: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub preview_device: Option<RuntimeDeviceId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub native_device: Option<RuntimeDeviceId>,
+    pub message: String,
+}
+
+/// Handle-based preview decode response. Frame payloads remain native/Rust-owned.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DecodedPreviewFrameResponse {
+    pub frame: RuntimeDecodedFrameHandleMetadata,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub texture: Option<RuntimeTextureHandleMetadata>,
+    pub storage_kind: PreviewFrameStorageKind,
+    pub source_time: Microseconds,
+    pub selected_path: RuntimeSelectedDecodePath,
+    pub texture_compatible: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    pub color: RuntimeVideoColorMetadata,
+    pub diagnostics: Vec<PreviewDecodeDiagnostic>,
+}
+
+/// Response returned when a retained preview frame handle is released.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewFrameReleaseResponse {
+    pub frame_handle_id: String,
+    pub owner_session: String,
+    pub generation: u64,
+    pub released: bool,
 }
 
 /// Renderer-provided reference to an existing derived preview cache entry.
@@ -988,7 +1087,7 @@ pub enum RuntimeTextureBackend {
     CoreVideoPixelBuffer,
 }
 
-/// Decoded frame pixel format exposed without raw frame bytes.
+/// Decoded frame pixel format exposed without frame payload data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum RuntimeVideoPixelFormat {
@@ -998,6 +1097,78 @@ pub enum RuntimeVideoPixelFormat {
     P010,
     Yuv420P,
     Unknown,
+}
+
+/// Runtime video color primaries exposed without platform sample attachments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeColorPrimaries {
+    Bt709,
+    Bt2020,
+    DisplayP3,
+    Unknown,
+}
+
+/// Runtime video transfer function exposed without platform sample attachments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeColorTransfer {
+    Bt709,
+    Srgb,
+    Pq,
+    Hlg,
+    Unknown,
+}
+
+/// Runtime video color matrix exposed without platform sample attachments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeColorMatrix {
+    Bt709,
+    Bt2020NonConstant,
+    Identity,
+    Unknown,
+}
+
+/// Runtime video color range exposed without platform sample attachments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeColorRange {
+    Limited,
+    Full,
+    Unknown,
+}
+
+/// Bounded color metadata diagnostic suitable for binding responses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeColorDiagnostic {
+    pub message: String,
+}
+
+/// Binding-safe color metadata for decoded frames and textures.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeVideoColorMetadata {
+    pub primaries: RuntimeColorPrimaries,
+    pub transfer: RuntimeColorTransfer,
+    pub matrix: RuntimeColorMatrix,
+    pub range: RuntimeColorRange,
+    pub diagnostics: Vec<RuntimeColorDiagnostic>,
+}
+
+impl RuntimeVideoColorMetadata {
+    pub fn unknown_with_diagnostic(message: impl Into<String>) -> Self {
+        Self {
+            primaries: RuntimeColorPrimaries::Unknown,
+            transfer: RuntimeColorTransfer::Unknown,
+            matrix: RuntimeColorMatrix::Unknown,
+            range: RuntimeColorRange::Unknown,
+            diagnostics: vec![RuntimeColorDiagnostic {
+                message: message.into(),
+            }],
+        }
+    }
 }
 
 /// Binding-safe runtime device identity for texture compatibility checks.
@@ -1026,6 +1197,7 @@ pub struct RuntimeDecodedFrameHandleMetadata {
     pub generation: u64,
     pub dimensions: RuntimeFrameDimensions,
     pub pixel_format: RuntimeVideoPixelFormat,
+    pub color: RuntimeVideoColorMetadata,
 }
 
 /// Binding-safe texture metadata. Native pointers and GPU objects never cross this contract.
@@ -1039,6 +1211,7 @@ pub struct RuntimeTextureHandleMetadata {
     pub device_id: RuntimeDeviceId,
     pub dimensions: RuntimeFrameDimensions,
     pub pixel_format: RuntimeVideoPixelFormat,
+    pub color: RuntimeVideoColorMetadata,
 }
 
 /// Binding-safe native media IO capability report.
