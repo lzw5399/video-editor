@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use draft_model::{
     Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
-    SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
-    Transition,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
+    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
+    TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -157,7 +158,9 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                         "stackIndex": 2,
                         "sourcePosition": 100000,
                         "targetTimerange": { "start": 500000, "duration": 500000 },
-                        "fontFamily": "PingFang SC",
+                        "source": "text",
+                        "fontFamily": "Source Han Sans SC",
+                        "fontRef": "source-han-local",
                         "fontCandidate": "VE_TEXT_FONT_PATH",
                         "fallbackCandidates": [
                             "VE_TEXT_FONT_PATH",
@@ -167,14 +170,58 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
                         ],
                         "alignment": "center",
-                        "safeArea": { "left": 96, "right": 96, "top": 54, "bottom": 54 },
+                        "textBox": {
+                            "widthMillis": 600,
+                            "heightMillis": 200,
+                            "width": 1152,
+                            "height": 216
+                        },
+                        "layoutRegion": {
+                            "xMillis": 100,
+                            "yMillis": 700,
+                            "widthMillis": 800,
+                            "heightMillis": 200,
+                            "x": 192,
+                            "y": 756,
+                            "width": 1536,
+                            "height": 216
+                        },
+                        "safeArea": { "left": 192, "right": 192, "top": 756, "bottom": 108 },
+                        "wrapping": "auto",
                         "wrappingPolicy": "boundedWidth",
+                        "lineHeightMillis": 1500,
+                        "letterSpacingMillis": 125,
                         "fontSize": 48,
                         "style": {
-                            "color": "#ffffff"
+                            "color": "#ffffff",
+                            "stroke": {
+                                "color": "#101010",
+                                "width": 3
+                            },
+                            "shadow": {
+                                "color": "#000000",
+                                "offsetX": 4,
+                                "offsetY": 6,
+                                "blur": 8
+                            },
+                            "background": {
+                                "color": "#202020"
+                            }
                         },
                         "layoutWidth": 1728,
-                        "layoutHeight": 58
+                        "layoutHeight": 144,
+                        "diagnostics": [
+                            {
+                                "property": "bubble",
+                                "support": "unsupported",
+                                "reason": "text bubble 气泡 is unsupported"
+                            },
+                            {
+                                "property": "effect",
+                                "support": "unsupported",
+                                "reason": "text effect 花字 is unsupported"
+                            }
+                        ]
                     },
                     "materialId": "text-material",
                     "filters": [],
@@ -189,6 +236,96 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
             ]
         })
     );
+}
+
+#[test]
+fn render_graph_preserves_complete_text_and_subtitle_intent_without_ffmpeg_syntax() {
+    let mut draft = render_graph_draft();
+    draft.materials
+        .push(material("subtitle-material", MaterialKind::Text, "text://subtitle"));
+    let mut subtitle = segment("subtitle-a", "subtitle-material", 0, 400_000, 600_000);
+    subtitle.text = Some(TextSegment {
+        content: "字幕第一行\n字幕第二行".to_owned(),
+        source: TextSegmentSource::Subtitle,
+        style: TextStyle {
+            font: TextFont {
+                family: "PingFang SC".to_owned(),
+                font_ref: None,
+            },
+            font_size: 40,
+            color: "#ffcc33".to_owned(),
+            alignment: TextAlignment::Left,
+            line_height_millis: 1_250,
+            letter_spacing_millis: 60,
+            stroke: None,
+            shadow: None,
+            background: None,
+        },
+        text_box: TextBox {
+            width_millis: 500,
+            height_millis: 240,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 200,
+            y_millis: 700,
+            width_millis: 600,
+            height_millis: 220,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: None,
+        effect: None,
+    });
+    let mut subtitle_track = Track::new("subtitle-track", TrackKind::Text, "字幕");
+    subtitle_track.segments.push(subtitle);
+    draft.tracks.push(subtitle_track);
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+
+    assert_eq!(
+        graph
+            .text_overlays
+            .iter()
+            .map(|overlay| {
+                (
+                    overlay.overlay.segment_id.as_str(),
+                    overlay.overlay.source,
+                    overlay.overlay.layout_width,
+                    overlay.overlay.layout_height,
+                    overlay.overlay.line_height_millis,
+                    overlay.overlay.letter_spacing_millis,
+                    overlay.overlay.diagnostics.len(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            ("text-a", TextSegmentSource::Text, 1_152, 144, 1_500, 125, 2),
+            (
+                "subtitle-a",
+                TextSegmentSource::Subtitle,
+                960,
+                100,
+                1_250,
+                60,
+                0
+            ),
+        ]
+    );
+
+    let snapshot = serde_json::to_string_pretty(&graph).expect("graph should serialize");
+    assert!(snapshot.contains("\"source\": \"subtitle\""));
+    assert!(snapshot.contains("\"letterSpacingMillis\": 60"));
+    assert!(snapshot.contains("\"property\": \"bubble\""));
+    assert!(!snapshot.contains("subtitles="));
+    assert!(!snapshot.contains("force_style"));
+    assert!(!snapshot.contains("ffmpeg"));
 }
 
 #[test]
@@ -458,14 +595,50 @@ fn render_graph_draft() -> Draft {
     let mut text = segment("text-a", "text-material", 0, 500_000, 500_000);
     text.text = Some(TextSegment {
         content: "标题".to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
+            font: TextFont {
+                family: "Source Han Sans SC".to_owned(),
+                font_ref: Some("source-han-local".to_owned()),
+            },
             font_size: 48,
             color: "#ffffff".to_owned(),
             alignment: TextAlignment::Center,
-            stroke: None,
-            shadow: None,
-            background: None,
+            line_height_millis: 1_500,
+            letter_spacing_millis: 125,
+            stroke: Some(TextStroke {
+                color: "#101010".to_owned(),
+                width: 3,
+            }),
+            shadow: Some(TextShadow {
+                color: "#000000".to_owned(),
+                offset_x: 4,
+                offset_y: 6,
+                blur: 8,
+            }),
+            background: Some(TextBackground {
+                color: "#202020".to_owned(),
+            }),
         },
+        text_box: TextBox {
+            width_millis: 600,
+            height_millis: 200,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 700,
+            width_millis: 800,
+            height_millis: 200,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: Some(TextBubbleRef::Unsupported {
+            name: "气泡".to_owned(),
+            external_ref: Some("bubble-vendor-01".to_owned()),
+        }),
+        effect: Some(TextEffectRef::Unsupported {
+            name: "花字".to_owned(),
+            external_ref: Some("effect-vendor-01".to_owned()),
+        }),
     });
     text_track.segments.push(text);
 

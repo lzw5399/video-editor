@@ -1,7 +1,9 @@
 use draft_model::{
     Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
-    SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
+    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
+    TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{
     EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,
@@ -273,7 +275,9 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
         .first()
         .expect("active text overlay should be resolved");
 
-    assert_eq!(overlay.font_family, "PingFang SC");
+    assert_eq!(overlay.source, TextSegmentSource::Text);
+    assert_eq!(overlay.font_family, "Source Han Sans SC");
+    assert_eq!(overlay.font_ref.as_deref(), Some("source-han-local"));
     assert_eq!(overlay.font_candidate, "VE_TEXT_FONT_PATH");
     assert_eq!(
         overlay.fallback_candidates,
@@ -286,15 +290,125 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
         ]
     );
     assert_eq!(overlay.alignment, TextAlignment::Center);
-    assert_eq!(overlay.safe_area.left, 96);
-    assert_eq!(overlay.safe_area.top, 54);
+    assert_eq!(overlay.text_box.width_millis, 600);
+    assert_eq!(overlay.text_box.width, 1_152);
+    assert_eq!(overlay.text_box.height, 216);
+    assert_eq!(overlay.layout_region.x, 192);
+    assert_eq!(overlay.layout_region.y, 756);
+    assert_eq!(overlay.layout_region.width, 1_536);
+    assert_eq!(overlay.layout_region.height, 216);
+    assert_eq!(overlay.wrapping, TextWrapping::Auto);
     assert_eq!(overlay.wrapping_policy.as_str(), "boundedWidth");
+    assert_eq!(overlay.line_height_millis, 1_500);
+    assert_eq!(overlay.letter_spacing_millis, 125);
     assert_eq!(overlay.style.color, "#ffffff");
-    assert!(overlay.style.stroke.is_none());
-    assert!(overlay.style.shadow.is_none());
-    assert!(overlay.style.background.is_none());
-    assert_eq!(overlay.layout_width, 1_728);
-    assert_eq!(overlay.layout_height, 58);
+    assert_eq!(overlay.style.stroke.as_ref().expect("stroke").width, 3);
+    assert_eq!(overlay.style.shadow.as_ref().expect("shadow").offset_x, 4);
+    assert_eq!(
+        overlay.style.background.as_ref().expect("background").color,
+        "#202020"
+    );
+    assert_eq!(overlay.layout_width, 1_152);
+    assert_eq!(overlay.layout_height, 144);
+    assert_eq!(overlay.diagnostics.len(), 2);
+    assert!(overlay.diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "bubble"
+            && diagnostic.support == "unsupported"
+            && diagnostic.reason.contains("气泡")
+    }));
+    assert!(overlay.diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "effect"
+            && diagnostic.support == "unsupported"
+            && diagnostic.reason.contains("花字")
+    }));
+}
+
+#[test]
+fn text_layout_resolves_multiple_text_and_subtitle_overlays_in_stack_order() {
+    let mut draft = frame_state_draft();
+    draft.materials
+        .push(material("subtitle-material", MaterialKind::Text, "text://subtitle"));
+    let mut subtitle = segment("subtitle-a", "subtitle-material", 0, 400_000, 600_000);
+    subtitle.text = Some(TextSegment {
+        content: "字幕第一行\n字幕第二行".to_owned(),
+        source: TextSegmentSource::Subtitle,
+        style: TextStyle {
+            font: TextFont {
+                family: "PingFang SC".to_owned(),
+                font_ref: None,
+            },
+            font_size: 40,
+            color: "#ffcc33".to_owned(),
+            alignment: TextAlignment::Left,
+            line_height_millis: 1_250,
+            letter_spacing_millis: 60,
+            stroke: None,
+            shadow: None,
+            background: None,
+        },
+        text_box: TextBox {
+            width_millis: 500,
+            height_millis: 240,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 200,
+            y_millis: 700,
+            width_millis: 600,
+            height_millis: 220,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: None,
+        effect: None,
+    });
+    let mut subtitle_track = Track::new("subtitle-track", TrackKind::Text, "字幕");
+    subtitle_track.segments.push(subtitle);
+    draft.tracks.push(subtitle_track);
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let frame = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect("frame state should resolve");
+
+    assert_eq!(
+        frame
+            .text_overlays
+            .iter()
+            .map(|overlay| {
+                (
+                    overlay.track_id.as_str(),
+                    overlay.segment_id.as_str(),
+                    overlay.source,
+                    overlay.stack_index,
+                    overlay.layout_width,
+                    overlay.layout_height,
+                    overlay.line_height_millis,
+                    overlay.letter_spacing_millis,
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "text-track",
+                "text-a",
+                TextSegmentSource::Text,
+                2,
+                1_152,
+                144,
+                1_500,
+                125
+            ),
+            (
+                "subtitle-track",
+                "subtitle-a",
+                TextSegmentSource::Subtitle,
+                3,
+                960,
+                100,
+                1_250,
+                60
+            ),
+        ]
+    );
 }
 
 #[test]
@@ -357,14 +471,50 @@ fn frame_state_draft() -> Draft {
     let mut text = segment("text-a", "text-material", 0, 500_000, 500_000);
     text.text = Some(TextSegment {
         content: "标题".to_owned(),
+        source: TextSegmentSource::Text,
         style: TextStyle {
+            font: TextFont {
+                family: "Source Han Sans SC".to_owned(),
+                font_ref: Some("source-han-local".to_owned()),
+            },
             font_size: 48,
             color: "#ffffff".to_owned(),
             alignment: TextAlignment::Center,
-            stroke: None,
-            shadow: None,
-            background: None,
+            line_height_millis: 1_500,
+            letter_spacing_millis: 125,
+            stroke: Some(TextStroke {
+                color: "#101010".to_owned(),
+                width: 3,
+            }),
+            shadow: Some(TextShadow {
+                color: "#000000".to_owned(),
+                offset_x: 4,
+                offset_y: 6,
+                blur: 8,
+            }),
+            background: Some(TextBackground {
+                color: "#202020".to_owned(),
+            }),
         },
+        text_box: TextBox {
+            width_millis: 600,
+            height_millis: 200,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 700,
+            width_millis: 800,
+            height_millis: 200,
+        },
+        wrapping: TextWrapping::Auto,
+        bubble: Some(TextBubbleRef::Unsupported {
+            name: "气泡".to_owned(),
+            external_ref: Some("bubble-vendor-01".to_owned()),
+        }),
+        effect: Some(TextEffectRef::Unsupported {
+            name: "花字".to_owned(),
+            external_ref: Some("effect-vendor-01".to_owned()),
+        }),
     });
     text_track.segments.push(text);
 

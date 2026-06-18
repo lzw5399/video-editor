@@ -126,14 +126,18 @@ fn draft_with_canvas(draft_id: &str, canvas_config: DraftCanvasConfig) -> Draft 
     let mut text = segment("text-a", "text-material", 0, 0, 1_000_000);
     text.text = Some(TextSegment {
         content: "画布文字".to_owned(),
+        source: Default::default(),
         style: TextStyle {
             font_size: 40,
             color: "#ffffff".to_owned(),
             alignment: TextAlignment::Center,
-            stroke: None,
-            shadow: None,
-            background: None,
+            ..TextStyle::default()
         },
+        text_box: Default::default(),
+        layout_region: Default::default(),
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
     });
     text_track.segments.push(text);
     draft.tracks = vec![text_track];

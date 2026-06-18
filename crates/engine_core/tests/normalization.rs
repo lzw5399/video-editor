@@ -167,14 +167,18 @@ fn complete_draft() -> Draft {
     let mut text = segment("text-a", "text-material", 0, 0, 1_000_000);
     text.text = Some(TextSegment {
         content: "字幕".to_owned(),
+        source: Default::default(),
         style: TextStyle {
             font_size: 42,
             color: "#ffffff".to_owned(),
             alignment: TextAlignment::Center,
-            stroke: None,
-            shadow: None,
-            background: None,
+            ..TextStyle::default()
         },
+        text_box: Default::default(),
+        layout_region: Default::default(),
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
     });
     text_track.segments.push(text);
 
