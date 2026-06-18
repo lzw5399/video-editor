@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-05-PLAN.md; Phase 11 Plan 05B remains next
+status: Completed 11-05B-PLAN.md; Phase 11 Plan 06 remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 8
+current_plan: 9
 total_plans_in_phase: 10
-stopped_at: Completed 11-05-PLAN.md
-last_updated: "2026-06-18T17:29:15.150Z"
-last_activity: "2026-06-18 - Completed Phase 11 Plan 05: preview service realtime backend routing, fallback ladder diagnostics, and binding telemetry propagation."
+stopped_at: Completed 11-05B-PLAN.md
+last_updated: "2026-06-18T17:43:45.146Z"
+last_activity: "2026-06-19 - Completed Phase 11 Plan 05B: desktop realtime telemetry/fallback display without renderer-owned fallback decisions."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 78
-  percent: 80
+  completed_plans: 79
+  percent: 81
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 7/10 complete; next plan 11-05B
-Status: Phase 11 Plan 05 complete; ready for desktop telemetry/fallback display without renderer-owned fallback decisions.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 05: preview service realtime backend routing, fallback ladder diagnostics, and binding telemetry propagation.
+Plan: 8/10 complete; next plan 11-06
+Status: Phase 11 Plan 05B complete; ready for text parity gates and final runtime boundary checks.
+Last activity: 2026-06-19 - Completed Phase 11 Plan 05B: desktop realtime telemetry/fallback display without renderer-owned fallback decisions.
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 73
+- Total plans completed: 74
 - Average duration: 9 min
-- Total execution time: 641 min
+- Total execution time: 649 min
 
 **By Phase:**
 
@@ -58,11 +58,11 @@ Progress: [████████░░] 80%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
-| 11 | 6 | 123 min | 21 min |
+| 11 | 7 | 131 min | 19 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 114 min
+- Last 5 plans: 50 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -134,6 +134,7 @@ Progress: [████████░░] 80%
 | Phase 11 P04 | 8 min | 2 tasks | 11 files |
 | Phase 11 P04B | 9 min | 2 tasks | 8 files |
 | Phase 11 P05 | 11 min | 2 tasks | 12 files |
+| Phase 11 P05B | 8 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -278,6 +279,8 @@ Recent decisions affecting current work:
 - [Phase 10.1]: The usable editor MVP closure is complete with `pnpm run test:phase10-1`, Electron smoke, full workspace tests, `pnpm run test:contracts`, and `pnpm run build` passing. — Future Phase 11+ work can build on a command-owned desktop MVP instead of demo-only UI scaffolding.
 - [Phase 11]: Plan 03B keeps default GPU tests mock/offscreen and gates real D3D12/Metal adapter smoke behind VIDEO_EDITOR_TEST_WGPU=1. — This makes GPU runtime contracts executable in CI without requiring a physical adapter.
 - [Phase 11]: Plan 03B stores CPU frame uploads as runtime-owned opaque texture records and rejects external texture handles until Phase 12. — This preserves the media texture interop boundary without exposing native pointers.
+- [Phase 11]: Plan 05B keeps desktop realtime preview display model formatting-only. — Renderer formats backend, fallback, cancellation, cache, stale, and latency fields returned by main/Rust without owning fallback decisions.
+- [Phase 11]: Plan 05B shows FFmpeg only as a fallback artifact label. — Supported realtime responses display Mock/GPU/offscreen backend labels and never present FFmpeg as active realtime backend.
 
 ### Pending Todos
 
@@ -314,6 +317,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T17:29:14.904Z
-Stopped at: Completed 11-05-PLAN.md
+Last session: 2026-06-18T17:43:15.759Z
+Stopped at: Completed 11-05B-PLAN.md
 Resume file: None
