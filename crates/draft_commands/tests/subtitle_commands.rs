@@ -105,7 +105,10 @@ fn subtitle_srt_import_targets_existing_text_track() {
 #[test]
 fn subtitle_srt_import_splits_cues_on_whitespace_only_blank_lines() {
     let mut payload = subtitle_payload(
-        Draft::new("subtitle-whitespace-separator-draft", "Subtitle Whitespace Separator"),
+        Draft::new(
+            "subtitle-whitespace-separator-draft",
+            "Subtitle Whitespace Separator",
+        ),
         CommandState::empty(),
         TimelineSelection::empty(),
     );

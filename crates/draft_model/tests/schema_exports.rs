@@ -1172,6 +1172,8 @@ fn constrain_text_contracts(schema_value: &mut serde_json::Value) {
         1,
         MAX_TEXT_LAYOUT_MILLIS,
     );
+    constrain_layout_region_sum_property(text_layout_region, "xMillis", "widthMillis");
+    constrain_layout_region_sum_property(text_layout_region, "yMillis", "heightMillis");
 
     let text_style = defs
         .get_mut("TextStyle")
@@ -1254,6 +1256,36 @@ fn constrain_string_pattern_property(
         object_schema["properties"][property]["pattern"],
         json!(pattern)
     );
+}
+
+fn constrain_layout_region_sum_property(
+    object_schema: &mut serde_json::Value,
+    offset_property: &str,
+    size_property: &str,
+) {
+    let invalid_ranges = (1..=MAX_TEXT_LAYOUT_MILLIS)
+        .map(|offset| {
+            json!({
+                "properties": {
+                    offset_property: { "minimum": offset },
+                    size_property: { "minimum": MAX_TEXT_LAYOUT_MILLIS + 1 - offset }
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    object_schema
+        .as_object_mut()
+        .expect("object schema should be an object")
+        .entry("allOf")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+        .expect("allOf should be an array")
+        .push(json!({
+            "not": {
+                "anyOf": invalid_ranges
+            }
+        }));
 }
 
 fn rational_frame_rate_schema_object(
@@ -1458,6 +1490,14 @@ fn invalid_text_contract_drafts() -> Vec<(&'static str, serde_json::Value)> {
             ),
         ),
         (
+            "layout x plus width must be <= 1000",
+            draft_value_with_text_layout_region(900, 100, 200, 800),
+        ),
+        (
+            "layout y plus height must be <= 1000",
+            draft_value_with_text_layout_region(100, 900, 800, 200),
+        ),
+        (
             "text color must be #RRGGBB",
             draft_value_with_text_contract_field(
                 "/tracks/0/segments/0/text/style/color",
@@ -1531,6 +1571,28 @@ fn draft_value_with_text_contract_field(
     *value
         .pointer_mut(pointer)
         .unwrap_or_else(|| panic!("text contract pointer should exist: {pointer}")) = replacement;
+    value
+}
+
+fn draft_value_with_text_layout_region(
+    x_millis: u32,
+    y_millis: u32,
+    width_millis: u32,
+    height_millis: u32,
+) -> serde_json::Value {
+    let mut value = draft_value_with_text_contract();
+    *value
+        .pointer_mut("/tracks/0/segments/0/text/layoutRegion/xMillis")
+        .expect("text contract xMillis pointer should exist") = json!(x_millis);
+    *value
+        .pointer_mut("/tracks/0/segments/0/text/layoutRegion/yMillis")
+        .expect("text contract yMillis pointer should exist") = json!(y_millis);
+    *value
+        .pointer_mut("/tracks/0/segments/0/text/layoutRegion/widthMillis")
+        .expect("text contract widthMillis pointer should exist") = json!(width_millis);
+    *value
+        .pointer_mut("/tracks/0/segments/0/text/layoutRegion/heightMillis")
+        .expect("text contract heightMillis pointer should exist") = json!(height_millis);
     value
 }
 
