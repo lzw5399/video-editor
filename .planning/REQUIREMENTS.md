@@ -297,7 +297,7 @@
 | MEDIAIO-01 | Phase 12 | Complete |
 | MEDIAIO-02 | Phase 12 | Complete |
 | MEDIAIO-03 | Phase 12 | Complete |
-| MEDIAIO-04 | Phase 12 | Planned |
+| MEDIAIO-04 | Phase 12 | Complete |
 | MEDIAIO-05 | Phase 12 | Complete |
 | INCR-01 | Phase 13 | Planned |
 | INCR-02 | Phase 13 | Planned |

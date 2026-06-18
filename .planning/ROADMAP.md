@@ -494,7 +494,7 @@ Plans:
 
 - [x] 12-01 - Shared media IO traits, frame pool leases, color metadata, texture/device identity, fallback reason contracts
 - [x] 12-02 - Desktop native/FFmpeg media IO capability reporting
-- [ ] 12-02B - Binding/schema/source guards and platform dependency verification checkpoint
+- [x] 12-02B - Binding/schema/source guards and platform dependency verification checkpoint
 - [ ] 12-03 - FFmpeg CPU frame fallback decoder and structured fallback ladder
 - [ ] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
 - [ ] 12-05 - Windows Media Foundation/DXVA/D3D frame and texture path

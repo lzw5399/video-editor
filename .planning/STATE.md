@@ -5,17 +5,17 @@ milestone_name: milestone
 status: completed
 current_phase: 12
 current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 3
+current_plan: 4
 total_plans_in_phase: 9
 stopped_at: None
-last_updated: "2026-06-18T19:04:07.000Z"
-last_activity: "2026-06-18 - Completed Phase 12 Plan 02: desktop native and FFmpeg media IO capability reporting."
+last_updated: "2026-06-18T19:30:33.000Z"
+last_activity: "2026-06-18 - Completed Phase 12 Plan 02B: binding/schema media IO contracts, source guards, and approved platform dependencies."
 progress:
   total_phases: 20
   completed_phases: 13
   total_plans: 98
-  completed_plans: 83
-  percent: 85
+  completed_plans: 84
+  percent: 86
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 12
-Plan: 2/9 complete; next plan 12-02B
-Status: Phase 12 in progress; shared media IO contracts and desktop capability reporting are complete.
-Last activity: 2026-06-18 - Completed Phase 12 Plan 02: desktop native and FFmpeg media IO capability reporting.
+Plan: 3/9 complete; next plan 12-03
+Status: Phase 12 in progress; binding/schema media IO contracts and approved platform dependencies are complete.
+Last activity: 2026-06-18 - Completed Phase 12 Plan 02B: binding/schema media IO contracts, source guards, and approved platform dependencies.
 
-Progress: [████████▌░] 85%
+Progress: [████████▌░] 86%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 83
+- Total plans completed: 84
 - Average duration: 9 min
-- Total execution time: 707 min
+- Total execution time: 736 min
 
 **By Phase:**
 
@@ -59,7 +59,7 @@ Progress: [████████▌░] 85%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
-| 12 | 2 | 46 min | 23 min |
+| 12 | 3 | 75 min | 25 min |
 
 **Recent Trend:**
 
@@ -140,6 +140,7 @@ Progress: [████████▌░] 85%
 | Phase 11 P07 | 12 min | 2 tasks | 5 files |
 | Phase 12 P01 | 40 min | 2 tasks | 11 files |
 | Phase 12 P02 | 6 min | 1 tasks | 12 files |
+| Phase 12 P02B | 29 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -165,6 +166,9 @@ Recent decisions affecting current work:
 - [Phase 12]: Plan 02 keeps desktop capability reporting additive: `RuntimeCapabilities.ffmpeg` wraps the existing FFmpeg readiness report and `RuntimeCapabilities.media_io` adds native/fallback posture. — Existing callers of `probe_runtime_capabilities` keep their current behavior while Phase 12 consumers can request the richer aggregate.
 - [Phase 12]: Windows and macOS media IO domains report Warning/Unavailable until native platform decode and texture import are proven. — Capability reports must not claim HEVC, ProRes, AV1, or texture interop support by default.
 - [Phase 12]: `UnsupportedPlatform` is a stable fallback reason. — Non-target platform capability domains fail explicitly instead of panicking, disappearing, or using renderer-supplied diagnostics.
+- [Phase 12]: Plan 02B keeps runtime capability binding contracts generated from `draft_model`. — `probeRuntimeCapabilities` preserves existing FFmpeg readiness fields and adds `mediaIo` native capability data without JavaScript-owned contract drift.
+- [Phase 12]: Binding-visible decoded frame and texture handle contracts are metadata-only. — Owner session, generation, backend, device identity, dimensions, and pixel format may cross bindings; native pointers and full-frame byte/pixel payloads are blocked by generated schema tests and `scripts/phase12-source-guards.sh`.
+- [Phase 12]: Windows `windows` 0.62.2 and macOS `objc2`/framework crates are approved target-specific dependencies for native media IO plans. — Plans 12-04 and 12-05 can rely on these dependencies without adding unapproved platform crates.
 - [Phase 11]: Plan 01 keeps realtime preview work at the Rust contract/mock-runtime layer; GPU, FFmpeg fallback execution, audio, scheduler, and platform decode remain deferred to later plans. — This establishes the shared runtime API without prematurely implementing later Phase 11/12/15/16 scope.
 - [Phase 11]: Preview frame presentation is generation-gated. — Stale request generations and canceled request tokens return non-presented results with telemetry and diagnostics instead of overwriting the current preview.
 - [Phase 11]: Plan 02 prepares realtime preview render graph intent through `engine_core` and `render_graph`, then classifies supported/degraded/unsupported capability outcomes before backend execution. — This keeps preview semantics Rust-owned and renderer-neutral while exposing serializable parity diagnostics against export graph intent.
