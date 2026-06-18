@@ -2504,6 +2504,9 @@
         "licensePosture": {
           "$ref": "#/$defs/RuntimeLicensePosture"
         },
+        "mediaIo": {
+          "$ref": "#/$defs/RuntimeMediaIoCapabilities"
+        },
         "status": {
           "$ref": "#/$defs/RuntimeCapabilityStatus"
         },
@@ -2522,6 +2525,7 @@
         "subtitlesFilter",
         "fontReadiness",
         "licensePosture",
+        "mediaIo",
         "diagnostics"
       ],
       "title": "RuntimeCapabilityReport",
@@ -2535,6 +2539,152 @@
         "unavailable"
       ],
       "type": "string"
+    },
+    "RuntimeCodecCapability": {
+      "additionalProperties": false,
+      "description": "Codec readiness and first native target metadata.",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "containers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "firstNativeHardwareDecodeTarget": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "codec",
+        "containers",
+        "firstNativeHardwareDecodeTarget",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeDecodedFrameHandleMetadata": {
+      "additionalProperties": false,
+      "description": "Binding-safe decoded frame metadata. The frame payload stays owned by Rust/native runtime.",
+      "properties": {
+        "dimensions": {
+          "$ref": "#/$defs/RuntimeFrameDimensions"
+        },
+        "frameHandleId": {
+          "type": "string"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ownerSession": {
+          "type": "string"
+        },
+        "pixelFormat": {
+          "$ref": "#/$defs/RuntimeVideoPixelFormat"
+        }
+      },
+      "required": [
+        "frameHandleId",
+        "ownerSession",
+        "generation",
+        "dimensions",
+        "pixelFormat"
+      ],
+      "title": "RuntimeDecodedFrameHandleMetadata",
+      "type": "object"
+    },
+    "RuntimeDeviceId": {
+      "additionalProperties": false,
+      "description": "Binding-safe runtime device identity for texture compatibility checks.",
+      "properties": {
+        "adapterId": {
+          "type": "string"
+        },
+        "backend": {
+          "$ref": "#/$defs/RuntimeTextureBackend"
+        },
+        "deviceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "backend",
+        "adapterId",
+        "deviceId"
+      ],
+      "type": "object"
+    },
+    "RuntimeFallbackDecodePathCapability": {
+      "additionalProperties": false,
+      "description": "One decode path capability entry.",
+      "properties": {
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/RuntimeSelectedDecodePath"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "path",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeFallbackLadderCapability": {
+      "additionalProperties": false,
+      "description": "Supported decode path ladder exposed as data, not renderer-owned selection logic.",
+      "properties": {
+        "paths": {
+          "items": {
+            "$ref": "#/$defs/RuntimeFallbackDecodePathCapability"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
     },
     "RuntimeFeatureCapability": {
       "additionalProperties": false,
@@ -2595,6 +2745,27 @@
       ],
       "type": "object"
     },
+    "RuntimeFrameDimensions": {
+      "additionalProperties": false,
+      "description": "Binding-safe frame dimensions for decoded frame and texture metadata.",
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
     "RuntimeLicensePosture": {
       "additionalProperties": false,
       "description": "Binding-safe FFmpeg runtime redistribution posture.",
@@ -2617,6 +2788,306 @@
         "redistributableBuild",
         "source",
         "message"
+      ],
+      "type": "object"
+    },
+    "RuntimeMacosMediaIoCapabilities": {
+      "additionalProperties": false,
+      "description": "macOS native media IO capability domain.",
+      "properties": {
+        "avFoundation": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "coreVideo": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metalTextureInterop": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        },
+        "videoToolbox": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        }
+      },
+      "required": [
+        "status",
+        "avFoundation",
+        "videoToolbox",
+        "coreVideo",
+        "metalTextureInterop"
+      ],
+      "type": "object"
+    },
+    "RuntimeMediaIoCapabilities": {
+      "additionalProperties": false,
+      "description": "Binding-safe native media IO capability report.",
+      "properties": {
+        "codecs": {
+          "items": {
+            "$ref": "#/$defs/RuntimeCodecCapability"
+          },
+          "type": "array"
+        },
+        "fallbackLadder": {
+          "$ref": "#/$defs/RuntimeFallbackLadderCapability"
+        },
+        "macos": {
+          "$ref": "#/$defs/RuntimeMacosMediaIoCapabilities"
+        },
+        "pixelFormats": {
+          "items": {
+            "$ref": "#/$defs/RuntimePixelFormatCapability"
+          },
+          "type": "array"
+        },
+        "textureInterop": {
+          "$ref": "#/$defs/RuntimeTextureInteropCapability"
+        },
+        "windows": {
+          "$ref": "#/$defs/RuntimeWindowsMediaIoCapabilities"
+        }
+      },
+      "required": [
+        "windows",
+        "macos",
+        "codecs",
+        "pixelFormats",
+        "textureInterop",
+        "fallbackLadder"
+      ],
+      "type": "object"
+    },
+    "RuntimeMediaIoFallbackReason": {
+      "description": "Binding-safe fallback reason for media IO capability reports.",
+      "enum": [
+        "unsupportedCodec",
+        "unsupportedPixelFormat",
+        "hardwareDecodeUnavailable",
+        "textureInteropUnavailable",
+        "deviceMismatch",
+        "allocationFailure",
+        "platformApiFailure",
+        "ffmpegUnavailable",
+        "userDisabledHardwareDecode",
+        "unsupportedPlatform"
+      ],
+      "type": "string"
+    },
+    "RuntimePixelFormatCapability": {
+      "additionalProperties": false,
+      "description": "Pixel-format readiness metadata without pixel payloads.",
+      "properties": {
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pixelFormat": {
+          "$ref": "#/$defs/RuntimeVideoPixelFormat"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "pixelFormat",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RuntimeSelectedDecodePath": {
+      "description": "Ordered decode route exposed as capability metadata, not renderer policy.",
+      "enum": [
+        "nativeHardwareTexture",
+        "nativeHardwareCpuCopy",
+        "nativeSoftwareCpuFrame",
+        "ffmpegCpuFrame",
+        "ffmpegPreviewArtifact"
+      ],
+      "type": "string"
+    },
+    "RuntimeTextureBackend": {
+      "description": "Native texture backend identity. Values are metadata only, not native handles.",
+      "enum": [
+        "d3d11Texture2D",
+        "d3d12Resource",
+        "metalTexture",
+        "coreVideoPixelBuffer"
+      ],
+      "type": "string"
+    },
+    "RuntimeTextureHandleMetadata": {
+      "additionalProperties": false,
+      "description": "Binding-safe texture metadata. Native pointers and GPU objects never cross this contract.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/RuntimeTextureBackend"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/RuntimeDeviceId"
+        },
+        "dimensions": {
+          "$ref": "#/$defs/RuntimeFrameDimensions"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ownerSession": {
+          "type": "string"
+        },
+        "pixelFormat": {
+          "$ref": "#/$defs/RuntimeVideoPixelFormat"
+        },
+        "textureHandleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "textureHandleId",
+        "ownerSession",
+        "generation",
+        "backend",
+        "deviceId",
+        "dimensions",
+        "pixelFormat"
+      ],
+      "title": "RuntimeTextureHandleMetadata",
+      "type": "object"
+    },
+    "RuntimeTextureInteropCapability": {
+      "additionalProperties": false,
+      "description": "Texture interop capability metadata for preview-device compatibility.",
+      "properties": {
+        "backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeTextureBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibleWithPreviewDevice": {
+          "type": "boolean"
+        },
+        "deviceId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeDeviceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "status",
+        "compatibleWithPreviewDevice"
+      ],
+      "type": "object"
+    },
+    "RuntimeVideoPixelFormat": {
+      "description": "Decoded frame pixel format exposed without raw frame bytes.",
+      "enum": [
+        "nv12",
+        "bgra8",
+        "rgba8",
+        "p010",
+        "yuv420P",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RuntimeWindowsMediaIoCapabilities": {
+      "additionalProperties": false,
+      "description": "Windows native media IO capability domain.",
+      "properties": {
+        "d3dTextureInterop": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "diagnostic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dxva": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "fallbackReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeMediaIoFallbackReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mediaFoundation": {
+          "$ref": "#/$defs/RuntimeFeatureCapability"
+        },
+        "status": {
+          "$ref": "#/$defs/RuntimeCapabilityStatus"
+        }
+      },
+      "required": [
+        "status",
+        "mediaFoundation",
+        "dxva",
+        "d3dTextureInterop"
       ],
       "type": "object"
     },

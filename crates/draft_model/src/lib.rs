@@ -19,30 +19,29 @@ pub mod timeline;
 pub mod validation;
 
 pub use canvas::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
-    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
-    normalized_to_canvas_pixel, reduce_ratio,
+    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAspectRatio,
+    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, CanvasPixelPoint,
+    DraftCanvasConfig, NormalizedCanvasPoint,
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
 pub use material::{
-    Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
-    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
+    add_material, mark_material_available, mark_material_missing, mark_material_probe_failed,
+    upsert_material, Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate,
 };
 pub use time::Microseconds;
 pub use timeline::{
     Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_OPACITY_MILLIS,
-    MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
-    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment,
-    SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
-    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
-    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
-    TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
-    Transition,
+    MainTrackMagnet, Segment, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
+    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, Track, TrackKind, Transition, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
 };
-pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
+pub use validation::{migrate_draft_json, validate_draft, DraftValidationError};
 
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
@@ -952,6 +951,212 @@ pub struct RuntimeLicensePosture {
     pub message: String,
 }
 
+/// Binding-safe fallback reason for media IO capability reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeMediaIoFallbackReason {
+    UnsupportedCodec,
+    UnsupportedPixelFormat,
+    HardwareDecodeUnavailable,
+    TextureInteropUnavailable,
+    DeviceMismatch,
+    AllocationFailure,
+    PlatformApiFailure,
+    FfmpegUnavailable,
+    UserDisabledHardwareDecode,
+    UnsupportedPlatform,
+}
+
+/// Ordered decode route exposed as capability metadata, not renderer policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeSelectedDecodePath {
+    NativeHardwareTexture,
+    NativeHardwareCpuCopy,
+    NativeSoftwareCpuFrame,
+    FfmpegCpuFrame,
+    FfmpegPreviewArtifact,
+}
+
+/// Native texture backend identity. Values are metadata only, not native handles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeTextureBackend {
+    D3d11Texture2D,
+    D3d12Resource,
+    MetalTexture,
+    CoreVideoPixelBuffer,
+}
+
+/// Decoded frame pixel format exposed without raw frame bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeVideoPixelFormat {
+    Nv12,
+    Bgra8,
+    Rgba8,
+    P010,
+    Yuv420P,
+    Unknown,
+}
+
+/// Binding-safe runtime device identity for texture compatibility checks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeDeviceId {
+    pub backend: RuntimeTextureBackend,
+    pub adapter_id: String,
+    pub device_id: String,
+}
+
+/// Binding-safe frame dimensions for decoded frame and texture metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeFrameDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Binding-safe decoded frame metadata. The frame payload stays owned by Rust/native runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeDecodedFrameHandleMetadata {
+    pub frame_handle_id: String,
+    pub owner_session: String,
+    pub generation: u64,
+    pub dimensions: RuntimeFrameDimensions,
+    pub pixel_format: RuntimeVideoPixelFormat,
+}
+
+/// Binding-safe texture metadata. Native pointers and GPU objects never cross this contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeTextureHandleMetadata {
+    pub texture_handle_id: String,
+    pub owner_session: String,
+    pub generation: u64,
+    pub backend: RuntimeTextureBackend,
+    pub device_id: RuntimeDeviceId,
+    pub dimensions: RuntimeFrameDimensions,
+    pub pixel_format: RuntimeVideoPixelFormat,
+}
+
+/// Binding-safe native media IO capability report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeMediaIoCapabilities {
+    pub windows: RuntimeWindowsMediaIoCapabilities,
+    pub macos: RuntimeMacosMediaIoCapabilities,
+    pub codecs: Vec<RuntimeCodecCapability>,
+    pub pixel_formats: Vec<RuntimePixelFormatCapability>,
+    pub texture_interop: RuntimeTextureInteropCapability,
+    pub fallback_ladder: RuntimeFallbackLadderCapability,
+}
+
+/// Windows native media IO capability domain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeWindowsMediaIoCapabilities {
+    pub status: RuntimeCapabilityStatus,
+    pub media_foundation: RuntimeFeatureCapability,
+    pub dxva: RuntimeFeatureCapability,
+    pub d3d_texture_interop: RuntimeFeatureCapability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// macOS native media IO capability domain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeMacosMediaIoCapabilities {
+    pub status: RuntimeCapabilityStatus,
+    pub av_foundation: RuntimeFeatureCapability,
+    pub video_toolbox: RuntimeFeatureCapability,
+    pub core_video: RuntimeFeatureCapability,
+    pub metal_texture_interop: RuntimeFeatureCapability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Codec readiness and first native target metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeCodecCapability {
+    pub codec: String,
+    pub containers: Vec<String>,
+    pub first_native_hardware_decode_target: bool,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Pixel-format readiness metadata without pixel payloads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimePixelFormatCapability {
+    pub pixel_format: RuntimeVideoPixelFormat,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Texture interop capability metadata for preview-device compatibility.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeTextureInteropCapability {
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub backend: Option<RuntimeTextureBackend>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub device_id: Option<RuntimeDeviceId>,
+    pub compatible_with_preview_device: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
+/// Supported decode path ladder exposed as data, not renderer-owned selection logic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeFallbackLadderCapability {
+    pub paths: Vec<RuntimeFallbackDecodePathCapability>,
+}
+
+/// One decode path capability entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeFallbackDecodePathCapability {
+    pub path: RuntimeSelectedDecodePath,
+    pub status: RuntimeCapabilityStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub diagnostic: Option<String>,
+}
+
 /// Runtime readiness report returned by Rust-owned capability probing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -966,6 +1171,7 @@ pub struct RuntimeCapabilityReport {
     pub subtitles_filter: RuntimeFeatureCapability,
     pub font_readiness: RuntimeFontCapability,
     pub license_posture: RuntimeLicensePosture,
+    pub media_io: RuntimeMediaIoCapabilities,
     pub diagnostics: Vec<String>,
 }
 
