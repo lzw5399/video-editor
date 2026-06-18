@@ -41,7 +41,7 @@ fn clock_generation_increments_for_all_invalidating_operations() {
 }
 
 #[test]
-fn clock_serializes_integer_microseconds_and_rational_rates() {
+fn clock_generation_serializes_integer_microseconds_and_rational_rates() {
     let clock = TimelineClock::new(
         Microseconds::new(12_345_678),
         RationalFrameRate::new(24_000, 1_001),
