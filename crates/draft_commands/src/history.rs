@@ -1,11 +1,11 @@
 //! Session-only bounded undo/redo history for timeline commands.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandHistorySnapshot, CommandName, CommandState, DirtyDomain,
-    Draft, TimelineCommandResponse, TimelineSelection,
+    CommandEvent, CommandHistorySnapshot, CommandName, CommandState, Draft,
+    TimelineCommandResponse, TimelineSelection,
 };
 
-use crate::{TimelineCommandError, TimelineCommandErrorKind};
+use crate::{TimelineCommandError, TimelineCommandErrorKind, delta::restored_draft_delta};
 
 pub const DEFAULT_HISTORY_LIMIT: u32 = 100;
 
@@ -69,23 +69,21 @@ pub fn undo_timeline_edit(
         label: Some("redo snapshot".to_owned()),
     });
 
+    let restored_draft = snapshot.draft;
+    let restored_selection = snapshot.selection;
+    let delta = restored_draft_delta(
+        CommandName::UndoTimelineEdit,
+        draft,
+        &restored_draft,
+        "undo restored a prior semantic snapshot",
+    );
+
     Ok(TimelineCommandResponse {
-        draft: snapshot.draft,
+        draft: restored_draft,
         command_state: next_state,
-        selection: snapshot.selection,
+        selection: restored_selection,
         events: vec![event("undoCommitted")],
-        delta: CommandDelta::full_draft(
-            CommandName::UndoTimelineEdit,
-            Vec::new(),
-            vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
-            vec![
-                DirtyDomain::Preview,
-                DirtyDomain::ExportPrep,
-                DirtyDomain::GraphSnapshot,
-                DirtyDomain::PreviewCache,
-            ],
-            "undo restored a prior semantic snapshot",
-        ),
+        delta,
     })
 }
 
@@ -115,23 +113,21 @@ pub fn redo_timeline_edit(
         events.push(event("historyLimitPruned"));
     }
 
+    let restored_draft = snapshot.draft;
+    let restored_selection = snapshot.selection;
+    let delta = restored_draft_delta(
+        CommandName::RedoTimelineEdit,
+        draft,
+        &restored_draft,
+        "redo restored a later semantic snapshot",
+    );
+
     Ok(TimelineCommandResponse {
-        draft: snapshot.draft,
+        draft: restored_draft,
         command_state: next_state,
-        selection: snapshot.selection,
+        selection: restored_selection,
         events,
-        delta: CommandDelta::full_draft(
-            CommandName::RedoTimelineEdit,
-            Vec::new(),
-            vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
-            vec![
-                DirtyDomain::Preview,
-                DirtyDomain::ExportPrep,
-                DirtyDomain::GraphSnapshot,
-                DirtyDomain::PreviewCache,
-            ],
-            "redo restored a later semantic snapshot",
-        ),
+        delta,
     })
 }
 

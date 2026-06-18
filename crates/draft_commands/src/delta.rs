@@ -113,6 +113,26 @@ const CANVAS_CONSUMERS: &[DirtyDomain] = &[
     DirtyDomain::PreviewCache,
 ];
 
+const HISTORY_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Timing,
+    DirtyDomain::Visual,
+    DirtyDomain::Text,
+    DirtyDomain::Audio,
+    DirtyDomain::Material,
+    DirtyDomain::GraphSnapshot,
+];
+
+const HISTORY_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Audio,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Waveform,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
 pub fn current_range(target_timerange: TargetTimerange) -> DirtyRange {
     DirtyRange {
         target_timerange,
@@ -409,6 +429,95 @@ pub fn canvas_delta(draft: &Draft) -> CommandDelta {
     }
 }
 
+pub fn restored_draft_delta(
+    command: CommandName,
+    previous_draft: &Draft,
+    restored_draft: &Draft,
+    reason: &'static str,
+) -> CommandDelta {
+    if previous_draft == restored_draft {
+        return CommandDelta::none(command, reason);
+    }
+
+    if previous_draft.canvas_config != restored_draft.canvas_config {
+        return CommandDelta::full_draft(
+            command,
+            vec![
+                ChangedEntity::Draft {
+                    draft_id: restored_draft.draft_id.clone(),
+                },
+                ChangedEntity::Canvas {
+                    draft_id: restored_draft.draft_id.clone(),
+                },
+            ],
+            CANVAS_DOMAINS.to_vec(),
+            CANVAS_CONSUMERS.to_vec(),
+            reason,
+        );
+    }
+
+    let mut entities = Vec::new();
+    let mut ranges = Vec::new();
+    let mut material_ids = Vec::new();
+
+    for (track_id, previous_segment) in draft_segments(previous_draft) {
+        match find_segment(restored_draft, &previous_segment.segment_id) {
+            Some((restored_track_id, restored_segment)) => {
+                if previous_segment != restored_segment || track_id != restored_track_id {
+                    push_segment_entities(
+                        &mut entities,
+                        &mut material_ids,
+                        track_id,
+                        previous_segment,
+                    );
+                    if track_id != restored_track_id {
+                        push_segment_entities(
+                            &mut entities,
+                            &mut material_ids,
+                            restored_track_id,
+                            restored_segment,
+                        );
+                    }
+                    ranges.push(previous_range(previous_segment.target_timerange.clone()));
+                    ranges.push(current_range(restored_segment.target_timerange.clone()));
+                }
+            }
+            None => {
+                push_segment_entities(&mut entities, &mut material_ids, track_id, previous_segment);
+                ranges.push(previous_range(previous_segment.target_timerange.clone()));
+            }
+        }
+    }
+
+    for (track_id, restored_segment) in draft_segments(restored_draft) {
+        if find_segment(previous_draft, &restored_segment.segment_id).is_none() {
+            push_segment_entities(&mut entities, &mut material_ids, track_id, restored_segment);
+            ranges.push(current_range(restored_segment.target_timerange.clone()));
+        }
+    }
+
+    if ranges.is_empty() {
+        CommandDelta::full_draft(
+            command,
+            vec![ChangedEntity::Draft {
+                draft_id: restored_draft.draft_id.clone(),
+            }],
+            HISTORY_DOMAINS.to_vec(),
+            HISTORY_CONSUMERS.to_vec(),
+            reason,
+        )
+    } else {
+        CommandDelta::targeted(
+            command,
+            entities,
+            HISTORY_DOMAINS.to_vec(),
+            ranges,
+            InvalidationScope::targeted(material_ids, HISTORY_CONSUMERS.to_vec()),
+            reason,
+        )
+    }
+}
+
 pub fn consumer_domains_for_semantic_domains(domains: &[DirtyDomain]) -> Vec<DirtyDomain> {
     let mut consumers = Vec::new();
     for domain in domains {
@@ -534,6 +643,62 @@ fn push_material_id(material_ids: &mut Vec<MaterialId>, material_id: &MaterialId
     if !material_ids.iter().any(|existing| existing == material_id) {
         material_ids.push(material_id.clone());
     }
+}
+
+fn push_segment_entities(
+    entities: &mut Vec<ChangedEntity>,
+    material_ids: &mut Vec<MaterialId>,
+    track_id: &TrackId,
+    segment: &Segment,
+) {
+    push_entity(
+        entities,
+        ChangedEntity::Track {
+            track_id: track_id.clone(),
+        },
+    );
+    push_entity(
+        entities,
+        ChangedEntity::Segment {
+            track_id: track_id.clone(),
+            segment_id: segment.segment_id.clone(),
+        },
+    );
+    push_entity(
+        entities,
+        ChangedEntity::Material {
+            material_id: segment.material_id.clone(),
+        },
+    );
+    push_material_id(material_ids, &segment.material_id);
+}
+
+fn push_entity(entities: &mut Vec<ChangedEntity>, entity: ChangedEntity) {
+    if !entities.contains(&entity) {
+        entities.push(entity);
+    }
+}
+
+fn draft_segments(draft: &Draft) -> impl Iterator<Item = (&TrackId, &Segment)> {
+    draft.tracks.iter().flat_map(|track| {
+        track
+            .segments
+            .iter()
+            .map(move |segment| (&track.track_id, segment))
+    })
+}
+
+fn find_segment<'a>(
+    draft: &'a Draft,
+    segment_id: &SegmentId,
+) -> Option<(&'a TrackId, &'a Segment)> {
+    draft.tracks.iter().find_map(|track| {
+        track
+            .segments
+            .iter()
+            .find(|segment| &segment.segment_id == segment_id)
+            .map(|segment| (&track.track_id, segment))
+    })
 }
 
 fn push_all(domains: &mut Vec<DirtyDomain>, additions: &[DirtyDomain]) {
