@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 12
 current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 5
+current_plan: 6
 total_plans_in_phase: 9
 stopped_at: None
-last_updated: "2026-06-18T19:49:39.000Z"
-last_activity: "2026-06-18 - Completed Phase 12 Plan 03: FFmpeg CPU frame fallback decoder and structured fallback ladder."
+last_updated: "2026-06-18T20:12:49.000Z"
+last_activity: "2026-06-18 - Completed Phase 12 Plan 04: macOS AVFoundation/CoreVideo native frame leases and texture fallback diagnostics."
 progress:
   total_phases: 20
   completed_phases: 13
   total_plans: 98
-  completed_plans: 85
-  percent: 87
+  completed_plans: 86
+  percent: 88
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 12
-Plan: 4/9 complete; next plan 12-04
-Status: Phase 12 in progress; FFmpeg CPU frame fallback and structured fallback ladder are complete.
-Last activity: 2026-06-18 - Completed Phase 12 Plan 03: FFmpeg CPU frame fallback decoder and structured fallback ladder.
+Plan: 5/9 complete; next plan 12-05
+Status: Phase 12 in progress; macOS native CoreVideo frame leases and texture fallback diagnostics are complete.
+Last activity: 2026-06-18 - Completed Phase 12 Plan 04: macOS AVFoundation/CoreVideo native frame leases and texture fallback diagnostics.
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 85
+- Total plans completed: 86
 - Average duration: 9 min
-- Total execution time: 755 min
+- Total execution time: 770 min
 
 **By Phase:**
 
@@ -59,11 +59,11 @@ Progress: [█████████░] 87%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
-| 12 | 4 | 94 min | 24 min |
+| 12 | 5 | 109 min | 22 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 106 min
+- Last 5 plans: 109 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -142,6 +142,7 @@ Progress: [█████████░] 87%
 | Phase 12 P02 | 6 min | 1 tasks | 12 files |
 | Phase 12 P02B | 29 min | 2 tasks | 10 files |
 | Phase 12 P03 | 19 min | 2 tasks | 9 files |
+| Phase 12 P04 | 15 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,8 @@ Progress: [█████████░] 87%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12]: macOS native H.264 decode returns CoreVideo-backed platform-opaque frame leases. — The session retains native sample-buffer lifetime in Rust and exposes only metadata/release IDs, not native pointers or full-frame JS byte buffers.
+- [Phase 12]: macOS Metal texture interop remains explicitly gated until `CVMetalTextureCache` and preview/native Metal device identity are proven. — The runtime records `TextureInteropUnavailable` or `DeviceMismatch` diagnostics instead of synthesizing a false-ready texture handle.
 - [Phase 12]: FFmpeg CPU frame fallback is a `media_runtime_desktop` MediaReader/MediaSession/VideoDecoder implementation. — The desktop fallback returns FramePool CPU leases and metadata instead of renderer-owned pixels or preview/export-owned artifacts.
 - [Phase 12]: FFmpeg fallback stream probing stays local to `media_runtime_desktop`. — Existing `probe_material_metadata`, export jobs, and preview artifact generation remain stable while fallback sessions get stream metadata needed for decoding.
 - [Phase 12]: `media_runtime` owns the canonical fallback ladder and serializable selected-path diagnostics. — Desktop capability reports and future decode selection use the same native hardware texture -> native hardware CPU copy -> native software CPU frame -> FFmpeg CPU frame -> FFmpeg preview artifact order.

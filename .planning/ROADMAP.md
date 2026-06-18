@@ -488,7 +488,7 @@ Plans:
   4. Realtime preview can consume frame or texture handles without full 4K pixel buffers crossing the JS/Rust boundary.
   5. FFmpeg remains available as fallback/probe/export/transcode implementation, with unsupported codecs, pixel formats, color spaces, and hardware paths degrading predictably.
 
-**Plans:** 4/9 plans executed
+**Plans:** 5/9 plans executed
 
 Plans:
 
@@ -496,7 +496,7 @@ Plans:
 - [x] 12-02 - Desktop native/FFmpeg media IO capability reporting
 - [x] 12-02B - Binding/schema/source guards and platform dependency verification checkpoint
 - [x] 12-03 - FFmpeg CPU frame fallback decoder and structured fallback ladder
-- [ ] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
+- [x] 12-04 - macOS AVFoundation/VideoToolbox/CoreVideo/Metal frame and texture path
 - [ ] 12-05 - Windows Media Foundation/DXVA/D3D frame and texture path
 - [ ] 12-06 - Phase 11 media IO handoff adapter
 - [ ] 12-06B - Handle-based preview decode binding/release contracts
