@@ -14,6 +14,7 @@ use media_runtime::{
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
 
+pub mod large_timeline;
 pub mod render_compare;
 
 /// Boundary marker for Phase 1 test harness helpers.
