@@ -1,9 +1,11 @@
 use draft_model::{
     Draft, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, Track, TrackKind,
+    SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
 };
 use realtime_preview_runtime::{
-    RealtimePreviewGraphInput, RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput,
+    RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
+    realtime_preview_parity_diagnostics,
 };
 use render_graph::OutputDimensions;
 
@@ -68,6 +70,38 @@ fn parity_diagnostics_graph_prepare_returns_classified_errors_for_invalid_profil
     assert!(empty_range.message.contains("render range"));
 }
 
+#[test]
+fn parity_diagnostics_snapshot_serializes_realtime_export_divergence() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: text_draft(),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("text draft prepares graph");
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_gpu_text_parity(false)
+        .classify(&prepared.graph);
+    let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
+
+    assert_eq!(
+        serde_json::to_value(&diagnostics).expect("parity diagnostics serialize"),
+        serde_json::json!([
+            {
+                "entityId": "text-a",
+                "domain": "text",
+                "previewSupport": {
+                    "degraded": {
+                        "reason": "gpu text parity disabled; realtime preview must use fallback text rasterization"
+                    }
+                },
+                "exportSupport": "supported",
+                "reason": "realtime preview text support diverges from export graph intent",
+                "fallbackUsed": true
+            }
+        ])
+    );
+}
+
 fn supported_draft() -> Draft {
     let mut draft = Draft::new("realtime-graph-prepare", "Realtime graph prepare");
     let mut material = Material::new(
@@ -96,6 +130,38 @@ fn supported_draft() -> Draft {
         SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
         TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
     ));
+    draft.tracks.push(track);
+    draft
+}
+
+fn text_draft() -> Draft {
+    let mut draft = Draft::new("realtime-parity-text", "Realtime parity text");
+    draft.materials.push(Material::new(
+        "text-material",
+        MaterialKind::Text,
+        "text://title",
+        "text-material",
+    ));
+
+    let mut segment = Segment::new(
+        "text-a",
+        "text-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    );
+    segment.text = Some(TextSegment {
+        content: "标题".to_owned(),
+        source: Default::default(),
+        style: TextStyle::default_title(),
+        text_box: Default::default(),
+        layout_region: Default::default(),
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
+    });
+
+    let mut track = Track::new("text-track", TrackKind::Text, "Text");
+    track.segments.push(segment);
     draft.tracks.push(track);
     draft
 }
