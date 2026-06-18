@@ -39,7 +39,10 @@ type PreviewMonitorProps = {
   showDeveloperDiagnostics: boolean;
   pending: boolean;
   playheadUs?: number;
+  playbackRunning: boolean;
   onPlayheadChange: (value: number) => void;
+  onTogglePlayback: () => void;
+  onStopPlayback: () => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
   onProbeRuntimeCapabilities: () => void;
@@ -140,7 +143,10 @@ export function PreviewMonitor({
   showDeveloperDiagnostics,
   pending,
   playheadUs = 0,
+  playbackRunning,
   onPlayheadChange,
+  onTogglePlayback,
+  onStopPlayback,
   onRequestPreviewFrame,
   onRequestPreviewSegment,
   onProbeRuntimeCapabilities,
@@ -329,20 +335,30 @@ export function PreviewMonitor({
               key={control.label}
               type="button"
               className={control.label === "画面比例" ? "preview-icon-button ratio-button" : "preview-icon-button"}
-              aria-label={control.label}
-              title={control.label}
+              aria-label={control.label === "播放" && playbackRunning ? "暂停" : control.label}
+              title={control.label === "播放" && playbackRunning ? "暂停" : control.label}
               onClick={() => {
-                if (control.label === "停止") {
-                  onPlayheadChange(0);
+                if (control.label === "播放") {
+                  onTogglePlayback();
+                } else if (control.label === "停止") {
+                  onStopPlayback();
                 } else if (control.label === "上一帧") {
                   onPlayheadChange(Math.max(0, safePlayheadUs - frameStepUs));
                 } else if (control.label === "下一帧") {
                   onPlayheadChange(safePlayheadUs + frameStepUs);
                 }
               }}
-              disabled={pending || control.label === "播放" || control.label === "适应窗口" || control.label === "画面比例" || control.label === "全屏"}
+              disabled={
+                (pending && !(playbackRunning && (control.label === "播放" || control.label === "停止"))) ||
+                (!runtimeDiagnostics.canPreview && control.label === "播放") ||
+                control.label === "适应窗口" ||
+                control.label === "画面比例" ||
+                control.label === "全屏"
+              }
             >
-              <span aria-hidden="true">{control.label === "画面比例" ? canvasRatio : control.symbol}</span>
+              <span aria-hidden="true">
+                {control.label === "画面比例" ? canvasRatio : control.label === "播放" && playbackRunning ? "⏸" : control.symbol}
+              </span>
             </button>
           ))}
         </div>

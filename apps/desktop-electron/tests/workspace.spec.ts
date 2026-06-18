@@ -935,6 +935,40 @@ test("播放头预览时间输入和逐帧按钮请求目标预览帧", async ()
   }
 });
 
+test("预览播放按钮推进播放头并请求连续预览帧", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    const previewControls = page.getByRole("group", { name: "预览播放控制" });
+    await expect(previewControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 20_000 });
+    await previewControls.getByRole("button", { name: "播放" }).click();
+    await expect(previewControls.getByRole("button", { name: "暂停" })).toBeEnabled();
+
+    await expect
+      .poll(async () => {
+        const targets = (await readExecuteCommandCalls(app))
+          .filter((call) => call.command === "requestPreviewFrame")
+          .map((call) => call.targetTime ?? 0);
+        return Math.max(0, ...targets);
+      }, { timeout: 7_000 })
+      .toBeGreaterThan(0);
+
+    await previewControls.getByRole("button", { name: "暂停" }).click();
+    await expect(previewControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 10_000 });
+
+    const timelineControls = page.getByRole("group", { name: "播放与历史" });
+    await expect(timelineControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 10_000 });
+    await timelineControls.getByRole("button", { name: "播放" }).click();
+    await expect(timelineControls.getByRole("button", { name: "暂停" })).toBeEnabled();
+    await timelineControls.getByRole("button", { name: "停止" }).click();
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:00.000");
+  } finally {
+    await app.close();
+  }
+});
+
 test("native preview host bridge keeps handles in main and exposes narrow telemetry APIs", async () => {
   const { app, page } = await launchWorkspaceApp();
 

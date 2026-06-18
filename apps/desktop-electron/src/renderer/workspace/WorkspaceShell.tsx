@@ -19,10 +19,13 @@ type WorkspaceShellProps = {
   bundlePath: string;
   materialPath: string;
   playheadUs: number;
+  playbackRunning: boolean;
   onCategoryChange: (category: WorkspaceCategory) => void;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
   onPlayheadChange: (value: number) => void;
+  onTogglePlayback: () => void;
+  onStopPlayback: () => void;
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
   onProbeRuntimeCapabilities: () => void;
@@ -67,10 +70,13 @@ export function WorkspaceShell({
   bundlePath,
   materialPath,
   playheadUs,
+  playbackRunning,
   onCategoryChange,
   onBundlePathChange,
   onMaterialPathChange,
   onPlayheadChange,
+  onTogglePlayback,
+  onStopPlayback,
   onRequestPreviewFrame,
   onRequestPreviewSegment,
   onProbeRuntimeCapabilities,
@@ -166,7 +172,10 @@ export function WorkspaceShell({
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
+          playbackRunning={playbackRunning}
           onPlayheadChange={onPlayheadChange}
+          onTogglePlayback={onTogglePlayback}
+          onStopPlayback={onStopPlayback}
           onRequestPreviewFrame={onRequestPreviewFrame}
           onRequestPreviewSegment={onRequestPreviewSegment}
           onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
@@ -197,7 +206,10 @@ export function WorkspaceShell({
         <Timeline
           workspace={workspace}
           playheadUs={playheadUs}
+          playbackRunning={playbackRunning}
           onPlayheadChange={onPlayheadChange}
+          onTogglePlayback={onTogglePlayback}
+          onStopPlayback={onStopPlayback}
           onSelectSegment={onSelectTimelineSegment}
           onAddSegment={onAddTimelineSegment}
           onMoveSelectedSegment={onMoveSelectedSegment}

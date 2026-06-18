@@ -32,7 +32,10 @@ const AUDIO_WAVEFORM_PLACEHOLDER_PATTERN: readonly ("short" | "medium" | "tall")
 type TimelineProps = {
   workspace: WorkspaceState;
   playheadUs: number;
+  playbackRunning: boolean;
   onPlayheadChange: (value: number) => void;
+  onTogglePlayback: () => void;
+  onStopPlayback: () => void;
   onSelectSegment?: (segmentId: SegmentId) => void;
   onAddSegment?: (materialId: string) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
@@ -47,7 +50,10 @@ type TimelineProps = {
 export function Timeline({
   workspace,
   playheadUs,
+  playbackRunning,
   onPlayheadChange,
+  onTogglePlayback,
+  onStopPlayback,
   onSelectSegment,
   onAddSegment,
   onMoveSelectedSegment,
@@ -123,7 +129,10 @@ export function Timeline({
       <TransportStrip
         workspace={workspace}
         playheadUs={playheadUs}
+        playbackRunning={playbackRunning}
         onPlayheadChange={onPlayheadChange}
+        onTogglePlayback={onTogglePlayback}
+        onStopPlayback={onStopPlayback}
         onAddSegment={onAddSegment}
         onMoveSelectedSegment={onMoveSelectedSegment}
         onSplitSelectedSegment={onSplitSelectedSegment}
@@ -178,7 +187,10 @@ function pointerTimeFromLane(clientX: number, laneLeft: number, laneWidth: numbe
 function TransportStrip({
   workspace,
   playheadUs,
+  playbackRunning,
   onPlayheadChange,
+  onTogglePlayback,
+  onStopPlayback,
   onAddSegment,
   onMoveSelectedSegment,
   onSplitSelectedSegment,
@@ -189,7 +201,10 @@ function TransportStrip({
 }: {
   workspace: WorkspaceState;
   playheadUs: number;
+  playbackRunning: boolean;
   onPlayheadChange: (value: number) => void;
+  onTogglePlayback: () => void;
+  onStopPlayback: () => void;
   onAddSegment?: (materialId: string) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: (splitAt: number) => void;
@@ -216,6 +231,9 @@ function TransportStrip({
   const hasSelection = workspace.selection.segmentIds.length > 0;
   const pending = workspace.pendingCommand !== null;
   const snappingLabel = workspace.commandState.snapping.enabled ? "吸附 开" : "吸附 关";
+  const isPlaybackRunning = playbackRunning;
+  const togglePlayback = onTogglePlayback;
+  const stopPlayback = onStopPlayback;
 
   return (
     <div className="transport-strip" aria-label="时间线控制">
@@ -232,8 +250,13 @@ function TransportStrip({
           onClick={onRedo}
           disabled={pending || workspace.commandState.redoStack.length === 0}
         />
-        <TimelineIconButton label="播放" symbol="▶" disabled />
-        <TimelineIconButton label="停止" symbol="■" onClick={() => onPlayheadChange(0)} />
+        <TimelineIconButton
+          label={isPlaybackRunning ? "暂停" : "播放"}
+          symbol={isPlaybackRunning ? "⏸" : "▶"}
+          onClick={togglePlayback}
+          disabled={(pending && !isPlaybackRunning) || !workspace.runtimeDiagnostics.canPreview}
+        />
+        <TimelineIconButton label="停止" symbol="■" onClick={stopPlayback} disabled={pending && !isPlaybackRunning} />
       </div>
       <label className="timeline-control compact-select">
         <span>素材</span>

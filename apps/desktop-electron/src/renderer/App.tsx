@@ -176,20 +176,89 @@ export function App(): React.ReactElement {
   const [bundlePath, setBundlePath] = useState(startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj");
   const [materialPath, setMaterialPath] = useState(startupFixture === "demo" ? "/tmp/demo-material.mp4" : "");
   const [playheadUs, setPlayheadUs] = useState(0);
+  const [playbackRunning, setPlaybackRunning] = useState(false);
   const workspaceRef = useRef(workspace);
+  const playheadRef = useRef(playheadUs);
   const commandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
   const pendingAutoPreviewTimeRef = useRef<number | null>(null);
   const autoPreviewRetryTimerRef = useRef<number | null>(null);
   const autoPreviewRetryCountRef = useRef(0);
+  const playbackClockRef = useRef<{ lastTimestampMs: number | null; accumulatedUs: number }>({
+    lastTimestampMs: null,
+    accumulatedUs: 0
+  });
 
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
 
   useEffect(() => {
+    playheadRef.current = playheadUs;
+  }, [playheadUs]);
+
+  useEffect(() => {
     flushPendingAutoPreviewFrame();
   }, [workspace.pendingCommand, workspace.runtimeDiagnostics.canPreview]);
+
+  useEffect(() => {
+    if (!playbackRunning) {
+      playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
+      return;
+    }
+
+    let animationFrame: number | null = null;
+
+    const tick = (timestampMs: number) => {
+      const clock = playbackClockRef.current;
+      if (clock.lastTimestampMs === null) {
+        clock.lastTimestampMs = timestampMs;
+      }
+
+      const elapsedUs = Math.max(0, Math.round((timestampMs - clock.lastTimestampMs) * 1000));
+      clock.lastTimestampMs = timestampMs;
+      clock.accumulatedUs += elapsedUs;
+
+      const frameStepUs = frameDurationUs(workspaceRef.current.draft.canvasConfig);
+      const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+      if (sequenceDurationUs <= 0) {
+        setPlaybackRunning(false);
+        return;
+      }
+
+      if (
+        clock.accumulatedUs >= frameStepUs &&
+        !commandInFlightRef.current &&
+        workspaceRef.current.runtimeDiagnostics.canPreview
+      ) {
+        const elapsedFrames = Math.max(1, Math.floor(clock.accumulatedUs / frameStepUs));
+        clock.accumulatedUs %= frameStepUs;
+        const targetTime = Math.min(sequenceDurationUs, playheadRef.current + elapsedFrames * frameStepUs);
+        setPlayheadUs(targetTime);
+        requestPreviewFrameAt(targetTime);
+
+        if (targetTime >= sequenceDurationUs) {
+          setPlaybackRunning(false);
+          return;
+        }
+      }
+
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+    return () => {
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [playbackRunning]);
+
+  useEffect(() => {
+    if (playbackRunning && !workspace.runtimeDiagnostics.canPreview) {
+      setPlaybackRunning(false);
+    }
+  }, [playbackRunning, workspace.runtimeDiagnostics.canPreview]);
 
   useEffect(() => {
     return () => {
@@ -1134,8 +1203,50 @@ export function App(): React.ReactElement {
 
   function handleSeekPlayhead(value: number): void {
     const targetTime = normalizePlayheadTime(value);
+    setPlaybackRunning(false);
     setPlayheadUs(targetTime);
     requestPreviewFrameAt(targetTime);
+  }
+
+  function handleTogglePlayback(): void {
+    if (playbackRunning) {
+      setPlaybackRunning(false);
+      return;
+    }
+
+    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
+      const message = runtimeUnavailableMessage(workspaceRef.current, "播放暂不可用");
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+    if (sequenceDurationUs <= 0) {
+      return;
+    }
+
+    if (playheadRef.current >= sequenceDurationUs) {
+      setPlayheadUs(0);
+      playheadRef.current = 0;
+    }
+    playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
+    setPlaybackRunning(true);
+  }
+
+  function handleStopPlayback(): void {
+    setPlaybackRunning(false);
+    handleSeekPlayhead(0);
   }
 
   function queueAutoPreviewFrame(targetTime: number): void {
@@ -1395,10 +1506,13 @@ export function App(): React.ReactElement {
       bundlePath={bundlePath}
       materialPath={materialPath}
       playheadUs={playheadUs}
+      playbackRunning={playbackRunning}
       onCategoryChange={setActiveCategory}
       onBundlePathChange={setBundlePath}
       onMaterialPathChange={setMaterialPath}
       onPlayheadChange={handleSeekPlayhead}
+      onTogglePlayback={handleTogglePlayback}
+      onStopPlayback={handleStopPlayback}
       onRequestPreviewFrame={handleRequestPreviewFrame}
       onRequestPreviewSegment={handleRequestPreviewSegment}
       onProbeRuntimeCapabilities={handleProbeRuntimeCapabilities}
@@ -1554,6 +1668,21 @@ function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: strin
 
 function normalizePlayheadTime(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
+  const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
+  const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
+  return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
+}
+
+function getSequenceDurationUs(workspace: WorkspaceState): number {
+  return workspace.draft.tracks.reduce((duration, track) => {
+    const trackEnd = track.segments.reduce((end, segment) => {
+      return Math.max(end, segment.targetTimerange.start + segment.targetTimerange.duration);
+    }, 0);
+    return Math.max(duration, trackEnd);
+  }, 0);
 }
 
 function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {
