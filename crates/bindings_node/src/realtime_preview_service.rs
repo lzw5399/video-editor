@@ -4,12 +4,13 @@ use std::fmt;
 
 use draft_model::{Draft, Microseconds, RationalFrameRate};
 use realtime_preview_runtime::{
-    PlaybackGeneration, PlaybackRate, PreviewGpuBackend, PreviewRequestMode, PreviewSessionId,
-    RealtimePreviewBackendUsed, RealtimePreviewError, RealtimePreviewFrameRequest,
+    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
+    PreviewRequestMode, PreviewSessionId, RealtimePreviewBackendUsed, RealtimePreviewDiagnostic,
+    RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
 };
-use serde::{de::Error as SerdeDeError, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 
@@ -167,7 +168,11 @@ impl RealtimePreviewBindingRegistry {
             presented: result.presented,
             stale_rejected: result.stale_rejected,
             canceled: result.canceled,
+            cancellation_token: result.cancellation_token,
             backend: result.backend,
+            fallback: result.fallback,
+            diagnostics: result.diagnostics,
+            telemetry: result.telemetry,
         })
     }
 
@@ -324,6 +329,12 @@ pub struct RealtimePreviewFrameBindingRequest {
     pub playback_generation: u64,
     pub queue_latency_ms: u64,
     pub render_duration_ms: u64,
+    pub mode: PreviewRequestMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancellation_token: Option<PreviewCancellationToken>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<RealtimePreviewFallbackReason>,
+    pub cache_hit: bool,
 }
 
 impl RealtimePreviewFrameBindingRequest {
@@ -331,12 +342,12 @@ impl RealtimePreviewFrameBindingRequest {
         RealtimePreviewFrameRequest {
             target_time: Microseconds::new(self.target_time_microseconds),
             playback_generation: PlaybackGeneration::new(self.playback_generation),
-            cancellation_token: None,
-            mode: PreviewRequestMode::Seek,
+            cancellation_token: self.cancellation_token,
+            mode: self.mode,
             queue_latency_ms: self.queue_latency_ms,
             render_duration_ms: self.render_duration_ms,
-            fallback_reason: None,
-            cache_hit: false,
+            fallback_reason: self.fallback_reason,
+            cache_hit: self.cache_hit,
             repeated_frame: false,
             dropped_frame: false,
         }
@@ -351,7 +362,13 @@ pub struct RealtimePreviewFrameBindingResponse {
     pub presented: bool,
     pub stale_rejected: bool,
     pub canceled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancellation_token: Option<PreviewCancellationToken>,
     pub backend: RealtimePreviewBackendUsed,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<RealtimePreviewFallbackReason>,
+    pub diagnostics: Vec<RealtimePreviewDiagnostic>,
+    pub telemetry: RealtimePreviewTelemetry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -468,9 +485,7 @@ fn validate_binding_session_id(session_id: &str) -> Result<(), RealtimePreviewBi
     Ok(())
 }
 
-fn deserialize_optional_u64_from_js_number<'de, D>(
-    deserializer: D,
-) -> Result<Option<u64>, D::Error>
+fn deserialize_optional_u64_from_js_number<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -488,12 +503,17 @@ where
             let Some(value) = number.as_f64() else {
                 return Err(D::Error::custom("native parent handle must be an integer"));
             };
-            if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > u64::MAX as f64 {
-                return Err(D::Error::custom("native parent handle must be a nonnegative integer"));
+            if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > u64::MAX as f64
+            {
+                return Err(D::Error::custom(
+                    "native parent handle must be a nonnegative integer",
+                ));
             }
             Ok(Some(value as u64))
         }
-        serde_json::Value::String(value) => value.parse::<u64>().map(Some).map_err(D::Error::custom),
+        serde_json::Value::String(value) => {
+            value.parse::<u64>().map(Some).map_err(D::Error::custom)
+        }
         _ => Err(D::Error::custom("native parent handle must be an integer")),
     }
 }
@@ -526,6 +546,7 @@ mod realtime_preview_bindings {
         RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
         RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
     };
+    use realtime_preview_runtime::PreviewRequestMode;
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -585,8 +606,8 @@ mod realtime_preview_bindings {
 
     #[test]
     fn surface_parent_handle_accepts_integral_js_number_values() {
-        let descriptor: RealtimePreviewSurfaceBindingDescriptor = serde_json::from_value(
-            serde_json::json!({
+        let descriptor: RealtimePreviewSurfaceBindingDescriptor =
+            serde_json::from_value(serde_json::json!({
                 "kind": "mock",
                 "parentHandle": 1357210896576.0,
                 "x": 12,
@@ -594,9 +615,8 @@ mod realtime_preview_bindings {
                 "width": 320,
                 "height": 180,
                 "scaleFactorMillis": 1250
-            }),
-        )
-        .expect("integral JS number handles deserialize");
+            }))
+            .expect("integral JS number handles deserialize");
 
         assert_eq!(descriptor.parent_handle, Some(1_357_210_896_576));
     }
@@ -615,6 +635,10 @@ mod realtime_preview_bindings {
                     playback_generation: generation.playback_generation,
                     queue_latency_ms: 3,
                     render_duration_ms: 4,
+                    mode: PreviewRequestMode::Seek,
+                    cancellation_token: None,
+                    fallback_reason: None,
+                    cache_hit: false,
                 },
             )
             .expect("frame request succeeds");
@@ -636,6 +660,10 @@ mod realtime_preview_bindings {
                     playback_generation: generation.playback_generation,
                     queue_latency_ms: 5,
                     render_duration_ms: 7,
+                    mode: PreviewRequestMode::Seek,
+                    cancellation_token: None,
+                    fallback_reason: None,
+                    cache_hit: false,
                 },
             )
             .expect("frame request records telemetry");

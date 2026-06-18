@@ -196,11 +196,19 @@ fn preview_commands_realtime_binding_preserves_fallback_and_cancellation_telemet
         result.fallback,
         Some(RealtimePreviewFallbackReason::FfmpegArtifactGenerated)
     );
-    assert_eq!(result.cancellation_token, Some(PreviewCancellationToken::new(9)));
+    assert_eq!(
+        result.cancellation_token,
+        Some(PreviewCancellationToken::new(9))
+    );
     assert!(!result.diagnostics.is_empty());
     assert_eq!(result.telemetry.fallback_count, 1);
     assert_eq!(result.telemetry.cache_hit_count, 1);
-    assert!(serde_json::to_value(&result).unwrap().get("gpuDevice").is_none());
+    assert!(
+        serde_json::to_value(&result)
+            .unwrap()
+            .get("gpuDevice")
+            .is_none()
+    );
 }
 
 struct FakePreviewExecutor {

@@ -22,8 +22,8 @@ use realtime_preview_runtime::{
 fn cancellation_telemetry_rejects_supported_and_fallback_results_without_artifacts() {
     let temp = tempfile::tempdir().expect("cache temp dir");
     let executor = CountingPreviewExecutor::new();
-    let config = RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg")
-        .with_mock_realtime_backend();
+    let config =
+        RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg").with_mock_realtime_backend();
     let token = PreviewCancellationToken::new(7);
     config
         .cancel_request(token)

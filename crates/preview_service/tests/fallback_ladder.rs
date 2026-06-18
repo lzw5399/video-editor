@@ -97,9 +97,7 @@ fn fallback_response(
 }
 
 fn temp_path() -> PathBuf {
-    tempfile::tempdir()
-        .expect("cache temp dir")
-        .keep()
+    tempfile::tempdir().expect("cache temp dir").keep()
 }
 
 struct CountingPreviewExecutor {

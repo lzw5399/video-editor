@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -33,6 +34,7 @@ pub struct RealtimePreviewServiceConfig {
     preferred_backend: PreviewGpuBackend,
     gpu_backend: RealtimePreviewGpuBackend,
     runtime: Mutex<RealtimePreviewRuntime>,
+    canceled_tokens: Mutex<BTreeSet<PreviewCancellationToken>>,
     session_id: realtime_preview_runtime::PreviewSessionId,
 }
 
@@ -51,6 +53,7 @@ impl RealtimePreviewServiceConfig {
             preferred_backend: PreviewGpuBackend::OffscreenOnly,
             gpu_backend: RealtimePreviewGpuBackend::OffscreenOnly,
             runtime: Mutex::new(runtime),
+            canceled_tokens: Mutex::new(BTreeSet::new()),
             session_id,
         }
     }
@@ -88,12 +91,43 @@ impl RealtimePreviewServiceConfig {
         &self.artifact_config
     }
 
+    pub fn cancel_request(
+        &self,
+        token: PreviewCancellationToken,
+    ) -> Result<(), PreviewServiceError> {
+        self.canceled_tokens
+            .lock()
+            .map_err(|_| {
+                PreviewServiceError::new(
+                    PreviewServiceErrorKind::RuntimeFailed,
+                    "realtime preview cancellation lock poisoned",
+                )
+            })?
+            .insert(token);
+        self.runtime
+            .lock()
+            .map_err(|_| {
+                PreviewServiceError::new(
+                    PreviewServiceErrorKind::RuntimeFailed,
+                    "realtime preview runtime lock poisoned",
+                )
+            })?
+            .cancel_request(self.session_id, token)
+            .map_err(|error| {
+                PreviewServiceError::new(
+                    PreviewServiceErrorKind::RuntimeFailed,
+                    format!("realtime preview cancel failed: {error}"),
+                )
+            })
+    }
+
     fn reset_runtime_session(&mut self) {
         let mut runtime = RealtimePreviewRuntime::new();
         self.session_id = runtime
             .create_session(default_session_config(self.preferred_backend))
             .expect("realtime preview session config is valid");
         self.runtime = Mutex::new(runtime);
+        self.canceled_tokens = Mutex::new(BTreeSet::new());
     }
 }
 
@@ -142,6 +176,51 @@ pub fn request_realtime_preview_frame(
     request: &RealtimePreviewFrameServiceRequest,
     frame_provider: &mut impl PreviewFrameProvider,
 ) -> Result<RealtimePreviewServiceFrameResponse, PreviewServiceError> {
+    if is_canceled(config, request)? {
+        let realtime = runtime_frame(
+            config,
+            request,
+            Some(RealtimePreviewFallbackReason::Canceled),
+            false,
+        )?;
+        return Ok(RealtimePreviewServiceFrameResponse {
+            fallback_decision: decision(
+                request,
+                Some(RealtimePreviewFallbackReason::Canceled),
+                false,
+                &realtime,
+                Vec::new(),
+            ),
+            realtime,
+            artifact: None,
+            cache_entry: None,
+            ffmpeg_job: None,
+            from_cache: false,
+        });
+    }
+    if is_stale(config, request)? {
+        let realtime = runtime_frame(
+            config,
+            request,
+            Some(RealtimePreviewFallbackReason::StaleGeneration),
+            false,
+        )?;
+        return Ok(RealtimePreviewServiceFrameResponse {
+            fallback_decision: decision(
+                request,
+                Some(RealtimePreviewFallbackReason::StaleGeneration),
+                false,
+                &realtime,
+                Vec::new(),
+            ),
+            realtime,
+            artifact: None,
+            cache_entry: None,
+            ffmpeg_job: None,
+            from_cache: false,
+        });
+    }
+
     let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: request.draft.clone(),
         target_time: request.target_time,
@@ -251,22 +330,23 @@ fn request_artifact_fallback(
             target_time: request.target_time,
         },
     )?;
-    let reason = if artifact.from_cache {
+    let decision_reason = if artifact.from_cache {
         RealtimePreviewFallbackReason::PreviewArtifactCacheHit
     } else {
         requested_reason
     };
-    let reason = if reason == RealtimePreviewFallbackReason::PreviewArtifactCacheHit {
-        reason
-    } else {
-        RealtimePreviewFallbackReason::FfmpegArtifactGenerated
-    };
-    let realtime = runtime_frame(config, request, Some(reason), artifact.from_cache)?;
+    let runtime_reason =
+        if decision_reason == RealtimePreviewFallbackReason::PreviewArtifactCacheHit {
+            decision_reason
+        } else {
+            RealtimePreviewFallbackReason::FfmpegArtifactGenerated
+        };
+    let realtime = runtime_frame(config, request, Some(runtime_reason), artifact.from_cache)?;
 
     Ok(RealtimePreviewServiceFrameResponse {
         fallback_decision: decision(
             request,
-            Some(reason),
+            Some(decision_reason),
             artifact.from_cache,
             &realtime,
             diagnostics,
@@ -277,6 +357,44 @@ fn request_artifact_fallback(
         ffmpeg_job: Some(artifact.ffmpeg_job),
         from_cache: artifact.from_cache,
     })
+}
+
+fn is_canceled(
+    config: &RealtimePreviewServiceConfig,
+    request: &RealtimePreviewFrameServiceRequest,
+) -> Result<bool, PreviewServiceError> {
+    let Some(token) = request.cancellation_token else {
+        return Ok(false);
+    };
+    Ok(config
+        .canceled_tokens
+        .lock()
+        .map_err(|_| {
+            PreviewServiceError::new(
+                PreviewServiceErrorKind::RuntimeFailed,
+                "realtime preview cancellation lock poisoned",
+            )
+        })?
+        .contains(&token))
+}
+
+fn is_stale(
+    config: &RealtimePreviewServiceConfig,
+    request: &RealtimePreviewFrameServiceRequest,
+) -> Result<bool, PreviewServiceError> {
+    let runtime = config.runtime.lock().map_err(|_| {
+        PreviewServiceError::new(
+            PreviewServiceErrorKind::RuntimeFailed,
+            "realtime preview runtime lock poisoned",
+        )
+    })?;
+    let clock = runtime.clock(config.session_id).map_err(|error| {
+        PreviewServiceError::new(
+            PreviewServiceErrorKind::RuntimeFailed,
+            format!("realtime preview clock lookup failed: {error}"),
+        )
+    })?;
+    Ok(clock.generation() != request.playback_generation)
 }
 
 fn runtime_frame(
