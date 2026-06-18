@@ -108,6 +108,9 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<UpdateSegmentVisualCommandPayload>(),
             export_decl::<SetSegmentKeyframeCommandPayload>(),
             export_decl::<RemoveSegmentKeyframeCommandPayload>(),
+            export_decl::<PreviewFrameStoragePreference>(),
+            export_decl::<PreviewDecodeRequest>(),
+            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
@@ -141,6 +144,10 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
+            export_decl::<PreviewFrameStorageKind>(),
+            export_decl::<PreviewDecodeDiagnostic>(),
+            export_decl::<DecodedPreviewFrameResponse>(),
+            export_decl::<PreviewFrameReleaseResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
@@ -1144,6 +1151,18 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "RemoveSegmentKeyframeCommandPayload",
     );
+    include_command_contract_schema::<PreviewFrameStoragePreference>(
+        &mut schema_value,
+        "PreviewFrameStoragePreference",
+    );
+    include_command_contract_schema::<PreviewDecodeRequest>(
+        &mut schema_value,
+        "PreviewDecodeRequest",
+    );
+    include_command_contract_schema::<ReleasePreviewFrameCommandPayload>(
+        &mut schema_value,
+        "ReleasePreviewFrameCommandPayload",
+    );
     include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
         &mut schema_value,
         "RequestPreviewFrameCommandPayload",
@@ -1179,6 +1198,22 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<PreviewArtifactResponse>(
         &mut schema_value,
         "PreviewArtifactResponse",
+    );
+    include_command_contract_schema::<PreviewFrameStorageKind>(
+        &mut schema_value,
+        "PreviewFrameStorageKind",
+    );
+    include_command_contract_schema::<PreviewDecodeDiagnostic>(
+        &mut schema_value,
+        "PreviewDecodeDiagnostic",
+    );
+    include_command_contract_schema::<DecodedPreviewFrameResponse>(
+        &mut schema_value,
+        "DecodedPreviewFrameResponse",
+    );
+    include_command_contract_schema::<PreviewFrameReleaseResponse>(
+        &mut schema_value,
+        "PreviewFrameReleaseResponse",
     );
     include_command_contract_schema::<PreviewCacheInvalidationResponse>(
         &mut schema_value,

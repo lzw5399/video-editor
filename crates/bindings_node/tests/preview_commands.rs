@@ -15,11 +15,12 @@ use bindings_node::realtime_preview_service::{
     RealtimePreviewSessionBindingConfig,
 };
 use draft_model::{
-    CommandErrorKind, Draft, InvalidatePreviewCacheCommandPayload, Material, MaterialId,
-    MaterialKind, Microseconds, PreviewCacheEntryRef, PreviewOutputProfile,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload, Segment,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
+    CommandErrorKind, DecodedPreviewFrameResponse, Draft, InvalidatePreviewCacheCommandPayload,
+    Material, MaterialId, MaterialKind, Microseconds, PreviewCacheEntryRef,
+    PreviewFrameStorageKind, PreviewOutputProfile, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, RuntimeSelectedDecodePath, Segment, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextStyle, TextWrapping, Track, TrackKind,
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::PreviewServiceConfig;
@@ -209,6 +210,128 @@ fn preview_commands_realtime_binding_preserves_fallback_and_cancellation_telemet
             .get("gpuDevice")
             .is_none()
     );
+}
+
+#[test]
+fn preview_decode_command_returns_handle_metadata_without_full_frame_payloads() {
+    let envelope = execute_command(json!({
+        "command": "requestPreviewDecode",
+        "payload": {
+            "kind": "requestPreviewDecode",
+            "sessionId": "preview-session-1",
+            "draft": preview_draft(),
+            "materialId": "video",
+            "sourceTime": 250000,
+            "playbackGeneration": 7,
+            "preferredStorage": "texture",
+            "previewDevice": {
+                "backend": "d3d11Texture2D",
+                "adapterId": "adapter-1",
+                "deviceId": "device-1"
+            }
+        },
+        "requestId": "req-preview-decode"
+    }))
+    .expect("preview decode command should return envelope");
+
+    assert_eq!(envelope["ok"], true, "{envelope:#}");
+    let data: DecodedPreviewFrameResponse =
+        serde_json::from_value(envelope["data"].clone()).expect("decode response contract");
+    assert_eq!(data.storage_kind, PreviewFrameStorageKind::Texture);
+    assert_eq!(
+        data.selected_path,
+        RuntimeSelectedDecodePath::NativeHardwareTexture
+    );
+    assert_eq!(data.frame.frame_handle_id, "preview-frame-1");
+    assert_eq!(data.frame.owner_session, "preview-session-1");
+    assert_eq!(data.frame.generation, 7);
+    assert_eq!(data.texture.as_ref().expect("texture metadata").generation, 7);
+    assert!(data.texture_compatible);
+
+    let serialized = serde_json::to_string(&envelope).expect("response serializes");
+    for forbidden in ["nativePointer", "rawHandle", "ArrayBuffer", "Uint8Array", "bytes", "pixels"] {
+        assert!(
+            !serialized.contains(forbidden),
+            "preview decode response must not expose {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn preview_decode_release_rejects_unknown_wrong_session_and_stale_generation_handles() {
+    let envelope = execute_command(json!({
+        "command": "requestPreviewDecode",
+        "payload": {
+            "kind": "requestPreviewDecode",
+            "sessionId": "preview-session-release",
+            "draft": preview_draft(),
+            "materialId": "video",
+            "sourceTime": 0,
+            "playbackGeneration": 3,
+            "preferredStorage": "cpu"
+        },
+        "requestId": "req-preview-decode-release"
+    }))
+    .expect("preview decode command should return envelope");
+    assert_eq!(envelope["ok"], true, "{envelope:#}");
+    let data: DecodedPreviewFrameResponse =
+        serde_json::from_value(envelope["data"].clone()).expect("decode response contract");
+
+    let wrong_session = execute_command(json!({
+        "command": "releasePreviewFrame",
+        "payload": {
+            "kind": "releasePreviewFrame",
+            "sessionId": "other-session",
+            "frameHandleId": data.frame.frame_handle_id,
+            "playbackGeneration": 3
+        },
+        "requestId": "req-preview-release-wrong-session"
+    }))
+    .expect("release command should return envelope");
+    assert_eq!(wrong_session["ok"], false);
+    assert_eq!(wrong_session["error"]["kind"], "previewServiceFailed");
+
+    let stale = execute_command(json!({
+        "command": "releasePreviewFrame",
+        "payload": {
+            "kind": "releasePreviewFrame",
+            "sessionId": "preview-session-release",
+            "frameHandleId": data.frame.frame_handle_id,
+            "playbackGeneration": 99
+        },
+        "requestId": "req-preview-release-stale"
+    }))
+    .expect("release command should return envelope");
+    assert_eq!(stale["ok"], false);
+    assert_eq!(stale["error"]["kind"], "previewServiceFailed");
+
+    let released = execute_command(json!({
+        "command": "releasePreviewFrame",
+        "payload": {
+            "kind": "releasePreviewFrame",
+            "sessionId": "preview-session-release",
+            "frameHandleId": data.frame.frame_handle_id,
+            "playbackGeneration": 3
+        },
+        "requestId": "req-preview-release-valid"
+    }))
+    .expect("release command should return envelope");
+    assert_eq!(released["ok"], true, "{released:#}");
+    assert_eq!(released["data"]["released"], true);
+
+    let unknown = execute_command(json!({
+        "command": "releasePreviewFrame",
+        "payload": {
+            "kind": "releasePreviewFrame",
+            "sessionId": "preview-session-release",
+            "frameHandleId": "preview-frame-missing",
+            "playbackGeneration": 3
+        },
+        "requestId": "req-preview-release-unknown"
+    }))
+    .expect("release command should return envelope");
+    assert_eq!(unknown["ok"], false);
+    assert_eq!(unknown["error"]["kind"], "previewServiceFailed");
 }
 
 struct FakePreviewExecutor {
