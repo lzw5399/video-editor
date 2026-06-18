@@ -431,7 +431,10 @@ fn prepare_export_job(
     let output_path = validate_output_path(&payload.output_path)?;
     let sidecar_dir = export_sidecar_dir(&output_path);
     let draft = payload.draft;
-    let normalized = normalize_draft(&draft, &EngineProfile::mvp_default()).map_err(|error| {
+    let engine_profile = EngineProfile::from_draft_canvas(&draft).map_err(|error| {
+        ExportCommandError::Engine(format!("export engine profile resolution failed: {error}"))
+    })?;
+    let normalized = normalize_draft(&draft, &engine_profile).map_err(|error| {
         ExportCommandError::Engine(format!("export engine normalization failed: {error}"))
     })?;
     let target_timerange = draft_export_timerange(&draft, normalized.duration)?;
@@ -442,8 +445,8 @@ fn prepare_export_job(
         ExportCommandError::RenderGraph(format!("export render graph failed: {error}"))
     })?;
     let output_profile = RenderOutputProfile::export_mp4(
-        export_dimensions(payload.preset),
-        range.frame_rate,
+        OutputDimensions::new(engine_profile.canvas_width, engine_profile.canvas_height),
+        range.frame_rate.clone(),
         target_timerange,
         export_preset(payload.preset),
     );
@@ -540,13 +543,6 @@ fn draft_export_timerange(
         Microseconds::ZERO,
         duration,
     ))
-}
-
-fn export_dimensions(preset: ExportPreset) -> OutputDimensions {
-    match preset {
-        ExportPreset::H264AacDraft => OutputDimensions::new(1280, 720),
-        ExportPreset::H264AacBalanced => OutputDimensions::new(1920, 1080),
-    }
 }
 
 fn export_preset(preset: ExportPreset) -> ExportMp4Preset {
