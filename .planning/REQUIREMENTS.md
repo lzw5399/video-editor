@@ -212,9 +212,9 @@
 | LAYER-01 | Phase 8 | Complete |
 | LAYER-02 | Phase 8 | Complete |
 | LAYER-03 | Phase 8 | Complete |
-| TEXT2-01 | Phase 9 | In Progress - schema complete in 09-01 |
-| TEXT2-02 | Phase 9 | Planned |
-| TEXT2-03 | Phase 9 | In Progress - unsupported refs represented in 09-01 |
+| TEXT2-01 | Phase 9 | Complete |
+| TEXT2-02 | Phase 9 | Complete |
+| TEXT2-03 | Phase 9 | Complete |
 | ANIM-01 | Phase 10 | Planned |
 | ANIM-02 | Phase 10 | Planned |
 | ANIM-03 | Phase 10 | Planned |

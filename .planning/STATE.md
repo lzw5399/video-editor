@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 09-01; next execute 09-02 text engine/render propagation
+status: Completed 09-02; next execute 09-03 subtitle import
 current_phase: 9
 current_phase_name: complete-text-and-subtitle-system
-current_plan: 1
+current_plan: 2
 total_plans_in_phase: 5
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-06-18T03:45:56.796Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-06-18T04:03:32.692Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 59
-  completed_plans: 55
-  percent: 93
+  completed_plans: 56
+  percent: 95
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 9
-Plan: 1/5
-Status: Completed 09-01; next execute 09-02 text engine/render propagation
+Plan: 2/5
+Status: Completed 09-02; next execute 09-03 subtitle import
 Last activity: 2026-06-18
 
-Progress: [█████████░] 93%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 55
+- Total plans completed: 56
 - Average duration: 8 min
-- Total execution time: 429 min
+- Total execution time: 439 min
 
 **By Phase:**
 
@@ -56,7 +56,7 @@ Progress: [█████████░] 93%
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
 | 08 | 5 | 89 min | 18 min |
-| 09 | 1 | 12 min | 12 min |
+| 09 | 2 | 22 min | 11 min |
 
 **Recent Trend:**
 
@@ -115,6 +115,7 @@ Progress: [█████████░] 93%
 | Phase 08 P04 | 18 min | 2 tasks | 9 files |
 | Phase 08 P05 | 12 min | 2 tasks | 8 files |
 | Phase 09 P01 | 12 min | 2 tasks | 8 files |
+| Phase 09 P02 | 10 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -220,6 +221,8 @@ Recent decisions affecting current work:
 - [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
 - [Phase 09]: Text/subtitle classification is a TextSegmentSource enum on Segment.text, not a separate subtitle object or render path. — This keeps Phase 09 aligned with the existing Segment.text command/render path while allowing subtitle imports to share text semantics.
 - [Phase 09]: Proprietary text bubble and 花字 references are represented as unsupported external refs with camelCase externalRef fields. — This records adapter-facing capability references without making proprietary IDs internal render semantics.
+- [Phase 09]: Segment-level text box and layout region fields take precedence over profile safe-area defaults during frame-state resolution.
+- [Phase 09]: Unsupported text font refs, bubbles, and effects stop ASS compilation with an explicit UnsupportedTextResource error instead of silently approximating proprietary resources.
 
 ### Pending Todos
 
@@ -248,6 +251,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T03:45:56.792Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-06-18T04:02:45.481Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
