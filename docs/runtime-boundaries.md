@@ -105,6 +105,105 @@ relink UI.
 future preview frame and segment generation can be injected without letting
 preview runtime concerns enter draft or timeline semantics.
 
+## Phase 11 Realtime Preview Runtime
+
+Phase 11 promotes realtime preview from a boundary placeholder into a Rust-owned
+runtime path. Rust-owned session, clock, generation, capability classification, telemetry, fallback routing, and GPU composition stay in `realtime_preview_runtime` and `preview_service`; Electron/React remains the desktop UI shell.
+
+### Ownership Map
+
+| Layer | Owns | Does Not Own |
+|-------|------|--------------|
+| Electron renderer | UI controls, DOM measurement, preview host rectangle reporting, Chinese telemetry display | FFmpeg commands, render graphs, GPU devices, GPU command lists, cache keys, dirty ranges, fallback selection, timeline mutation, keyframe evaluation |
+| Electron main/preload | `BrowserWindow.getNativeWindowHandle()` acquisition, safe IPC routing, integer host bounds forwarding | Preview composition semantics, fallback decisions, graph interpretation |
+| `bindings_node` | Thin JSON/Node-API route and type mapping, opaque session IDs | GPU rendering logic, native handle exposure to renderer, timeline math |
+| `realtime_preview_runtime` | `TimelineClock`, `PlaybackGeneration`, sessions, `wgpu` device/surface/offscreen targets, compositor, diagnostics, telemetry | Draft command mutation, FFmpeg export compilation, hardware decode, audio output, priority scheduling |
+| `preview_service` | Supported realtime routing, H.264 software video frame provider/cache, artifact fallback coordination, fallback diagnostics | Renderer UI, primary GPU composition internals, export behavior decisions |
+| `engine_core` / `render_graph` | Accepted draft normalization, integer-microsecond frame state, renderer-neutral graph intent | `wgpu`, OS handles, FFmpeg process execution |
+
+Renderer responsibilities are UI-only. It may measure the
+`.preview-native-host` rectangle with `getBoundingClientRect`, send rounded
+integer bounds and scale millis through preload, and display Simplified Chinese
+status/telemetry returned from main/Rust. It must not construct FFmpeg commands,
+render graphs, GPU command lists, cache keys, dirty ranges, fallback ladders, or
+timeline/keyframe semantics.
+
+### Runtime Inputs And Fallback
+
+Realtime preview consumes accepted draft snapshots, engine-resolved frame state,
+and renderer-neutral `RenderGraph` intent from Rust-owned layers. Supported
+seek, scrub, first-frame, and playback-tick requests use the
+`RealtimePreviewRuntime` path and report `TimelineClock` plus
+`PlaybackGeneration` telemetry so stale results are rejected before presentation.
+
+Phase 11 video input is a H.264 software video frame provider/cache boundary.
+Generated MP4/MOV fixture frames may be seeded by testkit or fallback artifact
+preparation, but supported realtime preview requests read cached CPU frames and
+must not spawn FFmpeg per frame. `TextureHandleDescriptor` remains a future
+Phase 12 interop shape, not a Phase 11 hardware decode implementation.
+
+Fallback is Rust-owned and diagnostic-first:
+
+- Native/offscreen `wgpu` realtime preview is the supported path when graph
+  capability classification, surface state, and frame providers are available.
+- Preview artifact cache hits are fallback artifacts and must be labeled as
+  fallback, not as the active realtime backend.
+- FFmpeg artifact generation is allowed only for unsupported/no-adapter/no-frame
+  provider states and must report `ffmpegArtifactGenerated`.
+- Text preview fails closed through `TextParityUnsupported` until repository
+  font parity proves GPU text output matches export semantics.
+
+### Downstream Phase Exclusions
+
+- Phase 12 owns platform-native media IO and hardware decode: Windows Media Foundation/DXVA/D3D texture interop and macOS AVFoundation/VideoToolbox/CoreVideo/Metal texture interop.
+- Phase 15 owns realtime audio, audio output, and audio/video synchronization on
+  the shared `TimelineClock`.
+- Phase 16 owns priority scheduling, queue fairness, background jobs, and full
+  cancellation policy beyond the minimal generation/cancel request fields used
+  in Phase 11.
+- Phase 18 owns complex effects, retiming, filters, masks, and transitions with explicit supported/degraded/unsupported matrices.
+
+### Phase 11 Gate Scripts
+
+The root Phase 11 gate is:
+
+```bash
+pnpm run test:phase11
+```
+
+It composes:
+
+- `pnpm run test:phase11-rust`
+- `pnpm run test:phase11-source-guards`
+- `pnpm run test:phase11-workspace`
+- `pnpm run test:contracts`
+
+`test:phase11-source-guards` blocks renderer-owned FFmpeg, render graph, GPU
+command, cache key, dirty range, fallback, timeline mutation, keyframe
+evaluation, and floating-point persisted timeline request fields while allowing
+DOM measurement, Chinese telemetry display, main-process handle acquisition, and
+binding route/type names.
+
+### Manual Platform Smoke
+
+These platform smokes are required before declaring a release build ready, but
+they are not run by default in CI because they require real desktop GPU adapters
+and native surfaces.
+
+Windows D3D12:
+
+```bash
+VIDEO_EDITOR_TEST_WGPU=1 cargo test -p realtime_preview_runtime real_wgpu_adapter -- --ignored --nocapture
+pnpm --filter @video-editor/desktop test:workspace -g "实时预览 native preview host rectangle reports integer bounds and telemetry"
+```
+
+macOS Metal:
+
+```bash
+VIDEO_EDITOR_TEST_WGPU=1 cargo test -p realtime_preview_runtime real_wgpu_adapter -- --ignored --nocapture
+pnpm --filter @video-editor/desktop test:workspace -g "实时预览 native preview host rectangle reports integer bounds and telemetry"
+```
+
 ## Deferred Hardware Encoder Boundary
 
 `HardwareEncoder` is documented only and is not implemented as a Rust type in

@@ -297,6 +297,22 @@ export class RealtimePreviewHost {
       return;
     }
 
+    if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_SEEK_FRAME === "1") {
+      this.lastFrame = requestRealtimePreviewFrame({
+        sessionId: this.sessionId,
+        frame: {
+          targetTimeMicroseconds: 1_200_000,
+          playbackGeneration: this.playbackGeneration,
+          queueLatencyMs: 2,
+          renderDurationMs: 5,
+          mode: "seek",
+          cacheHit: false
+        }
+      });
+      recordRealtimePreviewHostCall({ kind: "requestSeekFrame" });
+      return;
+    }
+
     if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME !== "1") {
       return;
     }
