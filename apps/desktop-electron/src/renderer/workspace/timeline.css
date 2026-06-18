@@ -146,6 +146,34 @@
   min-width: 56px;
 }
 
+.ruler-track {
+  cursor: pointer;
+  user-select: none;
+}
+
+.timeline-surface .playhead {
+  width: 10px;
+  margin-left: -5px;
+  background: transparent;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.timeline-surface .playhead::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: #20c7d9;
+  content: "";
+}
+
+.timeline-surface .playhead::before {
+  left: -1px;
+}
+
 .track-row {
   grid-template-columns: 160px minmax(0, 1fr);
 }

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 
 import type { SegmentId } from "../../generated/Draft";
 import {
@@ -11,6 +12,8 @@ import {
 } from "../viewModel";
 
 import "./timeline.css";
+
+const TIMELINE_HEADER_WIDTH_PX = 160;
 
 type TimelineProps = {
   workspace: WorkspaceState;
@@ -42,9 +45,64 @@ export function Timeline({
   onRedo
 }: TimelineProps): React.ReactElement {
   const timeline = deriveTimelineRows(workspace.draft, workspace.selection);
+  const trackListRef = useRef<HTMLDivElement>(null);
+  const playheadRatio = Math.max(0, Math.min(1, Math.max(0, playheadUs) / Math.max(1, timeline.duration)));
   const playheadStyle = {
-    left: `${(Math.max(0, playheadUs) / Math.max(1, timeline.duration)) * 100}%`
+    left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
   };
+  const seekFromTrackClientX = useCallback(
+    (clientX: number) => {
+      const trackList = trackListRef.current;
+      if (trackList === null) {
+        return;
+      }
+      const box = trackList.getBoundingClientRect();
+      const laneLeft = box.left + TIMELINE_HEADER_WIDTH_PX;
+      const laneWidth = Math.max(1, box.width - TIMELINE_HEADER_WIDTH_PX);
+      onPlayheadChange(pointerTimeFromLane(clientX, laneLeft, laneWidth, timeline.duration));
+    },
+    [onPlayheadChange, timeline.duration]
+  );
+  const handleRulerPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const box = event.currentTarget.getBoundingClientRect();
+      onPlayheadChange(pointerTimeFromLane(event.clientX, box.left, box.width, timeline.duration));
+    },
+    [onPlayheadChange, timeline.duration]
+  );
+  const handlePlayheadPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      seekFromTrackClientX(event.clientX);
+    },
+    [seekFromTrackClientX]
+  );
+  const handlePlayheadPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      seekFromTrackClientX(event.clientX);
+    },
+    [seekFromTrackClientX]
+  );
+  const handlePlayheadPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      seekFromTrackClientX(event.clientX);
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    },
+    [seekFromTrackClientX]
+  );
 
   return (
     <div className="timeline-surface">
@@ -63,7 +121,7 @@ export function Timeline({
 
       <div className="timeline-ruler" aria-label="时间线标尺">
         <div className="timeline-header-spacer" />
-        <div className="ruler-track">
+        <div className="ruler-track" onPointerDown={handleRulerPointerDown}>
           {timeline.rulerTicks.map((tick) => (
             <span className="ruler-tick" key={tick} style={{ left: `${(tick / timeline.duration) * 100}%` }}>
               {formatTimelineTime(tick)}
@@ -72,8 +130,17 @@ export function Timeline({
         </div>
       </div>
 
-      <div className="track-list" aria-label="轨道列表">
-        <div className="playhead" aria-hidden="true" style={playheadStyle} />
+      <div className="track-list" aria-label="轨道列表" ref={trackListRef}>
+        <div
+          className="playhead"
+          aria-hidden="true"
+          title="播放头拖动"
+          style={playheadStyle}
+          onPointerDown={handlePlayheadPointerDown}
+          onPointerMove={handlePlayheadPointerMove}
+          onPointerUp={handlePlayheadPointerUp}
+          onPointerCancel={handlePlayheadPointerUp}
+        />
         {timeline.rows.map((row) => (
           <TimelineTrackRow
             key={row.track.trackId}
@@ -87,6 +154,11 @@ export function Timeline({
       </div>
     </div>
   );
+}
+
+function pointerTimeFromLane(clientX: number, laneLeft: number, laneWidth: number, timelineDuration: number): number {
+  const ratio = Math.max(0, Math.min(1, (clientX - laneLeft) / Math.max(1, laneWidth)));
+  return Math.max(0, Math.round(ratio * Math.max(1, timelineDuration)));
 }
 
 function TransportStrip({
