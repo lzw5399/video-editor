@@ -555,6 +555,57 @@ test("command-only text edit routes complete text inspector changes through exec
   }
 });
 
+test("音频 add/volume/mute commands update accepted timeline and inspector state", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
+    await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(1);
+
+    await page.getByRole("button", { name: "添加音频" }).click();
+    await expectCommandCall(app, "addAudioSegment");
+    await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ }).last()).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByLabel("片段信息")).toContainText("音频轨道 1 / 音频");
+
+    await page.getByRole("tab", { name: "音频" }).click();
+    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "毫音量" }).fill("1350");
+    await page.getByRole("button", { name: "应用音量" }).click();
+    await expectCommandCall(app, "setSegmentVolume");
+    await expect(page.getByLabel("音频参数").getByRole("spinbutton", { name: "毫音量" })).toHaveValue("1350");
+
+    await page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" }).check();
+    await expectCommandCall(app, "setTrackMute");
+    await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
+    await expect(page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" })).toBeChecked();
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toEqual(
+      expect.arrayContaining(["addAudioSegment", "setSegmentVolume", "setTrackMute"])
+    );
+  } finally {
+    await app.close();
+  }
+});
+
+test("audio segment blocks expose deterministic P0 waveform placeholder stripe", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    const audioSegment = page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first();
+    await expect(audioSegment.locator(".audio-waveform-placeholder")).toHaveAttribute("aria-label", "音频波形占位");
+    await expect(audioSegment.locator(".audio-waveform-bar")).toHaveCount(12);
+    await expect(audioSegment.locator(".audio-waveform-bar").nth(0)).toHaveAttribute("data-height", "short");
+    await expect(audioSegment.locator(".audio-waveform-bar").nth(1)).toHaveAttribute("data-height", "medium");
+    await expect(audioSegment.locator(".audio-waveform-bar").nth(2)).toHaveAttribute("data-height", "tall");
+  } finally {
+    await app.close();
+  }
+});
+
 test("字幕 SRT import command path sends raw SRT once without renderer-created cue segments", async () => {
   const { app, page } = await launchWorkspaceApp();
 
