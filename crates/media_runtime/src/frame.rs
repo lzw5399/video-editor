@@ -3,7 +3,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{MediaSessionId, TextureHandle, TextureHandleId, VideoColorMetadata, VideoPixelFormat};
+use crate::{
+    MediaSessionId, RuntimeDeviceId, TextureBackend, TextureHandle, TextureHandleId,
+    VideoColorMetadata, VideoPixelFormat,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +119,9 @@ pub struct FrameReleaseDiagnostic {
     pub lease_id: FrameLeaseId,
     pub frame_handle_id: FrameHandleId,
     pub texture_handle_id: Option<TextureHandleId>,
+    pub texture_backend: Option<TextureBackend>,
+    pub texture_device_id: Option<RuntimeDeviceId>,
+    pub texture_compatible: Option<bool>,
     pub owner_session: MediaSessionId,
     pub generation: Option<u64>,
     pub storage_kind: FrameStorageKind,
@@ -294,6 +300,9 @@ fn release_diagnostic(
         lease_id,
         frame_handle_id: frame.handle_id.clone(),
         texture_handle_id: texture_handle_id(&frame.storage),
+        texture_backend: texture_backend(&frame.storage),
+        texture_device_id: texture_device_id(&frame.storage),
+        texture_compatible: texture_compatible(&frame.storage),
         owner_session: frame.owner_session.clone(),
         generation: frame.playback_generation,
         storage_kind: storage_kind(&frame.storage),
@@ -304,6 +313,27 @@ fn release_diagnostic(
 fn texture_handle_id(storage: &VideoFrameStorage) -> Option<TextureHandleId> {
     match storage {
         VideoFrameStorage::Texture(texture) => Some(texture.handle_id.clone()),
+        VideoFrameStorage::Cpu(_) | VideoFrameStorage::PlatformOpaque(_) => None,
+    }
+}
+
+fn texture_backend(storage: &VideoFrameStorage) -> Option<TextureBackend> {
+    match storage {
+        VideoFrameStorage::Texture(texture) => Some(texture.backend),
+        VideoFrameStorage::Cpu(_) | VideoFrameStorage::PlatformOpaque(_) => None,
+    }
+}
+
+fn texture_device_id(storage: &VideoFrameStorage) -> Option<RuntimeDeviceId> {
+    match storage {
+        VideoFrameStorage::Texture(texture) => Some(texture.device_id.clone()),
+        VideoFrameStorage::Cpu(_) | VideoFrameStorage::PlatformOpaque(_) => None,
+    }
+}
+
+fn texture_compatible(storage: &VideoFrameStorage) -> Option<bool> {
+    match storage {
+        VideoFrameStorage::Texture(_) => Some(true),
         VideoFrameStorage::Cpu(_) | VideoFrameStorage::PlatformOpaque(_) => None,
     }
 }

@@ -5,7 +5,7 @@ use media_runtime::{
 };
 
 #[test]
-fn session_close_reports_unreleased_cpu_frame_leases() {
+fn session_leaks_close_reports_unreleased_cpu_frame_leases() {
     let mut pool = frame_pool("desktop-session-cpu");
 
     let frame = pool
@@ -30,7 +30,7 @@ fn session_close_reports_unreleased_cpu_frame_leases() {
 }
 
 #[test]
-fn session_close_reports_unreleased_platform_opaque_frame_leases() {
+fn session_leaks_close_reports_unreleased_platform_opaque_frame_leases() {
     let mut pool = frame_pool("desktop-session-opaque");
 
     let frame = pool
@@ -54,7 +54,7 @@ fn session_close_reports_unreleased_platform_opaque_frame_leases() {
 }
 
 #[test]
-fn session_close_reports_unreleased_texture_leases_with_device_metadata() {
+fn session_leaks_close_reports_unreleased_texture_leases_with_device_metadata() {
     let mut pool = frame_pool("desktop-session-texture");
     let device_id = RuntimeDeviceId {
         backend: TextureBackend::D3d11Texture2D,
