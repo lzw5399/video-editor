@@ -205,7 +205,7 @@
 | CANVAS-01 | Phase 7 | Complete |
 | CANVAS-02 | Phase 7 | Complete |
 | CANVAS-03 | Phase 7 | Complete |
-| CANVAS-04 | Phase 7 | Planned |
+| CANVAS-04 | Phase 7 | Complete |
 | XFORM-01 | Phase 8 | Planned |
 | XFORM-02 | Phase 8 | Planned |
 | XFORM-03 | Phase 8 | Planned |
