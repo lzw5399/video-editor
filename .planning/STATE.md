@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: In Progress Phase 10.1 usable editor MVP completion
+status: Completed Phase 10.1 usable editor MVP completion; ready for Phase 11 planning
 current_phase: 10.1
 current_phase_name: usable-editor-mvp-completion
-current_plan: 4
+current_plan: 7
 total_plans_in_phase: 7
-stopped_at: Completed 10.1-03-PLAN.md
-last_updated: "2026-06-18T09:55:05.000Z"
-last_activity: 2026-06-18 - Completed Phase 10.1 Plan 03 playhead seek/click/drag/frame-step preview requests
+stopped_at: Completed 10.1-07-PLAN.md
+last_updated: "2026-06-18T11:04:17.000Z"
+last_activity: 2026-06-18 - Completed Phase 10.1 usable editor MVP completion and final source-guarded gates
 progress:
-  total_phases: 12
-  completed_phases: 11
+  total_phases: 20
+  completed_phases: 12
   total_plans: 71
-  completed_plans: 65
-  percent: 91
+  completed_plans: 71
+  percent: 100
 ---
 
 # Project State
@@ -25,22 +25,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 10.1 — usable-editor-mvp-completion
+**Current focus:** Phase 10.1 complete — ready for Phase 11 planning
 
 ## Current Position
 
 Phase: 10.1
-Plan: 3/7 complete; next 10.1-04
-Status: Phase 10.1 in progress; next slice is video/image transform editing and preview selection overlay
-Last activity: 2026-06-18 - Completed Phase 10.1 Plan 03 playhead seek/click/drag/frame-step preview requests
+Plan: 7/7 complete
+Status: Phase 10.1 complete; next step is Phase 11 planning/execution after reconciling active roadmap changes
+Last activity: 2026-06-18 - Completed Phase 10.1 usable editor MVP completion and final source-guarded gates.
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 65
+- Total plans completed: 67
 - Average duration: 9 min
 - Total execution time: 586 min
 
@@ -61,7 +61,7 @@ Progress: [█████████░] 90%
 
 **Recent Trend:**
 
-- Last 5 plans: 89 min
+- Last 5 plans: 69 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -131,6 +131,9 @@ Progress: [█████████░] 90%
 
 ### Roadmap Evolution
 
+- Confirmed production editor architecture decisions captured for Phase 11+: Windows/macOS desktop first; Rust `wgpu` realtime preview; native Windows Media Foundation/DXVA/D3D and macOS AVFoundation/VideoToolbox/CoreVideo/Metal media paths; FFmpeg as export/fallback; `CommandDelta` and stable render graph node IDs; SQLite artifact store under `.veproj/derived`; shared `TimelineClock + PlaybackGeneration`; scheduler-aligned jobs; ref-counted opaque handle registry; capability-first retiming/effects/transitions.
+- Production-grade architecture Phases 11-18 added after Phase 10.1 to address the external audit concerns directly: realtime GPU preview, hardware media IO, incremental render graph/cache coherence, asset/resource management, audio DSP, scheduler/telemetry, mobile/server bindings, and production retiming/effects/transitions.
+- Phase 10.1 completed all seven usable-editor MVP closure plans. The desktop editor now has system import, real PNG preview display, seek/scrub preview requests, transform/text/audio/subtitle editing, preview selection/text overlays, waveform placeholder, and final source guards.
 - Phase 10.1 inserted after Phase 10 as urgent usability closure. The phase turns the existing command/render/UI foundations into a real Jianying-style MVP editor: system file import, visible preview PNG frame display, playhead seek/scrub, timeline editing usability, video/audio/text/subtitle controls, and Playwright gates.
 - Future Phases 11-13 were archived outside active GSD in `ROADMAP_PHASES_11_13_ARCHIVE.md` so Phase 10.1 can continue without routing into retiming/effects/transitions work.
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
@@ -252,6 +255,7 @@ Recent decisions affecting current work:
 - [Phase 09]: Successful desktop text/subtitle timeline responses invalidate preview/export display state only after accepted Rust-shaped command responses. — Derived preview/export artifacts must stay tied to accepted core semantic edits, not optimistic renderer-local mutations.
 - [Phase 09]: Text/subtitle Electron tests use main-process Rust-shaped mock timeline responses while renderer code remains generated command-envelope-only. — This lets Playwright verify desktop UI behavior without moving draft mutation or subtitle parsing into renderer code.
 - [Phase 09]: Source guards and public root gates now enforce complete text/subtitle ownership boundaries. — Phase 09 is complete because `pnpm run test:phase9`, root `pnpm run test`, `/Users/zhiwen/.cargo/bin/just test`, `/Users/zhiwen/.cargo/bin/just build`, and generated contract drift checks pass.
+- [Phase 10.1]: The usable editor MVP closure is complete with `pnpm run test:phase10-1`, Electron smoke, full workspace tests, `pnpm run test:contracts`, and `pnpm run build` passing. — Future Phase 11+ work can build on a command-owned desktop MVP instead of demo-only UI scaffolding.
 
 ### Pending Todos
 
@@ -265,14 +269,16 @@ None yet.
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Compatibility | Jianying/CapCut/Kaipai adapters | Post-MVP | Initialization |
-| Platform | Mobile apps and server renderer | Post-MVP | Initialization |
-| Effects | Proprietary effect/preset parity beyond first-party supported/degraded semantics | Post-MVP | Initialization |
+| Compatibility | Jianying/CapCut/Kaipai adapters | Deferred beyond Phase 18 production architecture | Initialization |
+| Platform | Full mobile app productization | Deferred beyond Phase 17 binding/runtime foundation | Initialization |
+| Effects | 100% proprietary effect/preset parity beyond first-party supported/degraded semantics | Deferred; Phase 18 covers self-owned production effects semantics | Initialization |
 
 ## Quick Tasks Completed
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-18 | 260618-p3v-capture-confirmed-production-editor-arch | Captured confirmed production architecture decisions, research questions, Phase 11 context, and revised Phase 11-18 wording after user review. |
+| 2026-06-18 | 260618-oi7-plan-production-grade-editor-architectur | Added production-grade Phase 11-18 roadmap and requirement traceability after Phase 10.1 while keeping Phase 10.1 as the current in-progress phase. |
 | 2026-06-18 | 260618-o2v-archive-future-roadmap-phases-11-through | Archived future Phases 11-13 outside active GSD, removed their active roadmap/requirements entries, and preserved them in a root restoration file. |
 | 2026-06-18 | 260618-nr3-add-a-clear-one-command-desktop-startup- | Added `pnpm run desktop:open` and `just desktop-open` as clearer one-command desktop launch entries, and updated README quick-start instructions. |
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
@@ -285,6 +291,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T09:55:05.000Z
-Stopped at: Completed 10.1-03-PLAN.md
+Last session: 2026-06-18T11:04:17.000Z
+Stopped at: Completed 10.1-07-PLAN.md
 Resume file: None

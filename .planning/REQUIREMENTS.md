@@ -122,6 +122,68 @@
 - **ANIM-02**: Keyframes include integer/rational time, typed values, interpolation policy, and easing curve.
 - **ANIM-03**: engine_core and render_graph evaluate animated values at frame time without UI-owned interpolation or naked floating-point persisted semantics.
 
+### Production Realtime Preview And Rendering
+
+- **RTPREV-01**: Realtime preview has a Rust-owned `RealtimePreviewRuntime` separate from FFmpeg export compilation and can consume accepted draft semantics plus render graph intent.
+- **RTPREV-02**: Supported video, image, text, visual layer, transform, opacity, canvas, and keyframe state can render through `wgpu`, targeting D3D12 on Windows and Metal on macOS, with explicit unsupported/degraded diagnostics.
+- **RTPREV-03**: Seek, scrub, and basic playback preview do not spawn a new FFmpeg process per frame for supported timeline states.
+- **RTPREV-04**: Realtime preview and export share engine/render graph semantics and produce parity diagnostics for known divergence.
+- **RTPREV-05**: Preview runtime uses shared integer-microsecond `TimelineClock` and `PlaybackGeneration` values, and reports first-frame, seek latency, frame pacing, dropped frame, stale-generation rejection, cancellation, fallback, and cache-hit telemetry.
+
+### Media IO And Hardware Decode
+
+- **MEDIAIO-01**: Media reading and decoding are behind runtime traits/capability reports rather than directly binding preview decode semantics to FFmpeg process execution.
+- **MEDIAIO-02**: Desktop runtime reports Windows Media Foundation / DXVA / D3D texture capabilities and macOS AVFoundation / VideoToolbox / CoreVideo / Metal texture capabilities with fallback reasons.
+- **MEDIAIO-03**: Decoded media frames have explicit frame-pool, lifetime, color metadata, CPU frame, and GPU texture handle contracts.
+- **MEDIAIO-04**: Preview and binding layers avoid full-frame JS/Rust copies for 4K media when handle-based frame or texture paths are available.
+- **MEDIAIO-05**: FFmpeg remains available as fallback/probe/export/transcode implementation, and unsupported codecs, pixel formats, color spaces, and hardware paths degrade predictably with test coverage.
+
+### Incremental Graph And Cache Coherence
+
+- **INCR-01**: Render graph nodes have stable identities tied to semantic draft entities rather than content hashes alone, with fingerprints for current content, inputs, and runtime capabilities.
+- **INCR-02**: Accepted draft commands emit `CommandDelta` data with changed entity IDs, changed domains, and changed integer-microsecond ranges for incremental graph updates or targeted invalidation.
+- **INCR-03**: Dirty range propagation spans preview, export preparation, audio, thumbnails, waveforms, proxies, and preview cache using integer/rational time.
+- **INCR-04**: Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
+- **INCR-05**: Large-timeline tests verify graph diff cost, dirty range accuracy, and preview/export consistency after localized edits.
+
+### Asset Resource And Derived Artifact Store
+
+- **ASSET-01**: Asset manager indexes materials, proxies, thumbnails, waveforms, fonts, and supported effect resources with stable IDs and project-relative references.
+- **ASSET-02**: Derived artifacts are tracked in `.veproj/derived/artifact-store.sqlite` with schema version, runtime capability fingerprint, source material fingerprint, graph fingerprint, generation parameters, dependency rows, dirty state, and generation status.
+- **ASSET-03**: Replacing, relinking, renaming, or deleting source media invalidates or regenerates exactly the affected artifacts.
+- **ASSET-04**: Proxy, thumbnail, and waveform generation is chunked, resumable, cancellable, and isolated from interactive preview responsiveness.
+- **ASSET-05**: Cache garbage collection, storage quotas, and optional cloud/server synchronization manifests are defined before remote rendering depends on them.
+
+### Audio Engine And DSP Pipeline
+
+- **AUDIO2-01**: Audio preview playback uses a dedicated audio graph synchronized to the shared `TimelineClock` and `PlaybackGeneration`, with seek, pause, cancel, and buffering behavior independent from FFmpeg preview frame generation.
+- **AUDIO2-02**: Segment gain, track mute, pan, fades, keyframed volume, and future audio effects have typed DSP semantics with integer/rational timeline mapping.
+- **AUDIO2-03**: Windows preview audio output uses WASAPI and macOS preview audio output uses CoreAudio, while waveform and peak data from the artifact store drive UI display without becoming canonical audio semantics.
+- **AUDIO2-04**: Export audio mixdown remains parity-tested against the preview audio graph with classified differences.
+
+### Scheduler And Performance
+
+- **SCHED-01**: Preview, decode, artifact generation, export, media probing, and filesystem IO run through priority-aware queues with cancellation, backpressure, target timeline microseconds, and `PlaybackGeneration`.
+- **SCHED-02**: Export and heavy artifact jobs cannot block playhead scrubbing, inspector edits, or preview frame delivery on supported hardware.
+- **SCHED-03**: Thread-pool and resource limits are explicit, configurable for desktop development, and ready to map onto mobile/server runtimes.
+- **SCHED-04**: Performance telemetry records queue latency, job duration, cancellation, fallback, cache hit rate, first-frame time, and dropped-frame budgets.
+
+### Binding Runtime Expansion
+
+- **BIND-01**: Binding architecture separates desktop Node-API, portable C ABI, future Android JNI, future iOS Swift/ObjC, and server entrypoints without duplicating draft semantics.
+- **BIND-02**: Runtime sessions, project sessions, media handles, frame handles, texture handles, and artifact handles use opaque IDs with owner session, generation, reference count, explicit release, cascading session-close release, and debug leak diagnostics.
+- **BIND-03**: Large media frames and preview outputs cross language boundaries through handle-based or low-copy paths whenever supported, with GPU texture/frame handles bound to their device/context lifetime.
+- **BIND-04**: Server runtime can open `.veproj`, resolve materials, run render/export jobs, and report progress without Electron.
+- **BIND-05**: ABI, serialization, and binding smoke tests protect contract drift across desktop, mobile prototypes, and server rendering.
+
+### Production Effects And Retiming
+
+- **PRODFX-01**: Retiming/speed curves are typed draft semantics evaluated by engine_core and represented in render graph/audio graph without renderer-owned time math.
+- **PRODFX-02**: Transitions between adjacent visual segments have typed semantics, preview/export implementations or explicit degraded diagnostics, and undoable commands.
+- **PRODFX-03**: Filters/effects use a capability registry that maps semantic effect intent to GPU preview and export/compiler implementations where supported, before retiming, transition, and effect implementation expands.
+- **PRODFX-04**: Masks, blend modes, blur, and complex effects use the production GPU preview path for realtime interaction and classify unsupported export paths.
+- **PRODFX-05**: Complex Jianying/Kaipai-like template fixtures verify preview/export parity, fallback reports, and performance budgets for production editing scenarios.
+
 ### Compatibility
 
 - **COMP-01**: User can import a supported Jianying/CapCut draft subset into `.veproj`.
@@ -132,7 +194,7 @@
 
 - **PLAT-01**: Rust core exposes a C/FFI boundary for mobile/server shells.
 - **PLAT-02**: Server renderer can render a `.veproj` without Electron.
-- **PLAT-03**: iOS and Android prototypes can open and lightly edit the same draft semantics.
+- **PLAT-03**: iOS and Android extension points are represented by ABI/JNI/Swift contract documents and smoke-level handle/session tests, while full mobile apps remain deferred.
 
 ## Out of Scope
 
@@ -142,8 +204,8 @@
 | Jianying draft as primary project format | Conflicts with self-owned cross-platform core and long-term schema control |
 | 100% proprietary effect parity | Private resources/effects are unstable, unavailable, or legally constrained |
 | Kdenlive/MLT runtime integration | References only; direct integration creates mobility and licensing constraints |
-| GPU real-time effects engine | Too large for MVP; preview cache and FFmpeg path come first |
-| Mobile apps and cloud rendering in MVP | Architecture should prepare for them, but desktop editor must prove the core first |
+| GPU real-time effects engine in MVP | Too large for MVP; Phase 11 and Phase 18 now plan realtime preview/effects after Phase 10.1 |
+| Mobile apps and cloud rendering in MVP | Desktop MVP comes first; Phase 17 now plans portable binding/server runtime foundations after Phase 10.1 |
 
 ## Traceability
 
@@ -218,29 +280,67 @@
 | ANIM-01 | Phase 10 | Complete |
 | ANIM-02 | Phase 10 | Complete |
 | ANIM-03 | Phase 10 | Complete |
-| MVPEDIT-01 | Phase 10.1 | Planned |
-| MVPEDIT-02 | Phase 10.1 | Planned |
-| MVPEDIT-03 | Phase 10.1 | Planned |
-| MVPEDIT-04 | Phase 10.1 | Planned |
-| MVPEDIT-05 | Phase 10.1 | Planned |
-| MVPEDIT-06 | Phase 10.1 | Planned |
-| MVPEDIT-07 | Phase 10.1 | Planned |
-| MVPEDIT-08 | Phase 10.1 | Planned |
-| MVPEDIT-09 | Phase 10.1 | Planned |
+| MVPEDIT-01 | Phase 10.1 | Complete |
+| MVPEDIT-02 | Phase 10.1 | Complete |
+| MVPEDIT-03 | Phase 10.1 | Complete |
+| MVPEDIT-04 | Phase 10.1 | Complete |
+| MVPEDIT-05 | Phase 10.1 | Complete |
+| MVPEDIT-06 | Phase 10.1 | Complete |
+| MVPEDIT-07 | Phase 10.1 | Complete |
+| MVPEDIT-08 | Phase 10.1 | Complete |
+| MVPEDIT-09 | Phase 10.1 | Complete |
+| RTPREV-01 | Phase 11 | Planned |
+| RTPREV-02 | Phase 11 | Planned |
+| RTPREV-03 | Phase 11 | Planned |
+| RTPREV-04 | Phase 11 | Planned |
+| RTPREV-05 | Phase 11 | Planned |
+| MEDIAIO-01 | Phase 12 | Planned |
+| MEDIAIO-02 | Phase 12 | Planned |
+| MEDIAIO-03 | Phase 12 | Planned |
+| MEDIAIO-04 | Phase 12 | Planned |
+| MEDIAIO-05 | Phase 12 | Planned |
+| INCR-01 | Phase 13 | Planned |
+| INCR-02 | Phase 13 | Planned |
+| INCR-03 | Phase 13 | Planned |
+| INCR-04 | Phase 13 | Planned |
+| INCR-05 | Phase 13 | Planned |
+| ASSET-01 | Phase 14 | Planned |
+| ASSET-02 | Phase 14 | Planned |
+| ASSET-03 | Phase 14 | Planned |
+| ASSET-04 | Phase 14 | Planned |
+| ASSET-05 | Phase 14 | Planned |
+| AUDIO2-01 | Phase 15 | Planned |
+| AUDIO2-02 | Phase 15 | Planned |
+| AUDIO2-03 | Phase 15 | Planned |
+| AUDIO2-04 | Phase 15 | Planned |
+| SCHED-01 | Phase 16 | Planned |
+| SCHED-02 | Phase 16 | Planned |
+| SCHED-03 | Phase 16 | Planned |
+| SCHED-04 | Phase 16 | Planned |
+| BIND-01 | Phase 17 | Planned |
+| BIND-02 | Phase 17 | Planned |
+| BIND-03 | Phase 17 | Planned |
+| BIND-04 | Phase 17 | Planned |
+| BIND-05 | Phase 17 | Planned |
+| PRODFX-01 | Phase 18 | Planned |
+| PRODFX-02 | Phase 18 | Planned |
+| PRODFX-03 | Phase 18 | Planned |
+| PRODFX-04 | Phase 18 | Planned |
+| PRODFX-05 | Phase 18 | Planned |
 | COMP-01 | Post-MVP | Deferred |
 | COMP-02 | Post-MVP | Deferred |
 | COMP-03 | Post-MVP | Deferred |
-| PLAT-01 | Post-MVP | Deferred |
-| PLAT-02 | Post-MVP | Deferred |
-| PLAT-03 | Post-MVP | Deferred |
+| PLAT-01 | Phase 17 | Planned |
+| PLAT-02 | Phase 17 | Planned |
+| PLAT-03 | Phase 17 | Planned |
 
 **Coverage:**
 
 - v1 requirements: 52 total
 - Mapped to phases: 52
 - Unmapped: 0
-- v2/post-MVP requirements: 31 total, 25 planned in Phases 7-10.1 and 6 deferred
+- v2/post-MVP requirements: 69 total, 66 planned in Phases 7-18 and 3 deferred
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-18 after archiving future Phases 11-13 outside active GSD*
+*Last updated: 2026-06-18 after adding production-grade architecture Phases 11-18 after Phase 10.1*

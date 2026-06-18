@@ -4,7 +4,7 @@
 
 This milestone builds a desktop-first Jianying-style video editor MVP on a Rust-owned core. The path is intentionally layered: establish the engineering and test harness, define the draft/material model, implement command-driven timeline editing, build the desktop workspace, connect preview/export through one render path, then harden and package the app.
 
-After the MVP is packaged, the roadmap continues with core editor capability phases needed for Jianying/Kaipai-like template fidelity: project canvas space, segment transform, visual compositing, complete text, typed keyframes, and urgent usable-editor MVP completion. Retiming, effects, and transitions are parked outside active GSD planning until they are restored.
+After Phase 10.1 closes the usable MVP gap, the roadmap shifts from MVP delivery to production-grade editor architecture. The next phases address the known architectural ceiling directly: realtime GPU preview, hardware media IO, incremental render graph updates, coherent derived artifacts, resource management, an independent audio pipeline, task scheduling, mobile/server bindings, and then production retiming/effects/transitions on top of that foundation. FFmpeg remains a final export/encoding runtime, not the default realtime preview renderer for supported interactive editing paths.
 
 ## Phases
 
@@ -26,7 +26,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics (completed 2026-06-18)
 - [x] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity (completed 2026-06-18)
 - [x] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters (completed 2026-06-18)
-- [ ] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (INSERTED)
+- [x] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (completed 2026-06-18)
+- [ ] **Phase 11: Realtime Preview Runtime And GPU Render Backend** - Production realtime preview runtime, GPU compositor backend, frame pacing, and preview/export parity diagnostics
+- [ ] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff
+- [ ] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts
+- [ ] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC
+- [ ] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity
+- [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
+- [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
+- [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
 
 ## Phase Details
 
@@ -425,22 +433,179 @@ Plans:
   8. Electron renderer remains sandboxed: no direct Node/Electron access, no direct draft mutation, no FFmpeg/ffprobe/render graph/export script construction.
   9. Playwright Electron tests cover real file import, add-to-timeline, preview image display, playhead request/update, transform, audio, text, and SRT flows at 1280x800 and 1120x720.
 
-**Plans:** 3/7 plans complete
+**Plans:** 7/7 plans complete
 
 Plans:
 
 - [x] 10.1-01-PLAN.md - Add system file chooser import and material list usability gates
 - [x] 10.1-02-PLAN.md - Display real preview PNG frames and empty canvas fallback
 - [x] 10.1-03-PLAN.md - Make timeline playhead seek/click/drag/frame-step request preview frames
-- [ ] 10.1-04-PLAN.md - Complete video/image transform editing and preview selection overlay
-- [ ] 10.1-05-PLAN.md - Complete text add/edit/style display and preview parity
-- [ ] 10.1-06-PLAN.md - Complete audio segment volume, track mute, and waveform placeholder usability
-- [ ] 10.1-07-PLAN.md - Complete SRT import/edit flow, source guards, and phase gates
+- [x] 10.1-04-PLAN.md - Complete video/image transform editing and preview selection overlay
+- [x] 10.1-05-PLAN.md - Complete text add/edit/style display and preview parity
+- [x] 10.1-06-PLAN.md - Complete audio segment volume, track mute, and waveform placeholder usability
+- [x] 10.1-07-PLAN.md - Complete SRT import/edit flow, source guards, and phase gates
+
+### Phase 11: Realtime Preview Runtime And GPU Render Backend
+
+**Goal**: Introduce a Rust-side production realtime preview runtime that renders supported interactive timelines through `wgpu` on Windows/macOS instead of spawning FFmpeg/filter graphs for every preview frame.
+**Depends on**: Phase 10.1
+**Requirements**: RTPREV-01, RTPREV-02, RTPREV-03, RTPREV-04, RTPREV-05
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Preview requests flow through a Rust-owned `RealtimePreviewRuntime` that consumes accepted draft semantics and render graph intent.
+  2. Supported video/image/text/layer transform, opacity, canvas, and keyframe state renders through `wgpu`, targeting D3D12 on Windows and Metal on macOS.
+  3. Seeking, scrubbing, and basic playback do not spawn a new FFmpeg process per frame for supported preview paths.
+  4. Realtime preview, audio preview, and scheduled preview tasks use a shared integer-microsecond `TimelineClock` plus `PlaybackGeneration` so stale frames are rejected after seek/edit.
+  5. Realtime preview and export continue to share engine/render graph semantics, with parity tests and diagnostics for known divergences.
+  6. Preview runtime reports measurable first-frame, seek, frame pacing, stale-generation rejection, cancellation, and fallback telemetry.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 10.1 completion
+
+### Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop
+
+**Goal**: Split media reading/decoding from FFmpeg-specific execution and introduce Windows/macOS native media IO, hardware decode, frame pools, and texture ownership contracts.
+**Depends on**: Phase 11
+**Requirements**: MEDIAIO-01, MEDIAIO-02, MEDIAIO-03, MEDIAIO-04, MEDIAIO-05
+**Success Criteria** (what must be TRUE):
+
+  1. Media runtime exposes reader/decoder traits and capability reports rather than binding preview/decode semantics directly to FFmpeg process execution.
+  2. Windows runtime reports Media Foundation / DXVA / D3D texture capabilities; macOS runtime reports AVFoundation / VideoToolbox / CoreVideo / Metal texture capabilities.
+  3. Decoded frames use explicit frame pools, lifetimes, color metadata, and CPU/GPU handle types instead of ad hoc byte buffers.
+  4. Realtime preview can consume frame or texture handles without full 4K pixel buffers crossing the JS/Rust boundary.
+  5. FFmpeg remains available as fallback/probe/export/transcode implementation, with unsupported codecs, pixel formats, color spaces, and hardware paths degrading predictably.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 11 completion
+
+### Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence
+
+**Goal**: Make the semantic timeline and render graph update incrementally so large drafts do not require full graph regeneration and cache invalidation after every edit.
+**Depends on**: Phase 12
+**Requirements**: INCR-01, INCR-02, INCR-03, INCR-04, INCR-05
+**Success Criteria** (what must be TRUE):
+
+  1. Render graph nodes have stable identities tied to semantic draft entities, not content hashes alone.
+  2. Accepted draft commands emit `CommandDelta` data with changed entity IDs, changed domains, and changed integer-microsecond time ranges.
+  3. Dirty range propagation spans preview, export preparation, audio, thumbnails, waveforms, proxies, and preview cache without naked floating-point time.
+  4. Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
+  5. Large-timeline tests cover graph diff cost, cache invalidation correctness, and preview/export consistency after edits.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 12 completion
+
+### Phase 14: Asset Resource Manager And Derived Artifact Store
+
+**Goal**: Add a production resource layer backed by a project-local SQLite artifact index and derived blob store for materials, fonts, effects, proxies, thumbnails, waveforms, graph snapshots, and preview artifacts.
+**Depends on**: Phase 13
+**Requirements**: ASSET-01, ASSET-02, ASSET-03, ASSET-04, ASSET-05
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Asset manager indexes materials, proxies, thumbnails, waveforms, fonts, and supported effect resources with stable IDs and project-relative references.
+  2. `.veproj/derived/artifact-store.sqlite` tracks derived artifacts, dependencies, dirty state, generation status, schema version, runtime capability fingerprint, source material fingerprint, graph fingerprint, and generation parameters.
+  3. Replacing, relinking, renaming, or deleting source media invalidates or regenerates exactly the affected artifacts.
+  4. Proxy, thumbnail, and waveform generation is chunked, resumable, cancellable, and isolated from interactive preview responsiveness.
+  5. Cache garbage collection, storage quotas, and optional cloud/server synchronization manifests are defined before remote rendering depends on them.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 13 completion
+
+### Phase 15: Audio Engine And DSP Timeline Pipeline
+
+**Goal**: Introduce an independent low-latency audio graph and DSP timeline synchronized to the same `TimelineClock` and `PlaybackGeneration` used by `wgpu` preview rendering.
+**Depends on**: Phase 14
+**Requirements**: AUDIO2-01, AUDIO2-02, AUDIO2-03, AUDIO2-04
+**Success Criteria** (what must be TRUE):
+
+  1. Audio preview playback uses a dedicated audio graph with shared `TimelineClock`, seek, pause, cancel, and buffering behavior independent from FFmpeg preview frame generation.
+  2. Segment gain, track mute, pan, fades, keyframed volume, and future audio effects have typed DSP semantics with integer/rational timeline mapping.
+  3. Windows preview audio output uses WASAPI; macOS preview audio output uses CoreAudio.
+  4. Waveform and peak data from the artifact store drive UI display without becoming canonical audio semantics.
+  5. Export audio mixdown remains parity-tested against the preview audio graph with classified differences.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 14 completion
+
+### Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry
+
+**Goal**: Add a production job scheduler that isolates preview, decode, cache, IO, export, and analysis work while aligning all time-sensitive jobs to the shared timeline clock.
+**Depends on**: Phase 15
+**Requirements**: SCHED-01, SCHED-02, SCHED-03, SCHED-04
+**Success Criteria** (what must be TRUE):
+
+  1. Preview, decode, artifact generation, export, media probing, and filesystem IO run through priority-aware queues with cancellation and backpressure.
+  2. Export and heavy artifact jobs cannot block playhead scrubbing, inspector edits, or preview frame delivery on supported hardware.
+  3. Time-sensitive jobs carry target timeline microseconds and `PlaybackGeneration` so stale work cannot overwrite current preview/audio state.
+  4. Thread-pool/resource limits are explicit, configurable for desktop development, and ready to map onto mobile/server runtimes.
+  5. Performance telemetry records queue latency, job duration, cancellation, fallback, cache hit rate, first-frame time, and dropped-frame budgets.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 15 completion
+
+### Phase 17: Mobile/Server Binding Architecture And Runtime Ports
+
+**Goal**: Turn the desktop-first Rust core into a portable runtime surface with explicit Node-API, C ABI, future JNI/Swift contracts, server entrypoints, and reference-counted opaque handle lifetimes.
+**Depends on**: Phase 16
+**Requirements**: PLAT-01, PLAT-02, PLAT-03, BIND-01, BIND-02, BIND-03, BIND-04, BIND-05
+**Success Criteria** (what must be TRUE):
+
+  1. Binding architecture separates desktop Node-API, portable C ABI, future Android JNI, future iOS Swift/ObjC, and server entrypoints without duplicating draft semantics.
+  2. Runtime sessions, project sessions, media handles, frame handles, texture handles, and artifact handles use opaque IDs with owner session, generation, reference count, explicit release, cascading session-close release, and leak diagnostics.
+  3. Mobile lifecycle, sandboxed media permissions, file handles, texture handles, memory ownership, and cancellation are represented as contracts, but full iOS/Android apps are deferred.
+  4. Large media frames and preview outputs do not cross language boundaries as unnecessary copies when a handle-based path is available.
+  5. Server runtime can open `.veproj`, resolve materials, run render/export jobs, and report progress without Electron.
+  6. ABI, serialization, and binding smoke tests protect contract drift across desktop, mobile contracts, and server rendering.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 16 completion
+
+### Phase 18: Production Effects, Retiming, And Transition Semantics
+
+**Goal**: Restore retiming, effects, filters, masks, blends, and transitions as production editor semantics once realtime preview, media IO, graph/cache, audio, and scheduling foundations exist.
+**Depends on**: Phase 17
+**Requirements**: PRODFX-01, PRODFX-02, PRODFX-03, PRODFX-04, PRODFX-05
+**UI hint**: yes
+**Success Criteria** (what must be TRUE):
+
+  1. Retiming/speed curves are typed draft semantics evaluated by engine_core and represented in render graph/audio graph without renderer-owned time math.
+  2. Transitions between adjacent visual segments have typed semantics, preview/export implementations or explicit degraded diagnostics, and undoable commands.
+  3. Filters/effects use a capability registry that maps semantic effect intent to GPU preview and export/compiler implementations where supported.
+  4. Masks, blend modes, blur, and complex effects use the production GPU preview path for realtime interaction and classify unsupported export paths.
+  5. Complex Jianying/Kaipai-like template fixtures verify preview/export parity, fallback reports, and performance budgets for production editing scenarios.
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] TBD - Plan after Phase 17 completion; sequence capability registry, retiming/speed, transitions, visual effects, then template fidelity gates; use `ROADMAP_PHASES_11_13_ARCHIVE.md` as historical input for retiming/effects/transition scope
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -455,4 +620,12 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
-| 10.1 Usable Editor MVP Completion | 3/7 | In progress | - |
+| 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
+| 11. Realtime Preview Runtime And GPU Render Backend | TBD | Not planned | - |
+| 12. Media IO, Hardware Decode, And Frame/Texture Interop | TBD | Not planned | - |
+| 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | TBD | Not planned | - |
+| 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |
+| 15. Audio Engine And DSP Timeline Pipeline | TBD | Not planned | - |
+| 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
+| 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
+| 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
