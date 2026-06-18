@@ -1,11 +1,11 @@
 use draft_model::{
-    Draft, Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, Track, TrackKind,
+    DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftId, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
-    build_render_graph, OutputDimensions, RenderGraphNodeRole, RenderGraphSnapshot,
-    RenderOutputProfile,
+    build_render_graph, OutputDimensions, RenderGraphDiff, RenderGraphNodeId,
+    RenderGraphNodeRole, RenderGraphSnapshot, RenderOutputProfile,
 };
 
 #[test]
@@ -127,6 +127,90 @@ fn fingerprints_change_without_changing_node_identity() {
     assert_eq!(
         before_video.generator_version,
         render_graph::GRAPH_GENERATOR_VERSION
+    );
+}
+
+#[test]
+fn graph_diff_compares_node_id_first_then_fingerprint_and_carries_dirty_facts() {
+    let before = phase13_graph_draft();
+    let mut after = before.clone();
+    after.tracks[0].segments[0]
+        .visual
+        .transform
+        .opacity
+        .value_millis = 600;
+
+    let previous = snapshot_for(&before, output_profile(960, 540), "runtime:software:v1");
+    let current = snapshot_for(&after, output_profile(960, 540), "runtime:software:v1");
+    let dirty_ranges = vec![DirtyRange {
+        target_timerange: TargetTimerange::new(0, 1_000_000),
+        source: DirtyRangeSource::Current,
+    }];
+    let dirty_domains = vec![DirtyDomain::Visual, DirtyDomain::GraphSnapshot];
+
+    let diff = RenderGraphDiff::between(&previous, &current, &dirty_ranges, &dirty_domains);
+    let changed_keys = diff
+        .changed
+        .iter()
+        .map(|change| change.node_id.stable_key())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        changed_keys,
+        vec!["draft:phase13-node-identity-draft:track:video-track:segment:segment-a:video"]
+    );
+    assert_eq!(diff.added, Vec::<RenderGraphNodeId>::new());
+    assert_eq!(diff.removed, Vec::<RenderGraphNodeId>::new());
+    assert!(
+        diff.unchanged.iter().any(|node_id| node_id.stable_key()
+            == "draft:phase13-node-identity-draft:material:video-material"),
+        "localized visual edits should not classify the whole graph as changed"
+    );
+    assert_eq!(diff.dirty_ranges, dirty_ranges);
+    assert_eq!(diff.dirty_domains, dirty_domains);
+    assert_ne!(
+        diff.changed[0].previous_fingerprint,
+        diff.changed[0].current_fingerprint
+    );
+    assert_eq!(diff.changed[0].domains, dirty_domains);
+}
+
+#[test]
+fn graph_diff_classifies_added_and_removed_node_ids_deterministically() {
+    let mut previous =
+        snapshot_for(&phase13_graph_draft(), output_profile(960, 540), "runtime:software:v1");
+    let mut current = previous.clone();
+    let removed = previous.node_fingerprints.remove(0).node_id;
+    let mut added_fingerprint = current.node_fingerprints[0].clone();
+    added_fingerprint.node_id = RenderGraphNodeId {
+        role: RenderGraphNodeRole::Output,
+        draft_id: DraftId::new("phase13-node-identity-draft"),
+        track_id: None,
+        segment_id: None,
+        material_id: None,
+        local_id: Some("preview-frame-png".to_owned()),
+    };
+    current.node_fingerprints.push(added_fingerprint.clone());
+
+    let diff = RenderGraphDiff::between(&previous, &current, &[], &[]);
+
+    assert_eq!(diff.added, vec![added_fingerprint.node_id]);
+    assert_eq!(diff.removed, vec![removed]);
+    assert!(diff.changed.is_empty());
+    assert_eq!(
+        diff.unchanged
+            .iter()
+            .map(RenderGraphNodeId::stable_key)
+            .collect::<Vec<_>>(),
+        {
+            let mut keys = diff
+                .unchanged
+                .iter()
+                .map(RenderGraphNodeId::stable_key)
+                .collect::<Vec<_>>();
+            keys.sort();
+            keys
+        }
     );
 }
 
