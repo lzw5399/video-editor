@@ -25,7 +25,8 @@ import type {
   TrimSegmentCommandPayload,
   TrackId,
   UndoTimelineEditCommandPayload,
-  UpdateDraftCanvasConfigCommandPayload
+  UpdateDraftCanvasConfigCommandPayload,
+  UpdateSegmentVisualCommandPayload
 } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
@@ -42,6 +43,7 @@ import type {
   MaterialKind,
   Microseconds,
   SegmentId,
+  SegmentVisual,
   SegmentVolume,
   SourceTimerange,
   TargetTimerange,
@@ -348,6 +350,23 @@ export function buildUpdateDraftCanvasConfigCommand(
   } satisfies UpdateDraftCanvasConfigCommandPayload & { kind: "updateDraftCanvasConfig" };
 
   return envelope("updateDraftCanvasConfig", payload);
+}
+
+export function buildUpdateSegmentVisualCommand(
+  context: CommandContext,
+  segmentId: SegmentId,
+  visual: SegmentVisual
+): CommandEnvelope {
+  const payload = {
+    kind: "updateSegmentVisual",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    segmentId,
+    visual
+  } satisfies UpdateSegmentVisualCommandPayload & { kind: "updateSegmentVisual" };
+
+  return envelope("updateSegmentVisual", payload);
 }
 
 type RequestPreviewFrameOptions = {
