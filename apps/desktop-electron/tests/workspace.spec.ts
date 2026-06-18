@@ -334,6 +334,38 @@ async function expectPreviewControlsFit(page: Page, label: string): Promise<void
   expect(clippedItems, `${label} must stay inside preview shell`).toEqual([]);
 }
 
+async function expectNativePreviewHostLayout(
+  app: ElectronApplication,
+  page: Page,
+  width: number,
+  height: number
+): Promise<RegionBox> {
+  await setViewportSizeAndVerifyLayout(app, page, width, height);
+  const host = await expectStableBox(page.locator(".preview-native-host"), `实时预览宿主 ${width}x${height}`);
+  const timeline = await expectStableBox(page.locator('[aria-label="时间线"]'), `时间线 ${width}x${height}`);
+  const inspector = await expectStableBox(page.locator('[aria-label="属性检查器"]'), `属性检查器 ${width}x${height}`);
+
+  expect(host.width, `实时预览宿主宽度 ${width}x${height}`).toBeGreaterThan(120);
+  expect(host.height, `实时预览宿主高度 ${width}x${height}`).toBeGreaterThan(80);
+  expectNoOverlap(host, timeline, "实时预览宿主", "时间线");
+  expectNoOverlap(host, inspector, "实时预览宿主", "属性检查器");
+  await latestRealtimePreviewBounds(app);
+  return host;
+}
+
+async function latestRealtimePreviewBounds(app: ElectronApplication): Promise<NonNullable<RealtimePreviewHostCall["bounds"]>> {
+  await expect
+    .poll(async () => {
+      const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast((call) => call.kind === "updateSurfaceBounds")?.bounds;
+      return latestBounds === undefined ? null : latestBounds;
+    })
+    .not.toBeNull();
+
+  const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast((call) => call.kind === "updateSurfaceBounds")?.bounds;
+  expect(latestBounds, "实时预览宿主应上报 bounds").toBeDefined();
+  return latestBounds!;
+}
+
 async function expectLocatorInsideHorizontalContainer(container: Locator, target: Locator, label: string): Promise<void> {
   await target.scrollIntoViewIfNeeded();
   const containerBox = await expectStableBox(container, `${label} container`);
@@ -946,6 +978,54 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
     const callsAfterClose = await readRealtimePreviewHostCalls(app);
     expect(callsAfterClose.some((call) => call.kind === "detachSurface")).toBe(true);
     expect(callsAfterClose.some((call) => call.kind === "closeSession")).toBe(true);
+  } finally {
+    await app.close();
+  }
+});
+
+test("实时预览 native preview host rectangle reports integer bounds and telemetry", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
+    }
+  });
+
+  try {
+    const host1280 = await expectNativePreviewHostLayout(app, page, 1280, 800);
+    const latest1280 = await latestRealtimePreviewBounds(app);
+    expect(latest1280.width).toBe(Math.round(host1280.width));
+    expect(latest1280.height).toBe(Math.round(host1280.height));
+    expect(latest1280.x).toBe(Math.round(host1280.x));
+    expect(latest1280.y).toBe(Math.round(host1280.y));
+
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
+    await expect(page.getByLabel("实时预览数据")).toContainText("首帧");
+    await expect(page.getByLabel("实时预览数据")).toContainText("已呈现 1 帧");
+
+    const host1120 = await expectNativePreviewHostLayout(app, page, 1120, 720);
+    const latest1120 = await latestRealtimePreviewBounds(app);
+    const deviceScaleMillis = await page.evaluate(() => Math.round(window.devicePixelRatio * 1000));
+    expect(latest1120.width).toBe(Math.round(host1120.width));
+    expect(latest1120.height).toBe(Math.round(host1120.height));
+    expect(latest1120.scaleFactorMillis).toBe(deviceScaleMillis);
+  } finally {
+    await app.close();
+  }
+});
+
+test("实时预览 native preview fallback displays main-provided attach diagnostics", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_ATTACH_FAILURE: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览降级显示");
+    await expect(page.getByLabel("实时预览降级")).toContainText("实时预览降级");
+    await expect(page.getByLabel("实时预览降级")).not.toContainText("HWND");
+    await expect(page.getByLabel("实时预览降级")).not.toContainText("NSView");
   } finally {
     await app.close();
   }
