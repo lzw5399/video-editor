@@ -42,7 +42,11 @@ pub use discovery::{
     resolve_binary,
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
-pub use fallback::{MediaIoFallbackReason, SelectedDecodePath};
+pub use fallback::{
+    MediaIoFallbackCandidate, MediaIoFallbackDiagnostic, MediaIoFallbackReason,
+    MediaIoFallbackSelection, SelectedDecodePath, media_io_fallback_ladder,
+    select_media_io_fallback,
+};
 pub use frame::{
     CpuFrameHandle, DecodedAudioFrame, DecodedVideoFrame, FrameDimensions, FrameHandleId,
     FrameLeaseId, FrameLeaseRequest, FramePool, FramePoolCloseReport, FramePoolError,

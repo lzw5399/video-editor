@@ -2,7 +2,8 @@ use media_runtime::{
     CodecCapability, FallbackDecodePathCapability, FallbackLadderCapability, FfmpegExecutor,
     MediaIoFallbackReason, PixelFormatCapability, RuntimeCapabilities, RuntimeCapabilityReport,
     RuntimeCapabilityStatus, RuntimeConfig, RuntimeMediaIoCapabilities, SelectedDecodePath,
-    TextureInteropCapability, VideoPixelFormat, probe_runtime_capabilities,
+    TextureInteropCapability, VideoPixelFormat, media_io_fallback_ladder,
+    probe_runtime_capabilities,
 };
 
 use crate::platform::{probe_macos_media_io_capabilities, probe_windows_media_io_capabilities};
@@ -101,68 +102,82 @@ fn texture_interop_capability() -> TextureInteropCapability {
 fn fallback_ladder_capability(ffmpeg: &RuntimeCapabilityReport) -> FallbackLadderCapability {
     let ffmpeg_ready = ffmpeg.status != RuntimeCapabilityStatus::Unavailable;
     FallbackLadderCapability {
-        paths: vec![
-            FallbackDecodePathCapability {
-                path: SelectedDecodePath::NativeHardwareTexture,
-                status: RuntimeCapabilityStatus::Warning,
-                fallback_reason: Some(MediaIoFallbackReason::TextureInteropUnavailable),
-                diagnostic: Some(
-                    "Native hardware texture decode is preferred but not proven.".to_owned(),
-                ),
+        paths: media_io_fallback_ladder()
+            .into_iter()
+            .map(|path| fallback_path_capability(path, ffmpeg_ready))
+            .collect(),
+    }
+}
+
+fn fallback_path_capability(
+    path: SelectedDecodePath,
+    ffmpeg_ready: bool,
+) -> FallbackDecodePathCapability {
+    match path {
+        SelectedDecodePath::NativeHardwareTexture => FallbackDecodePathCapability {
+            path,
+            status: RuntimeCapabilityStatus::Warning,
+            fallback_reason: Some(MediaIoFallbackReason::TextureInteropUnavailable),
+            diagnostic: Some(
+                "Native hardware texture decode is preferred but not proven.".to_owned(),
+            ),
+        },
+        SelectedDecodePath::NativeHardwareCpuCopy => FallbackDecodePathCapability {
+            path,
+            status: RuntimeCapabilityStatus::Warning,
+            fallback_reason: Some(MediaIoFallbackReason::HardwareDecodeUnavailable),
+            diagnostic: Some(
+                "Native hardware decode with CPU copy remains pending platform proof.".to_owned(),
+            ),
+        },
+        SelectedDecodePath::NativeSoftwareCpuFrame => FallbackDecodePathCapability {
+            path,
+            status: RuntimeCapabilityStatus::Warning,
+            fallback_reason: Some(MediaIoFallbackReason::PlatformApiFailure),
+            diagnostic: Some(
+                "Native software CPU decode remains pending platform implementation.".to_owned(),
+            ),
+        },
+        SelectedDecodePath::FfmpegCpuFrame => FallbackDecodePathCapability {
+            path,
+            status: if ffmpeg_ready {
+                RuntimeCapabilityStatus::Ready
+            } else {
+                RuntimeCapabilityStatus::Unavailable
             },
-            FallbackDecodePathCapability {
-                path: SelectedDecodePath::NativeHardwareCpuCopy,
-                status: RuntimeCapabilityStatus::Warning,
-                fallback_reason: Some(MediaIoFallbackReason::HardwareDecodeUnavailable),
-                diagnostic: Some(
-                    "Native hardware decode with CPU copy remains pending platform proof."
+            fallback_reason: if ffmpeg_ready {
+                None
+            } else {
+                Some(MediaIoFallbackReason::FfmpegUnavailable)
+            },
+            diagnostic: if ffmpeg_ready {
+                Some(
+                    "FFmpeg CPU frame decode is available as the structured fallback implementation."
                         .to_owned(),
-                ),
-            },
-            FallbackDecodePathCapability {
-                path: SelectedDecodePath::NativeSoftwareCpuFrame,
-                status: RuntimeCapabilityStatus::Warning,
-                fallback_reason: Some(MediaIoFallbackReason::PlatformApiFailure),
-                diagnostic: Some(
-                    "Native software CPU decode remains pending platform implementation."
+                )
+            } else {
+                Some(
+                    "FFmpeg CPU frame decode is unavailable because FFmpeg capability probing failed."
                         .to_owned(),
-                ),
+                )
             },
-            FallbackDecodePathCapability {
-                path: SelectedDecodePath::FfmpegCpuFrame,
-                status: if ffmpeg_ready {
-                    RuntimeCapabilityStatus::Ready
-                } else {
-                    RuntimeCapabilityStatus::Unavailable
-                },
-                fallback_reason: if ffmpeg_ready {
-                    None
-                } else {
-                    Some(MediaIoFallbackReason::FfmpegUnavailable)
-                },
-                diagnostic: if ffmpeg_ready {
-                    Some("FFmpeg CPU frame decode is available as the structured fallback implementation.".to_owned())
-                } else {
-                    Some("FFmpeg CPU frame decode is unavailable because FFmpeg capability probing failed.".to_owned())
-                },
+        },
+        SelectedDecodePath::FfmpegPreviewArtifact => FallbackDecodePathCapability {
+            path,
+            status: if ffmpeg_ready {
+                RuntimeCapabilityStatus::Ready
+            } else {
+                RuntimeCapabilityStatus::Unavailable
             },
-            FallbackDecodePathCapability {
-                path: SelectedDecodePath::FfmpegPreviewArtifact,
-                status: if ffmpeg_ready {
-                    RuntimeCapabilityStatus::Ready
-                } else {
-                    RuntimeCapabilityStatus::Unavailable
-                },
-                fallback_reason: if ffmpeg_ready {
-                    None
-                } else {
-                    Some(MediaIoFallbackReason::FfmpegUnavailable)
-                },
-                diagnostic: Some(
-                    "Existing FFmpeg preview artifacts remain the final compatibility fallback."
-                        .to_owned(),
-                ),
+            fallback_reason: if ffmpeg_ready {
+                None
+            } else {
+                Some(MediaIoFallbackReason::FfmpegUnavailable)
             },
-        ],
+            diagnostic: Some(
+                "Existing FFmpeg preview artifacts remain the final compatibility fallback."
+                    .to_owned(),
+            ),
+        },
     }
 }
