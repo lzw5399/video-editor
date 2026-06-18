@@ -8,6 +8,21 @@
       "metadata": {
         "name": "Minimal Timeline Command"
       },
+      "canvasConfig": {
+        "aspectRatio": {
+          "kind": "preset",
+          "preset": "ratio16x9"
+        },
+        "width": 1920,
+        "height": 1080,
+        "frameRate": {
+          "numerator": 30,
+          "denominator": 1
+        },
+        "background": {
+          "kind": "black"
+        }
+      },
       "materials": [
         {
           "materialId": "material-video-001",

@@ -541,7 +541,9 @@ test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截�
     await inspector.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expectCommandCall(app, "updateDraftCanvasConfig");
-    await expect(page.getByText("画布 9:16 · 1080 x 1920 · 30 fps")).toBeVisible();
+    await expect(
+      page.getByLabel("预览窗口").getByText("画布 9:16 · 1080 x 1920 · 30 fps", { exact: true })
+    ).toBeVisible();
     await expect(page.getByText("模糊填充 · 降级").first()).toBeVisible();
 
     const calls = await readExecuteCommandCalls(app);
