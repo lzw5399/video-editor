@@ -16,18 +16,22 @@ use draft_model::{
     ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, Keyframe,
     KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
-    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
-    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
-    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
-    PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
-    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
-    RemoveSegmentKeyframeCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
-    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeFeatureCapability,
-    RuntimeFontCapability, RuntimeLicensePosture, Segment, SegmentAnchor, SegmentBackgroundFilling,
+    ListMissingMaterialsResponse, MainTrackMagnet, Material, MaterialId, MaterialKind,
+    MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload, PingCommandPayload,
+    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
+    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
+    RedoTimelineEditCommandPayload, RemoveSegmentKeyframeCommandPayload,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeCodecCapability, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
+    RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
+    RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
+    RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
+    RuntimePixelFormatCapability, RuntimeSelectedDecodePath, RuntimeTextureBackend,
+    RuntimeTextureHandleMetadata, RuntimeTextureInteropCapability, RuntimeVideoPixelFormat,
+    RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor, SegmentBackgroundFilling,
     SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentOpacity,
     SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume,
     SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
@@ -37,9 +41,10 @@ use draft_model::{
     TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
     TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
     UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
 };
-use schemars::{Schema, schema_for};
+use schemars::{schema_for, Schema};
 use serde_json::json;
 use ts_rs::{Config, TS};
 
@@ -148,6 +153,22 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RuntimeFeatureCapability>(),
             export_decl::<RuntimeFontCapability>(),
             export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeMediaIoFallbackReason>(),
+            export_decl::<RuntimeSelectedDecodePath>(),
+            export_decl::<RuntimeTextureBackend>(),
+            export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeDeviceId>(),
+            export_decl::<RuntimeFrameDimensions>(),
+            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
+            export_decl::<RuntimeTextureHandleMetadata>(),
+            export_decl::<RuntimeWindowsMediaIoCapabilities>(),
+            export_decl::<RuntimeMacosMediaIoCapabilities>(),
+            export_decl::<RuntimeCodecCapability>(),
+            export_decl::<RuntimePixelFormatCapability>(),
+            export_decl::<RuntimeTextureInteropCapability>(),
+            export_decl::<RuntimeFallbackDecodePathCapability>(),
+            export_decl::<RuntimeFallbackLadderCapability>(),
+            export_decl::<RuntimeMediaIoCapabilities>(),
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
@@ -317,6 +338,22 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RuntimeFeatureCapability>(),
             export_decl::<RuntimeFontCapability>(),
             export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeMediaIoFallbackReason>(),
+            export_decl::<RuntimeSelectedDecodePath>(),
+            export_decl::<RuntimeTextureBackend>(),
+            export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeDeviceId>(),
+            export_decl::<RuntimeFrameDimensions>(),
+            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
+            export_decl::<RuntimeTextureHandleMetadata>(),
+            export_decl::<RuntimeWindowsMediaIoCapabilities>(),
+            export_decl::<RuntimeMacosMediaIoCapabilities>(),
+            export_decl::<RuntimeCodecCapability>(),
+            export_decl::<RuntimePixelFormatCapability>(),
+            export_decl::<RuntimeTextureInteropCapability>(),
+            export_decl::<RuntimeFallbackDecodePathCapability>(),
+            export_decl::<RuntimeFallbackLadderCapability>(),
+            export_decl::<RuntimeMediaIoCapabilities>(),
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
@@ -553,6 +590,22 @@ fn schema_exports_include_runtime_capability_command_contracts() {
         "RuntimeFeatureCapability",
         "RuntimeFontCapability",
         "RuntimeLicensePosture",
+        "RuntimeMediaIoCapabilities",
+        "RuntimeWindowsMediaIoCapabilities",
+        "RuntimeMacosMediaIoCapabilities",
+        "RuntimeCodecCapability",
+        "RuntimePixelFormatCapability",
+        "RuntimeTextureInteropCapability",
+        "RuntimeFallbackLadderCapability",
+        "RuntimeFallbackDecodePathCapability",
+        "RuntimeMediaIoFallbackReason",
+        "RuntimeSelectedDecodePath",
+        "RuntimeTextureBackend",
+        "RuntimeDeviceId",
+        "RuntimeVideoPixelFormat",
+        "RuntimeFrameDimensions",
+        "RuntimeDecodedFrameHandleMetadata",
+        "RuntimeTextureHandleMetadata",
     ] {
         assert!(
             schema_json.contains(expected_contract)
@@ -562,11 +615,67 @@ fn schema_exports_include_runtime_capability_command_contracts() {
         );
     }
 
+    for expected_field in [
+        "mediaIo",
+        "windows",
+        "macos",
+        "codecs",
+        "pixelFormats",
+        "textureInterop",
+        "fallbackLadder",
+        "compatibleWithPreviewDevice",
+        "ownerSession",
+        "generation",
+        "backend",
+        "deviceId",
+    ] {
+        assert!(
+            schema_json.contains(expected_field) || command_result_ts.contains(expected_field),
+            "runtime media IO contracts should include {expected_field}"
+        );
+    }
+
+    assert_handle_safe_runtime_contracts_do_not_expose_raw_payloads(&schema_json);
+    assert_handle_safe_runtime_contracts_do_not_expose_raw_payloads(&command_result_ts);
+
     assert!(
         schema_json.contains("probeRuntimeCapabilities")
             && command_envelope_ts.contains("probeRuntimeCapabilities"),
         "runtime capability command should be generated from Rust contracts"
     );
+}
+
+#[test]
+fn schema_exports_include_phase12_source_guard_script_wiring() {
+    let root = project_root();
+    let package_json =
+        fs::read_to_string(root.join("package.json")).expect("package.json should exist");
+    let guard_path = root.join("scripts/phase12-source-guards.sh");
+
+    assert!(
+        package_json.contains("\"test:phase12-source-guards\""),
+        "package.json should expose the Phase 12 source guard"
+    );
+    assert!(
+        guard_path.exists(),
+        "Phase 12 source guard script should exist"
+    );
+
+    let guard = fs::read_to_string(guard_path).expect("Phase 12 source guard should be readable");
+    for required_boundary in [
+        "MediaFoundation",
+        "VideoToolbox",
+        "AVFoundation",
+        "ArrayBuffer",
+        "Uint8Array",
+        "nativePointer",
+        "rawHandle",
+    ] {
+        assert!(
+            guard.contains(required_boundary),
+            "Phase 12 source guard should reject {required_boundary}"
+        );
+    }
 }
 
 #[test]
@@ -778,6 +887,22 @@ fn command_result_ts_contract() -> String {
             export_decl::<RuntimeFeatureCapability>(),
             export_decl::<RuntimeFontCapability>(),
             export_decl::<RuntimeLicensePosture>(),
+            export_decl::<RuntimeMediaIoFallbackReason>(),
+            export_decl::<RuntimeSelectedDecodePath>(),
+            export_decl::<RuntimeTextureBackend>(),
+            export_decl::<RuntimeVideoPixelFormat>(),
+            export_decl::<RuntimeDeviceId>(),
+            export_decl::<RuntimeFrameDimensions>(),
+            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
+            export_decl::<RuntimeTextureHandleMetadata>(),
+            export_decl::<RuntimeWindowsMediaIoCapabilities>(),
+            export_decl::<RuntimeMacosMediaIoCapabilities>(),
+            export_decl::<RuntimeCodecCapability>(),
+            export_decl::<RuntimePixelFormatCapability>(),
+            export_decl::<RuntimeTextureInteropCapability>(),
+            export_decl::<RuntimeFallbackDecodePathCapability>(),
+            export_decl::<RuntimeFallbackLadderCapability>(),
+            export_decl::<RuntimeMediaIoCapabilities>(),
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
@@ -787,6 +912,32 @@ fn command_result_ts_contract() -> String {
             export_decl::<TimelineCommandResponse>(),
         ],
     )
+}
+
+fn assert_handle_safe_runtime_contracts_do_not_expose_raw_payloads(contract: &str) {
+    for forbidden in [
+        "nativePointer",
+        "rawHandle",
+        "ArrayBuffer",
+        "Uint8Array",
+        "\"bytes\"",
+        "\"pixels\"",
+        "\"rgba\"",
+        "\"bgra\"",
+        "bytes:",
+        "bytes?:",
+        "pixels:",
+        "pixels?:",
+        "rgba:",
+        "rgba?:",
+        "bgra:",
+        "bgra?:",
+    ] {
+        assert!(
+            !contract.contains(forbidden),
+            "handle-capable runtime contracts must not expose raw payload field {forbidden}"
+        );
+    }
 }
 
 fn ts_contract(declarations: &[String]) -> String {
@@ -1061,6 +1212,67 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<RuntimeLicensePosture>(
         &mut schema_value,
         "RuntimeLicensePosture",
+    );
+    include_command_contract_schema::<RuntimeMediaIoFallbackReason>(
+        &mut schema_value,
+        "RuntimeMediaIoFallbackReason",
+    );
+    include_command_contract_schema::<RuntimeSelectedDecodePath>(
+        &mut schema_value,
+        "RuntimeSelectedDecodePath",
+    );
+    include_command_contract_schema::<RuntimeTextureBackend>(
+        &mut schema_value,
+        "RuntimeTextureBackend",
+    );
+    include_command_contract_schema::<RuntimeVideoPixelFormat>(
+        &mut schema_value,
+        "RuntimeVideoPixelFormat",
+    );
+    include_command_contract_schema::<RuntimeDeviceId>(&mut schema_value, "RuntimeDeviceId");
+    include_command_contract_schema::<RuntimeFrameDimensions>(
+        &mut schema_value,
+        "RuntimeFrameDimensions",
+    );
+    include_command_contract_schema::<RuntimeDecodedFrameHandleMetadata>(
+        &mut schema_value,
+        "RuntimeDecodedFrameHandleMetadata",
+    );
+    include_command_contract_schema::<RuntimeTextureHandleMetadata>(
+        &mut schema_value,
+        "RuntimeTextureHandleMetadata",
+    );
+    include_command_contract_schema::<RuntimeWindowsMediaIoCapabilities>(
+        &mut schema_value,
+        "RuntimeWindowsMediaIoCapabilities",
+    );
+    include_command_contract_schema::<RuntimeMacosMediaIoCapabilities>(
+        &mut schema_value,
+        "RuntimeMacosMediaIoCapabilities",
+    );
+    include_command_contract_schema::<RuntimeCodecCapability>(
+        &mut schema_value,
+        "RuntimeCodecCapability",
+    );
+    include_command_contract_schema::<RuntimePixelFormatCapability>(
+        &mut schema_value,
+        "RuntimePixelFormatCapability",
+    );
+    include_command_contract_schema::<RuntimeTextureInteropCapability>(
+        &mut schema_value,
+        "RuntimeTextureInteropCapability",
+    );
+    include_command_contract_schema::<RuntimeFallbackDecodePathCapability>(
+        &mut schema_value,
+        "RuntimeFallbackDecodePathCapability",
+    );
+    include_command_contract_schema::<RuntimeFallbackLadderCapability>(
+        &mut schema_value,
+        "RuntimeFallbackLadderCapability",
+    );
+    include_command_contract_schema::<RuntimeMediaIoCapabilities>(
+        &mut schema_value,
+        "RuntimeMediaIoCapabilities",
     );
     include_command_contract_schema::<RuntimeCapabilityReport>(
         &mut schema_value,

@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bindings_node::execute_command;
 use draft_model::CommandErrorKind;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -84,12 +84,10 @@ fi
         envelope["data"]["ffmpeg"]["version"],
         "ffmpeg version test-build"
     );
-    assert!(
-        envelope["data"]["ffmpeg"]["configureSummary"]
-            .as_str()
-            .unwrap()
-            .contains("--enable-libx264")
-    );
+    assert!(envelope["data"]["ffmpeg"]["configureSummary"]
+        .as_str()
+        .unwrap()
+        .contains("--enable-libx264"));
     assert_eq!(
         envelope["data"]["ffprobe"]["path"],
         ffprobe.display().to_string()
@@ -107,6 +105,27 @@ fi
     assert_eq!(
         envelope["data"]["licensePosture"]["redistributableBuild"],
         false
+    );
+    assert!(envelope["data"]["mediaIo"].is_object(), "{envelope:#}");
+    assert!(envelope["data"]["mediaIo"]["windows"].is_object());
+    assert!(envelope["data"]["mediaIo"]["macos"].is_object());
+    assert_eq!(
+        envelope["data"]["mediaIo"]["textureInterop"]["compatibleWithPreviewDevice"],
+        false
+    );
+    assert_eq!(
+        envelope["data"]["mediaIo"]["fallbackLadder"]["paths"][0]["path"],
+        "nativeHardwareTexture"
+    );
+    assert!(
+        envelope["data"]["mediaIo"]["codecs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|codec| codec["codec"] == "h264"
+                && codec["containers"] == json!(["mp4", "mov"])
+                && codec["firstNativeHardwareDecodeTarget"] == true),
+        "{envelope:#}"
     );
 }
 
