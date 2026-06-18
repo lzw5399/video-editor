@@ -82,7 +82,7 @@ pub struct PreviewServiceError {
 }
 
 impl PreviewServiceError {
-    fn new(kind: PreviewServiceErrorKind, message: impl Into<String>) -> Self {
+    pub(crate) fn new(kind: PreviewServiceErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),

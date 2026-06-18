@@ -19,11 +19,11 @@ use realtime_preview_runtime::{
 };
 
 #[test]
-fn generated_h264_video_material_uses_realtime_backend_for_multiple_times() {
+fn realtime_video_material_generated_h264_uses_realtime_backend_for_multiple_times() {
     let temp = tempfile::tempdir().expect("cache temp dir");
     let executor = CountingPreviewExecutor::new();
-    let config = RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg")
-        .with_mock_realtime_backend();
+    let config =
+        RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg").with_mock_realtime_backend();
     let mut provider = SoftwareVideoFrameProvider::new(h264_cache());
     let draft = h264_draft();
 
@@ -55,8 +55,14 @@ fn generated_h264_video_material_uses_realtime_backend_for_multiple_times() {
     .expect("seek H.264 frame should route through realtime backend");
 
     assert_eq!(executor.calls(), 0);
-    assert!(matches!(first.realtime.backend, RealtimePreviewBackendUsed::Mock));
-    assert!(matches!(second.realtime.backend, RealtimePreviewBackendUsed::Mock));
+    assert!(matches!(
+        first.realtime.backend,
+        RealtimePreviewBackendUsed::Mock
+    ));
+    assert!(matches!(
+        second.realtime.backend,
+        RealtimePreviewBackendUsed::Mock
+    ));
     assert!(first.artifact.is_none());
     assert!(second.artifact.is_none());
     assert!(first.ffmpeg_job.is_none());

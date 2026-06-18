@@ -22,11 +22,11 @@ use realtime_preview_runtime::{
 use std::os::unix::process::ExitStatusExt;
 
 #[test]
-fn supported_graph_does_not_call_ffmpeg_executor() {
+fn realtime_backend_no_ffmpeg_supported_graph_does_not_call_ffmpeg_executor() {
     let temp = tempfile::tempdir().expect("cache temp dir");
     let executor = PanickingPreviewExecutor::new();
-    let config = RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg")
-        .with_mock_realtime_backend();
+    let config =
+        RealtimePreviewServiceConfig::new(temp.path(), "/bin/ffmpeg").with_mock_realtime_backend();
     let mut provider = SoftwareVideoFrameProvider::new(decoded_cache("video-material"));
 
     for (target_time, mode) in [

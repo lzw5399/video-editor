@@ -5,6 +5,8 @@
 //! keeps cache keys out of the renderer and `.veproj/project.json`.
 
 pub mod cache;
+pub mod realtime_backend;
+pub mod realtime_frame_provider;
 pub mod service;
 
 pub use cache::{
@@ -14,6 +16,12 @@ pub use cache::{
     accepted_timeline_edit_invalidation, changed_material_invalidation,
     changed_materials_invalidation, changed_range_invalidation, invalidate_preview_cache,
 };
+pub use realtime_backend::{
+    RealtimePreviewFallbackDecision, RealtimePreviewFrameServiceRequest,
+    RealtimePreviewServiceConfig, RealtimePreviewServiceFrameResponse,
+    request_realtime_preview_frame,
+};
+pub use realtime_frame_provider::RealtimeMaterialFrameProvider;
 pub use service::{
     PreviewFrameRequest, PreviewFrameResponse, PreviewSegmentRequest, PreviewSegmentResponse,
     PreviewServiceConfig, PreviewServiceError, PreviewServiceErrorKind, request_preview_frame,
