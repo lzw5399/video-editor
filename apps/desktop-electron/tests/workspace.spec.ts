@@ -933,19 +933,31 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeDisabled();
 
     await visualForm.getByLabel("位置 X", { exact: true }).fill("160");
+    await visualForm.getByLabel("位置 Y", { exact: true }).fill("-90");
     await visualForm.getByLabel("缩放 X", { exact: true }).fill("1250");
+    await visualForm.getByLabel("缩放 Y", { exact: true }).fill("850");
+    await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).fill("12");
+    await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).fill("760");
+    await visualForm.getByLabel("裁剪 左", { exact: true }).fill("80");
+    await visualForm.getByLabel("裁剪 右", { exact: true }).fill("40");
+    await visualForm.getByLabel("裁剪 上", { exact: true }).fill("30");
+    await visualForm.getByLabel("裁剪 下", { exact: true }).fill("20");
     await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: "填充" }).click();
     await visualForm.getByRole("group", { name: "背景填充" }).getByRole("button", { name: "黑色" }).click();
     await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeEnabled();
     await visualForm.getByRole("button", { name: "应用画面" }).click();
 
     await expectCommandCall(app, "updateSegmentVisual");
+    await expectLatestPreviewFrameTarget(app, 0);
     await expect(visualForm.getByLabel("位置 X", { exact: true })).toHaveValue("160");
+    await expect(visualForm.getByLabel("位置 Y", { exact: true })).toHaveValue("-90");
     await expect(visualForm.getByLabel("缩放 X", { exact: true })).toHaveValue("1250");
+    await expect(visualForm.getByLabel("缩放 Y", { exact: true })).toHaveValue("850");
 
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
     await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
-    await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新请求预览帧");
+    await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
     await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
     await expect(page.getByLabel("导出日志")).toContainText("画面变换已更新，请重新开始导出");
     await expect(page.getByLabel("输出校验")).toContainText("输出校验待完成");
@@ -959,11 +971,11 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
       fitMode: "fill",
       backgroundFilling: { kind: "black" },
       transform: {
-        position: { x: 160, y: 0 },
-        scale: { xMillis: 1250, yMillis: 1000 },
-        rotation: { degrees: 0 },
-        opacity: { valueMillis: 1000 },
-        crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
+        position: { x: 160, y: -90 },
+        scale: { xMillis: 1250, yMillis: 850 },
+        rotation: { degrees: 12 },
+        opacity: { valueMillis: 760 },
+        crop: { leftMillis: 80, rightMillis: 40, topMillis: 30, bottomMillis: 20 },
         anchor: { xMillis: 500, yMillis: 500 }
       },
       blendMode: { kind: "normal" },
@@ -972,6 +984,37 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
 
     await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
     await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
+  } finally {
+    await app.close();
+  }
+});
+
+test("selection preview overlay follows accepted visible segment without blocking preview image", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByRole("button", { name: "请求预览帧" }).click();
+    await expectCommandCall(app, "requestPreviewFrame");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+    await expect(page.getByLabel("预览选中框")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
+    await expectCommandCall(app, "selectTimelineSegments");
+
+    const overlay = page.getByLabel("预览选中框");
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toHaveAttribute("data-segment-id", "segment-main-video");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+
+    const overlayPointerEvents = await overlay.evaluate((element) => window.getComputedStyle(element).pointerEvents);
+    expect(overlayPointerEvents).toBe("none");
+
+    await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
+    await expect(overlay).toBeVisible();
+    await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
+    await expect(overlay).toBeVisible();
   } finally {
     await app.close();
   }
