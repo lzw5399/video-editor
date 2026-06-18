@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed Phase 10.1 usable editor MVP completion; ready for Phase 11 planning
-current_phase: 10.1
-current_phase_name: usable-editor-mvp-completion
-current_plan: 7
-total_plans_in_phase: 7
-stopped_at: Completed 10.1-07-PLAN.md
-last_updated: "2026-06-18T11:04:17.000Z"
-last_activity: 2026-06-18 - Completed Phase 10.1 usable editor MVP completion and final source-guarded gates
+status: Completed Phase 11 Plan 01 realtime preview runtime contracts; ready for Phase 11 Plan 02
+current_phase: 11
+current_phase_name: realtime-preview-runtime-and-gpu-render-backend
+current_plan: 2
+total_plans_in_phase: 10
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-06-18T15:07:13.451Z"
+last_activity: 2026-06-18 - Completed Phase 11 Plan 01 realtime preview runtime contracts.
 progress:
   total_phases: 20
   completed_phases: 12
-  total_plans: 71
-  completed_plans: 71
-  percent: 100
+  total_plans: 98
+  completed_plans: 72
+  percent: 73
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 10.1 complete — ready for Phase 11 planning
+**Current focus:** Phase 11 realtime preview runtime and GPU render backend
 
 ## Current Position
 
-Phase: 10.1
-Plan: 7/7 complete
-Status: Phase 10.1 complete; next step is Phase 11 planning/execution after reconciling active roadmap changes
-Last activity: 2026-06-18 - Completed Phase 10.1 usable editor MVP completion and final source-guarded gates.
+Phase: 11
+Plan: 1/10 complete; next plan 11-02
+Status: Phase 11 Plan 01 complete; ready for render graph preparation, capability classification, and preview/export parity diagnostics.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 01 realtime preview runtime contracts.
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 67
+- Total plans completed: 68
 - Average duration: 9 min
-- Total execution time: 586 min
+- Total execution time: 595 min
 
 **By Phase:**
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
+| 11 | 1 | 9 min | 9 min |
 
 **Recent Trend:**
 
@@ -126,6 +127,7 @@ Progress: [██████████] 100%
 | Phase 10 P04 | 20 min | 2 tasks | 10 files |
 | Phase 10 P05 | 25 min | 2 tasks | 5 files |
 | Phase 10.1 P03 | 13 min | 2 tasks | 5 files |
+| Phase 11 P01 | 9 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -144,6 +146,8 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 11]: Plan 01 keeps realtime preview work at the Rust contract/mock-runtime layer; GPU, FFmpeg fallback execution, audio, scheduler, and platform decode remain deferred to later plans. — This establishes the shared runtime API without prematurely implementing later Phase 11/12/15/16 scope.
+- [Phase 11]: Preview frame presentation is generation-gated. — Stale request generations and canceled request tokens return non-presented results with telemetry and diagnostics instead of overwriting the current preview.
 - [Phase 10.1]: Playhead seek side effects are centralized in App.tsx, while preview and timeline controls only report target times. — This keeps seek-driven preview frame requests consistent across time input, frame stepping, ruler clicks, and playhead drag without moving draft semantics into the renderer.
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
@@ -291,6 +295,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T11:04:17.000Z
-Stopped at: Completed 10.1-07-PLAN.md
+Last session: 2026-06-18T15:07:13.447Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
