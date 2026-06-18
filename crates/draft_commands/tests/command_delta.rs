@@ -90,14 +90,24 @@ fn simple_timeline_split_emits_original_range_and_both_segments() {
     .expect("split should commit");
 
     assert_eq!(split.events[0].kind, "segmentSplit");
-    assert!(split.delta.changed_entities.contains(&ChangedEntity::Segment {
-        track_id: "video-track".into(),
-        segment_id: "segment-a".into(),
-    }));
-    assert!(split.delta.changed_entities.contains(&ChangedEntity::Segment {
-        track_id: "video-track".into(),
-        segment_id: "segment-b".into(),
-    }));
+    assert!(
+        split
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-a".into(),
+            })
+    );
+    assert!(
+        split
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-b".into(),
+            })
+    );
     assert_eq!(
         split.delta.changed_ranges,
         vec![dirty_range(

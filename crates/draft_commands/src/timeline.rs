@@ -11,6 +11,9 @@ use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
     audio::{add_audio_segment, set_segment_volume, set_track_mute},
     canvas::update_draft_canvas_config,
+    delta::{
+        current_range, moved_segment_delta, previous_range, segment_delta, split_segment_delta,
+    },
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
@@ -290,12 +293,20 @@ pub fn add_segment(
     let material = find_material(&next_draft, &material_id)?.clone();
     validate_track_material_compatibility(&next_draft.tracks[track_index], &material)?;
 
-    next_draft.tracks[track_index].segments.push(Segment::new(
+    let segment = Segment::new(
         segment_id.clone(),
-        material_id,
+        material_id.clone(),
         source_timerange,
-        target_timerange,
-    ));
+        target_timerange.clone(),
+    );
+    let delta = segment_delta(
+        CommandName::AddSegment,
+        &track_id,
+        &segment,
+        vec![current_range(target_timerange)],
+        "segment added",
+    );
+    next_draft.tracks[track_index].segments.push(segment);
     validate_timeline_rules(&next_draft)?;
 
     Ok(response(
@@ -306,10 +317,7 @@ pub fn add_segment(
             track_ids: vec![track_id],
         },
         "segmentAdded",
-        CommandDelta::none(
-            CommandName::AddSegment,
-            "delta pending command-specific builder",
-        ),
+        delta,
     ))
 }
 
@@ -358,6 +366,7 @@ pub fn move_segment(
     }
 
     let mut segment = next_draft.tracks[source_track_index].segments[source_segment_index].clone();
+    let previous_target_timerange = segment.target_timerange.clone();
     let (snapped_start, snap_event) = apply_snapping(
         &next_draft,
         &target_track_id,
@@ -369,6 +378,14 @@ pub fn move_segment(
     let source_track_id = next_draft.tracks[source_track_index].track_id.clone();
     let mut extra_events = optional_events([snap_event]);
     segment.target_timerange.start = snapped_start;
+    let current_target_timerange = segment.target_timerange.clone();
+    let delta = moved_segment_delta(
+        &source_track_id,
+        &target_track_id,
+        &segment,
+        previous_target_timerange,
+        current_target_timerange,
+    );
 
     if target_track_index == source_track_index {
         next_draft.tracks[source_track_index].segments[source_segment_index] = segment;
@@ -400,10 +417,7 @@ pub fn move_segment(
         },
         "segmentMoved",
         extra_events,
-        CommandDelta::none(
-            CommandName::MoveSegment,
-            "delta pending command-specific builder",
-        ),
+        delta,
     )
     .with_selection_fallback(selection))
 }
@@ -421,6 +435,7 @@ pub fn split_segment(
     validate_track_unlocked(&next_draft.tracks[track_index])?;
 
     let original = next_draft.tracks[track_index].segments[segment_index].clone();
+    let original_target_timerange = original.target_timerange.clone();
     let target_start = original.target_timerange.start.get();
     let target_end = checked_target_end(&original.target_timerange)?.get();
     let split = split_at.get();
@@ -470,6 +485,12 @@ pub fn split_segment(
 
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = split_segment_delta(
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        &right_segment_id,
+        original_target_timerange,
+    );
 
     Ok(response(
         next_draft,
@@ -479,10 +500,7 @@ pub fn split_segment(
             track_ids: vec![track_id],
         },
         "segmentSplit",
-        CommandDelta::none(
-            CommandName::SplitSegment,
-            "delta pending command-specific builder",
-        ),
+        delta,
     ))
 }
 
@@ -509,6 +527,7 @@ pub fn trim_segment(
     checked_target_end(&target_timerange)?;
 
     let original = next_draft.tracks[track_index].segments[segment_index].clone();
+    let previous_target_timerange = original.target_timerange.clone();
     let old_target_start = original.target_timerange.start.get();
     let old_target_end = checked_target_end(&original.target_timerange)?.get();
     let new_target_start = target_timerange.start.get();
@@ -564,6 +583,17 @@ pub fn trim_segment(
     }
 
     next_draft.tracks[track_index].segments[segment_index].target_timerange = target_timerange;
+    let current_segment = next_draft.tracks[track_index].segments[segment_index].clone();
+    let delta = segment_delta(
+        CommandName::TrimSegment,
+        &track_id,
+        &current_segment,
+        vec![
+            previous_range(previous_target_timerange),
+            current_range(current_segment.target_timerange.clone()),
+        ],
+        "segment trimmed",
+    );
     let mut extra_events = optional_events([snap_event]);
     if let Some(event) = apply_main_track_magnet(&mut next_draft, &track_id)? {
         extra_events.push(event);
@@ -583,10 +613,7 @@ pub fn trim_segment(
         },
         "segmentTrimmed",
         extra_events,
-        CommandDelta::none(
-            CommandName::TrimSegment,
-            "delta pending command-specific builder",
-        ),
+        delta,
     ))
 }
 
@@ -600,6 +627,14 @@ pub fn delete_segment(
     let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
     validate_track_unlocked(&next_draft.tracks[track_index])?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
+    let removed_segment = next_draft.tracks[track_index].segments[segment_index].clone();
+    let delta = segment_delta(
+        CommandName::DeleteSegment,
+        &track_id,
+        &removed_segment,
+        vec![previous_range(removed_segment.target_timerange.clone())],
+        "segment deleted",
+    );
 
     next_draft.tracks[track_index]
         .segments
@@ -618,10 +653,7 @@ pub fn delete_segment(
         next_selection,
         "segmentDeleted",
         extra_events,
-        CommandDelta::none(
-            CommandName::DeleteSegment,
-            "delta pending command-specific builder",
-        ),
+        delta,
     ))
 }
 
