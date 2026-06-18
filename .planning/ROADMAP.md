@@ -403,7 +403,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
 | 7. Project Canvas Space And Coordinate System | 7/7 | Complete    | 2026-06-18 |
-| 8. Segment Transform And Visual Compositing | 2/5 | In Progress | - |
+| 8. Segment Transform And Visual Compositing | 3/5 | In Progress | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
 | 11. Retiming And Speed System | 0/TBD | Not started | - |

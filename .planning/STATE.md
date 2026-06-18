@@ -5,17 +5,17 @@ milestone_name: milestone
 status: active
 current_phase: 8
 current_phase_name: segment-transform-and-visual-compositing
-current_plan: 3
+current_plan: 4
 total_plans_in_phase: 5
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-06-18T02:25:00.853Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-06-18T02:42:00.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 8
   total_plans: 54
-  completed_plans: 51
-  percent: 94
+  completed_plans: 52
+  percent: 96
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 8
-Plan: 3/5
-Status: Phase 08 in progress; next 08-03 FFmpeg compiler and preview/export invalidation
+Plan: 4/5
+Status: Phase 08 in progress; next 08-04 desktop inspector visual controls
 Last activity: 2026-06-18
 
-Progress: [█████████░] 94%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 51
+- Total plans completed: 52
 - Average duration: 8 min
-- Total execution time: 390 min
+- Total execution time: 405 min
 
 **By Phase:**
 
@@ -55,11 +55,11 @@ Progress: [█████████░] 94%
 | 04.1 | 4 | - | - |
 | 06 | 5 | - | - |
 | 07 | 7 | - | - |
-| 08 | 2 | 44 min | 22 min |
+| 08 | 3 | 59 min | 20 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 121 min
+- Last 5 plans: 93 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -110,6 +110,7 @@ Progress: [█████████░] 94%
 | Phase 07 P07 | 12 min | 2 tasks | 7 files |
 | Phase 08 P01 | 35 min | 2 tasks | 14 files |
 | Phase 08 P02 | 9 min | 2 tasks | 7 files |
+| Phase 08 P03 | 15 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Recent decisions affecting current work:
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.
 - [Phase 08]: Hidden visual/text segments are omitted from visual frame state and render graph while audio remains controlled by audio/mute semantics. — This keeps visibility and audio muting separate like a desktop editor.
 - [Phase 08]: Render graph preserves typed visual intent and diagnostics without FFmpeg syntax. — Compiler-specific placement/filter strings remain outside render_graph.
+- [Phase 08]: FFmpeg compiler keeps the legacy full-canvas path for identity stretch visuals and uses transform-aware filters only for non-default visual intent. — This preserves existing snapshots while enabling crop, fit/fill/stretch, scale, opacity, and normalized placement.
+- [Phase 08]: Nonzero rotation is surfaced as unsupported visual intent until anchor-aware FFmpeg rotation is implemented. — The compiler must not silently ignore unsupported visual semantics.
+- [Phase 08]: Successful `updateSegmentVisual` command responses clear stale desktop preview/export display state. — The renderer invalidates derived artifacts only after Rust accepts the semantic edit.
 - Initialization: Product is a general Jianying-style desktop video editor, not an oral-video product.
 - Initialization: Rust core starts from day one; Electron is the first shell.
 - Initialization: Jianying terminology should be used consistently across UI, Rust core, IPC, schema, docs, and tests.
