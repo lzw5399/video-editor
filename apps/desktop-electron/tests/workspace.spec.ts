@@ -52,7 +52,12 @@ declare global {
 }
 
 async function launchWorkspaceApp(
-  options: { mockPreviewCommands?: boolean; mockExportCommands?: boolean; env?: NodeJS.ProcessEnv } = {}
+  options: {
+    mockPreviewCommands?: boolean;
+    mockExportCommands?: boolean;
+    showDeveloperDiagnostics?: boolean;
+    env?: NodeJS.ProcessEnv;
+  } = {}
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
@@ -62,6 +67,7 @@ async function launchWorkspaceApp(
       VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: options.showDeveloperDiagnostics === true ? "1" : "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"]),
       ...options.env
     }
@@ -384,18 +390,22 @@ test("Chinese editor workspace opens with required regions and material states",
 
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "资源分类" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "检查丢失" })).toBeVisible();
+    await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
+    await expect(page.getByLabel("素材路径")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "导入路径" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "刷新" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "检查丢失" })).toHaveCount(0);
     await expect(page.getByPlaceholder("搜索素材")).toBeVisible();
     const materialFilters = page.getByRole("group", { name: "素材筛选" });
     for (const filter of ["全部", "视频", "图片", "音频", "丢失"]) {
       await expect(materialFilters.getByRole("button", { name: filter })).toBeVisible();
     }
 
-    await expect(page.getByText("预览命令已接入")).toBeVisible();
+    await expect(page.getByText("预览命令已接入")).toHaveCount(0);
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
+    await expect(page.getByLabel("运行环境诊断")).toHaveCount(0);
     await expect(page.getByText("等待请求预览帧").first()).toBeVisible();
     await expect(page.getByText("预览将在下一阶段接入")).toHaveCount(0);
-    await expect(page.getByText("等待生成预览片段")).toBeVisible();
     await expect(page.getByRole("button", { name: "请求预览帧" })).toBeVisible();
     await expect(page.getByRole("button", { name: "生成预览片段" })).toBeVisible();
     await expect(page.getByLabel("预览时间")).toBeVisible();
@@ -540,7 +550,7 @@ test("command-only text edit routes complete text inspector changes through exec
     await expect(previewText).toHaveCSS("text-align", "right");
     await expect(previewText).toHaveCSS("letter-spacing", "0.12px");
     await expect(previewText).toHaveCSS("background-color", "rgb(32, 32, 32)");
-    await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新请求预览帧");
+    await expect(page.getByLabel("预览状态")).toContainText("文字已更新，请重新请求预览帧");
     await expect(page.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
 
     const calls = await readExecuteCommandCalls(app);
@@ -624,7 +634,7 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     const textSection = page.locator('section[aria-label="文本"]');
     await expect(textSection.getByRole("heading", { name: "文本", exact: true })).toBeVisible();
     await expect(textSection).toContainText("SRT 字幕");
-    await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新生成预览片段");
+    await expect(page.getByLabel("预览状态")).toContainText("文字已更新，请重新请求预览帧");
 
     await textSection.locator("textarea").fill("第一句字幕 已校对");
     await page.getByRole("button", { name: "应用文字" }).click();
@@ -726,7 +736,7 @@ test("动画 tab and command-only keyframe add/remove update accepted timeline m
     await expect(page.getByLabel("关键帧标记")).toBeVisible();
     await expect(page.getByLabel("关键帧列表")).toContainText("00:00:01.200");
     await expect(page.getByLabel("关键帧列表")).toContainText("线性");
-    await expect(page.getByLabel("预览产物")).toContainText("关键帧已更新，请重新请求预览帧");
+    await expect(page.getByLabel("预览状态")).toContainText("关键帧已更新，请重新请求预览帧");
     await expect(page.getByLabel("导出日志")).toContainText("关键帧已更新，请重新开始导出");
 
     const addCalls = await readExecuteCommandCalls(app);
@@ -778,7 +788,7 @@ test("material import routes through the same executeCommand bridge", async () =
 });
 
 test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -958,7 +968,7 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
 });
 
 test("画布变更后旧预览和导出派生状态失效", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -998,7 +1008,7 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
 });
 
 test("画面变换 command-only transform 通过 Rust command 更新 UI 并清理派生状态", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1136,7 +1146,7 @@ test("预览失败显示中文分类错误且不改草稿", async () => {
     await expect(page.getByLabel("预览状态")).toContainText("请求预览帧失败");
     await expect(page.getByLabel("预览状态")).toContainText("预览服务失败");
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
-    await expect(page.getByLabel("预览产物")).toContainText("预览帧失败");
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
   } finally {
     await app.close();
   }
@@ -1219,7 +1229,7 @@ test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async 
 
     await expect(page.getByRole("button", { name: "请求预览帧" })).toBeVisible();
     await expect(page.getByRole("button", { name: "生成预览片段" })).toBeVisible();
-    await expect(page.getByLabel("预览产物")).toBeVisible();
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
   } finally {
     await app.close();
   }

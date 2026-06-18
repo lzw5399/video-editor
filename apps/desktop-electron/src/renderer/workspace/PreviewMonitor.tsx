@@ -30,6 +30,7 @@ type PreviewMonitorProps = {
   exportState: ExportDisplayState;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   selectedSegment: SelectedSegmentView | null;
+  showDeveloperDiagnostics: boolean;
   pending: boolean;
   playheadUs?: number;
   onPlayheadChange: (value: number) => void;
@@ -47,6 +48,8 @@ type MonitorControl = {
   label: string;
   symbol: string;
 };
+
+const MICROSECONDS_PER_SECOND = 1_000_000;
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
   { label: "播放", symbol: "▶" },
@@ -66,6 +69,7 @@ export function PreviewMonitor({
   exportState,
   runtimeDiagnostics,
   selectedSegment,
+  showDeveloperDiagnostics,
   pending,
   playheadUs = 0,
   onPlayheadChange,
@@ -99,10 +103,10 @@ export function PreviewMonitor({
     preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
 
   return (
-    <div className="preview-shell">
+    <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
       <div className="preview-titlebar">
         <strong>{draftName}</strong>
-        <span title={canvasReadout}>预览命令已接入 · {canvasReadout}</span>
+        <span title={canvasReadout}>{canvasRatio}</span>
       </div>
 
       <div
@@ -201,17 +205,21 @@ export function PreviewMonitor({
         </div>
       </div>
 
-      <div className="preview-artifact-panel" aria-label="预览产物">
-        <PreviewArtifactLine title="预览帧" status={preview.frameStatusLabel} metadata={preview.frameMetadataLabel} path={preview.frameArtifactPath} />
-        <PreviewArtifactLine
-          title="预览片段"
-          status={preview.segmentStatusLabel}
-          metadata={preview.segmentMetadataLabel}
-          path={preview.segmentArtifactPath}
-        />
-      </div>
+      {showDeveloperDiagnostics ? (
+        <>
+          <div className="preview-artifact-panel" aria-label="预览产物">
+            <PreviewArtifactLine title="预览帧" status={preview.frameStatusLabel} metadata={preview.frameMetadataLabel} path={preview.frameArtifactPath} />
+            <PreviewArtifactLine
+              title="预览片段"
+              status={preview.segmentStatusLabel}
+              metadata={preview.segmentMetadataLabel}
+              path={preview.segmentArtifactPath}
+            />
+          </div>
 
-      <RuntimeDiagnosticsPanel diagnostics={runtimeDiagnostics} pending={pending} onProbe={onProbeRuntimeCapabilities} />
+          <RuntimeDiagnosticsPanel diagnostics={runtimeDiagnostics} pending={pending} onProbe={onProbeRuntimeCapabilities} />
+        </>
+      ) : null}
 
       <div className="export-panel" aria-label="导出面板">
         <label className="export-path-control">
@@ -293,7 +301,7 @@ export function PreviewMonitor({
 function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
   const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
   const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
-  return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
+  return Math.max(1, Math.round((denominator * MICROSECONDS_PER_SECOND) / numerator));
 }
 
 function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {

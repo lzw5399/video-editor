@@ -155,6 +155,7 @@ declare global {
   interface Window {
     videoEditorAppConfig?: {
       workspaceFixture?: WorkspaceStartupFixture;
+      showDeveloperDiagnostics?: boolean;
     };
     videoEditorCore: VideoEditorCoreApi;
     videoEditorPlatform?: VideoEditorPlatformApi;
@@ -163,6 +164,7 @@ declare global {
 
 export function App(): React.ReactElement {
   const startupFixture = readWorkspaceStartupFixture();
+  const showDeveloperDiagnostics = window.videoEditorAppConfig?.showDeveloperDiagnostics === true;
   const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
     createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture))
   );
@@ -1321,6 +1323,7 @@ export function App(): React.ReactElement {
     <WorkspaceShell
       workspace={workspace}
       activeCategory={activeCategory}
+      showDeveloperDiagnostics={showDeveloperDiagnostics}
       bundlePath={bundlePath}
       materialPath={materialPath}
       playheadUs={playheadUs}

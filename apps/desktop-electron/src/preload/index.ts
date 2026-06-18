@@ -6,7 +6,8 @@ const allowedRendererUrl = readAllowedRendererUrl();
 
 if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.location.href, allowedRendererUrl)) {
   contextBridge.exposeInMainWorld("videoEditorAppConfig", {
-    workspaceFixture: readWorkspaceFixture()
+    workspaceFixture: readWorkspaceFixture(),
+    showDeveloperDiagnostics: process.argv.includes("--video-editor-developer-diagnostics=1")
   });
   contextBridge.exposeInMainWorld("videoEditorCore", {
     ping: () => ipcRenderer.invoke("core:ping"),

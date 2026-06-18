@@ -97,7 +97,9 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
 
   try {
     await expectVisibleWorkspaceRegions(page);
-    await expect(page.getByText("预览命令已接入")).toBeVisible();
+    await expect(page.getByText("预览命令已接入")).toHaveCount(0);
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
+    await expect(page.getByLabel("运行环境诊断")).toHaveCount(0);
     await expect(page.getByText("等待请求预览帧").first()).toBeVisible();
     await expect(page.getByText("未选择片段")).toBeVisible();
 
@@ -161,8 +163,8 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     }
 
     await expect(page.getByText("还没有素材")).toBeVisible();
-    await expect(page.getByLabel("草稿包路径")).toHaveValue("/tmp/video-editor-workspace.veproj");
-    await expect(page.getByLabel("素材路径")).toHaveValue("");
+    await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
+    await expect(page.getByLabel("素材路径")).toHaveCount(0);
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toHaveCount(0);
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toHaveCount(0);
   } finally {
@@ -172,7 +174,8 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
 
 test("test fixture opt-in loads demo workspace materials", async () => {
   const { app, page } = await launchSmokeAppWithEnv({
-    VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo"
+    VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
+    VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "1"
   });
 
   try {

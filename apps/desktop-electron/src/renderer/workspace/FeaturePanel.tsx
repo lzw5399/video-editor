@@ -19,6 +19,7 @@ import {
 type FeaturePanelProps = {
   category: WorkspaceCategory;
   workspace: WorkspaceState;
+  showDeveloperDiagnostics: boolean;
   bundlePath: string;
   materialPath: string;
   onBundlePathChange: (value: string) => void;
@@ -60,6 +61,7 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
 
 function MaterialPanel({
   workspace,
+  showDeveloperDiagnostics,
   bundlePath,
   materialPath,
   onBundlePathChange,
@@ -99,32 +101,34 @@ function MaterialPanel({
         </button>
       </div>
 
-      <div className="field-stack advanced-import-fields">
-        <label className="field-row">
-          <span>草稿包路径</span>
-          <input value={bundlePath} onChange={(event) => onBundlePathChange(event.currentTarget.value)} />
-        </label>
-        <label className="field-row">
-          <span>素材路径</span>
-          <input value={materialPath} onChange={(event) => onMaterialPathChange(event.currentTarget.value)} />
-        </label>
-        <div className="button-row">
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={onImportMaterialFromPath}
-            disabled={workspace.pendingCommand !== null || materialPath.trim().length === 0}
-          >
-            导入路径
-          </button>
-          <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
-            刷新
-          </button>
-          <button type="button" className="secondary-action" onClick={onListMissingMaterials}>
-            检查丢失
-          </button>
+      {showDeveloperDiagnostics ? (
+        <div className="field-stack advanced-import-fields">
+          <label className="field-row">
+            <span>草稿包路径</span>
+            <input value={bundlePath} onChange={(event) => onBundlePathChange(event.currentTarget.value)} />
+          </label>
+          <label className="field-row">
+            <span>素材路径</span>
+            <input value={materialPath} onChange={(event) => onMaterialPathChange(event.currentTarget.value)} />
+          </label>
+          <div className="button-row">
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={onImportMaterialFromPath}
+              disabled={workspace.pendingCommand !== null || materialPath.trim().length === 0}
+            >
+              导入路径
+            </button>
+            <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
+              刷新
+            </button>
+            <button type="button" className="secondary-action" onClick={onListMissingMaterials}>
+              检查丢失
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="media-tool-row">
         <input
@@ -149,13 +153,13 @@ function MaterialPanel({
         ))}
       </div>
 
-      {workspace.materialDiagnostics.length === 0 ? null : (
+      {showDeveloperDiagnostics && workspace.materialDiagnostics.length > 0 ? (
         <div className="diagnostic-list" aria-label="素材诊断">
           {workspace.materialDiagnostics.map((diagnostic) => (
             <p key={`${diagnostic.materialId}-${diagnostic.kind}`}>{formatMaterialDiagnostic(diagnostic)}</p>
           ))}
         </div>
-      )}
+      ) : null}
 
       <MaterialList materials={filteredMaterials} />
     </div>

@@ -15,6 +15,7 @@ import { Timeline } from "./Timeline";
 type WorkspaceShellProps = {
   workspace: WorkspaceState;
   activeCategory: WorkspaceCategory;
+  showDeveloperDiagnostics: boolean;
   bundlePath: string;
   materialPath: string;
   playheadUs: number;
@@ -62,6 +63,7 @@ type WorkspaceShellProps = {
 export function WorkspaceShell({
   workspace,
   activeCategory,
+  showDeveloperDiagnostics,
   bundlePath,
   materialPath,
   playheadUs,
@@ -135,6 +137,7 @@ export function WorkspaceShell({
         <FeaturePanel
           category={activeCategory}
           workspace={workspace}
+          showDeveloperDiagnostics={showDeveloperDiagnostics}
           bundlePath={bundlePath}
           materialPath={materialPath}
           onBundlePathChange={onBundlePathChange}
@@ -160,6 +163,7 @@ export function WorkspaceShell({
           exportState={workspace.export}
           runtimeDiagnostics={workspace.runtimeDiagnostics}
           selectedSegment={selectedSegment}
+          showDeveloperDiagnostics={showDeveloperDiagnostics}
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
           onPlayheadChange={onPlayheadChange}

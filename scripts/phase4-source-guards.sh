@@ -69,7 +69,7 @@ fail_if_matches \
 
 fail_if_matches \
   "renderer must not construct FFmpeg, render graph, preview/export, or media artifact behavior" \
-  '\b(?:ffmpeg|ffprobe|filter_complex|renderGraph|render_graph|ffmpegCompiler|ffmpeg_compiler|ffmpegScripts|exportScript|previewCache|previewFrame|thumbnail|waveform|proxy)\b|render graph' \
+  '\b(?:ffmpeg|ffprobe|filter_complex|renderGraph|render_graph|ffmpegCompiler|ffmpeg_compiler|ffmpegScripts|exportScript|previewCache|previewFrame|thumbnailPath|thumbnailCache|waveformPath|waveformCache|waveformData|proxyPath|proxyCache)\b|render graph' \
   --glob '!commandHelpers.ts' \
   "${renderer_files[@]}"
 

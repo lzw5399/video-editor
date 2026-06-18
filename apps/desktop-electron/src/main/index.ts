@@ -46,8 +46,12 @@ const packagedRendererFile = join(__dirname, "../renderer/index.html");
 const packagedRendererUrl = pathToFileURL(packagedRendererFile).toString();
 const allowedRendererUrl = isDevelopment && devServerUrl !== undefined ? devServerUrl : packagedRendererUrl;
 const allowedRendererUrlArgument = `--video-editor-allowed-renderer-url=${allowedRendererUrl}`;
+const showDeveloperDiagnostics =
+  process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
+  process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
 const rendererArguments = [
   allowedRendererUrlArgument,
+  ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
   ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : [])
 ];
 
