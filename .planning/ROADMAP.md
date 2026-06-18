@@ -515,11 +515,11 @@ Plans:
   4. Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
   5. Large-timeline tests cover graph diff cost, cache invalidation correctness, and preview/export consistency after edits.
 
-**Plans:** 8/8 planned
+**Plans:** 1/8 plans executed
 
 Plans:
 
-- [ ] 13-01 - Validation harness, source guards, package scripts, and large-timeline fixture helpers
+- [x] 13-01 - Validation harness, source guards, package scripts, and large-timeline fixture helpers
 - [ ] 13-02 - `CommandDelta` core types, range helpers, and simple command delta emission
 - [ ] 13-02B - Schema/TypeScript/generated contract export for delta types
 - [ ] 13-03 - Text/audio/visual/keyframe/canvas/material domain coverage and undo/redo invalidation

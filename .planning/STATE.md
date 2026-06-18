@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 1
+current_plan: 2
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-18T21:06:18.000Z"
-last_activity: "2026-06-19 - Completed Phase 12 Plan 06C: final media IO lifetime diagnostics and Phase 12 gate."
+last_updated: "2026-06-18T21:25:13.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 01: validation harness, source guards, and large-timeline fixtures."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 90
-  percent: 92
+  completed_plans: 91
+  percent: 93
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 0/8 complete; next plan 13-01
-Status: Phase 12 complete; Phase 13 ready to start.
-Last activity: 2026-06-19 - Completed Phase 12 Plan 06C: final media IO lifetime diagnostics and Phase 12 gate.
+Plan: 1/8 complete; next plan 13-02
+Status: Phase 13 in progress; validation harness, source guards, and large-timeline fixtures are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 01: validation harness, source guards, and large-timeline fixtures.
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 90
+- Total plans completed: 91
 - Average duration: 9 min
-- Total execution time: 842 min
+- Total execution time: 852 min
 
 **By Phase:**
 
@@ -60,10 +60,11 @@ Progress: [█████████░] 92%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
+| 13 | 1 | 10 min | 10 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 87 min
+- Last 5 plans: 82 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -147,6 +148,7 @@ Progress: [█████████░] 92%
 | Phase 12 P06 | 10 min | 1 tasks | 6 files |
 | Phase 12 P06B | 20 min | 1 tasks | 8 files |
 | Phase 12 P06C | 20 min | 2 tasks | 4 files |
+| Phase 13 P01 | 10 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -165,6 +167,9 @@ Progress: [█████████░] 92%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: Phase 13 starts harness-first. — `test:phase13`, `scripts/phase13-source-guards.sh`, and focused Rust test targets now exist before behavior-heavy CommandDelta, render graph, and cache invalidation plans proceed.
+- [Phase 13]: `testkit::large_timeline` builds deterministic Rust-only drafts with stable IDs and localized edit coordinates. — Large-timeline tests avoid FFmpeg, SQLite artifact storage, Electron, and scheduler dependencies while preserving integer microsecond ranges.
+- [Phase 13]: Source guards reject renderer-owned dirty range, graph diff, graph node ID, cache key, invalidation, and FFmpeg command decisions. — The renderer remains a command/transport UI surface while Rust owns semantic and derived-cache facts.
 - [Phase 12]: `FrameReleaseDiagnostic` records texture backend, runtime device ID, and compatibility for texture leak reports. — Session close can now report CPU, platform-opaque, and texture lease leaks with owner session/generation and texture device context before resources are released.
 - [Phase 12]: `pnpm run test:phase12` is the final focused Phase 12 gate. — The gate composes media runtime contracts, desktop fallback/native tests, realtime handoff, binding preview decode contracts, source guards, schema exports, and generated contract drift checks.
 - [Phase 12]: Native hardware proof is explicit and env-gated. — macOS passed with `VIDEO_EDITOR_TEST_NATIVE_MEDIA=1` on this host; Windows still requires the same command on a Windows host before Windows native hardware acceptance is claimed.
