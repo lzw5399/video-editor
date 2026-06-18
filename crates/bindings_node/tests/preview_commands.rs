@@ -10,6 +10,10 @@ use bindings_node::preview_export_service::{
     invalidate_preview_cache_command, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
 };
+use bindings_node::realtime_preview_service::{
+    RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
+    RealtimePreviewSessionBindingConfig,
+};
 use draft_model::{
     CommandErrorKind, Draft, InvalidatePreviewCacheCommandPayload, Material, MaterialId,
     MaterialKind, Microseconds, PreviewCacheEntryRef, PreviewOutputProfile,
@@ -19,6 +23,9 @@ use draft_model::{
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::PreviewServiceConfig;
+use realtime_preview_runtime::{
+    PreviewCancellationToken, PreviewRequestMode, RealtimePreviewFallbackReason,
+};
 use serde_json::{Value, json};
 
 #[cfg(unix)]
@@ -154,6 +161,46 @@ fn preview_commands_reject_mismatched_preview_command_payload_pair() {
         envelope["error"]["kind"],
         serde_json::to_value(CommandErrorKind::InvalidPayload).unwrap()
     );
+}
+
+#[test]
+fn preview_commands_realtime_binding_preserves_fallback_and_cancellation_telemetry() {
+    let mut registry = RealtimePreviewBindingRegistry::new();
+    let session = registry
+        .create_session(RealtimePreviewSessionBindingConfig {
+            session_label: "preview-main".to_owned(),
+            frame_rate_numerator: 30,
+            frame_rate_denominator: 1,
+            playback_rate_numerator: 1,
+            playback_rate_denominator: 1,
+        })
+        .expect("session should be created");
+
+    let result = registry
+        .request_frame(
+            &session.session_id,
+            RealtimePreviewFrameBindingRequest {
+                target_time_microseconds: 500_000,
+                playback_generation: session.playback_generation,
+                queue_latency_ms: 2,
+                render_duration_ms: 9,
+                mode: PreviewRequestMode::Seek,
+                fallback_reason: Some(RealtimePreviewFallbackReason::FfmpegArtifactGenerated),
+                cache_hit: true,
+                cancellation_token: Some(PreviewCancellationToken::new(9)),
+            },
+        )
+        .expect("frame request should preserve fallback diagnostics");
+
+    assert_eq!(
+        result.fallback,
+        Some(RealtimePreviewFallbackReason::FfmpegArtifactGenerated)
+    );
+    assert_eq!(result.cancellation_token, Some(PreviewCancellationToken::new(9)));
+    assert!(!result.diagnostics.is_empty());
+    assert_eq!(result.telemetry.fallback_count, 1);
+    assert_eq!(result.telemetry.cache_hit_count, 1);
+    assert!(serde_json::to_value(&result).unwrap().get("gpuDevice").is_none());
 }
 
 struct FakePreviewExecutor {
