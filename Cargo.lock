@@ -1636,6 +1636,7 @@ dependencies = [
  "media_runtime",
  "media_runtime_desktop",
  "preview_service",
+ "realtime_preview_runtime",
  "render_graph",
  "serde_json",
  "tempfile",

@@ -19,3 +19,6 @@ preview_service = { path = "../preview_service" }
 render_graph = { path = "../render_graph" }
 serde_json = "1.0.150"
 tempfile = "3.27.0"
+
+[dev-dependencies]
+realtime_preview_runtime = { path = "../realtime_preview_runtime" }
