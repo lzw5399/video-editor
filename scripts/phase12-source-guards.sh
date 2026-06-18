@@ -7,6 +7,11 @@ if ! command -v rg >/dev/null 2>&1; then
 fi
 
 RENDERER_DIR="apps/desktop-electron/src/renderer"
+PHASE12_RUNTIME_DIRS=(
+  "crates/media_runtime/src"
+  "crates/media_runtime_desktop/src"
+  "crates/realtime_preview_runtime/src/media_io_adapter.rs"
+)
 CONTRACT_DIRS=(
   "crates/draft_model/src"
   "schemas/command.schema.json"
@@ -74,6 +79,7 @@ RENDERER_PLATFORM_MEDIA_PATTERN='\b(?:MediaFoundation|MF_SOURCE_READER|DXVA|D3D1
 RENDERER_DECODE_SELECTION_PATTERN='\b(?:RuntimeSelectedDecodePath|SelectedDecodePath|RuntimeMediaIoFallbackReason|MediaIoFallbackReason|NativeHardwareTexture|NativeHardwareCpuCopy|NativeSoftwareCpuFrame|FfmpegCpuFrame|FfmpegPreviewArtifact|chooseMediaIoFallback|selectMediaIoFallback|routeMediaIoFallback|mediaIoFallbackLadder)\b'
 RENDERER_FFMPEG_PROCESS_PATTERN='\b(?:FfmpegExecutor|ffmpegArgs|ffprobeArgs|filter_complex|filterComplex|child_process|execFile|exec\s*\(|spawn\s*\()\b'
 RAW_HANDLE_PATTERN='\b(?:nativePointer|rawHandle|ArrayBuffer|Uint8Array)\b|(^|[^A-Za-z0-9_])(?:bytes|pixels|rgba|bgra)[[:space:]]*[?:=]'
+PHASE12_RUNTIME_SEMANTIC_PATTERN='\b(?:build_render_graph|RenderGraphPlan|compile_ffmpeg_job|FfmpegJob|engine_core|draft_commands|execute_timeline_edit|normalize_draft|resolve_render_range)\b'
 
 assert_pattern_rejects \
   "renderer-owned platform media API" \
@@ -91,9 +97,22 @@ assert_pattern_rejects \
   "raw decoded-frame or native-handle payload contract" \
   "$RAW_HANDLE_PATTERN" \
   "export type BadDecodedFrame = { pixels: Uint8Array };"
+assert_pattern_rejects \
+  "Phase 12 runtime semantic ownership violation" \
+  "$PHASE12_RUNTIME_SEMANTIC_PATTERN" \
+  "let graph = build_render_graph(&normalized, &range);"
 
 require_fixed "$PACKAGE_JSON" "\"test:phase12-source-guards\""
 require_fixed "$PACKAGE_JSON" "bash scripts/phase12-source-guards.sh"
+require_fixed "$PACKAGE_JSON" "\"test:phase12\""
+require_fixed "$PACKAGE_JSON" "cargo test -p media_runtime media_io_contracts -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p media_runtime frame_pool -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p media_runtime_desktop session_leaks -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p bindings_node runtime_capabilities -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p bindings_node preview_decode -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p draft_model schema_exports -- --nocapture"
+require_fixed "$PACKAGE_JSON" "pnpm run test:phase12-source-guards"
+require_fixed "$PACKAGE_JSON" "pnpm run test:contracts"
 
 fail_matches \
   "renderer must not import or construct native platform media APIs" \
@@ -116,5 +135,10 @@ fail_matches \
   "binding-facing handle-capable contracts must not expose native pointers or raw frame byte/pixel payloads" \
   "$RAW_HANDLE_PATTERN" \
   "${CONTRACT_DIRS[@]}"
+
+fail_matches \
+  "Phase 12 media IO runtimes must not own render graph, FFmpeg compiler, or timeline edit semantics" \
+  "$PHASE12_RUNTIME_SEMANTIC_PATTERN" \
+  "${PHASE12_RUNTIME_DIRS[@]}"
 
 git diff --exit-code schemas apps/desktop-electron/src/generated >/dev/null
