@@ -10,6 +10,11 @@ type ExecuteCommandCall = {
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
+  canvasConfig: {
+    width: number;
+    height: number;
+    frameRate: { numerator: number; denominator: number };
+  } | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -26,6 +31,7 @@ const WORKSPACE_CATEGORIES = ["媒体", "音频", "文字", "贴纸", "特效", 
 const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
+const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
 
 type VideoEditorCoreApi = {
   executeCommand: (command: unknown) => Promise<unknown>;
@@ -143,6 +149,11 @@ async function expectProfessionalWorkspaceAtViewport(
 async function savePhase5PreviewScreenshot(page: Page, filename: string): Promise<void> {
   mkdirSync(PHASE5_SCREENSHOT_DIR, { recursive: true });
   await page.screenshot({ path: join(PHASE5_SCREENSHOT_DIR, filename), fullPage: true });
+}
+
+async function savePhase7CanvasScreenshot(page: Page, filename: string): Promise<void> {
+  mkdirSync(PHASE7_SCREENSHOT_DIR, { recursive: true });
+  await page.screenshot({ path: join(PHASE7_SCREENSHOT_DIR, filename), fullPage: true });
 }
 
 async function expectStableBox(locator: Locator, label: string): Promise<RegionBox> {
@@ -501,6 +512,55 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
     const segmentCall = calls.find((call) => call.command === "requestPreviewSegment");
     expect(frameCall?.targetTime).toBe(1_200_000);
     expect(segmentCall?.targetTimerange).toEqual({ start: 1_200_000, duration: 2_000_000 });
+  } finally {
+    await app.close();
+  }
+});
+
+test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截图", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+    await expectNoLeftSecondaryMenu(page);
+
+    const inspector = page.getByLabel("草稿参数");
+    await expect(inspector).toContainText("草稿参数");
+    for (const label of ["画布比例", "画布尺寸", "帧率", "画布背景", "黑色", "纯色", "模糊填充", "图片背景", "未接入"]) {
+      await expect(inspector).toContainText(label);
+    }
+    await expect(inspector.getByRole("button", { name: "应用草稿参数" })).toBeDisabled();
+    await expect(page.getByText("坐标以画布中心为原点")).toBeVisible();
+    await expect(page.getByRole("button", { name: "图片背景未接入" })).toBeDisabled();
+
+    await inspector.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
+    await expect(page.getByLabel("画布宽度")).toHaveValue("1080");
+    await expect(page.getByLabel("画布高度")).toHaveValue("1920");
+    await inspector.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "模糊填充" }).click();
+    await expect(inspector).toContainText("模糊填充 · 降级");
+    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+
+    await expectCommandCall(app, "updateDraftCanvasConfig");
+    await expect(page.getByText("画布 9:16 · 1080 x 1920 · 30 fps")).toBeVisible();
+    await expect(page.getByText("模糊填充 · 降级").first()).toBeVisible();
+
+    const calls = await readExecuteCommandCalls(app);
+    const canvasCall = calls.find((call) => call.command === "updateDraftCanvasConfig");
+    expect(canvasCall?.canvasConfig).toMatchObject({
+      width: 1080,
+      height: 1920,
+      frameRate: { numerator: 30, denominator: 1 }
+    });
+
+    await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
+    await expectCompactScrollbarBaseline();
+    await expectNoLeftSecondaryMenu(page);
+    await savePhase7CanvasScreenshot(page, "canvas-1280x800.png");
+
+    await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
+    await expectCompactScrollbarBaseline();
+    await expectNoLeftSecondaryMenu(page);
+    await savePhase7CanvasScreenshot(page, "canvas-1120x720.png");
   } finally {
     await app.close();
   }
