@@ -181,7 +181,7 @@ export function App(): React.ReactElement {
   useEffect(() => {
     const artifactPath = workspace.preview.frameArtifactPath;
     const platform = window.videoEditorPlatform;
-    if (artifactPath === null || platform === undefined) {
+    if (artifactPath === null || workspace.preview.frameDisplayUrl !== null || platform === undefined) {
       return;
     }
 
@@ -230,7 +230,7 @@ export function App(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [workspace.preview.frameArtifactPath]);
+  }, [workspace.preview.frameArtifactPath, workspace.preview.frameDisplayUrl]);
 
   useEffect(() => {
     let cancelled = false;
