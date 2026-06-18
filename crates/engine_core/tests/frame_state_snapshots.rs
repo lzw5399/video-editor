@@ -3,8 +3,8 @@ use draft_model::{
     Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentBackgroundFilling,
     SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition, SourceTimerange,
     TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
-    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
-    TextStyle, TextWrapping, Track, TrackKind,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, Track, TrackKind,
 };
 use engine_core::{
     EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,

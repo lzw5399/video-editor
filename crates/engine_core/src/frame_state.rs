@@ -1,6 +1,7 @@
 use draft_model::{
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, SegmentVisual,
-    TargetTimerange, TrackId,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MaterialId,
+    MaterialKind, Microseconds, RationalFrameRate, SegmentId, SegmentVisual, TargetTimerange,
+    TextSegment, TrackId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +79,7 @@ pub fn resolve_frame_state(
                 continue;
             }
 
+            let segment_time = segment_relative_time_at(segment, at)?;
             let source_position = source_position_at(segment, at)?;
             match track.kind {
                 draft_model::TrackKind::Audio => audio_segments.push(FrameAudioSegment {
@@ -86,7 +88,7 @@ pub fn resolve_frame_state(
                     material_id: segment.material.material_id.clone(),
                     source_position,
                     target_timerange: segment.target_timerange.clone(),
-                    volume_level_millis: segment.volume_level_millis,
+                    volume_level_millis: resolve_segment_volume(segment, segment_time),
                 }),
                 draft_model::TrackKind::Video | draft_model::TrackKind::Sticker => {
                     if !segment.visual.visible {
@@ -101,7 +103,7 @@ pub fn resolve_frame_state(
                             stack_index,
                             source_position,
                             target_timerange: segment.target_timerange.clone(),
-                            visual: segment.visual.clone(),
+                            visual: resolve_segment_visual(segment, segment_time),
                         });
                     }
                 }
@@ -120,10 +122,11 @@ pub fn resolve_frame_state(
                                     .with_segment_id(segment.segment_id.clone())
                                     .with_material_id(segment.material.material_id.clone())
                                 })?;
+                            let resolved_text = resolve_segment_text(segment, text, segment_time);
                             text_overlays.push(resolve_text_overlay(
                                 &track.track_id,
                                 segment,
-                                text,
+                                &resolved_text,
                                 stack_index,
                                 source_position,
                                 text_layout,
@@ -262,22 +265,12 @@ fn source_position_at(
     segment: &NormalizedSegment,
     at: Microseconds,
 ) -> Result<Microseconds, EngineError> {
-    let offset = at
-        .get()
-        .checked_sub(segment.target_timerange.start.get())
-        .ok_or_else(|| {
-            EngineError::new(
-                EngineErrorKind::TimerangeOverflow,
-                "frame position precedes segment targetTimerange start",
-            )
-            .with_segment_id(segment.segment_id.clone())
-            .with_material_id(segment.material.material_id.clone())
-        })?;
+    let offset = segment_relative_time_at(segment, at)?;
     segment
         .source_timerange
         .start
         .get()
-        .checked_add(offset)
+        .checked_add(offset.get())
         .map(Microseconds::new)
         .ok_or_else(|| {
             EngineError::new(
@@ -287,6 +280,273 @@ fn source_position_at(
             .with_segment_id(segment.segment_id.clone())
             .with_material_id(segment.material.material_id.clone())
         })
+}
+
+fn segment_relative_time_at(
+    segment: &NormalizedSegment,
+    at: Microseconds,
+) -> Result<Microseconds, EngineError> {
+    at.get()
+        .checked_sub(segment.target_timerange.start.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            EngineError::new(
+                EngineErrorKind::TimerangeOverflow,
+                "frame position precedes segment targetTimerange start",
+            )
+            .with_segment_id(segment.segment_id.clone())
+            .with_material_id(segment.material.material_id.clone())
+        })
+}
+
+fn resolve_segment_visual(segment: &NormalizedSegment, at: Microseconds) -> SegmentVisual {
+    let mut visual = segment.visual.clone();
+    visual.transform.position.x = resolve_int_keyframe(
+        segment,
+        KeyframeProperty::VisualPositionX,
+        visual.transform.position.x,
+        at,
+    );
+    visual.transform.position.y = resolve_int_keyframe(
+        segment,
+        KeyframeProperty::VisualPositionY,
+        visual.transform.position.y,
+        at,
+    );
+    visual.transform.scale.x_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::VisualScaleX,
+        visual.transform.scale.x_millis,
+        at,
+    );
+    visual.transform.scale.y_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::VisualScaleY,
+        visual.transform.scale.y_millis,
+        at,
+    );
+    visual.transform.rotation.degrees = resolve_int_keyframe(
+        segment,
+        KeyframeProperty::VisualRotation,
+        visual.transform.rotation.degrees,
+        at,
+    );
+    visual.transform.opacity.value_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::VisualOpacity,
+        visual.transform.opacity.value_millis,
+        at,
+    );
+    visual
+}
+
+fn resolve_segment_text(
+    segment: &NormalizedSegment,
+    text: &TextSegment,
+    at: Microseconds,
+) -> TextSegment {
+    let mut resolved = text.clone();
+    resolved.style.font_size = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextFontSize,
+        resolved.style.font_size,
+        at,
+    );
+    resolved.style.color = resolve_color_keyframe(
+        segment,
+        KeyframeProperty::TextColor,
+        &resolved.style.color,
+        at,
+    );
+    resolved.style.line_height_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLineHeight,
+        resolved.style.line_height_millis,
+        at,
+    );
+    resolved.style.letter_spacing_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLetterSpacing,
+        resolved.style.letter_spacing_millis,
+        at,
+    );
+    resolved.layout_region.x_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLayoutX,
+        resolved.layout_region.x_millis,
+        at,
+    );
+    resolved.layout_region.y_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLayoutY,
+        resolved.layout_region.y_millis,
+        at,
+    );
+    resolved.layout_region.width_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLayoutWidth,
+        resolved.layout_region.width_millis,
+        at,
+    );
+    resolved.layout_region.height_millis = resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::TextLayoutHeight,
+        resolved.layout_region.height_millis,
+        at,
+    );
+    resolved
+}
+
+fn resolve_segment_volume(segment: &NormalizedSegment, at: Microseconds) -> u32 {
+    resolve_uint_keyframe(
+        segment,
+        KeyframeProperty::Volume,
+        segment.volume_level_millis,
+        at,
+    )
+}
+
+fn resolve_int_keyframe(
+    segment: &NormalizedSegment,
+    property: KeyframeProperty,
+    base: i32,
+    at: Microseconds,
+) -> i32 {
+    resolve_numeric_keyframe(
+        segment,
+        property,
+        i128::from(base),
+        at,
+        |keyframe| match &keyframe.value {
+            KeyframeValue::Int { value } => Some(i128::from(*value)),
+            _ => None,
+        },
+    )
+    .and_then(|value| i32::try_from(value).ok())
+    .unwrap_or(base)
+}
+
+fn resolve_uint_keyframe(
+    segment: &NormalizedSegment,
+    property: KeyframeProperty,
+    base: u32,
+    at: Microseconds,
+) -> u32 {
+    resolve_numeric_keyframe(
+        segment,
+        property,
+        i128::from(base),
+        at,
+        |keyframe| match &keyframe.value {
+            KeyframeValue::Uint { value } => Some(i128::from(*value)),
+            _ => None,
+        },
+    )
+    .and_then(|value| u32::try_from(value).ok())
+    .unwrap_or(base)
+}
+
+fn resolve_numeric_keyframe(
+    segment: &NormalizedSegment,
+    property: KeyframeProperty,
+    base: i128,
+    at: Microseconds,
+    value_of: impl Fn(&Keyframe) -> Option<i128>,
+) -> Option<i128> {
+    let mut keyframes = keyframes_for_property(segment, property);
+    if keyframes.is_empty() || at < keyframes[0].at {
+        return Some(base);
+    }
+
+    for index in 0..keyframes.len() {
+        let current = keyframes[index];
+        if at == current.at {
+            return value_of(current);
+        }
+        if at < current.at {
+            let previous = keyframes[index - 1];
+            let previous_value = value_of(previous)?;
+            if previous.interpolation == KeyframeInterpolation::Hold {
+                return Some(previous_value);
+            }
+            let current_value = value_of(current)?;
+            let progress = eased_progress_per_mille(previous, at, current.at)?;
+            return Some(interpolate_i128(previous_value, current_value, progress));
+        }
+    }
+
+    keyframes.pop().and_then(value_of)
+}
+
+fn resolve_color_keyframe(
+    segment: &NormalizedSegment,
+    property: KeyframeProperty,
+    base: &str,
+    at: Microseconds,
+) -> String {
+    let keyframes = keyframes_for_property(segment, property);
+    if keyframes.is_empty() || at < keyframes[0].at {
+        return base.to_owned();
+    }
+
+    let mut last_color = base.to_owned();
+    for keyframe in keyframes {
+        if at < keyframe.at {
+            return last_color;
+        }
+        if let KeyframeValue::Color { value } = &keyframe.value {
+            last_color = value.clone();
+        }
+        if at == keyframe.at {
+            return last_color;
+        }
+    }
+    last_color
+}
+
+fn keyframes_for_property(
+    segment: &NormalizedSegment,
+    property: KeyframeProperty,
+) -> Vec<&Keyframe> {
+    let mut keyframes = segment
+        .keyframes
+        .iter()
+        .filter(|keyframe| keyframe.property == property)
+        .collect::<Vec<_>>();
+    keyframes.sort_by(|first, second| first.at.cmp(&second.at));
+    keyframes
+}
+
+fn eased_progress_per_mille(start: &Keyframe, at: Microseconds, end: Microseconds) -> Option<u32> {
+    let span = end.get().checked_sub(start.at.get())?;
+    if span == 0 {
+        return Some(1_000);
+    }
+    let elapsed = at.get().checked_sub(start.at.get())?;
+    let raw = (u128::from(elapsed) * 1_000_u128 / u128::from(span)).min(1_000) as u32;
+    Some(match start.easing {
+        KeyframeEasing::None => raw,
+        KeyframeEasing::EaseIn => raw.saturating_mul(raw) / 1_000,
+        KeyframeEasing::EaseOut => {
+            let remaining = 1_000_u32.saturating_sub(raw);
+            1_000_u32.saturating_sub(remaining.saturating_mul(remaining) / 1_000)
+        }
+        KeyframeEasing::EaseInOut => {
+            if raw < 500 {
+                2_u32.saturating_mul(raw).saturating_mul(raw) / 1_000
+            } else {
+                let remaining = 1_000_u32.saturating_sub(raw);
+                1_000_u32.saturating_sub(
+                    2_u32.saturating_mul(remaining).saturating_mul(remaining) / 1_000,
+                )
+            }
+        }
+    })
+}
+
+fn interpolate_i128(start: i128, end: i128, progress_per_mille: u32) -> i128 {
+    let delta = end - start;
+    start + (delta * i128::from(progress_per_mille)) / 1_000
 }
 
 fn validate_frame_rate(frame_rate: &RationalFrameRate) -> Result<(), EngineError> {
