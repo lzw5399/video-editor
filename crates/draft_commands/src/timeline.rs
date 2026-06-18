@@ -11,6 +11,7 @@ use crate::{
     audio::{add_audio_segment, set_segment_volume, set_track_mute},
     canvas::update_draft_canvas_config,
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
+    keyframe::{remove_segment_keyframe, set_segment_keyframe},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment, import_subtitle_srt},
     visual::update_segment_visual,
@@ -247,6 +248,21 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.visual,
+        ),
+        CommandPayload::SetSegmentKeyframe(payload) => set_segment_keyframe(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.keyframe,
+        ),
+        CommandPayload::RemoveSegmentKeyframe(payload) => remove_segment_keyframe(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.property,
+            payload.at,
         ),
         other => Err(TimelineCommandError::new(
             TimelineCommandErrorKind::UnsupportedCommand {

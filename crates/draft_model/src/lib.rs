@@ -85,6 +85,8 @@ pub enum CommandName {
     SetTrackMute,
     UpdateDraftCanvasConfig,
     UpdateSegmentVisual,
+    SetSegmentKeyframe,
+    RemoveSegmentKeyframe,
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
@@ -120,6 +122,8 @@ pub enum CommandPayload {
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
+    SetSegmentKeyframe(SetSegmentKeyframeCommandPayload),
+    RemoveSegmentKeyframe(RemoveSegmentKeyframeCommandPayload),
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
@@ -155,6 +159,8 @@ impl CommandPayload {
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
             Self::UpdateDraftCanvasConfig(_) => CommandName::UpdateDraftCanvasConfig,
             Self::UpdateSegmentVisual(_) => CommandName::UpdateSegmentVisual,
+            Self::SetSegmentKeyframe(_) => CommandName::SetSegmentKeyframe,
+            Self::RemoveSegmentKeyframe(_) => CommandName::RemoveSegmentKeyframe,
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
@@ -444,6 +450,29 @@ pub struct UpdateSegmentVisualCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub visual: SegmentVisual,
+}
+
+/// Payload accepted by the Phase 10 segment keyframe set command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSegmentKeyframeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub keyframe: Keyframe,
+}
+
+/// Payload accepted by the Phase 10 segment keyframe remove command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoveSegmentKeyframeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub property: KeyframeProperty,
+    pub at: Microseconds,
 }
 
 /// Preview artifact profile requested through Rust-owned preview services.

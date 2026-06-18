@@ -9,6 +9,7 @@ pub mod audio;
 pub mod canvas;
 pub mod error;
 pub mod history;
+pub mod keyframe;
 pub mod selection;
 pub mod snapping;
 pub mod text;
