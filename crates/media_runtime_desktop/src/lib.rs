@@ -9,12 +9,17 @@ use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
 
-use media_runtime::{DEFAULT_PROCESS_TIMEOUT, FfmpegExecutor, run_process_with_timeout};
+use media_runtime::{run_process_with_timeout, FfmpegExecutor, DEFAULT_PROCESS_TIMEOUT};
 
 mod capabilities;
+mod ffmpeg_fallback;
 mod platform;
 
 pub use capabilities::probe_desktop_runtime_capabilities;
+pub use ffmpeg_fallback::{
+    FfmpegCpuFrameDecodeRequest, FfmpegCpuVideoDecoder, FfmpegDecodeDiagnostic,
+    FfmpegFallbackMediaReader, FfmpegFallbackMediaSession,
+};
 
 /// Desktop FFmpeg executor shell.
 #[derive(Debug, Clone, Copy)]

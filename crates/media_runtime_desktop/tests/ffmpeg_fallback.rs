@@ -7,10 +7,9 @@ use std::process::{ExitStatus, Output};
 use std::rc::Rc;
 
 use media_runtime::{
-    BinaryKind, DecodeErrorKind, DiscoveredBinary, DiscoverySource, FfmpegExecutor,
-    MAX_STDERR_SUMMARY_BYTES, MediaIoErrorKind, MediaOpenRequest, MediaReader,
-    RuntimeConfig, StreamId, VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat,
-    discover_runtime_config,
+    discover_runtime_config, BinaryKind, DecodeErrorKind, DiscoveredBinary, DiscoverySource,
+    FfmpegExecutor, MediaIoErrorKind, MediaOpenRequest, MediaReader, RuntimeConfig, StreamId,
+    VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat, MAX_STDERR_SUMMARY_BYTES,
 };
 use media_runtime_desktop::{DesktopFfmpegExecutor, FfmpegFallbackMediaReader};
 
@@ -74,12 +73,13 @@ fn ffmpeg_fallback_classifies_missing_ffmpeg_without_panicking() {
     let runtime = fake_runtime(temp.path.join("missing-ffmpeg"), temp.path.join("ffprobe"));
     let reader = FfmpegFallbackMediaReader::new(UnavailableExecutor, runtime);
 
-    let error = reader
-        .open(MediaOpenRequest {
-            material_uri: media,
-            requested_streams: vec![StreamId(0)],
-        })
-        .expect_err("missing FFmpeg should be classified");
+    let error = match reader.open(MediaOpenRequest {
+        material_uri: media,
+        requested_streams: vec![StreamId(0)],
+    }) {
+        Ok(_) => panic!("missing FFmpeg should be classified"),
+        Err(error) => error,
+    };
 
     assert_eq!(error.kind, MediaIoErrorKind::RuntimeUnavailable);
     assert!(error.message.contains("FfmpegUnavailable"));
