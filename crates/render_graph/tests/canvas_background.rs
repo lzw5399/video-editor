@@ -2,9 +2,9 @@ use draft_model::{
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft, DraftCanvasConfig,
     Microseconds, RationalFrameRate, TargetTimerange,
 };
-use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
-    RenderCanvasBackgroundMode, RenderGraph, RenderIntentSupport, build_render_graph,
+    build_render_graph, RenderCanvasBackgroundMode, RenderGraph, RenderIntentSupport,
 };
 
 #[test]
@@ -21,7 +21,11 @@ fn black_and_solid_canvas_backgrounds_are_supported_graph_data() {
     assert!(black.canvas.diagnostics.is_empty());
     assert_eq!(
         serde_json::to_value(&black.canvas).expect("black canvas should serialize compatibly"),
-        serde_json::json!({ "width": 720, "height": 720 })
+        serde_json::json!({
+            "nodeId": canvas_node(),
+            "width": 720,
+            "height": 720
+        })
     );
 
     let solid = canvas_snapshot(CanvasBackground::SolidColor {
@@ -30,6 +34,7 @@ fn black_and_solid_canvas_backgrounds_are_supported_graph_data() {
     assert_eq!(
         solid,
         serde_json::json!({
+            "nodeId": canvas_node(),
             "width": 720,
             "height": 720,
             "background": {
@@ -48,6 +53,7 @@ fn blur_and_image_canvas_backgrounds_surface_explicit_diagnostics() {
     assert_eq!(
         blur,
         serde_json::json!({
+            "nodeId": canvas_node(),
             "width": 720,
             "height": 720,
             "background": {
@@ -69,6 +75,7 @@ fn blur_and_image_canvas_backgrounds_surface_explicit_diagnostics() {
     assert_eq!(
         image,
         serde_json::json!({
+            "nodeId": canvas_node(),
             "width": 720,
             "height": 720,
             "background": {
@@ -89,6 +96,13 @@ fn blur_and_image_canvas_backgrounds_surface_explicit_diagnostics() {
 
 fn canvas_snapshot(background: CanvasBackground) -> serde_json::Value {
     serde_json::to_value(canvas_graph(background).canvas).expect("canvas should serialize")
+}
+
+fn canvas_node() -> serde_json::Value {
+    serde_json::json!({
+        "role": "canvas",
+        "draftId": "draft-canvas-background"
+    })
 }
 
 fn canvas_graph(background: CanvasBackground) -> RenderGraph {
