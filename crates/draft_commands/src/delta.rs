@@ -133,6 +133,29 @@ const HISTORY_CONSUMERS: &[DirtyDomain] = &[
     DirtyDomain::PreviewCache,
 ];
 
+const MATERIAL_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Material,
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Audio,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Waveform,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
+const MATERIAL_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::Audio,
+    DirtyDomain::Thumbnail,
+    DirtyDomain::Waveform,
+    DirtyDomain::Proxy,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
 pub fn current_range(target_timerange: TargetTimerange) -> DirtyRange {
     DirtyRange {
         target_timerange,
@@ -427,6 +450,56 @@ pub fn canvas_delta(draft: &Draft) -> CommandDelta {
         },
         reason: "draft canvas config changed".to_owned(),
     }
+}
+
+pub fn material_dependency_delta(
+    command: CommandName,
+    draft: &Draft,
+    changed_material_ids: &[MaterialId],
+    reason: &'static str,
+) -> CommandDelta {
+    let mut entities = Vec::new();
+    let mut ranges = Vec::new();
+    let mut material_ids = Vec::new();
+
+    for material_id in changed_material_ids {
+        push_entity(
+            &mut entities,
+            ChangedEntity::Material {
+                material_id: material_id.clone(),
+            },
+        );
+        push_material_id(&mut material_ids, material_id);
+    }
+
+    for (track_id, segment) in draft_segments(draft) {
+        if changed_material_ids
+            .iter()
+            .any(|material_id| material_id == &segment.material_id)
+        {
+            push_segment_entities(&mut entities, &mut material_ids, track_id, segment);
+            ranges.push(DirtyRange {
+                target_timerange: segment.target_timerange.clone(),
+                source: DirtyRangeSource::MaterialWide,
+            });
+        }
+    }
+
+    if ranges.is_empty() {
+        ranges.push(DirtyRange {
+            target_timerange: draft_duration_range(draft),
+            source: DirtyRangeSource::MaterialWide,
+        });
+    }
+
+    CommandDelta::targeted(
+        command,
+        entities,
+        MATERIAL_DOMAINS.to_vec(),
+        ranges,
+        InvalidationScope::targeted(material_ids, MATERIAL_CONSUMERS.to_vec()),
+        reason,
+    )
 }
 
 pub fn restored_draft_delta(

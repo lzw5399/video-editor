@@ -1,5 +1,6 @@
 use draft_commands::audio::{add_audio_segment, set_segment_volume, set_track_mute};
 use draft_commands::canvas::update_draft_canvas_config;
+use draft_commands::delta::material_dependency_delta;
 use draft_commands::history::{redo_timeline_edit, undo_timeline_edit};
 use draft_commands::keyframe::{remove_segment_keyframe, set_segment_keyframe};
 use draft_commands::text::{add_text_segment, edit_text_segment, import_subtitle_srt};
@@ -14,10 +15,10 @@ use draft_model::{
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, ChangedEntity, CommandDelta,
     CommandName, CommandState, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig,
     ImportSubtitleSrtCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind, Microseconds,
-    RationalFrameRate, Segment, SegmentOpacity, SegmentPosition, SegmentVisual, SegmentVolume,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialId, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SegmentOpacity, SegmentPosition, SegmentVisual,
+    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion,
+    TextSegment, TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
     TrimSegmentDirection,
 };
 
@@ -559,6 +560,89 @@ fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
     assert_eq!(
         updated.delta.changed_ranges,
         vec![dirty_range(0, 1_000_000, DirtyRangeSource::FullDraft)]
+    );
+}
+
+#[test]
+fn material_dependency_delta_maps_materials_to_ranges_or_material_wide_fallback() {
+    let mut draft = draft_with_tracks_and_materials();
+    draft.tracks[0].segments.push(segment(
+        "segment-a",
+        "video-material",
+        SourceTimerange::new(100_000, 400_000),
+        TargetTimerange::new(0, 400_000),
+    ));
+    draft.tracks[0].segments.push(segment(
+        "segment-b",
+        "video-material",
+        SourceTimerange::new(600_000, 250_000),
+        TargetTimerange::new(700_000, 250_000),
+    ));
+
+    let dependent = material_dependency_delta(
+        CommandName::ImportMaterial,
+        &draft,
+        &[MaterialId::new("video-material")],
+        "material dependency changed",
+    );
+
+    assert_delta_has(
+        &dependent,
+        CommandName::ImportMaterial,
+        &[DirtyDomain::Material, DirtyDomain::Waveform],
+        &[
+            dirty_range(0, 400_000, DirtyRangeSource::MaterialWide),
+            dirty_range(700_000, 250_000, DirtyRangeSource::MaterialWide),
+        ],
+        &[
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::Audio,
+            DirtyDomain::Thumbnail,
+            DirtyDomain::Waveform,
+            DirtyDomain::Proxy,
+            DirtyDomain::GraphSnapshot,
+            DirtyDomain::PreviewCache,
+        ],
+    );
+    assert_eq!(
+        dependent.invalidation.material_ids,
+        vec![MaterialId::new("video-material")]
+    );
+    assert!(
+        dependent
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-a".into(),
+            })
+    );
+    assert!(
+        dependent
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-b".into(),
+            })
+    );
+
+    let material_wide = material_dependency_delta(
+        CommandName::ImportMaterial,
+        &draft,
+        &[MaterialId::new("unused-material")],
+        "material dependency changed",
+    );
+
+    assert_delta_has(
+        &material_wide,
+        CommandName::ImportMaterial,
+        &[DirtyDomain::Material],
+        &[dirty_range(0, 950_000, DirtyRangeSource::MaterialWide)],
+        &[DirtyDomain::PreviewCache],
+    );
+    assert_eq!(
+        material_wide.invalidation.material_ids,
+        vec![MaterialId::new("unused-material")]
     );
 }
 
