@@ -1,7 +1,5 @@
 use draft_model::{Microseconds, RationalFrameRate};
-use realtime_preview_runtime::{
-    PlaybackGeneration, PlaybackRate, PlaybackState, TimelineClock,
-};
+use realtime_preview_runtime::{PlaybackGeneration, PlaybackRate, PlaybackState, TimelineClock};
 
 #[test]
 fn clock_generation_increments_for_all_invalidating_operations() {
@@ -57,8 +55,10 @@ fn clock_generation_serializes_integer_microseconds_and_rational_rates() {
     assert_eq!(json["playbackRate"]["denominator"], 2);
     assert!(json["position"].is_u64());
 
-    let round_tripped: TimelineClock =
-        serde_json::from_value(json).expect("clock deserializes");
+    let round_tripped: TimelineClock = serde_json::from_value(json).expect("clock deserializes");
     assert_eq!(round_tripped.position(), Microseconds::new(12_345_678));
-    assert_eq!(round_tripped.playback_rate(), PlaybackRate::new(3, 2).unwrap());
+    assert_eq!(
+        round_tripped.playback_rate(),
+        PlaybackRate::new(3, 2).unwrap()
+    );
 }
