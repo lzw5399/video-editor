@@ -929,20 +929,193 @@
         "color"
       ]
     },
+    "TextBox": {
+      "type": "object",
+      "properties": {
+        "heightMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "widthMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "widthMillis",
+        "heightMillis"
+      ]
+    },
+    "TextBubbleRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "externalRef": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "unsupported"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "TextEffectRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "externalRef": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "unsupported"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "TextFont": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "fontRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "family"
+      ]
+    },
+    "TextLayoutRegion": {
+      "type": "object",
+      "properties": {
+        "heightMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "widthMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "xMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "yMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "xMillis",
+        "yMillis",
+        "widthMillis",
+        "heightMillis"
+      ]
+    },
     "TextSegment": {
       "type": "object",
       "properties": {
+        "bubble": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextBubbleRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "content": {
           "type": "string"
         },
+        "effect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextEffectRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "layoutRegion": {
+          "$ref": "#/$defs/TextLayoutRegion",
+          "default": {
+            "heightMillis": 800,
+            "widthMillis": 800,
+            "xMillis": 100,
+            "yMillis": 100
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/TextSegmentSource",
+          "default": "text"
+        },
         "style": {
           "$ref": "#/$defs/TextStyle"
+        },
+        "textBox": {
+          "$ref": "#/$defs/TextBox",
+          "default": {
+            "heightMillis": 200,
+            "widthMillis": 800
+          }
+        },
+        "wrapping": {
+          "$ref": "#/$defs/TextWrapping",
+          "default": "auto"
         }
       },
       "additionalProperties": false,
       "required": [
         "content",
         "style"
+      ]
+    },
+    "TextSegmentSource": {
+      "type": "string",
+      "enum": [
+        "text",
+        "subtitle"
       ]
     },
     "TextShadow": {
@@ -1010,9 +1183,27 @@
         "color": {
           "type": "string"
         },
+        "font": {
+          "$ref": "#/$defs/TextFont",
+          "default": {
+            "family": "PingFang SC"
+          }
+        },
         "fontSize": {
           "type": "integer",
           "format": "uint32",
+          "minimum": 0
+        },
+        "letterSpacingMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
+          "minimum": 0
+        },
+        "lineHeightMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1200,
           "minimum": 0
         },
         "shadow": {
@@ -1041,6 +1232,13 @@
         "fontSize",
         "color",
         "alignment"
+      ]
+    },
+    "TextWrapping": {
+      "type": "string",
+      "enum": [
+        "none",
+        "auto"
       ]
     },
     "Track": {

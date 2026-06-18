@@ -277,6 +277,7 @@ impl Default for TextWrapping {
 pub enum TextBubbleRef {
     Unsupported {
         name: String,
+        #[serde(rename = "externalRef")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         external_ref: Option<String>,
@@ -288,6 +289,7 @@ pub enum TextBubbleRef {
 pub enum TextEffectRef {
     Unsupported {
         name: String,
+        #[serde(rename = "externalRef")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         external_ref: Option<String>,
