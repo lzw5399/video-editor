@@ -490,31 +490,52 @@ test("command-only text edit routes complete text inspector changes through exec
   try {
     await spyExecuteCommandCalls(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByLabel("默认文字").getByLabel("文字内容").fill("开场标题");
     await page.getByRole("button", { name: "添加文字" }).click();
     await expectCommandCall(app, "addTextSegment");
 
-    await page.getByRole("button", { name: /片段 默认文字/ }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expect(page.getByRole("button", { name: /片段 默认文字/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByLabel("预览文字")).toContainText("开场标题");
 
     for (const section of ["文本", "样式", "文本框", "布局", "花字 / 气泡"]) {
       await expect(page.getByRole("heading", { name: section, exact: true })).toBeVisible();
     }
     const textSection = page.getByRole("region", { name: "文本", exact: true });
+    const styleSection = page.getByRole("region", { name: "样式", exact: true });
     const textBoxSection = page.getByRole("region", { name: "文本框", exact: true });
     const layoutSection = page.getByRole("region", { name: "布局", exact: true });
     const inspector = page.getByLabel("属性检查器");
-    for (const section of [textSection, page.getByRole("region", { name: "样式", exact: true }), textBoxSection, layoutSection]) {
+    for (const section of [textSection, styleSection, textBoxSection, layoutSection]) {
       await expectLocatorInsideHorizontalContainer(inspector, section, "文字检查器区块");
     }
     await expect(textSection).toContainText("字幕来源");
+    await textSection.getByLabel("文字内容").fill("开场标题 已修改");
     await textSection.getByLabel("字体").fill("PingFang SC");
+    await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill("48");
+    await textSection.getByLabel("颜色").fill("#18c7ff");
+    await styleSection.getByLabel("描边").check();
+    await styleSection.getByLabel("描边颜色").fill("#111111");
+    await styleSection.getByRole("spinbutton", { name: "描边宽度", exact: true }).fill("5");
+    await styleSection.getByLabel("阴影").check();
+    await styleSection.getByLabel("阴影颜色").fill("#333333");
+    await styleSection.getByLabel("背景").check();
+    await styleSection.getByLabel("背景颜色").fill("#202020");
+    await styleSection.getByRole("button", { name: "右", exact: true }).click();
     await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).fill("1300");
     await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).fill("120");
     await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).fill("120");
+    await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).fill("180");
     await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).fill("760");
     await layoutSection.getByRole("button", { name: "应用文字" }).click();
     await expectCommandCall(app, "editTextSegment");
 
+    const previewText = page.getByLabel("预览文字");
+    await expect(previewText).toContainText("开场标题 已修改");
+    await expect(previewText).toHaveCSS("color", "rgb(24, 199, 255)");
+    await expect(previewText).toHaveCSS("font-size", "48px");
+    await expect(previewText).toHaveCSS("text-align", "right");
+    await expect(previewText).toHaveCSS("letter-spacing", "0.12px");
+    await expect(previewText).toHaveCSS("background-color", "rgb(32, 32, 32)");
     await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新请求预览帧");
     await expect(page.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
 
@@ -522,7 +543,8 @@ test("command-only text edit routes complete text inspector changes through exec
     const addTextCall = calls.find((call) => call.command === "addTextSegment");
     const editTextCall = calls.find((call) => call.command === "editTextSegment");
     expect(addTextCall?.textSource).toBe("text");
-    expect(editTextCall?.textContent).toBe("输入文字");
+    expect(addTextCall?.textContent).toBe("开场标题");
+    expect(editTextCall?.textContent).toBe("开场标题 已修改");
     expect(calls.filter((call) => call.command === "editTextSegment")).toHaveLength(1);
   } finally {
     await app.close();
