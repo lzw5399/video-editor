@@ -4,6 +4,7 @@ pub mod capabilities;
 pub mod clock;
 pub mod diagnostics;
 pub mod fallback;
+pub mod frame_provider;
 pub mod graph_prepare;
 pub mod parity;
 pub mod request;
@@ -19,6 +20,10 @@ pub use diagnostics::{
     RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewSupport,
 };
 pub use fallback::RealtimePreviewFallbackReason;
+pub use frame_provider::{
+    CpuVideoFrame, FrameColorInfo, FrameValidationError, FrameValidationErrorKind,
+    PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError, TextureHandleDescriptor,
+};
 pub use graph_prepare::{
     PreparedRealtimePreviewGraph, RealtimePreviewGraphInput, RealtimePreviewGraphPrepareError,
     RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,

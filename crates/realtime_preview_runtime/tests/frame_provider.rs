@@ -5,7 +5,7 @@ use realtime_preview_runtime::{
 };
 
 #[test]
-fn valid_cpu_rgba_frames_pass_stride_and_pixel_validation() {
+fn frame_provider_valid_cpu_rgba_frames_pass_stride_and_pixel_validation() {
     let frame = CpuVideoFrame::new(
         MaterialId::new("video-material"),
         Microseconds::new(250_000),
@@ -27,7 +27,7 @@ fn valid_cpu_rgba_frames_pass_stride_and_pixel_validation() {
 }
 
 #[test]
-fn invalid_dimensions_stride_and_pixel_lengths_return_typed_errors() {
+fn frame_provider_invalid_dimensions_stride_and_pixel_lengths_return_typed_errors() {
     let zero_width = CpuVideoFrame::new(
         MaterialId::new("video-material"),
         Microseconds::new(0),
@@ -69,7 +69,7 @@ fn invalid_dimensions_stride_and_pixel_lengths_return_typed_errors() {
 }
 
 #[test]
-fn material_and_generation_metadata_are_validated_and_preserved_for_static_images() {
+fn frame_provider_material_and_generation_metadata_are_validated_and_preserved_for_static_images() {
     let empty_material = CpuVideoFrame::new(
         MaterialId::new(""),
         Microseconds::new(0),
@@ -102,7 +102,7 @@ fn material_and_generation_metadata_are_validated_and_preserved_for_static_image
 }
 
 #[test]
-fn unavailable_frames_include_provider_diagnostics() {
+fn frame_provider_unavailable_frames_include_provider_diagnostics() {
     struct UnavailableProvider;
 
     impl PreviewFrameProvider for UnavailableProvider {
@@ -143,7 +143,7 @@ fn unavailable_frames_include_provider_diagnostics() {
 }
 
 #[test]
-fn texture_handle_descriptors_serialize_without_native_pointers() {
+fn frame_provider_texture_handle_descriptors_serialize_without_native_pointers() {
     let descriptor = TextureHandleDescriptor::new(
         42,
         PlaybackGeneration::new(9),
