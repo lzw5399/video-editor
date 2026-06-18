@@ -87,6 +87,18 @@
 
 ## v2 Requirements
 
+### Usable MVP Completion
+
+- **MVPEDIT-01**: Desktop import uses an Electron main/preload system file chooser for video, audio, and image files; renderer code receives selected paths through a narrow sandboxed API and then calls `importMaterial`.
+- **MVPEDIT-02**: Imported materials appear in the left material panel with Jianying-style Chinese labels for kind, duration, dimensions or audio stream metadata, and availability.
+- **MVPEDIT-03**: Timeline operations for add, select, move, trim, split, delete, undo, redo, and copy where implemented remain command-only and keep snapping/main-track magnet behavior in Rust.
+- **MVPEDIT-04**: Timeline playhead can be changed by ruler click, playhead drag, time input, and previous/next frame controls; each seek requests a preview frame for the current integer-microsecond time.
+- **MVPEDIT-05**: Preview monitor displays returned PNG frame pixels inside the draft canvas aspect ratio instead of only showing artifact paths, with a black/empty canvas fallback.
+- **MVPEDIT-06**: Video/image/text visual controls for position, scale, rotation, opacity, crop, fit/fill/stretch, and visibility route through `updateSegmentVisual` and are reflected in preview state.
+- **MVPEDIT-07**: Audio editing exposes segment volume and track mute through `setSegmentVolume` and `setTrackMute`, with waveform shown as a P0 placeholder and real waveform cache explicitly deferred.
+- **MVPEDIT-08**: Text and SRT subtitle workflows add/edit text segments through `addTextSegment`, `editTextSegment`, and Rust-owned `importSubtitleSrt`; renderer code never constructs subtitle cue segments.
+- **MVPEDIT-09**: Playwright Electron coverage verifies system import, add-to-timeline, preview image display, playhead request/update, transform, audio, text, and SRT flows at 1280x800 and 1120x720.
+
 ### Core Editing Expansion
 
 - **CANVAS-01**: Draft has a canonical project canvas/profile model for aspect ratio, canvas width/height, and rational frame rate.
@@ -109,18 +121,6 @@
 - **ANIM-01**: Draft stores typed animated values for position, scale, rotation, opacity, text parameters, sticker parameters, filter parameters, and volume where applicable.
 - **ANIM-02**: Keyframes include integer/rational time, typed values, interpolation policy, and easing curve.
 - **ANIM-03**: engine_core and render_graph evaluate animated values at frame time without UI-owned interpolation or naked floating-point persisted semantics.
-
-- **SPEED-01**: Segment speed/变速 is represented as typed semantics that define source/target time mapping after retiming.
-- **SPEED-02**: Reverse playback and curve speed have explicit deferred/degraded capability boundaries until implemented.
-- **SPEED-03**: Audio follow-speed behavior is explicit and renderable/degradable through the shared preview/export path.
-
-- **FX-01**: Draft distinguishes filter, adjustment, effect, and transition concepts with Jianying-aligned names and typed parameter schemas.
-- **FX-02**: First-party filter/adjustment/effect parameters report supported, degraded, or unsupported capabilities through render_graph/compiler outputs.
-- **FX-03**: Jianying/Kaipai private native effect IDs remain external compatibility references and are not treated as internal render semantics.
-
-- **TRN-01**: Transitions attach to the correct adjacent or overlapping segment relationship with type, duration, and typed parameters.
-- **TRN-02**: Timeline validation defines transition effects on overlap, trim, snapping, and main-track magnet behavior.
-- **TRN-03**: render_graph represents transition windows deterministically for preview/export, with unsupported proprietary transitions classified.
 
 ### Compatibility
 
@@ -218,15 +218,15 @@
 | ANIM-01 | Phase 10 | Complete |
 | ANIM-02 | Phase 10 | Complete |
 | ANIM-03 | Phase 10 | Complete |
-| SPEED-01 | Phase 11 | Planned |
-| SPEED-02 | Phase 11 | Planned |
-| SPEED-03 | Phase 11 | Planned |
-| FX-01 | Phase 12 | Planned |
-| FX-02 | Phase 12 | Planned |
-| FX-03 | Phase 12 | Planned |
-| TRN-01 | Phase 13 | Planned |
-| TRN-02 | Phase 13 | Planned |
-| TRN-03 | Phase 13 | Planned |
+| MVPEDIT-01 | Phase 10.1 | Planned |
+| MVPEDIT-02 | Phase 10.1 | Planned |
+| MVPEDIT-03 | Phase 10.1 | Planned |
+| MVPEDIT-04 | Phase 10.1 | Planned |
+| MVPEDIT-05 | Phase 10.1 | Planned |
+| MVPEDIT-06 | Phase 10.1 | Planned |
+| MVPEDIT-07 | Phase 10.1 | Planned |
+| MVPEDIT-08 | Phase 10.1 | Planned |
+| MVPEDIT-09 | Phase 10.1 | Planned |
 | COMP-01 | Post-MVP | Deferred |
 | COMP-02 | Post-MVP | Deferred |
 | COMP-03 | Post-MVP | Deferred |
@@ -239,8 +239,8 @@
 - v1 requirements: 52 total
 - Mapped to phases: 52
 - Unmapped: 0
-- v2/post-MVP requirements: 31 total, 25 planned in Phases 7-13 and 6 deferred
+- v2/post-MVP requirements: 31 total, 25 planned in Phases 7-10.1 and 6 deferred
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-18 after Phase 10 verification*
+*Last updated: 2026-06-18 after archiving future Phases 11-13 outside active GSD*

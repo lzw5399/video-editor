@@ -75,7 +75,7 @@ async function importMaterial(
   const nextCount = (await countCommand(app, "importMaterial")) + 1;
   await page.getByLabel("草稿包路径").fill(bundlePath);
   await page.getByLabel("素材路径").fill(materialPath);
-  await page.getByRole("button", { name: "导入素材" }).click();
+  await page.getByRole("button", { name: "导入路径" }).click();
   await waitForCommandCount(app, "importMaterial", nextCount);
   await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", { timeout: 20_000 });
 }

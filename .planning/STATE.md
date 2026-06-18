@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed Phase 10; ready for Phase 11 retiming and speed planning
-current_phase: 11
-current_phase_name: retiming-and-speed-system
-current_plan: 0
-total_plans_in_phase: 0
-stopped_at: Completed 10-05-PLAN.md
-last_updated: "2026-06-18T08:35:00.000Z"
-last_activity: 2026-06-18
+status: In Progress Phase 10.1 usable editor MVP completion
+current_phase: 10.1
+current_phase_name: usable-editor-mvp-completion
+current_plan: 3
+total_plans_in_phase: 7
+stopped_at: Completed 10.1-02-PLAN.md
+last_updated: "2026-06-18T09:45:00.000Z"
+last_activity: 2026-06-18 - Completed Phase 10.1 Plan 01 system file chooser import and Plan 02 preview PNG image display
 progress:
-  total_phases: 14
+  total_phases: 12
   completed_phases: 11
-  total_plans: 64
+  total_plans: 71
   completed_plans: 64
-  percent: 79
+  percent: 90
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 11 — retiming-and-speed-system
+**Current focus:** Phase 10.1 — usable-editor-mvp-completion
 
 ## Current Position
 
-Phase: 11
-Plan: 0/TBD
-Status: Completed Phase 10; ready for Phase 11 retiming and speed planning
-Last activity: 2026-06-18 - Completed Phase 10 Plan 05 source guards, public gates, and verification closure
+Phase: 10.1
+Plan: 2/7 complete; next 10.1-03
+Status: Phase 10.1 in progress; next slice is playhead seek/click/drag/frame-step preview requests
+Last activity: 2026-06-18 - Completed Phase 10.1 Plan 01 system file chooser import and Plan 02 preview PNG image display
 
-Progress: [████████░░] 79%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -130,8 +130,10 @@ Progress: [████████░░] 79%
 
 ### Roadmap Evolution
 
+- Phase 10.1 inserted after Phase 10 as urgent usability closure. The phase turns the existing command/render/UI foundations into a real Jianying-style MVP editor: system file import, visible preview PNG frame display, playhead seek/scrub, timeline editing usability, video/audio/text/subtitle controls, and Playwright gates.
+- Future Phases 11-13 were archived outside active GSD in `ROADMAP_PHASES_11_13_ARCHIVE.md` so Phase 10.1 can continue without routing into retiming/effects/transitions work.
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
-- Phases 7-13 added after Phase 6 for post-MVP core editing capability expansion: project canvas space, segment transform/compositing, complete text, typed keyframes, retiming, effect semantics, and transition semantics. These phases are core Rust/domain/render/UI capabilities, not adapter-only compatibility work.
+- Phases 7-10 remain active completed post-MVP core editing capability expansion work: project canvas space, segment transform/compositing, complete text, and typed keyframes. Former future Phases 11-13 are archived outside active GSD until restored.
 
 ### Decisions
 
@@ -148,7 +150,7 @@ Recent decisions affecting current work:
 - [Phase 10]: Desktop keyframe controls route every mutation through generated `setSegmentKeyframe` and `removeSegmentKeyframe` command envelopes. — The renderer reads accepted keyframes for UI state and timeline markers, but never mutates `segment.keyframes` or evaluates animation.
 - [Phase 10]: Timeline keyframe markers are display-only diamonds inside accepted segment blocks. — Marker display updates only after Rust-shaped command responses, preserving command-owned timing and selection semantics.
 - [Phase 10]: Source guards now enforce generated keyframe contracts, required Chinese keyframe/animation UI copy, command-only tests, and renderer ownership boundaries. — The renderer may format accepted keyframe values for display but cannot mutate keyframes, evaluate easing/interpolation, or own render graph/FFmpeg/cache semantics.
-- [Phase 10]: Phase 10 completion passed `test:phase10`, root `test`, `just test`, `just build`, and generated-contract drift checks. — Phase 11 can build retiming/变速 semantics on a verified animation model and must keep source/target time mapping Rust-owned.
+- [Phase 10]: Phase 10 completion passed `test:phase10`, root `test`, `just test`, `just build`, and generated-contract drift checks. — Retiming/变速 follow-up is archived outside active GSD until restored.
 - [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
 - [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.
@@ -238,7 +240,7 @@ Recent decisions affecting current work:
 - [Phase 07]: Plan 07 makes `pnpm run test:phase7`, root `pnpm run test`, and `/Users/zhiwen/.cargo/bin/just test` the public canvas verification gates. — Future canvas/transform work should keep Phase 07 source guards passing rather than bypassing them.
 - [Phase 07]: Phase 5's naked-float-time guard intentionally excludes `draft_model/src/canvas.rs` because Phase 7 canvas coordinate conversion uses `f64` for spatial coordinates, not persisted timeline time. — Future guards should distinguish semantic time invariants from spatial coordinate math.
 - [Phase 07]: Command fixtures that embed drafts must include canonical `canvasConfig`. — Negative command fixtures should fail for their intended command payload shape, not for obsolete draft schema fields.
-- [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
+- [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, and keyframes are active first-class core semantics through Phase 10, with usable editor MVP closure in Phase 10.1. — Retiming, effects, and transitions are archived outside active GSD until restored.
 - [Phase 09]: Text/subtitle classification is a TextSegmentSource enum on Segment.text, not a separate subtitle object or render path. — This keeps Phase 09 aligned with the existing Segment.text command/render path while allowing subtitle imports to share text semantics.
 - [Phase 09]: Proprietary text bubble and 花字 references are represented as unsupported external refs with camelCase externalRef fields. — This records adapter-facing capability references without making proprietary IDs internal render semantics.
 - [Phase 09]: Segment-level text box and layout region fields take precedence over profile safe-area defaults during frame-state resolution.
@@ -269,6 +271,7 @@ None yet.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-18 | 260618-o2v-archive-future-roadmap-phases-11-through | Archived future Phases 11-13 outside active GSD, removed their active roadmap/requirements entries, and preserved them in a root restoration file. |
 | 2026-06-18 | 260618-nr3-add-a-clear-one-command-desktop-startup- | Added `pnpm run desktop:open` and `just desktop-open` as clearer one-command desktop launch entries, and updated README quick-start instructions. |
 | 2026-06-18 | 260618-1jz-create-open-source-readme-with-english-a | Added English and Chinese open-source README files with language switching, layered architecture explanation, adapter flow, quick start, project boundaries, and license notes. |
 | 2026-06-18 | 260618-jwf-electron | Added `pnpm run desktop` and `just desktop` one-command launch entries for the Electron desktop editor. |

@@ -11,11 +11,16 @@ type VideoEditorCoreApi = {
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
   executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
 };
+type VideoEditorPlatformApi = {
+  openMaterialFiles: () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  pathToFileUrl: (path: string) => Promise<string>;
+};
 
 declare global {
   interface Window {
     videoEditorAppConfig?: unknown;
     videoEditorCore?: VideoEditorCoreApi;
+    videoEditorPlatform?: VideoEditorPlatformApi;
     ipcRenderer?: unknown;
   }
 }
@@ -98,19 +103,26 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));
     expect(exposedKeys).toContain("videoEditorCore");
+    expect(exposedKeys).toContain("videoEditorPlatform");
     expect(exposedKeys).not.toContain("ipcRenderer");
 
     const apiShape = await page.evaluate(() => ({
       ping: typeof window.videoEditorCore?.ping,
       version: typeof window.videoEditorCore?.version,
       executeCommand: typeof window.videoEditorCore?.executeCommand,
-      keys: Object.keys(window.videoEditorCore ?? {})
+      keys: Object.keys(window.videoEditorCore ?? {}),
+      platformKeys: Object.keys(window.videoEditorPlatform ?? {}),
+      openMaterialFiles: typeof window.videoEditorPlatform?.openMaterialFiles,
+      pathToFileUrl: typeof window.videoEditorPlatform?.pathToFileUrl
     }));
     expect(apiShape).toEqual({
       ping: "function",
       version: "function",
       executeCommand: "function",
-      keys: ["ping", "version", "executeCommand"]
+      keys: ["ping", "version", "executeCommand"],
+      platformKeys: ["openMaterialFiles", "pathToFileUrl"],
+      openMaterialFiles: "function",
+      pathToFileUrl: "function"
     });
 
     const ping = await page.evaluate(() => window.videoEditorCore?.ping());
@@ -149,7 +161,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     }
 
     await expect(page.getByText("还没有素材")).toBeVisible();
-    await expect(page.getByLabel("草稿包路径")).toHaveValue("");
+    await expect(page.getByLabel("草稿包路径")).toHaveValue("/tmp/video-editor-workspace.veproj");
     await expect(page.getByLabel("素材路径")).toHaveValue("");
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toHaveCount(0);
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toHaveCount(0);
@@ -221,12 +233,16 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
       configType: typeof window.videoEditorAppConfig,
       coreType: typeof window.videoEditorCore,
       coreKeys: Object.keys(window.videoEditorCore ?? {}),
+      platformType: typeof window.videoEditorPlatform,
+      platformKeys: Object.keys(window.videoEditorPlatform ?? {}),
       ipcRendererType: typeof window.ipcRenderer
     }));
     expect(exposure).toEqual({
       configType: "undefined",
       coreType: "undefined",
       coreKeys: [],
+      platformType: "undefined",
+      platformKeys: [],
       ipcRendererType: "undefined"
     });
   } finally {

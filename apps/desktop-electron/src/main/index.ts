@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -92,6 +92,37 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   }
   return executeCommand(command);
 });
+ipcMain.handle("platform:openMaterialFiles", async (event) => {
+  assertAllowedIpcSender(event);
+
+  const testPaths = readTestOpenMaterialFiles();
+  if (testPaths !== null) {
+    return {
+      canceled: testPaths.length === 0,
+      filePaths: testPaths
+    };
+  }
+
+  const result = await dialog.showOpenDialog({
+    title: "导入素材",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "媒体文件", extensions: ["mp4", "mov", "m4v", "webm", "mp3", "wav", "m4a", "aac", "png", "jpg", "jpeg", "webp"] },
+      { name: "视频", extensions: ["mp4", "mov", "m4v", "webm"] },
+      { name: "音频", extensions: ["mp3", "wav", "m4a", "aac"] },
+      { name: "图片", extensions: ["png", "jpg", "jpeg", "webp"] }
+    ]
+  });
+
+  return {
+    canceled: result.canceled,
+    filePaths: result.filePaths
+  };
+});
+ipcMain.handle("platform:pathToFileUrl", (event, filePath: string) => {
+  assertAllowedIpcSender(event);
+  return pathToFileURL(filePath).toString();
+});
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
@@ -174,6 +205,24 @@ function isAllowedRendererUrl(targetUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+function readTestOpenMaterialFiles(): string[] | null {
+  const raw = process.env.VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES;
+  if (raw === undefined) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) {
+      return parsed;
+    }
+  } catch {
+    return raw.length === 0 ? [] : raw.split(":").filter((value) => value.length > 0);
+  }
+
+  return [];
 }
 
 function recordTestExecuteCommand(command: CommandEnvelope): void {

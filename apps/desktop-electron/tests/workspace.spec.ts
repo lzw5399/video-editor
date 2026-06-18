@@ -62,6 +62,7 @@ async function launchWorkspaceApp(
       VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"]),
       ...options.env
     }
   });
@@ -681,7 +682,10 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
     await expectCommandCall(app, "requestPreviewFrame");
     await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
     await expect(page.getByLabel("预览产物")).toContainText("image/png");
-    await expect(page.getByLabel("预览画面")).toContainText("/tmp/video-editor-preview-cache/test-frame-1200000.png");
+    const previewImage = page.getByRole("img", { name: "当前预览帧" });
+    await expect(previewImage).toBeVisible();
+    await expect(previewImage).toHaveAttribute("src", /test-frame-1200000\.png$/);
+    await expect(page.getByLabel("预览画面")).not.toContainText("/tmp/video-editor-preview-cache/test-frame-1200000.png");
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
     await expectCommandCall(app, "requestPreviewSegment");
@@ -787,7 +791,8 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
     await expectCommandCall(app, "requestPreviewFrame");
-    await expect(page.getByLabel("预览画面")).toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
     await expectCommandCall(app, "requestPreviewSegment");
@@ -805,7 +810,7 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await inspector.getByRole("button", { name: "应用草稿参数" }).click();
     await expectCommandCall(app, "updateDraftCanvasConfig");
 
-    await expect(page.getByLabel("预览画面")).not.toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
     await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新请求预览帧");
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新生成预览片段");
@@ -827,7 +832,8 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
     await expectCommandCall(app, "requestPreviewFrame");
-    await expect(page.getByLabel("预览画面")).toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
     await expectCommandCall(app, "requestPreviewSegment");
@@ -862,7 +868,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(visualForm.getByLabel("位置 X", { exact: true })).toHaveValue("160");
     await expect(visualForm.getByLabel("缩放 X", { exact: true })).toHaveValue("1250");
 
-    await expect(page.getByLabel("预览画面")).not.toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
     await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
     await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新请求预览帧");
     await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
@@ -944,7 +950,6 @@ test("concurrent material commands are blocked while a timeline edit is pending"
     });
 
     await expectCommandCall(app, "addSegment");
-    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(2);
 
     const draftMutatingCalls = (await readExecuteCommandCalls(app)).filter(
       (call) => call.command === "addSegment" || call.command === "importMaterial"

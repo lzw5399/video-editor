@@ -101,10 +101,13 @@ export function PreviewMonitor({
         aria-label="预览画面"
         style={canvasStyle}
       >
-        <div className="preview-placeholder">
-          <span>{preview.frameArtifactPath === null ? "等待请求预览帧" : "预览帧已返回"}</span>
-          {preview.frameArtifactPath === null ? null : <code>{preview.frameArtifactPath}</code>}
-        </div>
+        {preview.frameDisplayUrl === null ? (
+          <div className="preview-placeholder">
+            <span>{preview.frameArtifactPath === null ? "等待请求预览帧" : "预览帧已返回，正在准备显示"}</span>
+          </div>
+        ) : (
+          <img className="preview-frame-image" src={preview.frameDisplayUrl} alt="当前预览帧" aria-label="当前预览帧" />
+        )}
       </div>
 
       <div className="preview-transport" aria-label="预览控制">

@@ -24,6 +24,7 @@ type FeaturePanelProps = {
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
   onImportMaterial: () => void;
+  onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
   onAddTextSegment: (text: TextSegment, durationUs: number) => void;
@@ -64,6 +65,7 @@ function MaterialPanel({
   onBundlePathChange,
   onMaterialPathChange,
   onImportMaterial,
+  onImportMaterialFromPath,
   onRefreshMaterials,
   onListMissingMaterials
 }: FeaturePanelProps): React.ReactElement {
@@ -97,7 +99,7 @@ function MaterialPanel({
         </button>
       </div>
 
-      <div className="field-stack">
+      <div className="field-stack advanced-import-fields">
         <label className="field-row">
           <span>草稿包路径</span>
           <input value={bundlePath} onChange={(event) => onBundlePathChange(event.currentTarget.value)} />
@@ -107,6 +109,14 @@ function MaterialPanel({
           <input value={materialPath} onChange={(event) => onMaterialPathChange(event.currentTarget.value)} />
         </label>
         <div className="button-row">
+          <button
+            type="button"
+            className="secondary-action"
+            onClick={onImportMaterialFromPath}
+            disabled={workspace.pendingCommand !== null || materialPath.trim().length === 0}
+          >
+            导入路径
+          </button>
           <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
             刷新
           </button>

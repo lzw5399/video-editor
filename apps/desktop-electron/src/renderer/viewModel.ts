@@ -84,6 +84,7 @@ export type WorkspaceState = {
 
 export type PreviewDisplayState = {
   frameArtifactPath: string | null;
+  frameDisplayUrl: string | null;
   frameStatusLabel: string;
   frameMetadataLabel: string;
   segmentArtifactPath: string | null;
@@ -442,6 +443,7 @@ export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft):
     materialDiagnostics: [],
     preview: {
       frameArtifactPath: null,
+      frameDisplayUrl: null,
       frameStatusLabel: "等待请求预览帧",
       frameMetadataLabel: "帧预览尚未生成",
       segmentArtifactPath: null,

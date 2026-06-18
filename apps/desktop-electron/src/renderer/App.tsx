@@ -92,6 +92,14 @@ type VideoEditorCoreApi = {
   version: () => Promise<CommandResultEnvelope<VersionResponse>>;
   executeCommand: <T = unknown>(command: CommandEnvelope) => Promise<CommandResultEnvelope<T>>;
 };
+type OpenMaterialFilesResponse = {
+  canceled: boolean;
+  filePaths: string[];
+};
+type VideoEditorPlatformApi = {
+  openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
+  pathToFileUrl: (path: string) => Promise<string>;
+};
 
 type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
 type DraftCommandResultApplier<T> = (
@@ -149,6 +157,7 @@ declare global {
       workspaceFixture?: WorkspaceStartupFixture;
     };
     videoEditorCore: VideoEditorCoreApi;
+    videoEditorPlatform?: VideoEditorPlatformApi;
   }
 }
 
@@ -158,7 +167,7 @@ export function App(): React.ReactElement {
     createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture))
   );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
-  const [bundlePath, setBundlePath] = useState(startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "");
+  const [bundlePath, setBundlePath] = useState(startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj");
   const [materialPath, setMaterialPath] = useState(startupFixture === "demo" ? "/tmp/demo-material.mp4" : "");
   const [playheadUs, setPlayheadUs] = useState(0);
   const workspaceRef = useRef(workspace);
@@ -168,6 +177,60 @@ export function App(): React.ReactElement {
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    const artifactPath = workspace.preview.frameArtifactPath;
+    const platform = window.videoEditorPlatform;
+    if (artifactPath === null || platform === undefined) {
+      return;
+    }
+
+    let cancelled = false;
+    void platform.pathToFileUrl(artifactPath).then(
+      (displayUrl) => {
+        if (cancelled) {
+          return;
+        }
+        setWorkspace((current) => {
+          if (current.preview.frameArtifactPath !== artifactPath) {
+            return current;
+          }
+          const next = {
+            ...current,
+            preview: {
+              ...current.preview,
+              frameDisplayUrl: displayUrl
+            }
+          };
+          workspaceRef.current = next;
+          return next;
+        });
+      },
+      () => {
+        if (cancelled) {
+          return;
+        }
+        setWorkspace((current) => {
+          if (current.preview.frameArtifactPath !== artifactPath) {
+            return current;
+          }
+          const next = {
+            ...current,
+            preview: {
+              ...current.preview,
+              frameDisplayUrl: null
+            }
+          };
+          workspaceRef.current = next;
+          return next;
+        });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.preview.frameArtifactPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,6 +443,8 @@ export function App(): React.ReactElement {
         preview: {
           ...current.preview,
           error: null,
+          frameArtifactPath: pendingCommand === "请求预览帧" ? null : current.preview.frameArtifactPath,
+          frameDisplayUrl: pendingCommand === "请求预览帧" ? null : current.preview.frameDisplayUrl,
           frameStatusLabel: pendingCommand === "请求预览帧" ? "正在请求预览帧" : current.preview.frameStatusLabel,
           segmentStatusLabel: pendingCommand === "生成预览片段" ? "正在生成预览片段" : current.preview.segmentStatusLabel
         }
@@ -406,6 +471,8 @@ export function App(): React.ReactElement {
           preview: {
             ...current.preview,
             error: message,
+            frameArtifactPath: pendingCommand === "请求预览帧" ? null : current.preview.frameArtifactPath,
+            frameDisplayUrl: pendingCommand === "请求预览帧" ? null : current.preview.frameDisplayUrl,
             frameStatusLabel: pendingCommand === "请求预览帧" ? "预览帧失败" : current.preview.frameStatusLabel,
             segmentStatusLabel: pendingCommand === "生成预览片段" ? "预览片段失败" : current.preview.segmentStatusLabel
           }
@@ -540,13 +607,13 @@ export function App(): React.ReactElement {
     }
   }
 
-  async function handleImportMaterial(): Promise<void> {
+  async function importMaterialPath(path: string): Promise<void> {
     await executeDraftCommand<ImportMaterialResponse>(
       (current) =>
         buildImportMaterialCommand({
           draft: current.draft,
           bundlePath,
-          materialPath
+          materialPath: path
         }),
       "导入素材",
       (current, result) => {
@@ -568,6 +635,61 @@ export function App(): React.ReactElement {
         };
       }
     );
+  }
+
+  async function handleImportMaterial(): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回")
+      }));
+      return;
+    }
+
+    const platform = window.videoEditorPlatform;
+    if (platform === undefined) {
+      const fallbackPath = materialPath.trim();
+      if (fallbackPath.length === 0) {
+        setWorkspace((current) => ({
+          ...current,
+          commandError: commandErrorMessage("当前环境没有系统文件选择器，请填写素材路径后重试")
+        }));
+        return;
+      }
+      await importMaterialPath(fallbackPath);
+      return;
+    }
+
+    try {
+      const result = await platform.openMaterialFiles();
+      if (result.canceled || result.filePaths.length === 0) {
+        return;
+      }
+
+      setMaterialPath(result.filePaths[0] ?? "");
+      for (const selectedPath of result.filePaths) {
+        await importMaterialPath(selectedPath);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWorkspace((current) => ({
+        ...current,
+        pendingCommand: null,
+        commandError: commandErrorMessage(message)
+      }));
+    }
+  }
+
+  async function handleImportMaterialFromPath(): Promise<void> {
+    const fallbackPath = materialPath.trim();
+    if (fallbackPath.length === 0) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先填写素材路径")
+      }));
+      return;
+    }
+    await importMaterialPath(fallbackPath);
   }
 
   async function handleRefreshMaterials(): Promise<void> {
@@ -975,6 +1097,8 @@ export function App(): React.ReactElement {
           commandError: message,
           preview: {
             ...current.preview,
+            frameArtifactPath: null,
+            frameDisplayUrl: null,
             frameStatusLabel: "预览暂不可用",
             error: message
           }
@@ -1004,6 +1128,8 @@ export function App(): React.ReactElement {
             commandError: message,
             preview: {
               ...current.preview,
+              frameArtifactPath: null,
+              frameDisplayUrl: null,
               frameStatusLabel: "预览帧失败",
               error: message,
               lastRequestedPlayhead: targetTime
@@ -1018,6 +1144,7 @@ export function App(): React.ReactElement {
           preview: {
             ...current.preview,
             frameArtifactPath: result.data.path,
+            frameDisplayUrl: null,
             frameStatusLabel: `预览帧${formatPreviewStatus(result.data.status)}`,
             frameMetadataLabel: `${result.data.mimeType} · ${formatMicroseconds(result.data.targetTimerange.start)}`,
             error: null,
@@ -1196,6 +1323,7 @@ export function App(): React.ReactElement {
       onRefreshExportStatus={handleRefreshExportStatus}
       onCancelExport={handleCancelExport}
       onImportMaterial={handleImportMaterial}
+      onImportMaterialFromPath={handleImportMaterialFromPath}
       onRefreshMaterials={handleRefreshMaterials}
       onListMissingMaterials={handleListMissingMaterials}
       onAddTextSegment={handleAddTextSegment}
@@ -1260,6 +1388,7 @@ function clearDerivedPreviewState(
   return {
     ...preview,
     frameArtifactPath: null,
+    frameDisplayUrl: null,
     frameStatusLabel: copy.frameStatusLabel,
     frameMetadataLabel: copy.frameMetadataLabel,
     segmentArtifactPath: null,

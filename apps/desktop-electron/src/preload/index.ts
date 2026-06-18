@@ -13,6 +13,10 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     version: () => ipcRenderer.invoke("core:version"),
     executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command)
   });
+  contextBridge.exposeInMainWorld("videoEditorPlatform", {
+    openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles"),
+    pathToFileUrl: (path: string) => ipcRenderer.invoke("platform:pathToFileUrl", path)
+  });
 }
 
 function readAllowedRendererUrl(): string | undefined {

@@ -25,6 +25,7 @@ type WorkspaceShellProps = {
   onRefreshExportStatus: () => void;
   onCancelExport: () => void;
   onImportMaterial: () => void;
+  onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
   onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
@@ -71,6 +72,7 @@ export function WorkspaceShell({
   onRefreshExportStatus,
   onCancelExport,
   onImportMaterial,
+  onImportMaterialFromPath,
   onRefreshMaterials,
   onListMissingMaterials,
   onAddTextSegment,
@@ -130,6 +132,7 @@ export function WorkspaceShell({
           onBundlePathChange={onBundlePathChange}
           onMaterialPathChange={onMaterialPathChange}
           onImportMaterial={onImportMaterial}
+          onImportMaterialFromPath={onImportMaterialFromPath}
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}
           onAddTextSegment={onAddTextSegment}

@@ -4,7 +4,7 @@
 
 This milestone builds a desktop-first Jianying-style video editor MVP on a Rust-owned core. The path is intentionally layered: establish the engineering and test harness, define the draft/material model, implement command-driven timeline editing, build the desktop workspace, connect preview/export through one render path, then harden and package the app.
 
-After the MVP is packaged, the roadmap continues with core editor capability phases needed for Jianying/Kaipai-like template fidelity: project canvas space, segment transform, visual compositing, complete text, typed keyframes, retiming, effects, and transitions. These are core semantics, not adapter-only compatibility shims.
+After the MVP is packaged, the roadmap continues with core editor capability phases needed for Jianying/Kaipai-like template fidelity: project canvas space, segment transform, visual compositing, complete text, typed keyframes, and urgent usable-editor MVP completion. Retiming, effects, and transitions are parked outside active GSD planning until they are restored.
 
 ## Phases
 
@@ -26,9 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Segment Transform And Visual Compositing** - Jianying-style 画面/基础/变换 controls, layer ordering, visibility, fit/fill/stretch, and composition semantics (completed 2026-06-18)
 - [x] **Phase 9: Complete Text And Subtitle System** - Font references, text box layout, line height, letter spacing, safe areas, and multi-segment subtitle/text parity (completed 2026-06-18)
 - [x] **Phase 10: Typed Keyframe And Animation System** - Typed animated values, easing curves, and frame-time animation evaluation for transform/text/sticker/effect parameters (completed 2026-06-18)
-- [ ] **Phase 11: Retiming And Speed System** - Segment speed, source/target time mapping, audio follow-speed policy, and deferred reverse/curve-speed boundaries
-- [ ] **Phase 12: Filter Adjustment And Effect Semantics** - First-party filter/adjustment/effect parameter schemas plus supported/degraded/unsupported capability boundaries
-- [ ] **Phase 13: Transition Semantics And Timeline Integration** - Transition attachment, duration/type/params, overlap/trim/snapping effects, and render graph representation
+- [ ] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (INSERTED)
 
 ## Phase Details
 
@@ -409,55 +407,40 @@ Plans:
 
 - [x] 10-05-PLAN.md - Add Phase 10 source guards, public gates, and verification closure
 
-### Phase 11: Retiming And Speed System
+### Phase 10.1: Usable Editor MVP Completion (INSERTED)
 
-**Goal**: Add segment speed semantics so templates can express rhythm changes beyond trim/split/move.
-**Depends on**: Phase 10
-**Requirements**: SPEED-01, SPEED-02, SPEED-03
+**Goal:** Close the gap between a demo workspace and a truly usable Jianying/CapCut-style MVP editor by making import, timeline seeking, real preview display, and basic video/audio/text/subtitle editing work end-to-end through Rust commands.
+**Requirements**: MVPEDIT-01, MVPEDIT-02, MVPEDIT-03, MVPEDIT-04, MVPEDIT-05, MVPEDIT-06, MVPEDIT-07, MVPEDIT-08, MVPEDIT-09
+**Depends on:** Phase 10
 **UI hint**: yes
 **Success Criteria** (what must be TRUE):
 
-  1. Segment speed changes are represented as typed semantics that define source/target time mapping after retiming.
-  2. Audio follow-speed policy is explicit and renderable/degradable through the shared preview/export path.
-  3. Reverse playback and curve speed have explicit deferred or degraded capability boundaries until implemented.
-  4. Timeline trim/split/move validation understands retimed segments and remains atomic/undoable.
+  1. User can click `导入素材`, choose video/audio/image files through a system file chooser, and see imported materials with kind, duration, dimensions or audio metadata, and availability in the left material panel.
+  2. User can add compatible video/image/audio/text/subtitle materials to timeline tracks, select segments, move, trim, split, delete, undo, redo, and keep snapping/main-track magnet behavior Rust-owned.
+  3. User can click/drag the timeline playhead, use time input, and step previous/next frame; playhead changes request and display the current real preview frame.
+  4. The preview monitor displays the returned PNG frame inside the canvas at the draft canvas aspect ratio, with black/empty canvas fallback when no visible segment exists.
+  5. Video/image/text transform, text styling, audio volume, and track mute edits are exposed in the UI and route through `updateSegmentVisual`, `editTextSegment`, `setSegmentVolume`, and `setTrackMute`.
+  6. SRT import is Rust-parsed through `importSubtitleSrt`, creates editable text/subtitle segments, and renderer code never constructs subtitle cue segments directly.
+  7. Selection state is visible in the timeline, preview selection overlay, and inspector; no-selection state shows draft parameters.
+  8. Electron renderer remains sandboxed: no direct Node/Electron access, no direct draft mutation, no FFmpeg/ffprobe/render graph/export script construction.
+  9. Playwright Electron tests cover real file import, add-to-timeline, preview image display, playhead request/update, transform, audio, text, and SRT flows at 1280x800 and 1120x720.
 
-**Plans**: TBD
+**Plans:** 2/7 plans complete
 
-### Phase 12: Filter Adjustment And Effect Semantics
+Plans:
 
-**Goal**: Define first-party effect semantics and capability reporting instead of stuffing native effects into opaque strings.
-**Depends on**: Phase 11
-**Requirements**: FX-01, FX-02, FX-03
-**UI hint**: yes
-**Success Criteria** (what must be TRUE):
-
-  1. Draft schema distinguishes filter, adjustment, effect, and transition concepts using Jianying-aligned names and typed parameter schemas.
-  2. render_graph and ffmpeg_compiler classify each effect parameter as supported, degraded, or unsupported.
-  3. Jianying/Kaipai private native effect IDs are external references with compatibility reports, not internal render semantics.
-  4. Desktop UI can show deferred/unsupported states in Chinese without pretending the effect is fully renderable.
-
-**Plans**: TBD
-
-### Phase 13: Transition Semantics And Timeline Integration
-
-**Goal**: Implement transition semantics as first-class timeline relationships with deterministic edit and render behavior.
-**Depends on**: Phase 12
-**Requirements**: TRN-01, TRN-02, TRN-03
-**UI hint**: yes
-**Success Criteria** (what must be TRUE):
-
-  1. Transitions attach to the correct adjacent or overlapping segment relationship with type, duration, and parameters.
-  2. Timeline validation defines how transitions affect overlap, trim, snapping, and main-track magnet behavior.
-  3. render_graph represents transition windows deterministically for preview/export compilation.
-  4. Unsupported proprietary transitions degrade or report incompatibility rather than becoming opaque supported strings.
-
-**Plans**: TBD
+- [x] 10.1-01-PLAN.md - Add system file chooser import and material list usability gates
+- [x] 10.1-02-PLAN.md - Display real preview PNG frames and empty canvas fallback
+- [ ] 10.1-03-PLAN.md - Make timeline playhead seek/click/drag/frame-step request preview frames
+- [ ] 10.1-04-PLAN.md - Complete video/image transform editing and preview selection overlay
+- [ ] 10.1-05-PLAN.md - Complete text add/edit/style display and preview parity
+- [ ] 10.1-06-PLAN.md - Complete audio segment volume, track mute, and waveform placeholder usability
+- [ ] 10.1-07-PLAN.md - Complete SRT import/edit flow, source guards, and phase gates
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 11 -> 12 -> 13
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -472,6 +455,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 8. Segment Transform And Visual Compositing | 5/5 | Complete | 2026-06-18 |
 | 9. Complete Text And Subtitle System | 5/5 | Complete | 2026-06-18 |
 | 10. Typed Keyframe And Animation System | 5/5 | Complete    | 2026-06-18 |
-| 11. Retiming And Speed System | 0/TBD | Not started | - |
-| 12. Filter Adjustment And Effect Semantics | 0/TBD | Not started | - |
-| 13. Transition Semantics And Timeline Integration | 0/TBD | Not started | - |
+| 10.1 Usable Editor MVP Completion | 2/7 | In progress | - |
