@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 12
 current_phase_name: media-io-hardware-decode-and-frame-texture-interop
-current_plan: 6
+current_plan: 7
 total_plans_in_phase: 9
 stopped_at: None
-last_updated: "2026-06-18T20:12:49.000Z"
-last_activity: "2026-06-18 - Completed Phase 12 Plan 04: macOS AVFoundation/CoreVideo native frame leases and texture fallback diagnostics."
+last_updated: "2026-06-18T20:29:27.000Z"
+last_activity: "2026-06-18 - Completed Phase 12 Plan 05: Windows Media Foundation native frame leases and D3D texture fallback diagnostics."
 progress:
   total_phases: 20
   completed_phases: 13
   total_plans: 98
-  completed_plans: 86
-  percent: 88
+  completed_plans: 87
+  percent: 89
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 12
-Plan: 5/9 complete; next plan 12-05
-Status: Phase 12 in progress; macOS native CoreVideo frame leases and texture fallback diagnostics are complete.
-Last activity: 2026-06-18 - Completed Phase 12 Plan 04: macOS AVFoundation/CoreVideo native frame leases and texture fallback diagnostics.
+Plan: 6/9 complete; next plan 12-06
+Status: Phase 12 in progress; Windows native Media Foundation frame leases and honest D3D texture fallback diagnostics are complete, with Windows host verification still required.
+Last activity: 2026-06-18 - Completed Phase 12 Plan 05: Windows Media Foundation native frame leases and D3D texture fallback diagnostics.
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 86
+- Total plans completed: 87
 - Average duration: 9 min
-- Total execution time: 770 min
+- Total execution time: 792 min
 
 **By Phase:**
 
@@ -59,11 +59,11 @@ Progress: [█████████░] 88%
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
-| 12 | 5 | 109 min | 22 min |
+| 12 | 6 | 131 min | 22 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 109 min
+- Last 5 plans: 91 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -143,6 +143,7 @@ Progress: [█████████░] 88%
 | Phase 12 P02B | 29 min | 2 tasks | 10 files |
 | Phase 12 P03 | 19 min | 2 tasks | 9 files |
 | Phase 12 P04 | 15 min | 2 tasks | 8 files |
+| Phase 12 P05 | 22 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -161,6 +162,8 @@ Progress: [█████████░] 88%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12]: Windows native decode returns Media Foundation-backed platform-opaque frame leases until real D3D texture/device compatibility is proven. — The session retains native sample lifetime in Rust and exposes only metadata/release IDs, not native pointers or full-frame JS byte buffers.
+- [Phase 12]: Windows D3D texture interop is selected only when texture availability and preview/native device identity are both proven. — The runtime records `TextureInteropUnavailable` or `DeviceMismatch` diagnostics instead of advertising false-ready D3D texture handles.
 - [Phase 12]: macOS native H.264 decode returns CoreVideo-backed platform-opaque frame leases. — The session retains native sample-buffer lifetime in Rust and exposes only metadata/release IDs, not native pointers or full-frame JS byte buffers.
 - [Phase 12]: macOS Metal texture interop remains explicitly gated until `CVMetalTextureCache` and preview/native Metal device identity are proven. — The runtime records `TextureInteropUnavailable` or `DeviceMismatch` diagnostics instead of synthesizing a false-ready texture handle.
 - [Phase 12]: FFmpeg CPU frame fallback is a `media_runtime_desktop` MediaReader/MediaSession/VideoDecoder implementation. — The desktop fallback returns FramePool CPU leases and metadata instead of renderer-owned pixels or preview/export-owned artifacts.
