@@ -228,11 +228,12 @@ pub fn resolve_text_overlay(
     canvas_height: u32,
 ) -> Result<ResolvedTextOverlay, EngineError> {
     profile.validate(canvas_width, canvas_height)?;
-    let line_count = text.content.lines().count().max(1) as u32;
     let text_box = resolve_text_box(text, canvas_width, canvas_height);
     let layout_region = resolve_layout_region(text, canvas_width, canvas_height);
     let safe_area = safe_area_from_region(&layout_region, canvas_width, canvas_height)?;
     let layout_width = text_box.width.min(layout_region.width);
+    let resolved_content = resolve_wrapped_content(text, layout_width);
+    let line_count = resolved_content.lines().count().max(1) as u32;
     let layout_height = ceil_div_u32(
         text.style
             .font_size
@@ -247,7 +248,7 @@ pub fn resolve_text_overlay(
     Ok(ResolvedTextOverlay {
         track_id: track_id.clone(),
         segment_id: segment.segment_id.clone(),
-        content: text.content.clone(),
+        content: resolved_content,
         stack_index,
         source_position,
         target_timerange: segment.target_timerange.clone(),
@@ -330,6 +331,65 @@ fn safe_area_from_region(
 
 fn millis_of(value: u32, millis: u32) -> u32 {
     ((u64::from(value) * u64::from(millis)) / 1_000) as u32
+}
+
+fn resolve_wrapped_content(text: &TextSegment, max_line_width: u32) -> String {
+    if text.wrapping != TextWrapping::Auto || max_line_width == 0 {
+        return text.content.clone();
+    }
+
+    text.content
+        .split('\n')
+        .map(|line| {
+            wrap_line(
+                line,
+                text.style.font_size,
+                text.style.letter_spacing_millis,
+                max_line_width,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn wrap_line(
+    line: &str,
+    font_size: u32,
+    letter_spacing_millis: u32,
+    max_line_width: u32,
+) -> String {
+    if line.is_empty() {
+        return String::new();
+    }
+
+    let mut wrapped = String::new();
+    let mut current_width = 0u32;
+    for character in line.chars() {
+        let advance = character_advance_width(character, font_size, letter_spacing_millis);
+        if current_width > 0 && current_width.saturating_add(advance) > max_line_width {
+            wrapped.push('\n');
+            current_width = 0;
+        }
+        wrapped.push(character);
+        current_width = current_width.saturating_add(advance);
+    }
+    wrapped
+}
+
+fn character_advance_width(character: char, font_size: u32, letter_spacing_millis: u32) -> u32 {
+    let base_width_millis: u32 = if character.is_ascii_whitespace() {
+        500
+    } else if character.is_ascii() {
+        600
+    } else {
+        1_000
+    };
+
+    ceil_div_u32(
+        font_size.saturating_mul(base_width_millis.saturating_add(letter_spacing_millis)),
+        1_000,
+    )
+    .max(1)
 }
 
 fn text_diagnostics(text: &TextSegment) -> Vec<ResolvedTextDiagnostic> {

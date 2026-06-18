@@ -415,6 +415,30 @@ fn text_layout_resolves_multiple_text_and_subtitle_overlays_in_stack_order() {
 }
 
 #[test]
+fn text_layout_resolves_auto_wrapping_into_deterministic_lines() {
+    let mut draft = frame_state_draft();
+    let text = draft.tracks[3].segments[0]
+        .text
+        .as_mut()
+        .expect("frame state fixture should include text");
+    text.content = "abcdefghij".to_owned();
+    text.text_box.width_millis = 100;
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let frame = resolve_frame_state(&normalized, Microseconds::new(600_000))
+        .expect("frame state should resolve");
+    let overlay = frame
+        .text_overlays
+        .first()
+        .expect("active text overlay should be resolved");
+
+    assert_eq!(overlay.content, "abcde\nfghij");
+    assert_eq!(overlay.layout_width, 192);
+    assert_eq!(overlay.layout_height, 144);
+}
+
+#[test]
 fn text_layout_missing_profile_returns_classified_engine_error() {
     let profile = EngineProfile {
         text_layout: None,

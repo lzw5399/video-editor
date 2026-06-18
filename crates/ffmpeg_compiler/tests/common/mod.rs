@@ -120,6 +120,28 @@ pub fn export_plan_with_unsupported_text_resources() -> RenderGraphPlan {
     .expect("export plan should validate")
 }
 
+pub fn export_plan_with_wrapped_text() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let text = draft.tracks[3].segments[0]
+        .text
+        .as_mut()
+        .expect("compiler draft should include text");
+    text.content = "abcdefghij".to_owned();
+    text.text_box.width_millis = 100;
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
 fn sample_graph() -> render_graph::RenderGraph {
     sample_graph_from_draft(&compiler_draft())
 }

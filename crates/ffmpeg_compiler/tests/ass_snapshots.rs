@@ -29,3 +29,21 @@ fn ass_text_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() 
     assert!(ass.contents.contains("; LayoutRegion: 192,756 1536x216"));
     assert!(ass.contents.contains("; LineHeightMillis: 1500"));
 }
+
+#[test]
+fn ass_text_sidecar_uses_engine_resolved_auto_wrapping() {
+    let job = compile_ffmpeg_job(
+        &common::export_plan_with_wrapped_text(),
+        &common::compile_context(),
+    )
+    .expect("export with wrapped text should compile");
+    let ass = job
+        .sidecars
+        .iter()
+        .find(|sidecar| sidecar.kind == FfmpegSidecarKind::AssSubtitle)
+        .expect("text overlay should generate an ASS sidecar");
+
+    assert!(ass.contents.contains(
+        "Dialogue: 2,0:00:00.000,0:00:00.100,Default,text-a,192,192,108,,abcde\\\\Nfghij"
+    ));
+}
