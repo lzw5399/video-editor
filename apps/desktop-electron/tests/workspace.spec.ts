@@ -618,13 +618,35 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     await expectCommandCall(app, "importSubtitleSrt");
 
     await expect(page.getByRole("button", { name: /片段 导入字幕/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /片段 导入字幕/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByLabel("预览文字")).toContainText("测试字幕");
+    await expect(page.getByLabel("片段信息")).toContainText("字幕 / 文字");
+    const textSection = page.locator('section[aria-label="文本"]');
+    await expect(textSection.getByRole("heading", { name: "文本", exact: true })).toBeVisible();
+    await expect(textSection).toContainText("SRT 字幕");
     await expect(page.getByLabel("预览产物")).toContainText("文字已更新，请重新生成预览片段");
+
+    await textSection.locator("textarea").fill("第一句字幕 已校对");
+    await page.getByRole("button", { name: "应用文字" }).click();
+    await expectCommandCall(app, "editTextSegment");
+    await expect(page.getByLabel("预览文字")).toContainText("第一句字幕 已校对");
+
+    const visualForm = page.getByLabel("画面基础表单");
+    await visualForm.getByLabel("位置 X", { exact: true }).fill("80");
+    await visualForm.getByRole("button", { name: "应用画面" }).click();
+    await expectCommandCall(app, "updateSegmentVisual");
 
     const calls = await readExecuteCommandCalls(app);
     const importCalls = calls.filter((call) => call.command === "importSubtitleSrt");
     expect(importCalls).toHaveLength(1);
     expect(importCalls[0].srtContent).toContain("第二句字幕");
+    expect(importCalls[0].srtContent).toContain("00:00:02,000 --> 00:00:04,000");
+    expect(importCalls[0].textSource).toBeNull();
     expect(calls.filter((call) => call.command === "addTextSegment")).toHaveLength(0);
+    const editTextCall = calls.find((call) => call.command === "editTextSegment");
+    expect(editTextCall?.textSource).toBe("subtitle");
+    expect(editTextCall?.textContent).toBe("第一句字幕 已校对");
+    expect(calls.find((call) => call.command === "updateSegmentVisual")?.visual?.transform.position.x).toBe(80);
   } finally {
     await app.close();
   }
