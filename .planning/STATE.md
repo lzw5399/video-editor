@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 10
 current_phase_name: typed-keyframe-and-animation-system
-current_plan: 4
+current_plan: 5
 total_plans_in_phase: 5
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-06-18T07:49:29.873Z"
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-06-18T08:09:54.000Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 14
   completed_phases: 9
   total_plans: 64
-  completed_plans: 62
-  percent: 97
+  completed_plans: 63
+  percent: 98
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 10 (typed-keyframe-and-animation-system) — EXECUTING
-Plan: 4 of 5
-Status: Completed 10-03 keyframe engine/render graph/compiler diagnostics; ready for 10-04 desktop keyframe UI
-Last activity: 2026-06-18 - Completed Phase 10 Plan 03 keyframe frame-time evaluation and render diagnostics
+Plan: 5 of 5
+Status: Completed 10-04 desktop keyframe inspector/timeline UI; ready for 10-05 Phase 10 gates and verification closure
+Last activity: 2026-06-18 - Completed Phase 10 Plan 04 command-owned desktop keyframe controls and accepted timeline markers
 
-Progress: [██████████] 97%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 62
+- Total plans completed: 63
 - Average duration: 8 min
-- Total execution time: 528 min
+- Total execution time: 548 min
 
 **By Phase:**
 
@@ -122,6 +122,7 @@ Progress: [██████████] 97%
 | Phase 10 P01 | 16 min | 2 tasks | 9 files |
 | Phase 10 P02 | 14 min | 2 tasks | 10 files |
 | Phase 10 P03 | 17 min | 2 tasks | 6 files |
+| Phase 10 P04 | 20 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,8 @@ Recent decisions affecting current work:
 - [Phase 10]: The Node binding remains a thin allow-list and dispatcher for keyframe commands. — Binding tests verify Rust-shaped timeline responses and malformed/mismatched envelope rejection without moving edit semantics into bindings.
 - [Phase 10]: engine_core resolves keyframes at frame time using segment-relative microseconds and keeps static visual/text/volume fields as the base before the first keyframe. — Preview/export callers receive deterministic resolved state without renderer-owned interpolation.
 - [Phase 10]: render_graph preserves typed keyframe intent plus sampled animation states, while ffmpeg_compiler reports degraded/unsupported animation diagnostics instead of inventing partial continuous FFmpeg expressions. — This keeps animation semantics compiler-neutral until full animated render support is intentionally added.
+- [Phase 10]: Desktop keyframe controls route every mutation through generated `setSegmentKeyframe` and `removeSegmentKeyframe` command envelopes. — The renderer reads accepted keyframes for UI state and timeline markers, but never mutates `segment.keyframes` or evaluates animation.
+- [Phase 10]: Timeline keyframe markers are display-only diamonds inside accepted segment blocks. — Marker display updates only after Rust-shaped command responses, preserving command-owned timing and selection semantics.
 - [Phase 08]: Segment-level visual semantics live under one `Segment.visual` container. — This keeps transform, fit mode, background filling, blend mode, mask, and visibility aligned for later Phase 10 typed animation without introducing parallel fields.
 - [Phase 08]: Default segment `fitMode` is `stretch`. — This preserves the existing MVP full-canvas render behavior until Phase 08 compiler support intentionally changes placement math.
 - [Phase 08]: `updateSegmentVisual` is a Rust-owned command with validation and undo/redo. — Renderer code may build generated command envelopes, but persisted visual semantics must come back from Rust command responses.

@@ -403,7 +403,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 10-04-PLAN.md - Expose Jianying-style keyframe controls in desktop inspector and timeline
+- [x] 10-04-PLAN.md - Expose Jianying-style keyframe controls in desktop inspector and timeline
 
 **Wave 5** *(blocked on Wave 4 UI completion)*
 
