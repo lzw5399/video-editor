@@ -1,8 +1,8 @@
 //! Segment-level visual command semantics.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, SegmentId, SegmentVisual, TimelineCommandResponse,
-    TimelineSelection,
+    CommandDelta, CommandEvent, CommandName, CommandState, Draft, SegmentId, SegmentVisual,
+    TimelineCommandResponse, TimelineSelection,
 };
 
 use crate::{
@@ -43,5 +43,9 @@ pub fn update_segment_visual(
         command_state,
         selection: selection.clone(),
         events,
+        delta: CommandDelta::none(
+            CommandName::UpdateSegmentVisual,
+            "delta pending command-specific builder",
+        ),
     })
 }

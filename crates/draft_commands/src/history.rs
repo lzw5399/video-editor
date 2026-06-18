@@ -1,8 +1,8 @@
 //! Session-only bounded undo/redo history for timeline commands.
 
 use draft_model::{
-    CommandEvent, CommandHistorySnapshot, CommandState, Draft, TimelineCommandResponse,
-    TimelineSelection,
+    CommandDelta, CommandEvent, CommandHistorySnapshot, CommandName, CommandState, DirtyDomain,
+    Draft, TimelineCommandResponse, TimelineSelection,
 };
 
 use crate::{TimelineCommandError, TimelineCommandErrorKind};
@@ -74,6 +74,18 @@ pub fn undo_timeline_edit(
         command_state: next_state,
         selection: snapshot.selection,
         events: vec![event("undoCommitted")],
+        delta: CommandDelta::full_draft(
+            CommandName::UndoTimelineEdit,
+            Vec::new(),
+            vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+            vec![
+                DirtyDomain::Preview,
+                DirtyDomain::ExportPrep,
+                DirtyDomain::GraphSnapshot,
+                DirtyDomain::PreviewCache,
+            ],
+            "undo restored a prior semantic snapshot",
+        ),
     })
 }
 
@@ -108,6 +120,18 @@ pub fn redo_timeline_edit(
         command_state: next_state,
         selection: snapshot.selection,
         events,
+        delta: CommandDelta::full_draft(
+            CommandName::RedoTimelineEdit,
+            Vec::new(),
+            vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+            vec![
+                DirtyDomain::Preview,
+                DirtyDomain::ExportPrep,
+                DirtyDomain::GraphSnapshot,
+                DirtyDomain::PreviewCache,
+            ],
+            "redo restored a later semantic snapshot",
+        ),
     })
 }
 

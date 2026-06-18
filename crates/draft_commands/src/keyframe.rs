@@ -1,8 +1,8 @@
 //! Segment-level keyframe command semantics.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, Keyframe, KeyframeProperty, Microseconds, SegmentId,
-    TimelineCommandResponse, TimelineSelection,
+    CommandDelta, CommandEvent, CommandName, CommandState, Draft, Keyframe, KeyframeProperty,
+    Microseconds, SegmentId, TimelineCommandResponse, TimelineSelection,
 };
 
 use crate::{
@@ -41,6 +41,7 @@ pub fn set_segment_keyframe(
         selection,
         "setSegmentKeyframe",
         "segmentKeyframeSet",
+        CommandName::SetSegmentKeyframe,
     ))
 }
 
@@ -84,6 +85,7 @@ pub fn remove_segment_keyframe(
         selection,
         "removeSegmentKeyframe",
         "segmentKeyframeRemoved",
+        CommandName::RemoveSegmentKeyframe,
     ))
 }
 
@@ -102,6 +104,7 @@ fn response(
     previous_selection: &TimelineSelection,
     history_label: &str,
     event_kind: &str,
+    command: CommandName,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -125,5 +128,6 @@ fn response(
         command_state,
         selection: previous_selection.clone(),
         events,
+        delta: CommandDelta::none(command, "delta pending command-specific builder"),
     }
 }

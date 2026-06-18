@@ -264,6 +264,181 @@
         }
       ]
     },
+    "ChangedEntity": {
+      "description": "Semantic draft entities changed by a command.",
+      "oneOf": [
+        {
+          "properties": {
+            "draftId": {
+              "$ref": "#/$defs/DraftId"
+            },
+            "kind": {
+              "const": "draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "draftId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "material",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            }
+          },
+          "required": [
+            "kind",
+            "materialId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "track",
+              "type": "string"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "trackId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "segment",
+              "type": "string"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "trackId",
+            "segmentId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "kind": {
+              "const": "keyframe",
+              "type": "string"
+            },
+            "property": {
+              "$ref": "#/$defs/KeyframeProperty"
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "trackId",
+            "segmentId",
+            "property",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "draftId": {
+              "$ref": "#/$defs/DraftId"
+            },
+            "kind": {
+              "const": "canvas",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "draftId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "capabilityFingerprint": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "runtimeCapabilities",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "capabilityFingerprint"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandDelta": {
+      "additionalProperties": false,
+      "description": "Semantic facts emitted after an accepted Rust-owned command.",
+      "properties": {
+        "changedDomains": {
+          "items": {
+            "$ref": "#/$defs/DirtyDomain"
+          },
+          "type": "array"
+        },
+        "changedEntities": {
+          "items": {
+            "$ref": "#/$defs/ChangedEntity"
+          },
+          "type": "array"
+        },
+        "changedRanges": {
+          "items": {
+            "$ref": "#/$defs/DirtyRange"
+          },
+          "type": "array"
+        },
+        "command": {
+          "$ref": "#/$defs/CommandName"
+        },
+        "invalidation": {
+          "$ref": "#/$defs/InvalidationScope"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "changedEntities",
+        "changedDomains",
+        "changedRanges",
+        "invalidation",
+        "reason"
+      ],
+      "type": "object"
+    },
     "CommandEvent": {
       "additionalProperties": false,
       "description": "Event emitted with a command result.",
@@ -1531,6 +1706,57 @@
       "title": "DeleteSegmentCommandPayload",
       "type": "object"
     },
+    "DirtyDomain": {
+      "description": "Semantic and derived consumer domains affected by a command.",
+      "enum": [
+        "timing",
+        "visual",
+        "text",
+        "audio",
+        "material",
+        "effect",
+        "filter",
+        "transition",
+        "canvas",
+        "outputProfile",
+        "runtimeCapabilities",
+        "preview",
+        "exportPrep",
+        "thumbnail",
+        "waveform",
+        "proxy",
+        "graphSnapshot",
+        "previewCache"
+      ],
+      "type": "string"
+    },
+    "DirtyRange": {
+      "additionalProperties": false,
+      "description": "Integer target timeline span affected by a command.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/DirtyRangeSource"
+        },
+        "targetTimerange": {
+          "$ref": "#/$defs/TargetTimerange"
+        }
+      },
+      "required": [
+        "targetTimerange",
+        "source"
+      ],
+      "type": "object"
+    },
+    "DirtyRangeSource": {
+      "enum": [
+        "previous",
+        "current",
+        "previousAndCurrent",
+        "fullDraft",
+        "materialWide"
+      ],
+      "type": "string"
+    },
     "Draft": {
       "additionalProperties": false,
       "properties": {
@@ -1978,6 +2204,40 @@
         "reason"
       ],
       "title": "InvalidatePreviewCacheCommandPayload",
+      "type": "object"
+    },
+    "InvalidationScope": {
+      "additionalProperties": false,
+      "description": "Derived invalidation scope. Graph IDs are derived facts, not primary command entities.",
+      "properties": {
+        "consumerDomains": {
+          "items": {
+            "$ref": "#/$defs/DirtyDomain"
+          },
+          "type": "array"
+        },
+        "fullDraft": {
+          "type": "boolean"
+        },
+        "graphNodeIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "materialIds": {
+          "items": {
+            "$ref": "#/$defs/MaterialId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "fullDraft",
+        "materialIds",
+        "graphNodeIds",
+        "consumerDomains"
+      ],
       "type": "object"
     },
     "Keyframe": {
@@ -24555,6 +24815,9 @@
         "commandState": {
           "$ref": "#/$defs/CommandState"
         },
+        "delta": {
+          "$ref": "#/$defs/CommandDelta"
+        },
         "draft": {
           "$ref": "#/$defs/Draft"
         },
@@ -24572,7 +24835,8 @@
         "draft",
         "commandState",
         "selection",
-        "events"
+        "events",
+        "delta"
       ],
       "title": "TimelineCommandResponse",
       "type": "object"

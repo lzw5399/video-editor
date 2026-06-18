@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub mod canvas;
+pub mod delta;
 pub mod draft;
 pub mod ids;
 pub mod material;
@@ -22,6 +23,9 @@ pub use canvas::{
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
     CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
     normalized_to_canvas_pixel, reduce_ratio,
+};
+pub use delta::{
+    ChangedEntity, CommandDelta, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
@@ -747,6 +751,7 @@ pub struct TimelineCommandResponse {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub events: Vec<CommandEvent>,
+    pub delta: CommandDelta,
 }
 
 /// Response data returned by the Phase 2 material import command.

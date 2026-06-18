@@ -228,7 +228,9 @@ fn contract_serializes_command_delta_as_semantic_change_facts() {
         invalidation: InvalidationScope {
             full_draft: false,
             material_ids: vec!["video-material".into()],
-            graph_node_ids: vec!["draft:phase13:track:video-track:segment:segment-a:video".to_owned()],
+            graph_node_ids: vec![
+                "draft:phase13:track:video-track:segment:segment-a:video".to_owned(),
+            ],
             consumer_domains: vec![
                 DirtyDomain::Preview,
                 DirtyDomain::ExportPrep,

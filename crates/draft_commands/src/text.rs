@@ -1,9 +1,10 @@
 //! Semantic text/subtitle timeline commands.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, ImportSubtitleSrtCommandPayload, Material, MaterialId,
-    MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange, TextSegment,
-    TextSegmentSource, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    CommandDelta, CommandEvent, CommandName, CommandState, Draft, ImportSubtitleSrtCommandPayload,
+    Material, MaterialId, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange,
+    TargetTimerange, TextSegment, TextSegmentSource, TimelineCommandResponse, TimelineSelection,
+    Track, TrackId, TrackKind,
 };
 
 use crate::{
@@ -51,6 +52,7 @@ pub fn add_text_segment(
         },
         "addTextSegment",
         "textSegmentAdded",
+        CommandName::AddTextSegment,
     ))
 }
 
@@ -91,6 +93,7 @@ pub fn edit_text_segment(
         },
         "editTextSegment",
         "textSegmentEdited",
+        CommandName::EditTextSegment,
     ))
 }
 
@@ -192,6 +195,7 @@ pub fn import_subtitle_srt(
         },
         "importSubtitleSrt",
         "subtitleSrtImported",
+        CommandName::ImportSubtitleSrt,
     ))
 }
 
@@ -341,6 +345,7 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
+    command: CommandName,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -364,6 +369,7 @@ fn response(
         command_state,
         selection,
         events,
+        delta: CommandDelta::none(command, "delta pending command-specific builder"),
     }
 }
 

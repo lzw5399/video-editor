@@ -1,8 +1,8 @@
 //! Draft-level canvas command semantics.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, DraftCanvasConfig, TimelineCommandResponse,
-    TimelineSelection, validate_draft,
+    CommandDelta, CommandEvent, CommandName, CommandState, Draft, DraftCanvasConfig,
+    TimelineCommandResponse, TimelineSelection, validate_draft,
 };
 
 use crate::{TimelineCommandError, history::push_undo_snapshot};
@@ -35,5 +35,9 @@ pub fn update_draft_canvas_config(
         command_state,
         selection: selection.clone(),
         events,
+        delta: CommandDelta::none(
+            CommandName::UpdateDraftCanvasConfig,
+            "delta pending command-specific builder",
+        ),
     })
 }

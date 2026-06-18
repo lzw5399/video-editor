@@ -1,9 +1,10 @@
 //! Timeline command validation helpers.
 
 use draft_model::{
-    CommandEvent, CommandPayload, CommandState, Draft, Material, MaterialId, MaterialKind,
-    Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange, TimelineCommandResponse,
-    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection, validate_draft,
+    CommandDelta, CommandEvent, CommandName, CommandPayload, CommandState, Draft, Material,
+    MaterialId, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange,
+    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection,
+    validate_draft,
 };
 
 use crate::{
@@ -305,6 +306,10 @@ pub fn add_segment(
             track_ids: vec![track_id],
         },
         "segmentAdded",
+        CommandDelta::none(
+            CommandName::AddSegment,
+            "delta pending command-specific builder",
+        ),
     ))
 }
 
@@ -330,6 +335,7 @@ pub fn select_timeline_segments(
             track_ids,
         },
         "timelineSelectionChanged",
+        CommandDelta::none(CommandName::SelectTimelineSegments, "selection only"),
     ))
 }
 
@@ -394,6 +400,10 @@ pub fn move_segment(
         },
         "segmentMoved",
         extra_events,
+        CommandDelta::none(
+            CommandName::MoveSegment,
+            "delta pending command-specific builder",
+        ),
     )
     .with_selection_fallback(selection))
 }
@@ -469,6 +479,10 @@ pub fn split_segment(
             track_ids: vec![track_id],
         },
         "segmentSplit",
+        CommandDelta::none(
+            CommandName::SplitSegment,
+            "delta pending command-specific builder",
+        ),
     ))
 }
 
@@ -569,6 +583,10 @@ pub fn trim_segment(
         },
         "segmentTrimmed",
         extra_events,
+        CommandDelta::none(
+            CommandName::TrimSegment,
+            "delta pending command-specific builder",
+        ),
     ))
 }
 
@@ -600,6 +618,10 @@ pub fn delete_segment(
         next_selection,
         "segmentDeleted",
         extra_events,
+        CommandDelta::none(
+            CommandName::DeleteSegment,
+            "delta pending command-specific builder",
+        ),
     ))
 }
 
@@ -633,8 +655,16 @@ fn response(
     command_state: impl Into<CommandStateWithEvents>,
     selection: TimelineSelection,
     event_kind: &str,
+    delta: CommandDelta,
 ) -> TimelineCommandResponse {
-    response_with_events(draft, command_state, selection, event_kind, Vec::new())
+    response_with_events(
+        draft,
+        command_state,
+        selection,
+        event_kind,
+        Vec::new(),
+        delta,
+    )
 }
 
 fn response_with_events(
@@ -643,6 +673,7 @@ fn response_with_events(
     selection: TimelineSelection,
     event_kind: &str,
     extra_events: Vec<CommandEvent>,
+    delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let command_state = command_state.into();
     let mut events = vec![CommandEvent {
@@ -656,6 +687,7 @@ fn response_with_events(
         command_state: command_state.state,
         selection,
         events,
+        delta,
     }
 }
 

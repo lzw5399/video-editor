@@ -1,9 +1,9 @@
 //! Semantic audio/BGM timeline commands.
 
 use draft_model::{
-    CommandEvent, CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, MaterialId, Segment, SegmentId,
-    SegmentVolume, SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection,
-    TrackId,
+    CommandDelta, CommandEvent, CommandName, CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS,
+    MaterialId, Segment, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange,
+    TimelineCommandResponse, TimelineSelection, TrackId,
 };
 
 use crate::{
@@ -45,6 +45,7 @@ pub fn add_audio_segment(
         },
         "addAudioSegment",
         "audioSegmentAdded",
+        CommandName::AddAudioSegment,
     ))
 }
 
@@ -76,6 +77,7 @@ pub fn set_segment_volume(
         },
         "setSegmentVolume",
         "segmentVolumeChanged",
+        CommandName::SetSegmentVolume,
     ))
 }
 
@@ -104,6 +106,7 @@ pub fn set_track_mute(
         },
         "setTrackMute",
         "trackMuteChanged",
+        CommandName::SetTrackMute,
     ))
 }
 
@@ -129,6 +132,7 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
+    command: CommandName,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -152,6 +156,7 @@ fn response(
         command_state,
         selection,
         events,
+        delta: CommandDelta::none(command, "delta pending command-specific builder"),
     }
 }
 

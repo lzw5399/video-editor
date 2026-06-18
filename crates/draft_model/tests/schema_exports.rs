@@ -7,13 +7,14 @@ use std::{
 use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
     CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CanvasBackgroundCapability, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
-    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DecodedPreviewFrameResponse, DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, DraftId,
-    DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
-    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPreset,
-    ExportValidationReport, Filter, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
-    ImportMaterialResponse, ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload,
+    CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
+    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
+    CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
+    DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
+    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
+    ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
+    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
+    ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, InvalidationScope,
     Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
     ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
@@ -139,7 +140,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     );
 
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -193,6 +194,12 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportMaterialResponse>(),
             export_decl::<ListMaterialsResponse>(),
             export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<ChangedEntity>(),
+            export_decl::<DirtyDomain>(),
+            export_decl::<DirtyRange>(),
+            export_decl::<DirtyRangeSource>(),
+            export_decl::<InvalidationScope>(),
+            export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
         ],
     );
@@ -337,7 +344,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
         ],
     );
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -391,6 +398,12 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportMaterialResponse>(),
             export_decl::<ListMaterialsResponse>(),
             export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<ChangedEntity>(),
+            export_decl::<DirtyDomain>(),
+            export_decl::<DirtyRange>(),
+            export_decl::<DirtyRangeSource>(),
+            export_decl::<InvalidationScope>(),
+            export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
         ],
     );
@@ -966,7 +979,7 @@ fn command_envelope_ts_contract() -> String {
 
 fn command_result_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, TargetTimerange } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -1020,6 +1033,12 @@ fn command_result_ts_contract() -> String {
             export_decl::<ImportMaterialResponse>(),
             export_decl::<ListMaterialsResponse>(),
             export_decl::<ListMissingMaterialsResponse>(),
+            export_decl::<ChangedEntity>(),
+            export_decl::<DirtyDomain>(),
+            export_decl::<DirtyRange>(),
+            export_decl::<DirtyRangeSource>(),
+            export_decl::<InvalidationScope>(),
+            export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
         ],
     )

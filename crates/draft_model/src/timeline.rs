@@ -55,6 +55,47 @@ impl TargetTimerange {
             duration: duration.into(),
         }
     }
+
+    pub fn checked_end(&self) -> Option<Microseconds> {
+        self.start
+            .get()
+            .checked_add(self.duration.get())
+            .map(Microseconds::new)
+    }
+
+    pub fn overlaps_half_open(&self, other: &Self) -> Option<bool> {
+        let self_end = self.checked_end()?;
+        let other_end = other.checked_end()?;
+        Some(self.start.get() < other_end.get() && other.start.get() < self_end.get())
+    }
+
+    pub fn union(&self, other: &Self) -> Option<Self> {
+        let start = self.start.get().min(other.start.get());
+        let end = self.checked_end()?.get().max(other.checked_end()?.get());
+        Some(Self::new(start, end.checked_sub(start)?))
+    }
+
+    pub fn merge_sorted(ranges: impl IntoIterator<Item = Self>) -> Option<Vec<Self>> {
+        let mut sorted = ranges.into_iter().collect::<Vec<_>>();
+        sorted.sort_by_key(|range| (range.start, range.duration));
+
+        let mut merged: Vec<Self> = Vec::new();
+        for range in sorted {
+            range.checked_end()?;
+            let Some(current) = merged.last_mut() else {
+                merged.push(range);
+                continue;
+            };
+
+            if current.checked_end()?.get() >= range.start.get() {
+                *current = current.union(&range)?;
+            } else {
+                merged.push(range);
+            }
+        }
+
+        Some(merged)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
