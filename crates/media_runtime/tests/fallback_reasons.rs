@@ -25,7 +25,10 @@ fn fallback_reasons_serialize_with_stable_camel_case_names() {
             MediaIoFallbackReason::PlatformApiFailure,
             "platformApiFailure",
         ),
-        (MediaIoFallbackReason::FfmpegUnavailable, "ffmpegUnavailable"),
+        (
+            MediaIoFallbackReason::FfmpegUnavailable,
+            "ffmpegUnavailable",
+        ),
         (
             MediaIoFallbackReason::UserDisabledHardwareDecode,
             "userDisabledHardwareDecode",
@@ -39,7 +42,7 @@ fn fallback_reasons_serialize_with_stable_camel_case_names() {
 }
 
 #[test]
-fn selected_decode_paths_serialize_with_stable_camel_case_names() {
+fn fallback_reasons_selected_decode_paths_serialize_with_stable_camel_case_names() {
     let paths = [
         (
             SelectedDecodePath::NativeHardwareTexture,

@@ -8,11 +8,17 @@ use std::path::Path;
 use std::process::Output;
 
 mod capabilities;
+mod color;
+mod decoder;
 mod discovery;
 mod error;
+mod fallback;
+mod frame;
 mod job;
+mod media_io;
 mod probe;
 mod process;
+mod texture;
 mod validate;
 
 pub use capabilities::{
@@ -20,22 +26,38 @@ pub use capabilities::{
     RuntimeFeatureCapability, RuntimeFontCapability, RuntimeLicensePosture,
     probe_runtime_capabilities,
 };
+pub use color::{
+    ColorDiagnostic, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer, VideoColorMetadata,
+    VideoPixelFormat,
+};
+pub use decoder::{
+    AudioDecodeRequest, AudioDecoder, DecodeError, DecodeErrorKind, VideoDecodeRequest,
+    VideoDecoder,
+};
 pub use discovery::{
     BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
     discover_runtime_config, probe_binary_version, probe_binary_version_with_timeout,
     resolve_binary,
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
+pub use fallback::{MediaIoFallbackReason, SelectedDecodePath};
+pub use frame::{FrameDimensions, FrameHandleId};
 pub use job::{
     CancelToken, FfmpegJobEvent, FfmpegJobId, FfmpegJobResult, FfmpegJobState, FfmpegProgress,
     FfmpegRuntimeError, FfmpegRuntimeErrorKind, FfmpegRuntimeJob, parse_progress_lines,
     run_export_job,
+};
+pub use media_io::{
+    MediaIoError, MediaIoErrorKind, MediaOpenRequest, MediaProbeReport, MediaProbeRequest,
+    MediaProbeService, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
+    StreamId,
 };
 pub use probe::{
     MaterialProbeAudio, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
     MaterialProbeMetadata, MaterialProbeStatus, RationalFrameRate, probe_material_metadata,
 };
 pub use process::{DEFAULT_PROCESS_TIMEOUT, run_process_with_timeout};
+pub use texture::{RuntimeDeviceId, TextureBackend, TextureHandle, TextureHandleId};
 pub use validate::{
     OutputValidationError, OutputValidationErrorKind, OutputValidationExpectation,
     OutputValidationReport, validate_rendered_output,

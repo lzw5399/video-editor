@@ -1,16 +1,16 @@
 use std::path::PathBuf;
 
 use media_runtime::{
-    AudioDecodeRequest, AudioDecoder, ColorDiagnostic, ColorMatrix, ColorPrimaries,
-    ColorRange, ColorTransfer, DecodeError, DecodeErrorKind, FrameDimensions, MediaIoError,
-    MediaIoErrorKind, MediaOpenRequest, MediaReader, MediaSession, MediaSessionId,
-    MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId, StreamId,
-    TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata, VideoDecodeRequest,
-    VideoDecoder, VideoPixelFormat,
+    AudioDecodeRequest, AudioDecoder, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer,
+    DecodeError, DecodeErrorKind, FrameDimensions, MediaIoError, MediaIoErrorKind,
+    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
+    RationalFrameRate, RuntimeDeviceId, StreamId, TextureBackend, TextureHandle, TextureHandleId,
+    VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
 };
 
 #[test]
-fn fake_reader_opens_session_and_creates_decoder_trait_objects_without_ffmpeg_executor() {
+fn media_io_contracts_fake_reader_opens_session_and_creates_decoder_trait_objects_without_ffmpeg_executor()
+ {
     let reader: Box<dyn MediaReader> = Box::new(FakeReader);
     let session = reader
         .open(MediaOpenRequest {
@@ -45,7 +45,8 @@ fn fake_reader_opens_session_and_creates_decoder_trait_objects_without_ffmpeg_ex
 }
 
 #[test]
-fn texture_handle_serializes_as_opaque_ids_and_metadata_without_native_pointer_fields() {
+fn media_io_contracts_texture_handle_serializes_as_opaque_ids_and_metadata_without_native_pointer_fields()
+ {
     let handle = TextureHandle {
         handle_id: TextureHandleId("texture-42".to_owned()),
         owner_session: MediaSessionId("session-1".to_owned()),
@@ -80,7 +81,9 @@ fn texture_handle_serializes_as_opaque_ids_and_metadata_without_native_pointer_f
         "sample attachments missing"
     );
 
-    let object = value.as_object().expect("texture should serialize to object");
+    let object = value
+        .as_object()
+        .expect("texture should serialize to object");
     assert!(!object.contains_key("nativePointer"));
     assert!(!object.contains_key("rawHandle"));
     assert!(!object.contains_key("bytes"));
