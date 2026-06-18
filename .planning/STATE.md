@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-03B-PLAN.md; Phase 11 Plan 04 remains next
+status: Completed 11-04-PLAN.md; Phase 11 Plan 04B remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 5
+current_plan: 6
 total_plans_in_phase: 10
-stopped_at: Completed 11-03B-PLAN.md
-last_updated: "2026-06-18T16:47:12.430Z"
-last_activity: "2026-06-18 - Completed Phase 11 Plan 03B: wgpu offscreen device and compositor subset."
+stopped_at: Completed 11-04-PLAN.md
+last_updated: "2026-06-18T17:00:34.568Z"
+last_activity: "2026-06-18 - Completed Phase 11 Plan 04: native surface contracts and thin Node-API realtime preview bindings."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 75
-  percent: 77
+  completed_plans: 76
+  percent: 78
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 4/10 complete; next plan 11-04
-Status: Phase 11 Plan 03B complete; ready for native surface contracts and thin Node-API realtime preview bindings.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 03B: wgpu offscreen device and compositor subset.
+Plan: 5/10 complete; next plan 11-04B
+Status: Phase 11 Plan 04 complete; ready for Electron native preview host bridge work.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 04: native surface contracts and thin Node-API realtime preview bindings.
 
-Progress: [████████░░] 77%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 71
+- Total plans completed: 72
 - Average duration: 9 min
-- Total execution time: 624 min
+- Total execution time: 632 min
 
 **By Phase:**
 
@@ -58,11 +58,11 @@ Progress: [████████░░] 77%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
-| 11 | 4 | 106 min | 27 min |
+| 11 | 5 | 114 min | 23 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 98 min
+- Last 5 plans: 114 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -131,6 +131,7 @@ Progress: [████████░░] 77%
 | Phase 11 P02 | 68 min | 2 tasks | 7 files |
 | Phase 11 P03 | 15 min | 2 tasks | 8 files |
 | Phase 11 P03B | 14 min | 2 tasks | 11 files |
+| Phase 11 P04 | 8 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Preview frame presentation is generation-gated. — Stale request generations and canceled request tokens return non-presented results with telemetry and diagnostics instead of overwriting the current preview.
 - [Phase 11]: Plan 02 prepares realtime preview render graph intent through `engine_core` and `render_graph`, then classifies supported/degraded/unsupported capability outcomes before backend execution. — This keeps preview semantics Rust-owned and renderer-neutral while exposing serializable parity diagnostics against export graph intent.
 - [Phase 11]: Plan 03 keeps frame providers cache-only: CPU/static frames are validated contracts, generated H.264 frames are preloaded into `DecodedVideoFrameCache`, and `frame_for` maps integer microseconds to cached frame indices without per-request FFmpeg/process work. — This closes the supported video frame input prerequisite while preserving Phase 12 texture interop as an opaque descriptor boundary.
+- [Phase 11]: Plan 04 keeps native preview surface contracts in `realtime_preview_runtime`, while Node-API only allocates opaque session IDs and translates JSON. — This preserves Rust ownership of validation, lifecycle, playback generation, and telemetry.
+- [Phase 11]: Plan 04 does not return HWND, NSView, native child handles, GPU devices, command encoders, surfaces, or cache keys to TypeScript. — Binding responses expose only opaque session IDs, integer generation/time values, frame status, backend enum, and telemetry counters.
+- [Phase 11]: Plan 04 surface attach, bounds update, and detach advance playback generation through the runtime session. — Native surface lifecycle changes now participate in stale-preview rejection.
 - [Phase 10.1]: Playhead seek side effects are centralized in App.tsx, while preview and timeline controls only report target times. — This keeps seek-driven preview frame requests consistent across time input, frame stepping, ruler clicks, and playhead drag without moving draft semantics into the renderer.
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
@@ -303,6 +307,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T16:47:12.427Z
-Stopped at: Completed 11-03B-PLAN.md
+Last session: 2026-06-18T17:00:34.564Z
+Stopped at: Completed 11-04-PLAN.md
 Resume file: None
