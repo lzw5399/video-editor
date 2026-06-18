@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-04B-PLAN.md; Phase 11 Plan 05 remains next
+status: Completed 11-05-PLAN.md; Phase 11 Plan 05B remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 7
+current_plan: 8
 total_plans_in_phase: 10
-stopped_at: Completed 11-04B-PLAN.md
-last_updated: "2026-06-18T17:13:42.906Z"
-last_activity: "2026-06-18 - Completed Phase 11 Plan 04B: Electron native preview host bridge and renderer host rectangle smoke coverage."
+stopped_at: Completed 11-05-PLAN.md
+last_updated: "2026-06-18T17:29:15.150Z"
+last_activity: "2026-06-18 - Completed Phase 11 Plan 05: preview service realtime backend routing, fallback ladder diagnostics, and binding telemetry propagation."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 77
-  percent: 79
+  completed_plans: 78
+  percent: 80
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 6/10 complete; next plan 11-05
-Status: Phase 11 Plan 04B complete; ready for preview service realtime backend integration.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 04B: Electron native preview host bridge and renderer host rectangle smoke coverage.
+Plan: 7/10 complete; next plan 11-05B
+Status: Phase 11 Plan 05 complete; ready for desktop telemetry/fallback display without renderer-owned fallback decisions.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 05: preview service realtime backend routing, fallback ladder diagnostics, and binding telemetry propagation.
 
-Progress: [████████░░] 79%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -133,6 +133,7 @@ Progress: [████████░░] 79%
 | Phase 11 P03B | 14 min | 2 tasks | 11 files |
 | Phase 11 P04 | 8 min | 2 tasks | 11 files |
 | Phase 11 P04B | 9 min | 2 tasks | 8 files |
+| Phase 11 P05 | 11 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Plan 04 surface attach, bounds update, and detach advance playback generation through the runtime session. — Native surface lifecycle changes now participate in stale-preview rejection.
 - [Phase 11]: Plan 04B keeps native preview host IPC window-scoped in Electron main; renderer sends only integer rect and scale millis through preload. — This preserves the renderer as a UI-only geometry/reporting surface.
 - [Phase 11]: Plan 04B displays realtime preview status, telemetry, and fallback labels from main while keeping native handles, GPU objects, surface internals, command encoders, and cache keys out of the renderer. — This closes the Electron shell bridge without moving fallback routing or preview semantics into React.
+- [Phase 11]: Plan 05 keeps supported preview frame routing in preview_service before artifact fallback. — Seek/scrub/first-frame H.264 material requests use the realtime runtime and Rust-owned software frame cache without spawning FFmpeg per frame.
+- [Phase 11]: Plan 05 separates fallback decision reasons from FFmpeg artifact generation diagnostics. — The service records why fallback was selected while runtime/binding responses explicitly mark `FfmpegArtifactGenerated` only when the artifact path runs.
+- [Phase 11]: Plan 05 binding responses carry fallback, cancellation, diagnostics, and telemetry as data only. — Bindings still do not expose GPU internals or make fallback decisions.
 - [Phase 10.1]: Playhead seek side effects are centralized in App.tsx, while preview and timeline controls only report target times. — This keeps seek-driven preview frame requests consistent across time input, frame stepping, ruler clicks, and playhead drag without moving draft semantics into the renderer.
 - [Phase 10]: Keyframes are segment-attached typed semantic data with segment-relative integer-microsecond offsets. — This keeps the internal model aligned with Jianying-style keyframes while avoiding arbitrary property/value strings.
 - [Phase 10]: Static Phase 08/09 visual, text, and volume fields remain base values that keyframes override during frame-time evaluation. — Commands and engine evaluation can add animation without replacing established static segment semantics.
@@ -310,6 +314,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T17:13:42.902Z
-Stopped at: Completed 11-04B-PLAN.md
+Last session: 2026-06-18T17:29:14.904Z
+Stopped at: Completed 11-05-PLAN.md
 Resume file: None
