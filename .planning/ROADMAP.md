@@ -282,8 +282,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-03-PLAN.md - Add undoable Rust canvas command and binding route
-- [ ] 07-04-PLAN.md - Propagate canvas profile through engine, render graph, and FFmpeg compiler
+- [x] 07-03-PLAN.md - Add undoable Rust canvas command and binding route
+- [x] 07-04-PLAN.md - Propagate canvas profile through engine, render graph, and FFmpeg compiler
 
 **Wave 4** *(blocked on Wave 3 render/compiler completion)*
 
@@ -402,7 +402,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
-| 7. Project Canvas Space And Coordinate System | 2/7 | In Progress|  |
+| 7. Project Canvas Space And Coordinate System | 4/7 | In Progress|  |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |
