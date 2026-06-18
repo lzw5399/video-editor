@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use std::collections::BTreeMap;
 
 use draft_model::{
@@ -30,11 +32,16 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
         serde_json::to_value(&graph).expect("graph should serialize"),
         serde_json::json!({
             "draftId": "draft-render-graph",
-            "canvas": { "width": 1920, "height": 1080 },
+            "canvas": {
+                "nodeId": canvas_node("draft-render-graph"),
+                "width": 1920,
+                "height": 1080
+            },
             "targetTimerange": { "start": 600000, "duration": 100000 },
             "frameRate": { "numerator": 30, "denominator": 1 },
             "materials": [
                 {
+                    "nodeId": material_node("audio-material"),
                     "materialId": "audio-material",
                     "kind": "audio",
                     "uri": "file://audio.wav",
@@ -47,6 +54,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "hasAudio": true
                 },
                 {
+                    "nodeId": material_node("overlay-material"),
                     "materialId": "overlay-material",
                     "kind": "image",
                     "uri": "file://overlay.png",
@@ -59,6 +67,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "hasAudio": false
                 },
                 {
+                    "nodeId": material_node("text-material"),
                     "materialId": "text-material",
                     "kind": "text",
                     "uri": "text://title",
@@ -71,6 +80,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "hasAudio": false
                 },
                 {
+                    "nodeId": material_node("video-material"),
                     "materialId": "video-material",
                     "kind": "video",
                     "uri": "file://video.mp4",
@@ -85,6 +95,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
             ],
             "videoLayers": [
                 {
+                    "nodeId": segment_node("video-track", "video-a", "video-material", "videoSegment"),
                     "trackId": "video-track",
                     "segmentId": "video-a",
                     "materialId": "video-material",
@@ -95,6 +106,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "keyframes": [],
                     "filters": [
                         {
+                            "nodeId": filter_node("video-track", "video-a", "video-material", "0"),
                             "name": "lut",
                             "parameters": { "strengthMillis": "500" },
                             "support": "degraded",
@@ -102,6 +114,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                         }
                     ],
                     "transition": {
+                        "nodeId": transition_node("video-track", "video-a", "video-material"),
                         "name": "crossfade",
                         "duration": 120000,
                         "support": "degraded",
@@ -110,6 +123,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "visual": default_visual_json()
                 },
                 {
+                    "nodeId": segment_node("overlay-track", "overlay-a", "overlay-material", "videoSegment"),
                     "trackId": "overlay-track",
                     "segmentId": "overlay-a",
                     "materialId": "overlay-material",
@@ -125,6 +139,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
             ],
             "audioMixes": [
                 {
+                    "nodeId": segment_node("audio-track", "audio-a", "audio-material", "audioSegment"),
                     "trackId": "audio-track",
                     "segmentId": "audio-a",
                     "materialId": "audio-material",
@@ -134,6 +149,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "filters": []
                 },
                 {
+                    "nodeId": segment_node("video-track", "video-a", "video-material", "audioSegment"),
                     "trackId": "video-track",
                     "segmentId": "video-a",
                     "materialId": "video-material",
@@ -142,6 +158,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                     "volumeLevelMillis": 1000,
                     "filters": [
                         {
+                            "nodeId": filter_node("video-track", "video-a", "video-material", "0"),
                             "name": "lut",
                             "parameters": { "strengthMillis": "500" },
                             "support": "degraded",
@@ -152,6 +169,7 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
             ],
             "textOverlays": [
                 {
+                    "nodeId": segment_node("text-track", "text-a", "text-material", "textOverlay"),
                     "overlay": {
                         "trackId": "text-track",
                         "segmentId": "text-a",
@@ -231,9 +249,9 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                 }
             ],
             "sampledFrames": [
-                { "frameIndex": 0, "at": 600000 },
-                { "frameIndex": 1, "at": 633333 },
-                { "frameIndex": 2, "at": 666666 }
+                { "nodeId": frame_node("0:at:600000"), "frameIndex": 0, "at": 600000 },
+                { "nodeId": frame_node("1:at:633333"), "frameIndex": 1, "at": 633333 },
+                { "nodeId": frame_node("2:at:666666"), "frameIndex": 2, "at": 666666 }
             ]
         })
     );
@@ -850,5 +868,69 @@ fn default_visual_json() -> serde_json::Value {
         "backgroundFilling": { "kind": "none" },
         "blendMode": { "kind": "normal" },
         "mask": { "kind": "none" }
+    })
+}
+
+fn canvas_node(draft_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "role": "canvas",
+        "draftId": draft_id
+    })
+}
+
+fn material_node(material_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "role": "material",
+        "draftId": "draft-render-graph",
+        "materialId": material_id
+    })
+}
+
+fn segment_node(
+    track_id: &str,
+    segment_id: &str,
+    material_id: &str,
+    role: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "role": role,
+        "draftId": "draft-render-graph",
+        "trackId": track_id,
+        "segmentId": segment_id,
+        "materialId": material_id
+    })
+}
+
+fn filter_node(
+    track_id: &str,
+    segment_id: &str,
+    material_id: &str,
+    local_id: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "role": "segmentFilter",
+        "draftId": "draft-render-graph",
+        "trackId": track_id,
+        "segmentId": segment_id,
+        "materialId": material_id,
+        "localId": local_id
+    })
+}
+
+fn transition_node(track_id: &str, segment_id: &str, material_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "role": "segmentTransition",
+        "draftId": "draft-render-graph",
+        "trackId": track_id,
+        "segmentId": segment_id,
+        "materialId": material_id
+    })
+}
+
+fn frame_node(local_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "role": "sampledFrame",
+        "draftId": "draft-render-graph",
+        "localId": local_id
     })
 }

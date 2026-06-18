@@ -37,25 +37,22 @@ fn stable_node_ids_survive_content_timing_and_material_metadata_changes() {
     let before = phase13_graph_draft();
     let mut after = before.clone();
     after.materials[0].display_name = "Renamed Video Material".to_owned();
-    after.tracks[0].segments[0].target_timerange = TargetTimerange::new(200_000, 700_000);
+    after.tracks[0].segments[0].target_timerange = TargetTimerange::new(0, 700_000);
     after.tracks[0].segments[0].source_timerange = SourceTimerange::new(100_000, 700_000);
 
     let before_graph = graph_for(&before);
     let after_graph = graph_for(&after);
 
     assert_eq!(
-        before_graph.video_layers[0].node_id,
-        after_graph.video_layers[0].node_id,
+        before_graph.video_layers[0].node_id, after_graph.video_layers[0].node_id,
         "move/trim/content changes must keep the semantic segment node identity"
     );
     assert_eq!(
-        before_graph.audio_mixes[0].node_id,
-        after_graph.audio_mixes[0].node_id,
+        before_graph.audio_mixes[0].node_id, after_graph.audio_mixes[0].node_id,
         "audio identity must also remain semantic for the same material-backed segment"
     );
     assert_ne!(
-        before_graph.video_layers[0].target_timerange,
-        after_graph.video_layers[0].target_timerange,
+        before_graph.video_layers[0].target_timerange, after_graph.video_layers[0].target_timerange,
         "timing changes should affect graph content, not the stable node ID"
     );
 }

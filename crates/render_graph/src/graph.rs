@@ -13,6 +13,8 @@ use engine_core::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::incremental::RenderGraphNodeId;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderGraph {
@@ -34,6 +36,7 @@ pub struct RenderGraph {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderCanvas {
+    pub node_id: RenderGraphNodeId,
     pub width: u32,
     pub height: u32,
     #[serde(
@@ -95,6 +98,7 @@ pub struct RenderCanvasDiagnostic {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderMaterial {
+    pub node_id: RenderGraphNodeId,
     pub material_id: MaterialId,
     pub kind: MaterialKind,
     pub uri: String,
@@ -110,6 +114,7 @@ pub struct RenderMaterial {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderVideoLayer {
+    pub node_id: RenderGraphNodeId,
     pub track_id: TrackId,
     pub segment_id: SegmentId,
     pub material_id: MaterialId,
@@ -126,6 +131,7 @@ pub struct RenderVideoLayer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderAudioMix {
+    pub node_id: RenderGraphNodeId,
     pub track_id: TrackId,
     pub segment_id: SegmentId,
     pub material_id: MaterialId,
@@ -140,6 +146,7 @@ pub struct RenderAudioMix {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderTextOverlay {
+    pub node_id: RenderGraphNodeId,
     pub overlay: FrameTextOverlay,
     pub material_id: MaterialId,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -163,6 +170,7 @@ pub struct RenderVisualDiagnostic {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderFilterIntent {
+    pub node_id: RenderGraphNodeId,
     pub name: String,
     pub parameters: BTreeMap<String, String>,
     pub support: RenderIntentSupport,
@@ -172,6 +180,7 @@ pub struct RenderFilterIntent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderTransitionIntent {
+    pub node_id: RenderGraphNodeId,
     pub name: String,
     pub duration: Microseconds,
     pub support: RenderIntentSupport,
@@ -189,6 +198,7 @@ pub enum RenderIntentSupport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderSampledFrame {
+    pub node_id: RenderGraphNodeId,
     pub frame_index: u64,
     pub at: Microseconds,
 }
@@ -317,7 +327,7 @@ pub fn build_render_graph(
             unknown_segment_error(&segment_key.0, &segment_key.1, "visual range state")
         })?;
         material_ids.insert(segment.material.material_id.clone());
-        video_layers.push(render_video_layer(track, segment)?);
+        video_layers.push(render_video_layer(&normalized.draft_id, track, segment)?);
     }
 
     let mut audio_mixes = Vec::new();
@@ -326,7 +336,7 @@ pub fn build_render_graph(
             unknown_segment_error(&segment_key.0, &segment_key.1, "audio range state")
         })?;
         material_ids.insert(segment.material.material_id.clone());
-        audio_mixes.push(render_audio_mix(track, segment));
+        audio_mixes.push(render_audio_mix(&normalized.draft_id, track, segment));
     }
 
     let mut text_overlays = Vec::new();
@@ -337,7 +347,12 @@ pub fn build_render_graph(
         let overlay = first_text_overlay_for(range, &segment_key.0, &segment_key.1)
             .ok_or_else(|| unknown_segment_error(&segment_key.0, &segment_key.1, "text overlay"))?;
         material_ids.insert(segment.material.material_id.clone());
-        text_overlays.push(render_text_overlay(track, segment, overlay));
+        text_overlays.push(render_text_overlay(
+            &normalized.draft_id,
+            track,
+            segment,
+            overlay,
+        ));
     }
 
     let materials = render_materials(normalized, &material_ids)?;
@@ -378,6 +393,11 @@ pub fn build_render_graph(
             .iter()
             .enumerate()
             .map(|(frame_index, frame)| RenderSampledFrame {
+                node_id: RenderGraphNodeId::sampled_frame(
+                    &normalized.draft_id,
+                    frame_index as u64,
+                    frame.at.get(),
+                ),
                 frame_index: frame_index as u64,
                 at: frame.at,
             })
@@ -391,6 +411,7 @@ fn render_canvas(normalized: &NormalizedDraft) -> RenderCanvas {
     let background = render_canvas_background(&normalized.profile.canvas_background);
     let diagnostics = canvas_background_diagnostics(&background);
     RenderCanvas {
+        node_id: RenderGraphNodeId::canvas(&normalized.draft_id),
         width: normalized.profile.canvas_width,
         height: normalized.profile.canvas_height,
         background,
@@ -540,6 +561,7 @@ fn active_text_segments(
 }
 
 fn render_video_layer(
+    draft_id: &DraftId,
     track: &NormalizedTrack,
     segment: &NormalizedSegment,
 ) -> Result<RenderVideoLayer, RenderGraphError> {
@@ -554,6 +576,12 @@ fn render_video_layer(
     })?;
 
     Ok(RenderVideoLayer {
+        node_id: RenderGraphNodeId::video_segment(
+            draft_id,
+            &track.track_id,
+            &segment.segment_id,
+            &segment.material.material_id,
+        ),
         track_id: track.track_id.clone(),
         segment_id: segment.segment_id.clone(),
         material_id: segment.material.material_id.clone(),
@@ -562,14 +590,27 @@ fn render_video_layer(
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
         keyframes: segment.keyframes.clone(),
-        filters: render_filter_intents(&segment.filters),
-        transition: segment.transition.as_ref().map(render_transition_intent),
+        filters: render_filter_intents(draft_id, track, segment, &segment.filters),
+        transition: segment
+            .transition
+            .as_ref()
+            .map(|transition| render_transition_intent(draft_id, track, segment, transition)),
         visual: segment.visual.clone(),
     })
 }
 
-fn render_audio_mix(track: &NormalizedTrack, segment: &NormalizedSegment) -> RenderAudioMix {
+fn render_audio_mix(
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
+    segment: &NormalizedSegment,
+) -> RenderAudioMix {
     RenderAudioMix {
+        node_id: RenderGraphNodeId::audio_segment(
+            draft_id,
+            &track.track_id,
+            &segment.segment_id,
+            &segment.material.material_id,
+        ),
         track_id: track.track_id.clone(),
         segment_id: segment.segment_id.clone(),
         material_id: segment.material.material_id.clone(),
@@ -577,21 +618,31 @@ fn render_audio_mix(track: &NormalizedTrack, segment: &NormalizedSegment) -> Ren
         target_timerange: segment.target_timerange.clone(),
         keyframes: segment.keyframes.clone(),
         volume_level_millis: segment.volume_level_millis,
-        filters: render_filter_intents(&segment.filters),
+        filters: render_filter_intents(draft_id, track, segment, &segment.filters),
     }
 }
 
 fn render_text_overlay(
-    _track: &NormalizedTrack,
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
     segment: &NormalizedSegment,
     overlay: FrameTextOverlay,
 ) -> RenderTextOverlay {
     RenderTextOverlay {
+        node_id: RenderGraphNodeId::text_overlay(
+            draft_id,
+            &track.track_id,
+            &segment.segment_id,
+            &segment.material.material_id,
+        ),
         overlay,
         material_id: segment.material.material_id.clone(),
         keyframes: segment.keyframes.clone(),
-        filters: render_filter_intents(&segment.filters),
-        transition: segment.transition.as_ref().map(render_transition_intent),
+        filters: render_filter_intents(draft_id, track, segment, &segment.filters),
+        transition: segment
+            .transition
+            .as_ref()
+            .map(|transition| render_transition_intent(draft_id, track, segment, transition)),
         visual: segment.visual.clone(),
     }
 }
@@ -805,10 +856,23 @@ fn render_visual_diagnostic(
     }
 }
 
-fn render_filter_intents(filters: &[Filter]) -> Vec<RenderFilterIntent> {
+fn render_filter_intents(
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
+    segment: &NormalizedSegment,
+    filters: &[Filter],
+) -> Vec<RenderFilterIntent> {
     filters
         .iter()
-        .map(|filter| RenderFilterIntent {
+        .enumerate()
+        .map(|(filter_index, filter)| RenderFilterIntent {
+            node_id: RenderGraphNodeId::segment_filter(
+                draft_id,
+                &track.track_id,
+                &segment.segment_id,
+                &segment.material.material_id,
+                filter_index,
+            ),
             name: filter.name.clone(),
             parameters: filter.parameters.clone(),
             support: RenderIntentSupport::Degraded,
@@ -818,8 +882,19 @@ fn render_filter_intents(filters: &[Filter]) -> Vec<RenderFilterIntent> {
         .collect()
 }
 
-fn render_transition_intent(transition: &Transition) -> RenderTransitionIntent {
+fn render_transition_intent(
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
+    segment: &NormalizedSegment,
+    transition: &Transition,
+) -> RenderTransitionIntent {
     RenderTransitionIntent {
+        node_id: RenderGraphNodeId::segment_transition(
+            draft_id,
+            &track.track_id,
+            &segment.segment_id,
+            &segment.material.material_id,
+        ),
         name: transition.name.clone(),
         duration: transition.duration,
         support: RenderIntentSupport::Degraded,
@@ -936,13 +1011,14 @@ fn render_materials(
                 )
                 .with_material_id(material_id.clone())
             })?;
-            Ok(render_material(material))
+            Ok(render_material(&normalized.draft_id, material))
         })
         .collect()
 }
 
-fn render_material(material: &NormalizedMaterialRef) -> RenderMaterial {
+fn render_material(draft_id: &DraftId, material: &NormalizedMaterialRef) -> RenderMaterial {
     RenderMaterial {
+        node_id: RenderGraphNodeId::material(draft_id, &material.material_id),
         material_id: material.material_id.clone(),
         kind: material.kind,
         uri: material.uri.clone(),

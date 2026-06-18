@@ -5,6 +5,7 @@
 //! It does not execute FFmpeg jobs or decide editing behavior.
 
 pub mod graph;
+pub mod incremental;
 pub mod profile;
 
 pub use graph::{
@@ -13,6 +14,9 @@ pub use graph::{
     RenderGraphErrorKind, RenderIntentSupport, RenderMaterial, RenderSampledFrame,
     RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer, RenderVisualDiagnostic,
     build_render_graph,
+};
+pub use incremental::{
+    RenderGraphDiff, RenderGraphNodeChange, RenderGraphNodeId, RenderGraphNodeRole,
 };
 pub use profile::{
     ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderAudioCodec, RenderContainer,
