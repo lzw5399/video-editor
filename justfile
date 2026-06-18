@@ -35,6 +35,7 @@ test:
   pnpm run test:phase5-source-guards
   pnpm run test:phase5-workspace
   pnpm run test:phase6
+  pnpm run test:phase7
   pnpm run test:contracts
 
 test-phase6-packaging:
