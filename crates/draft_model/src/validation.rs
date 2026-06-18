@@ -10,7 +10,7 @@ use crate::{
     CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS,
     MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentBackgroundFilling,
     SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange,
-    TextSegment, reduce_ratio,
+    TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion, TextSegment, TextStyle, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -22,6 +22,7 @@ pub enum DraftValidationError {
     InvalidRationalFrameRate { field: String, reason: String },
     InvalidCanvasConfig { field: String, reason: String },
     InvalidSegmentVisual { field: String, reason: String },
+    InvalidTextSegment { field: String, reason: String },
     DuplicateId { id_kind: String, id: String },
     DerivedArtifactLeakage { field: String },
     InvalidDraftJson { message: String },
@@ -50,6 +51,9 @@ impl fmt::Display for DraftValidationError {
             }
             Self::InvalidSegmentVisual { field, reason } => {
                 write!(formatter, "invalid segment visual {field}: {reason}")
+            }
+            Self::InvalidTextSegment { field, reason } => {
+                write!(formatter, "invalid text segment {field}: {reason}")
             }
             Self::DuplicateId { id_kind, id } => {
                 write!(formatter, "duplicate {id_kind} id {id}")
@@ -392,32 +396,191 @@ fn validate_text_segment(field: &str, text: &TextSegment) -> Result<(), DraftVal
     if text.content.trim().is_empty() {
         return Err(missing_field(&format!("{field}.content")));
     }
-    if text.style.font_size == 0 {
-        return Err(missing_field(&format!("{field}.style.fontSize")));
+    validate_text_style(&format!("{field}.style"), &text.style)?;
+    validate_text_box(&format!("{field}.textBox"), &text.text_box)?;
+    validate_text_layout_region(&format!("{field}.layoutRegion"), &text.layout_region)?;
+    if let Some(bubble) = &text.bubble {
+        validate_text_bubble_ref(&format!("{field}.bubble"), bubble)?;
     }
-    validate_required_text(&format!("{field}.style.color"), &text.style.color)?;
-    if let Some(stroke) = &text.style.stroke {
-        validate_required_text(&format!("{field}.style.stroke.color"), &stroke.color)?;
-        if stroke.width == 0 {
-            return Err(missing_field(&format!("{field}.style.stroke.width")));
-        }
-    }
-    if let Some(shadow) = &text.style.shadow {
-        validate_required_text(&format!("{field}.style.shadow.color"), &shadow.color)?;
-    }
-    if let Some(background) = &text.style.background {
-        validate_required_text(
-            &format!("{field}.style.background.color"),
-            &background.color,
-        )?;
+    if let Some(effect) = &text.effect {
+        validate_text_effect_ref(&format!("{field}.effect"), effect)?;
     }
 
+    Ok(())
+}
+
+fn validate_text_style(field: &str, style: &TextStyle) -> Result<(), DraftValidationError> {
+    validate_required_text(&format!("{field}.font.family"), &style.font.family)?;
+    if let Some(font_ref) = &style.font.font_ref {
+        validate_required_text(&format!("{field}.font.fontRef"), font_ref)?;
+    }
+    if style.font_size == 0 {
+        return Err(invalid_text_segment(
+            &format!("{field}.fontSize"),
+            "font size must be greater than zero",
+        ));
+    }
+    validate_text_hex_color(&format!("{field}.color"), &style.color)?;
+    if style.line_height_millis < crate::MIN_TEXT_LINE_HEIGHT_MILLIS
+        || style.line_height_millis > crate::MAX_TEXT_LINE_HEIGHT_MILLIS
+    {
+        return Err(invalid_text_segment(
+            &format!("{field}.lineHeightMillis"),
+            &format!(
+                "line height must be between {} and {} millis",
+                crate::MIN_TEXT_LINE_HEIGHT_MILLIS,
+                crate::MAX_TEXT_LINE_HEIGHT_MILLIS
+            ),
+        ));
+    }
+    validate_text_millis_range(
+        &format!("{field}.letterSpacingMillis"),
+        style.letter_spacing_millis,
+        crate::MAX_TEXT_LETTER_SPACING_MILLIS,
+        "letter spacing must be between 0 and 2000 millis",
+    )?;
+    if let Some(stroke) = &style.stroke {
+        validate_text_hex_color(&format!("{field}.stroke.color"), &stroke.color)?;
+        if stroke.width == 0 {
+            return Err(invalid_text_segment(
+                &format!("{field}.stroke.width"),
+                "stroke width must be greater than zero",
+            ));
+        }
+    }
+    if let Some(shadow) = &style.shadow {
+        validate_text_hex_color(&format!("{field}.shadow.color"), &shadow.color)?;
+    }
+    if let Some(background) = &style.background {
+        validate_text_hex_color(&format!("{field}.background.color"), &background.color)?;
+    }
+
+    Ok(())
+}
+
+fn validate_text_box(field: &str, text_box: &TextBox) -> Result<(), DraftValidationError> {
+    validate_positive_text_millis(&format!("{field}.widthMillis"), text_box.width_millis)?;
+    validate_positive_text_millis(&format!("{field}.heightMillis"), text_box.height_millis)
+}
+
+fn validate_text_layout_region(
+    field: &str,
+    layout_region: &TextLayoutRegion,
+) -> Result<(), DraftValidationError> {
+    for (name, value) in [
+        ("xMillis", layout_region.x_millis),
+        ("yMillis", layout_region.y_millis),
+        ("widthMillis", layout_region.width_millis),
+        ("heightMillis", layout_region.height_millis),
+    ] {
+        validate_text_millis_range(
+            &format!("{field}.{name}"),
+            value,
+            crate::MAX_TEXT_LAYOUT_MILLIS,
+            "layout region values must be between 0 and 1000 millis",
+        )?;
+    }
+    validate_positive_text_millis(&format!("{field}.widthMillis"), layout_region.width_millis)?;
+    validate_positive_text_millis(&format!("{field}.heightMillis"), layout_region.height_millis)?;
+    if layout_region.x_millis + layout_region.width_millis > crate::MAX_TEXT_LAYOUT_MILLIS {
+        return Err(invalid_text_segment(
+            field,
+            "layout region x plus width must be <= 1000",
+        ));
+    }
+    if layout_region.y_millis + layout_region.height_millis > crate::MAX_TEXT_LAYOUT_MILLIS {
+        return Err(invalid_text_segment(
+            field,
+            "layout region y plus height must be <= 1000",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_text_bubble_ref(
+    field: &str,
+    bubble: &TextBubbleRef,
+) -> Result<(), DraftValidationError> {
+    match bubble {
+        TextBubbleRef::Unsupported { name, external_ref } => {
+            validate_required_text(&format!("{field}.name"), name)?;
+            validate_optional_external_ref(&format!("{field}.externalRef"), external_ref)
+        }
+    }
+}
+
+fn validate_text_effect_ref(
+    field: &str,
+    effect: &TextEffectRef,
+) -> Result<(), DraftValidationError> {
+    match effect {
+        TextEffectRef::Unsupported { name, external_ref } => {
+            validate_required_text(&format!("{field}.name"), name)?;
+            validate_optional_external_ref(&format!("{field}.externalRef"), external_ref)
+        }
+    }
+}
+
+fn validate_optional_external_ref(
+    field: &str,
+    external_ref: &Option<String>,
+) -> Result<(), DraftValidationError> {
+    if let Some(external_ref) = external_ref {
+        validate_required_text(field, external_ref)?;
+    }
     Ok(())
 }
 
 fn validate_required_text(field: &str, value: &str) -> Result<(), DraftValidationError> {
     if value.trim().is_empty() {
         return Err(missing_field(field));
+    }
+    Ok(())
+}
+
+fn validate_positive_text_millis(field: &str, value: u32) -> Result<(), DraftValidationError> {
+    if value == 0 {
+        return Err(invalid_text_segment(
+            field,
+            "value must be greater than zero millis",
+        ));
+    }
+    validate_text_millis_range(
+        field,
+        value,
+        crate::MAX_TEXT_LAYOUT_MILLIS,
+        "value must be <= 1000 millis",
+    )
+}
+
+fn validate_text_millis_range(
+    field: &str,
+    value: u32,
+    max: u32,
+    reason: &str,
+) -> Result<(), DraftValidationError> {
+    if value > max {
+        return Err(invalid_text_segment(field, reason));
+    }
+    Ok(())
+}
+
+fn validate_text_hex_color(field: &str, color: &str) -> Result<(), DraftValidationError> {
+    let color = color.trim();
+    if color.len() != 7 || !color.starts_with('#') {
+        return Err(invalid_text_segment(
+            field,
+            "color must use #RRGGBB hex format",
+        ));
+    }
+    if !color[1..]
+        .chars()
+        .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err(invalid_text_segment(
+            field,
+            "color must contain only hex digits",
+        ));
     }
     Ok(())
 }
@@ -632,6 +795,13 @@ fn invalid_canvas(field: &str, reason: &str) -> DraftValidationError {
 
 fn invalid_segment_visual(field: &str, reason: &str) -> DraftValidationError {
     DraftValidationError::InvalidSegmentVisual {
+        field: field.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+fn invalid_text_segment(field: &str, reason: &str) -> DraftValidationError {
+    DraftValidationError::InvalidTextSegment {
         field: field.to_owned(),
         reason: reason.to_owned(),
     }

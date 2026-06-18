@@ -10,6 +10,10 @@ pub const MAX_SEGMENT_VOLUME_MILLIS: u32 = 4_000;
 pub const MAX_SEGMENT_OPACITY_MILLIS: u32 = 1_000;
 pub const MAX_SEGMENT_CROP_MILLIS: u32 = 1_000;
 pub const MAX_SEGMENT_ANCHOR_MILLIS: u32 = 1_000;
+pub const MIN_TEXT_LINE_HEIGHT_MILLIS: u32 = 500;
+pub const MAX_TEXT_LINE_HEIGHT_MILLIS: u32 = 3_000;
+pub const MAX_TEXT_LETTER_SPACING_MILLIS: u32 = 2_000;
+pub const MAX_TEXT_LAYOUT_MILLIS: u32 = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -99,6 +103,43 @@ pub enum TextAlignment {
     Right,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TextSegmentSource {
+    Text,
+    Subtitle,
+}
+
+impl Default for TextSegmentSource {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextFont {
+    pub family: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub font_ref: Option<String>,
+}
+
+impl TextFont {
+    pub fn system_default() -> Self {
+        Self {
+            family: "PingFang SC".to_owned(),
+            font_ref: None,
+        }
+    }
+}
+
+impl Default for TextFont {
+    fn default() -> Self {
+        Self::system_default()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextStroke {
@@ -124,9 +165,15 @@ pub struct TextBackground {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextStyle {
+    #[serde(default)]
+    pub font: TextFont,
     pub font_size: u32,
     pub color: String,
     pub alignment: TextAlignment,
+    #[serde(default = "default_text_line_height_millis")]
+    pub line_height_millis: u32,
+    #[serde(default)]
+    pub letter_spacing_millis: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub stroke: Option<TextStroke>,
@@ -138,11 +185,134 @@ pub struct TextStyle {
     pub background: Option<TextBackground>,
 }
 
+impl TextStyle {
+    pub fn default_title() -> Self {
+        Self {
+            font: TextFont::default(),
+            font_size: 36,
+            color: "#ffffff".to_owned(),
+            alignment: TextAlignment::Center,
+            line_height_millis: default_text_line_height_millis(),
+            letter_spacing_millis: 0,
+            stroke: None,
+            shadow: None,
+            background: None,
+        }
+    }
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self::default_title()
+    }
+}
+
+fn default_text_line_height_millis() -> u32 {
+    1_200
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextBox {
+    pub width_millis: u32,
+    pub height_millis: u32,
+}
+
+impl TextBox {
+    pub const fn default_box() -> Self {
+        Self {
+            width_millis: 800,
+            height_millis: 200,
+        }
+    }
+}
+
+impl Default for TextBox {
+    fn default() -> Self {
+        Self::default_box()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TextLayoutRegion {
+    pub x_millis: u32,
+    pub y_millis: u32,
+    pub width_millis: u32,
+    pub height_millis: u32,
+}
+
+impl TextLayoutRegion {
+    pub const fn safe_area() -> Self {
+        Self {
+            x_millis: 100,
+            y_millis: 100,
+            width_millis: 800,
+            height_millis: 800,
+        }
+    }
+}
+
+impl Default for TextLayoutRegion {
+    fn default() -> Self {
+        Self::safe_area()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TextWrapping {
+    None,
+    Auto,
+}
+
+impl Default for TextWrapping {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TextBubbleRef {
+    Unsupported {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        external_ref: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TextEffectRef {
+    Unsupported {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        external_ref: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextSegment {
     pub content: String,
+    #[serde(default)]
+    pub source: TextSegmentSource,
     pub style: TextStyle,
+    #[serde(default)]
+    pub text_box: TextBox,
+    #[serde(default)]
+    pub layout_region: TextLayoutRegion,
+    #[serde(default)]
+    pub wrapping: TextWrapping,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bubble: Option<TextBubbleRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub effect: Option<TextEffectRef>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

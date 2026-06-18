@@ -32,11 +32,14 @@ pub use material::{
 pub use time::Microseconds;
 pub use timeline::{
     Filter, Keyframe, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
-    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MainTrackMagnet, Segment, SegmentAnchor,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentMask,
-    SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
-    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
-    TextSegment, TextShadow, TextStroke, TextStyle, Track, TrackKind, Transition,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
+    MainTrackMagnet, Segment, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
+    TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
