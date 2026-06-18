@@ -1,0 +1,98 @@
+use draft_model::{
+    Draft, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, Track, TrackKind,
+};
+use realtime_preview_runtime::{
+    RealtimePreviewGraphInput, RealtimePreviewGraphPrepareErrorKind,
+    prepare_realtime_preview_graph,
+};
+use render_graph::OutputDimensions;
+
+#[test]
+fn graph_prepare_builds_engine_owned_single_frame_render_graph_without_ffmpeg() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: supported_draft(),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("supported draft prepares graph");
+
+    assert_eq!(prepared.target_time, Microseconds::new(500_000));
+    assert_eq!(prepared.preview_dimensions, OutputDimensions::new(960, 540));
+    assert_eq!(prepared.profile.canvas_width, 1920);
+    assert_eq!(prepared.profile.canvas_height, 1080);
+    assert_eq!(prepared.frame_rate, RationalFrameRate::new(30, 1));
+    assert_eq!(
+        prepared.render_range.target_timerange,
+        TargetTimerange::new(Microseconds::new(500_000), Microseconds::new(33_333))
+    );
+    assert_eq!(prepared.render_range.frames.len(), 1);
+    assert_eq!(prepared.graph.video_layers.len(), 1);
+    assert_eq!(prepared.graph.materials[0].material_id.as_str(), "video-material");
+    assert_eq!(prepared.diagnostics.len(), 0);
+}
+
+#[test]
+fn graph_prepare_returns_classified_errors_for_invalid_profile_and_range_inputs() {
+    let invalid_dimensions = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: supported_draft(),
+        target_time: Microseconds::new(0),
+        preview_dimensions: OutputDimensions::new(0, 540),
+    })
+    .expect_err("zero preview dimensions should be classified");
+
+    assert_eq!(
+        invalid_dimensions.kind,
+        RealtimePreviewGraphPrepareErrorKind::InvalidPreviewProfile
+    );
+    assert!(
+        invalid_dimensions
+            .message
+            .contains("preview dimensions width and height")
+    );
+
+    let empty_range = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: supported_draft(),
+        target_time: Microseconds::new(2_000_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect_err("target outside draft should be classified");
+
+    assert_eq!(
+        empty_range.kind,
+        RealtimePreviewGraphPrepareErrorKind::RenderGraphFailed
+    );
+    assert!(empty_range.message.contains("render graph"));
+}
+
+fn supported_draft() -> Draft {
+    let mut draft = Draft::new("realtime-graph-prepare", "Realtime graph prepare");
+    let mut material = Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file://video.mp4",
+        "video-material",
+    );
+    material.metadata = MaterialMetadata {
+        duration: Some(Microseconds::new(1_000_000)),
+        width: Some(1920),
+        height: Some(1080),
+        frame_rate: Some(RationalFrameRate::new(30, 1)),
+        has_video: true,
+        has_audio: true,
+        audio_sample_rate: Some(48_000),
+        audio_channels: Some(2),
+        probe_error: None,
+    };
+    draft.materials.push(material);
+
+    let mut track = Track::new("video-track", TrackKind::Video, "Video");
+    track.segments.push(Segment::new(
+        "video-a",
+        "video-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    ));
+    draft.tracks.push(track);
+    draft
+}
