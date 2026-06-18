@@ -3,6 +3,7 @@
 pub mod clock;
 pub mod diagnostics;
 pub mod fallback;
+pub mod graph_prepare;
 pub mod request;
 pub mod session;
 pub mod telemetry;
@@ -12,6 +13,10 @@ pub use diagnostics::{
     RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewSupport,
 };
 pub use fallback::RealtimePreviewFallbackReason;
+pub use graph_prepare::{
+    PreparedRealtimePreviewGraph, RealtimePreviewGraphInput, RealtimePreviewGraphPrepareError,
+    RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
+};
 pub use request::{
     PreviewCancellationToken, PreviewRequestMode, RealtimePreviewBackendUsed,
     RealtimePreviewFrameRequest, RealtimePreviewFrameResult,

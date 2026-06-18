@@ -19,6 +19,26 @@ pub struct RealtimePreviewDiagnostic {
 }
 
 impl RealtimePreviewDiagnostic {
+    pub fn new(
+        entity_id: Option<String>,
+        domain: RealtimePreviewDiagnosticDomain,
+        support: RealtimePreviewSupport,
+        reason: impl Into<String>,
+        fallback: Option<RealtimePreviewFallbackReason>,
+        fallback_used: bool,
+    ) -> Self {
+        Self {
+            entity_id,
+            domain,
+            support,
+            reason: reason.into(),
+            fallback,
+            fallback_used,
+            canceled: false,
+            cancellation_token: None,
+        }
+    }
+
     pub fn runtime(
         reason: impl Into<String>,
         support: RealtimePreviewSupport,

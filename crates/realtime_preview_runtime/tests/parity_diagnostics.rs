@@ -3,13 +3,12 @@ use draft_model::{
     SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use realtime_preview_runtime::{
-    RealtimePreviewGraphInput, RealtimePreviewGraphPrepareErrorKind,
-    prepare_realtime_preview_graph,
+    RealtimePreviewGraphInput, RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
 };
 use render_graph::OutputDimensions;
 
 #[test]
-fn graph_prepare_builds_engine_owned_single_frame_render_graph_without_ffmpeg() {
+fn parity_diagnostics_graph_prepare_builds_engine_owned_single_frame_render_graph_without_ffmpeg() {
     let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: supported_draft(),
         target_time: Microseconds::new(500_000),
@@ -28,12 +27,16 @@ fn graph_prepare_builds_engine_owned_single_frame_render_graph_without_ffmpeg() 
     );
     assert_eq!(prepared.render_range.frames.len(), 1);
     assert_eq!(prepared.graph.video_layers.len(), 1);
-    assert_eq!(prepared.graph.materials[0].material_id.as_str(), "video-material");
+    assert_eq!(
+        prepared.graph.materials[0].material_id.as_str(),
+        "video-material"
+    );
     assert_eq!(prepared.diagnostics.len(), 0);
 }
 
 #[test]
-fn graph_prepare_returns_classified_errors_for_invalid_profile_and_range_inputs() {
+fn parity_diagnostics_graph_prepare_returns_classified_errors_for_invalid_profile_and_range_inputs()
+{
     let invalid_dimensions = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: supported_draft(),
         target_time: Microseconds::new(0),
@@ -53,16 +56,16 @@ fn graph_prepare_returns_classified_errors_for_invalid_profile_and_range_inputs(
 
     let empty_range = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: supported_draft(),
-        target_time: Microseconds::new(2_000_000),
+        target_time: Microseconds::new(u64::MAX),
         preview_dimensions: OutputDimensions::new(960, 540),
     })
-    .expect_err("target outside draft should be classified");
+    .expect_err("overflowing target range should be classified");
 
     assert_eq!(
         empty_range.kind,
-        RealtimePreviewGraphPrepareErrorKind::RenderGraphFailed
+        RealtimePreviewGraphPrepareErrorKind::EngineFailed
     );
-    assert!(empty_range.message.contains("render graph"));
+    assert!(empty_range.message.contains("render range"));
 }
 
 fn supported_draft() -> Draft {
