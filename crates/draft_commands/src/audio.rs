@@ -8,6 +8,7 @@ use draft_model::{
 
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
+    delta::{audio_property_delta, audio_segment_delta, track_mute_delta},
     history::push_undo_snapshot,
     timeline::{validate_timeline_rules, validate_track_unlocked},
 };
@@ -33,6 +34,15 @@ pub fn add_audio_segment(
         target_timerange,
     ));
     validate_timeline_rules(&next_draft)?;
+    let delta = audio_segment_delta(
+        CommandName::AddAudioSegment,
+        &track_id,
+        next_draft.tracks[track_index]
+            .segments
+            .last()
+            .expect("audio segment was just appended"),
+        "audio segment added",
+    );
 
     Ok(response(
         next_draft,
@@ -46,6 +56,7 @@ pub fn add_audio_segment(
         "addAudioSegment",
         "audioSegmentAdded",
         CommandName::AddAudioSegment,
+        delta,
     ))
 }
 
@@ -65,6 +76,12 @@ pub fn set_segment_volume(
     next_draft.tracks[track_index].segments[segment_index].volume = volume;
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = audio_property_delta(
+        CommandName::SetSegmentVolume,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        "segment volume changed",
+    );
 
     Ok(response(
         next_draft,
@@ -78,6 +95,7 @@ pub fn set_segment_volume(
         "setSegmentVolume",
         "segmentVolumeChanged",
         CommandName::SetSegmentVolume,
+        delta,
     ))
 }
 
@@ -94,6 +112,7 @@ pub fn set_track_mute(
 
     next_draft.tracks[track_index].muted = muted;
     validate_timeline_rules(&next_draft)?;
+    let delta = track_mute_delta(&track_id, &next_draft.tracks[track_index].segments);
 
     Ok(response(
         next_draft,
@@ -107,6 +126,7 @@ pub fn set_track_mute(
         "setTrackMute",
         "trackMuteChanged",
         CommandName::SetTrackMute,
+        delta,
     ))
 }
 
@@ -132,7 +152,8 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    command: CommandName,
+    _command: CommandName,
+    delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -156,7 +177,7 @@ fn response(
         command_state,
         selection,
         events,
-        delta: CommandDelta::none(command, "delta pending command-specific builder"),
+        delta,
     }
 }
 

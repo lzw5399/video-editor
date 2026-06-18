@@ -1,6 +1,4 @@
-use draft_commands::audio::{
-    add_audio_segment, set_segment_volume, set_track_mute,
-};
+use draft_commands::audio::{add_audio_segment, set_segment_volume, set_track_mute};
 use draft_commands::text::{add_text_segment, edit_text_segment, import_subtitle_srt};
 use draft_commands::timeline::{
     add_segment as command_add_segment, delete_segment as command_delete_segment,
@@ -264,13 +262,23 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
             DirtyDomain::PreviewCache,
         ],
     );
-    assert!(text_added.delta.changed_entities.contains(&ChangedEntity::Segment {
-        track_id: "text-track".into(),
-        segment_id: "text-segment".into(),
-    }));
-    assert!(text_added.delta.changed_entities.contains(&ChangedEntity::Material {
-        material_id: "text-material".into(),
-    }));
+    assert!(
+        text_added
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "text-track".into(),
+                segment_id: "text-segment".into(),
+            })
+    );
+    assert!(
+        text_added
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Material {
+                material_id: "text-material".into(),
+            })
+    );
 
     let text_edited = edit_text_segment(
         &text_added.draft,
@@ -296,9 +304,8 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
         track_name: "Subtitles".to_owned(),
         segment_id_prefix: "subtitle".to_owned(),
         material_id_prefix: "subtitle-material".to_owned(),
-        srt_content:
-            "1\n00:00:00,100 --> 00:00:00,300\nA\n\n2\n00:00:00,400 --> 00:00:00,800\nB"
-                .to_owned(),
+        srt_content: "1\n00:00:00,100 --> 00:00:00,300\nA\n\n2\n00:00:00,400 --> 00:00:00,800\nB"
+            .to_owned(),
         time_offset: Microseconds::new(50_000),
         style: TextStyle::default(),
         text_box: TextBox::default(),
@@ -316,14 +323,24 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
         ],
         &[DirtyDomain::PreviewCache],
     );
-    assert!(subtitle.delta.changed_entities.contains(&ChangedEntity::Segment {
-        track_id: "text-track".into(),
-        segment_id: "subtitle-1".into(),
-    }));
-    assert!(subtitle.delta.changed_entities.contains(&ChangedEntity::Segment {
-        track_id: "text-track".into(),
-        segment_id: "subtitle-2".into(),
-    }));
+    assert!(
+        subtitle
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "text-track".into(),
+                segment_id: "subtitle-1".into(),
+            })
+    );
+    assert!(
+        subtitle
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "text-track".into(),
+                segment_id: "subtitle-2".into(),
+            })
+    );
 
     let audio_added = add_audio_segment(
         &draft_with_audio_track(),
@@ -392,9 +409,14 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
         &[dirty_range(200_000, 800_000, DirtyRangeSource::Current)],
         &[DirtyDomain::Audio, DirtyDomain::Waveform],
     );
-    assert!(muted.delta.changed_entities.contains(&ChangedEntity::Track {
-        track_id: "audio-track".into(),
-    }));
+    assert!(
+        muted
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Track {
+                track_id: "audio-track".into(),
+            })
+    );
 }
 
 fn assert_delta_eq(actual: &CommandDelta, expected: CommandDelta) {

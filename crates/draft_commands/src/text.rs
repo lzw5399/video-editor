@@ -9,6 +9,7 @@ use draft_model::{
 
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
+    delta::{text_segment_delta, text_segments_delta},
     history::push_undo_snapshot,
     timeline::{validate_timeline_rules, validate_track_unlocked},
 };
@@ -40,6 +41,15 @@ pub fn add_text_segment(
     next_draft.tracks[track_index].segments.push(segment);
 
     validate_timeline_rules(&next_draft)?;
+    let delta = text_segment_delta(
+        CommandName::AddTextSegment,
+        &track_id,
+        next_draft.tracks[track_index]
+            .segments
+            .last()
+            .expect("text segment was just appended"),
+        "text segment added",
+    );
 
     Ok(response(
         next_draft,
@@ -53,6 +63,7 @@ pub fn add_text_segment(
         "addTextSegment",
         "textSegmentAdded",
         CommandName::AddTextSegment,
+        delta,
     ))
 }
 
@@ -81,6 +92,12 @@ pub fn edit_text_segment(
     next_draft.tracks[track_index].segments[segment_index].text = Some(text);
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = text_segment_delta(
+        CommandName::EditTextSegment,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        "text segment edited",
+    );
 
     Ok(response(
         next_draft,
@@ -94,6 +111,7 @@ pub fn edit_text_segment(
         "editTextSegment",
         "textSegmentEdited",
         CommandName::EditTextSegment,
+        delta,
     ))
 }
 
@@ -143,6 +161,7 @@ pub fn import_subtitle_srt(
     };
 
     let mut segment_ids = Vec::with_capacity(cues.len());
+    let mut added_segments = Vec::with_capacity(cues.len());
     for (index, cue) in cues.into_iter().enumerate() {
         let ordinal = index + 1;
         let segment_id = SegmentId::from(format!("{}-{ordinal}", payload.segment_id_prefix));
@@ -178,11 +197,18 @@ pub fn import_subtitle_srt(
             TargetTimerange::new(target_start, cue.duration),
         );
         segment.text = Some(text);
+        added_segments.push(segment.clone());
         next_draft.tracks[track_index].segments.push(segment);
         segment_ids.push(segment_id);
     }
 
     validate_timeline_rules(&next_draft)?;
+    let delta = text_segments_delta(
+        CommandName::ImportSubtitleSrt,
+        &payload.track_id,
+        added_segments.iter(),
+        "subtitle SRT imported",
+    );
 
     Ok(response(
         next_draft,
@@ -196,6 +222,7 @@ pub fn import_subtitle_srt(
         "importSubtitleSrt",
         "subtitleSrtImported",
         CommandName::ImportSubtitleSrt,
+        delta,
     ))
 }
 
@@ -345,7 +372,8 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    command: CommandName,
+    _command: CommandName,
+    delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
         command_state,
@@ -369,7 +397,7 @@ fn response(
         command_state,
         selection,
         events,
-        delta: CommandDelta::none(command, "delta pending command-specific builder"),
+        delta,
     }
 }
 
