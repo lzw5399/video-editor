@@ -411,6 +411,50 @@ fn schema_exports_include_timeline_command_session_contracts() {
 }
 
 #[test]
+fn schema_exports_include_phase13_incremental_harness_anchors() {
+    let command_schema = command_schema_json();
+    let draft_schema = draft_schema_json();
+    let command_result_ts = command_result_ts_contract();
+    let draft_ts = ts_contract(&[
+        export_decl::<Microseconds>(),
+        export_decl::<TargetTimerange>(),
+        export_decl::<MaterialId>(),
+    ]);
+
+    for expected_contract in [
+        "TimelineCommandResponse",
+        "InvalidatePreviewCacheCommandPayload",
+        "PreviewCacheInvalidationResponse",
+    ] {
+        assert!(
+            command_schema.contains(expected_contract)
+                || command_result_ts.contains(expected_contract),
+            "Phase 13 downstream contract assertions should attach to {expected_contract}"
+        );
+    }
+
+    for expected_contract in ["Microseconds", "TargetTimerange", "MaterialId"] {
+        assert!(
+            draft_schema.contains(expected_contract) || draft_ts.contains(expected_contract),
+            "Phase 13 dirty range contracts should keep exporting {expected_contract}"
+        );
+    }
+
+    for forbidden in [
+        "artifactStore",
+        "graphSnapshot",
+        "previewCacheKey",
+        "dirtyRangeSeconds",
+        "targetTimeSeconds",
+    ] {
+        assert!(
+            !draft_schema.contains(forbidden),
+            "canonical draft schema must not grow derived Phase 13 metadata field {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn schema_exports_include_timeline_edit_command_contracts() {
     let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();

@@ -1,6 +1,7 @@
 use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandName, CommandPayload,
-    CommandResultEnvelope, PingResponse, VersionResponse,
+    CommandResultEnvelope, CommandState, Draft, Microseconds, PingResponse, TargetTimerange,
+    TimelineCommandResponse, TimelineSelection, VersionResponse,
 };
 use serde_json::json;
 
@@ -115,4 +116,89 @@ fn contract_rejects_mismatched_command_and_payload_kind() {
         result.is_err(),
         "command name and payload kind must describe the same operation"
     );
+}
+
+#[test]
+fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
+    let response = TimelineCommandResponse {
+        draft: Draft::new("phase13-contract-draft", "Phase 13 Contract"),
+        command_state: CommandState::empty(),
+        selection: TimelineSelection::empty(),
+        events: vec![CommandEvent {
+            kind: "phase13HarnessReady".to_owned(),
+            message: Some("delta assertions attach here in downstream plans".to_owned()),
+        }],
+    };
+
+    let serialized = serde_json::to_value(&response).expect("timeline response serializes");
+    assert_eq!(
+        serialized,
+        json!({
+            "draft": {
+                "schemaVersion": 1,
+                "draftId": "phase13-contract-draft",
+                "metadata": { "name": "Phase 13 Contract" },
+                "canvasConfig": {
+                    "aspectRatio": { "kind": "preset", "preset": "ratio16x9" },
+                    "width": 1920,
+                    "height": 1080,
+                    "frameRate": { "numerator": 30, "denominator": 1 },
+                    "background": { "kind": "black" }
+                },
+                "materials": [],
+                "tracks": []
+            },
+            "commandState": {
+                "undoStack": [],
+                "redoStack": [],
+                "maxHistoryEntries": 100,
+                "snapping": { "enabled": true, "threshold": 100000 }
+            },
+            "selection": { "segmentIds": [], "trackIds": [] },
+            "events": [{
+                "kind": "phase13HarnessReady",
+                "message": "delta assertions attach here in downstream plans"
+            }]
+        })
+    );
+
+    let serialized_text = serialized.to_string();
+    for forbidden in [
+        "ffmpegArgs",
+        "renderGraph",
+        "previewCacheKey",
+        "dirtyRanges",
+        "artifactStore",
+    ] {
+        assert!(
+            !serialized_text.contains(forbidden),
+            "timeline command response should not leak derived ownership field {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn contract_documents_integer_half_open_dirty_range_anchor() {
+    let range = TargetTimerange::new(Microseconds::new(100_000), Microseconds::new(50_000));
+    let adjacent = TargetTimerange::new(Microseconds::new(150_000), Microseconds::new(25_000));
+    let overlapping = TargetTimerange::new(Microseconds::new(149_999), Microseconds::new(1));
+
+    assert_eq!(range.start.get(), 100_000);
+    assert_eq!(range.duration.get(), 50_000);
+    assert!(!half_open_overlap(&range, &adjacent));
+    assert!(half_open_overlap(&range, &overlapping));
+}
+
+fn half_open_overlap(first: &TargetTimerange, second: &TargetTimerange) -> bool {
+    let first_end = first
+        .start
+        .get()
+        .checked_add(first.duration.get())
+        .expect("test ranges should not overflow");
+    let second_end = second
+        .start
+        .get()
+        .checked_add(second.duration.get())
+        .expect("test ranges should not overflow");
+    first.start.get() < second_end && second.start.get() < first_end
 }
