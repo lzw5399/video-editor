@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 
+type RealtimePreviewHostRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactorMillis: number;
+};
+
 const allowedRendererUrl = readAllowedRendererUrl();
 
 if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.location.href, allowedRendererUrl)) {
@@ -17,6 +25,10 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorPlatform", {
     openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles"),
     pathToFileUrl: (path: string) => ipcRenderer.invoke("platform:pathToFileUrl", path)
+  });
+  contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
+    updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
+    getTelemetry: () => ipcRenderer.invoke("realtimePreviewHost:getTelemetry")
   });
 }
 
@@ -42,4 +54,18 @@ function isAllowedRendererLocation(targetHref: string, allowedHref: string): boo
   } catch {
     return false;
   }
+}
+
+function sanitizeHostRect(rect: RealtimePreviewHostRect): RealtimePreviewHostRect {
+  return {
+    x: finiteRounded(rect.x),
+    y: finiteRounded(rect.y),
+    width: finiteRounded(rect.width),
+    height: finiteRounded(rect.height),
+    scaleFactorMillis: finiteRounded(rect.scaleFactorMillis)
+  };
+}
+
+function finiteRounded(value: number): number {
+  return Number.isFinite(value) ? Math.round(value) : 0;
 }

@@ -9,7 +9,7 @@ use realtime_preview_runtime::{
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as SerdeDeError, Deserialize, Deserializer, Serialize};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 
@@ -232,7 +232,11 @@ pub enum RealtimePreviewSurfaceBindingKind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RealtimePreviewSurfaceBindingDescriptor {
     pub kind: RealtimePreviewSurfaceBindingKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_u64_from_js_number",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub parent_handle: Option<u64>,
     pub x: i32,
     pub y: i32,
@@ -464,6 +468,36 @@ fn validate_binding_session_id(session_id: &str) -> Result<(), RealtimePreviewBi
     Ok(())
 }
 
+fn deserialize_optional_u64_from_js_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::Number(number) => {
+            if let Some(value) = number.as_u64() {
+                return Ok(Some(value));
+            }
+            let Some(value) = number.as_f64() else {
+                return Err(D::Error::custom("native parent handle must be an integer"));
+            };
+            if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > u64::MAX as f64 {
+                return Err(D::Error::custom("native parent handle must be a nonnegative integer"));
+            }
+            Ok(Some(value as u64))
+        }
+        serde_json::Value::String(value) => value.parse::<u64>().map(Some).map_err(D::Error::custom),
+        _ => Err(D::Error::custom("native parent handle must be an integer")),
+    }
+}
+
 fn validate_frame_rate(
     numerator: u32,
     denominator: u32,
@@ -547,6 +581,24 @@ mod realtime_preview_bindings {
             "diagnostic should come from Rust surface validation: {}",
             error.message()
         );
+    }
+
+    #[test]
+    fn surface_parent_handle_accepts_integral_js_number_values() {
+        let descriptor: RealtimePreviewSurfaceBindingDescriptor = serde_json::from_value(
+            serde_json::json!({
+                "kind": "mock",
+                "parentHandle": 1357210896576.0,
+                "x": 12,
+                "y": 34,
+                "width": 320,
+                "height": 180,
+                "scaleFactorMillis": 1250
+            }),
+        )
+        .expect("integral JS number handles deserialize");
+
+        assert_eq!(descriptor.parent_handle, Some(1_357_210_896_576));
     }
 
     #[test]

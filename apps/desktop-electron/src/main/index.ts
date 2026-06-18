@@ -12,6 +12,7 @@ import type {
 } from "../generated/CommandResultEnvelope";
 import type { Draft, Keyframe, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
 import { executeCommand, ping, version } from "./nativeBinding";
+import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
 type TestExecuteCommandCall = {
   command: CommandEnvelope["command"];
@@ -143,6 +144,7 @@ async function createWindow(): Promise<void> {
       additionalArguments: rendererArguments
     }
   });
+  registerRealtimePreviewHost(window, assertAllowedIpcSender);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, targetUrl) => {

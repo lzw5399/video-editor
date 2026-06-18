@@ -12,6 +12,102 @@ type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
+  createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
+  closeRealtimePreviewSession: (request: RealtimePreviewSessionRequest) => RealtimePreviewClosedResponse;
+  attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
+  updateRealtimePreviewSurfaceBounds: (request: RealtimePreviewSurfaceBoundsRequest) => RealtimePreviewGenerationResponse;
+  detachRealtimePreviewSurface: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
+  requestRealtimePreviewFrame: (request: RealtimePreviewFrameRequest) => RealtimePreviewFrameResponse;
+  getRealtimePreviewTelemetry: (request: RealtimePreviewSessionRequest) => RealtimePreviewTelemetryResponse;
+};
+
+export type RealtimePreviewSessionConfig = {
+  sessionLabel: string;
+  frameRateNumerator: number;
+  frameRateDenominator: number;
+  playbackRateNumerator: number;
+  playbackRateDenominator: number;
+};
+
+export type RealtimePreviewSessionRequest = {
+  sessionId: string;
+};
+
+export type RealtimePreviewSessionResponse = {
+  sessionId: string;
+  playbackGeneration: number;
+};
+
+export type RealtimePreviewClosedResponse = {
+  sessionId: string;
+  closed: boolean;
+};
+
+export type RealtimePreviewSurfaceDescriptor = {
+  kind: "windowsHwnd" | "macosNsView" | "mock" | "offscreen";
+  parentHandle?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactorMillis: number;
+};
+
+export type RealtimePreviewSurfaceRequest = {
+  sessionId: string;
+  surface: RealtimePreviewSurfaceDescriptor;
+};
+
+export type RealtimePreviewSurfaceBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactorMillis: number;
+};
+
+export type RealtimePreviewSurfaceBoundsRequest = {
+  sessionId: string;
+  bounds: RealtimePreviewSurfaceBounds;
+};
+
+export type RealtimePreviewGenerationResponse = {
+  playbackGeneration: number;
+};
+
+export type RealtimePreviewFrameRequest = {
+  sessionId: string;
+  frame: {
+    targetTimeMicroseconds: number;
+    playbackGeneration: number;
+    queueLatencyMs: number;
+    renderDurationMs: number;
+  };
+};
+
+export type RealtimePreviewFrameResponse = {
+  targetTimeMicroseconds: number;
+  playbackGeneration: number;
+  presented: boolean;
+  staleRejected: boolean;
+  canceled: boolean;
+  backend: string;
+};
+
+export type RealtimePreviewTelemetryResponse = {
+  firstFrameLatencyMs: number | null;
+  seekLatencyMs: number | null;
+  queueLatencyMs: number;
+  renderDurationMs: number;
+  presentedFrameCount: number;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  staleRejectedCount: number;
+  canceledRequestCount: number;
+  fallbackCount: number;
+  cacheHitCount: number;
+  targetTimeMicroseconds: number;
+  playbackGeneration: number;
 };
 
 const requireNative = createRequire(__filename);
@@ -44,6 +140,36 @@ export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<
   return binding.executeCommand(command);
 }
 
+export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
+  return requireLoadedBinding().createRealtimePreviewSession(config);
+}
+
+export function closeRealtimePreviewSession(request: RealtimePreviewSessionRequest): RealtimePreviewClosedResponse {
+  return requireLoadedBinding().closeRealtimePreviewSession(request);
+}
+
+export function attachRealtimePreviewSurface(request: RealtimePreviewSurfaceRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().attachRealtimePreviewSurface(request);
+}
+
+export function updateRealtimePreviewSurfaceBounds(
+  request: RealtimePreviewSurfaceBoundsRequest
+): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().updateRealtimePreviewSurfaceBounds(request);
+}
+
+export function detachRealtimePreviewSurface(request: RealtimePreviewSessionRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().detachRealtimePreviewSurface(request);
+}
+
+export function requestRealtimePreviewFrame(request: RealtimePreviewFrameRequest): RealtimePreviewFrameResponse {
+  return requireLoadedBinding().requestRealtimePreviewFrame(request);
+}
+
+export function getRealtimePreviewTelemetry(request: RealtimePreviewSessionRequest): RealtimePreviewTelemetryResponse {
+  return requireLoadedBinding().getRealtimePreviewTelemetry(request);
+}
+
 function loadNativeBinding(): NativeBinding | null {
   if (cachedBinding !== undefined) {
     return cachedBinding;
@@ -55,15 +181,29 @@ function loadNativeBinding(): NativeBinding | null {
     if (
       typeof loaded.ping !== "function" ||
       typeof loaded.version !== "function" ||
-      typeof loaded.executeCommand !== "function"
+      typeof loaded.executeCommand !== "function" ||
+      typeof loaded.createRealtimePreviewSession !== "function" ||
+      typeof loaded.closeRealtimePreviewSession !== "function" ||
+      typeof loaded.attachRealtimePreviewSurface !== "function" ||
+      typeof loaded.updateRealtimePreviewSurfaceBounds !== "function" ||
+      typeof loaded.detachRealtimePreviewSurface !== "function" ||
+      typeof loaded.requestRealtimePreviewFrame !== "function" ||
+      typeof loaded.getRealtimePreviewTelemetry !== "function"
     ) {
-      throw new Error("Native binding does not expose ping, version, and executeCommand");
+      throw new Error("Native binding does not expose the required editor and realtime preview functions");
     }
 
     cachedBinding = {
       ping: loaded.ping,
       version: loaded.version,
-      executeCommand: loaded.executeCommand
+      executeCommand: loaded.executeCommand,
+      createRealtimePreviewSession: loaded.createRealtimePreviewSession,
+      closeRealtimePreviewSession: loaded.closeRealtimePreviewSession,
+      attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,
+      updateRealtimePreviewSurfaceBounds: loaded.updateRealtimePreviewSurfaceBounds,
+      detachRealtimePreviewSurface: loaded.detachRealtimePreviewSurface,
+      requestRealtimePreviewFrame: loaded.requestRealtimePreviewFrame,
+      getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry
     };
     cachedLoadError = null;
     return cachedBinding;
@@ -72,6 +212,14 @@ function loadNativeBinding(): NativeBinding | null {
     cachedLoadError = boundErrorMessage(error);
     return null;
   }
+}
+
+function requireLoadedBinding(): NativeBinding {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    throw new Error(`剪辑核心加载失败：${cachedLoadError ?? "unknown load failure"}`);
+  }
+  return binding;
 }
 
 export function resolveNativeBindingPath(): string {
