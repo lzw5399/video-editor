@@ -577,7 +577,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expectCommandCall(app, "setSegmentVolume");
     await expect(page.getByLabel("音频参数").getByRole("spinbutton", { name: "毫音量" })).toHaveValue("1350");
 
-    await page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" }).check();
+    await page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" }).click();
     await expectCommandCall(app, "setTrackMute");
     await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
     await expect(page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" })).toBeChecked();

@@ -14,6 +14,20 @@ import {
 import "./timeline.css";
 
 const TIMELINE_HEADER_WIDTH_PX = 160;
+const AUDIO_WAVEFORM_PLACEHOLDER_PATTERN: readonly ("short" | "medium" | "tall")[] = [
+  "short",
+  "medium",
+  "tall",
+  "medium",
+  "short",
+  "tall",
+  "medium",
+  "short",
+  "medium",
+  "tall",
+  "short",
+  "medium"
+];
 
 type TimelineProps = {
   workspace: WorkspaceState;
@@ -447,6 +461,7 @@ function TimelineSegmentBlock({
   onSelectSegment?: (segmentId: SegmentId) => void;
 }): React.ReactElement {
   const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
+  const showAudioWaveform = segment.visualKind === "audio";
 
   return (
     <button
@@ -460,6 +475,7 @@ function TimelineSegmentBlock({
     >
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
+      {showAudioWaveform ? <AudioWaveformPlaceholder /> : null}
       {segment.segment.keyframes.length > 0 && showKeyframeStrip ? (
         <span className="segment-keyframe-strip" aria-label="关键帧标记">
           {segment.segment.keyframes.map((keyframe) => (
@@ -478,6 +494,16 @@ function TimelineSegmentBlock({
         </span>
       ) : null}
     </button>
+  );
+}
+
+function AudioWaveformPlaceholder(): React.ReactElement {
+  return (
+    <span className="audio-waveform-placeholder" aria-label="音频波形占位">
+      {AUDIO_WAVEFORM_PLACEHOLDER_PATTERN.map((height, index) => (
+        <span key={`${height}-${index}`} className="audio-waveform-bar" data-height={height} aria-hidden="true" />
+      ))}
+    </span>
   );
 }
 
