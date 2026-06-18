@@ -287,7 +287,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 render/compiler completion)*
 
-- [ ] 07-05-PLAN.md - Propagate canvas profile through preview and export services
+- [x] 07-05-PLAN.md - Propagate canvas profile through preview and export services
 
 **Wave 5** *(blocked on Wave 3 command route and Wave 4 service propagation)*
 
@@ -402,7 +402,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 04.1 Professional Jianying Workspace UI Refinement | 4/4 | Complete    | 2026-06-17 |
 | 5. Preview And Export Pipeline | 9/9 | Complete   | 2026-06-18 |
 | 6. MVP Hardening And Packaging | 5/5 | Complete    | 2026-06-17 |
-| 7. Project Canvas Space And Coordinate System | 4/7 | In Progress|  |
+| 7. Project Canvas Space And Coordinate System | 5/7 | In Progress|  |
 | 8. Segment Transform And Visual Compositing | 0/TBD | Not started | - |
 | 9. Complete Text And Subtitle System | 0/TBD | Not started | - |
 | 10. Typed Keyframe And Animation System | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-04-PLAN.md
-last_updated: "2026-06-18T00:07:02.387Z"
-last_activity: 2026-06-18 -- Phase 07 Wave 3 completed
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-06-18T00:22:20.742Z"
+last_activity: 2026-06-18 -- Phase 07 Plan 05 completed
 progress:
   total_phases: 14
   completed_phases: 7
   total_plans: 49
-  completed_plans: 46
-  percent: 94
+  completed_plans: 47
+  percent: 96
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 07 (project-canvas-space-and-coordinate-system) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
-Last activity: 2026-06-18 -- Phase 07 Wave 3 completed
+Last activity: 2026-06-18 -- Phase 07 Plan 05 completed
 
-Progress: [█████████░] 94%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 46
+- Total plans completed: 47
 - Average duration: 7 min
-- Total execution time: 303 min
+- Total execution time: 324 min
 
 **By Phase:**
 
@@ -53,7 +53,7 @@ Progress: [█████████░] 94%
 
 **Recent Trend:**
 
-- Last 5 plans: 100 min
+- Last 5 plans: 121 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -99,6 +99,7 @@ Progress: [█████████░] 94%
 | Phase 07 P02 | 7 min | 2 tasks | 13 files |
 | Phase 07 P03 | 5 min | 2 tasks | 7 files |
 | Phase 07 P04 | 10 min | 2 tasks | 7 files |
+| Phase 07 P05 | 21 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -182,6 +183,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 08 adds Rust-generated export command contracts for startExport, getExportJobStatus, and cancelExport. — Desktop helpers build envelopes only; renderer code does not construct FFmpeg args, render graphs, export scripts, process handles, or validation expectations.
 - [Phase 05]: Plan 08 routes export through bindings_node's job registry while media_runtime owns process execution and validation. — The binding layer composes engine_core, render_graph, ffmpeg_compiler, and media_runtime without moving export semantics into Electron UI.
 - [Phase 05]: Plan 08 keeps export UI as a compact Chinese panel inside the preview monitor. — This preserves the Jianying-style hierarchy with the top feature bar as the only primary navigation and keeps 1120x720/1280x800 screenshot gates plus dark scrollbar baseline.
+- [Phase 07]: Plan 05 makes preview and export production services resolve `EngineProfile` from `Draft.canvas_config`. — Preview cache output may fit within service max dimensions while preserving canvas aspect ratio, but export output validation uses canonical draft width, height, and rational frame rate.
+- [Phase 07]: Export presets select codec and quality only. — Presets no longer override draft canvas dimensions, which keeps preview/export metadata aligned for vertical and custom projects.
 - [Post-MVP Roadmap]: Project canvas, transform, compositing, complete text, keyframes, retiming, effects, and transitions are planned as first-class core semantics in Phases 7-13. — Jianying/Kaipai-like template fidelity depends on internal Rust/domain/schema/IPC/UI terms aligning with Jianying concepts rather than treating these as adapter-only strings.
 
 ### Pending Todos
@@ -211,6 +214,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T00:06:48.770Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-06-18T00:22:20.739Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None

@@ -202,9 +202,9 @@
 | TEST-06 | Phase 6 | Complete |
 | TEST-07 | Phase 6 | Complete |
 | TEST-08 | Phase 04.1 | Complete |
-| CANVAS-01 | Phase 7 | Planned |
-| CANVAS-02 | Phase 7 | Planned |
-| CANVAS-03 | Phase 7 | Planned |
+| CANVAS-01 | Phase 7 | Complete |
+| CANVAS-02 | Phase 7 | Complete |
+| CANVAS-03 | Phase 7 | Complete |
 | CANVAS-04 | Phase 7 | Planned |
 | XFORM-01 | Phase 8 | Planned |
 | XFORM-02 | Phase 8 | Planned |
