@@ -52,7 +52,9 @@ type CanvasFormState = {
   preset: CanvasPresetChoice;
   width: string;
   height: string;
-  frameRate: string;
+  frameRatePreset: string;
+  frameRateNumerator: string;
+  frameRateDenominator: string;
   backgroundKind: CanvasBackground["kind"];
   color: string;
 };
@@ -254,7 +256,10 @@ export function Inspector({
                       <span>文字内容</span>
                       <textarea
                         value={textState.content}
-                        onChange={(event) => setTextState((current) => ({ ...current, content: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const content = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, content }));
+                        }}
                       />
                     </label>
                     <label className="field-row compact-row">
@@ -263,9 +268,10 @@ export function Inspector({
                         type="number"
                         min="1"
                         value={textState.fontSize}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, fontSize: event.currentTarget.valueAsNumber || 1 }))
-                        }
+                        onChange={(event) => {
+                          const fontSize = event.currentTarget.valueAsNumber || 1;
+                          setTextState((current) => ({ ...current, fontSize }));
+                        }}
                       />
                     </label>
                     <label className="field-row compact-row color-row">
@@ -273,7 +279,10 @@ export function Inspector({
                       <input
                         type="color"
                         value={textState.color}
-                        onChange={(event) => setTextState((current) => ({ ...current, color: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const color = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, color }));
+                        }}
                       />
                     </label>
                     <div className="field-row compact-row">
@@ -295,9 +304,10 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.strokeEnabled}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, strokeEnabled: event.currentTarget.checked }))
-                        }
+                        onChange={(event) => {
+                          const strokeEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, strokeEnabled }));
+                        }}
                       />
                       <span>描边</span>
                     </label>
@@ -307,7 +317,10 @@ export function Inspector({
                         type="color"
                         value={textState.strokeColor}
                         disabled={!textState.strokeEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, strokeColor: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const strokeColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, strokeColor }));
+                        }}
                       />
                     </label>
                     <label className="field-row compact-row">
@@ -317,18 +330,20 @@ export function Inspector({
                         min="1"
                         value={textState.strokeWidth}
                         disabled={!textState.strokeEnabled}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, strokeWidth: event.currentTarget.valueAsNumber || 1 }))
-                        }
+                        onChange={(event) => {
+                          const strokeWidth = event.currentTarget.valueAsNumber || 1;
+                          setTextState((current) => ({ ...current, strokeWidth }));
+                        }}
                       />
                     </label>
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.shadowEnabled}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, shadowEnabled: event.currentTarget.checked }))
-                        }
+                        onChange={(event) => {
+                          const shadowEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, shadowEnabled }));
+                        }}
                       />
                       <span>阴影</span>
                     </label>
@@ -338,16 +353,20 @@ export function Inspector({
                         type="color"
                         value={textState.shadowColor}
                         disabled={!textState.shadowEnabled}
-                        onChange={(event) => setTextState((current) => ({ ...current, shadowColor: event.currentTarget.value }))}
+                        onChange={(event) => {
+                          const shadowColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, shadowColor }));
+                        }}
                       />
                     </label>
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.backgroundEnabled}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, backgroundEnabled: event.currentTarget.checked }))
-                        }
+                        onChange={(event) => {
+                          const backgroundEnabled = event.currentTarget.checked;
+                          setTextState((current) => ({ ...current, backgroundEnabled }));
+                        }}
                       />
                       <span>背景</span>
                     </label>
@@ -357,9 +376,10 @@ export function Inspector({
                         type="color"
                         value={textState.backgroundColor}
                         disabled={!textState.backgroundEnabled}
-                        onChange={(event) =>
-                          setTextState((current) => ({ ...current, backgroundColor: event.currentTarget.value }))
-                        }
+                        onChange={(event) => {
+                          const backgroundColor = event.currentTarget.value;
+                          setTextState((current) => ({ ...current, backgroundColor }));
+                        }}
                       />
                     </label>
                     <button
@@ -445,11 +465,12 @@ function CanvasDraftSettings({
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
 }): React.ReactElement {
   const acceptedConfig = workspace.draft.canvasConfig;
+  const acceptedConfigKey = useMemo(() => JSON.stringify(acceptedConfig), [acceptedConfig]);
   const [canvasState, setCanvasState] = useState<CanvasFormState>(() => canvasFormFromConfig(acceptedConfig));
 
   useEffect(() => {
     setCanvasState(canvasFormFromConfig(acceptedConfig));
-  }, [acceptedConfig]);
+  }, [acceptedConfigKey]);
 
   const candidate = buildCanvasConfigFromForm(canvasState);
   const validationMessage = validateCanvasForm(canvasState);
@@ -480,6 +501,17 @@ function CanvasDraftSettings({
       preset: "custom",
       [field]: value
     }));
+  }
+
+  function updateFrameRatePart(field: "frameRateNumerator" | "frameRateDenominator", value: string): void {
+    setCanvasState((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function updateCanvasColor(value: string): void {
+    setCanvasState((current) => ({ ...current, color: value }));
   }
 
   return (
@@ -545,17 +577,61 @@ function CanvasDraftSettings({
 
         <label className="canvas-control-row">
           <span>帧率</span>
-          <select
-            aria-label="帧率"
-            value={canvasState.frameRate}
-            onChange={(event) => setCanvasState((current) => ({ ...current, frameRate: event.currentTarget.value }))}
-          >
-            {CANVAS_FRAME_RATES.map((frameRate) => (
-              <option key={frameRate} value={String(frameRate)}>
-                {frameRate} fps
+          <span className="canvas-frame-rate-controls">
+            <select
+              aria-label="帧率"
+              value={canvasState.frameRatePreset}
+              onChange={(event) => {
+                const nextFrameRate = event.currentTarget.value;
+                setCanvasState((current) => {
+                  if (nextFrameRate === "custom") {
+                    return { ...current, frameRatePreset: "custom" };
+                  }
+
+                  return {
+                    ...current,
+                    frameRatePreset: nextFrameRate,
+                    frameRateNumerator: nextFrameRate,
+                    frameRateDenominator: "1"
+                  };
+                });
+              }}
+            >
+              {CANVAS_FRAME_RATES.map((frameRate) => (
+                <option key={frameRate} value={String(frameRate)}>
+                  {frameRate} fps
+                </option>
+              ))}
+              <option value="custom">
+                {canvasState.frameRatePreset === "custom"
+                  ? `当前 ${canvasState.frameRateNumerator}/${canvasState.frameRateDenominator} fps`
+                  : "自定义"}
               </option>
-            ))}
-          </select>
+            </select>
+            {canvasState.frameRatePreset === "custom" ? (
+              <span className="canvas-rate-fields">
+                <input
+                  aria-label="帧率分子"
+                  inputMode="numeric"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={canvasState.frameRateNumerator}
+                  onChange={(event) => updateFrameRatePart("frameRateNumerator", event.currentTarget.value)}
+                />
+                <span aria-hidden="true">/</span>
+                <input
+                  aria-label="帧率分母"
+                  inputMode="numeric"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={canvasState.frameRateDenominator}
+                  onChange={(event) => updateFrameRatePart("frameRateDenominator", event.currentTarget.value)}
+                />
+              </span>
+            ) : null}
+          </span>
         </label>
 
         <div className="canvas-control-row">
@@ -583,13 +659,13 @@ function CanvasDraftSettings({
                 aria-label="画布背景颜色"
                 type="color"
                 value={isHexColor(canvasState.color) ? canvasState.color : "#000000"}
-                onChange={(event) => setCanvasState((current) => ({ ...current, color: event.currentTarget.value }))}
+                onChange={(event) => updateCanvasColor(event.currentTarget.value)}
               />
               <input
                 aria-label="画布背景色值"
                 type="text"
                 value={canvasState.color}
-                onChange={(event) => setCanvasState((current) => ({ ...current, color: event.currentTarget.value }))}
+                onChange={(event) => updateCanvasColor(event.currentTarget.value)}
               />
             </span>
           </label>
@@ -710,7 +786,9 @@ function canvasFormFromConfig(config: DraftCanvasConfig): CanvasFormState {
     preset: config.aspectRatio.kind === "preset" ? config.aspectRatio.preset : "custom",
     width: String(config.width),
     height: String(config.height),
-    frameRate: frameRateControlValue(config),
+    frameRatePreset: frameRatePresetFromConfig(config),
+    frameRateNumerator: String(config.frameRate.numerator),
+    frameRateDenominator: String(config.frameRate.denominator),
     backgroundKind: config.background.kind,
     color: config.background.kind === "solidColor" ? config.background.color : "#000000"
   };
@@ -719,9 +797,10 @@ function canvasFormFromConfig(config: DraftCanvasConfig): CanvasFormState {
 function buildCanvasConfigFromForm(state: CanvasFormState): DraftCanvasConfig | null {
   const width = parsePositiveInteger(state.width);
   const height = parsePositiveInteger(state.height);
-  const frameRate = parsePositiveInteger(state.frameRate);
+  const frameRateNumerator = parsePositiveInteger(state.frameRateNumerator);
+  const frameRateDenominator = parsePositiveInteger(state.frameRateDenominator);
 
-  if (width === null || height === null || frameRate === null) {
+  if (width === null || height === null || frameRateNumerator === null || frameRateDenominator === null) {
     return null;
   }
 
@@ -736,8 +815,8 @@ function buildCanvasConfigFromForm(state: CanvasFormState): DraftCanvasConfig | 
     width,
     height,
     frameRate: {
-      numerator: frameRate,
-      denominator: 1
+      numerator: frameRateNumerator,
+      denominator: frameRateDenominator
     },
     background: canvasBackgroundFromForm(state)
   };
@@ -768,14 +847,15 @@ function canvasBackgroundFromForm(state: CanvasFormState): CanvasBackground {
 function validateCanvasForm(state: CanvasFormState): string | null {
   const width = parsePositiveInteger(state.width);
   const height = parsePositiveInteger(state.height);
-  const frameRate = parsePositiveInteger(state.frameRate);
+  const frameRateNumerator = parsePositiveInteger(state.frameRateNumerator);
+  const frameRateDenominator = parsePositiveInteger(state.frameRateDenominator);
 
   if (width === null || height === null) {
     return "画布尺寸必须是大于 0 的整数。";
   }
 
-  if (frameRate === null) {
-    return "帧率必须是大于 0 的整数。";
+  if (frameRateNumerator === null || frameRateDenominator === null) {
+    return "帧率分子和分母必须是大于 0 的整数。";
   }
 
   if (state.backgroundKind === "solidColor" && !isHexColor(state.color)) {
@@ -793,10 +873,13 @@ function canvasConfigsEqual(left: DraftCanvasConfig, right: DraftCanvasConfig): 
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function frameRateControlValue(config: DraftCanvasConfig): string {
+function frameRatePresetFromConfig(config: DraftCanvasConfig): string {
   const { numerator, denominator } = config.frameRate;
-  const fps = denominator === 0 ? 30 : Math.round(numerator / denominator);
-  return CANVAS_FRAME_RATES.includes(fps as (typeof CANVAS_FRAME_RATES)[number]) ? String(fps) : "30";
+  if (denominator === 1 && CANVAS_FRAME_RATES.includes(numerator as (typeof CANVAS_FRAME_RATES)[number])) {
+    return String(numerator);
+  }
+
+  return "custom";
 }
 
 function parsePositiveInteger(value: string): number | null {

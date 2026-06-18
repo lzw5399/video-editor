@@ -55,6 +55,8 @@ import {
   getSelectedTrackView,
   initialWorkspaceDraft,
   nextTrackStart,
+  type ExportDisplayState,
+  type PreviewDisplayState,
   type WorkspaceCategory,
   type WorkspaceState
 } from "./viewModel";
@@ -771,6 +773,8 @@ export function App(): React.ReactElement {
           commandState: result.data.commandState,
           selection: result.data.selection,
           materials: result.data.draft.materials,
+          preview: clearDerivedPreviewState(current.preview),
+          export: clearDerivedExportState(current.export),
           pendingCommand: null,
           commandError: null
         };
@@ -1058,6 +1062,35 @@ function applyExportCommandResult(
       diagnosticLabel,
       error: message
     }
+  };
+}
+
+function clearDerivedPreviewState(preview: PreviewDisplayState): PreviewDisplayState {
+  return {
+    ...preview,
+    frameArtifactPath: null,
+    frameStatusLabel: "画布已更新，请重新请求预览帧",
+    frameMetadataLabel: "预览帧需要重新生成",
+    segmentArtifactPath: null,
+    segmentStatusLabel: "画布已更新，请重新生成预览片段",
+    segmentMetadataLabel: "预览片段需要重新生成",
+    error: null,
+    lastRequestedPlayhead: null,
+    lastRequestedRangeLabel: null
+  };
+}
+
+function clearDerivedExportState(exportState: ExportDisplayState): ExportDisplayState {
+  return {
+    ...exportState,
+    jobId: null,
+    phase: null,
+    progressPerMille: null,
+    outTime: null,
+    logSummary: "草稿已更新，请重新开始导出",
+    validation: null,
+    diagnosticLabel: null,
+    error: null
   };
 }
 

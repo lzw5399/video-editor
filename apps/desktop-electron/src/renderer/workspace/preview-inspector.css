@@ -813,6 +813,29 @@
   grid-template-columns: 32px minmax(0, 1fr);
 }
 
+.canvas-frame-rate-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  overflow: visible;
+  color: inherit;
+  white-space: normal;
+}
+
+.canvas-rate-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.canvas-rate-fields span {
+  color: #aaa79f;
+  text-align: center;
+}
+
 .canvas-control-row input,
 .canvas-control-row select {
   width: 100%;

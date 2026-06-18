@@ -1,6 +1,6 @@
 ---
 phase: 07-project-canvas-space-and-coordinate-system
-reviewed: 2026-06-18T01:12:27Z
+reviewed: 2026-06-18T01:37:54Z
 depth: standard
 files_reviewed: 49
 files_reviewed_list:
@@ -55,33 +55,49 @@ files_reviewed_list:
   - scripts/phase5-source-guards.sh
   - scripts/phase7-source-guards.sh
 findings:
+  critical: 0
+  warning: 0
+  info: 0
+  total: 0
+resolved_findings:
   critical: 2
   warning: 1
   info: 0
   total: 3
-status: issues_found
+status: passed_after_fixes
 ---
 
 # Phase 07: Code Review Report
 
-**Reviewed:** 2026-06-18T01:12:27Z
+**Reviewed:** 2026-06-18T01:37:54Z
 **Depth:** standard
 **Files Reviewed:** 49
-**Status:** issues_found
+**Status:** passed_after_fixes
 
 ## Narrative Findings (AI reviewer)
 
 ## Summary
 
-Reviewed the Phase 07 canvas model, command boundary, Electron UI command routing, preview/export derivation path, schemas, fixtures, and guards. The Rust semantic model and command envelope routing are mostly aligned with the project constraints, but supported canvas settings can still produce incorrect derived artifacts or unintended semantic rewrites.
+Reviewed the Phase 07 canvas model, command boundary, Electron UI command routing, preview/export derivation path, schemas, fixtures, and guards. The original review found three issues; all are resolved in follow-up fixes and covered by executable gates.
+
+## Verification After Fixes
+
+- `cargo test -p ffmpeg_compiler --test canvas_profile_snapshots -- --nocapture`
+- `pnpm --filter @video-editor/desktop test:workspace -g "自定义帧率|画布变更后旧预览|草稿参数画布|command-only timeline"`
+- `pnpm run test:phase7`
+- `pnpm run test`
+- `/Users/zhiwen/.cargo/bin/just test`
+- `/Users/zhiwen/.cargo/bin/just build`
+- `git diff --exit-code schemas apps/desktop-electron/src/generated`
 
 ## Critical Issues
 
 ### CR-01: Supported solid canvas backgrounds compile to black output
 
-**Classification:** BLOCKER
+**Classification:** BLOCKER — RESOLVED
 **File:** `crates/ffmpeg_compiler/src/job.rs:260`
 **Issue:** `compile_ffmpeg_job` forwards the render graph to `generate_filter_script`, but that path never applies `plan.graph.canvas.background`; the called filter generator hardcodes `color=c=black` for the base video. Render graph marks `solidColor` as `supported` and UI marks it ready, so a draft with `background: { kind: "solidColor", color: "#112233" }` exports/previews black whenever the base is visible.
+**Resolution:** `generate_filter_script` now derives the empty visual base from `plan.graph.canvas.background`, converts supported `#RRGGBB` solid colors to FFmpeg `0xRRGGBB`, and falls back to black only for non-solid/degraded modes. `canvas_profile_snapshots` now asserts that solid color canvas export emits the selected color.
 **Fix:**
 ```rust
 // In the filter generation path, derive the base from plan.graph.canvas.background.
@@ -108,9 +124,10 @@ Add compiler and preview/export parity tests that assert a solid-color draft emi
 
 ### CR-02: Canvas inspector silently rewrites non-listed rational frame rates
 
-**Classification:** BLOCKER
+**Classification:** BLOCKER — RESOLVED
 **File:** `apps/desktop-electron/src/renderer/workspace/Inspector.tsx:796`
 **Issue:** `canvasFormFromConfig` collapses `frameRate` through `frameRateControlValue`; unsupported rates default to `"30"` and rational rates are rounded. Applying an unrelated canvas change then sends `{ numerator: 30, denominator: 1 }`, silently changing canonical draft semantics such as `30000/1001` or `48/1`.
+**Resolution:** The canvas form now keeps `frameRateNumerator` and `frameRateDenominator` in state, uses presets only as an explicit convenience, and syncs accepted draft config by semantic key rather than object churn. Playwright verifies `30000/1001` survives a subsequent background edit.
 **Fix:** Preserve the exact `RationalFrameRate` unless the user explicitly changes it. For example, keep numerator/denominator in form state and support custom display values:
 ```ts
 type CanvasFormState = {
@@ -135,9 +152,10 @@ Keep the preset select as a convenience, but do not coerce unknown rational fram
 
 ### WR-01: Canvas semantic changes leave stale derived preview/export state visible
 
-**Classification:** WARNING
+**Classification:** WARNING — RESOLVED
 **File:** `apps/desktop-electron/src/renderer/App.tsx:768`
 **Issue:** After `updateDraftCanvasConfig` succeeds, the app updates `draft` but preserves `preview.frameArtifactPath`, `preview.segmentArtifactPath`, export `jobId`, validation, and progress from the previous draft. Preview/export artifacts are derived from `.veproj/project.json`; after canvas dimensions, frame rate, or background changes, the visible artifact paths and validation metadata no longer describe the canonical draft.
+**Resolution:** Successful canvas updates now clear derived preview frame/segment artifacts, export job/progress/validation, and show Chinese regeneration copy. Playwright verifies the old `/tmp/video-editor-preview-cache/...` paths and export validation disappear after canvas mutation.
 **Fix:** Clear derived preview/export state on every successful draft semantic mutation that changes canvas/timeline/materials, or at least on canvas updates:
 ```ts
 return {

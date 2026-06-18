@@ -60,6 +60,11 @@ fn export_encode_settings_and_validation_use_square_custom_draft_canvas_profile(
         job.validation.expected_frame_rate,
         RationalFrameRate::new(48, 1)
     );
+    assert!(
+        job.filter_script.contains("color=c=0x222222"),
+        "solid color canvas background must be preserved in generated filter script: {}",
+        job.filter_script
+    );
 }
 
 #[test]

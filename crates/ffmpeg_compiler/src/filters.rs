@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use draft_model::{MaterialId, Microseconds, SourceTimerange, TargetTimerange};
-use render_graph::{RenderGraphPlan, RenderOutputProfile};
+use render_graph::{RenderCanvasBackgroundMode, RenderGraphPlan, RenderOutputProfile};
 use serde::{Deserialize, Serialize};
 
 use crate::job::{
@@ -67,8 +67,9 @@ pub fn generate_filter_script(
     }
 
     let mut current_video = if visual_labels.is_empty() {
+        let background_color = canvas_background_color_arg(plan);
         lines.push(format!(
-            "color=c=black:s={width}x{height}:r={rate}:d={duration}[vbase0]",
+            "color=c={background_color}:s={width}x{height}:r={rate}:d={duration}[vbase0]",
             width = dimensions.width,
             height = dimensions.height,
             rate = frame_rate_arg(plan),
@@ -217,6 +218,28 @@ fn frame_rate_arg(plan: &RenderGraphPlan) -> String {
         | RenderOutputProfile::ExportMp4 { frame_rate, .. } => frame_rate,
     };
     format!("{}/{}", frame_rate.numerator, frame_rate.denominator)
+}
+
+fn canvas_background_color_arg(plan: &RenderGraphPlan) -> String {
+    let background = &plan.graph.canvas.background;
+    if background.mode != RenderCanvasBackgroundMode::SolidColor {
+        return "black".to_owned();
+    }
+
+    background
+        .color
+        .as_deref()
+        .and_then(hex_color_to_ffmpeg_arg)
+        .unwrap_or_else(|| "black".to_owned())
+}
+
+fn hex_color_to_ffmpeg_arg(value: &str) -> Option<String> {
+    let hex = value.trim().strip_prefix('#')?;
+    if hex.len() != 6 || !hex.chars().all(|character| character.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    Some(format!("0x{}", hex.to_ascii_uppercase()))
 }
 
 fn volume_arg(level_millis: u32) -> String {
