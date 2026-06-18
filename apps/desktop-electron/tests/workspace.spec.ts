@@ -108,6 +108,15 @@ async function expectCommandCall(app: ElectronApplication, command: CommandName)
     .toBe(true);
 }
 
+async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
+  await expect
+    .poll(async () => {
+      const calls = (await readExecuteCommandCalls(app)).filter((call) => call.command === "requestPreviewFrame");
+      return calls.at(-1)?.targetTime ?? null;
+    })
+    .toBe(targetTime);
+}
+
 async function setViewportSizeAndVerifyLayout(app: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
   await app.evaluate(
     async ({ BrowserWindow }, size) => {
@@ -698,6 +707,72 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
     const segmentCall = calls.find((call) => call.command === "requestPreviewSegment");
     expect(frameCall?.targetTime).toBe(1_200_000);
     expect(segmentCall?.targetTimerange).toEqual({ start: 1_200_000, duration: 2_000_000 });
+  } finally {
+    await app.close();
+  }
+});
+
+test("播放头预览时间输入和逐帧按钮请求目标预览帧", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByLabel("预览时间").fill("1200000");
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
+    await expectLatestPreviewFrameTarget(app, 1_200_000);
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-1200000\.png$/);
+
+    const inspector = page.getByLabel("草稿参数");
+    await page.getByLabel("帧率", { exact: true }).selectOption("custom");
+    await page.getByLabel("帧率分子").fill("30000");
+    await page.getByLabel("帧率分母").fill("1001");
+    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    await expectCommandCall(app, "updateDraftCanvasConfig");
+    await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
+
+    await spyExecuteCommandCalls(app, page);
+    await page.getByLabel("预览时间").fill("0");
+    await expectLatestPreviewFrameTarget(app, 0);
+    await page.getByLabel("预览时间").fill("1200000");
+    await expectLatestPreviewFrameTarget(app, 1_200_000);
+
+    await page.getByRole("button", { name: "下一帧" }).click();
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.233");
+    await expectLatestPreviewFrameTarget(app, 1_233_367);
+
+    await page.getByRole("button", { name: "上一帧" }).click();
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
+    await expectLatestPreviewFrameTarget(app, 1_200_000);
+  } finally {
+    await app.close();
+  }
+});
+
+test("播放头支持时间线标尺点击和拖动请求预览帧", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    const rulerTrack = page.locator(".ruler-track");
+    const rulerBox = await expectStableBox(rulerTrack, "时间线标尺轨道");
+    await page.mouse.click(rulerBox.x + rulerBox.width * 0.5, rulerBox.y + rulerBox.height * 0.5);
+    await expect(page.getByLabel("播放头")).toHaveValue("5000000");
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:05.000");
+    await expectLatestPreviewFrameTarget(app, 5_000_000);
+
+    await spyExecuteCommandCalls(app, page);
+    const playhead = page.locator(".playhead");
+    const playheadBox = await expectStableBox(playhead, "播放头拖动线");
+    await page.mouse.move(playheadBox.x + playheadBox.width / 2, playheadBox.y + 4);
+    await page.mouse.down();
+    await page.mouse.move(rulerBox.x + rulerBox.width * 0.75, playheadBox.y + 4);
+    await page.mouse.up();
+
+    await expect(page.getByLabel("播放头")).toHaveValue("7500000");
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:07.500");
+    await expectLatestPreviewFrameTarget(app, 7_500_000);
   } finally {
     await app.close();
   }
