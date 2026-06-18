@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Completed 11-03-PLAN.md; Phase 11 Plan 03B remains next
+status: Completed 11-03B-PLAN.md; Phase 11 Plan 04 remains next
 current_phase: 11
 current_phase_name: realtime-preview-runtime-and-gpu-render-backend
-current_plan: 4
+current_plan: 5
 total_plans_in_phase: 10
-stopped_at: Completed 11-03-PLAN.md
-last_updated: "2026-06-18T16:25:05.316Z"
-last_activity: "2026-06-18 - Completed Phase 11 Plan 03: frame provider contracts and H.264 software video frame cache."
+stopped_at: Completed 11-03B-PLAN.md
+last_updated: "2026-06-18T16:47:12.430Z"
+last_activity: "2026-06-18 - Completed Phase 11 Plan 03B: wgpu offscreen device and compositor subset."
 progress:
   total_phases: 20
   completed_phases: 12
   total_plans: 98
-  completed_plans: 74
-  percent: 76
+  completed_plans: 75
+  percent: 77
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 11
-Plan: 3/10 complete; next plan 11-03B
-Status: Phase 11 Plan 03 complete; ready for `wgpu` device/offscreen compositor work.
-Last activity: 2026-06-18 - Completed Phase 11 Plan 03: frame provider contracts and H.264 software video frame cache.
+Plan: 4/10 complete; next plan 11-04
+Status: Phase 11 Plan 03B complete; ready for native surface contracts and thin Node-API realtime preview bindings.
+Last activity: 2026-06-18 - Completed Phase 11 Plan 03B: wgpu offscreen device and compositor subset.
 
-Progress: [████████░░] 76%
+Progress: [████████░░] 77%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 70
+- Total plans completed: 71
 - Average duration: 9 min
-- Total execution time: 610 min
+- Total execution time: 624 min
 
 **By Phase:**
 
@@ -58,11 +58,11 @@ Progress: [████████░░] 76%
 | 08 | 5 | 89 min | 18 min |
 | 09 | 5 | 64 min | 13 min |
 | 10 | 5 | 92 min | 18 min |
-| 11 | 3 | 92 min | 31 min |
+| 11 | 4 | 106 min | 27 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 84 min
+- Last 5 plans: 98 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -130,6 +130,7 @@ Progress: [████████░░] 76%
 | Phase 11 P01 | 9 min | 2 tasks | 13 files |
 | Phase 11 P02 | 68 min | 2 tasks | 7 files |
 | Phase 11 P03 | 15 min | 2 tasks | 8 files |
+| Phase 11 P03B | 14 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -264,6 +265,8 @@ Recent decisions affecting current work:
 - [Phase 09]: Text/subtitle Electron tests use main-process Rust-shaped mock timeline responses while renderer code remains generated command-envelope-only. — This lets Playwright verify desktop UI behavior without moving draft mutation or subtitle parsing into renderer code.
 - [Phase 09]: Source guards and public root gates now enforce complete text/subtitle ownership boundaries. — Phase 09 is complete because `pnpm run test:phase9`, root `pnpm run test`, `/Users/zhiwen/.cargo/bin/just test`, `/Users/zhiwen/.cargo/bin/just build`, and generated contract drift checks pass.
 - [Phase 10.1]: The usable editor MVP closure is complete with `pnpm run test:phase10-1`, Electron smoke, full workspace tests, `pnpm run test:contracts`, and `pnpm run build` passing. — Future Phase 11+ work can build on a command-owned desktop MVP instead of demo-only UI scaffolding.
+- [Phase 11]: Plan 03B keeps default GPU tests mock/offscreen and gates real D3D12/Metal adapter smoke behind VIDEO_EDITOR_TEST_WGPU=1. — This makes GPU runtime contracts executable in CI without requiring a physical adapter.
+- [Phase 11]: Plan 03B stores CPU frame uploads as runtime-owned opaque texture records and rejects external texture handles until Phase 12. — This preserves the media texture interop boundary without exposing native pointers.
 
 ### Pending Todos
 
@@ -300,6 +303,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T16:25:05.311Z
-Stopped at: Completed 11-03-PLAN.md
+Last session: 2026-06-18T16:47:12.427Z
+Stopped at: Completed 11-03B-PLAN.md
 Resume file: None
