@@ -12,7 +12,16 @@ import type {
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
-import type { Draft, DraftCanvasConfig, Material, MaterialKind, SegmentVolume, TextSegment, TrackKind } from "../generated/Draft";
+import type {
+  Draft,
+  DraftCanvasConfig,
+  Material,
+  MaterialKind,
+  SegmentVisual,
+  SegmentVolume,
+  TextSegment,
+  TrackKind
+} from "../generated/Draft";
 import {
   applyTimelineCommandResult,
   buildAddSegmentCommand,
@@ -38,6 +47,7 @@ import {
   buildTrimSegmentCommand,
   buildUndoTimelineEditCommand,
   buildUpdateDraftCanvasConfigCommand,
+  buildUpdateSegmentVisualCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -819,6 +829,20 @@ export function App(): React.ReactElement {
     );
   }
 
+  function handleUpdateSelectedSegmentVisual(visual: SegmentVisual): void {
+    void executeTimelineCommand(
+      (current) => {
+        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
+        if (selectedSegment === null) {
+          throw new Error("请先选择一个片段");
+        }
+
+        return buildUpdateSegmentVisualCommand(current, selectedSegment.segment.segmentId, visual);
+      },
+      "应用画面"
+    );
+  }
+
   function handleRequestPreviewFrame(): void {
     if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
       const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
@@ -1055,6 +1079,7 @@ export function App(): React.ReactElement {
       onAddAudioSegment={handleAddAudioSegment}
       onEditSelectedText={handleEditSelectedText}
       onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}
+      onUpdateSelectedSegmentVisual={handleUpdateSelectedSegmentVisual}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
       onSelectTimelineSegment={handleSelectTimelineSegment}

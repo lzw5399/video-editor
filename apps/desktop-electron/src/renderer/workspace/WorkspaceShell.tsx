@@ -1,6 +1,6 @@
 import { WORKSPACE_CATEGORIES, WORKSPACE_CATEGORY_META, type WorkspaceCategory, type WorkspaceState } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { DraftCanvasConfig } from "../../generated/Draft";
+import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor } from "./PreviewMonitor";
@@ -31,6 +31,7 @@ type WorkspaceShellProps = {
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
+  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
@@ -69,6 +70,7 @@ export function WorkspaceShell({
   onAddAudioSegment,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
+  onUpdateSelectedSegmentVisual,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute,
   onSelectTimelineSegment,
@@ -154,6 +156,7 @@ export function WorkspaceShell({
           workspace={workspace}
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
+          onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
         />

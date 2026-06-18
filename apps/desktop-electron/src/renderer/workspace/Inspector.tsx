@@ -4,6 +4,9 @@ import type {
   CanvasAspectRatioPreset,
   CanvasBackground,
   DraftCanvasConfig,
+  SegmentBackgroundFilling,
+  SegmentFitMode,
+  SegmentVisual,
   TextAlignment,
   TextSegment
 } from "../../generated/Draft";
@@ -26,6 +29,7 @@ type InspectorProps = {
   workspace: WorkspaceState;
   onEditSelectedText: (text: TextSegment) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
+  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
@@ -57,6 +61,25 @@ type CanvasFormState = {
   frameRateDenominator: string;
   backgroundKind: CanvasBackground["kind"];
   color: string;
+};
+
+type VisualBackgroundChoice = SegmentBackgroundFilling["kind"];
+
+type VisualFormState = {
+  visible: boolean;
+  positionX: string;
+  positionY: string;
+  scaleXMillis: string;
+  scaleYMillis: string;
+  rotationDegrees: string;
+  opacityMillis: string;
+  fitMode: SegmentFitMode;
+  cropLeftMillis: string;
+  cropRightMillis: string;
+  cropTopMillis: string;
+  cropBottomMillis: string;
+  backgroundKind: VisualBackgroundChoice;
+  backgroundColor: string;
 };
 
 const DEFAULT_TEXT_STATE: TextFormState = {
@@ -96,11 +119,25 @@ const CANVAS_BACKGROUNDS: readonly { kind: CanvasBackground["kind"]; label: stri
   { kind: "blurFill", label: "模糊填充" },
   { kind: "image", label: "图片背景" }
 ];
+const FIT_MODE_LABELS: Record<SegmentFitMode, string> = {
+  fit: "适应",
+  fill: "填充",
+  stretch: "拉伸"
+};
+const VISUAL_BACKGROUND_LABELS: Record<VisualBackgroundChoice, string> = {
+  none: "无",
+  black: "黑色",
+  solidColor: "纯色",
+  blur: "模糊",
+  image: "图片"
+};
+const VISUAL_BACKGROUND_CHOICES: readonly VisualBackgroundChoice[] = ["none", "black", "solidColor", "blur", "image"];
 
 export function Inspector({
   workspace,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
+  onUpdateSelectedSegmentVisual,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
@@ -236,13 +273,14 @@ export function Inspector({
 
               <section className="inspector-section" aria-label="画面变换">
                 <div className="inspector-section-title">
-                  <h3>画面</h3>
+                  <h3>基础</h3>
                   <KeyframeButton />
                 </div>
-                <ShellControl label="位置" value="X 0 / Y 0" />
-                <ShellControl label="缩放" value="100%" />
-                <ShellControl label="旋转" value="0°" />
-                <ShellControl label="不透明度" value="100%" />
+                <SegmentVisualControls
+                  visual={selected.segment.visual}
+                  pending={workspace.pendingCommand !== null}
+                  onUpdateVisual={onUpdateSelectedSegmentVisual}
+                />
               </section>
 
               <section className="inspector-section" aria-label="文字参数">
@@ -760,15 +798,396 @@ function KeyframeButton(): React.ReactElement {
   );
 }
 
-function ShellControl({ label, value }: { label: string; value: string }): React.ReactElement {
+function SegmentVisualControls({
+  visual,
+  pending,
+  onUpdateVisual
+}: {
+  visual: SegmentVisual;
+  pending: boolean;
+  onUpdateVisual: (visual: SegmentVisual) => void;
+}): React.ReactElement {
+  const visualKey = useMemo(() => JSON.stringify(visual), [visual]);
+  const [visualState, setVisualState] = useState<VisualFormState>(() => visualFormFromVisual(visual));
+
+  useEffect(() => {
+    setVisualState(visualFormFromVisual(visual));
+  }, [visualKey]);
+
+  const candidate = buildVisualFromForm(visual, visualState);
+  const validationMessage = validateVisualForm(visualState);
+  const changed = candidate !== null && !visualValuesEqual(candidate, visual);
+  const canApply = candidate !== null && validationMessage === null && changed && !pending;
+
+  function updateVisualField(field: keyof VisualFormState, value: string | boolean): void {
+    setVisualState((current) => ({ ...current, [field]: value }));
+  }
+
   return (
-    <div className="field-row compact-row shell-control-row">
+    <div className="visual-controls" aria-label="画面基础表单">
+      <label className="toggle-row compact-toggle visual-toggle-row">
+        <input
+          type="checkbox"
+          checked={visualState.visible}
+          onChange={(event) => updateVisualField("visible", event.currentTarget.checked)}
+          disabled={pending}
+        />
+        <span>显示画面</span>
+      </label>
+
+      <VisualPairControl
+        label="位置"
+        firstLabel="X"
+        secondLabel="Y"
+        min={-1000}
+        max={1000}
+        step={10}
+        firstValue={visualState.positionX}
+        secondValue={visualState.positionY}
+        disabled={pending}
+        onFirstChange={(value) => updateVisualField("positionX", value)}
+        onSecondChange={(value) => updateVisualField("positionY", value)}
+      />
+
+      <VisualPairControl
+        label="缩放"
+        firstLabel="X"
+        secondLabel="Y"
+        min={1}
+        max={3000}
+        step={10}
+        firstValue={visualState.scaleXMillis}
+        secondValue={visualState.scaleYMillis}
+        disabled={pending}
+        onFirstChange={(value) => updateVisualField("scaleXMillis", value)}
+        onSecondChange={(value) => updateVisualField("scaleYMillis", value)}
+      />
+
+      <VisualSingleControl
+        label="旋转"
+        min={-360}
+        max={360}
+        step={1}
+        value={visualState.rotationDegrees}
+        disabled={pending}
+        onChange={(value) => updateVisualField("rotationDegrees", value)}
+      />
+
+      <VisualSingleControl
+        label="不透明度"
+        min={0}
+        max={1000}
+        step={10}
+        value={visualState.opacityMillis}
+        disabled={pending}
+        onChange={(value) => updateVisualField("opacityMillis", value)}
+      />
+
+      <div className="visual-control-row">
+        <span>适应方式</span>
+        <div className="visual-segmented" role="group" aria-label="适应方式">
+          {(Object.keys(FIT_MODE_LABELS) as SegmentFitMode[]).map((fitMode) => (
+            <button
+              key={fitMode}
+              type="button"
+              className={visualState.fitMode === fitMode ? "active" : ""}
+              aria-pressed={visualState.fitMode === fitMode}
+              onClick={() => updateVisualField("fitMode", fitMode)}
+              disabled={pending}
+            >
+              {FIT_MODE_LABELS[fitMode]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="visual-control-row">
+        <span>裁剪</span>
+        <div className="visual-crop-grid" role="group" aria-label="裁剪">
+          <VisualCompactNumber
+            label="左"
+            ariaLabel="裁剪 左"
+            min={0}
+            max={999}
+            step={10}
+            value={visualState.cropLeftMillis}
+            disabled={pending}
+            onChange={(value) => updateVisualField("cropLeftMillis", value)}
+          />
+          <VisualCompactNumber
+            label="右"
+            ariaLabel="裁剪 右"
+            min={0}
+            max={999}
+            step={10}
+            value={visualState.cropRightMillis}
+            disabled={pending}
+            onChange={(value) => updateVisualField("cropRightMillis", value)}
+          />
+          <VisualCompactNumber
+            label="上"
+            ariaLabel="裁剪 上"
+            min={0}
+            max={999}
+            step={10}
+            value={visualState.cropTopMillis}
+            disabled={pending}
+            onChange={(value) => updateVisualField("cropTopMillis", value)}
+          />
+          <VisualCompactNumber
+            label="下"
+            ariaLabel="裁剪 下"
+            min={0}
+            max={999}
+            step={10}
+            value={visualState.cropBottomMillis}
+            disabled={pending}
+            onChange={(value) => updateVisualField("cropBottomMillis", value)}
+          />
+        </div>
+      </div>
+
+      <div className="visual-control-row">
+        <span>背景填充</span>
+        <div className="visual-segmented background-fill" role="group" aria-label="背景填充">
+          {VISUAL_BACKGROUND_CHOICES.map((backgroundKind) => (
+            <button
+              key={backgroundKind}
+              type="button"
+              className={visualState.backgroundKind === backgroundKind ? "active" : ""}
+              aria-pressed={visualState.backgroundKind === backgroundKind}
+              onClick={() => updateVisualField("backgroundKind", backgroundKind)}
+              disabled={pending || backgroundKind === "image"}
+            >
+              {VISUAL_BACKGROUND_LABELS[backgroundKind]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {visualState.backgroundKind === "solidColor" ? (
+        <label className="visual-control-row visual-color-row">
+          <span>填充颜色</span>
+          <span className="visual-color-controls">
+            <input
+              aria-label="背景填充颜色"
+              type="color"
+              value={isHexColor(visualState.backgroundColor) ? visualState.backgroundColor : "#000000"}
+              onChange={(event) => updateVisualField("backgroundColor", event.currentTarget.value)}
+              disabled={pending}
+            />
+            <input
+              aria-label="背景填充色值"
+              type="text"
+              value={visualState.backgroundColor}
+              onChange={(event) => updateVisualField("backgroundColor", event.currentTarget.value)}
+              disabled={pending}
+            />
+          </span>
+        </label>
+      ) : null}
+
+      <div className="visual-deferred-grid">
+        <div className="visual-deferred-row">
+          <span>混合模式</span>
+          <strong>正常</strong>
+          <em>未接入</em>
+        </div>
+        <div className="visual-deferred-row">
+          <span>蒙版</span>
+          <strong>无</strong>
+          <em>未接入</em>
+        </div>
+      </div>
+
+      {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
+
+      <button
+        type="button"
+        className="primary-action wide-action"
+        onClick={() => {
+          if (candidate !== null && validationMessage === null) {
+            onUpdateVisual(candidate);
+          }
+        }}
+        disabled={!canApply}
+      >
+        应用画面
+      </button>
+    </div>
+  );
+}
+
+function VisualPairControl({
+  label,
+  firstLabel,
+  secondLabel,
+  min,
+  max,
+  step,
+  firstValue,
+  secondValue,
+  disabled,
+  onFirstChange,
+  onSecondChange
+}: {
+  label: string;
+  firstLabel: string;
+  secondLabel: string;
+  min: number;
+  max: number;
+  step: number;
+  firstValue: string;
+  secondValue: string;
+  disabled: boolean;
+  onFirstChange: (value: string) => void;
+  onSecondChange: (value: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="visual-control-row" role="group" aria-label={label}>
       <span>{label}</span>
-      <div className="shell-control">
-        <input type="range" min="0" max="100" value="100" disabled readOnly aria-label={`${label}待接入`} />
-        <input type="text" value={value} disabled readOnly aria-label={`${label}数值待接入`} />
+      <div className="visual-pair-grid">
+        <VisualRangeNumber
+          label={label}
+          shortLabel={firstLabel}
+          min={min}
+          max={max}
+          step={step}
+          value={firstValue}
+          disabled={disabled}
+          onChange={onFirstChange}
+        />
+        <VisualRangeNumber
+          label={label}
+          shortLabel={secondLabel}
+          min={min}
+          max={max}
+          step={step}
+          value={secondValue}
+          disabled={disabled}
+          onChange={onSecondChange}
+        />
       </div>
     </div>
+  );
+}
+
+function VisualSingleControl({
+  label,
+  min,
+  max,
+  step,
+  value,
+  disabled,
+  onChange
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="visual-control-row" role="group" aria-label={label}>
+      <span>{label}</span>
+      <VisualRangeNumber
+        label={label}
+        shortLabel="数值"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function VisualRangeNumber({
+  label,
+  shortLabel,
+  min,
+  max,
+  step,
+  value,
+  disabled,
+  onChange
+}: {
+  label: string;
+  shortLabel: string;
+  min: number;
+  max: number;
+  step: number;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}): React.ReactElement {
+  const rangeValue = clamp(Number.parseInt(value, 10) || 0, min, max);
+  const numberAriaLabel = shortLabel === "数值" ? label : `${label} ${shortLabel}`;
+
+  return (
+    <label className="visual-range-number">
+      <span>{shortLabel}</span>
+      <input
+        aria-label={`${numberAriaLabel}滑杆`}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={rangeValue}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        disabled={disabled}
+      />
+      <input
+        aria-label={numberAriaLabel}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
+function VisualCompactNumber({
+  label,
+  ariaLabel,
+  min,
+  max,
+  step,
+  value,
+  disabled,
+  onChange
+}: {
+  label: string;
+  ariaLabel: string;
+  min: number;
+  max: number;
+  step: number;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}): React.ReactElement {
+  return (
+    <label className="visual-compact-number">
+      <span>{label}</span>
+      <input
+        aria-label={ariaLabel}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        disabled={disabled}
+      />
+    </label>
   );
 }
 
@@ -869,8 +1288,209 @@ function validateCanvasForm(state: CanvasFormState): string | null {
   return null;
 }
 
+function visualFormFromVisual(visual: SegmentVisual): VisualFormState {
+  return {
+    visible: visual.visible,
+    positionX: String(visual.transform.position.x),
+    positionY: String(visual.transform.position.y),
+    scaleXMillis: String(visual.transform.scale.xMillis),
+    scaleYMillis: String(visual.transform.scale.yMillis),
+    rotationDegrees: String(visual.transform.rotation.degrees),
+    opacityMillis: String(visual.transform.opacity.valueMillis),
+    fitMode: visual.fitMode,
+    cropLeftMillis: String(visual.transform.crop.leftMillis),
+    cropRightMillis: String(visual.transform.crop.rightMillis),
+    cropTopMillis: String(visual.transform.crop.topMillis),
+    cropBottomMillis: String(visual.transform.crop.bottomMillis),
+    backgroundKind: visual.backgroundFilling.kind,
+    backgroundColor: visual.backgroundFilling.kind === "solidColor" ? visual.backgroundFilling.color : "#000000"
+  };
+}
+
+function buildVisualFromForm(base: SegmentVisual, state: VisualFormState): SegmentVisual | null {
+  const positionX = parseIntegerInRange(state.positionX, -1000, 1000);
+  const positionY = parseIntegerInRange(state.positionY, -1000, 1000);
+  const scaleXMillis = parseIntegerInRange(state.scaleXMillis, 1, 3000);
+  const scaleYMillis = parseIntegerInRange(state.scaleYMillis, 1, 3000);
+  const rotationDegrees = parseIntegerInRange(state.rotationDegrees, -360, 360);
+  const opacityMillis = parseIntegerInRange(state.opacityMillis, 0, 1000);
+  const cropLeftMillis = parseIntegerInRange(state.cropLeftMillis, 0, 999);
+  const cropRightMillis = parseIntegerInRange(state.cropRightMillis, 0, 999);
+  const cropTopMillis = parseIntegerInRange(state.cropTopMillis, 0, 999);
+  const cropBottomMillis = parseIntegerInRange(state.cropBottomMillis, 0, 999);
+
+  if (
+    positionX === null ||
+    positionY === null ||
+    scaleXMillis === null ||
+    scaleYMillis === null ||
+    rotationDegrees === null ||
+    opacityMillis === null ||
+    cropLeftMillis === null ||
+    cropRightMillis === null ||
+    cropTopMillis === null ||
+    cropBottomMillis === null
+  ) {
+    return null;
+  }
+
+  if (cropLeftMillis + cropRightMillis >= 1000 || cropTopMillis + cropBottomMillis >= 1000) {
+    return null;
+  }
+
+  if (state.backgroundKind === "solidColor" && !isHexColor(state.backgroundColor)) {
+    return null;
+  }
+
+  return {
+    visible: state.visible,
+    transform: {
+      position: { x: positionX, y: positionY },
+      scale: { xMillis: scaleXMillis, yMillis: scaleYMillis },
+      rotation: { degrees: rotationDegrees },
+      opacity: { valueMillis: opacityMillis },
+      crop: {
+        leftMillis: cropLeftMillis,
+        rightMillis: cropRightMillis,
+        topMillis: cropTopMillis,
+        bottomMillis: cropBottomMillis
+      },
+      anchor: base.transform.anchor
+    },
+    fitMode: state.fitMode,
+    backgroundFilling: visualBackgroundFromForm(base.backgroundFilling, state),
+    blendMode: base.blendMode,
+    mask: base.mask
+  };
+}
+
+function validateVisualForm(state: VisualFormState): string | null {
+  if (
+    parseIntegerInRange(state.positionX, -1000, 1000) === null ||
+    parseIntegerInRange(state.positionY, -1000, 1000) === null
+  ) {
+    return "位置必须是 -1000 到 1000 之间的整数。";
+  }
+
+  if (
+    parseIntegerInRange(state.scaleXMillis, 1, 3000) === null ||
+    parseIntegerInRange(state.scaleYMillis, 1, 3000) === null
+  ) {
+    return "缩放必须是 1 到 3000 之间的整数。";
+  }
+
+  if (parseIntegerInRange(state.rotationDegrees, -360, 360) === null) {
+    return "旋转必须是 -360 到 360 之间的整数角度。";
+  }
+
+  if (parseIntegerInRange(state.opacityMillis, 0, 1000) === null) {
+    return "不透明度必须是 0 到 1000 之间的整数。";
+  }
+
+  const cropLeftMillis = parseIntegerInRange(state.cropLeftMillis, 0, 999);
+  const cropRightMillis = parseIntegerInRange(state.cropRightMillis, 0, 999);
+  const cropTopMillis = parseIntegerInRange(state.cropTopMillis, 0, 999);
+  const cropBottomMillis = parseIntegerInRange(state.cropBottomMillis, 0, 999);
+
+  if (
+    cropLeftMillis === null ||
+    cropRightMillis === null ||
+    cropTopMillis === null ||
+    cropBottomMillis === null
+  ) {
+    return "裁剪必须是 0 到 999 之间的整数。";
+  }
+
+  if (cropLeftMillis + cropRightMillis >= 1000 || cropTopMillis + cropBottomMillis >= 1000) {
+    return "左右或上下裁剪总和必须小于 1000。";
+  }
+
+  if (state.backgroundKind === "solidColor" && !isHexColor(state.backgroundColor)) {
+    return "背景填充纯色必须使用 #RRGGBB 色值。";
+  }
+
+  return null;
+}
+
+function visualBackgroundFromForm(base: SegmentBackgroundFilling, state: VisualFormState): SegmentBackgroundFilling {
+  if (state.backgroundKind === "solidColor") {
+    return {
+      kind: "solidColor",
+      color: state.backgroundColor.trim()
+    };
+  }
+
+  if (state.backgroundKind === "black") {
+    return { kind: "black" };
+  }
+
+  if (state.backgroundKind === "blur") {
+    return { kind: "blur" };
+  }
+
+  if (state.backgroundKind === "image") {
+    return base.kind === "image" ? base : { kind: "image", materialId: null };
+  }
+
+  return { kind: "none" };
+}
+
 function canvasConfigsEqual(left: DraftCanvasConfig, right: DraftCanvasConfig): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function visualValuesEqual(left: SegmentVisual, right: SegmentVisual): boolean {
+  return (
+    left.visible === right.visible &&
+    left.fitMode === right.fitMode &&
+    left.transform.position.x === right.transform.position.x &&
+    left.transform.position.y === right.transform.position.y &&
+    left.transform.scale.xMillis === right.transform.scale.xMillis &&
+    left.transform.scale.yMillis === right.transform.scale.yMillis &&
+    left.transform.rotation.degrees === right.transform.rotation.degrees &&
+    left.transform.opacity.valueMillis === right.transform.opacity.valueMillis &&
+    left.transform.crop.leftMillis === right.transform.crop.leftMillis &&
+    left.transform.crop.rightMillis === right.transform.crop.rightMillis &&
+    left.transform.crop.topMillis === right.transform.crop.topMillis &&
+    left.transform.crop.bottomMillis === right.transform.crop.bottomMillis &&
+    left.transform.anchor.xMillis === right.transform.anchor.xMillis &&
+    left.transform.anchor.yMillis === right.transform.anchor.yMillis &&
+    visualBackgroundsEqual(left.backgroundFilling, right.backgroundFilling) &&
+    visualBlendModesEqual(left.blendMode, right.blendMode) &&
+    visualMasksEqual(left.mask, right.mask)
+  );
+}
+
+function visualBackgroundsEqual(left: SegmentBackgroundFilling, right: SegmentBackgroundFilling): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+
+  if (left.kind === "solidColor" && right.kind === "solidColor") {
+    return left.color === right.color;
+  }
+
+  if (left.kind === "image" && right.kind === "image") {
+    return (left.materialId ?? null) === (right.materialId ?? null);
+  }
+
+  return true;
+}
+
+function visualBlendModesEqual(left: SegmentVisual["blendMode"], right: SegmentVisual["blendMode"]): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+
+  return left.kind !== "unsupported" || right.kind !== "unsupported" || left.name === right.name;
+}
+
+function visualMasksEqual(left: SegmentVisual["mask"], right: SegmentVisual["mask"]): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+
+  return left.kind !== "unsupported" || right.kind !== "unsupported" || left.name === right.name;
 }
 
 function frameRatePresetFromConfig(config: DraftCanvasConfig): string {
@@ -889,6 +1509,19 @@ function parsePositiveInteger(value: string): number | null {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseIntegerInRange(value: string, min: number, max: number): number | null {
+  if (!/^-?\d+$/.test(value.trim())) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function isHexColor(value: string): boolean {

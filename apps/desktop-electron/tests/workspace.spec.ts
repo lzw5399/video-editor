@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
+import type { SegmentVisual } from "../src/generated/Draft";
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -15,6 +16,7 @@ type ExecuteCommandCall = {
     height: number;
     frameRate: { numerator: number; denominator: number };
   } | null;
+  visual: SegmentVisual | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -636,6 +638,84 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
   }
 });
 
+test("画面变换 command-only transform 通过 Rust command 更新 UI 并清理派生状态", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+    await expectNoLeftSecondaryMenu(page);
+
+    await page.getByRole("button", { name: "请求预览帧" }).click();
+    await expectCommandCall(app, "requestPreviewFrame");
+    await expect(page.getByLabel("预览画面")).toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+
+    await page.getByRole("button", { name: "生成预览片段" }).click();
+    await expectCommandCall(app, "requestPreviewSegment");
+    await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
+
+    await page.getByRole("button", { name: "开始导出" }).click();
+    await expectCommandCall(app, "startExport");
+    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await expectCommandCall(app, "getExportJobStatus");
+    await expect(page.getByLabel("输出校验")).toContainText("1920x1080");
+
+    await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
+    await expectCommandCall(app, "selectTimelineSegments");
+
+    const visualForm = page.getByLabel("画面基础表单");
+    await expect(page.getByLabel("画面变换")).toContainText("基础");
+    for (const label of ["显示画面", "位置", "缩放", "旋转", "不透明度", "适应方式", "裁剪", "背景填充"]) {
+      await expect(visualForm).toContainText(label);
+    }
+    await expect(visualForm).toContainText("混合模式");
+    await expect(visualForm).toContainText("蒙版");
+    await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeDisabled();
+
+    await visualForm.getByLabel("位置 X", { exact: true }).fill("160");
+    await visualForm.getByLabel("缩放 X", { exact: true }).fill("1250");
+    await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: "填充" }).click();
+    await visualForm.getByRole("group", { name: "背景填充" }).getByRole("button", { name: "黑色" }).click();
+    await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeEnabled();
+    await visualForm.getByRole("button", { name: "应用画面" }).click();
+
+    await expectCommandCall(app, "updateSegmentVisual");
+    await expect(visualForm.getByLabel("位置 X", { exact: true })).toHaveValue("160");
+    await expect(visualForm.getByLabel("缩放 X", { exact: true })).toHaveValue("1250");
+
+    await expect(page.getByLabel("预览画面")).not.toContainText("/tmp/video-editor-preview-cache/test-frame-0.png");
+    await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
+    await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新请求预览帧");
+    await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
+    await expect(page.getByLabel("导出日志")).toContainText("画面变换已更新，请重新开始导出");
+    await expect(page.getByLabel("输出校验")).toContainText("输出校验待完成");
+    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "取消导出" })).toBeDisabled();
+
+    const visualCall = (await readExecuteCommandCalls(app)).find((call) => call.command === "updateSegmentVisual");
+    expect(visualCall?.kind).toBe("updateSegmentVisual");
+    expect(visualCall?.visual).toMatchObject({
+      visible: true,
+      fitMode: "fill",
+      backgroundFilling: { kind: "black" },
+      transform: {
+        position: { x: 160, y: 0 },
+        scale: { xMillis: 1250, yMillis: 1000 },
+        rotation: { degrees: 0 },
+        opacity: { valueMillis: 1000 },
+        crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
+        anchor: { xMillis: 500, yMillis: 500 }
+      },
+      blendMode: { kind: "normal" },
+      mask: { kind: "none" }
+    });
+
+    await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
+    await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
+  } finally {
+    await app.close();
+  }
+});
+
 test("预览失败显示中文分类错误且不改草稿", async () => {
   const { app, page } = await launchWorkspaceApp({
     mockPreviewCommands: false,
@@ -695,7 +775,7 @@ test("concurrent material commands are blocked while a timeline edit is pending"
   }
 });
 
-test("layout stability keeps workspace regions visible and fixed at required sizes", async () => {
+test("五大区域 layout stability keeps workspace regions visible and fixed at required sizes", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {

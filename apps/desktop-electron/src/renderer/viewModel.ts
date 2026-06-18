@@ -19,6 +19,7 @@ import type {
   MaterialStatus,
   Microseconds,
   Segment,
+  SegmentVisual,
   Track,
   TrackKind
 } from "../generated/Draft";
@@ -170,6 +171,24 @@ export type TimelineView = {
 
 export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";
 
+function defaultSegmentVisual(): SegmentVisual {
+  return {
+    visible: true,
+    transform: {
+      position: { x: 0, y: 0 },
+      scale: { xMillis: 1000, yMillis: 1000 },
+      rotation: { degrees: 0 },
+      opacity: { valueMillis: 1000 },
+      crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
+      anchor: { xMillis: 500, yMillis: 500 }
+    },
+    fitMode: "stretch",
+    backgroundFilling: { kind: "none" },
+    blendMode: { kind: "normal" },
+    mask: { kind: "none" }
+  };
+}
+
 export const initialWorkspaceDraft: Draft = {
   schemaVersion: 1,
   draftId: "draft-phase-04-workspace",
@@ -292,7 +311,8 @@ export const initialWorkspaceDraft: Draft = {
           transition: null,
           volume: {
             levelMillis: 1000
-          }
+          },
+          visual: defaultSegmentVisual()
         }
       ]
     },
@@ -322,7 +342,8 @@ export const initialWorkspaceDraft: Draft = {
           transition: null,
           volume: {
             levelMillis: 800
-          }
+          },
+          visual: defaultSegmentVisual()
         }
       ]
     },

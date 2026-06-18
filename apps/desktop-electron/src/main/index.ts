@@ -10,6 +10,7 @@ import type {
   RuntimeCapabilityReport,
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
+import type { SegmentVisual } from "../generated/Draft";
 import { executeCommand, ping, version } from "./nativeBinding";
 
 type TestExecuteCommandCall = {
@@ -23,6 +24,7 @@ type TestExecuteCommandCall = {
     height: number;
     frameRate: { numerator: number; denominator: number };
   } | null;
+  visual: SegmentVisual | null;
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
@@ -57,6 +59,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testCanvasResponse = maybeBuildTestCanvasCommandResponse(command);
   if (testCanvasResponse !== null) {
     return testCanvasResponse;
+  }
+  const testVisualResponse = maybeBuildTestVisualCommandResponse(command);
+  if (testVisualResponse !== null) {
+    return testVisualResponse;
   }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
@@ -160,6 +166,7 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
   const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
   const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
+  const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const jobId =
@@ -175,10 +182,64 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     targetTime,
     targetTimerange,
     canvasConfig,
+    visual,
     outputPath,
     preset,
     jobId
   });
+}
+
+function maybeBuildTestVisualCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
+  if (command.payload.kind !== "updateSegmentVisual") {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return null;
+  }
+
+  const draft = {
+    ...command.payload.draft,
+    tracks: command.payload.draft.tracks.map((track) => ({
+      ...track,
+      segments: track.segments.map((segment) =>
+        segment.segmentId === command.payload.segmentId ? { ...segment, visual: command.payload.visual } : segment
+      )
+    }))
+  };
+
+  return {
+    ok: true,
+    data: {
+      draft,
+      commandState: {
+        ...command.payload.commandState,
+        undoStack: [
+          ...command.payload.commandState.undoStack,
+          {
+            draft: command.payload.draft,
+            selection: command.payload.selection,
+            label: "updateSegmentVisual"
+          }
+        ],
+        redoStack: []
+      },
+      selection: command.payload.selection,
+      events: [
+        {
+          kind: "segmentVisualUpdated",
+          message: null
+        }
+      ]
+    },
+    error: null,
+    events: [
+      {
+        kind: "segmentVisualUpdated",
+        message: null
+      }
+    ]
+  };
 }
 
 function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
