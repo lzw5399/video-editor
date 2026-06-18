@@ -3,9 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use media_runtime::{
-    discover_runtime_config, FfmpegExecutor, MediaIoFallbackReason, MediaOpenRequest,
-    RuntimeDeviceId, SelectedDecodePath, StreamId, TextureBackend, VideoDecodeRequest,
-    VideoFrameStorage, VideoPixelFormat,
+    FfmpegExecutor, MediaIoFallbackReason, MediaOpenRequest, RuntimeDeviceId, SelectedDecodePath,
+    StreamId, TextureBackend, VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat,
+    discover_runtime_config,
 };
 use media_runtime_desktop::{
     DesktopFfmpegExecutor, MacosMediaReader, MacosTextureInteropPolicy,
@@ -14,8 +14,9 @@ use media_runtime_desktop::{
 
 #[test]
 fn macos_texture_interop_defaults_to_native_frame_fallback_until_device_is_proven() {
-    let selection = select_macos_texture_interop_fallback(true, None, false)
-        .expect("native decode frame path should remain available when texture interop is unproven");
+    let selection = select_macos_texture_interop_fallback(true, None, false).expect(
+        "native decode frame path should remain available when texture interop is unproven",
+    );
 
     assert_eq!(
         selection.selected_path,
@@ -48,12 +49,9 @@ fn macos_texture_interop_reports_device_mismatch_before_cpu_or_ffmpeg_fallback()
         device_id: "native-device".to_owned(),
     };
 
-    let selection = select_macos_texture_interop_fallback(
-        true,
-        Some((&preview_device, &native_device)),
-        true,
-    )
-    .expect("native decode frame path should remain available when devices mismatch");
+    let selection =
+        select_macos_texture_interop_fallback(true, Some((&preview_device, &native_device)), true)
+            .expect("native decode frame path should remain available when devices mismatch");
 
     assert_eq!(
         selection.selected_path,
@@ -77,9 +75,8 @@ fn macos_texture_interop_selects_texture_only_for_compatible_metal_device() {
         device_id: "registry-123".to_owned(),
     };
 
-    let selection =
-        select_macos_texture_interop_fallback(true, Some((&device, &device)), true)
-            .expect("compatible Metal device should select native texture path");
+    let selection = select_macos_texture_interop_fallback(true, Some((&device, &device)), true)
+        .expect("compatible Metal device should select native texture path");
 
     assert_eq!(
         selection.selected_path,
@@ -193,7 +190,10 @@ fn macos_texture_decode_degrades_when_texture_interop_is_disabled() {
         })
         .expect("disabled texture interop should still return a native frame lease");
 
-    assert!(matches!(frame.storage, VideoFrameStorage::PlatformOpaque(_)));
+    assert!(matches!(
+        frame.storage,
+        VideoFrameStorage::PlatformOpaque(_)
+    ));
     assert!(
         session
             .last_fallback_selection()

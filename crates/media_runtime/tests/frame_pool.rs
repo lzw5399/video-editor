@@ -14,7 +14,10 @@ fn frame_pool_acquire_cpu_frame_increments_and_release_decrements_outstanding_le
     );
 
     let frame = pool
-        .acquire_video_frame(cpu_request(Some(3), VideoColorMetadata::unknown_with_diagnostic("unknown color")))
+        .acquire_video_frame(cpu_request(
+            Some(3),
+            VideoColorMetadata::unknown_with_diagnostic("unknown color"),
+        ))
         .expect("CPU frame lease should be acquired");
 
     assert_eq!(pool.outstanding_lease_count(), 1);
@@ -38,7 +41,10 @@ fn frame_pool_session_close_releases_unreleased_frame_and_texture_handles_with_l
     );
 
     let cpu = pool
-        .acquire_video_frame(cpu_request(Some(5), VideoColorMetadata::unknown_with_diagnostic("cpu color")))
+        .acquire_video_frame(cpu_request(
+            Some(5),
+            VideoColorMetadata::unknown_with_diagnostic("cpu color"),
+        ))
         .expect("CPU frame lease should be acquired");
     let texture = pool
         .acquire_video_frame(FrameLeaseRequest {
@@ -120,6 +126,46 @@ fn frame_pool_unknown_color_metadata_is_preserved_with_diagnostics_on_decoded_fr
 }
 
 #[test]
+fn frame_pool_acquires_platform_opaque_frame_without_exposing_native_pointer() {
+    let mut pool = FramePool::new(
+        MediaSessionId("session-opaque".to_owned()),
+        FramePoolLimits {
+            max_outstanding_leases: 1,
+        },
+    );
+
+    let frame = pool
+        .acquire_video_frame(FrameLeaseRequest {
+            playback_generation: Some(9),
+            source_time_us: 2_000,
+            duration_us: Some(33_333),
+            frame_index: Some(1),
+            dimensions: FrameDimensions {
+                width: 160,
+                height: 90,
+            },
+            pixel_format: VideoPixelFormat::Nv12,
+            color: VideoColorMetadata::unknown_with_diagnostic("platform color attachment missing"),
+            storage: FrameStorageRequest::PlatformOpaque {
+                label: "CoreVideoPixelBuffer(opaque)".to_owned(),
+            },
+        })
+        .expect("platform opaque frame lease should be acquired");
+
+    match frame.storage {
+        VideoFrameStorage::PlatformOpaque(handle) => {
+            assert_eq!(
+                handle.owner_session,
+                MediaSessionId("session-opaque".to_owned())
+            );
+            assert_eq!(handle.generation, Some(9));
+            assert_eq!(handle.label, "CoreVideoPixelBuffer(opaque)");
+        }
+        other => panic!("expected platform opaque frame storage, got {other:?}"),
+    }
+}
+
+#[test]
 fn frame_pool_rejects_release_from_wrong_owner_session() {
     let mut pool = FramePool::new(
         MediaSessionId("session-1".to_owned()),
@@ -128,7 +174,10 @@ fn frame_pool_rejects_release_from_wrong_owner_session() {
         },
     );
     let frame = pool
-        .acquire_video_frame(cpu_request(Some(1), VideoColorMetadata::unknown_with_diagnostic("unknown")))
+        .acquire_video_frame(cpu_request(
+            Some(1),
+            VideoColorMetadata::unknown_with_diagnostic("unknown"),
+        ))
         .expect("frame should be acquired");
 
     let error = pool
@@ -142,10 +191,7 @@ fn frame_pool_rejects_release_from_wrong_owner_session() {
     assert_eq!(pool.outstanding_lease_count(), 1);
 }
 
-fn cpu_request(
-    playback_generation: Option<u64>,
-    color: VideoColorMetadata,
-) -> FrameLeaseRequest {
+fn cpu_request(playback_generation: Option<u64>, color: VideoColorMetadata) -> FrameLeaseRequest {
     FrameLeaseRequest {
         playback_generation,
         source_time_us: 1_000,

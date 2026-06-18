@@ -881,8 +881,10 @@ dependencies = [
  "media_runtime",
  "objc2",
  "objc2-av-foundation",
+ "objc2-core-foundation",
  "objc2-core-media",
  "objc2-core-video",
+ "objc2-foundation",
  "objc2-metal",
  "objc2-video-toolbox",
  "serde",
@@ -1152,7 +1154,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
  "bitflags",
+ "block2",
  "dispatch2",
+ "libc",
  "objc2",
 ]
 
@@ -1223,6 +1227,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags",
+ "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
 ]

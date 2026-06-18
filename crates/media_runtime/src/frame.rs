@@ -31,6 +31,7 @@ pub struct FramePoolLimits {
 pub enum FrameStorageRequest {
     Cpu { estimated_byte_len: usize },
     Texture(TextureHandle),
+    PlatformOpaque { label: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,6 +207,14 @@ impl FramePool {
                 }
                 VideoFrameStorage::Texture(texture)
             }
+            FrameStorageRequest::PlatformOpaque { label } => {
+                VideoFrameStorage::PlatformOpaque(PlatformFrameHandle {
+                    handle_id: handle_id.clone(),
+                    owner_session: self.owner_session.clone(),
+                    generation: request.playback_generation,
+                    label,
+                })
+            }
         };
 
         let frame = DecodedVideoFrame {
@@ -261,7 +270,11 @@ impl FramePool {
         let leak_diagnostics = std::mem::take(&mut self.active)
             .into_iter()
             .map(|(lease_id, frame)| {
-                release_diagnostic(lease_id, &frame, "unreleased frame lease closed with session")
+                release_diagnostic(
+                    lease_id,
+                    &frame,
+                    "unreleased frame lease closed with session",
+                )
             })
             .collect();
 
