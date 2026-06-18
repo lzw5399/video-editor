@@ -62,8 +62,10 @@ fn draft_schema_serializes_material_track_and_segment_records() {
         main_track_magnet: MainTrackMagnet::enabled(),
         keyframes: vec![Keyframe {
             at: Microseconds::new(500_000),
-            property: "opacity".to_owned(),
-            value: "0.5".to_owned(),
+            property: KeyframeProperty::VisualOpacity,
+            value: KeyframeValue::Uint { value: 500 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::None,
         }],
         filters: vec![Filter {
             name: "brightness".to_owned(),
@@ -301,8 +303,7 @@ fn keyframe_validation_rejects_invalid_property_value_combinations() {
         "error should mention keyframes: {error}"
     );
     assert!(
-        error.to_string().contains("VisualOpacity")
-            || error.to_string().contains("visualOpacity"),
+        error.to_string().contains("VisualOpacity") || error.to_string().contains("visualOpacity"),
         "error should mention visual opacity: {error}"
     );
 }

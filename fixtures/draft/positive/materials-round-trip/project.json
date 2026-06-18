@@ -94,8 +94,13 @@
           "keyframes": [
             {
               "at": 1000000,
-              "property": "opacity",
-              "value": "1.0"
+              "property": "visualOpacity",
+              "value": {
+                "kind": "uint",
+                "value": 1000
+              },
+              "interpolation": "linear",
+              "easing": "none"
             }
           ],
           "filters": [

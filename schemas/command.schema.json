@@ -1771,19 +1771,124 @@
         "at": {
           "$ref": "#/$defs/Microseconds"
         },
+        "easing": {
+          "$ref": "#/$defs/KeyframeEasing"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/KeyframeInterpolation"
+        },
         "property": {
-          "type": "string"
+          "$ref": "#/$defs/KeyframeProperty"
         },
         "value": {
-          "type": "string"
+          "$ref": "#/$defs/KeyframeValue"
         }
       },
       "required": [
         "at",
         "property",
-        "value"
+        "value",
+        "interpolation",
+        "easing"
       ],
       "type": "object"
+    },
+    "KeyframeEasing": {
+      "enum": [
+        "none",
+        "easeIn",
+        "easeOut",
+        "easeInOut"
+      ],
+      "type": "string"
+    },
+    "KeyframeInterpolation": {
+      "enum": [
+        "hold",
+        "linear"
+      ],
+      "type": "string"
+    },
+    "KeyframeProperty": {
+      "enum": [
+        "visualPositionX",
+        "visualPositionY",
+        "visualScaleX",
+        "visualScaleY",
+        "visualRotation",
+        "visualOpacity",
+        "textFontSize",
+        "textColor",
+        "textLineHeight",
+        "textLetterSpacing",
+        "textLayoutX",
+        "textLayoutY",
+        "textLayoutWidth",
+        "textLayoutHeight",
+        "volume",
+        "stickerPositionX",
+        "stickerPositionY",
+        "stickerScaleX",
+        "stickerScaleY",
+        "filterParameterUnsupported"
+      ],
+      "type": "string"
+    },
+    "KeyframeValue": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "int",
+              "type": "string"
+            },
+            "value": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "uint",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "color",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "MainTrackMagnet": {
       "additionalProperties": false,

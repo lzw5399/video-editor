@@ -14,6 +14,7 @@ use draft_model::{
     ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
     ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
     MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
@@ -62,12 +63,14 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_command_schema_rejects_zero_frame_rates(&schema_json);
     assert_command_schema_rejects_invalid_canvas_config(&schema_json);
     assert_command_schema_rejects_invalid_text_contracts(&schema_json);
+    assert_command_schema_rejects_invalid_keyframe_contracts(&schema_json);
     assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
 
     let draft_schema_json = draft_schema_json();
     assert_draft_schema_rejects_zero_frame_rates(&draft_schema_json);
     assert_draft_schema_rejects_invalid_canvas_config(&draft_schema_json);
     assert_draft_schema_rejects_invalid_text_contracts(&draft_schema_json);
+    assert_draft_schema_rejects_invalid_keyframe_contracts(&draft_schema_json);
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
@@ -178,6 +181,10 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<MainTrackMagnet>(),
         export_decl::<SourceTimerange>(),
         export_decl::<TargetTimerange>(),
+        export_decl::<KeyframeProperty>(),
+        export_decl::<KeyframeValue>(),
+        export_decl::<KeyframeInterpolation>(),
+        export_decl::<KeyframeEasing>(),
         export_decl::<Keyframe>(),
         export_decl::<Filter>(),
         export_decl::<Transition>(),
@@ -1020,6 +1027,7 @@ fn command_schema_json() -> String {
     constrain_rational_frame_rate(&mut schema_value);
     constrain_canvas_config(&mut schema_value);
     constrain_text_contracts(&mut schema_value);
+    constrain_keyframe_contracts(&mut schema_value);
     schema_value
         .as_object_mut()
         .expect("command schema should be a JSON object")
@@ -1034,6 +1042,7 @@ fn draft_schema_json() -> String {
     constrain_rational_frame_rate_schema(&mut schema);
     constrain_canvas_config_schema(&mut schema);
     constrain_text_contracts_schema(&mut schema);
+    constrain_keyframe_contracts_schema(&mut schema);
     serde_json::to_string_pretty(&schema).expect("draft schema should serialize")
 }
 
@@ -1216,6 +1225,33 @@ fn constrain_text_contracts_schema(schema: &mut Schema) {
     *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
 }
 
+fn constrain_keyframe_contracts(schema_value: &mut serde_json::Value) {
+    let defs = schema_value
+        .get_mut("$defs")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("generated schema should contain $defs");
+
+    let keyframe_value = defs
+        .get_mut("KeyframeValue")
+        .expect("generated schema should contain KeyframeValue");
+    let color_variant = keyframe_value
+        .get_mut("oneOf")
+        .and_then(serde_json::Value::as_array_mut)
+        .and_then(|variants| {
+            variants.iter_mut().find(|variant| {
+                variant["properties"]["kind"]["const"] == serde_json::Value::String("color".into())
+            })
+        })
+        .expect("KeyframeValue should contain color variant");
+    constrain_string_pattern_property(color_variant, "value", TEXT_HEX_COLOR_PATTERN);
+}
+
+fn constrain_keyframe_contracts_schema(schema: &mut Schema) {
+    let mut schema_value = schema.as_value().clone();
+    constrain_keyframe_contracts(&mut schema_value);
+    *schema = Schema::try_from(schema_value).expect("patched draft schema should remain valid");
+}
+
 fn constrain_uint_property(
     object_schema: &mut serde_json::Value,
     property: &str,
@@ -1358,6 +1394,19 @@ fn assert_draft_schema_rejects_invalid_text_contracts(schema_json: &str) {
     }
 }
 
+fn assert_draft_schema_rejects_invalid_keyframe_contracts(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("draft schema should compile");
+
+    for (case, value) in invalid_keyframe_contract_drafts() {
+        assert!(
+            schema.validate(&value).is_err(),
+            "draft schema should reject invalid keyframe contract: {case}"
+        );
+    }
+}
+
 fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
     let schema_value: serde_json::Value =
         serde_json::from_str(schema_json).expect("command schema should parse");
@@ -1420,6 +1469,20 @@ fn assert_command_schema_rejects_invalid_text_contracts(schema_json: &str) {
         assert!(
             schema.validate(&value).is_err(),
             "command schema should reject invalid text contract: {case}"
+        );
+    }
+}
+
+fn assert_command_schema_rejects_invalid_keyframe_contracts(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("command schema should parse");
+    let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
+
+    for (case, draft) in invalid_keyframe_contract_drafts() {
+        let value = list_materials_command_with_draft(draft);
+        assert!(
+            schema.validate(&value).is_err(),
+            "command schema should reject invalid keyframe contract: {case}"
         );
     }
 }
@@ -1561,6 +1624,78 @@ fn invalid_text_contract_drafts() -> Vec<(&'static str, serde_json::Value)> {
             ),
         ),
     ]
+}
+
+fn invalid_keyframe_contract_drafts() -> Vec<(&'static str, serde_json::Value)> {
+    vec![
+        (
+            "unknown keyframe property",
+            draft_value_with_keyframe_contract_field(
+                "/tracks/0/segments/0/keyframes/0/property",
+                json!("opacity"),
+            ),
+        ),
+        (
+            "keyframe color must be #RRGGBB",
+            draft_value_with_keyframe_contract_field(
+                "/tracks/0/segments/0/keyframes/1/value/value",
+                json!("ffcc00"),
+            ),
+        ),
+    ]
+}
+
+fn draft_value_with_keyframe_contract_field(
+    pointer: &str,
+    replacement: serde_json::Value,
+) -> serde_json::Value {
+    let mut value = draft_value_with_keyframe_contract();
+    *value
+        .pointer_mut(pointer)
+        .unwrap_or_else(|| panic!("keyframe contract pointer should exist: {pointer}")) =
+        replacement;
+    value
+}
+
+fn draft_value_with_keyframe_contract() -> serde_json::Value {
+    let mut draft = Draft::new("draft-schema-keyframe-contract", "Schema keyframe contract");
+    draft.materials.push(Material::new(
+        "material-video-001",
+        MaterialKind::Video,
+        "media/video.mp4",
+        "video.mp4",
+    ));
+
+    let mut segment = Segment::new(
+        "segment-video-001",
+        "material-video-001",
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    segment.keyframes = vec![
+        Keyframe {
+            at: Microseconds::new(100_000),
+            property: KeyframeProperty::VisualOpacity,
+            value: KeyframeValue::Uint { value: 800 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::None,
+        },
+        Keyframe {
+            at: Microseconds::new(500_000),
+            property: KeyframeProperty::TextColor,
+            value: KeyframeValue::Color {
+                value: "#ffcc00".to_owned(),
+            },
+            interpolation: KeyframeInterpolation::Hold,
+            easing: KeyframeEasing::None,
+        },
+    ];
+
+    let mut track = Track::new("track-video-001", TrackKind::Video, "视频");
+    track.segments.push(segment);
+    draft.tracks.push(track);
+
+    serde_json::to_value(draft).expect("keyframe contract draft should serialize")
 }
 
 fn draft_value_with_text_contract_field(

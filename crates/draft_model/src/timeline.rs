@@ -77,8 +77,59 @@ impl MainTrackMagnet {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Keyframe {
     pub at: Microseconds,
-    pub property: String,
-    pub value: String,
+    pub property: KeyframeProperty,
+    pub value: KeyframeValue,
+    pub interpolation: KeyframeInterpolation,
+    pub easing: KeyframeEasing,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyframeProperty {
+    VisualPositionX,
+    VisualPositionY,
+    VisualScaleX,
+    VisualScaleY,
+    VisualRotation,
+    VisualOpacity,
+    TextFontSize,
+    TextColor,
+    TextLineHeight,
+    TextLetterSpacing,
+    TextLayoutX,
+    TextLayoutY,
+    TextLayoutWidth,
+    TextLayoutHeight,
+    Volume,
+    StickerPositionX,
+    StickerPositionY,
+    StickerScaleX,
+    StickerScaleY,
+    FilterParameterUnsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum KeyframeValue {
+    Int { value: i32 },
+    Uint { value: u32 },
+    Color { value: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyframeInterpolation {
+    Hold,
+    Linear,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyframeEasing {
+    None,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

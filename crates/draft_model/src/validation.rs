@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, MAX_SEGMENT_VOLUME_MILLIS,
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentBackgroundFilling,
-    SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange,
-    TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion, TextSegment, TextStyle, reduce_ratio,
+    CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe, KeyframeProperty,
+    KeyframeValue, MAX_SEGMENT_VOLUME_MILLIS, MaterialId, MaterialKind, Microseconds,
+    RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask,
+    SegmentVisual, SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef,
+    TextLayoutRegion, TextSegment, TextStyle, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -23,6 +24,7 @@ pub enum DraftValidationError {
     InvalidCanvasConfig { field: String, reason: String },
     InvalidSegmentVisual { field: String, reason: String },
     InvalidTextSegment { field: String, reason: String },
+    InvalidKeyframe { field: String, reason: String },
     DuplicateId { id_kind: String, id: String },
     DerivedArtifactLeakage { field: String },
     InvalidDraftJson { message: String },
@@ -54,6 +56,9 @@ impl fmt::Display for DraftValidationError {
             }
             Self::InvalidTextSegment { field, reason } => {
                 write!(formatter, "invalid text segment {field}: {reason}")
+            }
+            Self::InvalidKeyframe { field, reason } => {
+                write!(formatter, "invalid keyframe {field}: {reason}")
             }
             Self::DuplicateId { id_kind, id } => {
                 write!(formatter, "duplicate {id_kind} id {id}")
@@ -174,14 +179,11 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                 &segment.target_timerange,
             )?;
 
-            for keyframe in &segment.keyframes {
-                if keyframe.property.trim().is_empty() {
-                    return Err(missing_field("tracks[].segments[].keyframes[].property"));
-                }
-                if keyframe.value.trim().is_empty() {
-                    return Err(missing_field("tracks[].segments[].keyframes[].value"));
-                }
-            }
+            validate_keyframes(
+                "tracks[].segments[].keyframes",
+                &segment.keyframes,
+                segment.target_timerange.duration,
+            )?;
             for filter in &segment.filters {
                 if filter.name.trim().is_empty() {
                     return Err(missing_field("tracks[].segments[].filters[].name"));
@@ -390,6 +392,205 @@ fn validate_hex_color(field: &str, color: &str) -> Result<(), DraftValidationErr
         return Err(invalid_canvas(field, "color must contain only hex digits"));
     }
     Ok(())
+}
+
+fn validate_keyframes(
+    field: &str,
+    keyframes: &[Keyframe],
+    target_duration: Microseconds,
+) -> Result<(), DraftValidationError> {
+    let mut seen = BTreeSet::new();
+
+    for keyframe in keyframes {
+        let keyframe_field = format!("{field}[]");
+        if keyframe.at > target_duration {
+            return Err(invalid_keyframe(
+                &format!("{keyframe_field}.at"),
+                "keyframe time must be within the segment target duration",
+            ));
+        }
+        let key = (keyframe.property.clone(), keyframe.at);
+        if !seen.insert(key) {
+            return Err(invalid_keyframe(
+                &keyframe_field,
+                "duplicate keyframe for property and time",
+            ));
+        }
+        validate_keyframe_property_value(&keyframe_field, &keyframe.property, &keyframe.value)?;
+    }
+
+    Ok(())
+}
+
+fn validate_keyframe_property_value(
+    field: &str,
+    property: &KeyframeProperty,
+    value: &KeyframeValue,
+) -> Result<(), DraftValidationError> {
+    match property {
+        KeyframeProperty::VisualPositionX
+        | KeyframeProperty::VisualPositionY
+        | KeyframeProperty::VisualRotation => {
+            let KeyframeValue::Int { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "int"));
+            };
+            if matches!(property, KeyframeProperty::VisualRotation)
+                && (*value < -360 || *value > 360)
+            {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "visual rotation must be between -360 and 360 degrees",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::VisualScaleX | KeyframeProperty::VisualScaleY => {
+            let KeyframeValue::Uint { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "uint"));
+            };
+            if *value == 0 {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "visual scale must be greater than zero",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::VisualOpacity => {
+            let KeyframeValue::Uint { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "uint"));
+            };
+            if *value > crate::MAX_SEGMENT_OPACITY_MILLIS {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "visual opacity must be <= 1000",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::TextFontSize => {
+            let KeyframeValue::Uint { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "uint"));
+            };
+            if *value == 0 {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "text font size must be greater than zero",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::TextColor => {
+            let KeyframeValue::Color { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "color"));
+            };
+            validate_keyframe_hex_color(&format!("{field}.value"), value)
+        }
+        KeyframeProperty::TextLineHeight => {
+            let KeyframeValue::Uint { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "uint"));
+            };
+            if *value < crate::MIN_TEXT_LINE_HEIGHT_MILLIS
+                || *value > crate::MAX_TEXT_LINE_HEIGHT_MILLIS
+            {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "text line height must be between 500 and 3000 millis",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::TextLetterSpacing => validate_uint_keyframe_max(
+            field,
+            property,
+            value,
+            crate::MAX_TEXT_LETTER_SPACING_MILLIS,
+            "text letter spacing must be between 0 and 2000 millis",
+        ),
+        KeyframeProperty::TextLayoutX | KeyframeProperty::TextLayoutY => {
+            validate_uint_keyframe_max(
+                field,
+                property,
+                value,
+                crate::MAX_TEXT_LAYOUT_MILLIS,
+                "text layout offset must be between 0 and 1000 millis",
+            )
+        }
+        KeyframeProperty::TextLayoutWidth | KeyframeProperty::TextLayoutHeight => {
+            let KeyframeValue::Uint { value } = value else {
+                return Err(keyframe_type_mismatch(field, property, "uint"));
+            };
+            if *value == 0 || *value > crate::MAX_TEXT_LAYOUT_MILLIS {
+                return Err(invalid_keyframe(
+                    &format!("{field}.value"),
+                    "text layout size must be between 1 and 1000 millis",
+                ));
+            }
+            Ok(())
+        }
+        KeyframeProperty::Volume => validate_uint_keyframe_max(
+            field,
+            property,
+            value,
+            crate::MAX_SEGMENT_VOLUME_MILLIS,
+            "volume must be between 0 and 4000 millis",
+        ),
+        KeyframeProperty::StickerPositionX
+        | KeyframeProperty::StickerPositionY
+        | KeyframeProperty::StickerScaleX
+        | KeyframeProperty::StickerScaleY => Err(invalid_keyframe(
+            &format!("{field}.property"),
+            "sticker parameter animation is deferred until sticker semantics are implemented",
+        )),
+        KeyframeProperty::FilterParameterUnsupported => Err(invalid_keyframe(
+            &format!("{field}.property"),
+            "filter parameter animation is deferred until filter semantics are implemented",
+        )),
+    }
+}
+
+fn validate_uint_keyframe_max(
+    field: &str,
+    property: &KeyframeProperty,
+    value: &KeyframeValue,
+    max: u32,
+    reason: &str,
+) -> Result<(), DraftValidationError> {
+    let KeyframeValue::Uint { value } = value else {
+        return Err(keyframe_type_mismatch(field, property, "uint"));
+    };
+    if *value > max {
+        return Err(invalid_keyframe(&format!("{field}.value"), reason));
+    }
+    Ok(())
+}
+
+fn validate_keyframe_hex_color(field: &str, color: &str) -> Result<(), DraftValidationError> {
+    let color = color.trim();
+    if color.len() != 7 || !color.starts_with('#') {
+        return Err(invalid_keyframe(field, "color must use #RRGGBB hex format"));
+    }
+    if !color[1..]
+        .chars()
+        .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err(invalid_keyframe(
+            field,
+            "color must contain only hex digits",
+        ));
+    }
+    Ok(())
+}
+
+fn keyframe_type_mismatch(
+    field: &str,
+    property: &KeyframeProperty,
+    expected: &str,
+) -> DraftValidationError {
+    invalid_keyframe(
+        &format!("{field}.value"),
+        &format!("{property:?} requires {expected} keyframe value"),
+    )
 }
 
 fn validate_text_segment(field: &str, text: &TextSegment) -> Result<(), DraftValidationError> {
@@ -805,6 +1006,13 @@ fn invalid_segment_visual(field: &str, reason: &str) -> DraftValidationError {
 
 fn invalid_text_segment(field: &str, reason: &str) -> DraftValidationError {
     DraftValidationError::InvalidTextSegment {
+        field: field.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+fn invalid_keyframe(field: &str, reason: &str) -> DraftValidationError {
+    DraftValidationError::InvalidKeyframe {
         field: field.to_owned(),
         reason: reason.to_owned(),
     }
