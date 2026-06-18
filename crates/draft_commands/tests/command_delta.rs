@@ -1,5 +1,6 @@
 use draft_commands::audio::{add_audio_segment, set_segment_volume, set_track_mute};
 use draft_commands::canvas::update_draft_canvas_config;
+use draft_commands::history::{redo_timeline_edit, undo_timeline_edit};
 use draft_commands::keyframe::{remove_segment_keyframe, set_segment_keyframe};
 use draft_commands::text::{add_text_segment, edit_text_segment, import_subtitle_srt};
 use draft_commands::timeline::{
@@ -558,6 +559,57 @@ fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
     assert_eq!(
         updated.delta.changed_ranges,
         vec![dirty_range(0, 1_000_000, DirtyRangeSource::FullDraft)]
+    );
+}
+
+#[test]
+fn undo_redo_delta_reports_restored_semantic_ranges() {
+    let (draft, state, selection) = draft_with_existing_segment();
+    let moved = command_move_segment(
+        &draft,
+        &state,
+        &selection,
+        "segment-a".into(),
+        "video-track".into(),
+        Microseconds::new(600_000),
+    )
+    .expect("move should commit");
+
+    let undone = undo_timeline_edit(&moved.draft, &moved.command_state, &moved.selection)
+        .expect("undo should restore the pre-move draft");
+    assert_eq!(undone.draft, draft);
+    assert_delta_has(
+        &undone.delta,
+        CommandName::UndoTimelineEdit,
+        &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+        &[
+            dirty_range(600_000, 400_000, DirtyRangeSource::Previous),
+            dirty_range(0, 400_000, DirtyRangeSource::Current),
+        ],
+        &[DirtyDomain::Preview, DirtyDomain::PreviewCache],
+    );
+    assert!(
+        undone
+            .delta
+            .changed_entities
+            .contains(&ChangedEntity::Segment {
+                track_id: "video-track".into(),
+                segment_id: "segment-a".into(),
+            })
+    );
+
+    let redone = redo_timeline_edit(&undone.draft, &undone.command_state, &undone.selection)
+        .expect("redo should restore the moved draft");
+    assert_eq!(redone.draft, moved.draft);
+    assert_delta_has(
+        &redone.delta,
+        CommandName::RedoTimelineEdit,
+        &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+        &[
+            dirty_range(0, 400_000, DirtyRangeSource::Previous),
+            dirty_range(600_000, 400_000, DirtyRangeSource::Current),
+        ],
+        &[DirtyDomain::Preview, DirtyDomain::PreviewCache],
     );
 }
 
