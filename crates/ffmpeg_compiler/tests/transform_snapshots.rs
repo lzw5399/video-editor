@@ -1,6 +1,7 @@
 mod common;
 
 use draft_model::{
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     MaterialKind, Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode,
     SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
     SegmentScale, TargetTimerange,
@@ -101,6 +102,33 @@ fn transform_fit_mode_background_fill_and_visual_diagnostics_are_preserved() {
     assert!(!job.filter_script.contains("blend=all_mode"));
 }
 
+#[test]
+fn transform_keyframe_animation_diagnostics_are_preserved_without_ffmpeg_animation_expressions() {
+    let mut draft = common::compiler_draft();
+    let overlay = &mut draft.tracks[1].segments[0];
+    overlay.keyframes.extend([
+        int_keyframe(KeyframeProperty::VisualRotation, 600_000, 0),
+        int_keyframe(KeyframeProperty::VisualRotation, 666_666, 30),
+        uint_keyframe(KeyframeProperty::VisualOpacity, 600_000, 1_000),
+        uint_keyframe(KeyframeProperty::VisualOpacity, 666_666, 500),
+    ]);
+
+    let job = compile_ffmpeg_job(&export_plan_from_draft(draft), &compile_context())
+        .expect("animation diagnostic export job should compile");
+
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "keyframe.visualRotation"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+    }));
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "keyframe.visualOpacity"
+            && diagnostic.support == RenderIntentSupport::Degraded
+    }));
+    assert!(!job.filter_script.contains("rotate="));
+    assert!(!job.filter_script.contains("enable='between"));
+    assert!(!job.filter_script.contains("if("));
+}
+
 fn export_plan_from_draft(draft: draft_model::Draft) -> RenderGraphPlan {
     let normalized =
         normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
@@ -126,4 +154,24 @@ fn export_plan_from_draft(draft: draft_model::Draft) -> RenderGraphPlan {
 fn compile_context() -> CompileContext {
     CompileContext::new("/derived/output.mp4", "/derived")
         .with_capabilities(CompilerCapabilities::all_available_for_tests())
+}
+
+fn int_keyframe(property: KeyframeProperty, at: u64, value: i32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Int { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
+}
+
+fn uint_keyframe(property: KeyframeProperty, at: u64, value: u32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Uint { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
 }

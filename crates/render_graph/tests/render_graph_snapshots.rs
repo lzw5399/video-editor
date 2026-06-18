@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    Draft, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
     SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
     TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
@@ -387,6 +388,108 @@ fn transform_render_graph_preserves_visual_intent_without_ffmpeg_syntax() {
 }
 
 #[test]
+fn keyframe_render_graph_preserves_typed_intent_and_sampled_animation_states() {
+    let mut draft = render_graph_draft();
+    let video = &mut draft.tracks[0].segments[0];
+    video.keyframes.extend([
+        int_keyframe(KeyframeProperty::VisualPositionX, 600_000, 0),
+        int_keyframe(KeyframeProperty::VisualPositionX, 666_666, 600),
+    ]);
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.keyframes.extend([
+        uint_keyframe(KeyframeProperty::Volume, 600_000, 1_000),
+        uint_keyframe(KeyframeProperty::Volume, 666_666, 2_000),
+    ]);
+    let text = &mut draft.tracks[3].segments[0];
+    text.keyframes.extend([
+        uint_keyframe(KeyframeProperty::TextFontSize, 100_000, 40),
+        uint_keyframe(KeyframeProperty::TextFontSize, 166_666, 70),
+    ]);
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+
+    assert_eq!(
+        graph.video_layers[0]
+            .keyframes
+            .iter()
+            .map(|keyframe| (&keyframe.property, keyframe.at.get()))
+            .collect::<Vec<_>>(),
+        vec![
+            (&KeyframeProperty::VisualPositionX, 600_000),
+            (&KeyframeProperty::VisualPositionX, 666_666),
+        ]
+    );
+    assert_eq!(
+        graph.audio_mixes[0]
+            .keyframes
+            .iter()
+            .map(|keyframe| (&keyframe.property, keyframe.at.get()))
+            .collect::<Vec<_>>(),
+        vec![
+            (&KeyframeProperty::Volume, 600_000),
+            (&KeyframeProperty::Volume, 666_666),
+        ]
+    );
+    assert_eq!(
+        graph.text_overlays[0]
+            .keyframes
+            .iter()
+            .map(|keyframe| (&keyframe.property, keyframe.at.get()))
+            .collect::<Vec<_>>(),
+        vec![
+            (&KeyframeProperty::TextFontSize, 100_000),
+            (&KeyframeProperty::TextFontSize, 166_666),
+        ]
+    );
+
+    assert_eq!(
+        graph
+            .sampled_animation_states
+            .iter()
+            .map(|state| {
+                (
+                    state.at.get(),
+                    state.visual_layers[0].visual.transform.position.x,
+                    state.audio_segments[0].volume_level_millis,
+                    state.text_overlays[0].font_size,
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (600_000, 0, 1_000, 40),
+            (633_333, 300, 1_500, 55),
+            (666_666, 600, 2_000, 70),
+        ]
+    );
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "keyframe.visualPositionX"
+            && diagnostic.support == render_graph::RenderIntentSupport::Degraded
+    }));
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "keyframe.volume"
+            && diagnostic.support == render_graph::RenderIntentSupport::Degraded
+    }));
+    assert!(graph.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "keyframe.textFontSize"
+            && diagnostic.support == render_graph::RenderIntentSupport::Degraded
+    }));
+
+    let snapshot = serde_json::to_string_pretty(&graph).expect("graph should serialize");
+    assert!(snapshot.contains("\"sampledAnimationStates\""));
+    assert!(snapshot.contains("\"keyframes\""));
+    assert!(!snapshot.contains("filter_complex"));
+    assert!(!snapshot.contains("ffmpeg"));
+}
+
+#[test]
 fn render_graph_preserves_filter_and_transition_intents_without_ffmpeg_syntax() {
     let normalized = normalize_draft(&render_graph_draft(), &EngineProfile::mvp_default())
         .expect("draft should normalize");
@@ -705,6 +808,26 @@ fn segment(
         SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
         TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
     )
+}
+
+fn int_keyframe(property: KeyframeProperty, at: u64, value: i32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Int { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
+}
+
+fn uint_keyframe(property: KeyframeProperty, at: u64, value: u32) -> Keyframe {
+    Keyframe {
+        at: Microseconds::new(at),
+        property,
+        value: KeyframeValue::Uint { value },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    }
 }
 
 fn default_visual_json() -> serde_json::Value {
