@@ -8,8 +8,8 @@ current_phase_name: asset-resource-manager-and-derived-artifact-store
 current_plan: 0
 total_plans_in_phase: 0
 stopped_at: None
-last_updated: "2026-06-19T02:34:58.968Z"
-last_activity: "2026-06-19 - Completed Phase 13: incremental render graph, dirty ranges, and cache coherence."
+last_updated: "2026-06-19T02:50:30.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 including security verification; Phase 14 is ready for planning."
 progress:
   total_phases: 20
   completed_phases: 15
@@ -31,8 +31,8 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 14
 Plan: Not planned
-Status: Phase 13 complete; Phase 14 is ready for discussion/planning.
-Last activity: 2026-06-19 - Completed Phase 13: incremental render graph, dirty ranges, and cache coherence.
+Status: Phase 13 complete including security verification; Phase 14 is ready for discussion/planning.
+Last activity: 2026-06-19 - Completed Phase 13 including security verification; Phase 14 is ready for planning.
 
 Progress: [████████░░] 75%
 

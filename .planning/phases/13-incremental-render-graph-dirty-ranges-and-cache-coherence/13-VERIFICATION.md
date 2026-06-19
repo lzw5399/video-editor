@@ -148,9 +148,17 @@ No orphaned Phase 13 requirements were found in `.planning/REQUIREMENTS.md`; INC
 
 None. This phase is Rust/core contract and test-gate work; no visual, real-time UX, external service, or manual UAT-only behavior was identified.
 
+### Security Follow-Up
+
+| Item | Status | Evidence |
+|---|---|---|
+| T-13-05 dirty range merge overflow | VERIFIED FIXED | `PreviewInvalidationRequest::normalize` now falls back to full-draft invalidation when dirty range merging returns `None`; regression test `invalidation_range_merge_overflow_falls_back_to_full_draft` verifies targeted ranges are cleared and all cache entries invalidate. |
+| Security gate | PASSED | `13-SECURITY.md` reports `status: verified`, `threats_open: 0`, `threats_closed: 25` after re-audit. |
+| Final Phase 13 gate after security fix | PASS | `pnpm run test:phase13` passed after the T-13-05 fix. |
+
 ### Gaps Summary
 
-No blocking gaps found. `gsd-tools` was unavailable on PATH during verification, so artifact/key-link checks were performed manually against ROADMAP, PLAN frontmatter, REQUIREMENTS, source files, and focused command execution. The only worktree item present before writing this report was untracked `reference/`, which was not modified.
+No blocking gaps found. `gsd-tools` was unavailable on PATH during initial verification, so artifact/key-link checks were performed manually against ROADMAP, PLAN frontmatter, REQUIREMENTS, source files, and focused command execution. The later Phase 13 security gate found T-13-05, which was fixed and re-audited to `threats_open: 0`. The only worktree item present before writing this report was untracked `reference/`, which was not modified.
 
 ---
 
