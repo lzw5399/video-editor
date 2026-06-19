@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 use std::{
     collections::BTreeSet,
     env, fs,
@@ -8,8 +10,9 @@ use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceSummary, AudioPanBalance,
-    AudioPreviewCommandPayload, AudioPreviewCommandResponse, AudioPreviewStatusResponse,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceStatus,
+    AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
+    AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
     CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
     CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
     CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
@@ -54,7 +57,8 @@ use draft_model::{
     TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
     Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload, WaveformDisplayPeaksResponse,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload, WaveformDisplayPeak,
+    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -132,6 +136,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<AudioPreviewCommandPayload>(),
             export_decl::<GetArtifactStatusCommandPayload>(),
             export_decl::<RefreshArtifactStatusCommandPayload>(),
             export_decl::<ArtifactGenerationActionCommandPayload>(),
@@ -171,6 +176,14 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<DecodedPreviewFrameResponse>(),
             export_decl::<PreviewFrameReleaseResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<AudioPreviewPlaybackStatus>(),
+            export_decl::<AudioOutputDeviceStatus>(),
+            export_decl::<WaveformDisplayStatus>(),
+            export_decl::<AudioOutputDeviceSummary>(),
+            export_decl::<AudioPreviewStatusResponse>(),
+            export_decl::<AudioPreviewCommandResponse>(),
+            export_decl::<WaveformDisplayPeak>(),
+            export_decl::<WaveformDisplayPeaksResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
             export_decl::<ExportDiagnostic>(),
@@ -1083,24 +1096,39 @@ fn schema_exports_include_phase15_audio_preview_binding_contracts() {
         );
     }
 
-    let audio_contract_text = [
-        command_envelope_ts.as_str(),
-        command_result_ts.as_str(),
-        &serde_json::to_string(
-            &[
-                defs.get("AudioPreviewCommandPayload"),
-                defs.get("AudioPreviewCommandResponse"),
-                defs.get("AudioPreviewStatusResponse"),
-                defs.get("AudioOutputDeviceSummary"),
-                defs.get("WaveformDisplayPeaksResponse"),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>(),
-        )
-        .expect("audio contract defs should serialize"),
+    let audio_ts_text = [
+        "AudioPreviewCommandPayload",
+        "AudioPreviewCommandResponse",
+        "AudioPreviewStatusResponse",
+        "AudioOutputDeviceSummary",
+        "WaveformDisplayPeak",
+        "WaveformDisplayPeaksResponse",
     ]
+    .into_iter()
+    .filter_map(|contract_name| {
+        command_envelope_ts
+            .lines()
+            .chain(command_result_ts.lines())
+            .find(|line| line.starts_with(&format!("export type {contract_name}")))
+            .map(str::to_owned)
+    })
+    .collect::<Vec<_>>()
     .join("\n");
+    let audio_schema_text = serde_json::to_string(
+        &[
+            defs.get("AudioPreviewCommandPayload"),
+            defs.get("AudioPreviewCommandResponse"),
+            defs.get("AudioPreviewStatusResponse"),
+            defs.get("AudioOutputDeviceSummary"),
+            defs.get("WaveformDisplayPeak"),
+            defs.get("WaveformDisplayPeaksResponse"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>(),
+    )
+    .expect("audio contract defs should serialize");
+    let audio_contract_text = format!("{audio_ts_text}\n{audio_schema_text}");
 
     for forbidden in [
         "AudioGraph",
@@ -1507,6 +1535,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<AudioPreviewCommandPayload>(),
             export_decl::<GetArtifactStatusCommandPayload>(),
             export_decl::<RefreshArtifactStatusCommandPayload>(),
             export_decl::<ArtifactGenerationActionCommandPayload>(),
@@ -1544,6 +1573,14 @@ fn command_result_ts_contract() -> String {
             export_decl::<DecodedPreviewFrameResponse>(),
             export_decl::<PreviewFrameReleaseResponse>(),
             export_decl::<PreviewCacheInvalidationResponse>(),
+            export_decl::<AudioPreviewPlaybackStatus>(),
+            export_decl::<AudioOutputDeviceStatus>(),
+            export_decl::<WaveformDisplayStatus>(),
+            export_decl::<AudioOutputDeviceSummary>(),
+            export_decl::<AudioPreviewStatusResponse>(),
+            export_decl::<AudioPreviewCommandResponse>(),
+            export_decl::<WaveformDisplayPeak>(),
+            export_decl::<WaveformDisplayPeaksResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
             export_decl::<ExportDiagnostic>(),
@@ -1905,6 +1942,42 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<InvalidatePreviewCacheCommandPayload>(
         &mut schema_value,
         "InvalidatePreviewCacheCommandPayload",
+    );
+    include_command_contract_schema::<AudioPreviewCommandPayload>(
+        &mut schema_value,
+        "AudioPreviewCommandPayload",
+    );
+    include_command_contract_schema::<AudioPreviewPlaybackStatus>(
+        &mut schema_value,
+        "AudioPreviewPlaybackStatus",
+    );
+    include_command_contract_schema::<AudioOutputDeviceStatus>(
+        &mut schema_value,
+        "AudioOutputDeviceStatus",
+    );
+    include_command_contract_schema::<WaveformDisplayStatus>(
+        &mut schema_value,
+        "WaveformDisplayStatus",
+    );
+    include_command_contract_schema::<AudioOutputDeviceSummary>(
+        &mut schema_value,
+        "AudioOutputDeviceSummary",
+    );
+    include_command_contract_schema::<AudioPreviewStatusResponse>(
+        &mut schema_value,
+        "AudioPreviewStatusResponse",
+    );
+    include_command_contract_schema::<AudioPreviewCommandResponse>(
+        &mut schema_value,
+        "AudioPreviewCommandResponse",
+    );
+    include_command_contract_schema::<WaveformDisplayPeak>(
+        &mut schema_value,
+        "WaveformDisplayPeak",
+    );
+    include_command_contract_schema::<WaveformDisplayPeaksResponse>(
+        &mut schema_value,
+        "WaveformDisplayPeaksResponse",
     );
     include_command_contract_schema::<ExportPrepDirtyFacts>(
         &mut schema_value,
@@ -3235,6 +3308,127 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "invalidatePreviewCache" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "createAudioPreviewSession" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "createAudioPreviewSession" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "playAudioPreview" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "playAudioPreview" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "pauseAudioPreview" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "pauseAudioPreview" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "stopAudioPreview" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "stopAudioPreview" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "seekAudioPreview" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "seekAudioPreview" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "cancelAudioPreview" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "cancelAudioPreview" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "getAudioPreviewStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "getAudioPreviewStatus" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "listAudioOutputDevices" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "listAudioOutputDevices" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "selectAudioOutputDevice" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "selectAudioOutputDevice" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "getWaveformDisplayPeaks" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "getWaveformDisplayPeaks" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "refreshWaveformStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "refreshWaveformStatus" }
                     },
                     "required": ["kind"]
                 }

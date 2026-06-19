@@ -99,6 +99,17 @@ pub enum CommandName {
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
+    CreateAudioPreviewSession,
+    PlayAudioPreview,
+    PauseAudioPreview,
+    StopAudioPreview,
+    SeekAudioPreview,
+    CancelAudioPreview,
+    GetAudioPreviewStatus,
+    ListAudioOutputDevices,
+    SelectAudioOutputDevice,
+    GetWaveformDisplayPeaks,
+    RefreshWaveformStatus,
     GetArtifactStatus,
     RefreshArtifactStatus,
     RetryArtifactGeneration,
@@ -146,6 +157,17 @@ pub enum CommandPayload {
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
+    CreateAudioPreviewSession(AudioPreviewCommandPayload),
+    PlayAudioPreview(AudioPreviewCommandPayload),
+    PauseAudioPreview(AudioPreviewCommandPayload),
+    StopAudioPreview(AudioPreviewCommandPayload),
+    SeekAudioPreview(AudioPreviewCommandPayload),
+    CancelAudioPreview(AudioPreviewCommandPayload),
+    GetAudioPreviewStatus(AudioPreviewCommandPayload),
+    ListAudioOutputDevices(AudioPreviewCommandPayload),
+    SelectAudioOutputDevice(AudioPreviewCommandPayload),
+    GetWaveformDisplayPeaks(AudioPreviewCommandPayload),
+    RefreshWaveformStatus(AudioPreviewCommandPayload),
     GetArtifactStatus(GetArtifactStatusCommandPayload),
     RefreshArtifactStatus(RefreshArtifactStatusCommandPayload),
     RetryArtifactGeneration(ArtifactGenerationActionCommandPayload),
@@ -193,6 +215,17 @@ impl CommandPayload {
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
+            Self::CreateAudioPreviewSession(_) => CommandName::CreateAudioPreviewSession,
+            Self::PlayAudioPreview(_) => CommandName::PlayAudioPreview,
+            Self::PauseAudioPreview(_) => CommandName::PauseAudioPreview,
+            Self::StopAudioPreview(_) => CommandName::StopAudioPreview,
+            Self::SeekAudioPreview(_) => CommandName::SeekAudioPreview,
+            Self::CancelAudioPreview(_) => CommandName::CancelAudioPreview,
+            Self::GetAudioPreviewStatus(_) => CommandName::GetAudioPreviewStatus,
+            Self::ListAudioOutputDevices(_) => CommandName::ListAudioOutputDevices,
+            Self::SelectAudioOutputDevice(_) => CommandName::SelectAudioOutputDevice,
+            Self::GetWaveformDisplayPeaks(_) => CommandName::GetWaveformDisplayPeaks,
+            Self::RefreshWaveformStatus(_) => CommandName::RefreshWaveformStatus,
             Self::GetArtifactStatus(_) => CommandName::GetArtifactStatus,
             Self::RefreshArtifactStatus(_) => CommandName::RefreshArtifactStatus,
             Self::RetryArtifactGeneration(_) => CommandName::RetryArtifactGeneration,
@@ -728,6 +761,146 @@ pub struct InvalidatePreviewCacheCommandPayload {
     pub artifact_schema_version: u32,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub generator_version: String,
+}
+
+/// Shared payload for Rust-owned audio preview, output device, and waveform display commands.
+///
+/// Individual commands consume the subset they need. Optional fields keep the
+/// transport stable while command handlers validate required combinations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioPreviewCommandPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub draft: Option<Draft>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub target_time: Option<Microseconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub target_timerange: Option<TargetTimerange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub playback_generation: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub device_selection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub max_peak_bins: Option<u16>,
+}
+
+/// Stable audio preview playback status exposed to production UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioPreviewPlaybackStatus {
+    Ready,
+    Playing,
+    Paused,
+    Stopped,
+    Buffering,
+    Seeking,
+    Canceled,
+    StaleRejected,
+    Unavailable,
+    Failed,
+}
+
+/// Safe audio output device readiness status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioOutputDeviceStatus {
+    Ready,
+    Degraded,
+    Missing,
+    Unavailable,
+}
+
+/// Safe waveform display readiness status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WaveformDisplayStatus {
+    Ready,
+    Pending,
+    Missing,
+    Failed,
+}
+
+/// Device summary safe for renderer display and selection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioOutputDeviceSummary {
+    pub selection_id: String,
+    pub display_name: String,
+    pub status: AudioOutputDeviceStatus,
+    pub status_label: String,
+    pub is_default: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub sample_rate_hz: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub channel_count: Option<u16>,
+    pub diagnostics: Vec<String>,
+}
+
+/// Audio preview session status safe for binding responses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioPreviewStatusResponse {
+    pub session_id: String,
+    pub generation: u64,
+    pub status: AudioPreviewPlaybackStatus,
+    pub status_label: String,
+    pub target_time: Microseconds,
+    pub buffered_until: Microseconds,
+    pub device: AudioOutputDeviceSummary,
+    pub diagnostics: Vec<String>,
+}
+
+/// Generic acknowledgement returned by audio preview transport commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioPreviewCommandResponse {
+    pub session_id: String,
+    pub generation: u64,
+    pub accepted: bool,
+    pub status: AudioPreviewPlaybackStatus,
+    pub status_label: String,
+    pub target_time: Microseconds,
+    pub diagnostics: Vec<String>,
+}
+
+/// Single display-ready waveform peak bin with bounded integer amplitude units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WaveformDisplayPeak {
+    pub min_millis: i16,
+    pub max_millis: i16,
+}
+
+/// Bounded waveform display response. Values are derived display data only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WaveformDisplayPeaksResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+    pub status: WaveformDisplayStatus,
+    pub status_label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub target_timerange: Option<TargetTimerange>,
+    pub requested_peak_bins: u16,
+    pub returned_peak_bins: u16,
+    pub peaks: Vec<WaveformDisplayPeak>,
+    pub diagnostics: Vec<String>,
 }
 
 /// Common project-scoped artifact status request.

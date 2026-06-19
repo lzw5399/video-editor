@@ -188,11 +188,257 @@
       ],
       "type": "object"
     },
+    "AudioOutputDeviceStatus": {
+      "description": "Safe audio output device readiness status.",
+      "enum": [
+        "ready",
+        "degraded",
+        "missing",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "AudioOutputDeviceSummary": {
+      "additionalProperties": false,
+      "description": "Device summary safe for renderer display and selection.",
+      "properties": {
+        "channelCount": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "sampleRateHz": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "selectionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AudioOutputDeviceStatus"
+        },
+        "statusLabel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "selectionId",
+        "displayName",
+        "status",
+        "statusLabel",
+        "isDefault",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
     "AudioPanBalance": {
       "format": "int32",
       "maximum": 1000,
       "minimum": -1000,
       "type": "integer"
+    },
+    "AudioPreviewCommandPayload": {
+      "additionalProperties": false,
+      "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+      "properties": {
+        "deviceSelectionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Draft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "materialId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxPeakBins": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "playbackGeneration": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetTime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microseconds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetTimerange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetTimerange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "AudioPreviewCommandPayload",
+      "type": "object"
+    },
+    "AudioPreviewCommandResponse": {
+      "additionalProperties": false,
+      "description": "Generic acknowledgement returned by audio preview transport commands.",
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AudioPreviewPlaybackStatus"
+        },
+        "statusLabel": {
+          "type": "string"
+        },
+        "targetTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "sessionId",
+        "generation",
+        "accepted",
+        "status",
+        "statusLabel",
+        "targetTime",
+        "diagnostics"
+      ],
+      "title": "AudioPreviewCommandResponse",
+      "type": "object"
+    },
+    "AudioPreviewPlaybackStatus": {
+      "description": "Stable audio preview playback status exposed to production UI.",
+      "enum": [
+        "ready",
+        "playing",
+        "paused",
+        "stopped",
+        "buffering",
+        "seeking",
+        "canceled",
+        "staleRejected",
+        "unavailable",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "AudioPreviewStatusResponse": {
+      "additionalProperties": false,
+      "description": "Audio preview session status safe for binding responses.",
+      "properties": {
+        "bufferedUntil": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "device": {
+          "$ref": "#/$defs/AudioOutputDeviceSummary"
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AudioPreviewPlaybackStatus"
+        },
+        "statusLabel": {
+          "type": "string"
+        },
+        "targetTime": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "sessionId",
+        "generation",
+        "status",
+        "statusLabel",
+        "targetTime",
+        "bufferedUntil",
+        "device",
+        "diagnostics"
+      ],
+      "title": "AudioPreviewStatusResponse",
+      "type": "object"
     },
     "CancelExportCommandPayload": {
       "additionalProperties": false,
@@ -579,6 +825,17 @@
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
+        "createAudioPreviewSession",
+        "playAudioPreview",
+        "pauseAudioPreview",
+        "stopAudioPreview",
+        "seekAudioPreview",
+        "cancelAudioPreview",
+        "getAudioPreviewStatus",
+        "listAudioOutputDevices",
+        "selectAudioOutputDevice",
+        "getWaveformDisplayPeaks",
+        "refreshWaveformStatus",
         "getArtifactStatus",
         "refreshArtifactStatus",
         "retryArtifactGeneration",
@@ -1719,6 +1976,919 @@
             "changedRanges",
             "changedMaterialIds",
             "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "createAudioPreviewSession",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "playAudioPreview",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "pauseAudioPreview",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "stopAudioPreview",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "seekAudioPreview",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "cancelAudioPreview",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "getAudioPreviewStatus",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "listAudioOutputDevices",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "selectAudioOutputDevice",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "getWaveformDisplayPeaks",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Shared payload for Rust-owned audio preview, output device, and waveform display commands.\n\nIndividual commands consume the subset they need. Optional fields keep the\ntransport stable while command handlers validate required combinations.",
+          "properties": {
+            "deviceSelectionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "draft": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Draft"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "refreshWaveformStatus",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxPeakBins": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "playbackGeneration": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetTime": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "targetTimerange": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TargetTimerange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind"
           ],
           "type": "object"
         },
@@ -25793,6 +26963,105 @@
       ],
       "title": "UpdateSegmentVisualCommandPayload",
       "type": "object"
+    },
+    "WaveformDisplayPeak": {
+      "additionalProperties": false,
+      "description": "Single display-ready waveform peak bin with bounded integer amplitude units.",
+      "properties": {
+        "maxMillis": {
+          "format": "int16",
+          "maximum": 32767,
+          "minimum": -32768,
+          "type": "integer"
+        },
+        "minMillis": {
+          "format": "int16",
+          "maximum": 32767,
+          "minimum": -32768,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "minMillis",
+        "maxMillis"
+      ],
+      "type": "object"
+    },
+    "WaveformDisplayPeaksResponse": {
+      "additionalProperties": false,
+      "description": "Bounded waveform display response. Values are derived display data only.",
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "materialId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "peaks": {
+          "items": {
+            "$ref": "#/$defs/WaveformDisplayPeak"
+          },
+          "type": "array"
+        },
+        "requestedPeakBins": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "returnedPeakBins": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/WaveformDisplayStatus"
+        },
+        "statusLabel": {
+          "type": "string"
+        },
+        "targetTimerange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetTimerange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "statusLabel",
+        "requestedPeakBins",
+        "returnedPeakBins",
+        "peaks",
+        "diagnostics"
+      ],
+      "title": "WaveformDisplayPeaksResponse",
+      "type": "object"
+    },
+    "WaveformDisplayStatus": {
+      "description": "Safe waveform display readiness status.",
+      "enum": [
+        "ready",
+        "pending",
+        "missing",
+        "failed"
+      ],
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -26318,6 +27587,193 @@
           "properties": {
             "kind": {
               "const": "invalidatePreviewCache"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "createAudioPreviewSession"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "createAudioPreviewSession"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "playAudioPreview"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "playAudioPreview"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "pauseAudioPreview"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "pauseAudioPreview"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "stopAudioPreview"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "stopAudioPreview"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "seekAudioPreview"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "seekAudioPreview"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "cancelAudioPreview"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "cancelAudioPreview"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "getAudioPreviewStatus"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "getAudioPreviewStatus"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "listAudioOutputDevices"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "listAudioOutputDevices"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "selectAudioOutputDevice"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "selectAudioOutputDevice"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "getWaveformDisplayPeaks"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "getWaveformDisplayPeaks"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "refreshWaveformStatus"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "refreshWaveformStatus"
             }
           },
           "required": [
