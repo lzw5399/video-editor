@@ -6,7 +6,11 @@ fn native_audio_proof_is_explicitly_env_gated() {
         let diagnostic = native_audio_probe();
         eprintln!("{}", diagnostic.message);
         assert!(diagnostic.skipped);
-        assert!(diagnostic.message.contains("VIDEO_EDITOR_TEST_NATIVE_AUDIO=1"));
+        assert!(
+            diagnostic
+                .message
+                .contains("VIDEO_EDITOR_TEST_NATIVE_AUDIO=1")
+        );
         return;
     }
 

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{AudioBufferResult, AudioPreviewStatusLabel};
 
 pub trait AudioOutputDevice {
-    type Stream: AudioOutputStream;
+    type Stream: AudioOutputSink;
 
     fn capabilities(&self) -> AudioOutputCapabilities;
     fn open_stream(
@@ -15,7 +15,7 @@ pub trait AudioOutputDevice {
     ) -> Result<Self::Stream, AudioOutputError>;
 }
 
-pub trait AudioOutputStream {
+pub trait AudioOutputSink {
     fn present(&mut self, result: &AudioBufferResult) -> Result<(), AudioOutputError>;
     fn presented_result_count(&self) -> u64;
 }
@@ -75,7 +75,7 @@ impl MockAudioOutputDevice {
 }
 
 impl AudioOutputDevice for MockAudioOutputDevice {
-    type Stream = MockAudioOutputStream;
+    type Stream = MockAudioOutputSink;
 
     fn capabilities(&self) -> AudioOutputCapabilities {
         self.capabilities.clone()
@@ -93,7 +93,7 @@ impl AudioOutputDevice for MockAudioOutputDevice {
                 reason: "mock output requires nonzero bounds".to_owned(),
             });
         }
-        Ok(MockAudioOutputStream {
+        Ok(MockAudioOutputSink {
             capabilities: capabilities.clone(),
             presented_result_count: 0,
         })
@@ -101,12 +101,12 @@ impl AudioOutputDevice for MockAudioOutputDevice {
 }
 
 #[derive(Debug, Clone)]
-pub struct MockAudioOutputStream {
+pub struct MockAudioOutputSink {
     capabilities: AudioOutputCapabilities,
     presented_result_count: u64,
 }
 
-impl AudioOutputStream for MockAudioOutputStream {
+impl AudioOutputSink for MockAudioOutputSink {
     fn present(&mut self, result: &AudioBufferResult) -> Result<(), AudioOutputError> {
         if !result.presented {
             self.presented_result_count = self.presented_result_count.saturating_add(1);

@@ -5,7 +5,7 @@ use audio_output_desktop::{
 };
 
 #[test]
-fn desktop_output_capabilities_report_mock_readiness_without_native_device() {
+fn audio_output_capabilities_report_mock_readiness_without_native_device() {
     let report = probe_desktop_audio_output_capabilities();
     let mock = report
         .backends
@@ -23,7 +23,7 @@ fn desktop_output_capabilities_report_mock_readiness_without_native_device() {
 }
 
 #[test]
-fn desktop_output_capabilities_report_platform_domains_without_false_native_readiness() {
+fn audio_output_capabilities_report_platform_domains_without_false_native_readiness() {
     let report = probe_desktop_audio_output_capabilities();
     let native = report
         .backends
@@ -34,39 +34,54 @@ fn desktop_output_capabilities_report_platform_domains_without_false_native_read
     #[cfg(target_os = "macos")]
     {
         assert_eq!(native.platform_api, Some("CoreAudio".to_owned()));
-        assert_ne!(native.status, DesktopAudioOutputCapabilityStatus::Unsupported);
+        assert_ne!(
+            native.status,
+            DesktopAudioOutputCapabilityStatus::Unsupported
+        );
     }
 
     #[cfg(windows)]
     {
         assert_eq!(native.platform_api, Some("WASAPI".to_owned()));
-        assert_ne!(native.status, DesktopAudioOutputCapabilityStatus::Unsupported);
+        assert_ne!(
+            native.status,
+            DesktopAudioOutputCapabilityStatus::Unsupported
+        );
     }
 
     #[cfg(not(any(target_os = "macos", windows)))]
     {
-        assert_eq!(native.status, DesktopAudioOutputCapabilityStatus::Unsupported);
-        assert!(native.fallback_reason.as_deref().unwrap_or_default().contains("unsupported"));
+        assert_eq!(
+            native.status,
+            DesktopAudioOutputCapabilityStatus::Unsupported
+        );
+        assert!(
+            native
+                .fallback_reason
+                .as_deref()
+                .unwrap_or_default()
+                .contains("unsupported")
+        );
         assert_eq!(native.device_count, 0);
     }
 }
 
 #[test]
-fn create_desktop_audio_output_defaults_to_mock_for_generic_ci() {
+fn audio_output_capabilities_create_desktop_audio_output_defaults_to_mock_for_generic_ci() {
     let output = create_desktop_audio_output();
     let capabilities = output.capabilities();
 
     assert!(capabilities.mock);
     assert_eq!(capabilities.sample_rate_hz, 48_000);
 
-    let mut stream = output
+    let stream = output
         .open_stream(&capabilities)
         .expect("mock output stream should open");
     assert_eq!(stream.presented_result_count(), 0);
 }
 
 #[test]
-fn public_capability_report_contains_only_safe_summaries() {
+fn audio_output_capabilities_public_report_contains_only_safe_summaries() {
     let report = probe_desktop_audio_output_capabilities();
     let joined_labels = report
         .backends
@@ -83,7 +98,7 @@ fn public_capability_report_contains_only_safe_summaries() {
 }
 
 #[test]
-fn mock_output_device_is_reexported_from_desktop_boundary() {
+fn audio_output_capabilities_mock_output_device_is_reexported_from_desktop_boundary() {
     let output = MockAudioOutputDevice::default();
     let capabilities = output.capabilities();
 
