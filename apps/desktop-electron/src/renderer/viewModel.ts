@@ -1091,6 +1091,25 @@ export function formatRealtimePreviewFallbackReason(reason: RealtimePreviewFallb
   return labels[reason];
 }
 
+export function formatRealtimePreviewProductFallbackReason(reason: RealtimePreviewFallbackReason): string {
+  const labels: Record<RealtimePreviewFallbackReason, string> = {
+    noGpuAdapter: "实时预览受限：未检测到可用 GPU",
+    surfaceUnavailable: "实时预览受限：预览窗口暂不可用",
+    surfaceLost: "实时预览受限：预览窗口已失效",
+    unsupportedGraphIntent: "实时预览受限：当前画面超出实时支持范围",
+    frameProviderUnavailable: "实时预览受限：素材帧暂不可用",
+    textParityUnsupported: "实时预览受限：文字实时一致性未通过",
+    nativeChildWindowFailed: "实时预览受限：原生预览窗口接入失败",
+    offscreenReadbackRequired: "实时预览受限：需要离屏回读",
+    previewArtifactCacheHit: "实时预览受限：当前使用缓存画面",
+    ffmpegArtifactGenerated: "实时预览受限：当前画面暂不能实时播放",
+    canceled: "实时预览受限：当前请求已取消",
+    staleGeneration: "实时预览受限：旧画面请求已拒绝"
+  };
+
+  return labels[reason];
+}
+
 export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayModel): string {
   const latency = [
     model.firstFrameLatencyMs === null ? "首帧 -" : `首帧 ${model.firstFrameLatencyMs} ms`,
@@ -1122,6 +1141,18 @@ export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayMod
     ...requestState,
     ...fallback
   ].join(" · ");
+}
+
+export function summarizeRealtimePreviewProductDisplay(model: RealtimePreviewDisplayModel): string {
+  if (model.fallbackReason !== null) {
+    return formatRealtimePreviewProductFallbackReason(model.fallbackReason);
+  }
+
+  if (model.fallbackArtifactVisible || model.backend === "previewArtifact" || model.backend === "ffmpegArtifact") {
+    return "实时预览受限：正在使用降级画面";
+  }
+
+  return summarizeRealtimePreviewDisplay(model);
 }
 
 export function formatMaterialKind(kind: MaterialKind): string {

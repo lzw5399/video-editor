@@ -14,6 +14,7 @@ import {
   formatRealtimePreviewBackendLabel,
   formatRealtimePreviewFallbackReason,
   summarizeRealtimePreviewDisplay,
+  summarizeRealtimePreviewProductDisplay,
   type SelectedSegmentView,
   type AudioParityDisplayModel,
   type AudioDeviceDisplayModel,
@@ -332,7 +333,7 @@ export function PreviewMonitor({
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
           <div className="preview-native-host-readout">
             <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
-            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState)}</span>
+            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>
           </div>
           {nativeHostState.fallbackLabel !== null ? (
             <div className="preview-native-host-fallback" aria-label="实时预览降级">
@@ -340,10 +341,11 @@ export function PreviewMonitor({
             </div>
           ) : null}
           {nativeHostState.fallbackArtifactVisible && nativeHostState.fallbackReason !== null ? (
-            <div className="preview-native-host-fallback" aria-label="实时预览备用产物">
-              {`${formatRealtimePreviewBackendLabel(nativeHostState.backend)} · ${formatRealtimePreviewFallbackReason(
-                nativeHostState.fallbackReason
-              )}`}
+            <div
+              className="preview-native-host-fallback"
+              aria-label={showDeveloperDiagnostics ? "实时预览备用产物" : "实时预览受限"}
+            >
+              {formatRealtimePreviewFallbackArtifact(nativeHostState, showDeveloperDiagnostics)}
             </div>
           ) : null}
         </div>
@@ -607,10 +609,13 @@ function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): strin
   if (state.fallbackActive) {
     return state.statusLabel;
   }
+  if (state.fallbackArtifactVisible || state.fallbackReason !== null) {
+    return "实时预览受限";
+  }
   return state.hostAttached ? "实时预览已接入" : "实时预览等待接入";
 }
 
-function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState): string {
+function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDeveloperDiagnostics: boolean): string {
   const { telemetry } = state;
   if (telemetry === null) {
     return "等待首帧";
@@ -636,7 +641,19 @@ function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState): string
     fallbackArtifactVisible: state.fallbackArtifactVisible
   };
 
-  return summarizeRealtimePreviewDisplay(model);
+  return showDeveloperDiagnostics ? summarizeRealtimePreviewDisplay(model) : summarizeRealtimePreviewProductDisplay(model);
+}
+
+function formatRealtimePreviewFallbackArtifact(
+  state: RealtimePreviewHostState,
+  showDeveloperDiagnostics: boolean
+): string {
+  if (showDeveloperDiagnostics && state.fallbackReason !== null) {
+    return `${formatRealtimePreviewBackendLabel(state.backend)} · ${formatRealtimePreviewFallbackReason(
+      state.fallbackReason
+    )}`;
+  }
+  return formatRealtimePreviewTelemetry(state, false);
 }
 
 function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
