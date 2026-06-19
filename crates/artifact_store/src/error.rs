@@ -17,4 +17,16 @@ pub enum ArtifactStoreError {
         #[source]
         source: rusqlite::Error,
     },
+
+    #[error("invalid derived relative path `{path}`: {reason}")]
+    InvalidDerivedPath { path: String, reason: String },
+
+    #[error(
+        "artifact blob fingerprint mismatch for {artifact_id}: expected {expected}, actual {actual}"
+    )]
+    FingerprintMismatch {
+        artifact_id: String,
+        expected: String,
+        actual: String,
+    },
 }

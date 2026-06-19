@@ -3,8 +3,8 @@
 //! This crate owns `.veproj/derived` storage facts. The canonical project
 //! semantics remain in `.veproj/project.json`.
 
-pub mod error;
 pub mod blob_store;
+pub mod error;
 pub mod fingerprint;
 pub mod paths;
 pub mod schema;

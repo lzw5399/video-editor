@@ -2,9 +2,7 @@ use std::fs;
 
 use artifact_store::blob_store::{BlobStore, BlobWriteIntent};
 use artifact_store::fingerprint::{ArtifactFingerprint, fingerprint_bytes, fingerprint_file};
-use artifact_store::paths::{
-    blob_tmp_path, derived_root_path, validate_derived_relative_path,
-};
+use artifact_store::paths::{blob_tmp_path, derived_root_path, validate_derived_relative_path};
 use artifact_store::schema::open_artifact_store;
 use rusqlite::Connection;
 use serde_json::json;
@@ -70,11 +68,8 @@ fn blob_store_writes_atomic_content_addressed_project_relative_blob() {
             .exists()
     );
     assert_eq!(
-        fingerprint_file(
-            &derived_root_path(&bundle_path)
-                .join(&record.blob_relative_path)
-        )
-        .expect("written blob should fingerprint"),
+        fingerprint_file(&derived_root_path(&bundle_path).join(&record.blob_relative_path))
+            .expect("written blob should fingerprint"),
         record.blob_fingerprint
     );
     assert!(
@@ -189,8 +184,14 @@ fn write_intent(artifact_id: &str, expected: Option<ArtifactFingerprint>) -> Blo
 }
 
 fn assert_project_relative_blob_path(path: &str) {
-    assert!(!path.starts_with('/'), "path should not be absolute: {path}");
-    assert!(!path.starts_with("C:"), "path should not use drive prefix: {path}");
+    assert!(
+        !path.starts_with('/'),
+        "path should not be absolute: {path}"
+    );
+    assert!(
+        !path.starts_with("C:"),
+        "path should not use drive prefix: {path}"
+    );
     assert!(!path.starts_with(".."), "path should not traverse: {path}");
     assert!(
         !path.starts_with(".veproj/derived"),

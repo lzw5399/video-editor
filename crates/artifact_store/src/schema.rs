@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 
 use crate::ArtifactStoreError;
+use crate::paths::{artifact_store_db_path, derived_root_path};
 
-pub const DERIVED_DIR_NAME: &str = "derived";
 pub const ARTIFACT_STORE_DB_FILE_NAME: &str = "artifact-store.sqlite";
 pub const ARTIFACT_STORE_SCHEMA_VERSION: u32 = 1;
 pub const ARTIFACT_STORE_BUSY_TIMEOUT_MS: u64 = 5_000;
@@ -19,8 +19,8 @@ pub struct ArtifactStoreConfig {
 impl ArtifactStoreConfig {
     pub fn for_bundle(bundle_path: impl AsRef<Path>) -> Self {
         let bundle_path = bundle_path.as_ref().to_path_buf();
-        let derived_path = bundle_path.join(DERIVED_DIR_NAME);
-        let db_path = derived_path.join(ARTIFACT_STORE_DB_FILE_NAME);
+        let derived_path = derived_root_path(&bundle_path);
+        let db_path = artifact_store_db_path(&bundle_path);
         Self {
             bundle_path,
             derived_path,
@@ -39,6 +39,10 @@ pub struct ArtifactStore {
 impl ArtifactStore {
     pub fn connection(&self) -> &Connection {
         &self.conn
+    }
+
+    pub(crate) fn connection_mut(&mut self) -> &mut Connection {
+        &mut self.conn
     }
 }
 
