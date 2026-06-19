@@ -155,12 +155,81 @@ impl RealtimePreviewCompositor {
 
     pub fn present_to_surface(
         &mut self,
-        _graph: &RenderGraph,
-        _target: &mut RealtimePreviewGpuPresentationTarget,
-        _frame_provider: &mut impl PreviewFrameProvider,
+        graph: &RenderGraph,
+        target: &mut RealtimePreviewGpuPresentationTarget,
+        frame_provider: &mut impl PreviewFrameProvider,
         _texture_cache: &mut RealtimePreviewTextureCache,
     ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
-        Err(RealtimePreviewCompositorError::WgpuSurfacePresentUnavailable)
+        let device_ref = self
+            .device
+            .device()
+            .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
+        let queue = self
+            .device
+            .queue()
+            .ok_or(RealtimePreviewCompositorError::WgpuQueueUnavailable)?;
+        let mut diagnostics = Vec::new();
+        validate_target_dimensions(target, graph, "presentation surface", &mut diagnostics);
+        let capability = self.classifier.classify(graph);
+        diagnostics.extend(capability.diagnostics);
+        let mut support = summarize_support(capability.support, &diagnostics);
+
+        if support == RealtimePreviewGraphSupport::Unsupported {
+            return Ok(RealtimePreviewSurfacePresentationOutput {
+                width: target.width(),
+                height: target.height(),
+                pixels: None,
+                submitted_draws: 0,
+                presented_frames: 0,
+                render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
+                support,
+                diagnostics,
+            });
+        }
+
+        let surface_texture = acquire_surface_texture(target.surface())?;
+        let view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let (encoder, submitted_draws) = encode_wgpu_graph_to_view(
+            graph,
+            target,
+            device_ref,
+            queue,
+            &view,
+            frame_provider,
+            &mut diagnostics,
+            &mut support,
+        )?;
+        if support == RealtimePreviewGraphSupport::Unsupported {
+            drop(view);
+            drop(surface_texture);
+            return Ok(RealtimePreviewSurfacePresentationOutput {
+                width: target.width(),
+                height: target.height(),
+                pixels: None,
+                submitted_draws: 0,
+                presented_frames: 0,
+                render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
+                support,
+                diagnostics,
+            });
+        }
+
+        let submission = queue.submit([encoder.finish()]);
+        poll_wgpu(device_ref, Some(submission))?;
+        surface_texture.present();
+
+        Ok(RealtimePreviewSurfacePresentationOutput {
+            width: target.width(),
+            height: target.height(),
+            pixels: None,
+            submitted_draws,
+            presented_frames: 1,
+            render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
+            support,
+            diagnostics,
+        })
     }
 }
 
@@ -206,7 +275,7 @@ pub enum RealtimePreviewCompositorError {
     WgpuReadbackMap(String),
     WgpuReadbackTimeout,
     WgpuPoll(String),
-    WgpuSurfacePresentUnavailable,
+    WgpuSurfaceAcquire(String),
 }
 
 impl fmt::Display for RealtimePreviewCompositorError {
@@ -228,8 +297,8 @@ impl fmt::Display for RealtimePreviewCompositorError {
             Self::WgpuReadbackMap(error) => write!(formatter, "wgpu readback map failed: {error}"),
             Self::WgpuReadbackTimeout => formatter.write_str("wgpu readback timed out"),
             Self::WgpuPoll(error) => write!(formatter, "wgpu device poll failed: {error}"),
-            Self::WgpuSurfacePresentUnavailable => {
-                formatter.write_str("wgpu surface presentation is not implemented")
+            Self::WgpuSurfaceAcquire(error) => {
+                write!(formatter, "wgpu surface texture acquire failed: {error}")
             }
         }
     }
@@ -242,14 +311,24 @@ fn validate_target_matches_graph(
     graph: &RenderGraph,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
 ) {
+    validate_target_dimensions(target, graph, "offscreen target", diagnostics);
+}
+
+fn validate_target_dimensions(
+    target: &impl WgpuRenderTargetInfo,
+    graph: &RenderGraph,
+    label: &'static str,
+    diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
+) {
     if target.width() != graph.canvas.width || target.height() != graph.canvas.height {
+        let message = format!("{label} dimensions must match render graph canvas");
         diagnostics.push(RealtimePreviewDiagnostic::new(
             None,
             RealtimePreviewDiagnosticDomain::Surface,
             RealtimePreviewSupport::Unsupported {
-                reason: "offscreen target dimensions must match render graph canvas".to_owned(),
+                reason: message.clone(),
             },
-            "offscreen target dimensions must match render graph canvas",
+            message,
             None,
             true,
         ));
@@ -300,60 +379,17 @@ fn render_wgpu_graph(
     let queue = device
         .queue()
         .ok_or(RealtimePreviewCompositorError::WgpuQueueUnavailable)?;
-    let clear_color = canvas_clear_color(graph)?;
-    let pipeline_resources = if graph.video_layers.is_empty() && graph.text_overlays.is_empty() {
-        None
-    } else {
-        Some(RealtimePreviewWgpuPipelines::new(
-            device_ref,
-            target.format(),
-        ))
-    };
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = device_ref.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("realtime-preview-wgpu-graph-encoder"),
-    });
-    let layer_draws = if let Some(resources) = pipeline_resources.as_ref() {
-        prepare_wgpu_layer_draws(
-            graph,
-            target,
-            device_ref,
-            queue,
-            resources,
-            frame_provider,
-            diagnostics,
-            support,
-        )?
-    } else {
-        Vec::new()
-    };
-
-    {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("realtime-preview-wgpu-graph-render-pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear_color),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        if let Some(resources) = pipeline_resources.as_ref() {
-            pass.set_pipeline(&resources.pipeline);
-            for draw in &layer_draws {
-                pass.set_bind_group(0, &draw.bind_group, &[]);
-                pass.set_vertex_buffer(0, draw.vertex_buffer.slice(..));
-                pass.draw(0..6, 0..1);
-            }
-        }
-    }
+    let (mut encoder, submitted_draws) = encode_wgpu_graph_to_view(
+        graph,
+        target,
+        device_ref,
+        queue,
+        &view,
+        frame_provider,
+        diagnostics,
+        support,
+    )?;
 
     let unpadded_bytes_per_row = target.width() as usize * target.format().bytes_per_pixel();
     let padded_bytes_per_row = align_to(
@@ -418,7 +454,105 @@ fn render_wgpu_graph(
     drop(mapped);
     readback.unmap();
 
-    Ok((pixels, layer_draws.len().min(u32::MAX as usize) as u32))
+    Ok((pixels, submitted_draws))
+}
+
+trait WgpuRenderTargetInfo {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn format(&self) -> super::RealtimePreviewTargetFormat;
+}
+
+impl WgpuRenderTargetInfo for RealtimePreviewGpuTarget {
+    fn width(&self) -> u32 {
+        self.width()
+    }
+
+    fn height(&self) -> u32 {
+        self.height()
+    }
+
+    fn format(&self) -> super::RealtimePreviewTargetFormat {
+        self.format()
+    }
+}
+
+impl WgpuRenderTargetInfo for RealtimePreviewGpuPresentationTarget {
+    fn width(&self) -> u32 {
+        self.width()
+    }
+
+    fn height(&self) -> u32 {
+        self.height()
+    }
+
+    fn format(&self) -> super::RealtimePreviewTargetFormat {
+        self.format()
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_wgpu_graph_to_view(
+    graph: &RenderGraph,
+    target: &impl WgpuRenderTargetInfo,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    view: &wgpu::TextureView,
+    frame_provider: &mut impl PreviewFrameProvider,
+    diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
+    support: &mut RealtimePreviewGraphSupport,
+) -> Result<(wgpu::CommandEncoder, u32), RealtimePreviewCompositorError> {
+    let clear_color = canvas_clear_color(graph)?;
+    let pipeline_resources = if graph.video_layers.is_empty() && graph.text_overlays.is_empty() {
+        None
+    } else {
+        Some(RealtimePreviewWgpuPipelines::new(device, target.format()))
+    };
+    let layer_draws = if let Some(resources) = pipeline_resources.as_ref() {
+        prepare_wgpu_layer_draws(
+            graph,
+            target,
+            device,
+            queue,
+            resources,
+            frame_provider,
+            diagnostics,
+            support,
+        )?
+    } else {
+        Vec::new()
+    };
+    let submitted_draws = layer_draws.len().min(u32::MAX as usize) as u32;
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("realtime-preview-wgpu-graph-encoder"),
+    });
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("realtime-preview-wgpu-graph-render-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(clear_color),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        if let Some(resources) = pipeline_resources.as_ref() {
+            pass.set_pipeline(&resources.pipeline);
+            for draw in &layer_draws {
+                pass.set_bind_group(0, &draw.bind_group, &[]);
+                pass.set_vertex_buffer(0, draw.vertex_buffer.slice(..));
+                pass.draw(0..6, 0..1);
+            }
+        }
+    }
+    Ok((encoder, submitted_draws))
 }
 
 struct RealtimePreviewWgpuPipelines {
@@ -536,7 +670,7 @@ struct WgpuLayerDraw {
 
 fn prepare_wgpu_layer_draws(
     graph: &RenderGraph,
-    target: &RealtimePreviewGpuTarget,
+    target: &impl WgpuRenderTargetInfo,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
@@ -634,7 +768,7 @@ fn graph_draw_layers(graph: &RenderGraph) -> Vec<GraphDrawLayer<'_>> {
 #[allow(clippy::too_many_arguments)]
 fn push_wgpu_video_layer_draw(
     graph: &RenderGraph,
-    target: &RealtimePreviewGpuTarget,
+    target: &impl WgpuRenderTargetInfo,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
@@ -687,7 +821,7 @@ fn push_wgpu_video_layer_draw(
 #[allow(clippy::too_many_arguments)]
 fn push_wgpu_text_layer_draw(
     graph: &RenderGraph,
-    target: &RealtimePreviewGpuTarget,
+    target: &impl WgpuRenderTargetInfo,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
@@ -891,7 +1025,7 @@ fn upload_wgpu_layer_texture(
 }
 
 fn textured_quad_vertices(
-    target: &RealtimePreviewGpuTarget,
+    target: &impl WgpuRenderTargetInfo,
     material: &RenderMaterial,
     visual: &SegmentVisual,
 ) -> Vec<u8> {
@@ -945,7 +1079,7 @@ fn textured_quad_vertices(
 }
 
 fn textured_rect_vertices(
-    target: &RealtimePreviewGpuTarget,
+    target: &impl WgpuRenderTargetInfo,
     x: i64,
     y: i64,
     width: u32,
@@ -1093,6 +1227,30 @@ fn poll_wgpu(
         })
         .map(|_| ())
         .map_err(|error| RealtimePreviewCompositorError::WgpuPoll(error.to_string()))
+}
+
+fn acquire_surface_texture(
+    surface: &wgpu::Surface<'static>,
+) -> Result<wgpu::SurfaceTexture, RealtimePreviewCompositorError> {
+    match surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(texture)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+        wgpu::CurrentSurfaceTexture::Timeout => Err(
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface acquire timed out".into()),
+        ),
+        wgpu::CurrentSurfaceTexture::Occluded => Err(
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is occluded".into()),
+        ),
+        wgpu::CurrentSurfaceTexture::Outdated => Err(
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is outdated".into()),
+        ),
+        wgpu::CurrentSurfaceTexture::Lost => Err(
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is lost".into()),
+        ),
+        wgpu::CurrentSurfaceTexture::Validation => Err(
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface validation failed".into()),
+        ),
+    }
 }
 
 fn align_to(value: usize, alignment: usize) -> usize {

@@ -237,6 +237,20 @@ impl RealtimePreviewGpuDevice {
         ))
     }
 
+    pub fn resize_presentation_target(
+        &self,
+        target: &mut RealtimePreviewGpuPresentationTarget,
+        bounds: super::surface::PreviewSurfaceBounds,
+    ) -> Result<(), PreviewSurfaceError> {
+        let device = self.device.as_deref().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "product presentation resize requires a real WGPU device",
+            )
+        })?;
+        target.update_bounds(device, bounds)
+    }
+
     pub(crate) fn device(&self) -> Option<&wgpu::Device> {
         self.device.as_deref()
     }
