@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: Inserted Phase 15.1 and Phase 15.2 before Phase 16
-last_updated: "2026-06-19T14:07:03Z"
-last_activity: 2026-06-19 -- Completed Phase 15.1 Plan 03 bundled font registry shared by preview and export
+last_updated: "2026-06-19T16:40:15Z"
+last_activity: 2026-06-20 -- Completed Phase 15.1 Plan 04 first-material canvas adaptation and non-stretch fit defaults
 progress:
   total_phases: 22
   completed_phases: 17
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.1 (p0-basic-editing-chain-repair) — INSERTED
-Plan: 3 of 6
+Plan: 4 of 6
 Status: In progress — execute `$gsd-execute-phase 15.1` remaining plans
-Last activity: 2026-06-19 -- Completed Phase 15.1 Plan 03 bundled font registry shared by preview and export
+Last activity: 2026-06-20 -- Completed Phase 15.1 Plan 04 first-material canvas adaptation and non-stretch fit defaults
 
-Progress: [█████░░░░░] 50% for Phase 15.1
+Progress: [███████░░░] 67% for Phase 15.1
 
 ## Performance Metrics
 
@@ -172,6 +172,7 @@ Progress: [█████░░░░░] 50% for Phase 15.1
 
 - Phase 15.1 inserted after Phase 15 as urgent P0 work before Phase 16: P0 Basic Editing Chain Repair. (URGENT)
 - Phase 15.1 planned as six executable P0 gates: realtime playback chain, baseline preview capability, bundled font registry, first-material canvas adaptation, multitrack commands, and full user-chain verification. (URGENT)
+- Phase 15.1 Plan 04 completed Rust-owned first-material canvas adaptation, auto/manual canvas policy, default non-stretch fit mode, and a blank-draft portrait import E2E. (URGENT)
 - Phase 15.1 Plan 03 completed bundled Noto Sans CJK SC font registry, stable baseline text `fontRef`, and shared preview/export font resolution. (URGENT)
 - Phase 15.2 inserted after Phase 15 as urgent P0 work before Phase 16: P0 Jianying-Style Production UI Convergence. (URGENT)
 - Confirmed production editor architecture decisions captured for Phase 11+: Windows/macOS desktop first; Rust `wgpu` realtime preview; native Windows Media Foundation/DXVA/D3D and macOS AVFoundation/VideoToolbox/CoreVideo/Metal media paths; FFmpeg as export/fallback; `CommandDelta` and stable render graph node IDs; SQLite artifact store under `.veproj/derived`; shared `TimelineClock + PlaybackGeneration`; scheduler-aligned jobs; ref-counted opaque handle registry; capability-first retiming/effects/transitions.

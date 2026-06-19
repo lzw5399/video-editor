@@ -626,7 +626,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 1 completion)*
 
-- [ ] 15.1-04-PLAN.md - Add first-material canvas adaptation and non-stretch default visual fit
+- [x] 15.1-04-PLAN.md - Add first-material canvas adaptation and non-stretch default visual fit
 - [ ] 15.1-05-PLAN.md - Add Rust-owned multitrack commands and minimal timeline controls
 
 **Wave 4** *(blocked on Waves 1-3 completion)*
