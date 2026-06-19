@@ -7,6 +7,7 @@ pub mod blob_store;
 pub mod dependencies;
 pub mod error;
 pub mod fingerprint;
+pub mod generation;
 pub mod invalidation;
 pub mod jobs;
 pub mod paths;

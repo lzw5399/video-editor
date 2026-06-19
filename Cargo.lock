@@ -59,6 +59,7 @@ dependencies = [
  "blake3",
  "draft_model",
  "fs2",
+ "media_runtime",
  "project_store",
  "rusqlite",
  "serde",

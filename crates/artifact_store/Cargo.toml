@@ -13,6 +13,7 @@ path = "src/lib.rs"
 blake3 = "1.8.5"
 draft_model = { path = "../draft_model" }
 fs2 = "0.4.3"
+media_runtime = { path = "../media_runtime" }
 project_store = { path = "../project_store" }
 rusqlite = "0.40.1"
 serde = { version = "1.0.228", features = ["derive"] }

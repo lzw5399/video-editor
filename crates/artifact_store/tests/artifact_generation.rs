@@ -14,7 +14,7 @@ use draft_model::MaterialId;
 use serde_json::json;
 
 #[test]
-fn generation_proxy_writes_blob_and_persists_ready_artifact() {
+fn artifact_generation_proxy_writes_blob_and_persists_ready_artifact() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut generator = FakeArtifactGenerator::new();
@@ -27,7 +27,12 @@ fn generation_proxy_writes_blob_and_persists_ready_artifact() {
     )
     .expect("proxy generation should succeed");
 
-    assert_ready_outcome(&bundle_path, &outcome, ArtifactKind::Proxy, b"proxy mp4 bytes");
+    assert_ready_outcome(
+        &bundle_path,
+        &outcome,
+        ArtifactKind::Proxy,
+        b"proxy mp4 bytes",
+    );
     assert_eq!(outcome.job.status, GenerationJobStatus::Completed);
     assert_eq!(outcome.completed_chunks.len(), 1);
     assert_eq!(generator.proxy_calls(), 1);
@@ -47,7 +52,7 @@ fn generation_proxy_writes_blob_and_persists_ready_artifact() {
 }
 
 #[test]
-fn generation_thumbnail_records_fingerprints_and_project_relative_blob_path() {
+fn artifact_generation_thumbnail_records_fingerprints_and_project_relative_blob_path() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut generator = FakeArtifactGenerator::new();
@@ -71,7 +76,10 @@ fn generation_thumbnail_records_fingerprints_and_project_relative_blob_path() {
         "blob path must be derived-root-relative"
     );
     assert!(
-        !outcome.artifact.blob_relative_path.contains(".veproj/derived"),
+        !outcome
+            .artifact
+            .blob_relative_path
+            .contains(".veproj/derived"),
         "blob path must not leak cache root"
     );
     assert_eq!(outcome.artifact.mime, GeneratedArtifactMime::ImagePng);
@@ -92,7 +100,7 @@ fn generation_thumbnail_records_fingerprints_and_project_relative_blob_path() {
 }
 
 #[test]
-fn generation_waveform_writes_deterministic_data_and_integer_sample_metadata() {
+fn artifact_generation_waveform_writes_deterministic_data_and_integer_sample_metadata() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut generator = FakeArtifactGenerator::new();
@@ -111,7 +119,10 @@ fn generation_waveform_writes_deterministic_data_and_integer_sample_metadata() {
         ArtifactKind::Waveform,
         br#"{"samples":[0,25,50],"durationUs":2000000}"#,
     );
-    assert_eq!(outcome.artifact.mime, GeneratedArtifactMime::ApplicationJson);
+    assert_eq!(
+        outcome.artifact.mime,
+        GeneratedArtifactMime::ApplicationJson
+    );
     assert_eq!(outcome.job.progress.progress_per_mille, Some(1000));
 
     let reopened = open_artifact_store(&bundle_path).expect("store should reopen");
@@ -128,7 +139,7 @@ fn generation_waveform_writes_deterministic_data_and_integer_sample_metadata() {
 }
 
 #[test]
-fn generation_cancellation_prevents_blob_commit_and_resume_skips_completed_chunks() {
+fn artifact_generation_cancellation_prevents_blob_commit_and_resume_skips_completed_chunks() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut generator = FakeArtifactGenerator::new();
@@ -149,7 +160,11 @@ fn generation_cancellation_prevents_blob_commit_and_resume_skips_completed_chunk
     )
     .expect("completed proxy generation should resume without rewrite");
     assert_eq!(second.job.status, GenerationJobStatus::Completed);
-    assert_eq!(generator.proxy_calls(), 1, "completed chunk must not be regenerated");
+    assert_eq!(
+        generator.proxy_calls(),
+        1,
+        "completed chunk must not be regenerated"
+    );
     assert_eq!(
         first.artifact.blob_relative_path,
         second.artifact.blob_relative_path
@@ -327,8 +342,10 @@ fn assert_ready_outcome(
 fn artifact_count(store: &artifact_store::schema::ArtifactStore) -> i64 {
     store
         .connection()
-        .query_row("SELECT COUNT(*) FROM artifact WHERE status = 'ready'", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM artifact WHERE status = 'ready'",
+            [],
+            |row| row.get(0),
+        )
         .expect("artifact count should read")
 }
