@@ -213,6 +213,59 @@ fn export_commands_cancel_running_job_and_report_classified_status() {
 }
 
 #[test]
+fn export_commands_cancelled_validation_job_stays_cancelled() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("export-cancel-validation");
+    let ffmpeg = sandbox.ffmpeg_complete();
+    let ffprobe = sandbox.ffprobe_slow_success(1_920, 1_080, true);
+    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
+    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let output = sandbox.root.join("cancel-validation.mp4");
+
+    let started = execute_command(json!({
+        "command": "startExport",
+        "payload": {
+            "kind": "startExport",
+            "draft": export_draft("draft-export-cancel-validation"),
+            "outputPath": output,
+            "preset": ExportPreset::H264AacBalanced
+        },
+        "requestId": "req-export-cancel-validation-start"
+    }))
+    .expect("start export should return envelope");
+    let job_id = started["data"]["jobId"].as_str().unwrap().to_owned();
+
+    let validating = wait_for_export_phase(&job_id, ExportJobPhase::Validating);
+    assert_eq!(validating["ok"], true, "{validating:#}");
+
+    let cancelled = execute_command(json!({
+        "command": "cancelExport",
+        "payload": {
+            "kind": "cancelExport",
+            "jobId": job_id
+        },
+        "requestId": "req-export-cancel-validation"
+    }))
+    .expect("cancel export should return envelope");
+    assert_eq!(cancelled["data"]["phase"], "cancelled");
+
+    thread::sleep(Duration::from_millis(500));
+    let final_status = execute_command(json!({
+        "command": "getExportJobStatus",
+        "payload": {
+            "kind": "getExportJobStatus",
+            "jobId": job_id
+        },
+        "requestId": "req-export-cancel-validation-status"
+    }))
+    .expect("status command should return envelope");
+
+    assert_eq!(final_status["ok"], true, "{final_status:#}");
+    assert_eq!(final_status["data"]["phase"], "cancelled");
+    assert_eq!(final_status["data"]["diagnostic"]["kind"], "cancelled");
+}
+
+#[test]
 fn export_commands_classify_invalid_output_path_as_export_service_failure() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-invalid");
@@ -393,6 +446,10 @@ sleep 5
         self.ffprobe_success_with_frame_rate(width, height, 30, 1, has_audio)
     }
 
+    fn ffprobe_slow_success(&self, width: u32, height: u32, has_audio: bool) -> PathBuf {
+        self.ffprobe_success_script(width, height, 30, 1, has_audio, "sleep 0.25\n")
+    }
+
     fn ffprobe_success_with_frame_rate(
         &self,
         width: u32,
@@ -400,6 +457,25 @@ sleep 5
         frame_rate_numerator: u32,
         frame_rate_denominator: u32,
         has_audio: bool,
+    ) -> PathBuf {
+        self.ffprobe_success_script(
+            width,
+            height,
+            frame_rate_numerator,
+            frame_rate_denominator,
+            has_audio,
+            "",
+        )
+    }
+
+    fn ffprobe_success_script(
+        &self,
+        width: u32,
+        height: u32,
+        frame_rate_numerator: u32,
+        frame_rate_denominator: u32,
+        has_audio: bool,
+        delay: &str,
     ) -> PathBuf {
         let audio_stream = if has_audio {
             r#",{"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2,"duration":"1.000000"}"#
@@ -414,6 +490,7 @@ if [ "$1" = "-version" ]; then
   printf 'ffprobe version export-test\n'
   exit 0
 fi
+{delay}
 cat <<'JSON'
 {{"streams":[{{"codec_type":"video","codec_name":"h264","width":{width},"height":{height},"r_frame_rate":"{frame_rate_numerator}/{frame_rate_denominator}","duration":"1.000000"}}{audio_stream}],"format":{{"duration":"1.000000"}}}}
 JSON

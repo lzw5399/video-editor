@@ -600,6 +600,9 @@ impl ExportJobRegistry {
 
         match runtime_result {
             Ok(result) if result.state == FfmpegJobState::Completed => {
+                if cancel_token.is_cancelled() {
+                    return;
+                }
                 self.mark_validating(&job_id, &result);
                 match validate_rendered_output(
                     &validation_executor,
@@ -609,7 +612,7 @@ impl ExportJobRegistry {
                 ) {
                     Ok(report) => {
                         let validation = export_validation_report(report);
-                        let _ = self.update_status(&job_id, |status| {
+                        let _ = self.update_status_if_not_terminal(&job_id, |status| {
                             status.phase = ExportJobPhase::Completed;
                             status.progress_per_mille = Some(1000);
                             status.log_summary = Some("导出完成，输出校验通过".to_owned());
@@ -619,7 +622,7 @@ impl ExportJobRegistry {
                     }
                     Err(error) => {
                         let diagnostic = export_validation_diagnostic(&error);
-                        let _ = self.update_status(&job_id, |status| {
+                        let _ = self.update_status_if_not_terminal(&job_id, |status| {
                             status.phase = ExportJobPhase::ValidationFailed;
                             status.log_summary = Some("导出完成，但输出校验未通过".to_owned());
                             status.diagnostic = Some(diagnostic);
@@ -634,7 +637,7 @@ impl ExportJobRegistry {
                     stdout_summary: result.stdout_summary.clone(),
                     stderr_summary: result.stderr_summary.clone(),
                 };
-                let _ = self.update_status(&job_id, |status| {
+                let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Cancelled;
                     status.progress_per_mille = result
                         .final_progress
@@ -653,7 +656,7 @@ impl ExportJobRegistry {
                     stdout_summary: result.stdout_summary.clone(),
                     stderr_summary: result.stderr_summary.clone(),
                 };
-                let _ = self.update_status(&job_id, |status| {
+                let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Failed;
                     status.log_summary = bounded_export_log(&result);
                     status.diagnostic = Some(diagnostic);
@@ -661,7 +664,7 @@ impl ExportJobRegistry {
             }
             Err(error) => {
                 let diagnostic = export_runtime_diagnostic(&error);
-                let _ = self.update_status(&job_id, |status| {
+                let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Failed;
                     status.log_summary = Some("导出运行失败".to_owned());
                     status.diagnostic = Some(diagnostic);
@@ -673,13 +676,13 @@ impl ExportJobRegistry {
     fn apply_runtime_event(&self, job_id: &str, event: FfmpegJobEvent) {
         match event {
             FfmpegJobEvent::Started { .. } => {
-                let _ = self.update_status(job_id, |status| {
+                let _ = self.update_status_if_not_terminal(job_id, |status| {
                     status.phase = ExportJobPhase::Running;
                     status.log_summary = Some("导出运行中".to_owned());
                 });
             }
             FfmpegJobEvent::Progress { progress } => {
-                let _ = self.update_status(job_id, |status| {
+                let _ = self.update_status_if_not_terminal(job_id, |status| {
                     status.phase = ExportJobPhase::Running;
                     status.progress_per_mille = progress.progress_per_mille;
                     status.out_time = Some(Microseconds::new(progress.out_time_microseconds));
@@ -691,7 +694,7 @@ impl ExportJobRegistry {
                 });
             }
             FfmpegJobEvent::Completed { state } => {
-                let _ = self.update_status(job_id, |status| {
+                let _ = self.update_status_if_not_terminal(job_id, |status| {
                     if state == FfmpegJobState::Cancelled {
                         status.phase = ExportJobPhase::Cancelled;
                     }
@@ -701,7 +704,7 @@ impl ExportJobRegistry {
     }
 
     fn mark_validating(&self, job_id: &str, result: &FfmpegJobResult) {
-        let _ = self.update_status(job_id, |status| {
+        let _ = self.update_status_if_not_terminal(job_id, |status| {
             status.phase = ExportJobPhase::Validating;
             status.progress_per_mille = Some(1000);
             status.out_time = result
@@ -709,6 +712,19 @@ impl ExportJobRegistry {
                 .map(|progress| Microseconds::new(progress.out_time_microseconds));
             status.log_summary = Some("导出完成，正在校验输出".to_owned());
         });
+    }
+
+    fn update_status_if_not_terminal(
+        &self,
+        job_id: &str,
+        update: impl FnOnce(&mut ExportJobStatusResponse),
+    ) -> Result<(), ExportCommandError> {
+        self.update_status(job_id, |status| {
+            if is_terminal_export_phase(status.phase) {
+                return;
+            }
+            update(status);
+        })
     }
 
     fn update_status(
@@ -723,6 +739,16 @@ impl ExportJobRegistry {
         update(&mut entry.status);
         Ok(())
     }
+}
+
+fn is_terminal_export_phase(phase: ExportJobPhase) -> bool {
+    matches!(
+        phase,
+        ExportJobPhase::Completed
+            | ExportJobPhase::Failed
+            | ExportJobPhase::ValidationFailed
+            | ExportJobPhase::Cancelled
+    )
 }
 
 pub fn global_export_registry() -> &'static ExportJobRegistry {
