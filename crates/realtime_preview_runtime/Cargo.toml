@@ -24,8 +24,11 @@ wgpu = "29.0.3"
 [target.'cfg(target_os = "macos")'.dependencies]
 media_runtime_desktop = { path = "../media_runtime_desktop" }
 objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-core-foundation = "0.3.2"
 objc2-core-video = { version = "0.3.2", features = ["objc2-metal"] }
 objc2-metal = "0.3.2"
+raw-window-metal = "1.1.0"
 
 [dev-dependencies]
 testkit = { path = "../testkit" }

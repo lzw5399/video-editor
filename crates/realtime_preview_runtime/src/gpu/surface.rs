@@ -340,6 +340,8 @@ pub struct RealtimePreviewGpuPresentationTarget {
     format: RealtimePreviewTargetFormat,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+    #[cfg(target_os = "macos")]
+    macos_attachment: Option<crate::platform::macos::MacosWgpuSurfaceAttachment>,
 }
 
 impl RealtimePreviewGpuPresentationTarget {
@@ -356,7 +358,18 @@ impl RealtimePreviewGpuPresentationTarget {
             format,
             surface,
             config,
+            #[cfg(target_os = "macos")]
+            macos_attachment: None,
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn with_macos_attachment(
+        mut self,
+        attachment: crate::platform::macos::MacosWgpuSurfaceAttachment,
+    ) -> Self {
+        self.macos_attachment = Some(attachment);
+        self
     }
 
     pub const fn descriptor(&self) -> PreviewSurfaceDescriptor {
@@ -393,6 +406,10 @@ impl RealtimePreviewGpuPresentationTarget {
         bounds: PreviewSurfaceBounds,
     ) -> Result<(), PreviewSurfaceError> {
         let bounds = bounds.validate()?;
+        #[cfg(target_os = "macos")]
+        if let Some(attachment) = self.macos_attachment.as_mut() {
+            attachment.update_bounds(bounds)?;
+        }
         self.bounds = bounds;
         self.config.width = bounds.width;
         self.config.height = bounds.height;

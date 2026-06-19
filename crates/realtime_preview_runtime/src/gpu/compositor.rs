@@ -171,7 +171,6 @@ impl RealtimePreviewCompositor {
             .queue()
             .ok_or(RealtimePreviewCompositorError::WgpuQueueUnavailable)?;
         let mut diagnostics = Vec::new();
-        validate_target_dimensions(target, graph, "presentation surface", &mut diagnostics);
         let capability = self.classifier.classify(graph);
         diagnostics.extend(capability.diagnostics);
         let mut support = summarize_support(capability.support, &diagnostics);
@@ -1514,25 +1513,39 @@ fn poll_wgpu(
 fn acquire_surface_texture(
     surface: &wgpu::Surface<'static>,
 ) -> Result<wgpu::SurfaceTexture, RealtimePreviewCompositorError> {
-    match surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(texture)
-        | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
-        wgpu::CurrentSurfaceTexture::Timeout => Err(
-            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface acquire timed out".into()),
-        ),
-        wgpu::CurrentSurfaceTexture::Occluded => Err(
-            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is occluded".into()),
-        ),
-        wgpu::CurrentSurfaceTexture::Outdated => Err(
-            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is outdated".into()),
-        ),
-        wgpu::CurrentSurfaceTexture::Lost => Err(
-            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface is lost".into()),
-        ),
-        wgpu::CurrentSurfaceTexture::Validation => Err(
-            RealtimePreviewCompositorError::WgpuSurfaceAcquire("surface validation failed".into()),
-        ),
+    let mut last_transient = None;
+    for _ in 0..8 {
+        match surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => return Ok(texture),
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                last_transient = Some("surface acquire timed out");
+                std::thread::sleep(Duration::from_millis(16));
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                last_transient = Some("surface is occluded");
+                std::thread::sleep(Duration::from_millis(16));
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                return Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(
+                    "surface is outdated".into(),
+                ));
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                return Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(
+                    "surface is lost".into(),
+                ));
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                return Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(
+                    "surface validation failed".into(),
+                ));
+            }
+        }
     }
+    Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(
+        last_transient.unwrap_or("surface acquire failed").into(),
+    ))
 }
 
 fn align_to(value: usize, alignment: usize) -> usize {

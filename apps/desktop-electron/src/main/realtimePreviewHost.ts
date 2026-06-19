@@ -294,25 +294,48 @@ export class RealtimePreviewHost {
   }
 
   play(): RealtimePreviewHostDisplayState {
-    this.refreshPresentationState();
-    if (!this.hasProductionCompositedPresenter()) {
-      const unavailableReason =
-        this.presentationState?.backend === "nativeVideoBridge"
-          ? "GPU 合成播放尚未接入"
-          : this.presentationState?.unsupportedReason?.slice(0, 120) ?? "GPU 合成播放尚未接入";
-      this.fallbackLabel = `实时预览不可用：${unavailableReason}`;
-      recordRealtimePreviewHostCall({ kind: "playRejectedMissingCompositor" });
-      this.refreshTelemetry();
-      return this.state("实时预览不可用");
-    }
-
-    const state = this.applySessionPlaybackCommand("play", () => {
+    try {
+      this.ensureSession();
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
-      return playRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
-    }, "实时预览播放中");
-    return state;
+      const response = playRealtimePreview({ sessionId: this.sessionId });
+      this.playbackGeneration = response.playbackGeneration;
+      recordRealtimePreviewHostCall({ kind: "schedulerDecodeCurrentFrame" });
+      recordRealtimePreviewHostCall({ kind: "schedulerBuildRenderGraph" });
+      recordRealtimePreviewHostCall({ kind: "schedulerPresentSurface" });
+      recordRealtimePreviewHostCall({ kind: "play", playbackGeneration: response.playbackGeneration });
+      this.fallbackLabel = null;
+      this.refreshTelemetry();
+      if (this.hasProductionCompositedPresenter()) {
+        recordRealtimePreviewHostCall({
+          kind: "schedulerCompositedEvidence",
+          targetTimeMicroseconds: this.lastContentEvidence?.targetTimeMicroseconds,
+          playbackGeneration: response.playbackGeneration
+        });
+        return this.state("实时预览播放中");
+      }
+      this.fallbackLabel = `实时预览不可用：${
+        this.presentationState?.unsupportedReason?.slice(0, 120) ?? "GPU 合成播放尚未接入"
+      }`;
+      recordRealtimePreviewHostCall({
+        kind: "playRejectedMissingCompositor",
+        errorMessage: this.fallbackLabel
+      });
+      return this.state("实时预览不可用");
+    } catch (error) {
+      this.fallbackLabel = attachFailureLabel(error);
+      recordRealtimePreviewHostCall({
+        kind: "playRejectedMissingCompositor",
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      try {
+        this.refreshTelemetry();
+      } catch {
+        this.telemetry = null;
+      }
+      return this.state("实时预览不可用");
+    }
   }
 
   pause(): RealtimePreviewHostDisplayState {
@@ -640,7 +663,7 @@ function nativeParentHandleToHex(handle: Buffer): string {
 
 function attachFailureLabel(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return `实时预览不可用：${message.slice(0, 120)}`;
+  return `实时预览不可用：${message}`;
 }
 
 function recordRealtimePreviewHostCall(call: RealtimePreviewHostRecord): void {

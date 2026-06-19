@@ -136,11 +136,14 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let descriptor = descriptor.to_runtime_descriptor()?;
-        let generation = self
-            .runtime
-            .attach_surface(runtime_id, descriptor)
-            .map_err(RealtimePreviewBindingError::runtime)?;
         self.scheduler_mut(session_id)?.attach_surface(descriptor)?;
+        let generation = match self.runtime.attach_surface(runtime_id, descriptor) {
+            Ok(generation) => generation,
+            Err(error) => {
+                self.scheduler_mut(session_id)?.detach_surface();
+                return Err(RealtimePreviewBindingError::runtime(error));
+            }
+        };
         Ok(generation_response(generation))
     }
 
@@ -218,9 +221,16 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .play(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
-        let evidence = self
+        let evidence = match self
             .scheduler_mut(session_id)?
-            .present_next_tick(target_time, generation)?;
+            .present_next_tick(target_time, generation)
+        {
+            Ok(evidence) => evidence,
+            Err(error) => {
+                let _ = self.runtime.pause(runtime_id);
+                return Err(error);
+            }
+        };
         self.runtime
             .record_presented_output(
                 runtime_id,
@@ -537,7 +547,7 @@ impl RealtimePreviewBindingScheduler {
         if self.gpu_device.is_none() || self.surface_target.is_none() {
             return Err(RealtimePreviewBindingError::presenter(
                 NativePreviewPresenterError::new(
-                    "render graph GPU presentation surface is not attached",
+                    "render graph GPU compositor scheduler presentation surface is not attached",
                 ),
             ));
         }
@@ -547,7 +557,7 @@ impl RealtimePreviewBindingScheduler {
         {
             return Err(RealtimePreviewBindingError::presenter(
                 NativePreviewPresenterError::new(
-                    "render graph GPU presentation surface is not attached",
+                    "render graph GPU compositor scheduler presentation surface is not attached",
                 ),
             ));
         }
@@ -670,9 +680,17 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                 reason: error.to_string(),
             })?;
         if output.presented_frames == 0 {
+            let details = output
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.reason.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
             return Err(RealtimePlaybackSchedulerError::MissingPrerequisite {
-                reason: "render graph GPU compositor produced no presented surface frame"
-                    .to_owned(),
+                reason: format!(
+                    "render graph GPU compositor produced no presented surface frame: support={:?} submittedDraws={} diagnostics={}",
+                    output.support, output.submitted_draws, details
+                ),
             });
         }
         Ok(RealtimePlaybackSchedulerPresentation {

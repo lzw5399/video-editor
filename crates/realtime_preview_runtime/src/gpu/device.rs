@@ -207,8 +207,11 @@ impl RealtimePreviewGpuDevice {
             )
         })?;
 
-        let surface = create_native_surface(instance, parent_window_handle)?;
         let bounds = descriptor.bounds();
+        let native_surface = create_native_surface(instance, parent_window_handle, bounds)?;
+        let surface = native_surface.surface;
+        #[cfg(target_os = "macos")]
+        let macos_attachment = native_surface.macos_attachment;
         let mut config = surface
             .get_default_config(adapter, bounds.width, bounds.height)
             .ok_or_else(|| {
@@ -240,12 +243,19 @@ impl RealtimePreviewGpuDevice {
         config.usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
         surface.configure(device, &config);
 
-        Ok(RealtimePreviewGpuPresentationTarget::new(
+        let target = RealtimePreviewGpuPresentationTarget::new(
             descriptor,
             configured_format,
             surface,
             config,
-        ))
+        );
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(attachment) = macos_attachment {
+                return Ok(target.with_macos_attachment(attachment));
+            }
+        }
+        Ok(target)
     }
 
     pub fn create_nv12_external_texture_planes(
@@ -485,19 +495,28 @@ impl RealtimePreviewGpuDevice {
     }
 }
 
+struct NativeSurfaceCreation {
+    surface: wgpu::Surface<'static>,
+    #[cfg(target_os = "macos")]
+    macos_attachment: Option<crate::platform::macos::MacosWgpuSurfaceAttachment>,
+}
+
 fn create_native_surface(
     instance: &wgpu::Instance,
     handle: NativeParentWindowHandle,
-) -> Result<wgpu::Surface<'static>, PreviewSurfaceError> {
+    bounds: super::surface::PreviewSurfaceBounds,
+) -> Result<NativeSurfaceCreation, PreviewSurfaceError> {
     #[cfg(target_os = "macos")]
     {
-        let raw_handle = crate::platform::macos::raw_window_handle(handle)?;
-        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: None,
-            raw_window_handle: raw_handle.into(),
-        };
-        return unsafe { instance.create_surface_unsafe(target) }
-            .map_err(|error| surface_error(error.to_string()));
+        let attachment = crate::platform::macos::MacosWgpuSurfaceAttachment::new(handle, bounds)?;
+        let target =
+            wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(attachment.core_animation_layer());
+        let surface = unsafe { instance.create_surface_unsafe(target) }
+            .map_err(|error| surface_error(error.to_string()))?;
+        return Ok(NativeSurfaceCreation {
+            surface,
+            macos_attachment: Some(attachment),
+        });
     }
 
     #[cfg(target_os = "windows")]
@@ -507,13 +526,15 @@ fn create_native_surface(
             raw_display_handle: None,
             raw_window_handle: raw_handle.into(),
         };
-        return unsafe { instance.create_surface_unsafe(target) }
-            .map_err(|error| surface_error(error.to_string()));
+        let _ = bounds;
+        let surface = unsafe { instance.create_surface_unsafe(target) }
+            .map_err(|error| surface_error(error.to_string()))?;
+        return Ok(NativeSurfaceCreation { surface });
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = (instance, handle);
+        let _ = (instance, handle, bounds);
         Err(PreviewSurfaceError::new(
             PreviewSurfaceDiagnosticKind::PlatformUnavailable,
             "native WGPU preview surfaces are supported only on macOS and Windows",
