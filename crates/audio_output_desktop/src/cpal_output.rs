@@ -73,16 +73,12 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
         &self,
         capabilities: &AudioOutputCapabilities,
     ) -> Result<Self::Stream, AudioOutputError> {
-        if capabilities.sample_rate_hz == 0 || capabilities.max_channel_count == 0 {
-            return Err(AudioOutputError::InvalidCapabilities {
-                reason: "native output requires nonzero sample rate and channel count".to_owned(),
-            });
-        }
+        validate_native_output_capabilities(capabilities, &self.capabilities())?;
 
         let sample_format = self.default_config.sample_format();
         let config: cpal::StreamConfig = self.default_config.clone().into();
         let presented_result_count = Arc::new(AtomicU64::new(0));
-        let callback_count = Arc::clone(&presented_result_count);
+        let callback_count = Arc::new(AtomicU64::new(0));
         let error_callback = |error| eprintln!("native audio output stream diagnostic: {error}");
 
         let stream = match sample_format {
@@ -143,6 +139,43 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
             presented_result_count,
         })
     }
+}
+
+fn validate_native_output_capabilities(
+    requested: &AudioOutputCapabilities,
+    available: &AudioOutputCapabilities,
+) -> Result<(), AudioOutputError> {
+    if requested.sample_rate_hz == 0
+        || requested.max_channel_count == 0
+        || requested.max_frame_count == 0
+    {
+        return Err(AudioOutputError::InvalidCapabilities {
+            reason: "native output requires nonzero sample rate, channel count, and frame count"
+                .to_owned(),
+        });
+    }
+    if requested.device_id != available.device_id {
+        return Err(AudioOutputError::InvalidCapabilities {
+            reason: "native output device does not match requested device".to_owned(),
+        });
+    }
+    if requested.sample_rate_hz != available.sample_rate_hz {
+        return Err(AudioOutputError::InvalidCapabilities {
+            reason: format!(
+                "native output sample rate {} Hz is unavailable; default device is {} Hz",
+                requested.sample_rate_hz, available.sample_rate_hz
+            ),
+        });
+    }
+    if requested.max_channel_count > available.max_channel_count {
+        return Err(AudioOutputError::InvalidCapabilities {
+            reason: format!(
+                "native output channel count {} exceeds available {}",
+                requested.max_channel_count, available.max_channel_count
+            ),
+        });
+    }
+    Ok(())
 }
 
 pub struct CpalAudioOutputSink {
@@ -353,4 +386,40 @@ where
         error_callback,
         None,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use audio_engine::AudioOutputCapabilities;
+
+    use super::validate_native_output_capabilities;
+
+    fn capabilities() -> AudioOutputCapabilities {
+        AudioOutputCapabilities {
+            device_id: "native-device".to_owned(),
+            display_name: "Native Device".to_owned(),
+            sample_rate_hz: 48_000,
+            max_channel_count: 2,
+            max_frame_count: 2_400,
+            mock: false,
+        }
+    }
+
+    #[test]
+    fn native_output_capability_validation_rejects_mismatched_requests() {
+        let available = capabilities();
+        assert!(validate_native_output_capabilities(&available, &available).is_ok());
+
+        let mut wrong_rate = available.clone();
+        wrong_rate.sample_rate_hz = 44_100;
+        assert!(validate_native_output_capabilities(&wrong_rate, &available).is_err());
+
+        let mut too_many_channels = available.clone();
+        too_many_channels.max_channel_count = 8;
+        assert!(validate_native_output_capabilities(&too_many_channels, &available).is_err());
+
+        let mut wrong_device = available.clone();
+        wrong_device.device_id = "other-device".to_owned();
+        assert!(validate_native_output_capabilities(&wrong_device, &available).is_err());
+    }
 }

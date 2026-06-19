@@ -558,6 +558,7 @@ fn audio_render_graph_maps_dsp_mix_intent_for_export_without_ffmpeg_syntax() {
         mix.volume_keyframes[0].target_time,
         Microseconds::new(625_000)
     );
+    assert_eq!(mix.volume_keyframes[0].target_sample, 30_000);
     assert_eq!(mix.volume_keyframes[0].gain_millis, 1_250);
     assert_eq!(mix.effect_slots.len(), 1);
     assert_eq!(mix.effect_slots[0].slot_id, "slot-vendor-space");

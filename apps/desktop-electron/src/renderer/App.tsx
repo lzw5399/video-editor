@@ -1685,7 +1685,7 @@ export function App(): React.ReactElement {
           draft: current.draft,
           sessionId,
           targetTime: playheadRef.current,
-          playbackGeneration: current.audioPreview.generation + 1
+          playbackGeneration: current.audioPreview.generation
         }),
       "播放音频",
       applyAudioPreviewCommandResult

@@ -150,17 +150,19 @@ pub fn generate_filter_script(
             let input_index = input_indexes
                 .get(&audio.material_id)
                 .ok_or_else(|| missing_input(&audio.material_id))?;
+            let output_range = output_timerange(plan);
             let Some(clip) = clipped_source_timerange(
                 &audio.source_timerange,
                 &audio.target_timerange,
-                output_timerange(plan),
+                output_range,
             ) else {
                 continue;
             };
             let label = format!("a{audio_index}");
-            let filters = compile_audio_mix_filters(audio, &clip);
+            let filters = compile_audio_mix_filters(audio, &clip, output_range);
             lines.push(format!("[{input_index}:a]{}[{label}]", filters.join(",")));
             diagnostics.extend(audio_effect_slot_diagnostics(audio));
+            diagnostics.extend(audio_volume_keyframe_diagnostics(audio));
             audio_labels.push(label);
         }
         if audio_labels.len() == 1 {
@@ -185,13 +187,21 @@ pub fn generate_filter_script(
     })
 }
 
-fn compile_audio_mix_filters(audio: &RenderAudioMix, clip: &SourceTimerange) -> Vec<String> {
+fn compile_audio_mix_filters(
+    audio: &RenderAudioMix,
+    clip: &SourceTimerange,
+    output: &TargetTimerange,
+) -> Vec<String> {
     let mut filters = vec![format!(
         "atrim=start={start}:duration={duration}",
         start = format_seconds(clip.start),
         duration = format_seconds(clip.duration)
     )];
     filters.push("asetpts=PTS-STARTPTS".to_owned());
+    let delay = target_delay_from_output(&audio.target_timerange, output);
+    if delay.get() > 0 {
+        filters.push(format!("adelay={delay}|{delay}", delay = delay_millis(delay)));
+    }
     filters.push(format!("volume={}", volume_arg(audio.gain_millis)));
     if audio.pan_balance_millis != 0 {
         filters.push(pan_filter(audio.pan_balance_millis));
@@ -214,6 +224,15 @@ fn compile_audio_mix_filters(audio: &RenderAudioMix, clip: &SourceTimerange) -> 
         ));
     }
     filters
+}
+
+fn target_delay_from_output(target: &TargetTimerange, output: &TargetTimerange) -> Microseconds {
+    let active_start = target.start.max(output.start);
+    Microseconds::new(active_start.get().saturating_sub(output.start.get()))
+}
+
+fn delay_millis(value: Microseconds) -> u64 {
+    (value.get().saturating_add(999)) / 1_000
 }
 
 fn pan_filter(balance_millis: i32) -> String {
@@ -256,6 +275,21 @@ fn audio_effect_slot_diagnostics(audio: &RenderAudioMix) -> Vec<RenderAudioMixDi
             },
         })
         .collect()
+}
+
+fn audio_volume_keyframe_diagnostics(audio: &RenderAudioMix) -> Vec<RenderAudioMixDiagnostic> {
+    if audio.volume_keyframes.is_empty() {
+        return Vec::new();
+    }
+
+    vec![RenderAudioMixDiagnostic {
+        track_id: audio.track_id.clone(),
+        segment_id: audio.segment_id.clone(),
+        material_id: audio.material_id.clone(),
+        property: "audio.volumeKeyframes".to_owned(),
+        support: RenderIntentSupport::Unsupported,
+        reason: "keyframed audio volume is preserved for diagnostics but is not compiled into FFmpeg volume automation".to_owned(),
+    }]
 }
 
 fn compile_visual_layer(

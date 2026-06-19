@@ -13,8 +13,8 @@ use draft_model::{
     AudioOutputDeviceStatus, AudioOutputDeviceSummary, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
     CommandError, CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope,
-    Microseconds, RationalFrameRate, TargetTimerange, WaveformDisplayPeak,
-    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
+    Microseconds, RationalFrameRate, TargetTimerange, WaveformDisplayPeaksResponse,
+    WaveformDisplayStatus,
 };
 use realtime_preview_runtime::{PlaybackRate, PlaybackState};
 use serde::{Deserialize, Serialize};
@@ -75,7 +75,8 @@ impl AudioPreviewBindingRegistry {
         let runtime_id = self.runtime_session_id(session_id)?;
         let generation = self
             .runtime
-            .resume(runtime_id)
+            .seek(runtime_id, target_time)
+            .and_then(|_| self.runtime.resume(runtime_id))
             .map_err(AudioPreviewBindingError::runtime)?;
         Ok(command_response(
             session_id,
@@ -274,25 +275,18 @@ impl AudioPreviewBindingRegistry {
                 diagnostics: vec!["waveform display request had zero bins".to_owned()],
             });
         }
-        let peaks = (0..requested_peak_bins)
-            .map(|index| {
-                let phase = i16::try_from(index % 8).unwrap_or(0);
-                let max_millis = 250 + phase.saturating_mul(80);
-                WaveformDisplayPeak {
-                    min_millis: -max_millis,
-                    max_millis,
-                }
-            })
-            .collect::<Vec<_>>();
         Ok(WaveformDisplayPeaksResponse {
             material_id: material_id.map(draft_model::MaterialId::new),
-            status: WaveformDisplayStatus::Ready,
-            status_label: "波形就绪".to_owned(),
+            status: WaveformDisplayStatus::Missing,
+            status_label: "暂无波形".to_owned(),
             target_timerange,
             requested_peak_bins,
-            returned_peak_bins: u16::try_from(peaks.len()).unwrap_or(u16::MAX),
-            peaks,
-            diagnostics: Vec::new(),
+            returned_peak_bins: 0,
+            peaks: Vec::new(),
+            diagnostics: vec![
+                "waveform display requires a ready waveform artifact before peaks can be shown"
+                    .to_owned(),
+            ],
         })
     }
 

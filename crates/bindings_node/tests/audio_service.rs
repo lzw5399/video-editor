@@ -59,6 +59,11 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
     assert!(playing.accepted);
     assert_eq!(playing.status, AudioPreviewPlaybackStatus::Playing);
 
+    let status_after_play = registry
+        .status(&created.session_id)
+        .expect("playing status should be readable");
+    assert_eq!(status_after_play.target_time, Microseconds::new(0));
+
     let sought = registry
         .seek(&created.session_id, Microseconds::new(500_000))
         .expect("audio seek should advance generation");
@@ -75,6 +80,22 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
     assert!(!stale.accepted);
     assert_eq!(stale.status, AudioPreviewPlaybackStatus::StaleRejected);
     assert!(stale.diagnostics.iter().any(|message| message.contains("stale")));
+
+    let current = registry
+        .status(&created.session_id)
+        .expect("current generation should be readable");
+    let accepted_seek_play = registry
+        .play(
+            &created.session_id,
+            Microseconds::new(600_000),
+            current.generation,
+        )
+        .expect("fresh generation play should be accepted");
+    assert!(accepted_seek_play.accepted);
+    let status_after_seek_play = registry
+        .status(&created.session_id)
+        .expect("play should update runtime target time");
+    assert_eq!(status_after_seek_play.target_time, Microseconds::new(600_000));
 
     let paused = registry
         .pause(&created.session_id)
@@ -122,10 +143,13 @@ fn audio_service_returns_safe_devices_and_bounded_waveform_payloads() {
             16,
         )
         .expect("waveform display payload should be returned");
-    assert_eq!(waveform.status, WaveformDisplayStatus::Ready);
+    assert_eq!(waveform.status, WaveformDisplayStatus::Missing);
     assert_eq!(waveform.requested_peak_bins, 16);
-    assert_eq!(waveform.returned_peak_bins, waveform.peaks.len() as u16);
-    assert!(waveform.peaks.len() <= 16);
+    assert_eq!(waveform.returned_peak_bins, 0);
+    assert!(waveform.peaks.is_empty());
+    assert!(waveform.diagnostics.iter().any(|message| {
+        message.contains("ready waveform artifact")
+    }));
 
     let serialized = serde_json::to_string(&waveform).expect("waveform should serialize");
     for forbidden in [

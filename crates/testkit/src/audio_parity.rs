@@ -343,7 +343,7 @@ fn preview_volume_keyframes(preview: &AudioMixSegment) -> Vec<RenderAudioVolumeK
         .iter()
         .map(|point| RenderAudioVolumeKeyframe {
             target_time: point.at,
-            target_sample: 0,
+            target_sample: point.target_sample,
             gain_millis: point.gain_millis,
         })
         .collect()

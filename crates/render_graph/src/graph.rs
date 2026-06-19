@@ -14,6 +14,8 @@ use engine_core::{
 };
 use serde::{Deserialize, Serialize};
 
+const DEFAULT_AUDIO_SAMPLE_RATE_HZ: u32 = 48_000;
+
 use crate::incremental::RenderGraphNodeId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -725,7 +727,7 @@ fn render_audio_mix(
         pan_balance_millis: segment.audio.pan_balance_millis.balance_millis,
         fade_in_duration: segment.audio.fade_in_duration.duration,
         fade_out_duration: segment.audio.fade_out_duration.duration,
-        volume_keyframes: volume_keyframes_for(segment, 0),
+        volume_keyframes: volume_keyframes_for(segment, audio_sample_rate_for_segment(segment)),
         effect_slots: render_audio_effect_slots(segment),
         classification: RenderAudioMixClassification::Audible,
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
@@ -1015,7 +1017,7 @@ fn render_transition_intent(
 
 fn volume_keyframes_for(
     segment: &NormalizedSegment,
-    target_sample_offset: u64,
+    sample_rate_hz: u32,
 ) -> Vec<RenderAudioVolumeKeyframe> {
     segment
         .keyframes
@@ -1033,11 +1035,26 @@ fn volume_keyframes_for(
                 .map(Microseconds::new)
                 .map(|target_time| RenderAudioVolumeKeyframe {
                     target_time,
-                    target_sample: target_sample_offset,
+                    target_sample: timeline_time_to_samples(target_time, sample_rate_hz),
                     gain_millis: value,
                 })
         })
         .collect()
+}
+
+fn audio_sample_rate_for_segment(segment: &NormalizedSegment) -> u32 {
+    segment
+        .material
+        .audio_sample_rate
+        .filter(|sample_rate| *sample_rate > 0)
+        .unwrap_or(DEFAULT_AUDIO_SAMPLE_RATE_HZ)
+}
+
+fn timeline_time_to_samples(value: Microseconds, sample_rate_hz: u32) -> u64 {
+    let samples = u128::from(value.get())
+        .saturating_mul(u128::from(sample_rate_hz))
+        / 1_000_000_u128;
+    samples.min(u128::from(u64::MAX)) as u64
 }
 
 fn render_audio_effect_slots(segment: &NormalizedSegment) -> Vec<RenderAudioEffectSlot> {

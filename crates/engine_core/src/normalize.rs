@@ -140,6 +140,8 @@ pub struct NormalizedMaterialRef {
     pub height: Option<u32>,
     pub has_video: bool,
     pub has_audio: bool,
+    pub audio_sample_rate: Option<u32>,
+    pub audio_channels: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -519,6 +521,8 @@ fn normalized_material_ref(material: &Material) -> NormalizedMaterialRef {
         height: material.metadata.height,
         has_video: material.metadata.has_video,
         has_audio: material.metadata.has_audio,
+        audio_sample_rate: material.metadata.audio_sample_rate,
+        audio_channels: material.metadata.audio_channels,
     }
 }
 

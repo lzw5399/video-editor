@@ -69,7 +69,7 @@
     "test:phase14-source-guards": "bash scripts/phase14-source-guards.sh",
     "test:phase14-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"资源任务|资源维护|素材资源状态|缓存空间|五大区域\"",
     "test:phase14": "pnpm run test:phase14-rust && pnpm run test:phase14-source-guards && pnpm run test:phase14-workspace && pnpm run test:contracts",
-    "test:phase15-rust": "cargo test -p draft_model audio -- --nocapture && cargo test -p draft_commands audio -- --nocapture && cargo test -p audio_engine -- --nocapture && cargo test -p audio_output_desktop audio_output_capabilities -- --nocapture && cargo test -p bindings_node audio_service -- --nocapture && cargo test -p render_graph audio -- --nocapture && cargo test -p ffmpeg_compiler audio -- --nocapture && cargo test -p testkit audio_preview_export_parity -- --nocapture",
+    "test:phase15-rust": "cargo test -p draft_model audio -- --nocapture && cargo test -p draft_commands audio -- --nocapture && cargo test -p audio_engine -- --nocapture && cargo test -p audio_output_desktop audio_output_capabilities -- --nocapture && cargo test -p audio_output_desktop native_output_capability_validation -- --nocapture && cargo test -p bindings_node audio_service -- --nocapture && cargo test -p render_graph audio -- --nocapture && cargo test -p ffmpeg_compiler audio -- --nocapture && cargo test -p testkit audio_preview_export_parity -- --nocapture",
     "test:phase15-source-guards": "bash scripts/phase15-source-guards.sh",
     "test:phase15-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"音频预览|波形|播放状态|五大区域\"",
     "test:phase15": "pnpm run test:phase15-rust && pnpm run test:phase15-source-guards && pnpm run test:phase15-workspace && pnpm run test:contracts",

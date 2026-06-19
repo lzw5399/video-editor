@@ -186,6 +186,24 @@ pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
     .expect("export plan should validate")
 }
 
+pub fn export_plan_with_delayed_audio_mix() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.target_timerange = TargetTimerange::new(Microseconds::new(500_000), Microseconds::new(500_000));
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
 fn sample_graph() -> render_graph::RenderGraph {
     sample_graph_from_draft(&compiler_draft())
 }
@@ -311,6 +329,8 @@ fn material(material_id: &str, kind: MaterialKind, uri: &str) -> Material {
         }
         MaterialKind::Audio => {
             material.metadata.has_audio = true;
+            material.metadata.audio_sample_rate = Some(48_000);
+            material.metadata.audio_channels = Some(2);
         }
         MaterialKind::Text | MaterialKind::Sticker => {}
     }

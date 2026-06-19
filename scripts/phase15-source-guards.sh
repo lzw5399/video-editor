@@ -123,6 +123,7 @@ require_fixed "$PACKAGE_JSON" "cargo test -p draft_model audio -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p draft_commands audio -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p audio_engine -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p audio_output_desktop audio_output_capabilities -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p audio_output_desktop native_output_capability_validation -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p bindings_node audio_service -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p render_graph audio -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p ffmpeg_compiler audio -- --nocapture"
@@ -219,5 +220,4 @@ fail_matches \
 fail_matches \
   "production renderer copy must hide audio graph, DSP, backend, FFmpeg, artifact-store, cache, fingerprint, dirty-range, session/device, raw log, and raw buffer internals" \
   "$PRODUCTION_FORBIDDEN_COPY_PATTERN" \
-  "${RENDERER_PRODUCTION_DIRS[@]}" \
-  --glob '!viewModel.ts'
+  "${RENDERER_PRODUCTION_DIRS[@]}"
