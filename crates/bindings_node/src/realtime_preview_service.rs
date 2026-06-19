@@ -787,7 +787,7 @@ fn generation_response(
 #[cfg(test)]
 mod realtime_preview_bindings {
     use super::{
-        RealtimePreviewBindingErrorKind, RealtimePreviewBindingRegistry,
+        RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind, RealtimePreviewBindingRegistry,
         RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
         RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
     };
@@ -891,6 +891,35 @@ mod realtime_preview_bindings {
         assert_eq!(result.target_time_microseconds, 1_234_567);
         assert_eq!(result.playback_generation, generation.playback_generation);
         assert!(result.presented);
+    }
+
+    #[test]
+    fn default_product_session_does_not_use_mock_backend() {
+        let (mut registry, session_id) = registry_with_session();
+        let generation = registry
+            .seek(&session_id, 33_333)
+            .expect("seek returns generation");
+        let result = registry
+            .request_frame(
+                &session_id,
+                RealtimePreviewFrameBindingRequest {
+                    target_time_microseconds: 33_333,
+                    playback_generation: generation.playback_generation,
+                    queue_latency_ms: 1,
+                    render_duration_ms: 1,
+                    mode: PreviewRequestMode::PlaybackTick,
+                    cancellation_token: None,
+                    fallback_reason: None,
+                    cache_hit: false,
+                },
+            )
+            .expect("frame request succeeds");
+
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        assert_eq!(result.backend, RealtimePreviewBackendUsed::Gpu);
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        assert_eq!(result.backend, RealtimePreviewBackendUsed::Offscreen);
     }
 
     #[test]
