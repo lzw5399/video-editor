@@ -368,11 +368,22 @@ struct MacosNativeLease {
 
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
-struct MacosRegisteredTextureLease {
+pub struct MacosRegisteredTextureLease {
     _metal_texture_cache:
         objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>,
     _metal_luma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
     _metal_chroma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
+}
+
+#[cfg(target_os = "macos")]
+impl MacosRegisteredTextureLease {
+    pub fn luma_texture(&self) -> &objc2_core_video::CVMetalTexture {
+        &self._metal_luma_texture
+    }
+
+    pub fn chroma_texture(&self) -> &objc2_core_video::CVMetalTexture {
+        &self._metal_chroma_texture
+    }
 }
 
 #[cfg(not(target_os = "macos"))]

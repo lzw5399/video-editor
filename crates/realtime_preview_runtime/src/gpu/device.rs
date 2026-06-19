@@ -353,6 +353,104 @@ impl RealtimePreviewGpuDevice {
         ))
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn create_nv12_external_texture_planes_from_metal(
+        &self,
+        width: u32,
+        height: u32,
+        luma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
+        chroma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
+    ) -> Result<RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuError> {
+        use objc2_metal::MTLTextureType;
+        use wgpu::hal::{self, CopyExtent};
+
+        let device = self
+            .device
+            .as_deref()
+            .ok_or(RealtimePreviewGpuError::WgpuDeviceUnavailable)?;
+        if !device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
+            return Err(RealtimePreviewGpuError::ExternalTextureUnsupported);
+        }
+        if width == 0 || height == 0 || width % 2 != 0 || height % 2 != 0 {
+            return Err(RealtimePreviewGpuError::InvalidExternalTexturePlanes(
+                "NV12 Metal external texture planes require non-zero even dimensions".to_owned(),
+            ));
+        }
+
+        let luma = unsafe {
+            wrap_metal_plane_texture(
+                device,
+                luma,
+                "realtime-preview-cvmetal-luma-plane",
+                wgpu::TextureFormat::R8Unorm,
+                MTLTextureType::Type2D,
+                width,
+                height,
+            )
+        };
+        let chroma = unsafe {
+            wrap_metal_plane_texture(
+                device,
+                chroma,
+                "realtime-preview-cvmetal-chroma-plane",
+                wgpu::TextureFormat::Rg8Unorm,
+                MTLTextureType::Type2D,
+                width / 2,
+                height / 2,
+            )
+        };
+
+        unsafe fn wrap_metal_plane_texture(
+            device: &wgpu::Device,
+            raw: objc2::rc::Retained<
+                objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>,
+            >,
+            label: &'static str,
+            format: wgpu::TextureFormat,
+            raw_type: objc2_metal::MTLTextureType,
+            width: u32,
+            height: u32,
+        ) -> wgpu::Texture {
+            let hal_texture = unsafe {
+                hal::metal::Device::texture_from_raw(
+                    raw,
+                    format,
+                    raw_type,
+                    1,
+                    1,
+                    CopyExtent {
+                        width,
+                        height,
+                        depth: 1,
+                    },
+                )
+            };
+            unsafe {
+                device.create_texture_from_hal::<hal::api::Metal>(
+                    hal_texture,
+                    &wgpu::TextureDescriptor {
+                        label: Some(label),
+                        size: wgpu::Extent3d {
+                            width,
+                            height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        view_formats: &[],
+                    },
+                )
+            }
+        }
+
+        Ok(RealtimePreviewExternalTexturePlanes::new(
+            width, height, luma, chroma,
+        ))
+    }
+
     pub fn resize_presentation_target(
         &self,
         target: &mut RealtimePreviewGpuPresentationTarget,
