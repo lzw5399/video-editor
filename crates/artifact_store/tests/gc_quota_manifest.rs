@@ -12,6 +12,10 @@ use artifact_store::jobs::{
     ArtifactGenerationRequest, ArtifactKind, GenerationProgress, create_generation_job,
     start_generation_chunk,
 };
+use artifact_store::manifest::{
+    ManifestGenerationOptions, generate_sync_manifest, manifest_fingerprint,
+    write_sync_manifest_artifact,
+};
 use artifact_store::paths::{blob_tmp_path, derived_root_path};
 use artifact_store::quota::{QuotaPolicy, QuotaSeverity, compute_quota_state, set_quota_policy};
 use artifact_store::schema::open_artifact_store;
@@ -321,6 +325,120 @@ fn gc_quota_manifest_quota_reports_cleanup_completion_from_tombstones() {
     assert_eq!(state.labels.released_label, format_bytes(stale.byte_count));
 }
 
+#[test]
+fn gc_quota_manifest_sync_manifest_is_deterministic_and_fingerprinted() {
+    let first = manifest_json_and_fingerprint();
+    let second = manifest_json_and_fingerprint();
+
+    assert_eq!(first.0, second.0, "manifest JSON must be byte-identical");
+    assert_eq!(first.1, second.1, "manifest fingerprint must be stable");
+    assert!(
+        first.1.starts_with("blake3:v1:"),
+        "manifest fingerprint must include algorithm prefix"
+    );
+}
+
+#[test]
+fn gc_quota_manifest_sync_manifest_entries_are_project_relative_and_complete() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let live = write_artifact(
+        &bundle_path,
+        "artifact-manifest-live",
+        "thumbnail",
+        b"manifest live bytes",
+    );
+    let stale = write_artifact(
+        &bundle_path,
+        "artifact-manifest-stale",
+        "proxy",
+        b"manifest stale bytes",
+    );
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-manifest-live",
+        vec![
+            DependencyUpsert::new(ArtifactDependency::material("material-001")),
+            DependencyUpsert::new(ArtifactDependency::graph_node("segment:video:001")),
+        ],
+    )
+    .expect("manifest dependencies should persist");
+    store
+        .connection()
+        .execute(
+            "UPDATE artifact SET dirty = 1, status = 'dirty' WHERE artifact_id = ?1",
+            ["artifact-manifest-stale"],
+        )
+        .expect("stale artifact should be dirty");
+    collect_garbage(&mut store, GcMode::Apply).expect("stale artifact should tombstone");
+
+    let manifest = generate_sync_manifest(&store, ManifestGenerationOptions::default())
+        .expect("manifest should generate");
+
+    assert_eq!(manifest.schema_version, 1);
+    assert_eq!(manifest.generator_version, "artifact-store-sync-manifest-v1");
+    assert_eq!(manifest.entries.len(), 1);
+    let entry = &manifest.entries[0];
+    assert_eq!(entry.artifact_id, "artifact-manifest-live");
+    assert_eq!(entry.artifact_kind, "thumbnail");
+    assert_eq!(entry.status, "ready");
+    assert_eq!(entry.blob_relative_path, live.blob_relative_path);
+    assert_eq!(entry.byte_count, live.byte_count);
+    assert_eq!(entry.blob_fingerprint, live.blob_fingerprint.to_string());
+    assert_eq!(entry.source_fingerprint.as_deref(), Some("source:v1"));
+    assert_eq!(entry.graph_fingerprint.as_deref(), Some("graph:v1"));
+    assert_eq!(entry.dependencies.len(), 2);
+    assert!(entry.blob_relative_path.starts_with("blobs/"));
+    assert!(!entry.blob_relative_path.starts_with('/'));
+    assert!(!entry.blob_relative_path.contains(".veproj/derived"));
+    assert_eq!(manifest.tombstones.len(), 1);
+    assert_eq!(manifest.tombstones[0].artifact_id, "artifact-manifest-stale");
+    assert_eq!(
+        manifest.tombstones[0].blob_relative_path,
+        stale.blob_relative_path
+    );
+}
+
+#[test]
+fn gc_quota_manifest_sync_manifest_has_no_remote_transport_or_credentials() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    write_artifact(
+        &bundle_path,
+        "artifact-manifest-local",
+        "waveform",
+        b"manifest local bytes",
+    );
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+
+    let manifest = generate_sync_manifest(&store, ManifestGenerationOptions::default())
+        .expect("manifest should generate");
+    let written = write_sync_manifest_artifact(&bundle_path, &manifest)
+        .expect("manifest artifact should write through BlobStore");
+    let serialized = serde_json::to_string(&manifest).expect("manifest should serialize");
+
+    assert!(written.blob_relative_path.starts_with("blobs/"));
+    for forbidden in [
+        "http://",
+        "https://",
+        "s3://",
+        "gs://",
+        "token",
+        "secret",
+        "credential",
+        "upload",
+        "download",
+        "provider",
+        "serverRendering",
+    ] {
+        assert!(
+            !serialized.contains(forbidden),
+            "manifest introduced remote/cloud transport field {forbidden}: {serialized}"
+        );
+    }
+}
+
 fn write_artifact(
     bundle_path: &Path,
     artifact_id: &str,
@@ -423,4 +541,36 @@ fn format_bytes(bytes: u64) -> String {
     } else {
         format!("{:.1} KB", bytes as f64 / 1024.0)
     }
+}
+
+fn manifest_json_and_fingerprint() -> (String, String) {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    write_artifact(
+        &bundle_path,
+        "artifact-manifest-a",
+        "thumbnail",
+        b"manifest a bytes",
+    );
+    write_artifact(
+        &bundle_path,
+        "artifact-manifest-b",
+        "waveform",
+        b"manifest b bytes",
+    );
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-manifest-b",
+        vec![DependencyUpsert::new(ArtifactDependency::material(
+            "material-001",
+        ))],
+    )
+    .expect("dependency should persist");
+    let manifest = generate_sync_manifest(&store, ManifestGenerationOptions::default())
+        .expect("manifest should generate");
+    (
+        serde_json::to_string(&manifest).expect("manifest should serialize"),
+        manifest_fingerprint(&manifest).expect("manifest should fingerprint"),
+    )
 }
