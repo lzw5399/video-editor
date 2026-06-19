@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -63,6 +64,7 @@ impl RealtimePreviewCompositor {
                     &self.device,
                     texture,
                     frame_provider,
+                    texture_cache,
                     &mut diagnostics,
                     &mut support,
                 )?;
@@ -158,7 +160,7 @@ impl RealtimePreviewCompositor {
         graph: &RenderGraph,
         target: &mut RealtimePreviewGpuPresentationTarget,
         frame_provider: &mut impl PreviewFrameProvider,
-        _texture_cache: &mut RealtimePreviewTextureCache,
+        texture_cache: &mut RealtimePreviewTextureCache,
     ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
         let device_ref = self
             .device
@@ -198,6 +200,7 @@ impl RealtimePreviewCompositor {
             queue,
             &view,
             frame_provider,
+            texture_cache,
             &mut diagnostics,
             &mut support,
         )?;
@@ -370,6 +373,7 @@ fn render_wgpu_graph(
     device: &RealtimePreviewGpuDevice,
     texture: &wgpu::Texture,
     frame_provider: &mut impl PreviewFrameProvider,
+    texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
 ) -> Result<(Vec<u8>, u32), RealtimePreviewCompositorError> {
@@ -387,6 +391,7 @@ fn render_wgpu_graph(
         queue,
         &view,
         frame_provider,
+        texture_cache,
         diagnostics,
         support,
     )?;
@@ -499,6 +504,7 @@ fn encode_wgpu_graph_to_view(
     queue: &wgpu::Queue,
     view: &wgpu::TextureView,
     frame_provider: &mut impl PreviewFrameProvider,
+    texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
 ) -> Result<(wgpu::CommandEncoder, u32), RealtimePreviewCompositorError> {
@@ -516,6 +522,7 @@ fn encode_wgpu_graph_to_view(
             queue,
             resources,
             frame_provider,
+            texture_cache,
             diagnostics,
             support,
         )?
@@ -662,10 +669,24 @@ impl RealtimePreviewWgpuPipelines {
 }
 
 struct WgpuLayerDraw {
-    _texture: wgpu::Texture,
+    _texture: WgpuLayerTexture,
     _view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
+}
+
+enum WgpuLayerTexture {
+    Owned(wgpu::Texture),
+    Imported(Rc<wgpu::Texture>),
+}
+
+impl WgpuLayerTexture {
+    fn texture(&self) -> &wgpu::Texture {
+        match self {
+            Self::Owned(texture) => texture,
+            Self::Imported(texture) => texture.as_ref(),
+        }
+    }
 }
 
 fn prepare_wgpu_layer_draws(
@@ -675,6 +696,7 @@ fn prepare_wgpu_layer_draws(
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
     frame_provider: &mut impl PreviewFrameProvider,
+    texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
 ) -> Result<Vec<WgpuLayerDraw>, RealtimePreviewCompositorError> {
@@ -698,6 +720,7 @@ fn prepare_wgpu_layer_draws(
                     queue,
                     resources,
                     frame_provider,
+                    texture_cache,
                     diagnostics,
                     support,
                     &mut draws,
@@ -773,6 +796,7 @@ fn push_wgpu_video_layer_draw(
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
     frame_provider: &mut impl PreviewFrameProvider,
+    texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
     draws: &mut Vec<WgpuLayerDraw>,
@@ -798,7 +822,7 @@ fn push_wgpu_video_layer_draw(
             return Ok(());
         }
     };
-    let texture = match upload_wgpu_layer_texture(device, queue, frame) {
+    let texture = match upload_wgpu_layer_texture(device, queue, texture_cache, frame) {
         Ok(texture) => texture,
         Err(error) => {
             diagnostics.push(layer_diagnostic(layer, error.to_string()));
@@ -875,10 +899,12 @@ fn push_wgpu_texture_draw(
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
     draws: &mut Vec<WgpuLayerDraw>,
-    texture: wgpu::Texture,
+    texture: WgpuLayerTexture,
     vertices: Vec<u8>,
 ) {
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let view = texture
+        .texture()
+        .create_view(&wgpu::TextureViewDescriptor::default());
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("realtime-preview-textured-quad-bind-group"),
         layout: &resources.bind_group_layout,
@@ -929,7 +955,7 @@ fn upload_wgpu_rgba_texture(
     stride_bytes: u32,
     pixels: &[u8],
     label: &'static str,
-) -> Result<wgpu::Texture, RealtimePreviewCompositorError> {
+) -> Result<WgpuLayerTexture, RealtimePreviewCompositorError> {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
         size: wgpu::Extent3d {
@@ -963,23 +989,40 @@ fn upload_wgpu_rgba_texture(
             depth_or_array_layers: 1,
         },
     );
-    Ok(texture)
+    Ok(WgpuLayerTexture::Owned(texture))
 }
 
 fn upload_wgpu_layer_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    texture_cache: &mut RealtimePreviewTextureCache,
     input: PreviewFrameInput,
-) -> Result<wgpu::Texture, RealtimePreviewCompositorError> {
+) -> Result<WgpuLayerTexture, RealtimePreviewCompositorError> {
     let frame = match input {
         PreviewFrameInput::CpuRgba(frame) | PreviewFrameInput::StaticImage(frame) => frame,
         PreviewFrameInput::TextureHandle(handle) => {
-            return Err(
-                RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
-                    handle_id: handle.handle_id,
-                    backend: handle.backend,
-                },
-            );
+            let lease = texture_cache
+                .resolve_native_texture(&handle)
+                .map_err(|error| {
+                    RealtimePreviewCompositorError::WgpuFrameUpload(error.to_string())
+                })?;
+            let Some(texture) = lease.resource_as::<wgpu::Texture>() else {
+                return Err(
+                    RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                        handle_id: handle.handle_id,
+                        backend: handle.backend,
+                    },
+                );
+            };
+            if !matches!(handle.pixel_format.as_str(), "rgba8" | "bgra8") {
+                return Err(
+                    RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                        handle_id: handle.handle_id,
+                        backend: format!("{}:{}", handle.backend, handle.pixel_format),
+                    },
+                );
+            }
+            return Ok(WgpuLayerTexture::Imported(texture));
         }
         PreviewFrameInput::Unavailable { reason } => {
             return Err(RealtimePreviewCompositorError::WgpuFrameUpload(reason));
@@ -1021,7 +1064,7 @@ fn upload_wgpu_layer_texture(
             depth_or_array_layers: 1,
         },
     );
-    Ok(texture)
+    Ok(WgpuLayerTexture::Owned(texture))
 }
 
 fn textured_quad_vertices(

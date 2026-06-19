@@ -83,6 +83,14 @@ impl fmt::Debug for NativeTextureLease {
     }
 }
 
+impl PartialEq for NativeTextureLease {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle == other.handle && self.resource_kind == other.resource_kind
+    }
+}
+
+impl Eq for NativeTextureLease {}
+
 #[derive(Debug, Clone)]
 pub struct NativeTextureLeaseRegistry {
     leases: Rc<RefCell<BTreeMap<TextureHandleId, NativeTextureLease>>>,

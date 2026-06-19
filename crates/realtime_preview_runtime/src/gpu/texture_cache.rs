@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{MaterialId, Microseconds};
+use media_runtime::{NativeTextureLease, NativeTextureLeaseRegistry};
 
 use crate::{
     CpuVideoFrame, FrameValidationError, PlaybackGeneration, PreviewFrameInput,
@@ -35,14 +36,21 @@ impl RealtimePreviewTexture {
     pub fn cpu_pixels(&self) -> Option<&[u8]> {
         match &self.storage {
             RealtimePreviewTextureStorage::CpuRgba { pixels } => Some(pixels),
-            RealtimePreviewTextureStorage::ExternalHandle(_) => None,
+            RealtimePreviewTextureStorage::ExternalHandle { .. } => None,
         }
     }
 
     pub fn external_handle(&self) -> Option<&TextureHandleDescriptor> {
         match &self.storage {
             RealtimePreviewTextureStorage::CpuRgba { .. } => None,
-            RealtimePreviewTextureStorage::ExternalHandle(handle) => Some(handle),
+            RealtimePreviewTextureStorage::ExternalHandle { descriptor, .. } => Some(descriptor),
+        }
+    }
+
+    pub fn native_texture_lease(&self) -> Option<&NativeTextureLease> {
+        match &self.storage {
+            RealtimePreviewTextureStorage::CpuRgba { .. } => None,
+            RealtimePreviewTextureStorage::ExternalHandle { lease, .. } => Some(lease),
         }
     }
 
@@ -51,7 +59,7 @@ impl RealtimePreviewTexture {
             RealtimePreviewTextureStorage::CpuRgba { .. } => {
                 RealtimePreviewTextureStorageKind::CpuRgba
             }
-            RealtimePreviewTextureStorage::ExternalHandle(_) => {
+            RealtimePreviewTextureStorage::ExternalHandle { .. } => {
                 RealtimePreviewTextureStorageKind::ExternalHandle
             }
         }
@@ -66,14 +74,20 @@ pub enum RealtimePreviewTextureStorageKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealtimePreviewTextureStorage {
-    CpuRgba { pixels: Vec<u8> },
-    ExternalHandle(TextureHandleDescriptor),
+    CpuRgba {
+        pixels: Vec<u8>,
+    },
+    ExternalHandle {
+        descriptor: TextureHandleDescriptor,
+        lease: NativeTextureLease,
+    },
 }
 
 #[derive(Debug, Default)]
 pub struct RealtimePreviewTextureCache {
     next_texture_id: u64,
     textures: BTreeMap<RealtimePreviewTextureId, RealtimePreviewTexture>,
+    native_texture_registry: Option<NativeTextureLeaseRegistry>,
 }
 
 impl RealtimePreviewTextureCache {
@@ -81,7 +95,17 @@ impl RealtimePreviewTextureCache {
         Self {
             next_texture_id: 1,
             textures: BTreeMap::new(),
+            native_texture_registry: None,
         }
+    }
+
+    pub fn with_native_texture_registry(mut self, registry: NativeTextureLeaseRegistry) -> Self {
+        self.native_texture_registry = Some(registry);
+        self
+    }
+
+    pub fn set_native_texture_registry(&mut self, registry: NativeTextureLeaseRegistry) {
+        self.native_texture_registry = Some(registry);
     }
 
     pub fn upload_frame(
@@ -105,9 +129,23 @@ impl RealtimePreviewTextureCache {
                 handle
                     .validate()
                     .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
+                let expected_handle = handle
+                    .to_texture_handle()
+                    .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
+                let registry = self.native_texture_registry.as_ref().ok_or_else(|| {
+                    RealtimePreviewTextureCacheError::Unavailable {
+                        reason: "native texture lease registry is not attached to the realtime texture cache"
+                            .to_owned(),
+                    }
+                })?;
+                let lease = registry.resolve(&expected_handle).map_err(|error| {
+                    RealtimePreviewTextureCacheError::Unavailable {
+                        reason: format!("native texture lease unavailable: {error}"),
+                    }
+                })?;
 
                 let texture_id = self.next_id();
-                let texture = texture_from_handle(texture_id, handle);
+                let texture = texture_from_handle(texture_id, handle, lease);
                 self.textures.insert(texture_id, texture.clone());
                 Ok(texture)
             }
@@ -119,6 +157,27 @@ impl RealtimePreviewTextureCache {
 
     pub fn get(&self, texture_id: RealtimePreviewTextureId) -> Option<&RealtimePreviewTexture> {
         self.textures.get(&texture_id)
+    }
+
+    pub fn resolve_native_texture(
+        &self,
+        descriptor: &TextureHandleDescriptor,
+    ) -> Result<NativeTextureLease, RealtimePreviewTextureCacheError> {
+        let expected_handle = descriptor
+            .to_texture_handle()
+            .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
+        let registry = self.native_texture_registry.as_ref().ok_or_else(|| {
+            RealtimePreviewTextureCacheError::Unavailable {
+                reason:
+                    "native texture lease registry is not attached to the realtime texture cache"
+                        .to_owned(),
+            }
+        })?;
+        registry.resolve(&expected_handle).map_err(|error| {
+            RealtimePreviewTextureCacheError::Unavailable {
+                reason: format!("native texture lease unavailable: {error}"),
+            }
+        })
     }
 
     fn next_id(&mut self) -> RealtimePreviewTextureId {
@@ -167,6 +226,7 @@ fn texture_from_frame(
 fn texture_from_handle(
     id: RealtimePreviewTextureId,
     handle: TextureHandleDescriptor,
+    lease: NativeTextureLease,
 ) -> RealtimePreviewTexture {
     RealtimePreviewTexture {
         id,
@@ -175,6 +235,9 @@ fn texture_from_handle(
         playback_generation: handle.playback_generation,
         width: handle.width,
         height: handle.height,
-        storage: RealtimePreviewTextureStorage::ExternalHandle(handle),
+        storage: RealtimePreviewTextureStorage::ExternalHandle {
+            descriptor: handle,
+            lease,
+        },
     }
 }
