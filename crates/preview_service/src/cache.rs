@@ -273,8 +273,18 @@ impl PreviewInvalidationRequest {
         self.changed_graph_node_keys.dedup();
         sort_consumer_domains(&mut self.changed_domains);
         self.changed_domains.dedup();
-        if let Some(merged_ranges) = merge_dirty_ranges(std::mem::take(&mut self.dirty_ranges)) {
-            self.dirty_ranges = merged_ranges;
+        match merge_dirty_ranges(std::mem::take(&mut self.dirty_ranges)) {
+            Some(merged_ranges) => {
+                self.dirty_ranges = merged_ranges;
+            }
+            None => {
+                self.dirty_ranges.clear();
+                self.full_draft = true;
+                if !self.changed_domains.contains(&DirtyDomain::PreviewCache) {
+                    self.changed_domains.push(DirtyDomain::PreviewCache);
+                }
+                sort_consumer_domains(&mut self.changed_domains);
+            }
         }
     }
 

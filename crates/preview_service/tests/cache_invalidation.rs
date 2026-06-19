@@ -168,6 +168,43 @@ fn invalidation_removes_overlapping_ranges_and_keeps_unrelated_entries() {
 }
 
 #[test]
+fn invalidation_range_merge_overflow_falls_back_to_full_draft() {
+    let entries = vec![
+        entry(
+            "before",
+            0,
+            100_000,
+            &["video-material"],
+            PreviewCacheProfile::FramePng,
+        ),
+        entry(
+            "after",
+            500_000,
+            100_000,
+            &["video-material"],
+            PreviewCacheProfile::SegmentMp4,
+        ),
+    ];
+    let request = PreviewInvalidationRequest::new(
+        [dirty_range(u64::MAX - 5, 10, DirtyRangeSource::Current)],
+        [],
+        [],
+        [DirtyDomain::PreviewCache],
+        "overflow dirty range",
+    );
+
+    assert!(request.full_draft);
+    assert!(
+        request.dirty_ranges.is_empty(),
+        "overflowing dirty ranges should not be preserved as targeted ranges"
+    );
+    assert!(request.changed_domains.contains(&DirtyDomain::PreviewCache));
+
+    let result = invalidate_preview_cache(&entries, &request);
+    assert_eq!(invalidated_ids(&result), vec!["before", "after"]);
+}
+
+#[test]
 fn invalidation_removes_entries_with_changed_material_dependency() {
     let entries = vec![
         entry(
