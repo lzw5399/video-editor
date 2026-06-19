@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 7
+current_plan: 8
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-19T01:31:08.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 05: preview cache key v2, invalidation request v2, and export-prep dirty facts."
+last_updated: "2026-06-19T01:46:42.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 05B: binding-safe preview/export dirty fact contracts and regenerated TypeScript."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 96
-  percent: 98
+  completed_plans: 97
+  percent: 99
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 6/8 complete; next plan 13-05B
-Status: Phase 13 in progress; preview/export cache coherence facts are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 05: preview cache key v2, invalidation request v2, and export-prep dirty facts.
+Plan: 7/8 complete; next plan 13-06
+Status: Phase 13 in progress; binding-safe preview/export dirty fact contracts are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 05B: binding-safe preview/export dirty fact contracts and regenerated TypeScript.
 
-Progress: [██████████] 98%
+Progress: [██████████] 99%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 96
+- Total plans completed: 97
 - Average duration: 9 min
-- Total execution time: 916 min
+- Total execution time: 940 min
 
 **By Phase:**
 
@@ -60,11 +60,11 @@ Progress: [██████████] 98%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 6 | 74 min | 12 min |
+| 13 | 7 | 98 min | 14 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 64 min
+- Last 5 plans: 80 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -154,6 +154,7 @@ Progress: [██████████] 98%
 | Phase 13 P03 | 9 min | 3 tasks | 11 files |
 | Phase 13 P04 | 18 min | 3 tasks | 8 files |
 | Phase 13 P05 | 25 min | 2 tasks | 6 files |
+| Phase 13 P05B | 24 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,9 @@ Progress: [██████████] 98%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: Preview/export dirty facts now cross the binding boundary as generated transport data. — Plan 05B exposed DirtyRange-based invalidation payloads, graph node IDs, dirty domains, runtime/output fingerprints, full-draft flags, schema/generator versions, and export dirty facts without renderer-owned invalidation logic.
+- [Phase 13]: `ExportPrepDirtyFacts` lives in `draft_model` for schema and TypeScript generation. — It remains classification data only; no scheduler, SQLite artifact store, FFmpeg command construction, graph diff computation, or cache key derivation moved into bindings or renderer code.
+- [Phase 13]: Desktop command helper changes are type alignment only. — `commandHelpers.ts` now accepts generated `DirtyRange[]` for invalidation payload transport, with source guards continuing to block renderer-owned dirty/cache decisions.
 - [Phase 13]: Preview cache keys now derive from Rust render graph snapshots and node fingerprints. — Plan 05 added graph node keys plus semantic/input/output/runtime/schema/generator fingerprint dimensions to `PreviewCacheKey` without renderer-supplied key computation.
 - [Phase 13]: Preview invalidation v2 consumes Rust-owned dirty ranges, material IDs, graph node keys, dirty domains, runtime/output fingerprints, and full-draft fallback. — Legacy entries remain targetable by range/material invalidation but are stale-unsafe for v2 graph/runtime/profile facts.
 - [Phase 13]: Export prep receives dirty classification facts, not jobs or persistence. — `ExportPrepDirtyFacts` mirrors preview invalidation facts while scheduler queues, SQLite artifact store, and binding-safe schema expansion remain later scope.
