@@ -8,15 +8,16 @@ use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, CancelExportCommandPayload,
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
-    ChangedEntity, CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
-    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DecodedPreviewFrameResponse, DeleteSegmentCommandPayload, DirtyDomain, DirtyRange,
-    DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
-    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
-    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
-    ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceSummary, AudioPanBalance,
+    AudioPreviewCommandPayload, AudioPreviewCommandResponse, AudioPreviewStatusResponse,
+    CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
+    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
+    CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
+    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
+    DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
+    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts,
+    ExportPreset, ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
     ImportMaterialCommandPayload, ImportMaterialResponse, ImportSubtitleSrtCommandPayload,
     InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
@@ -53,7 +54,7 @@ use draft_model::{
     TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
     Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload, WaveformDisplayPeaksResponse,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -1008,6 +1009,125 @@ fn schema_exports_include_phase15_audio_semantic_contracts() {
         assert!(
             !draft_ts.contains(forbidden) && !command_envelope_ts.contains(forbidden),
             "audio contracts must not expose renderer-owned or derived field {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn schema_exports_include_phase15_audio_preview_binding_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+
+    for command_name in [
+        "createAudioPreviewSession",
+        "playAudioPreview",
+        "pauseAudioPreview",
+        "stopAudioPreview",
+        "seekAudioPreview",
+        "cancelAudioPreview",
+        "getAudioPreviewStatus",
+        "listAudioOutputDevices",
+        "selectAudioOutputDevice",
+        "getWaveformDisplayPeaks",
+        "refreshWaveformStatus",
+    ] {
+        assert_command_pairing_occurs_once(&command_schema, command_name);
+        assert!(
+            command_envelope_ts.contains(command_name),
+            "generated TypeScript command names should include {command_name}"
+        );
+    }
+
+    for expected_contract in [
+        "AudioPreviewCommandPayload",
+        "AudioPreviewCommandResponse",
+        "AudioPreviewStatusResponse",
+        "AudioOutputDeviceSummary",
+        "WaveformDisplayPeaksResponse",
+    ] {
+        assert!(
+            defs.contains_key(expected_contract)
+                || command_envelope_ts.contains(&format!("export type {expected_contract}"))
+                || command_result_ts.contains(&format!("export type {expected_contract}")),
+            "audio preview binding contracts should generate {expected_contract}"
+        );
+    }
+
+    for expected_field in [
+        ("AudioPreviewCommandPayload", "sessionId"),
+        ("AudioPreviewCommandPayload", "targetTime"),
+        ("AudioPreviewCommandPayload", "playbackGeneration"),
+        ("AudioPreviewCommandPayload", "deviceSelectionId"),
+        ("AudioPreviewCommandPayload", "maxPeakBins"),
+        ("AudioPreviewStatusResponse", "sessionId"),
+        ("AudioPreviewStatusResponse", "generation"),
+        ("AudioPreviewStatusResponse", "status"),
+        ("AudioPreviewStatusResponse", "diagnostics"),
+        ("AudioOutputDeviceSummary", "displayName"),
+        ("AudioOutputDeviceSummary", "statusLabel"),
+        ("WaveformDisplayPeaksResponse", "peaks"),
+        ("WaveformDisplayPeaksResponse", "requestedPeakBins"),
+    ] {
+        let (contract_name, field_name) = expected_field;
+        assert!(
+            defs.get(contract_name)
+                .and_then(|schema| schema.pointer(&format!("/properties/{field_name}")))
+                .is_some(),
+            "{contract_name} should expose safe field {field_name}"
+        );
+    }
+
+    let audio_contract_text = [
+        command_envelope_ts.as_str(),
+        command_result_ts.as_str(),
+        &serde_json::to_string(
+            &[
+                defs.get("AudioPreviewCommandPayload"),
+                defs.get("AudioPreviewCommandResponse"),
+                defs.get("AudioPreviewStatusResponse"),
+                defs.get("AudioOutputDeviceSummary"),
+                defs.get("WaveformDisplayPeaksResponse"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>(),
+        )
+        .expect("audio contract defs should serialize"),
+    ]
+    .join("\n");
+
+    for forbidden in [
+        "AudioGraph",
+        "DSP",
+        "mixBuffer",
+        "ringBuffer",
+        "outputDeviceHandle",
+        "CoreAudio",
+        "WASAPI",
+        "cpal",
+        "rubato",
+        "FFmpeg",
+        "SQLite",
+        "blobPath",
+        "artifactRoot",
+        "cacheKey",
+        "fingerprint",
+        "dirtyRange",
+        "nativeHandle",
+        "rawBuffer",
+        "sampleBuffer",
+        "streamConfig",
+        "ffmpegFilter",
+    ] {
+        assert!(
+            !audio_contract_text.contains(forbidden),
+            "audio binding contracts must not expose internal field or implementation term {forbidden}"
         );
     }
 }
