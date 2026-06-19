@@ -400,6 +400,14 @@ impl RealtimePreviewGpuPresentationTarget {
         &self.surface
     }
 
+    pub(crate) fn prepare_for_present(&mut self) -> Result<(), PreviewSurfaceError> {
+        #[cfg(target_os = "macos")]
+        if let Some(attachment) = self.macos_attachment.as_mut() {
+            attachment.prepare_for_present(self.bounds)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn update_bounds(
         &mut self,
         device: &wgpu::Device,

@@ -3,10 +3,13 @@ use std::ptr::NonNull;
 
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSView, NSWindowOrderingMode};
+use objc2_app_kit::{
+    NSApplication, NSBackingStoreType, NSView, NSWindow, NSWindowOcclusionState,
+    NSWindowOrderingMode, NSWindowStyleMask,
+};
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
+use objc2_quartz_core::CAMetalLayer;
 use raw_window_handle::AppKitWindowHandle;
-use raw_window_metal::Layer;
 
 use crate::gpu::surface::{
     NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDiagnosticKind,
@@ -44,8 +47,10 @@ pub fn raw_window_handle(
 #[derive(Debug)]
 pub struct MacosWgpuSurfaceAttachment {
     parent_view: Retained<NSView>,
+    parent_window: Retained<NSWindow>,
+    child_window: Retained<NSWindow>,
     child_view: Retained<NSView>,
-    metal_layer: Layer,
+    metal_layer: Retained<CAMetalLayer>,
 }
 
 // The binding registry is shared behind a Mutex. AppKit operations are still
@@ -77,16 +82,36 @@ impl MacosWgpuSurfaceAttachment {
                     "macOS WGPU presenter could not retain parent NSView",
                 )
             })?;
+        let parent_window = ensure_parent_window_visible(&parent_view)?;
+        let child_frame = screen_rect_for_bounds(&parent_view, bounds);
         let child_view =
-            NSView::initWithFrame(mtm.alloc(), ns_rect_for_bounds(&parent_view, bounds));
+            NSView::initWithFrame(mtm.alloc(), content_rect_for_bounds(bounds));
+        let metal_layer = CAMetalLayer::new();
         child_view.setWantsLayer(true);
+        child_view.setLayer(Some(&metal_layer));
         child_view.setHidden(false);
         child_view.setAlphaValue(1.0);
-        parent_view.addSubview_positioned_relativeTo(
-            &child_view,
-            NSWindowOrderingMode::Above,
-            None,
-        );
+        child_view.setPostsFrameChangedNotifications(true);
+        let child_window = unsafe {
+            NSWindow::initWithContentRect_styleMask_backing_defer(
+                mtm.alloc(),
+                child_frame,
+                NSWindowStyleMask::Borderless,
+                NSBackingStoreType::Buffered,
+                false,
+            )
+        };
+        unsafe {
+            child_window.setReleasedWhenClosed(false);
+        }
+        child_window.setContentView(Some(&child_view));
+        child_window.setOpaque(false);
+        child_window.setHasShadow(false);
+        child_window.setIgnoresMouseEvents(true);
+        unsafe {
+            parent_window.addChildWindow_ordered(&child_window, NSWindowOrderingMode::Above);
+        }
+        child_window.orderFrontRegardless();
         let child_ptr = (&*child_view) as *const NSView as *mut c_void;
         let child_ns_view = NonNull::new(child_ptr).ok_or_else(|| {
             PreviewSurfaceError::new(
@@ -94,9 +119,14 @@ impl MacosWgpuSurfaceAttachment {
                 "macOS WGPU child NSView must be non-null",
             )
         })?;
-        let metal_layer = unsafe { Layer::from_ns_view(child_ns_view) };
+        let _ = child_ns_view;
+        configure_metal_layer(&metal_layer, bounds);
+        child_view.setNeedsDisplay(true);
+        child_view.displayIfNeededIgnoringOpacity();
         Ok(Self {
             parent_view,
+            parent_window,
+            child_window,
             child_view,
             metal_layer,
         })
@@ -114,7 +144,7 @@ impl MacosWgpuSurfaceAttachment {
     }
 
     pub fn core_animation_layer(&self) -> *mut c_void {
-        self.metal_layer.as_ptr().as_ptr()
+        Retained::as_ptr(&self.metal_layer).cast::<c_void>() as *mut c_void
     }
 
     pub fn update_bounds(
@@ -122,8 +152,30 @@ impl MacosWgpuSurfaceAttachment {
         bounds: PreviewSurfaceBounds,
     ) -> Result<(), PreviewSurfaceError> {
         let _mtm = require_main_thread()?;
-        self.child_view
-            .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
+        ensure_window_visible(&self.parent_window);
+        self.child_window
+            .setFrame_display(screen_rect_for_bounds(&self.parent_view, bounds), true);
+        self.child_view.setFrame(content_rect_for_bounds(bounds));
+        self.child_view.setHidden(false);
+        self.child_view.setAlphaValue(1.0);
+        configure_metal_layer(&self.metal_layer, bounds);
+        self.parent_view.layoutSubtreeIfNeeded();
+        self.child_view.setNeedsDisplay(true);
+        self.child_view.displayIfNeededIgnoringOpacity();
+        Ok(())
+    }
+
+    pub fn prepare_for_present(
+        &mut self,
+        bounds: PreviewSurfaceBounds,
+    ) -> Result<(), PreviewSurfaceError> {
+        let _mtm = require_main_thread()?;
+        ensure_window_visible(&self.parent_window);
+        self.child_window.orderFrontRegardless();
+        self.child_view.setHidden(false);
+        self.child_view.setAlphaValue(1.0);
+        configure_metal_layer(&self.metal_layer, bounds);
+        self.child_view.displayIfNeededIgnoringOpacity();
         Ok(())
     }
 
@@ -131,7 +183,8 @@ impl MacosWgpuSurfaceAttachment {
         if MainThreadMarker::new().is_none() {
             return;
         }
-        self.child_view.removeFromSuperview();
+        self.parent_window.removeChildWindow(&self.child_window);
+        self.child_window.orderOut(None);
     }
 }
 
@@ -148,6 +201,78 @@ fn require_main_thread() -> Result<MainThreadMarker, PreviewSurfaceError> {
             "macOS WGPU presenter must be used on the main thread",
         )
     })
+}
+
+fn ensure_parent_window_visible(parent_view: &NSView) -> Result<Retained<NSWindow>, PreviewSurfaceError> {
+    let mtm = require_main_thread()?;
+    let app = NSApplication::sharedApplication(mtm);
+    app.unhideWithoutActivation();
+    #[allow(deprecated)]
+    app.activateIgnoringOtherApps(true);
+    let window = parent_view.window().ok_or_else(|| {
+        PreviewSurfaceError::new(
+            PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+            "macOS WGPU parent NSView is not attached to an NSWindow",
+        )
+    })?;
+    ensure_window_visible(&window);
+    Ok(window)
+}
+
+fn ensure_window_visible(window: &NSWindow) {
+    if !window.isVisible() {
+        window.orderFrontRegardless();
+    }
+    if !window
+        .occlusionState()
+        .contains(NSWindowOcclusionState::Visible)
+    {
+        window.makeKeyAndOrderFront(None);
+        window.orderFrontRegardless();
+    }
+}
+
+fn configure_metal_layer(metal_layer: &CAMetalLayer, bounds: PreviewSurfaceBounds) {
+    let scale = (bounds.scale_factor_millis as f64 / 1000.0).max(0.001);
+    let logical_size = CGSize::new(
+        (bounds.width as f64 / scale).max(1.0),
+        (bounds.height as f64 / scale).max(1.0),
+    );
+    let drawable_size = CGSize::new(bounds.width.max(1) as f64, bounds.height.max(1) as f64);
+    metal_layer.setBounds(CGRect::new(CGPoint::new(0.0, 0.0), logical_size));
+    metal_layer.setPosition(CGPoint::new(
+        logical_size.width / 2.0,
+        logical_size.height / 2.0,
+    ));
+    metal_layer.setContentsScale(scale);
+    metal_layer.setDrawableSize(drawable_size);
+    metal_layer.setPresentsWithTransaction(false);
+    metal_layer.setFramebufferOnly(true);
+    metal_layer.setHidden(false);
+    metal_layer.setZPosition(1.0);
+    metal_layer.setNeedsDisplayOnBoundsChange(true);
+    metal_layer.setNeedsDisplay();
+}
+
+fn screen_rect_for_bounds(parent_view: &NSView, bounds: PreviewSurfaceBounds) -> CGRect {
+    let rect = ns_rect_for_bounds(parent_view, bounds);
+    let rect_in_window = parent_view.convertRect_toView(rect, None);
+    if let Some(window) = parent_view.window() {
+        window.convertRectToScreen(rect_in_window)
+    } else {
+        rect_in_window
+    }
+}
+
+fn content_rect_for_bounds(bounds: PreviewSurfaceBounds) -> CGRect {
+    let scale = (bounds.scale_factor_millis as f64 / 1000.0).max(0.001);
+    CGRect::new(
+        CGPoint::new(0.0, 0.0),
+        CGSize::new(
+            (bounds.width as f64 / scale).max(1.0),
+            (bounds.height as f64 / scale).max(1.0),
+        ),
+    )
 }
 
 fn ns_rect_for_bounds(parent_view: &NSView, bounds: PreviewSurfaceBounds) -> CGRect {

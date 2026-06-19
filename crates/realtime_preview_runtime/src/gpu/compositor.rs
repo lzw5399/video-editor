@@ -188,6 +188,9 @@ impl RealtimePreviewCompositor {
             });
         }
 
+        target.prepare_for_present().map_err(|error| {
+            RealtimePreviewCompositorError::WgpuSurfaceAcquire(error.to_string())
+        })?;
         let surface_texture = acquire_surface_texture(target.surface())?;
         let view = surface_texture
             .texture

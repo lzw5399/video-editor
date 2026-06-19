@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 
 import type { Draft } from "../generated/Draft";
 import {
@@ -185,6 +185,7 @@ export class RealtimePreviewHost {
       }
 
       if (!this.attached) {
+        this.ensureNativeWindowVisible();
         const surface = this.buildSurfaceDescriptor(bounds);
         recordRealtimePreviewHostCall({
           kind: "attachSurface",
@@ -299,6 +300,7 @@ export class RealtimePreviewHost {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
+      this.ensureNativeWindowVisible();
       const response = playRealtimePreview({ sessionId: this.sessionId });
       this.playbackGeneration = response.playbackGeneration;
       recordRealtimePreviewHostCall({ kind: "schedulerDecodeCurrentFrame" });
@@ -441,6 +443,20 @@ export class RealtimePreviewHost {
       parentHandle,
       ...bounds
     };
+  }
+
+  private ensureNativeWindowVisible(): void {
+    if (this.window.isDestroyed()) {
+      throw new Error("实时预览窗口已关闭");
+    }
+    if (this.window.isMinimized()) {
+      this.window.restore();
+    }
+    if (!this.window.isVisible()) {
+      this.window.show();
+    }
+    this.window.focus();
+    app.focus({ steal: true });
   }
 
   private refreshTelemetry(): void {
