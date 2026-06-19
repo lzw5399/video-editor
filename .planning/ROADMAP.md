@@ -664,7 +664,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 15.2-03-PLAN.md - Feed real imported material frames and audio state into realtime preview
+- [x] 15.2-03-PLAN.md - Feed real imported material frames and audio state into realtime preview
 
 **Wave 4** *(blocked on Waves 2-3 completion)*
 
