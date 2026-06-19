@@ -16,6 +16,7 @@ pub struct LargeTimelineConfig {
     pub include_audio: bool,
     pub include_text: bool,
     pub segment_duration: Microseconds,
+    pub target_stride: Microseconds,
     pub localized_edit_index: usize,
     pub canvas_config: DraftCanvasConfig,
 }
@@ -47,6 +48,12 @@ impl LargeTimelineConfig {
 
     pub fn with_segment_duration(mut self, duration: Microseconds) -> Self {
         self.segment_duration = duration;
+        self.target_stride = duration;
+        self
+    }
+
+    pub fn with_target_stride(mut self, stride: Microseconds) -> Self {
+        self.target_stride = stride;
         self
     }
 
@@ -74,6 +81,7 @@ impl Default for LargeTimelineConfig {
             include_audio: true,
             include_text: true,
             segment_duration: Microseconds::new(100_000),
+            target_stride: Microseconds::new(100_000),
             localized_edit_index: 150,
             canvas_config: DraftCanvasConfig {
                 aspect_ratio: CanvasAspectRatio::custom(16, 9),
@@ -199,8 +207,13 @@ fn validate_config(config: &LargeTimelineConfig) -> Result<(), LargeTimelineErro
             "segment_duration must be greater than zero microseconds",
         ));
     }
+    if config.target_stride.get() < config.segment_duration.get() {
+        return Err(LargeTimelineError::new(
+            "target_stride must be greater than or equal to segment_duration",
+        ));
+    }
     let last_index = config.segments_per_track - 1;
-    checked_target_range(last_index, config.segment_duration)?;
+    checked_target_range(last_index, config.segment_duration, config.target_stride)?;
     Ok(())
 }
 
@@ -226,7 +239,7 @@ fn push_track_with_segments(
             format!("{prefix}-segment-{index:06}"),
             material_id,
             SourceTimerange::new(Microseconds::ZERO, config.segment_duration),
-            checked_target_range(index, config.segment_duration)?,
+            checked_target_range(index, config.segment_duration, config.target_stride)?,
         );
         if kind == TrackKind::Text {
             segment.text = Some(text_segment(index));
@@ -331,11 +344,12 @@ fn localized_edit_target(
 fn checked_target_range(
     index: usize,
     duration: Microseconds,
+    stride: Microseconds,
 ) -> Result<TargetTimerange, LargeTimelineError> {
     let index = u64::try_from(index)
         .map_err(|_| LargeTimelineError::new("segment index exceeds u64 range"))?;
     let start = index
-        .checked_mul(duration.get())
+        .checked_mul(stride.get())
         .ok_or_else(|| LargeTimelineError::new("large timeline target start overflowed"))?;
     Ok(TargetTimerange::new(Microseconds::new(start), duration))
 }

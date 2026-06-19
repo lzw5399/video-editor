@@ -475,6 +475,49 @@ fn invalidation_v2_from_command_delta_expands_export_prep_and_preview_cache_fact
     assert_eq!(export_facts.reason, "visual edit");
 }
 
+#[test]
+fn large_timeline_cache_invalidation_retains_unrelated_entries_for_localized_dirty_ranges() {
+    let entries = (0..1_000)
+        .map(|index| {
+            entry_v2(
+                &format!("entry-{index:04}"),
+                index * 100_000,
+                100_000,
+                &[if index == 500 {
+                    "changed-material"
+                } else {
+                    "stable-material"
+                }],
+                &[if index == 500 {
+                    "changed-node"
+                } else {
+                    "stable-node"
+                }],
+                PreviewCacheProfile::FramePng,
+            )
+        })
+        .collect::<Vec<_>>();
+    let request = PreviewInvalidationRequest::new(
+        [
+            dirty_range(50_000_000, 100_000, DirtyRangeSource::Previous),
+            dirty_range(50_200_000, 100_000, DirtyRangeSource::Current),
+        ],
+        [MaterialId::new("changed-material")],
+        ["changed-node".to_owned()],
+        [DirtyDomain::PreviewCache],
+        "large localized edit",
+    );
+
+    let result = invalidate_preview_cache(&entries, &request);
+
+    assert_eq!(
+        invalidated_ids(&result),
+        vec!["entry-0500", "entry-0502"],
+        "old/current dirty ranges plus the changed graph/material entry should be invalidated"
+    );
+    assert_eq!(result.retained.len(), 998);
+}
+
 fn entry(
     id: &str,
     start: u64,

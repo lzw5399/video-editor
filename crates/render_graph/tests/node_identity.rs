@@ -1,11 +1,12 @@
 use draft_model::{
     DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftId, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    Microseconds, RationalFrameRate, Segment, SegmentOpacity, SourceTimerange, TargetTimerange,
+    Track, TrackKind,
 };
-use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
-    build_render_graph, OutputDimensions, RenderGraphDiff, RenderGraphNodeId, RenderGraphNodeRole,
-    RenderGraphSnapshot, RenderOutputProfile,
+    OutputDimensions, RenderGraphDiff, RenderGraphNodeId, RenderGraphNodeRole, RenderGraphSnapshot,
+    RenderOutputProfile, build_render_graph,
 };
 
 #[test]
@@ -267,6 +268,64 @@ fn node_identity_target_preserves_integer_sampled_frame_anchors() {
     );
 }
 
+#[test]
+fn large_timeline_node_identity_bounds_localized_visual_diff() {
+    let before = large_timeline_graph_draft(512);
+    let mut after = before.clone();
+    after.tracks[0].segments[256].visual.transform.opacity = SegmentOpacity { value_millis: 640 };
+    let full_range = TargetTimerange::new(Microseconds::ZERO, Microseconds::new(51_200_000));
+    let previous = snapshot_for_range(
+        &before,
+        full_range.clone(),
+        output_profile_for_range(960, 540, full_range.clone()),
+        "runtime:software:v1",
+    );
+    let current = snapshot_for_range(
+        &after,
+        full_range.clone(),
+        output_profile_for_range(960, 540, full_range.clone()),
+        "runtime:software:v1",
+    );
+    let diff = RenderGraphDiff::between(
+        &previous,
+        &current,
+        &[DirtyRange {
+            target_timerange: TargetTimerange::new(25_600_000, 100_000),
+            source: DirtyRangeSource::Current,
+        }],
+        &[DirtyDomain::Visual, DirtyDomain::GraphSnapshot],
+    );
+    let changed_keys = diff
+        .changed
+        .iter()
+        .map(|change| change.node_id.stable_key())
+        .collect::<Vec<_>>();
+
+    assert!(
+        diff.added.is_empty(),
+        "localized visual edit must not add nodes"
+    );
+    assert!(
+        diff.removed.is_empty(),
+        "localized visual edit must not remove nodes"
+    );
+    assert!(
+        changed_keys.contains(
+            &"draft:phase13-large-node-draft:track:video-track:segment:segment-000256:video"
+                .to_owned()
+        ),
+        "changed keys should include the localized segment node: {changed_keys:?}"
+    );
+    assert!(
+        diff.changed.len() <= 12,
+        "large localized edit should only change the segment and nearby sampled frames"
+    );
+    assert!(
+        diff.unchanged.len() > diff.changed.len() * 100,
+        "large graph should remain identity-reusable"
+    );
+}
+
 fn graph_for(draft: &Draft) -> render_graph::RenderGraph {
     let profile = EngineProfile::from_draft_canvas(draft).expect("canvas profile should resolve");
     let normalized = normalize_draft(draft, &profile).expect("draft should normalize");
@@ -287,11 +346,36 @@ fn snapshot_for(
     RenderGraphSnapshot::from_graph(&graph, &output_profile, runtime_capability_fingerprint)
 }
 
+fn snapshot_for_range(
+    draft: &Draft,
+    target_timerange: TargetTimerange,
+    output_profile: RenderOutputProfile,
+    runtime_capability_fingerprint: &str,
+) -> RenderGraphSnapshot {
+    let profile = EngineProfile::from_draft_canvas(draft).expect("canvas profile should resolve");
+    let normalized = normalize_draft(draft, &profile).expect("draft should normalize");
+    let range = resolve_render_range(&normalized, target_timerange).expect("range should resolve");
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+    RenderGraphSnapshot::from_graph(&graph, &output_profile, runtime_capability_fingerprint)
+}
+
 fn output_profile(width: u32, height: u32) -> RenderOutputProfile {
+    output_profile_for_range(
+        width,
+        height,
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(100_000)),
+    )
+}
+
+fn output_profile_for_range(
+    width: u32,
+    height: u32,
+    target_timerange: TargetTimerange,
+) -> RenderOutputProfile {
     RenderOutputProfile::preview_frame_png(
         OutputDimensions::new(width, height),
         RationalFrameRate::new(30, 1),
-        TargetTimerange::new(Microseconds::new(0), Microseconds::new(100_000)),
+        target_timerange,
     )
 }
 
@@ -307,6 +391,38 @@ fn phase13_graph_draft() -> Draft {
     ));
     draft.tracks.push(track);
     draft
+}
+
+fn large_timeline_graph_draft(segment_count: usize) -> Draft {
+    let mut draft = Draft::new("phase13-large-node-draft", "Phase 13 Large Node Identity");
+    let mut track = Track::new("video-track", TrackKind::Video, "Video");
+    for index in 0..segment_count {
+        let material_id = format!("material-{index:06}");
+        draft.materials.push(large_video_material(&material_id));
+        track.segments.push(Segment::new(
+            format!("segment-{index:06}"),
+            material_id,
+            SourceTimerange::new(0, 100_000),
+            TargetTimerange::new(index as u64 * 100_000, 100_000),
+        ));
+    }
+    draft.tracks.push(track);
+    draft
+}
+
+fn large_video_material(material_id: &str) -> Material {
+    let mut material = Material::new(
+        material_id,
+        MaterialKind::Video,
+        format!("file://{material_id}.mp4"),
+        material_id,
+    );
+    material.metadata.duration = Some(Microseconds::new(100_000));
+    material.metadata.width = Some(1920);
+    material.metadata.height = Some(1080);
+    material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    material.metadata.has_video = true;
+    material
 }
 
 fn video_material() -> Material {
