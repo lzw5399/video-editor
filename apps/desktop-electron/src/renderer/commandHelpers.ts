@@ -488,7 +488,14 @@ type InvalidatePreviewCacheOptions = {
   entries: PreviewCacheEntryRef[];
   changedRanges: DirtyRange[];
   changedMaterialIds: MaterialId[];
+  changedGraphNodeIds?: string[];
+  changedDomains?: InvalidatePreviewCacheCommandPayload["changedDomains"];
+  runtimeCapabilityFingerprint?: string | null;
+  outputProfileFingerprint?: string | null;
+  fullDraft?: boolean;
   reason: string;
+  artifactSchemaVersion?: number;
+  generatorVersion?: string;
 };
 
 export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCacheOptions): CommandEnvelope {
@@ -497,7 +504,14 @@ export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCac
     entries: options.entries,
     changedRanges: options.changedRanges,
     changedMaterialIds: options.changedMaterialIds,
-    reason: options.reason
+    changedGraphNodeIds: options.changedGraphNodeIds,
+    changedDomains: options.changedDomains,
+    runtimeCapabilityFingerprint: options.runtimeCapabilityFingerprint,
+    outputProfileFingerprint: options.outputProfileFingerprint,
+    fullDraft: options.fullDraft,
+    reason: options.reason,
+    artifactSchemaVersion: options.artifactSchemaVersion,
+    generatorVersion: options.generatorVersion
   } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
 
   return envelope("invalidatePreviewCache", payload);
@@ -507,6 +521,7 @@ type StartExportOptions = {
   draft: Draft;
   outputPath: string;
   preset: ExportPreset;
+  dirtyFacts?: StartExportCommandPayload["dirtyFacts"];
 };
 
 export function buildStartExportCommand(options: StartExportOptions): CommandEnvelope {
@@ -514,7 +529,8 @@ export function buildStartExportCommand(options: StartExportOptions): CommandEnv
     kind: "startExport",
     draft: options.draft,
     outputPath: options.outputPath,
-    preset: options.preset
+    preset: options.preset,
+    dirtyFacts: options.dirtyFacts
   } satisfies StartExportCommandPayload & { kind: "startExport" };
 
   return envelope("startExport", payload);
