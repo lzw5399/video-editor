@@ -14,6 +14,7 @@ PHASE13_TEST_TARGETS=(
   "crates/render_graph/tests/node_identity.rs"
   "crates/preview_service/tests/dirty_propagation.rs"
   "crates/testkit/tests/large_timeline_incremental.rs"
+  "crates/testkit/tests/preview_export_parity.rs"
 )
 SEMANTIC_CONTRACT_SURFACES=(
   "crates/draft_model/src"
@@ -119,6 +120,19 @@ require_fixed "$PACKAGE_JSON" "cargo test -p draft_commands --test command_delta
 require_fixed "$PACKAGE_JSON" "cargo test -p render_graph --test node_identity -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p preview_service --test dirty_propagation -- --nocapture"
 require_fixed "$PACKAGE_JSON" "cargo test -p testkit large_timeline -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p testkit large_timeline_incremental -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p testkit preview_export_parity -- --nocapture"
+require_fixed "$PACKAGE_JSON" "pnpm run test:contracts"
+
+require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type DirtyRange ="
+require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type InvalidatePreviewCacheCommandPayload ="
+require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type ExportPrepDirtyFacts ="
+require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type CommandDelta ="
+require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type TimelineCommandResponse ="
+require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type ExportPrepDirtyFacts ="
+require_fixed "schemas/command.schema.json" "\"CommandDelta\""
+require_fixed "schemas/command.schema.json" "\"DirtyRange\""
+require_fixed "schemas/command.schema.json" "\"ExportPrepDirtyFacts\""
 
 for target in "${PHASE13_TEST_TARGETS[@]}"; do
   [ -f "$target" ] || fail "missing Phase 13 test target ${target}"
