@@ -29,6 +29,7 @@ pub struct RealtimePreviewCapabilityClassifier {
     pub runtime_backend_available: bool,
     pub surface_available: bool,
     pub gpu_text_parity: bool,
+    pub bundled_text_font_registry_available: bool,
 }
 
 impl RealtimePreviewCapabilityClassifier {
@@ -37,6 +38,7 @@ impl RealtimePreviewCapabilityClassifier {
             runtime_backend_available: true,
             surface_available: true,
             gpu_text_parity: false,
+            bundled_text_font_registry_available: false,
         }
     }
 
@@ -52,6 +54,11 @@ impl RealtimePreviewCapabilityClassifier {
 
     pub fn with_gpu_text_parity(mut self, enabled: bool) -> Self {
         self.gpu_text_parity = enabled;
+        self
+    }
+
+    pub fn with_bundled_text_font_registry_available(mut self, available: bool) -> Self {
+        self.bundled_text_font_registry_available = available;
         self
     }
 
@@ -355,7 +362,11 @@ fn classify_text(
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
 ) {
     for text in &graph.text_overlays {
-        diagnostics.push(text_preview_diagnostic(text, classifier.gpu_text_parity));
+        diagnostics.push(text_preview_diagnostic(
+            text,
+            classifier.gpu_text_parity,
+            classifier.bundled_text_font_registry_available,
+        ));
     }
 }
 

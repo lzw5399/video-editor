@@ -5143,6 +5143,30 @@
           },
           "type": "array"
         },
+        "bundledFontFamily": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundledFontLicense": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundledFontPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundledFontRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "diagnostic": {
           "type": [
             "string",
@@ -26594,7 +26618,8 @@
         "font": {
           "$ref": "#/$defs/TextFont",
           "default": {
-            "family": "PingFang SC"
+            "family": "Noto Sans CJK SC",
+            "fontRef": "font://bundled/noto-sans-cjk-sc-regular"
           }
         },
         "fontSize": {

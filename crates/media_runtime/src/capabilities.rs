@@ -2,11 +2,16 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use draft_model::{
+    bundled_text_font_path, repository_root_from_manifest, validate_bundled_font_registry,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BinaryKind, DiscoveredBinary, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, MediaIoFallbackReason,
-    RuntimeConfig, RuntimeDeviceId, SelectedDecodePath, TextureBackend, VideoPixelFormat,
+    BinaryKind, DiscoveredBinary, FfmpegExecutor, MediaIoFallbackReason, RuntimeConfig,
+    RuntimeDeviceId, SelectedDecodePath, TextureBackend, VideoPixelFormat,
+    MAX_STDERR_SUMMARY_BYTES,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +48,10 @@ pub struct RuntimeFeatureCapability {
 pub struct RuntimeFontCapability {
     pub env_text_font_path: Option<PathBuf>,
     pub available_font_paths: Vec<PathBuf>,
+    pub bundled_font_ref: Option<String>,
+    pub bundled_font_family: Option<String>,
+    pub bundled_font_path: Option<PathBuf>,
+    pub bundled_font_license: Option<String>,
     pub status: RuntimeCapabilityStatus,
     pub diagnostic: Option<String>,
 }
@@ -340,11 +349,16 @@ fn feature_capability(
 
 fn font_capability() -> RuntimeFontCapability {
     let env_text_font_path = env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from);
+    let bundled_font_path = bundled_text_font_path();
+    let bundled_validation = validate_bundled_font_registry(&repository_root_from_manifest())
+        .map_err(|error| error.to_string());
     let available_font_paths = resolved_text_font_paths()
         .into_iter()
         .filter(|path| path.is_file())
         .collect::<Vec<_>>();
-    let diagnostic = if available_font_paths.is_empty() {
+    let diagnostic = if let Err(error) = &bundled_validation {
+        Some(format!("内置字体注册表不可用：{error}"))
+    } else if available_font_paths.is_empty() {
         Some("字体环境未完全就绪，文字渲染可能与导出结果不一致。".to_owned())
     } else {
         None
@@ -353,6 +367,19 @@ fn font_capability() -> RuntimeFontCapability {
     RuntimeFontCapability {
         env_text_font_path,
         available_font_paths,
+        bundled_font_ref: bundled_validation
+            .as_ref()
+            .ok()
+            .map(|_| BUNDLED_TEXT_FONT_REF.to_owned()),
+        bundled_font_family: bundled_validation
+            .as_ref()
+            .ok()
+            .map(|_| BUNDLED_TEXT_FONT_FAMILY.to_owned()),
+        bundled_font_path: bundled_validation.as_ref().ok().map(|_| bundled_font_path),
+        bundled_font_license: bundled_validation
+            .as_ref()
+            .ok()
+            .map(|_| BUNDLED_TEXT_FONT_LICENSE_SPDX.to_owned()),
         status: if diagnostic.is_some() {
             RuntimeCapabilityStatus::Warning
         } else {
@@ -367,6 +394,7 @@ fn resolved_text_font_paths() -> Vec<PathBuf> {
     if let Some(path) = env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from) {
         paths.push(path);
     }
+    paths.push(bundled_text_font_path());
     paths.extend([
         PathBuf::from("/System/Library/Fonts/PingFang.ttc"),
         PathBuf::from("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),

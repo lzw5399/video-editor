@@ -4,7 +4,10 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use draft_model::{MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId};
+use draft_model::{
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, BUNDLED_TEXT_FONT_FAMILY,
+    BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
+};
 use render_graph::{
     ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderAudioMixDiagnostic,
     RenderCanvasDiagnostic, RenderContainer, RenderGraphPlan, RenderOutputProfile,
@@ -12,7 +15,7 @@ use render_graph::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::ass::{TextRenderCapability, generate_ass_sidecars};
+use crate::ass::{generate_ass_sidecars, TextRenderCapability};
 use crate::filters::generate_filter_script;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,10 +69,15 @@ impl CompilerCapabilities {
                 supports_subtitles_filter: true,
                 env_text_font_path: Some("/fonts/PingFang.ttc".to_owned()),
                 available_font_paths: vec![
+                    BUNDLED_TEXT_FONT_RELATIVE_PATH.to_owned(),
                     "/fonts/PingFang.ttc".to_owned(),
                     "/System/Library/Fonts/PingFang.ttc".to_owned(),
                     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf".to_owned(),
                 ],
+                bundled_font_ref: Some(BUNDLED_TEXT_FONT_REF.to_owned()),
+                bundled_font_family: Some(BUNDLED_TEXT_FONT_FAMILY.to_owned()),
+                bundled_font_path: Some(BUNDLED_TEXT_FONT_RELATIVE_PATH.to_owned()),
+                bundled_font_license: Some(BUNDLED_TEXT_FONT_LICENSE_SPDX.to_owned()),
             },
         }
     }

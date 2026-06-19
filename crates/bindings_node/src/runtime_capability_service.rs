@@ -99,6 +99,12 @@ fn command_font_capability(capability: RuntimeFontCapability) -> CommandRuntimeF
             .into_iter()
             .map(|path| path.display().to_string())
             .collect(),
+        bundled_font_ref: capability.bundled_font_ref,
+        bundled_font_family: capability.bundled_font_family,
+        bundled_font_path: capability
+            .bundled_font_path
+            .map(|path| path.display().to_string()),
+        bundled_font_license: capability.bundled_font_license,
         status: command_status(capability.status),
         diagnostic: capability.diagnostic,
     }

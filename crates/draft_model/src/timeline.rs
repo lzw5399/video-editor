@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::BTreeMap};
 
-use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use schemars::{json_schema, JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
@@ -221,6 +221,13 @@ pub struct TextFont {
 }
 
 impl TextFont {
+    pub fn bundled_default() -> Self {
+        Self {
+            family: crate::BUNDLED_TEXT_FONT_FAMILY.to_owned(),
+            font_ref: Some(crate::BUNDLED_TEXT_FONT_REF.to_owned()),
+        }
+    }
+
     pub fn system_default() -> Self {
         Self {
             family: "PingFang SC".to_owned(),
@@ -231,7 +238,7 @@ impl TextFont {
 
 impl Default for TextFont {
     fn default() -> Self {
-        Self::system_default()
+        Self::bundled_default()
     }
 }
 

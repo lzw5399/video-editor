@@ -3,17 +3,17 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, BUNDLED_TEXT_FONT_REF, Draft,
-    Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
-    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
-    TextStyle, TextWrapping, Track, TrackKind, Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    Transition, BUNDLED_TEXT_FONT_REF,
 };
-use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
 use render_graph::{
-    ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph,
+    build_render_graph, ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile,
 };
 
 pub fn compile_context() -> CompileContext {
@@ -33,6 +33,10 @@ pub fn no_font_context() -> CompileContext {
             supports_subtitles_filter: true,
             env_text_font_path: None,
             available_font_paths: Vec::new(),
+            bundled_font_ref: None,
+            bundled_font_family: None,
+            bundled_font_path: None,
+            bundled_font_license: None,
         }),
     )
 }
@@ -49,6 +53,10 @@ pub fn no_subtitle_filter_context() -> CompileContext {
             supports_subtitles_filter: true,
             env_text_font_path: Some("/fonts/PingFang.ttc".to_owned()),
             available_font_paths: vec!["/fonts/PingFang.ttc".to_owned()],
+            bundled_font_ref: None,
+            bundled_font_family: None,
+            bundled_font_path: None,
+            bundled_font_license: None,
         }),
     )
 }
@@ -129,7 +137,10 @@ pub fn export_plan_with_bundled_font_ref() -> RenderGraphPlan {
         .as_mut()
         .expect("compiler draft should include text");
     text.style.font = TextFont::default();
-    assert_eq!(text.style.font.font_ref.as_deref(), Some(BUNDLED_TEXT_FONT_REF));
+    assert_eq!(
+        text.style.font.font_ref.as_deref(),
+        Some(BUNDLED_TEXT_FONT_REF)
+    );
 
     let graph = sample_graph_from_draft(&draft);
     RenderGraphPlan::new(

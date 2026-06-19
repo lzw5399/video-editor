@@ -1121,6 +1121,7 @@ checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 name = "media_runtime"
 version = "0.1.0"
 dependencies = [
+ "draft_model",
  "media_runtime_desktop",
  "serde",
  "serde_json",

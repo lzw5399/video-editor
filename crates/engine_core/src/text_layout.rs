@@ -1,6 +1,7 @@
 use draft_model::{
     Microseconds, SegmentId, TargetTimerange, TextAlignment, TextBackground, TextBubbleRef,
     TextEffectRef, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextWrapping, TrackId,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
 };
 use serde::{Deserialize, Serialize};
 
@@ -80,9 +81,11 @@ pub struct TextFontPolicy {
 impl TextFontPolicy {
     pub fn mvp_default() -> Self {
         Self {
-            font_family: "PingFang SC".to_owned(),
-            font_candidate: "VE_TEXT_FONT_PATH".to_owned(),
+            font_family: BUNDLED_TEXT_FONT_FAMILY.to_owned(),
+            font_candidate: BUNDLED_TEXT_FONT_REF.to_owned(),
             fallback_candidates: vec![
+                BUNDLED_TEXT_FONT_REF.to_owned(),
+                BUNDLED_TEXT_FONT_RELATIVE_PATH.to_owned(),
                 "VE_TEXT_FONT_PATH".to_owned(),
                 "/System/Library/Fonts/PingFang.ttc".to_owned(),
                 "/System/Library/Fonts/Supplemental/Arial Unicode.ttf".to_owned(),

@@ -1,13 +1,12 @@
 use std::collections::BTreeSet;
 
-use draft_model::TextAlignment;
-use draft_model::{Microseconds, TargetTimerange};
+use draft_model::{resolve_bundled_font, Microseconds, TargetTimerange, TextAlignment};
 use render_graph::{RenderGraph, RenderGraphPlan, RenderOutputProfile, RenderTextOverlay};
 use serde::{Deserialize, Serialize};
 
 use crate::job::{
-    CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegSidecar, FfmpegSidecarKind,
-    format_seconds, sanitize_id,
+    format_seconds, sanitize_id, CompileContext, FfmpegCompileError, FfmpegCompileErrorKind,
+    FfmpegSidecar, FfmpegSidecarKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +16,14 @@ pub struct TextRenderCapability {
     pub supports_subtitles_filter: bool,
     pub env_text_font_path: Option<String>,
     pub available_font_paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundled_font_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundled_font_family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundled_font_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundled_font_license: Option<String>,
 }
 
 impl Default for TextRenderCapability {
@@ -26,6 +33,10 @@ impl Default for TextRenderCapability {
             supports_subtitles_filter: true,
             env_text_font_path: None,
             available_font_paths: Vec::new(),
+            bundled_font_ref: None,
+            bundled_font_family: None,
+            bundled_font_path: None,
+            bundled_font_license: None,
         }
     }
 }
@@ -86,6 +97,34 @@ pub fn resolve_text_font(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+
+    if let Some(font_ref) = &overlay.overlay.font_ref {
+        if let Some(entry) = resolve_bundled_font(font_ref) {
+            if let Some(path) = &capability.bundled_font_path {
+                if capability.bundled_font_ref.as_deref() == Some(font_ref.as_str())
+                    && available.contains(path)
+                {
+                    return Ok(ResolvedTextFont {
+                        family: capability
+                            .bundled_font_family
+                            .clone()
+                            .unwrap_or_else(|| entry.family.to_owned()),
+                        path: path.clone(),
+                        candidate: font_ref.clone(),
+                    });
+                }
+            }
+
+            return Err(FfmpegCompileError::new(
+                FfmpegCompileErrorKind::MissingTextFont,
+                format!(
+                    "bundled text font {font_ref} is registered but unavailable to FFmpeg"
+                ),
+                "Restore the bundled font asset and runtime capability registry before compiling text overlays.",
+            )
+            .with_material_id(overlay.material_id.clone()));
+        }
+    }
 
     if let Some(env_path) = &capability.env_text_font_path {
         if overlay
@@ -222,7 +261,9 @@ fn reject_unsupported_text_resources(
 ) -> Result<(), FfmpegCompileError> {
     let mut unsupported = Vec::new();
     if let Some(font_ref) = &overlay.overlay.font_ref {
-        unsupported.push(format!("fontRef {font_ref}"));
+        if resolve_bundled_font(font_ref).is_none() {
+            unsupported.push(format!("fontRef {font_ref}"));
+        }
     }
     unsupported.extend(
         overlay

@@ -6,23 +6,23 @@ use draft_model::{Draft, Microseconds, RationalFrameRate};
 use ffmpeg_compiler::{CompilerCapabilities, FfmpegJob};
 use media_runtime::FfmpegExecutor;
 use realtime_preview_runtime::{
-    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewFrameProvider,
-    PreviewGpuBackend, PreviewRequestMode, RealtimePreviewCapabilityClassifier,
-    RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewFallbackReason,
-    RealtimePreviewFrameRequest, RealtimePreviewFrameResult, RealtimePreviewGraphInput,
-    RealtimePreviewGraphSupport, RealtimePreviewRuntime, RealtimePreviewSessionConfig,
     gpu::{
         RealtimePreviewCompositor, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
         RealtimePreviewGpuDeviceDescriptor, RealtimePreviewTargetFormat,
         RealtimePreviewTextureCache,
     },
-    prepare_realtime_preview_graph,
+    prepare_realtime_preview_graph, PlaybackGeneration, PlaybackRate, PreviewCancellationToken,
+    PreviewFrameProvider, PreviewGpuBackend, PreviewRequestMode,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnostic,
+    RealtimePreviewDiagnosticDomain, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
+    RealtimePreviewFrameResult, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
+    RealtimePreviewRuntime, RealtimePreviewSessionConfig,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    PreviewArtifact, PreviewCacheEntry, PreviewFrameRequest, PreviewServiceConfig,
-    PreviewServiceError, PreviewServiceErrorKind, request_preview_frame,
+    request_preview_frame, PreviewArtifact, PreviewCacheEntry, PreviewFrameRequest,
+    PreviewServiceConfig, PreviewServiceError, PreviewServiceErrorKind,
 };
 
 #[derive(Debug)]
@@ -31,6 +31,7 @@ pub struct RealtimePreviewServiceConfig {
     runtime_backend_available: bool,
     surface_available: bool,
     gpu_text_parity: bool,
+    bundled_text_font_registry_available: bool,
     preferred_backend: PreviewGpuBackend,
     gpu_backend: RealtimePreviewGpuBackend,
     runtime: Mutex<RealtimePreviewRuntime>,
@@ -50,6 +51,7 @@ impl RealtimePreviewServiceConfig {
             runtime_backend_available: true,
             surface_available: true,
             gpu_text_parity: false,
+            bundled_text_font_registry_available: true,
             preferred_backend: PreviewGpuBackend::OffscreenOnly,
             gpu_backend: RealtimePreviewGpuBackend::OffscreenOnly,
             runtime: Mutex::new(runtime),
@@ -77,6 +79,11 @@ impl RealtimePreviewServiceConfig {
 
     pub fn with_gpu_text_parity(mut self, enabled: bool) -> Self {
         self.gpu_text_parity = enabled;
+        self
+    }
+
+    pub fn with_bundled_text_font_registry_available(mut self, available: bool) -> Self {
+        self.bundled_text_font_registry_available = available;
         self
     }
 
@@ -237,6 +244,7 @@ pub fn request_realtime_preview_frame(
         runtime_backend_available: config.runtime_backend_available,
         surface_available: config.surface_available,
         gpu_text_parity: config.gpu_text_parity,
+        bundled_text_font_registry_available: config.bundled_text_font_registry_available,
     };
     let capability = classifier.classify(&prepared.graph);
     let mut diagnostics = prepared.diagnostics;
@@ -302,6 +310,7 @@ fn render_realtime_frame(
         runtime_backend_available: config.runtime_backend_available,
         surface_available: true,
         gpu_text_parity: config.gpu_text_parity,
+        bundled_text_font_registry_available: config.bundled_text_font_registry_available,
     };
     let mut compositor = RealtimePreviewCompositor::new(device, classifier);
     let mut texture_cache = RealtimePreviewTextureCache::new();
@@ -443,11 +452,9 @@ fn preflight_fallback_reason(
     if !config.surface_available {
         return Some(RealtimePreviewFallbackReason::SurfaceUnavailable);
     }
-    if !config.gpu_text_parity
-        && diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.domain == RealtimePreviewDiagnosticDomain::Text)
-    {
+    if diagnostics.iter().any(|diagnostic| {
+        diagnostic.domain == RealtimePreviewDiagnosticDomain::Text && diagnostic.fallback_used
+    }) {
         return Some(RealtimePreviewFallbackReason::TextParityUnsupported);
     }
     None

@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
-    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
-    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentAudio,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual,
-    SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion,
-    TextSegment, TextStyle, reduce_ratio,
+    reduce_ratio, AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft,
+    DraftSchemaVersion, Keyframe, KeyframeProperty, KeyframeValue, MaterialId, MaterialKind,
+    Microseconds, RationalFrameRate, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange, TextBox,
+    TextBubbleRef, TextEffectRef, TextLayoutRegion, TextSegment, TextStyle,
+    MAX_AUDIO_FADE_DURATION_MICROSECONDS, MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS,
+    MIN_AUDIO_PAN_BALANCE_MILLIS,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -625,6 +625,14 @@ fn validate_text_style(field: &str, style: &TextStyle) -> Result<(), DraftValida
     validate_required_text(&format!("{field}.font.family"), &style.font.family)?;
     if let Some(font_ref) = &style.font.font_ref {
         validate_required_text(&format!("{field}.font.fontRef"), font_ref)?;
+        if font_ref.starts_with("font://bundled/")
+            && crate::resolve_bundled_font(font_ref).is_none()
+        {
+            return Err(invalid_text_segment(
+                &format!("{field}.font.fontRef"),
+                "bundled fontRef is not registered",
+            ));
+        }
     }
     if style.font_size == 0 {
         return Err(invalid_text_segment(

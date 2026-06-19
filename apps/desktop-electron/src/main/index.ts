@@ -40,6 +40,7 @@ type TestExecuteCommandCall = {
   keyframeAt: number | null;
   textContent: string | null;
   textSource: string | null;
+  textFontRef: string | null;
   srtContent: string | null;
   outputPath: string | null;
   preset: string | null;
@@ -308,6 +309,7 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     keyframeAt,
     textContent: text?.content ?? null,
     textSource: text?.source ?? null,
+    textFontRef: text?.style.font.fontRef ?? null,
     srtContent,
     outputPath,
     preset,
@@ -899,7 +901,14 @@ function maybeBuildTestRuntimeCapabilitiesResponse(
       },
       fontReadiness: {
         envTextFontPath: null,
-        availableFontPaths: ["/System/Library/Fonts/PingFang.ttc"],
+        availableFontPaths: [
+          "assets/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+          "/System/Library/Fonts/PingFang.ttc"
+        ],
+        bundledFontRef: "font://bundled/noto-sans-cjk-sc-regular",
+        bundledFontFamily: "Noto Sans CJK SC",
+        bundledFontPath: "assets/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+        bundledFontLicense: "OFL-1.1",
         status: "ready",
         diagnostic: null
       },

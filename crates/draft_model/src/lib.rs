@@ -13,6 +13,7 @@ use ts_rs::TS;
 pub mod canvas;
 pub mod delta;
 pub mod draft;
+pub mod font_registry;
 pub mod ids;
 pub mod material;
 pub mod time;
@@ -20,35 +21,43 @@ pub mod timeline;
 pub mod validation;
 
 pub use canvas::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
-    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
-    normalized_to_canvas_pixel, reduce_ratio,
+    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAspectRatio,
+    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, CanvasPixelPoint,
+    DraftCanvasConfig, NormalizedCanvasPoint,
 };
 pub use delta::{
     ChangedEntity, CommandDelta, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
+pub use font_registry::{
+    bundled_font_registry, bundled_text_font, bundled_text_font_path,
+    repository_root_from_manifest, resolve_bundled_font, validate_bundled_font_registry,
+    BundledFontRegistryEntry, BundledFontValidation, FontRegistryError,
+    BUNDLED_TEXT_FONT_COVERAGE_SAMPLE, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_PATH,
+    BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
+    BUNDLED_TEXT_FONT_STYLE, BUNDLED_TEXT_FONT_WEIGHT,
+};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
 pub use material::{
-    Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
-    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
+    add_material, mark_material_available, mark_material_missing, mark_material_probe_failed,
+    upsert_material, Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate,
 };
 pub use time::Microseconds;
 pub use timeline::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Filter, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MAX_AUDIO_FADE_DURATION_MICROSECONDS, MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_ANCHOR_MILLIS,
-    MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS,
-    MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS,
-    MIN_AUDIO_PAN_BALANCE_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment,
-    SegmentAnchor, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet,
+    Segment, SegmentAnchor, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop,
     SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
     SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
     TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
     TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, Track, TrackKind, Transition,
+    TextWrapping, Track, TrackKind, Transition, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
+    MIN_TEXT_LINE_HEIGHT_MILLIS,
 };
-pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
+pub use validation::{migrate_draft_json, validate_draft, DraftValidationError};
 
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
@@ -1516,6 +1525,18 @@ pub struct RuntimeFontCapability {
     #[ts(optional = nullable)]
     pub env_text_font_path: Option<String>,
     pub available_font_paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundled_font_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundled_font_family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundled_font_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundled_font_license: Option<String>,
     pub status: RuntimeCapabilityStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

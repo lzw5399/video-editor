@@ -10,8 +10,12 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use draft_model::{
+    bundled_text_font_path, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX,
+    BUNDLED_TEXT_FONT_REF,
+};
 use ffmpeg_compiler::{CompilerCapabilities, TextRenderCapability};
-use media_runtime::{FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig};
+use media_runtime::{FfmpegExecutor, RuntimeConfig, MAX_STDERR_SUMMARY_BYTES};
 
 pub const PHASE5_MEAN_RGB_DELTA_MAX: f64 = 8.0;
 pub const PHASE5_P99_RGB_DELTA_MAX: u8 = 24;
@@ -149,7 +153,11 @@ pub fn probe_phase5_render_capabilities(
     compiler_capabilities_from_probe_outputs(
         &encoders,
         &filters,
-        resolved_text_font_paths(),
+        {
+            let mut paths = resolved_text_font_paths();
+            paths.push(bundled_text_font_path());
+            paths
+        },
         env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from),
     )
 }
@@ -189,6 +197,7 @@ pub fn compiler_capabilities_from_probe_outputs(
         )));
     }
 
+    let bundled_font_path = bundled_text_font_path().to_string_lossy().into_owned();
     let available_font_paths = available_font_paths
         .into_iter()
         .filter(|path| path.is_file())
@@ -214,6 +223,10 @@ pub fn compiler_capabilities_from_probe_outputs(
             supports_subtitles_filter: true,
             env_text_font_path,
             available_font_paths,
+            bundled_font_ref: Some(BUNDLED_TEXT_FONT_REF.to_owned()),
+            bundled_font_family: Some(BUNDLED_TEXT_FONT_FAMILY.to_owned()),
+            bundled_font_path: Some(bundled_font_path),
+            bundled_font_license: Some(BUNDLED_TEXT_FONT_LICENSE_SPDX.to_owned()),
         },
     })
 }

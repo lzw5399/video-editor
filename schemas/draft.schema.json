@@ -21426,7 +21426,8 @@
         "font": {
           "$ref": "#/$defs/TextFont",
           "default": {
-            "family": "PingFang SC"
+            "family": "Noto Sans CJK SC",
+            "fontRef": "font://bundled/noto-sans-cjk-sc-regular"
           }
         },
         "fontSize": {

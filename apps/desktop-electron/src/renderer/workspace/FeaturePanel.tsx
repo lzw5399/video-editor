@@ -220,8 +220,8 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
       source: "text",
       style: {
         font: {
-          family: "PingFang SC",
-          fontRef: null
+          family: "Noto Sans CJK SC",
+          fontRef: "font://bundled/noto-sans-cjk-sc-regular"
         },
         fontSize: 36,
         color: "#ffffff",
