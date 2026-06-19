@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 14-06-PLAN.md
-last_updated: "2026-06-19T06:18:31Z"
-last_activity: 2026-06-19 -- Completed 14-06 generated contracts and binding commands
+status: verifying
+stopped_at: Completed 14-07-PLAN.md
+last_updated: "2026-06-19T06:37:29.368Z"
+last_activity: 2026-06-19 -- Completed 14-07 resource status UI and final Phase 14 gates
 progress:
   total_phases: 20
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 105
-  completed_plans: 104
-  percent: 99
+  completed_plans: 105
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 14 (asset-resource-manager-and-derived-artifact-store) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 14-06 generated contracts and binding commands
+Status: Phase complete — ready for verification
+Last activity: 2026-06-19 -- Completed 14-07 resource status UI and final Phase 14 gates
 
-Progress: [██████████] 99%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -156,6 +156,7 @@ Progress: [██████████] 99%
 | Phase 14 P03 | 8min | 2 tasks | 4 files |
 | Phase 14 P04 | 12 min | 3 tasks | 7 files |
 | Phase 14 P05 | 8 min | 3 tasks | 6 files |
+| Phase 14 P07 | 17 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -361,6 +362,9 @@ Recent decisions affecting current work:
 - [Phase 14]: Generation workers poll persisted SQLite cancellation state through GenerationWorkerContext instead of renderer-owned scheduling or cache state. — ASSET-04 requires cancellable Rust-owned generation while Phase 16 scheduler policy remains deferred.
 - [Phase 14]: Generated proxy, thumbnail, and waveform bytes become ready artifacts only through BlobStore atomic writes. — Derived artifacts must be project-contained and must not be written directly by workers or renderer code.
 - [Phase 14]: Phase 16 scheduler priority and backpressure remain deferred; Phase 14 exposes lifecycle contracts only. — The plan explicitly excludes priority queues and backpressure policy.
+- [Phase 14]: Resource status UI remains production-facing only: no default artifact roots, SQLite names, raw cache/fingerprint/dirty facts, FFmpeg/ffprobe internals, manifests, tombstones, or raw logs. — Protects Resource status UI trust boundary T-14-22 and keeps TypeScript as presentation/command transport only.
+- [Phase 14]: Artifact generation actions are submitted as generated commands using Rust-owned job IDs and bundle/session context; TypeScript does not choose GC candidates or generation behavior. — Preserves T-14-21 and T-14-23 by keeping artifact internals, cleanup candidates, and generation semantics in Rust.
+- [Phase 14]: Phase 13 future-scope guard now excludes explicit Phase 14 artifact-store targets while continuing to protect non-Phase 14 code. — Keeps upstream Phase 13 validation green after Phase 14 exists without weakening renderer/source ownership checks.
 
 ### Pending Todos
 
@@ -397,6 +401,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T05:29:36.243Z
-Stopped at: Completed 14-04-PLAN.md
+Last session: 2026-06-19T06:36:43.041Z
+Stopped at: Completed 14-07-PLAN.md
 Resume file: None
