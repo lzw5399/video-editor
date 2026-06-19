@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: completed
 stopped_at: Completed 15.2-03B-PLAN.md
-last_updated: "2026-06-19T21:37:36.610Z"
+last_updated: "2026-06-19T21:43:26.501Z"
 last_activity: 2026-06-20 -- Phase 15.2 Plan 03B completed decoded native texture lease registry and WGPU compositor import prerequisite; next execute Plan 04 desktop product playback scheduler integration
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 126
   completed_plans: 123
-  percent: 98
+  percent: 78
 ---
 
 # Project State
@@ -420,6 +420,7 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
+- 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
 
 ## Deferred Items
 
