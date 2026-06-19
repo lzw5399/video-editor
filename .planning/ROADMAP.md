@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 8 plans
+**Plans:** 4/8 plans executed
 
 Plans:
 
@@ -668,7 +668,7 @@ Plans:
 
 **Wave 4** *(blocked on Waves 2-3 completion)*
 
-- [ ] 15.2-03A-PLAN.md - Add native WGPU surface presentation target for product preview
+- [x] 15.2-03A-PLAN.md - Add native WGPU surface presentation target for product preview
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

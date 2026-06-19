@@ -86,7 +86,7 @@
 - [x] **TEST-08**: Electron workspace tests and source guards verify the professional UI at 1280x800 and 1120x720, including five-region visibility, command-only timeline updates, and no renderer-owned media/render semantics.
 - [ ] **TEST-E2E-01**: Every default visible editing feature added or changed after Phase 15.1 has Playwright/Electron coverage that performs the real user workflow and verifies visible preview, timeline state, saved draft, or exported media evidence.
 - [ ] **TEST-E2E-02**: Repository-owned media fixtures cover the main product workflow matrix: video, image, audio, text, timeline edit, playback, save/reopen, and export.
-- [ ] **NO-FALLBACK-01**: Product-facing success states cannot be satisfied by fallback, mock, artifact, first-frame, DOM overlay, decoded CPU probe, or legacy/native player evidence that bypasses the claimed production implementation.
+- [x] **NO-FALLBACK-01**: Product-facing success states cannot be satisfied by fallback, mock, artifact, first-frame, DOM overlay, decoded CPU probe, or legacy/native player evidence that bypasses the claimed production implementation.
 - [ ] **NO-FALLBACK-02**: Refactors remove or gate obsolete legacy implementations from normal product flows instead of preserving them as compatibility or fallback paths.
 
 ## v2 Requirements
@@ -357,7 +357,7 @@
 | P0-GPU-05 | Phase 15.2 | Planned |
 | TEST-E2E-01 | Phase 15.2 | Planned |
 | TEST-E2E-02 | Phase 15.2 | Planned |
-| NO-FALLBACK-01 | Phase 15.2 | Planned |
+| NO-FALLBACK-01 | Phase 15.2 | Complete |
 | P0-UI-01 | Phase 15.3 | Planned |
 | P0-UI-02 | Phase 15.3 | Planned |
 | P0-UI-03 | Phase 15.3 | Planned |
