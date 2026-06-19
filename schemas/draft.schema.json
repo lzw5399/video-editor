@@ -38,6 +38,70 @@
     "tracks"
   ],
   "$defs": {
+    "AudioEffectSlot": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/AudioEffectSlotKind"
+        },
+        "slotId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "slotId",
+        "kind",
+        "enabled"
+      ]
+    },
+    "AudioEffectSlotKind": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "externalRef": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "unsupported"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "AudioFade": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration"
+      ]
+    },
+    "AudioPanBalance": {
+      "type": "integer",
+      "format": "int32",
+      "maximum": 1000,
+      "minimum": -1000
+    },
     "CanvasAspectRatio": {
       "oneOf": [
         {
@@ -527,6 +591,20 @@
     "Segment": {
       "type": "object",
       "properties": {
+        "audio": {
+          "$ref": "#/$defs/SegmentAudio",
+          "default": {
+            "effectSlots": [],
+            "fadeInDuration": {
+              "duration": 0
+            },
+            "fadeOutDuration": {
+              "duration": 0
+            },
+            "gainMillis": 1000,
+            "panBalanceMillis": 0
+          }
+        },
         "filters": {
           "type": "array",
           "items": {
@@ -652,6 +730,39 @@
       "required": [
         "xMillis",
         "yMillis"
+      ]
+    },
+    "SegmentAudio": {
+      "type": "object",
+      "properties": {
+        "effectSlots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AudioEffectSlot"
+          }
+        },
+        "fadeInDuration": {
+          "$ref": "#/$defs/AudioFade"
+        },
+        "fadeOutDuration": {
+          "$ref": "#/$defs/AudioFade"
+        },
+        "gainMillis": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "panBalanceMillis": {
+          "$ref": "#/$defs/AudioPanBalance"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "gainMillis",
+        "panBalanceMillis",
+        "fadeInDuration",
+        "fadeOutDuration",
+        "effectSlots"
       ]
     },
     "SegmentBackgroundFilling": {

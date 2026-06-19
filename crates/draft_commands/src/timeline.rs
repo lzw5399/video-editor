@@ -9,7 +9,7 @@ use draft_model::{
 
 use crate::{
     TimelineCommandError, TimelineCommandErrorKind,
-    audio::{add_audio_segment, set_segment_volume, set_track_mute},
+    audio::{add_audio_segment, set_segment_volume, set_track_mute, update_segment_audio},
     canvas::update_draft_canvas_config,
     delta::{
         current_range, moved_segment_delta, previous_range, segment_delta, split_segment_delta,
@@ -232,6 +232,23 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.volume,
+        ),
+        CommandPayload::UpdateSegmentAudio(payload) => update_segment_audio(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.gain_millis,
+            payload
+                .pan_balance_millis
+                .map(|pan_balance| pan_balance.balance_millis),
+            payload
+                .fade_in_duration
+                .map(|fade_in_duration| fade_in_duration.duration),
+            payload
+                .fade_out_duration
+                .map(|fade_out_duration| fade_out_duration.duration),
+            payload.effect_slots,
         ),
         CommandPayload::SetTrackMute(payload) => set_track_mute(
             &payload.draft,

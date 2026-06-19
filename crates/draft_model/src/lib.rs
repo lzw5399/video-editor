@@ -135,6 +135,7 @@ pub enum CommandPayload {
     ImportSubtitleSrt(ImportSubtitleSrtCommandPayload),
     AddAudioSegment(AddAudioSegmentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
+    UpdateSegmentAudio(UpdateSegmentAudioCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
@@ -181,6 +182,7 @@ impl CommandPayload {
             Self::ImportSubtitleSrt(_) => CommandName::ImportSubtitleSrt,
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
+            Self::UpdateSegmentAudio(_) => CommandName::UpdateSegmentAudio,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
             Self::UpdateDraftCanvasConfig(_) => CommandName::UpdateDraftCanvasConfig,
             Self::UpdateSegmentVisual(_) => CommandName::UpdateSegmentVisual,
@@ -452,6 +454,31 @@ pub struct SetSegmentVolumeCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub volume: SegmentVolume,
+}
+
+/// Payload accepted by the Phase 15 segment audio semantic update command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateSegmentAudioCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub gain_millis: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub pan_balance_millis: Option<AudioPanBalance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fade_in_duration: Option<AudioFade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub fade_out_duration: Option<AudioFade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub effect_slots: Option<Vec<AudioEffectSlot>>,
 }
 
 /// Payload accepted by the Phase 3 track mute command.

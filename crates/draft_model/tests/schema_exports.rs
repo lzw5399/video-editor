@@ -8,9 +8,9 @@ use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
-    AudioEffectSlot, AudioFade, AudioPanBalance, CancelExportCommandPayload, CanvasAspectRatio,
-    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, ChangedEntity,
-    CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, CancelExportCommandPayload,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
+    ChangedEntity, CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
     CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
     DecodedPreviewFrameResponse, DeleteSegmentCommandPayload, DirtyDomain, DirtyRange,
     DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
@@ -91,7 +91,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -114,6 +114,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
@@ -273,6 +274,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<TextEffectRef>(),
         export_decl::<TextSegment>(),
         export_decl::<SegmentVolume>(),
+        export_decl::<AudioPanBalance>(),
+        export_decl::<AudioFade>(),
+        export_decl::<AudioEffectSlotKind>(),
+        export_decl::<AudioEffectSlot>(),
+        export_decl::<SegmentAudio>(),
         export_decl::<SegmentPosition>(),
         export_decl::<SegmentScale>(),
         export_decl::<SegmentRotation>(),
@@ -317,7 +323,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
     }
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -340,6 +346,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
@@ -1340,7 +1347,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrimSegmentDirection } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -1363,6 +1370,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
+            export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<SetTrackMuteCommandPayload>(),
             export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
             export_decl::<UpdateSegmentVisualCommandPayload>(),
@@ -1725,6 +1733,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<SetSegmentVolumeCommandPayload>(
         &mut schema_value,
         "SetSegmentVolumeCommandPayload",
+    );
+    include_command_contract_schema::<UpdateSegmentAudioCommandPayload>(
+        &mut schema_value,
+        "UpdateSegmentAudioCommandPayload",
     );
     include_command_contract_schema::<SetTrackMuteCommandPayload>(
         &mut schema_value,
@@ -2982,6 +2994,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "setSegmentVolume" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "updateSegmentAudio" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "updateSegmentAudio" }
                     },
                     "required": ["kind"]
                 }

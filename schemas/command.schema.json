@@ -130,6 +130,70 @@
       "title": "AddTextSegmentCommandPayload",
       "type": "object"
     },
+    "AudioEffectSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/AudioEffectSlotKind"
+        },
+        "slotId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slotId",
+        "kind",
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "AudioEffectSlotKind": {
+      "oneOf": [
+        {
+          "properties": {
+            "externalRef": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "unsupported",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AudioFade": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        }
+      },
+      "required": [
+        "duration"
+      ],
+      "type": "object"
+    },
+    "AudioPanBalance": {
+      "format": "int32",
+      "maximum": 1000,
+      "minimum": -1000,
+      "type": "integer"
+    },
     "CancelExportCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 5 export cancellation command.",
@@ -504,6 +568,7 @@
         "importSubtitleSrt",
         "addAudioSegment",
         "setSegmentVolume",
+        "updateSegmentAudio",
         "setTrackMute",
         "updateDraftCanvasConfig",
         "updateSegmentVisual",
@@ -1187,6 +1252,83 @@
             "selection",
             "segmentId",
             "volume"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 15 segment audio semantic update command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "effectSlots": {
+              "items": {
+                "$ref": "#/$defs/AudioEffectSlot"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "fadeInDuration": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AudioFade"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fadeOutDuration": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AudioFade"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gainMillis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "updateSegmentAudio",
+              "type": "string"
+            },
+            "panBalanceMillis": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AudioPanBalance"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "segmentId": {
+              "$ref": "#/$defs/SegmentId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "segmentId"
           ],
           "type": "object"
         },
@@ -4238,6 +4380,20 @@
     "Segment": {
       "additionalProperties": false,
       "properties": {
+        "audio": {
+          "$ref": "#/$defs/SegmentAudio",
+          "default": {
+            "effectSlots": [],
+            "fadeInDuration": {
+              "duration": 0
+            },
+            "fadeOutDuration": {
+              "duration": 0
+            },
+            "gainMillis": 1000,
+            "panBalanceMillis": 0
+          }
+        },
         "filters": {
           "items": {
             "$ref": "#/$defs/Filter"
@@ -4362,6 +4518,39 @@
       "required": [
         "xMillis",
         "yMillis"
+      ],
+      "type": "object"
+    },
+    "SegmentAudio": {
+      "additionalProperties": false,
+      "properties": {
+        "effectSlots": {
+          "items": {
+            "$ref": "#/$defs/AudioEffectSlot"
+          },
+          "type": "array"
+        },
+        "fadeInDuration": {
+          "$ref": "#/$defs/AudioFade"
+        },
+        "fadeOutDuration": {
+          "$ref": "#/$defs/AudioFade"
+        },
+        "gainMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "panBalanceMillis": {
+          "$ref": "#/$defs/AudioPanBalance"
+        }
+      },
+      "required": [
+        "gainMillis",
+        "panBalanceMillis",
+        "fadeInDuration",
+        "fadeOutDuration",
+        "effectSlots"
       ],
       "type": "object"
     },
@@ -25502,6 +25691,79 @@
       "title": "UpdateDraftCanvasConfigCommandPayload",
       "type": "object"
     },
+    "UpdateSegmentAudioCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 15 segment audio semantic update command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "effectSlots": {
+          "items": {
+            "$ref": "#/$defs/AudioEffectSlot"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "fadeInDuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioFade"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fadeOutDuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioFade"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gainMillis": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "panBalanceMillis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioPanBalance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "segmentId"
+      ],
+      "title": "UpdateSegmentAudioCommandPayload",
+      "type": "object"
+    },
     "UpdateSegmentVisualCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 8 segment visual update command.",
@@ -25869,6 +26131,23 @@
           "properties": {
             "kind": {
               "const": "setSegmentVolume"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "updateSegmentAudio"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "updateSegmentAudio"
             }
           },
           "required": [
