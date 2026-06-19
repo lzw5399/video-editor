@@ -118,6 +118,16 @@ impl AudioPreviewRuntime {
         Ok(session.clock.generation())
     }
 
+    pub fn stop(
+        &mut self,
+        session_id: AudioPreviewSessionId,
+    ) -> Result<PlaybackGeneration, AudioPreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.clock.stop();
+        session.sync_generation();
+        Ok(session.clock.generation())
+    }
+
     pub fn resume(
         &mut self,
         session_id: AudioPreviewSessionId,

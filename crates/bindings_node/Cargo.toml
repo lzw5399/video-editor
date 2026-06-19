@@ -12,6 +12,8 @@ path = "src/lib.rs"
 
 [dependencies]
 artifact_store = { path = "../artifact_store" }
+audio_engine = { path = "../audio_engine" }
+audio_output_desktop = { path = "../audio_output_desktop" }
 draft_commands = { path = "../draft_commands" }
 draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }

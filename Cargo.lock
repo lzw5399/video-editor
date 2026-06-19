@@ -128,6 +128,8 @@ name = "bindings_node"
 version = "0.1.0"
 dependencies = [
  "artifact_store",
+ "audio_engine",
+ "audio_output_desktop",
  "draft_commands",
  "draft_model",
  "engine_core",

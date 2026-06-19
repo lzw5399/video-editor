@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use crate::artifact_store_service::handle_artifact_store_command;
+use crate::audio_service::{handle_audio_service_command, AudioPreviewBindingRegistry};
 use crate::material_service::{
     import_material_and_save, list_materials, list_missing_materials, ImportMaterialRequest,
     MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
@@ -40,6 +41,7 @@ use crate::realtime_preview_service::{
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
 pub mod artifact_store_service;
+pub mod audio_service;
 pub mod material_service;
 pub mod preview_export_service;
 pub mod realtime_preview_service;
@@ -95,6 +97,17 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
+                | "createAudioPreviewSession"
+                | "playAudioPreview"
+                | "pauseAudioPreview"
+                | "stopAudioPreview"
+                | "seekAudioPreview"
+                | "cancelAudioPreview"
+                | "getAudioPreviewStatus"
+                | "listAudioOutputDevices"
+                | "selectAudioOutputDevice"
+                | "getWaveformDisplayPeaks"
+                | "refreshWaveformStatus"
                 | "getArtifactStatus"
                 | "refreshArtifactStatus"
                 | "retryArtifactGeneration"
@@ -176,6 +189,19 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             }
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
+        CommandName::CreateAudioPreviewSession
+        | CommandName::PlayAudioPreview
+        | CommandName::PauseAudioPreview
+        | CommandName::StopAudioPreview
+        | CommandName::SeekAudioPreview
+        | CommandName::CancelAudioPreview
+        | CommandName::GetAudioPreviewStatus
+        | CommandName::ListAudioOutputDevices
+        | CommandName::SelectAudioOutputDevice
+        | CommandName::GetWaveformDisplayPeaks
+        | CommandName::RefreshWaveformStatus => {
+            audio_service_command(envelope.command, envelope.payload)
+        }
         CommandName::GetArtifactStatus
         | CommandName::RefreshArtifactStatus
         | CommandName::RetryArtifactGeneration
@@ -500,6 +526,15 @@ fn invalidate_preview_cache_binding_command(
     to_js_value(ok_envelope(invalidate_preview_cache_command(payload)))
 }
 
+fn audio_service_command(
+    command: CommandName,
+    payload: CommandPayload,
+) -> Result<serde_json::Value> {
+    to_js_value(with_audio_preview_registry(|registry| {
+        handle_audio_service_command(registry, command, payload)
+    })?)
+}
+
 fn preview_service_config_from_preview_payload(
     cache_root: Option<&str>,
     bundle_path: Option<&str>,
@@ -736,6 +771,20 @@ fn to_js_value<T: serde::Serialize>(value: CommandResultEnvelope<T>) -> Result<s
 fn global_realtime_preview_registry() -> &'static Mutex<RealtimePreviewBindingRegistry> {
     static REGISTRY: OnceLock<Mutex<RealtimePreviewBindingRegistry>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(RealtimePreviewBindingRegistry::new()))
+}
+
+fn global_audio_preview_registry() -> &'static Mutex<AudioPreviewBindingRegistry> {
+    static REGISTRY: OnceLock<Mutex<AudioPreviewBindingRegistry>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(AudioPreviewBindingRegistry::new()))
+}
+
+fn with_audio_preview_registry<T>(
+    action: impl FnOnce(&mut AudioPreviewBindingRegistry) -> T,
+) -> Result<T> {
+    let mut registry = global_audio_preview_registry()
+        .lock()
+        .map_err(|_| napi::Error::from_reason("audio preview registry lock poisoned"))?;
+    Ok(action(&mut registry))
 }
 
 fn with_realtime_preview_registry<T: serde::Serialize>(
