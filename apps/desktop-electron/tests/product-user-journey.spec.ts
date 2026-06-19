@@ -14,7 +14,9 @@ import {
 test.describe.configure({ timeout: 90_000 });
 
 test("product playback rejects native video bridge as render-graph GPU compositor evidence", async () => {
-  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO], {
+    VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR: "1"
+  });
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
@@ -106,12 +108,48 @@ test("product playback rejects native video bridge as render-graph GPU composito
   }
 });
 
-test.skip(
-  "product user can import a repo video, add it to the timeline, and see render-graph GPU playback frames advance",
-  async () => {
-    test.info().annotations.push({
-      type: "phase",
-      description: "Re-enabled by Phase 15.2-04 when desktop render-graph GPU presentation is connected"
-    });
+test("product user can import a repo video, add it to the timeline, and see render-graph GPU playback frames advance", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+
+    const before = await capturePreviewEvidence(page);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    const playButton = controls.getByRole("button", { name: "播放预览" });
+    await expect(playButton).toBeEnabled({ timeout: 20_000 });
+    await playButton.click();
+    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
+
+    const after = await waitForCompositedPreviewEvidence(page, 12_000);
+    const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const hostCallKinds = (await readRealtimePreviewHostCalls(app)).map((call) => call.kind);
+
+    expect(after.hostState?.ok).toBe(true);
+    expect(after.hostState?.productReady).toBe(true);
+    expect(after.hostState?.fallbackActive).toBe(false);
+    expect(after.hostState?.backend).toBe("renderGraphGpu");
+    expect(after.hostState?.diagnosticSource).toBe("none");
+    expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+    expect(after.hostState?.contentEvidence?.digest).not.toBe(before.hostState?.contentEvidence?.digest ?? null);
+    expect(after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
+      before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
+    );
+    expect(after.hostState?.telemetry?.presentedFrameCount ?? 0).toBeGreaterThan(
+      before.hostState?.telemetry?.presentedFrameCount ?? 0
+    );
+    expect(after.timecodeUs).toBeGreaterThan(before.timecodeUs);
+    expect(
+      frameRequestsAfterPlay,
+      "product playback must not drive a requestPreviewFrame PNG/artifact loop"
+    ).toBe(frameRequestsBeforePlay);
+    expect(after.hostState?.frameDisplay).toBeNull();
+    await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
+    expect(hostCallKinds).toEqual(expect.arrayContaining(["updateDraftSnapshot", "seek", "play"]));
+    expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
+  } finally {
+    await app.close();
   }
-);
+});
