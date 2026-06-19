@@ -152,7 +152,17 @@ test("product user can import a repo video, add it to the timeline, and see rend
     ).toBe(frameRequestsBeforePlay);
     expect(after.hostState?.frameDisplay).toBeNull();
     await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
-    expect(hostCallKinds).toEqual(expect.arrayContaining(["updateDraftSnapshot", "seek", "play"]));
+    expect(hostCallKinds).toEqual(
+      expect.arrayContaining([
+        "updateDraftSnapshot",
+        "seek",
+        "schedulerDecodeCurrentFrame",
+        "schedulerBuildRenderGraph",
+        "schedulerPresentSurface",
+        "schedulerCompositedEvidence",
+        "play"
+      ])
+    );
     expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
   } finally {
     await app.close();

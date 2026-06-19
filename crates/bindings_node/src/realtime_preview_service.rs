@@ -708,7 +708,11 @@ mod realtime_preview_bindings {
         RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
         RealtimePreviewSurfaceBindingKind,
     };
-    use draft_model::{AudioPreviewPlaybackStatus, Microseconds};
+    use crate::native_preview_presenter::NativePreviewContentEvidenceSource;
+    use draft_model::{
+        AudioPreviewPlaybackStatus, Draft, Material, MaterialKind, MaterialMetadata, Microseconds,
+        RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    };
     use realtime_preview_runtime::{
         PlaybackGeneration, PreviewRequestMode, RealtimePreviewAudioSyncState,
         RealtimePreviewFallbackReason,
@@ -876,6 +880,60 @@ mod realtime_preview_bindings {
     }
 
     #[test]
+    fn scheduler_playback_presents_render_graph_gpu_evidence_after_draft_and_surface_ready() {
+        let (mut registry, session_id) = registry_with_session();
+        registry
+            .attach_surface(
+                &session_id,
+                RealtimePreviewSurfaceBindingDescriptor {
+                    kind: RealtimePreviewSurfaceBindingKind::Mock,
+                    parent_handle: Some(42),
+                    parent_handle_hex: None,
+                    x: 0,
+                    y: 0,
+                    width: 640,
+                    height: 360,
+                    scale_factor_millis: 1000,
+                },
+            )
+            .expect("scheduler can validate attached compositor surface");
+        registry
+            .update_draft_snapshot(&session_id, scheduler_video_draft(), None)
+            .expect("scheduler stores accepted draft snapshot");
+        registry
+            .seek(&session_id, 500_000)
+            .expect("scheduler clock seeks to timeline time");
+
+        let play = registry
+            .play(&session_id)
+            .expect("scheduler play decodes, builds render graph, and presents");
+        let presentation = registry
+            .presentation_state(&session_id)
+            .expect("scheduler presentation evidence is queryable");
+        let telemetry = registry
+            .telemetry(&session_id)
+            .expect("scheduler presentation updates telemetry");
+
+        assert!(
+            play.playback_generation > 0,
+            "scheduler play returns an advanced playback generation"
+        );
+        assert!(presentation.available);
+        assert_eq!(presentation.backend, super::NativePreviewPresentationBackend::RenderGraphGpu);
+        let evidence = presentation
+            .evidence
+            .as_ref()
+            .expect("presented compositor evidence is required");
+        assert_eq!(
+            evidence.source,
+            NativePreviewContentEvidenceSource::RenderGraphGpuComposited
+        );
+        assert!(evidence.target_time_microseconds >= 500_000);
+        assert!(telemetry.presented_frame_count > 0);
+        assert!(telemetry.target_time_microseconds >= 500_000);
+    }
+
+    #[test]
     fn realtime_frame_request_carries_audio_preview_sync_state() {
         let (mut registry, session_id) = registry_with_session();
         let generation = registry
@@ -994,5 +1052,38 @@ mod realtime_preview_bindings {
         assert!(telemetry_json.get("commandEncoder").is_none());
         assert!(telemetry_json.get("nativeChildHandle").is_none());
         assert!(telemetry_json.get("cacheKey").is_none());
+    }
+
+    fn scheduler_video_draft() -> Draft {
+        let mut draft = Draft::new("draft-scheduler-001", "Scheduler playback");
+        let mut material = Material::new(
+            "material-video-001",
+            MaterialKind::Video,
+            "file:///repo-owned-fixture/p0-moving-testsrc.mp4",
+            "p0-moving-testsrc.mp4",
+        );
+        material.metadata = MaterialMetadata {
+            duration: Some(Microseconds::new(2_000_000)),
+            width: Some(640),
+            height: Some(360),
+            frame_rate: Some(RationalFrameRate::new(30, 1)),
+            has_video: true,
+            has_audio: false,
+            audio_sample_rate: None,
+            audio_channels: None,
+            probe_error: None,
+        };
+        draft.materials.push(material);
+
+        let segment = Segment::new(
+            "segment-video-001",
+            "material-video-001",
+            SourceTimerange::new(0, 2_000_000),
+            TargetTimerange::new(0, 2_000_000),
+        );
+        let mut track = Track::new("track-video-001", TrackKind::Video, "视频");
+        track.segments.push(segment);
+        draft.tracks.push(track);
+        draft
     }
 }
