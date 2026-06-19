@@ -68,6 +68,7 @@ pub enum RealtimePreviewDiagnosticDomain {
     VisualLayer,
     Transform,
     Text,
+    Audio,
     Keyframe,
     Effect,
     Surface,

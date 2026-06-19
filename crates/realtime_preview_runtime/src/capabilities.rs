@@ -1,5 +1,8 @@
 use draft_model::{KeyframeProperty, MaterialKind, SegmentBlendMode, SegmentFitMode, SegmentMask};
-use render_graph::{RenderGraph, RenderIntentSupport, RenderVideoLayer};
+use render_graph::{
+    RenderAudioEffectSlotSupport, RenderAudioMixClassification, RenderGraph, RenderIntentSupport,
+    RenderVideoLayer,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::gpu::text::text_preview_diagnostic;
@@ -61,6 +64,7 @@ impl RealtimePreviewCapabilityClassifier {
         classify_material_frames(graph, &mut diagnostics);
         classify_visual_layers(graph, &mut diagnostics);
         classify_text(self, graph, &mut diagnostics);
+        classify_audio(graph, &mut diagnostics);
 
         RealtimePreviewCapabilityReport {
             support: summarize_support(&diagnostics),
@@ -161,7 +165,30 @@ fn classify_material_frames(graph: &RenderGraph, diagnostics: &mut Vec<RealtimeP
                     ));
                 }
             }
-            MaterialKind::Text | MaterialKind::Audio | MaterialKind::Sticker => {}
+            MaterialKind::Audio => {
+                if material.has_audio {
+                    diagnostics.push(RealtimePreviewDiagnostic::new(
+                        Some(material.material_id.as_str().to_owned()),
+                        RealtimePreviewDiagnosticDomain::Audio,
+                        RealtimePreviewSupport::Supported,
+                        "audio material is available for realtime preview mix",
+                        None,
+                        false,
+                    ));
+                } else {
+                    diagnostics.push(RealtimePreviewDiagnostic::new(
+                        Some(material.material_id.as_str().to_owned()),
+                        RealtimePreviewDiagnosticDomain::Audio,
+                        RealtimePreviewSupport::Unsupported {
+                            reason: "audio material does not expose an audio stream for realtime preview".to_owned(),
+                        },
+                        "audio material does not expose an audio stream for realtime preview",
+                        None,
+                        true,
+                    ));
+                }
+            }
+            MaterialKind::Text | MaterialKind::Sticker => {}
         }
     }
 }
@@ -329,6 +356,54 @@ fn classify_text(
 ) {
     for text in &graph.text_overlays {
         diagnostics.push(text_preview_diagnostic(text, classifier.gpu_text_parity));
+    }
+}
+
+fn classify_audio(graph: &RenderGraph, diagnostics: &mut Vec<RealtimePreviewDiagnostic>) {
+    for mix in &graph.audio_mixes {
+        let unsupported_effect = mix
+            .effect_slots
+            .iter()
+            .find(|slot| slot.enabled && slot.support == RenderAudioEffectSlotSupport::Unsupported);
+        if let Some(effect) = unsupported_effect {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(mix.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Audio,
+                RealtimePreviewSupport::Unsupported {
+                    reason: format!(
+                        "audio effect {} is unsupported in realtime preview",
+                        effect.name
+                    ),
+                },
+                format!(
+                    "audio effect {} is unsupported in realtime preview",
+                    effect.name
+                ),
+                None,
+                true,
+            ));
+            continue;
+        }
+
+        let reason = match mix.classification {
+            RenderAudioMixClassification::Audible => {
+                "audio mix is available for realtime preview playback"
+            }
+            RenderAudioMixClassification::SilentMutedTrack => {
+                "audio mix is intentionally silent because the track is muted"
+            }
+            RenderAudioMixClassification::SilentZeroGain => {
+                "audio mix is intentionally silent because gain is zero"
+            }
+        };
+        diagnostics.push(RealtimePreviewDiagnostic::new(
+            Some(mix.segment_id.as_str().to_owned()),
+            RealtimePreviewDiagnosticDomain::Audio,
+            RealtimePreviewSupport::Supported,
+            reason,
+            None,
+            false,
+        ));
     }
 }
 

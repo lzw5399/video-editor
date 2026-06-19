@@ -51,6 +51,7 @@ fn parity_domain(domain: RealtimePreviewDiagnosticDomain) -> bool {
             | RealtimePreviewDiagnosticDomain::VisualLayer
             | RealtimePreviewDiagnosticDomain::Transform
             | RealtimePreviewDiagnosticDomain::Text
+            | RealtimePreviewDiagnosticDomain::Audio
             | RealtimePreviewDiagnosticDomain::Keyframe
             | RealtimePreviewDiagnosticDomain::Effect
     )
@@ -85,6 +86,20 @@ fn export_support_for(
                     .iter()
                     .any(|diagnostic| diagnostic.support == "unsupported")
                 {
+                    RenderIntentSupport::Unsupported
+                } else {
+                    RenderIntentSupport::Supported
+                }
+            }),
+        RealtimePreviewDiagnosticDomain::Audio => entity_id
+            .and_then(|entity_id| {
+                graph
+                    .audio_mixes
+                    .iter()
+                    .find(|mix| mix.segment_id.as_str() == entity_id)
+            })
+            .map(|mix| {
+                if mix.effect_slots.iter().any(|slot| slot.enabled) {
                     RenderIntentSupport::Unsupported
                 } else {
                     RenderIntentSupport::Supported
@@ -153,6 +168,7 @@ fn parity_reason(domain: RealtimePreviewDiagnosticDomain) -> String {
         RealtimePreviewDiagnosticDomain::VisualLayer => "visual layer",
         RealtimePreviewDiagnosticDomain::Transform => "transform",
         RealtimePreviewDiagnosticDomain::Text => "text",
+        RealtimePreviewDiagnosticDomain::Audio => "audio",
         RealtimePreviewDiagnosticDomain::Keyframe => "keyframe",
         RealtimePreviewDiagnosticDomain::Effect => "effect",
         RealtimePreviewDiagnosticDomain::Surface => "surface",
