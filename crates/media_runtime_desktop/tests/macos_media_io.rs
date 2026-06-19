@@ -224,10 +224,9 @@ fn macos_texture_decode_returns_metal_texture_when_preview_device_is_compatible(
     let fixture = H264Fixture::generate(&executor, &runtime);
     let preview_device = macos_system_metal_device_id()
         .expect("test host should expose the system Metal device when native media is enabled");
-    let reader = MacosMediaReader::new()
-        .with_texture_interop_policy(MacosTextureInteropPolicy::for_preview_device(
-            preview_device.clone(),
-        ));
+    let reader = MacosMediaReader::new().with_texture_interop_policy(
+        MacosTextureInteropPolicy::for_preview_device(preview_device.clone()),
+    );
     let session = reader
         .open_session(MediaOpenRequest {
             material_uri: fixture.path.clone(),

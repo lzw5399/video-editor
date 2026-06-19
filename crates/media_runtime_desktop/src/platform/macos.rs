@@ -11,11 +11,12 @@ use media_runtime::{
     MediaIoErrorKind, MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection,
     MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
     RationalFrameRate, RuntimeCapabilityStatus, RuntimeDeviceId, RuntimeFeatureCapability,
-    SelectedDecodePath, StreamId, TextureBackend, VideoColorMetadata, VideoDecodeRequest,
-    VideoDecoder, VideoPixelFormat,
+    SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
+    VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
 };
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_TEXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 const DEFAULT_MAX_OUTSTANDING_LEASES: usize = 8;
 
@@ -202,6 +203,7 @@ impl MacosMediaSession {
         }
 
         Ok(MacosVideoDecoder {
+            session_id: self.session_id.clone(),
             material_uri: self.material_uri.clone(),
             stream: stream.clone(),
             frame_state: Rc::clone(&self.frame_state),
@@ -260,6 +262,7 @@ impl MediaSession for MacosMediaSession {
 
 #[derive(Debug)]
 pub struct MacosVideoDecoder {
+    session_id: MediaSessionId,
     material_uri: PathBuf,
     stream: MediaStreamInfo,
     frame_state: Rc<RefCell<MacosFrameState>>,
@@ -344,12 +347,26 @@ impl MacosFrameState {
 #[derive(Debug)]
 struct MacosNativeLease {
     _sample_buffer: objc2::rc::Retained<objc2_core_media::CMSampleBuffer>,
-    _metal_texture: Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>>,
+    _metal_texture_cache:
+        Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>>,
+    _metal_luma_texture:
+        Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>>,
+    _metal_chroma_texture:
+        Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>>,
 }
 
 #[cfg(not(target_os = "macos"))]
 #[derive(Debug)]
 struct MacosNativeLease;
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct MacosTextureInterop {
+    handle: TextureHandle,
+    cache: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>,
+    luma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
+    chroma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
+}
 
 #[cfg(target_os = "macos")]
 fn platform_macos_capabilities() -> MacosMediaIoCapabilities {
@@ -546,17 +563,38 @@ fn platform_decode_frame(
         ));
     }
 
-    let native_device = if decoder.texture_policy.enabled {
-        system_metal_device_id()
-    } else {
-        None
-    };
+    let color = decoder.stream.color.clone().unwrap_or_else(|| {
+        VideoColorMetadata::unknown_with_diagnostic(
+            "AVFoundation/CoreVideo did not expose complete color attachments for this frame",
+        )
+    });
+    let native_device = decoder
+        .texture_policy
+        .enabled
+        .then(system_metal_device_id)
+        .flatten();
     let devices = decoder
         .texture_policy
         .preview_device
         .as_ref()
         .zip(native_device.as_ref());
-    let texture_cache_available = false;
+    let texture_interop = if let Some((preview_device, native_device)) = devices {
+        if preview_device == native_device {
+            Some(create_metal_textures(
+                pixel_buffer,
+                dimensions,
+                native_device.clone(),
+                decoder.session_id.clone(),
+                request.playback_generation.unwrap_or_default(),
+                color.clone(),
+            )?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let texture_cache_available = texture_interop.is_some();
     let fallback_selection =
         select_macos_texture_interop_fallback(true, devices, texture_cache_available)
             .ok_or_else(|| platform_decode_error("macOS fallback ladder had no available path"))?;
@@ -574,17 +612,24 @@ fn platform_decode_frame(
         .stream
         .frame_rate
         .and_then(|rate| frame_index_at(source_time_us, rate));
-    let color = decoder.stream.color.clone().unwrap_or_else(|| {
-        VideoColorMetadata::unknown_with_diagnostic(
-            "AVFoundation/CoreVideo did not expose complete color attachments for this frame",
-        )
-    });
-    let storage = FrameStorageRequest::PlatformOpaque {
-        label: format!("CoreVideoPixelBuffer({cv_pixel_format:#x})"),
+    let storage = if let Some(texture_interop) = &texture_interop {
+        FrameStorageRequest::Texture(texture_interop.handle.clone())
+    } else {
+        FrameStorageRequest::PlatformOpaque {
+            label: format!("CoreVideoPixelBuffer({cv_pixel_format:#x})"),
+        }
     };
     let native_lease = MacosNativeLease {
         _sample_buffer: sample_buffer,
-        _metal_texture: None,
+        _metal_texture_cache: texture_interop
+            .as_ref()
+            .map(|texture_interop| texture_interop.cache.clone()),
+        _metal_luma_texture: texture_interop
+            .as_ref()
+            .map(|texture_interop| texture_interop.luma_texture.clone()),
+        _metal_chroma_texture: texture_interop
+            .as_ref()
+            .map(|texture_interop| texture_interop.chroma_texture.clone()),
     };
 
     decoder
@@ -678,9 +723,170 @@ fn output_settings_nv12() -> objc2::rc::Retained<
     use objc2_core_video::kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
     use objc2_foundation::{NSDictionary, NSNumber, NSString};
 
-    let key = NSString::from_str("PixelFormatType");
-    let value = NSNumber::numberWithUnsignedInt(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange);
-    NSDictionary::from_slices(&[&*key], &[&*value])
+    let pixel_format_key = NSString::from_str("PixelFormatType");
+    let pixel_format_value =
+        NSNumber::numberWithUnsignedInt(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange);
+    let metal_compatibility_key = NSString::from_str("MetalCompatibility");
+    let metal_compatibility_value = NSNumber::numberWithBool(true);
+    NSDictionary::from_slices(
+        &[&*pixel_format_key, &*metal_compatibility_key],
+        &[&*pixel_format_value, &*metal_compatibility_value],
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn create_metal_textures(
+    pixel_buffer: &objc2_core_video::CVPixelBuffer,
+    dimensions: FrameDimensions,
+    native_device: RuntimeDeviceId,
+    owner_session: MediaSessionId,
+    generation: u64,
+    color: VideoColorMetadata,
+) -> Result<MacosTextureInterop, DecodeError> {
+    use core::ptr::NonNull;
+    use objc2_core_foundation::CFRetained;
+    use objc2_core_video::{
+        CVMetalTextureCache, CVMetalTextureGetTexture, CVPixelBufferGetHeightOfPlane,
+        CVPixelBufferGetPlaneCount, CVPixelBufferGetWidthOfPlane, kCVReturnSuccess,
+    };
+    use objc2_metal::{MTLCreateSystemDefaultDevice, MTLPixelFormat};
+
+    let device = MTLCreateSystemDefaultDevice()
+        .ok_or_else(|| platform_decode_error("Metal default device is unavailable"))?;
+    if native_device
+        != system_metal_device_id().ok_or_else(|| {
+            platform_decode_error("Metal default device identity could not be confirmed")
+        })?
+    {
+        return Err(platform_decode_error(
+            "Metal default device changed before texture cache creation",
+        ));
+    }
+    let plane_count = CVPixelBufferGetPlaneCount(pixel_buffer);
+    if plane_count < 2 {
+        return Err(platform_decode_error(format!(
+            "NV12 Metal interop requires two planes, got {plane_count}"
+        )));
+    }
+
+    let mut raw_cache: *mut CVMetalTextureCache = core::ptr::null_mut();
+    let cache_result = unsafe {
+        CVMetalTextureCache::create(
+            None,
+            None,
+            &device,
+            None,
+            NonNull::new(&mut raw_cache).expect("CVMetalTextureCache out pointer is never null"),
+        )
+    };
+    if cache_result != kCVReturnSuccess {
+        return Err(platform_decode_error(format!(
+            "CVMetalTextureCacheCreate failed with status {cache_result}"
+        )));
+    }
+    let cache = unsafe {
+        CFRetained::from_raw(
+            NonNull::new(raw_cache)
+                .ok_or_else(|| platform_decode_error("CVMetalTextureCacheCreate returned null"))?,
+        )
+    };
+
+    let luma_texture = create_metal_plane_texture(
+        &cache,
+        pixel_buffer,
+        MTLPixelFormat::R8Unorm,
+        CVPixelBufferGetWidthOfPlane(pixel_buffer, 0),
+        CVPixelBufferGetHeightOfPlane(pixel_buffer, 0),
+        0,
+        "luma",
+    )?;
+    let chroma_texture = create_metal_plane_texture(
+        &cache,
+        pixel_buffer,
+        MTLPixelFormat::RG8Unorm,
+        CVPixelBufferGetWidthOfPlane(pixel_buffer, 1),
+        CVPixelBufferGetHeightOfPlane(pixel_buffer, 1),
+        1,
+        "chroma",
+    )?;
+    if CVMetalTextureGetTexture(&luma_texture).is_none() {
+        return Err(platform_decode_error(
+            "CVMetalTexture luma plane did not expose an MTLTexture",
+        ));
+    }
+    if CVMetalTextureGetTexture(&chroma_texture).is_none() {
+        return Err(platform_decode_error(
+            "CVMetalTexture chroma plane did not expose an MTLTexture",
+        ));
+    }
+
+    Ok(MacosTextureInterop {
+        handle: TextureHandle {
+            handle_id: TextureHandleId(format!(
+                "macos-metal-texture-{}",
+                NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed)
+            )),
+            owner_session,
+            generation,
+            backend: TextureBackend::MetalTexture,
+            device_id: native_device,
+            dimensions,
+            pixel_format: VideoPixelFormat::Nv12,
+            color,
+        },
+        cache,
+        luma_texture,
+        chroma_texture,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn create_metal_plane_texture(
+    cache: &objc2_core_video::CVMetalTextureCache,
+    pixel_buffer: &objc2_core_video::CVPixelBuffer,
+    pixel_format: objc2_metal::MTLPixelFormat,
+    width: usize,
+    height: usize,
+    plane_index: usize,
+    plane_name: &str,
+) -> Result<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>, DecodeError> {
+    use core::ptr::NonNull;
+    use objc2_core_foundation::CFRetained;
+    use objc2_core_video::{CVMetalTexture, CVMetalTextureCache, kCVReturnSuccess};
+
+    if width == 0 || height == 0 {
+        return Err(platform_decode_error(format!(
+            "CVPixelBuffer {plane_name} plane has invalid dimensions {width}x{height}"
+        )));
+    }
+
+    let mut raw_texture: *mut CVMetalTexture = core::ptr::null_mut();
+    let result = unsafe {
+        CVMetalTextureCache::create_texture_from_image(
+            None,
+            cache,
+            pixel_buffer,
+            None,
+            pixel_format,
+            width,
+            height,
+            plane_index,
+            NonNull::new(&mut raw_texture).expect("CVMetalTexture out pointer is never null"),
+        )
+    };
+    if result != kCVReturnSuccess {
+        return Err(platform_decode_error(format!(
+            "CVMetalTextureCacheCreateTextureFromImage failed for {plane_name} plane with status {result}"
+        )));
+    }
+
+    Ok(unsafe {
+        CFRetained::from_raw(NonNull::new(raw_texture).ok_or_else(|| {
+            platform_decode_error(format!(
+                "CVMetalTextureCacheCreateTextureFromImage returned null for {plane_name} plane"
+            ))
+        })?)
+    })
 }
 
 #[cfg(target_os = "macos")]
