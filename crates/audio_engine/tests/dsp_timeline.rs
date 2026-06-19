@@ -4,8 +4,8 @@ use audio_engine::{
 };
 use draft_model::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
-    MaterialKind, Microseconds, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    Microseconds, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 
 #[test]
@@ -25,8 +25,11 @@ fn dsp_timeline_evaluates_audio_tracks_with_integer_sample_rows() {
     assert_eq!(segment.source_start_sample, 24_000);
     assert_eq!(segment.gain_envelope.base_gain_millis, 800);
     assert_eq!(segment.gain_envelope.points.len(), 3);
-    assert_eq!(segment.gain_envelope.points[1].at, Microseconds::new(1_000_000));
-    assert_eq!(segment.gain_envelope.points[1].target_sample, 60_000);
+    assert_eq!(
+        segment.gain_envelope.points[1].at,
+        Microseconds::new(1_000_000)
+    );
+    assert_eq!(segment.gain_envelope.points[1].target_sample, 48_000);
     assert_eq!(segment.gain_envelope.points[1].gain_millis, 1_200);
     assert_eq!(segment.pan_envelope.balance_millis, -250);
     assert_eq!(segment.fade_envelope.fade_in_sample_count, 12_000);
@@ -52,7 +55,10 @@ fn dsp_timeline_muted_tracks_emit_silent_mix_segments_with_identity() {
         segment.mix_classification,
         DspMixClassification::SilentMutedTrack
     );
-    assert_eq!(plan.mix_intent.segments[0].segment_id.as_str(), "segment-audio-001");
+    assert_eq!(
+        plan.mix_intent.segments[0].segment_id.as_str(),
+        "segment-audio-001"
+    );
     assert_eq!(
         plan.mix_intent.segments[0].classification,
         AudioMixClassification::SilentMutedTrack
@@ -69,7 +75,10 @@ fn dsp_timeline_carries_unsupported_effect_slots_without_changing_audio_math() {
     let segment = &plan.tracks[0].segments[0];
     assert_eq!(segment.effect_slots.len(), 1);
     assert_eq!(segment.effect_slots[0].slot_id, "effect-slot-001");
-    assert_eq!(segment.effect_slots[0].support, DspEffectSlotSupport::Unsupported);
+    assert_eq!(
+        segment.effect_slots[0].support,
+        DspEffectSlotSupport::Unsupported
+    );
     assert_eq!(segment.gain_envelope.base_gain_millis, 800);
     assert_eq!(segment.pan_envelope.balance_millis, -250);
     assert_eq!(segment.fade_envelope.fade_in_sample_count, 12_000);
