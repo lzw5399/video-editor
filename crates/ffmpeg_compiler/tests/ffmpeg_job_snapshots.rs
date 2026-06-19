@@ -108,7 +108,10 @@ fn audio_filters_compile_gain_pan_fades_and_classify_unsupported_effect_slots() 
             .contains("pan=stereo|c0=1.000*c0|c1=0.500*c1")
     );
     assert!(job.filter_script.contains("afade=t=in:st=0:d=0.100000"));
-    assert!(job.filter_script.contains("afade=t=out:st=0:d=0.200000"));
+    assert!(
+        job.filter_script
+            .contains("afade=t=out:st=0.000000:d=0.200000")
+    );
     assert_eq!(job.filter_script_diagnostics.len(), 1);
     assert_eq!(
         job.filter_script_diagnostics[0].reason,

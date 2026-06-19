@@ -10,15 +10,16 @@ pub mod incremental;
 pub mod profile;
 
 pub use fingerprint::{
-    deterministic_fingerprint, RenderGraphNodeFingerprint, RenderGraphSnapshot,
-    GRAPH_GENERATOR_VERSION, GRAPH_SCHEMA_VERSION,
+    GRAPH_GENERATOR_VERSION, GRAPH_SCHEMA_VERSION, RenderGraphNodeFingerprint, RenderGraphSnapshot,
+    deterministic_fingerprint,
 };
 pub use graph::{
-    build_render_graph, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
-    RenderCanvasBackgroundMode, RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph,
-    RenderGraphError, RenderGraphErrorKind, RenderIntentSupport, RenderMaterial,
-    RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer,
-    RenderVisualDiagnostic,
+    RenderAudioEffectSlot, RenderAudioEffectSlotSupport, RenderAudioMix,
+    RenderAudioMixClassification, RenderAudioMixDiagnostic, RenderAudioVolumeKeyframe,
+    RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode, RenderCanvasDiagnostic,
+    RenderFilterIntent, RenderGraph, RenderGraphError, RenderGraphErrorKind, RenderIntentSupport,
+    RenderMaterial, RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent,
+    RenderVideoLayer, RenderVisualDiagnostic, build_render_graph,
 };
 pub use incremental::{
     RenderGraphDiff, RenderGraphNodeChange, RenderGraphNodeId, RenderGraphNodeRole,

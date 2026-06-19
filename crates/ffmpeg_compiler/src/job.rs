@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use draft_model::{MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId};
 use render_graph::{
-    ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderCanvasDiagnostic, RenderContainer,
-    RenderGraphPlan, RenderOutputProfile, RenderVideoCodec, RenderVisualDiagnostic,
+    ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderAudioMixDiagnostic,
+    RenderCanvasDiagnostic, RenderContainer, RenderGraphPlan, RenderOutputProfile,
+    RenderVideoCodec, RenderVisualDiagnostic,
 };
 use serde::{Deserialize, Serialize};
 
@@ -103,6 +104,8 @@ pub struct FfmpegJob {
     pub inputs: Vec<FfmpegInput>,
     pub sidecars: Vec<FfmpegSidecar>,
     pub filter_script: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filter_script_diagnostics: Vec<RenderAudioMixDiagnostic>,
     pub encode_settings: EncodeSettings,
     pub validation: OutputValidationExpectation,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -292,6 +295,7 @@ pub fn compile_ffmpeg_job(
         inputs,
         sidecars,
         filter_script: filter.contents,
+        filter_script_diagnostics: filter.diagnostics,
         encode_settings,
         validation,
         canvas_diagnostics: plan.graph.canvas.diagnostics.clone(),

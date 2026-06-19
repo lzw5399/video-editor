@@ -5,7 +5,8 @@ use draft_model::{
     SegmentVisual, SourceTimerange, TargetTimerange,
 };
 use render_graph::{
-    OutputDimensions, RenderCanvasBackgroundMode, RenderGraphPlan, RenderMaterial,
+    OutputDimensions, RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixDiagnostic,
+    RenderCanvasBackgroundMode, RenderGraphPlan, RenderIntentSupport, RenderMaterial,
     RenderOutputProfile, RenderVideoLayer,
 };
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,8 @@ pub struct GeneratedFilterScript {
     pub path: String,
     pub contents: String,
     pub has_audio_output: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<RenderAudioMixDiagnostic>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,6 +143,7 @@ pub fn generate_filter_script(
         plan.output_profile,
         RenderOutputProfile::PreviewFrame { .. }
     ) && !plan.graph.audio_mixes.is_empty();
+    let mut diagnostics = Vec::new();
     if has_audio_output {
         let mut audio_labels = Vec::new();
         for (audio_index, audio) in plan.graph.audio_mixes.iter().enumerate() {
@@ -154,12 +158,9 @@ pub fn generate_filter_script(
                 continue;
             };
             let label = format!("a{audio_index}");
-            lines.push(format!(
-                "[{input_index}:a]atrim=start={start}:duration={duration},asetpts=PTS-STARTPTS,volume={volume}[{label}]",
-                start = format_seconds(clip.start),
-                duration = format_seconds(clip.duration),
-                volume = volume_arg(audio.volume_level_millis)
-            ));
+            let filters = compile_audio_mix_filters(audio, &clip);
+            lines.push(format!("[{input_index}:a]{}[{label}]", filters.join(",")));
+            diagnostics.extend(audio_effect_slot_diagnostics(audio));
             audio_labels.push(label);
         }
         if audio_labels.len() == 1 {
@@ -180,7 +181,81 @@ pub fn generate_filter_script(
         path,
         contents: lines.join(";\n"),
         has_audio_output,
+        diagnostics,
     })
+}
+
+fn compile_audio_mix_filters(audio: &RenderAudioMix, clip: &SourceTimerange) -> Vec<String> {
+    let mut filters = vec![format!(
+        "atrim=start={start}:duration={duration}",
+        start = format_seconds(clip.start),
+        duration = format_seconds(clip.duration)
+    )];
+    filters.push("asetpts=PTS-STARTPTS".to_owned());
+    filters.push(format!("volume={}", volume_arg(audio.gain_millis)));
+    if audio.pan_balance_millis != 0 {
+        filters.push(pan_filter(audio.pan_balance_millis));
+    }
+    if audio.fade_in_duration.get() > 0 {
+        filters.push(format!(
+            "afade=t=in:st=0:d={}",
+            format_seconds(audio.fade_in_duration)
+        ));
+    }
+    if audio.fade_out_duration.get() > 0 {
+        let fade_start = clip
+            .duration
+            .get()
+            .saturating_sub(audio.fade_out_duration.get());
+        filters.push(format!(
+            "afade=t=out:st={}:d={}",
+            format_seconds(Microseconds::new(fade_start)),
+            format_seconds(audio.fade_out_duration)
+        ));
+    }
+    filters
+}
+
+fn pan_filter(balance_millis: i32) -> String {
+    let clamped = balance_millis.clamp(-1_000, 1_000);
+    let left = if clamped > 0 {
+        1_000_i32.saturating_sub(clamped)
+    } else {
+        1_000
+    };
+    let right = if clamped < 0 {
+        1_000_i32.saturating_add(clamped)
+    } else {
+        1_000
+    };
+    format!(
+        "pan=stereo|c0={}.{}*c0|c1={}.{}*c1",
+        left / 1_000,
+        format!("{:03}", left.rem_euclid(1_000)),
+        right / 1_000,
+        format!("{:03}", right.rem_euclid(1_000))
+    )
+}
+
+fn audio_effect_slot_diagnostics(audio: &RenderAudioMix) -> Vec<RenderAudioMixDiagnostic> {
+    audio
+        .effect_slots
+        .iter()
+        .filter(|slot| slot.enabled)
+        .map(|slot| match slot.support {
+            RenderAudioEffectSlotSupport::Unsupported => RenderAudioMixDiagnostic {
+                track_id: audio.track_id.clone(),
+                segment_id: audio.segment_id.clone(),
+                material_id: audio.material_id.clone(),
+                property: format!("audioEffectSlot.{}", slot.slot_id),
+                support: RenderIntentSupport::Unsupported,
+                reason: format!(
+                    "unsupported audio effect slot {} is preserved for diagnostics",
+                    slot.name
+                ),
+            },
+        })
+        .collect()
 }
 
 fn compile_visual_layer(

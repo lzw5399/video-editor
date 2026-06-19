@@ -256,6 +256,13 @@ fn audio_mix_fingerprint(
             target_timerange: &mix.target_timerange,
             keyframes: &mix.keyframes,
             volume_level_millis: mix.volume_level_millis,
+            gain_millis: mix.gain_millis,
+            pan_balance_millis: mix.pan_balance_millis,
+            fade_in_duration: mix.fade_in_duration,
+            fade_out_duration: mix.fade_out_duration,
+            volume_keyframes: &mix.volume_keyframes,
+            effect_slots: &mix.effect_slots,
+            classification: mix.classification,
             filters: &mix.filters,
         },
         &SegmentInputFacts {
@@ -522,6 +529,13 @@ struct AudioMixSemanticInput<'a> {
     target_timerange: &'a TargetTimerange,
     keyframes: &'a [draft_model::Keyframe],
     volume_level_millis: u32,
+    gain_millis: u32,
+    pan_balance_millis: i32,
+    fade_in_duration: draft_model::Microseconds,
+    fade_out_duration: draft_model::Microseconds,
+    volume_keyframes: &'a [crate::RenderAudioVolumeKeyframe],
+    effect_slots: &'a [crate::RenderAudioEffectSlot],
+    classification: crate::RenderAudioMixClassification,
     filters: &'a [RenderFilterIntent],
 }
 

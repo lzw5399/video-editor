@@ -3,9 +3,10 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    CanvasBackground, DraftId, Filter, Keyframe, KeyframeProperty, MaterialId, MaterialKind,
-    Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentId,
-    SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    AudioEffectSlotKind, CanvasBackground, DraftId, Filter, Keyframe, KeyframeProperty,
+    KeyframeValue, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask, SegmentVisual,
+    SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -140,7 +141,109 @@ pub struct RenderAudioMix {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keyframes: Vec<Keyframe>,
     pub volume_level_millis: u32,
+    #[serde(
+        default = "unity_gain_millis",
+        skip_serializing_if = "is_unity_gain_millis"
+    )]
+    pub gain_millis: u32,
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub pan_balance_millis: i32,
+    #[serde(
+        default = "zero_microseconds",
+        skip_serializing_if = "is_zero_microseconds"
+    )]
+    pub fade_in_duration: Microseconds,
+    #[serde(
+        default = "zero_microseconds",
+        skip_serializing_if = "is_zero_microseconds"
+    )]
+    pub fade_out_duration: Microseconds,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub volume_keyframes: Vec<RenderAudioVolumeKeyframe>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_slots: Vec<RenderAudioEffectSlot>,
+    #[serde(
+        default,
+        skip_serializing_if = "RenderAudioMixClassification::is_audible"
+    )]
+    pub classification: RenderAudioMixClassification,
     pub filters: Vec<RenderFilterIntent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderAudioVolumeKeyframe {
+    pub target_time: Microseconds,
+    pub target_sample: u64,
+    pub gain_millis: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderAudioEffectSlot {
+    pub slot_id: String,
+    pub enabled: bool,
+    pub support: RenderAudioEffectSlotSupport,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RenderAudioEffectSlotSupport {
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RenderAudioMixClassification {
+    Audible,
+    SilentMutedTrack,
+    SilentZeroGain,
+}
+
+impl RenderAudioMixClassification {
+    fn is_audible(&self) -> bool {
+        matches!(self, Self::Audible)
+    }
+}
+
+impl Default for RenderAudioMixClassification {
+    fn default() -> Self {
+        Self::Audible
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderAudioMixDiagnostic {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
+    pub material_id: MaterialId,
+    pub property: String,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+fn unity_gain_millis() -> u32 {
+    1_000
+}
+
+fn is_unity_gain_millis(value: &u32) -> bool {
+    *value == unity_gain_millis()
+}
+
+fn is_zero_i32(value: &i32) -> bool {
+    *value == 0
+}
+
+fn is_zero_microseconds(value: &Microseconds) -> bool {
+    value.get() == 0
+}
+
+fn zero_microseconds() -> Microseconds {
+    Microseconds::ZERO
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -618,6 +721,13 @@ fn render_audio_mix(
         target_timerange: segment.target_timerange.clone(),
         keyframes: segment.keyframes.clone(),
         volume_level_millis: segment.volume_level_millis,
+        gain_millis: segment.audio.gain_millis,
+        pan_balance_millis: segment.audio.pan_balance_millis.balance_millis,
+        fade_in_duration: segment.audio.fade_in_duration.duration,
+        fade_out_duration: segment.audio.fade_out_duration.duration,
+        volume_keyframes: volume_keyframes_for(segment, 0),
+        effect_slots: render_audio_effect_slots(segment),
+        classification: RenderAudioMixClassification::Audible,
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
     }
 }
@@ -901,6 +1011,50 @@ fn render_transition_intent(
         reason: "transition intent is preserved for compiler/runtime capability handling"
             .to_owned(),
     }
+}
+
+fn volume_keyframes_for(
+    segment: &NormalizedSegment,
+    target_sample_offset: u64,
+) -> Vec<RenderAudioVolumeKeyframe> {
+    segment
+        .keyframes
+        .iter()
+        .filter(|keyframe| keyframe.property == KeyframeProperty::Volume)
+        .filter_map(|keyframe| {
+            let KeyframeValue::Uint { value } = keyframe.value else {
+                return None;
+            };
+            segment
+                .target_timerange
+                .start
+                .get()
+                .checked_add(keyframe.at.get())
+                .map(Microseconds::new)
+                .map(|target_time| RenderAudioVolumeKeyframe {
+                    target_time,
+                    target_sample: target_sample_offset,
+                    gain_millis: value,
+                })
+        })
+        .collect()
+}
+
+fn render_audio_effect_slots(segment: &NormalizedSegment) -> Vec<RenderAudioEffectSlot> {
+    segment
+        .audio
+        .effect_slots
+        .iter()
+        .map(|slot| match &slot.kind {
+            AudioEffectSlotKind::Unsupported { name, external_ref } => RenderAudioEffectSlot {
+                slot_id: slot.slot_id.clone(),
+                enabled: slot.enabled,
+                support: RenderAudioEffectSlotSupport::Unsupported,
+                name: name.clone(),
+                external_ref: external_ref.clone(),
+            },
+        })
+        .collect()
 }
 
 fn render_sampled_animation_states(

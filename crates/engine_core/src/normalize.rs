@@ -4,7 +4,7 @@ use std::fmt;
 
 use draft_model::{
     CanvasBackground, Draft, DraftId, DraftValidationError, Filter, Keyframe, Material, MaterialId,
-    MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment,
+    MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentAudio,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask, SegmentVisual,
     SourceTimerange, TargetTimerange, TextSegment, TrackId, TrackKind, Transition, validate_draft,
 };
@@ -121,6 +121,7 @@ pub struct NormalizedSegment {
     pub filters: Vec<Filter>,
     pub transition: Option<Transition>,
     pub text: Option<TextSegment>,
+    pub audio: SegmentAudio,
     pub volume_level_millis: u32,
     pub visual: SegmentVisual,
 }
@@ -427,6 +428,7 @@ fn normalize_segment(
         filters: segment.filters.clone(),
         transition: segment.transition.clone(),
         text: segment.text.clone(),
+        audio: segment.audio.clone(),
         volume_level_millis: segment.volume.level_millis,
         visual: segment.visual.clone(),
     })
