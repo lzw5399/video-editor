@@ -888,7 +888,7 @@ function maybeBuildTestArtifactResponse(
   if (command.payload.kind === "getArtifactStatus" || command.payload.kind === "refreshArtifactStatus") {
     return {
       ok: true,
-        data: buildTestArtifactStatusSummary(command.payload.sessionId, "生成中"),
+      data: buildTestArtifactStatusSummary(command.payload.sessionId, "生成中"),
       error: null,
       events: []
     };
@@ -946,6 +946,61 @@ function buildTestArtifactStatusSummary(
   statusLabel: string,
   cancelledJobId: string | null = null
 ): ArtifactStatusSummary {
+  const includeOverflowTask = process.env.VIDEO_EDITOR_TEST_ARTIFACT_TASK_COUNT === "4";
+  const tasks: ArtifactStatusSummary["tasks"] = [
+    {
+      jobId: "artifact-job-waveform",
+      artifactKind: "waveform",
+      displayLabel: "城市街景.mp4",
+      status: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "cancelRequested" : "running",
+      statusLabel: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "正在取消" : "生成中",
+      progressPerMille: 420,
+      canRetry: false,
+      canResume: false,
+      canCancel: true,
+      errorCategory: null
+    },
+    {
+      jobId: "artifact-job-thumbnail",
+      artifactKind: "thumbnail",
+      displayLabel: "封面图.png",
+      status: "failed",
+      statusLabel: "生成失败",
+      progressPerMille: null,
+      canRetry: true,
+      canResume: false,
+      canCancel: false,
+      errorCategory: "missingSource"
+    },
+    {
+      jobId: "artifact-job-proxy",
+      artifactKind: "proxy",
+      displayLabel: "背景音乐.wav",
+      status: "resumable",
+      statusLabel: "可继续",
+      progressPerMille: 510,
+      canRetry: false,
+      canResume: true,
+      canCancel: false,
+      errorCategory: null
+    }
+  ];
+
+  if (includeOverflowTask) {
+    tasks.push({
+      jobId: "artifact-job-preview",
+      artifactKind: "preview",
+      displayLabel: "预览资源",
+      status: "waiting",
+      statusLabel: "等待生成",
+      progressPerMille: null,
+      canRetry: false,
+      canResume: false,
+      canCancel: false,
+      errorCategory: null
+    });
+  }
+
   return {
     sessionId,
     statusLabel,
@@ -1007,44 +1062,7 @@ function buildTestArtifactStatusSummary(
         errorCategory: "missingSource"
       }
     ],
-    tasks: [
-      {
-        jobId: "artifact-job-waveform",
-        artifactKind: "waveform",
-        displayLabel: "城市街景.mp4",
-        status: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "cancelRequested" : "running",
-        statusLabel: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "正在取消" : "生成中",
-        progressPerMille: 420,
-        canRetry: false,
-        canResume: false,
-        canCancel: true,
-        errorCategory: null
-      },
-      {
-        jobId: "artifact-job-thumbnail",
-        artifactKind: "thumbnail",
-        displayLabel: "封面图.png",
-        status: "failed",
-        statusLabel: "生成失败",
-        progressPerMille: null,
-        canRetry: true,
-        canResume: false,
-        canCancel: false,
-        errorCategory: "missingSource"
-      },
-      {
-        jobId: "artifact-job-proxy",
-        artifactKind: "proxy",
-        displayLabel: "背景音乐.wav",
-        status: "resumable",
-        statusLabel: "可继续",
-        progressPerMille: 510,
-        canRetry: false,
-        canResume: true,
-        canCancel: false,
-        errorCategory: null
-      }
-    ],
+    tasks,
     quota: buildTestArtifactQuotaStatus(),
     refreshAvailable: true
   };
