@@ -4,13 +4,12 @@ use std::rc::Rc;
 
 use draft_model::{MaterialId, Microseconds};
 use media_runtime::{
-    AudioDecoder, DecodeError, DecodedVideoFrame, FrameDimensions, FrameLeaseRequest, FramePool,
-    FramePoolLimits, FrameStorageRequest, MediaIoError, MediaIoFallbackCandidate,
-    MediaIoFallbackReason, MediaIoFallbackSelection, MediaOpenRequest, MediaReader, MediaSession,
-    MediaSessionId, MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId,
-    SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
+    select_media_io_fallback, AudioDecoder, DecodeError, DecodedVideoFrame, FrameDimensions,
+    FrameLeaseRequest, FramePool, FramePoolLimits, FrameStorageRequest, MediaIoError,
+    MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection, MediaOpenRequest,
+    MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind, RationalFrameRate,
+    RuntimeDeviceId, SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
     VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoFrameStorage, VideoPixelFormat,
-    select_media_io_fallback,
 };
 use realtime_preview_runtime::{
     MediaIoFrameProvider, PlaybackGeneration, PreviewDecodeDeviceContext, PreviewFrameInput,
@@ -150,7 +149,8 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
 }
 
 #[test]
-fn media_io_frame_provider_supplies_compatible_native_texture_input_for_imported_material() {
+fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_imported_material()
+{
     let material_id = MaterialId::new("texture-provider-material");
     let device = RuntimeDeviceId {
         backend: TextureBackend::D3d11Texture2D,
@@ -202,7 +202,7 @@ fn media_io_frame_provider_supplies_compatible_native_texture_input_for_imported
 }
 
 #[test]
-fn media_io_frame_provider_rejects_ffmpeg_fallback_as_product_compositor_input() {
+fn media_io_handoff_frame_provider_rejects_ffmpeg_fallback_as_product_compositor_input() {
     let material_id = MaterialId::new("ffmpeg-fallback-material");
     let reader = MockMediaReader::new(
         Rc::new(RefCell::new(Vec::new())),
@@ -234,13 +234,16 @@ fn media_io_frame_provider_rejects_ffmpeg_fallback_as_product_compositor_input()
         )
         .expect_err("FFmpeg fallback must fail closed for product compositor input");
 
-    assert!(matches!(error, PreviewFrameProviderError::Unavailable { .. }));
+    assert!(matches!(
+        error,
+        PreviewFrameProviderError::Unavailable { .. }
+    ));
     assert!(
         error.to_string().contains("fallback"),
         "error should explain fallback rejection: {error}"
     );
     assert_eq!(provider.telemetry().fallback_count, 1);
-    assert_eq!(provider.telemetry().presentable_frame_count, 1);
+    assert_eq!(provider.telemetry().presentable_frame_count, 0);
 }
 
 #[test]
@@ -472,6 +475,7 @@ impl MediaSession for MockMediaSession {
                     max_outstanding_leases: 8,
                 },
             ),
+            owner_session: self.session_id.clone(),
             recorded_requests: self.recorded_requests.clone(),
             storage: self.storage.clone(),
             _fallback_selection: self.fallback_selection.clone(),
@@ -486,6 +490,7 @@ impl MediaSession for MockMediaSession {
 #[derive(Debug)]
 struct MockVideoDecoder {
     pool: FramePool,
+    owner_session: MediaSessionId,
     recorded_requests: Rc<RefCell<Vec<VideoDecodeRequest>>>,
     storage: MockStorage,
     _fallback_selection: Option<MediaIoFallbackSelection>,
@@ -504,7 +509,7 @@ impl VideoDecoder for MockVideoDecoder {
             },
             MockStorage::Texture(device) => FrameStorageRequest::Texture(TextureHandle {
                 handle_id: TextureHandleId("texture-1".to_owned()),
-                owner_session: MediaSessionId("mock-session-/fixtures/texture.mp4".to_owned()),
+                owner_session: self.owner_session.clone(),
                 generation: request.playback_generation.unwrap_or_default(),
                 backend: device.backend,
                 device_id: device.clone(),

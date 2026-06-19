@@ -9,7 +9,12 @@ use media_runtime::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{PlaybackGeneration, RealtimePreviewFallbackReason, fallback_reason_from_media_io};
+use crate::{
+    fallback_reason_from_media_io, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
+    PreviewFrameProviderError, RealtimePreviewFallbackReason, TextureHandleDescriptor,
+};
+
+const PROVIDER_NAME: &str = "media-io-frame-provider";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,6 +138,8 @@ pub struct MediaIoFrameProvider {
     reader: Box<dyn MediaReader>,
     materials: BTreeMap<MaterialId, RegisteredMaterial>,
     telemetry: PreviewMediaIoTelemetry,
+    desired_storage: PreviewFrameStoragePreference,
+    device: PreviewDecodeDeviceContext,
 }
 
 impl MediaIoFrameProvider {
@@ -141,7 +148,29 @@ impl MediaIoFrameProvider {
             reader,
             materials: BTreeMap::new(),
             telemetry: PreviewMediaIoTelemetry::new(),
+            desired_storage: PreviewFrameStoragePreference::Texture,
+            device: PreviewDecodeDeviceContext::unproven(
+                "preview GPU device context has not been attached to media IO",
+            ),
         }
+    }
+
+    pub fn with_desired_storage(mut self, desired_storage: PreviewFrameStoragePreference) -> Self {
+        self.desired_storage = desired_storage;
+        self
+    }
+
+    pub fn with_preview_device_context(mut self, device: PreviewDecodeDeviceContext) -> Self {
+        self.device = device;
+        self
+    }
+
+    pub fn desired_storage(&self) -> PreviewFrameStoragePreference {
+        self.desired_storage
+    }
+
+    pub fn preview_device_context(&self) -> &PreviewDecodeDeviceContext {
+        &self.device
     }
 
     pub fn register_material(
@@ -221,11 +250,15 @@ impl MediaIoFrameProvider {
         } else {
             fallback_reason_from_media_io(selected_path, fallback_reason)
         };
+        let presentable = !stale_rejected
+            && fallback.is_none()
+            && storage_kind.is_presentable(texture_compatible);
 
         if stale_rejected {
             self.telemetry.stale_rejected_count =
                 self.telemetry.stale_rejected_count.saturating_add(1);
-        } else {
+        }
+        if presentable {
             self.telemetry.presentable_frame_count =
                 self.telemetry.presentable_frame_count.saturating_add(1);
         }
@@ -265,6 +298,42 @@ impl MediaIoFrameProvider {
 
     pub fn telemetry(&self) -> &PreviewMediaIoTelemetry {
         &self.telemetry
+    }
+}
+
+impl PreviewFrameProvider for MediaIoFrameProvider {
+    fn provider_name(&self) -> &'static str {
+        PROVIDER_NAME
+    }
+
+    fn frame_for(
+        &mut self,
+        material_id: &MaterialId,
+        source_position: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
+        let output = self
+            .decode_material_frame(
+                PreviewMaterialDecodeRequest {
+                    material_id: material_id.clone(),
+                    source_position,
+                    playback_generation,
+                    desired_storage: self.desired_storage,
+                    device: self.device.clone(),
+                },
+                playback_generation,
+            )
+            .map_err(|error| {
+                PreviewFrameProviderError::unavailable(
+                    self.provider_name(),
+                    material_id.clone(),
+                    source_position,
+                    playback_generation,
+                    format!("media IO decode handoff failed: {error}"),
+                )
+            })?;
+
+        preview_input_from_media_io_output(self.provider_name(), output)
     }
 }
 
@@ -344,6 +413,104 @@ fn storage_kind_for(storage: &VideoFrameStorage) -> PreviewFrameStorageKind {
         VideoFrameStorage::Cpu(_) => PreviewFrameStorageKind::Cpu,
         VideoFrameStorage::Texture(_) => PreviewFrameStorageKind::Texture,
         VideoFrameStorage::PlatformOpaque(_) => PreviewFrameStorageKind::PlatformOpaque,
+    }
+}
+
+impl PreviewFrameStorageKind {
+    fn is_presentable(self, texture_compatible: bool) -> bool {
+        matches!(self, Self::Texture) && texture_compatible
+    }
+}
+
+fn preview_input_from_media_io_output(
+    provider_name: &'static str,
+    output: PreviewMaterialDecodeOutput,
+) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
+    if output.stale_rejected {
+        return Err(PreviewFrameProviderError::unavailable(
+            provider_name,
+            output.material_id,
+            output.source_position,
+            output.playback_generation,
+            "decoded frame belongs to a stale playback generation",
+        ));
+    }
+
+    if let Some(fallback) = output.fallback {
+        return Err(PreviewFrameProviderError::unavailable(
+            provider_name,
+            output.material_id,
+            output.source_position,
+            output.playback_generation,
+            format!("media IO fallback {fallback:?} cannot be used as product compositor input"),
+        ));
+    }
+
+    match output.storage_kind {
+        PreviewFrameStorageKind::Texture => {
+            let texture_compatible = output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.texture_compatible);
+            if !texture_compatible {
+                return Err(PreviewFrameProviderError::unavailable(
+                    provider_name,
+                    output.material_id,
+                    output.source_position,
+                    output.playback_generation,
+                    "native texture frame is not proven compatible with the preview GPU device",
+                ));
+            }
+
+            let material_id = output.material_id;
+            let source_position = output.source_position;
+            let playback_generation = output.playback_generation;
+            let descriptor = TextureHandleDescriptor::from_decoded_frame(
+                material_id.clone(),
+                source_position,
+                &output.decoded_frame,
+            )
+            .map_err(|error| {
+                PreviewFrameProviderError::invalid_frame(
+                    provider_name,
+                    Some(material_id.clone()),
+                    Some(source_position),
+                    Some(playback_generation),
+                    error,
+                )
+            })?
+            .ok_or_else(|| {
+                PreviewFrameProviderError::unavailable(
+                    provider_name,
+                    material_id,
+                    source_position,
+                    playback_generation,
+                    "media IO reported texture storage without a texture handle",
+                )
+            })?;
+            Ok(PreviewFrameInput::TextureHandle(descriptor))
+        }
+        PreviewFrameStorageKind::Cpu => Err(PreviewFrameProviderError::unavailable(
+            provider_name,
+            output.material_id,
+            output.source_position,
+            output.playback_generation,
+            "media IO CPU frame handle does not include compositor-ready RGBA pixels",
+        )),
+        PreviewFrameStorageKind::PlatformOpaque => Err(PreviewFrameProviderError::unavailable(
+            provider_name,
+            output.material_id,
+            output.source_position,
+            output.playback_generation,
+            "platform-opaque media IO frame cannot be sampled by the realtime GPU compositor",
+        )),
+        PreviewFrameStorageKind::ArtifactFallback => Err(PreviewFrameProviderError::unavailable(
+            provider_name,
+            output.material_id,
+            output.source_position,
+            output.playback_generation,
+            "FFmpeg preview artifacts cannot be used as product realtime compositor input",
+        )),
     }
 }
 
