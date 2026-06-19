@@ -312,7 +312,7 @@
 | AUDIO2-01 | Phase 15 | Complete |
 | AUDIO2-02 | Phase 15 | Complete |
 | AUDIO2-03 | Phase 15 | Planned |
-| AUDIO2-04 | Phase 15 | Planned |
+| AUDIO2-04 | Phase 15 | Complete |
 | SCHED-01 | Phase 16 | Planned |
 | SCHED-02 | Phase 16 | Planned |
 | SCHED-03 | Phase 16 | Planned |

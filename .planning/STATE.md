@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-06-19T10:05:10.527Z"
-last_activity: 2026-06-19 -- Completed 15-02-PLAN.md
+stopped_at: Completed 15-06-PLAN.md
+last_updated: "2026-06-19T10:25:11.690Z"
+last_activity: 2026-06-19 -- Completed 15-06-PLAN.md
 progress:
   total_phases: 20
   completed_phases: 16
   total_plans: 112
-  completed_plans: 107
+  completed_plans: 108
   percent: 96
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15 (audio-engine-and-dsp-timeline-pipeline) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 15-02-PLAN.md
+Last activity: 2026-06-19 -- Completed 15-06-PLAN.md
 
 Progress: [██████████] 96%
 
@@ -36,9 +36,9 @@ Progress: [██████████] 96%
 
 **Velocity:**
 
-- Total plans completed: 107
+- Total plans completed: 108
 - Average duration: 9 min
-- Total execution time: 959 min
+- Total execution time: 973 min
 
 **By Phase:**
 
@@ -160,6 +160,7 @@ Progress: [██████████] 96%
 | Phase 14 P07 | 17 min | 3 tasks | 12 files |
 | Phase 15 P01 | 15 min | 3 tasks | 12 files |
 | Phase 15 P02 | 9 min | 2 tasks | 11 files |
+| Phase 15 P06 | 14 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -372,6 +373,9 @@ Recent decisions affecting current work:
 - [Phase 15]: Plan 15-02 keeps audio_engine pure Rust semantics/session contracts; native desktop output is deferred to Plan 15-03. — This preserves the planned ownership boundary and avoids CPAL/native output before the package checkpoint.
 - [Phase 15]: Muted audio tracks preserve segment identity through silent mix classifications. — Downstream diagnostics, parity, and export mapping need stable segment identity even when a track is silent.
 - [Phase 15]: Audio buffer results expose safe metadata, diagnostics, generation, and telemetry only. — Native handles, raw buffers, FFmpeg filters, and artifact paths stay outside the session boundary.
+- [Phase 15]: Render graph reads accepted SegmentAudio through engine_core normalization instead of depending directly on audio_engine, avoiding the audio_engine -> realtime_preview_runtime -> render_graph crate cycle.
+- [Phase 15]: FFmpeg audio filter strings remain localized to ffmpeg_compiler; renderer code receives no audio FFmpeg syntax.
+- [Phase 15]: Audio preview/export parity diagnostics live in testkit as typed Rust data comparing AudioMixIntent and RenderAudioMix without raw sample buffers.
 
 ### Pending Todos
 
@@ -408,6 +412,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T10:04:43.773Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-06-19T10:24:47.508Z
+Stopped at: Completed 15-06-PLAN.md
 Resume file: None
