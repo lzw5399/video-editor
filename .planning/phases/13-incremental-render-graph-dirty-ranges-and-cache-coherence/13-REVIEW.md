@@ -1,6 +1,6 @@
 ---
 phase: 13-incremental-render-graph-dirty-ranges-and-cache-coherence
-reviewed: "2026-06-19T02:08:39Z"
+reviewed: "2026-06-19T02:27:32Z"
 depth: standard
 files_reviewed: 41
 files_reviewed_list:
@@ -46,104 +46,46 @@ files_reviewed_list:
   - schemas/command.schema.json
   - scripts/phase13-source-guards.sh
 findings:
-  critical: 2
-  warning: 1
+  critical: 0
+  warning: 0
   info: 0
-  total: 3
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 13: Code Review Report
 
-**Reviewed:** 2026-06-19T02:08:39Z
+**Reviewed:** 2026-06-19T02:27:32Z
 **Depth:** standard
 **Files Reviewed:** 41
-**Status:** issues_found
+**Status:** clean
 
 ## Summary
 
-Reviewed the Phase 13 command delta, render graph fingerprint, preview cache invalidation, desktop command helpers, binding, tests, generated contracts, and source guard surfaces. The implementation has correctness defects in the export cancellation state machine and in the desktop helpers that are supposed to carry the new dirty/cache coherence facts. There is also an incomplete graph-node fingerprint surface for filter/transition node IDs.
+Re-reviewed the Phase 13 changed files after fixes, including the Electron command helpers, Node binding export/preview bridge, command delta generation, preview cache invalidation, render graph fingerprints, schema/generated contracts, tests, and source guard script.
+
+All reviewed files meet quality standards. No Critical, Warning, or Info issues were found in this pass.
+
+Previously reported items were verified resolved:
+
+- CR-01: Export cancellation status updates now use terminal-phase guards, and validation/completion no longer overwrites cancelled jobs.
+- CR-02: Desktop command helpers now forward v2 preview cache dirty facts and export dirty facts.
+- WR-01: Render graph snapshots now include filter and transition node fingerprints.
+
+Verification commands run:
+
+- `cargo test -p bindings_node --test export_commands -- --nocapture`
+- `cargo test -p bindings_node --test preview_commands preview_commands_transport_v2_dirty_facts_without_renderer_owned_overrides -- --nocapture`
+- `cargo test -p render_graph --test render_graph_snapshots render_graph_snapshot_collects_in_memory_node_fingerprints -- --nocapture`
+- `cargo test -p preview_service --test dirty_propagation export_prep_dirty_facts_match_preview_invalidation_facts -- --nocapture`
+- `pnpm run test:phase13-source-guards`
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
-
-### CR-01: BLOCKER - Cancelled export jobs can be overwritten as running/completed
-
-**File:** `crates/bindings_node/src/preview_export_service.rs:567`
-
-**Issue:** `cancel()` marks an active job as `Cancelled` at lines 567-584, but the background export thread still applies runtime events and final states without checking the current terminal phase. `apply_runtime_event()` rewrites progress events back to `Running` at lines 681-691, `mark_validating()` rewrites the job to `Validating` at lines 703-711, and the completed validation path rewrites it to `Completed` at lines 602-618. If cancellation races with FFmpeg exit or validation, status polling can report a user-cancelled job as running or completed, which is incorrect user-visible behavior.
-
-**Fix:**
-
-```rust
-fn update_status_if_not_terminal(
-    &self,
-    job_id: &str,
-    update: impl FnOnce(&mut ExportJobStatusResponse),
-) -> Result<(), ExportCommandError> {
-    self.update_status(job_id, |status| {
-        if matches!(
-            status.phase,
-            ExportJobPhase::Completed
-                | ExportJobPhase::Failed
-                | ExportJobPhase::ValidationFailed
-                | ExportJobPhase::Cancelled
-        ) {
-            return;
-        }
-        update(status);
-    })
-}
-```
-
-Use this guarded update for runtime progress, validating, validation success/failure, and runtime failure paths, or explicitly check `cancel_token.is_cancelled()` before moving from FFmpeg completion into validation/completed.
-
-### CR-02: BLOCKER - Desktop command builders drop Phase 13 dirty/cache facts
-
-**File:** `apps/desktop-electron/src/renderer/commandHelpers.ts:487`
-
-**Issue:** The generated command contracts expose `changedGraphNodeIds`, `changedDomains`, runtime/output fingerprints, `fullDraft`, schema version, generator version, and export `dirtyFacts`, but the hand-written helpers do not allow callers to pass them. `buildInvalidatePreviewCacheCommand()` only sends `entries`, `changedRanges`, `changedMaterialIds`, and `reason` at lines 487-501, so UI invalidations cannot target graph-node or runtime/output-profile changes. `buildStartExportCommand()` only sends `draft`, `outputPath`, and `preset` at lines 506-518, so export jobs started through the helper lose `ExportPrepDirtyFacts`. This breaks the Phase 13 product path even though Rust-side contracts support the data.
-
-**Fix:**
-
-```ts
-type InvalidatePreviewCacheOptions = {
-  entries: PreviewCacheEntryRef[];
-  changedRanges: DirtyRange[];
-  changedMaterialIds: MaterialId[];
-  changedGraphNodeIds?: string[];
-  changedDomains?: InvalidatePreviewCacheCommandPayload["changedDomains"];
-  runtimeCapabilityFingerprint?: string | null;
-  outputProfileFingerprint?: string | null;
-  fullDraft?: boolean;
-  reason: string;
-  artifactSchemaVersion?: number;
-  generatorVersion?: string;
-};
-
-type StartExportOptions = {
-  draft: Draft;
-  outputPath: string;
-  preset: ExportPreset;
-  dirtyFacts?: StartExportCommandPayload["dirtyFacts"];
-};
-```
-
-Forward every optional field into the payload so the desktop UI can use the same v2 dirty facts that the Rust binding and schema already define.
-
-## Warnings
-
-### WR-01: WARNING - Filter and transition graph node IDs are exposed but never fingerprinted
-
-**File:** `crates/render_graph/src/fingerprint.rs:80`
-
-**Issue:** `RenderGraphNodeId` defines stable IDs for `SegmentFilter` and `SegmentTransition`, and `RenderFilterIntent` / `RenderTransitionIntent` carry those IDs in `crates/render_graph/src/graph.rs:172` and `crates/render_graph/src/graph.rs:182`. However `node_fingerprints()` only emits fingerprints for canvas, materials, video layers, audio mixes, text overlays, and sampled frames at lines 80-126. Preview cache keys are derived from snapshot node fingerprints in `crates/preview_service/src/service.rs:388`, so cache entries never contain filter or transition node keys. Any invalidation that targets those stable node IDs cannot match existing entries.
-
-**Fix:** Add node fingerprints for filter and transition intents, or stop exposing those IDs as independently targetable graph nodes until they participate in snapshots. For example, extend `node_fingerprints()` with per-layer filter and transition fingerprints that use the existing `RenderFilterIntent.node_id` and `RenderTransitionIntent.node_id`.
+No narrative findings.
 
 ---
 
-_Reviewed: 2026-06-19T02:08:39Z_
+_Reviewed: 2026-06-19T02:27:32Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
