@@ -377,7 +377,10 @@ fn gc_quota_manifest_sync_manifest_entries_are_project_relative_and_complete() {
         .expect("manifest should generate");
 
     assert_eq!(manifest.schema_version, 1);
-    assert_eq!(manifest.generator_version, "artifact-store-sync-manifest-v1");
+    assert_eq!(
+        manifest.generator_version,
+        "artifact-store-sync-manifest-v1"
+    );
     assert_eq!(manifest.entries.len(), 1);
     let entry = &manifest.entries[0];
     assert_eq!(entry.artifact_id, "artifact-manifest-live");
@@ -393,7 +396,10 @@ fn gc_quota_manifest_sync_manifest_entries_are_project_relative_and_complete() {
     assert!(!entry.blob_relative_path.starts_with('/'));
     assert!(!entry.blob_relative_path.contains(".veproj/derived"));
     assert_eq!(manifest.tombstones.len(), 1);
-    assert_eq!(manifest.tombstones[0].artifact_id, "artifact-manifest-stale");
+    assert_eq!(
+        manifest.tombstones[0].artifact_id,
+        "artifact-manifest-stale"
+    );
     assert_eq!(
         manifest.tombstones[0].blob_relative_path,
         stale.blob_relative_path
@@ -410,7 +416,7 @@ fn gc_quota_manifest_sync_manifest_has_no_remote_transport_or_credentials() {
         "waveform",
         b"manifest local bytes",
     );
-    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    let store = open_artifact_store(&bundle_path).expect("store should open");
 
     let manifest = generate_sync_manifest(&store, ManifestGenerationOptions::default())
         .expect("manifest should generate");

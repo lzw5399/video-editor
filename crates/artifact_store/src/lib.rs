@@ -11,6 +11,7 @@ pub mod gc;
 pub mod generation;
 pub mod invalidation;
 pub mod jobs;
+pub mod manifest;
 pub mod paths;
 pub mod quota;
 pub mod resource_index;
