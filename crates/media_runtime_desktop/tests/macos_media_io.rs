@@ -211,6 +211,66 @@ fn macos_texture_decode_degrades_when_texture_interop_is_disabled() {
 
 #[test]
 #[cfg(target_os = "macos")]
+fn macos_texture_decode_returns_metal_texture_when_preview_device_is_compatible() {
+    if std::env::var_os("VIDEO_EDITOR_TEST_NATIVE_MEDIA").is_none() {
+        eprintln!("skipping macOS texture interop proof; set VIDEO_EDITOR_TEST_NATIVE_MEDIA=1");
+        return;
+    }
+
+    let runtime = discover_runtime_config().expect(
+        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+    );
+    let executor = DesktopFfmpegExecutor::default();
+    let fixture = H264Fixture::generate(&executor, &runtime);
+    let preview_device = macos_system_metal_device_id()
+        .expect("test host should expose the system Metal device when native media is enabled");
+    let reader = MacosMediaReader::new()
+        .with_texture_interop_policy(MacosTextureInteropPolicy::for_preview_device(
+            preview_device.clone(),
+        ));
+    let session = reader
+        .open_session(MediaOpenRequest {
+            material_uri: fixture.path.clone(),
+            requested_streams: vec![StreamId(0)],
+        })
+        .expect("fixture should open through AVFoundation");
+    let mut decoder = session
+        .native_video_decoder(StreamId(0))
+        .expect("H.264 video stream should have a native decoder");
+
+    let frame = decoder
+        .decode_at(VideoDecodeRequest {
+            source_time_us: 0,
+            playback_generation: Some(20),
+        })
+        .expect("compatible Metal preview device should decode into a texture lease");
+
+    match &frame.storage {
+        VideoFrameStorage::Texture(texture) => {
+            assert_eq!(texture.owner_session, session.session_id());
+            assert_eq!(texture.generation, 20);
+            assert_eq!(texture.backend, TextureBackend::MetalTexture);
+            assert_eq!(texture.device_id, preview_device);
+            assert_eq!(texture.dimensions.width, 160);
+            assert_eq!(texture.dimensions.height, 90);
+        }
+        other => panic!("expected compatible Metal texture frame storage, got {other:?}"),
+    }
+    assert_eq!(
+        session
+            .last_fallback_selection()
+            .expect("texture path selection should be recorded")
+            .selected_path,
+        SelectedDecodePath::NativeHardwareTexture
+    );
+
+    session
+        .release_frame(frame.release)
+        .expect("native texture frame should release");
+}
+
+#[test]
+#[cfg(target_os = "macos")]
 fn macos_native_close_reports_unreleased_corevideo_leases() {
     if std::env::var_os("VIDEO_EDITOR_TEST_NATIVE_MEDIA").is_none() {
         eprintln!("skipping macOS native lease close proof; set VIDEO_EDITOR_TEST_NATIVE_MEDIA=1");
@@ -250,6 +310,18 @@ fn macos_native_close_reports_unreleased_corevideo_leases() {
 struct H264Fixture {
     _temp: TempDir,
     path: PathBuf,
+}
+
+#[cfg(target_os = "macos")]
+fn macos_system_metal_device_id() -> Option<RuntimeDeviceId> {
+    use objc2_metal::{MTLCreateSystemDefaultDevice, MTLDevice};
+
+    let device = MTLCreateSystemDefaultDevice()?;
+    Some(RuntimeDeviceId {
+        backend: TextureBackend::MetalTexture,
+        adapter_id: "apple-metal".to_owned(),
+        device_id: format!("registry-{}", device.registryID()),
+    })
 }
 
 impl H264Fixture {
