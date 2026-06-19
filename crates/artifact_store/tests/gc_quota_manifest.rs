@@ -2,6 +2,9 @@ use std::fs;
 use std::path::Path;
 
 use artifact_store::blob_store::{BlobStore, BlobWriteIntent};
+use artifact_store::dependencies::{
+    ArtifactDependency, DependencyUpsert, upsert_artifact_dependencies,
+};
 use artifact_store::gc::{
     GcMode, TombstoneReason, collect_garbage, plan_garbage_collection, sweep_temporary_blobs,
 };
@@ -47,6 +50,14 @@ fn gc_quota_manifest_gc_dry_run_preserves_live_artifacts_jobs_and_source_media()
             ["artifact-dirty-live"],
         )
         .expect("dirty row should update");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-dirty-live",
+        vec![DependencyUpsert::new(ArtifactDependency::material(
+            "material-001",
+        ))],
+    )
+    .expect("dirty live dependency should persist");
     create_generation_job(
         &mut store,
         ArtifactGenerationRequest {
@@ -124,8 +135,11 @@ fn gc_quota_manifest_gc_apply_tombstones_and_deletes_only_contained_candidates()
     {
         let outside = sandbox.path().join("outside");
         fs::create_dir_all(&outside).expect("outside dir should be created");
-        std::os::unix::fs::symlink(&outside, derived_root_path(&bundle_path).join("escape-link"))
-            .expect("escape symlink should be created");
+        std::os::unix::fs::symlink(
+            &outside,
+            derived_root_path(&bundle_path).join("escape-link"),
+        )
+        .expect("escape symlink should be created");
         insert_artifact_row(
             &store,
             "artifact-symlink-path",
@@ -142,7 +156,10 @@ fn gc_quota_manifest_gc_apply_tombstones_and_deletes_only_contained_candidates()
     assert_eq!(outcome.deleted_blob_count, 1);
     assert_eq!(outcome.released_bytes, stale.byte_count);
     assert!(!path_exists(&bundle_path, &stale));
-    assert_eq!(artifact_status(&store, "artifact-stale-apply"), "tombstoned");
+    assert_eq!(
+        artifact_status(&store, "artifact-stale-apply"),
+        "tombstoned"
+    );
 
     let tombstone = tombstone_for(&store, "artifact-stale-apply");
     assert_eq!(tombstone.0, stale.blob_relative_path);

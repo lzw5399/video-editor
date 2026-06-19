@@ -95,6 +95,13 @@ fn apply_connection_pragmas_at(
 fn run_migrations_at(conn: &Connection, db_path: &Path) -> Result<(), ArtifactStoreError> {
     conn.execute_batch(INITIAL_SCHEMA_SQL)
         .map_err(|source| sqlite_error(db_path, source))?;
+    add_column_if_missing(
+        conn,
+        db_path,
+        "artifact_tombstone",
+        "byte_count",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (byte_count >= 0)",
+    )?;
     conn.pragma_update(None, "user_version", ARTIFACT_STORE_SCHEMA_VERSION)
         .map_err(|source| sqlite_error(db_path, source))?;
     conn.execute(
@@ -108,6 +115,30 @@ fn run_migrations_at(conn: &Connection, db_path: &Path) -> Result<(), ArtifactSt
         ),
     )
     .map_err(|source| sqlite_error(db_path, source))?;
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    db_path: &Path,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), ArtifactStoreError> {
+    let mut statement = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|source| sqlite_error(db_path, source))?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|source| sqlite_error(db_path, source))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| sqlite_error(db_path, source))?;
+    if !columns.iter().any(|existing| existing == column) {
+        conn.execute_batch(&format!(
+            "ALTER TABLE {table} ADD COLUMN {column} {definition};"
+        ))
+        .map_err(|source| sqlite_error(db_path, source))?;
+    }
     Ok(())
 }
 
@@ -229,6 +260,7 @@ CREATE TABLE IF NOT EXISTS artifact_tombstone (
     artifact_id TEXT NOT NULL,
     blob_relative_path TEXT,
     blob_fingerprint TEXT,
+    byte_count INTEGER NOT NULL DEFAULT 0 CHECK (byte_count >= 0),
     reason TEXT NOT NULL,
     created_at_unix_ms INTEGER NOT NULL
 );
