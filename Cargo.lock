@@ -1973,6 +1973,7 @@ dependencies = [
 name = "testkit"
 version = "0.1.0"
 dependencies = [
+ "audio_engine",
  "draft_model",
  "engine_core",
  "ffmpeg_compiler",
@@ -1981,6 +1982,7 @@ dependencies = [
  "preview_service",
  "realtime_preview_runtime",
  "render_graph",
+ "serde",
  "serde_json",
  "tempfile",
 ]

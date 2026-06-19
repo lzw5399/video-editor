@@ -4,22 +4,26 @@ use draft_model::{
     MaterialKind, Microseconds, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
-use render_graph::{build_render_graph, RenderAudioMix};
+use render_graph::{RenderAudioMix, build_render_graph};
 use testkit::{
-    audio_preview_export_parity_diagnostic, AudioMixParityDifference, AudioMixParityStatus,
+    AudioMixParityDifference, AudioMixParityStatus, audio_preview_export_parity_diagnostic,
 };
 
 #[test]
 fn audio_preview_export_parity_matches_gain_pan_fade_keyframes_and_ranges() {
-    let draft = audio_parity_draft(false, true);
+    let draft = audio_parity_draft(false, false);
     let preview =
         audio_engine::evaluate_dsp_timeline(&draft, audio_engine::DspTimelineConfig::new(48_000))
             .expect("preview audio mix intent should evaluate")
             .mix_intent;
     let export = export_audio_mixes(&draft);
 
-    let diagnostic =
-        audio_preview_export_parity_diagnostic(&preview, &export, 48_000, &Vec::<MaterialId>::new());
+    let diagnostic = audio_preview_export_parity_diagnostic(
+        &preview,
+        &export,
+        48_000,
+        &Vec::<MaterialId>::new(),
+    );
 
     assert_eq!(diagnostic.status, AudioMixParityStatus::Match);
     assert!(diagnostic.differences.is_empty());
@@ -48,10 +52,14 @@ fn audio_preview_export_parity_classifies_supported_difference_categories() {
     );
 
     assert_eq!(diagnostic.status, AudioMixParityStatus::Diverged);
-    assert!(diagnostic.differences.contains(&AudioMixParityDifference::SampleRateMismatch {
-        preview_sample_rate_hz: 44_100,
-        export_sample_rate_hz: 48_000,
-    }));
+    assert!(
+        diagnostic
+            .differences
+            .contains(&AudioMixParityDifference::SampleRateMismatch {
+                preview_sample_rate_hz: 44_100,
+                export_sample_rate_hz: 48_000,
+            })
+    );
     assert!(diagnostic.differences.iter().any(|difference| {
         matches!(difference, AudioMixParityDifference::EffectSlotUnsupported { slot_id, .. } if slot_id == "slot-vendor-space")
     }));

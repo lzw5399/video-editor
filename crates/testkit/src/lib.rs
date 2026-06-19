@@ -14,8 +14,14 @@ use media_runtime::{
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
 
+pub mod audio_parity;
 pub mod large_timeline;
 pub mod render_compare;
+
+pub use audio_parity::{
+    AudioMixParityDifference, AudioMixParityStatus, AudioPreviewExportParityDiagnostic,
+    AudioSampleSummary, audio_preview_export_parity_diagnostic,
+};
 
 /// Boundary marker for Phase 1 test harness helpers.
 pub const TESTKIT_BOUNDARY: &str = "fixtures-goldens-render-smoke-shell";
