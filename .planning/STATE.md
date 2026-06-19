@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 6
+current_plan: 7
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-19T01:17:55.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 04: stable render graph node IDs, fingerprints, snapshots, and deterministic graph diffs."
+last_updated: "2026-06-19T01:31:08.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 05: preview cache key v2, invalidation request v2, and export-prep dirty facts."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 95
-  percent: 97
+  completed_plans: 96
+  percent: 98
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 5/8 complete; next plan 13-05
-Status: Phase 13 in progress; render graph identity, fingerprints, snapshots, and diff helpers are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 04: stable render graph node IDs, fingerprints, snapshots, and deterministic graph diffs.
+Plan: 6/8 complete; next plan 13-05B
+Status: Phase 13 in progress; preview/export cache coherence facts are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 05: preview cache key v2, invalidation request v2, and export-prep dirty facts.
 
-Progress: [██████████] 97%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 95
+- Total plans completed: 96
 - Average duration: 9 min
-- Total execution time: 891 min
+- Total execution time: 916 min
 
 **By Phase:**
 
@@ -60,11 +60,11 @@ Progress: [██████████] 97%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 5 | 49 min | 10 min |
+| 13 | 6 | 74 min | 12 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 49 min
+- Last 5 plans: 64 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -153,6 +153,7 @@ Progress: [██████████] 97%
 | Phase 13 P02B | 4 min | 2 tasks | 1 files |
 | Phase 13 P03 | 9 min | 3 tasks | 11 files |
 | Phase 13 P04 | 18 min | 3 tasks | 8 files |
+| Phase 13 P05 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,9 @@ Progress: [██████████] 97%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: Preview cache keys now derive from Rust render graph snapshots and node fingerprints. — Plan 05 added graph node keys plus semantic/input/output/runtime/schema/generator fingerprint dimensions to `PreviewCacheKey` without renderer-supplied key computation.
+- [Phase 13]: Preview invalidation v2 consumes Rust-owned dirty ranges, material IDs, graph node keys, dirty domains, runtime/output fingerprints, and full-draft fallback. — Legacy entries remain targetable by range/material invalidation but are stale-unsafe for v2 graph/runtime/profile facts.
+- [Phase 13]: Export prep receives dirty classification facts, not jobs or persistence. — `ExportPrepDirtyFacts` mirrors preview invalidation facts while scheduler queues, SQLite artifact store, and binding-safe schema expansion remain later scope.
 - [Phase 13]: Render graph node identity is now semantic and separate from output validity. — Plan 04 added stable `RenderGraphNodeId` keys for canvas/material/segment/filter/transition/frame roles, while keeping fingerprints as reuse facts.
 - [Phase 13]: Render graph fingerprints include semantic, input, output profile, runtime capability, schema, and generator dimensions. — Runtime or output changes invalidate outputs without changing stable semantic node keys.
 - [Phase 13]: Graph snapshots remain in-memory render_graph contracts and diffs compare node ID before fingerprint. — Diff helpers classify added/removed/changed/unchanged nodes and carry Rust-owned dirty ranges/domains without renderer, scheduler, SQLite, FFmpeg, or UI dependencies.
