@@ -195,6 +195,27 @@ fn artifact_generation_cancellation_prevents_blob_commit_and_resume_skips_comple
     );
 }
 
+#[test]
+fn artifact_generation_worker_context_exposes_persisted_cancel_probe() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    let request = proxy_request("job-context-cancel", "artifact-context-cancel");
+    artifact_store::jobs::create_generation_job(&mut store, request.clone().into_generation_request())
+        .expect("job should be created");
+    artifact_store::jobs::start_generation_chunk(&mut store, "job-context-cancel", 0)
+        .expect("chunk should start");
+    cancel_generation_job(&mut store, "job-context-cancel").expect("cancel should persist");
+
+    let mut generator = CancelAwareGenerator;
+    let error = generate_proxy_artifact(&bundle_path, &mut generator, request)
+        .expect_err("cancel-aware generator should observe persisted cancel");
+    assert!(
+        error.to_string().contains("cancel"),
+        "unexpected cancel probe error: {error}"
+    );
+}
+
 struct FakeArtifactGenerator {
     proxy_bytes: Vec<u8>,
     thumbnail_bytes: Vec<u8>,
@@ -254,6 +275,44 @@ impl ArtifactGenerator for FakeArtifactGenerator {
             "json",
             self.waveform_bytes.clone(),
         ))
+    }
+}
+
+struct CancelAwareGenerator;
+
+impl ArtifactGenerator for CancelAwareGenerator {
+    fn generate_proxy(
+        &mut self,
+        context: &GenerationWorkerContext,
+        _request: &ProxyGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        if context.cancel_requested()? {
+            return Err(artifact_store::ArtifactStoreError::InvalidDerivedPath {
+                path: context.job_id.clone(),
+                reason: "generation cancelled by persisted probe".to_owned(),
+            });
+        }
+        Ok(GeneratedArtifact::new(
+            GeneratedArtifactMime::VideoMp4,
+            "mp4",
+            b"should-not-write".to_vec(),
+        ))
+    }
+
+    fn generate_thumbnail(
+        &mut self,
+        _context: &GenerationWorkerContext,
+        _request: &ThumbnailGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        unreachable!("cancel-aware proxy test should not call thumbnail")
+    }
+
+    fn generate_waveform(
+        &mut self,
+        _context: &GenerationWorkerContext,
+        _request: &WaveformGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        unreachable!("cancel-aware proxy test should not call waveform")
     }
 }
 
