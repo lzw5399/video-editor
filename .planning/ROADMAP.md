@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 7/9 plans executed or blocked; 15.2-05/06 remain unreleased behind 04A
+**Plans:** 7/10 plans executed or blocked; 15.2-05/06 remain unreleased behind 04B
 
 Plans:
 
@@ -680,13 +680,17 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 15.2-04A-PLAN.md - Add Rust-owned realtime playback scheduler for desktop compositor presentation (blocked: WGPU surface texture acquire reports surface is occluded)
+- [x] 15.2-04A-PLAN.md - Add Rust-owned realtime playback scheduler for desktop compositor presentation (blocked: WGPU surface texture acquire reports surface is occluded)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
+- [ ] 15.2-04B-PLAN.md - Fix macOS/Electron native WGPU surface occlusion and prove compositor presentation
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
 
-**Wave 9** *(blocked on Waves 1-8 completion)*
+**Wave 10** *(blocked on Waves 1-9 completion)*
 
 - [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
