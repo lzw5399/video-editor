@@ -50,12 +50,12 @@ test("product user can import a repo video, add it to the timeline, and see play
     ).toBeGreaterThan(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
     expect(
       after.hostState?.backend ?? null,
-      "normal product playback must use the realtime GPU backend, not mock/offscreen/artifact fallback"
-    ).toBe("gpu");
+      "normal product playback must use the render-graph GPU compositor backend, not native-video/mock/offscreen/artifact fallback"
+    ).toBe("renderGraphGpu");
     expect(
       after.hostState?.contentEvidence?.source ?? null,
-      "normal product playback evidence must come from the composited GPU preview output, not decoded CPU probes or mock frame tokens"
-    ).toBe("composited");
+      "normal product playback evidence must come from render-graph GPU compositor output, not native-video, decoded CPU probes, or mock frame tokens"
+    ).toBe("renderGraphGpuComposited");
     expect(
       after.hostState?.contentEvidence?.digest ?? null,
       "native composited content fingerprint must advance during playback"

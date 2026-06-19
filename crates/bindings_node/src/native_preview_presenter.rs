@@ -758,6 +758,23 @@ mod tests {
     }
 
     #[test]
+    fn native_player_presentation_serializes_as_native_video_not_gpu_compositor() {
+        let state = NativePreviewPresentationState::available(Some(NativePreviewContentEvidence {
+            source: NativePreviewContentEvidenceSource::Composited,
+            digest: "digest".to_owned(),
+            width: 16,
+            height: 9,
+            byte_count: 16 * 9 * 4,
+            target_time_microseconds: 123_000,
+        }));
+
+        let json = serde_json::to_value(state).expect("native preview state serializes");
+
+        assert_eq!(json["backend"], "nativeVideo");
+        assert_eq!(json["evidence"]["source"], "nativeVideo");
+    }
+
+    #[test]
     fn source_resolution_rejects_multiple_visible_video_segments() {
         let mut draft = single_video_draft("/tmp/clip.mp4");
         let second = Segment::new(

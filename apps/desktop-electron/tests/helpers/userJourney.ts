@@ -27,7 +27,14 @@ type RealtimePreviewHostState = {
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
-  backend: "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
+  backend:
+    | "mock"
+    | "nativeVideo"
+    | "renderGraphGpu"
+    | "offscreen"
+    | "previewArtifact"
+    | "ffmpegArtifact"
+    | "none";
   telemetry: {
     presentedFrameCount: number;
     targetTimeMicroseconds: number;
@@ -40,7 +47,7 @@ type RealtimePreviewHostState = {
     accentColor: string;
   } | null;
   contentEvidence: {
-    source: "composited";
+    source: "nativeVideo" | "renderGraphGpuComposited";
     digest: string;
     width: number;
     height: number;
@@ -73,7 +80,7 @@ export async function waitForCompositedPreviewEvidence(
 
   while (Date.now() < deadline) {
     lastEvidence = await capturePreviewEvidence(page);
-    if (lastEvidence.hostState?.contentEvidence?.source === "composited") {
+    if (lastEvidence.hostState?.contentEvidence?.source === "renderGraphGpuComposited") {
       return lastEvidence;
     }
     await page.waitForTimeout(250);
