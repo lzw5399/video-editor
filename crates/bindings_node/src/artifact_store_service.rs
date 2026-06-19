@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use artifact_store::gc::{collect_garbage, GcMode};
-use artifact_store::jobs::{
-    cancel_generation_job, job_status_summary, list_active_generation_jobs, resume_generation_job,
-    ArtifactGenerationJob, GenerationJobStatus, GenerationStatusSummary,
-};
-use artifact_store::quota::{compute_quota_state, QuotaState};
-use artifact_store::schema::{open_artifact_store, ArtifactStore};
 use artifact_store::ArtifactStoreError;
+use artifact_store::gc::{GcMode, collect_garbage};
+use artifact_store::jobs::{
+    ArtifactGenerationJob, GenerationJobStatus, GenerationStatusSummary, cancel_generation_job,
+    job_status_summary, list_active_generation_jobs, restart_generation_job, resume_generation_job,
+};
+use artifact_store::quota::{QuotaState, compute_quota_state};
+use artifact_store::schema::{ArtifactStore, open_artifact_store};
 use draft_model::{
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
@@ -88,7 +88,7 @@ impl ArtifactStoreBindingService {
     }
 
     pub fn resume_generation(
-        &self,
+        &mut self,
         job_id: &str,
     ) -> Result<ArtifactGenerationTaskSummary, ArtifactBindingError> {
         let plan =
@@ -96,15 +96,13 @@ impl ArtifactStoreBindingService {
         if plan.is_none() {
             return Err(ArtifactBindingError::ActionUnavailable);
         }
-        let summary =
-            job_status_summary(&self.store, job_id).map_err(ArtifactBindingError::Store)?;
-        summary
-            .map(task_summary_from_generation_summary)
-            .ok_or(ArtifactBindingError::UnknownJob)
+        let job =
+            restart_generation_job(&mut self.store, job_id).map_err(ArtifactBindingError::Store)?;
+        Ok(task_summary_from_job(&job))
     }
 
     pub fn retry_generation(
-        &self,
+        &mut self,
         job_id: &str,
     ) -> Result<ArtifactGenerationTaskSummary, ArtifactBindingError> {
         let summary =
@@ -113,7 +111,9 @@ impl ArtifactStoreBindingService {
         if !summary.can_retry {
             return Err(ArtifactBindingError::ActionUnavailable);
         }
-        Ok(task_summary_from_generation_summary(summary))
+        let job =
+            restart_generation_job(&mut self.store, job_id).map_err(ArtifactBindingError::Store)?;
+        Ok(task_summary_from_job(&job))
     }
 }
 
@@ -208,14 +208,14 @@ fn artifact_command_result(
             CommandName::RetryArtifactGeneration,
             CommandPayload::RetryArtifactGeneration(payload),
         ) => {
-            let service = service_from_action_payload(&payload)?;
+            let mut service = service_from_action_payload(&payload)?;
             serialize(service.retry_generation(&payload.job_id)?)
         }
         (
             CommandName::ResumeArtifactGeneration,
             CommandPayload::ResumeArtifactGeneration(payload),
         ) => {
-            let service = service_from_action_payload(&payload)?;
+            let mut service = service_from_action_payload(&payload)?;
             serialize(service.resume_generation(&payload.job_id)?)
         }
         (
