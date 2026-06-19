@@ -220,7 +220,10 @@ fn artifact_generation_worker_context_exposes_persisted_cancel_probe() {
     let job = persisted_job(&bundle_path, "job-context-cancel");
     assert_eq!(job.status, GenerationJobStatus::Cancelled);
     assert_eq!(job.chunks[0].status, GenerationChunkStatus::Cancelled);
-    assert_eq!(artifact_count(&open_artifact_store(&bundle_path).expect("store should open")), 0);
+    assert_eq!(
+        artifact_count(&open_artifact_store(&bundle_path).expect("store should open")),
+        0
+    );
 }
 
 #[test]
@@ -304,7 +307,11 @@ fn artifact_generation_records_material_resource_and_source_dependencies_for_inv
         Vec::new(),
         InvalidationScope::targeted(
             vec![MaterialId::new("material-001")],
-            vec![DirtyDomain::Proxy, DirtyDomain::Thumbnail, DirtyDomain::Waveform],
+            vec![
+                DirtyDomain::Proxy,
+                DirtyDomain::Thumbnail,
+                DirtyDomain::Waveform,
+            ],
         ),
         "material relinked",
     );
@@ -312,7 +319,11 @@ fn artifact_generation_records_material_resource_and_source_dependencies_for_inv
         .expect("material command delta should dirty generated artifacts");
     assert_dirty_ids(
         &dirty.dirty_artifacts,
-        &["artifact-dep-proxy", "artifact-dep-thumb", "artifact-dep-wave"],
+        &[
+            "artifact-dep-proxy",
+            "artifact-dep-thumb",
+            "artifact-dep-wave",
+        ],
     );
 
     store
@@ -335,7 +346,11 @@ fn artifact_generation_records_material_resource_and_source_dependencies_for_inv
     .expect("source delete should tombstone generated artifacts");
     assert_dirty_ids(
         &deleted.dirty_artifacts,
-        &["artifact-dep-proxy", "artifact-dep-thumb", "artifact-dep-wave"],
+        &[
+            "artifact-dep-proxy",
+            "artifact-dep-thumb",
+            "artifact-dep-wave",
+        ],
     );
     for artifact_id in [
         "artifact-dep-proxy",
@@ -397,10 +412,12 @@ impl ArtifactGenerator for FailureGenerator {
         _request: &ProxyGenerationRequest,
     ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
         match self.mode {
-            FailureMode::GeneratorError => Err(artifact_store::ArtifactStoreError::InvalidDerivedPath {
-                path: "artifact-failure".to_owned(),
-                reason: "generator failed".to_owned(),
-            }),
+            FailureMode::GeneratorError => {
+                Err(artifact_store::ArtifactStoreError::InvalidDerivedPath {
+                    path: "artifact-failure".to_owned(),
+                    reason: "generator failed".to_owned(),
+                })
+            }
             FailureMode::EmptyOutput => Ok(GeneratedArtifact::new(
                 GeneratedArtifactMime::VideoMp4,
                 "mp4",
@@ -619,7 +636,10 @@ fn artifact_count(store: &artifact_store::schema::ArtifactStore) -> i64 {
         .expect("artifact count should read")
 }
 
-fn persisted_job(bundle_path: &std::path::Path, job_id: &str) -> artifact_store::jobs::ArtifactGenerationJob {
+fn persisted_job(
+    bundle_path: &std::path::Path,
+    job_id: &str,
+) -> artifact_store::jobs::ArtifactGenerationJob {
     let store = open_artifact_store(bundle_path).expect("store should open");
     list_generation_jobs(&store)
         .expect("jobs should list")

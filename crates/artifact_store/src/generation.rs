@@ -12,7 +12,8 @@ use crate::dependencies::{
 };
 use crate::jobs::{
     ArtifactGenerationJob, ArtifactGenerationRequest, ArtifactKind, GenerationChunk,
-    GenerationJobStatus, GenerationProgress, complete_generation_chunk, create_generation_job,
+    GenerationJobStatus, GenerationProgress, acknowledge_generation_cancelled,
+    complete_generation_chunk, create_generation_job, fail_generation_chunk,
     generation_cancel_requested, list_generation_jobs, next_pending_chunk, start_generation_chunk,
 };
 use crate::resource_index::ResourceId;
@@ -153,6 +154,9 @@ impl ProxyGenerationRequest {
             artifact_id: Some(self.artifact_id),
             kind: ArtifactKind::Proxy,
             stable_key,
+            resource_id: Some(self.resource_id.as_str().to_owned()),
+            material_id: Some(self.material_id.as_str().to_owned()),
+            source_ref: Some(self.source_ref),
             generation_parameters_json: self.generation_parameters_json,
             source_fingerprint: Some(self.source_fingerprint),
             runtime_capability_fingerprint: Some(self.runtime_capability_fingerprint),
@@ -197,6 +201,9 @@ impl ThumbnailGenerationRequest {
             artifact_id: Some(self.artifact_id),
             kind: ArtifactKind::Thumbnail,
             stable_key,
+            resource_id: Some(self.resource_id.as_str().to_owned()),
+            material_id: Some(self.material_id.as_str().to_owned()),
+            source_ref: Some(self.source_ref),
             generation_parameters_json: self.generation_parameters_json,
             source_fingerprint: Some(self.source_fingerprint),
             runtime_capability_fingerprint: Some(self.runtime_capability_fingerprint),
@@ -243,6 +250,9 @@ impl WaveformGenerationRequest {
             artifact_id: Some(self.artifact_id),
             kind: ArtifactKind::Waveform,
             stable_key,
+            resource_id: Some(self.resource_id.as_str().to_owned()),
+            material_id: Some(self.material_id.as_str().to_owned()),
+            source_ref: Some(self.source_ref),
             generation_parameters_json: self.generation_parameters_json,
             source_fingerprint: Some(self.source_fingerprint),
             runtime_capability_fingerprint: Some(self.runtime_capability_fingerprint),
@@ -313,6 +323,9 @@ where
     let mut store = open_artifact_store(bundle_path)?;
     if let Some(existing) = existing_job(&store, &request.job_id)? {
         if generation_cancel_requested(&store, &request.job_id)? {
+            if existing.status != GenerationJobStatus::Cancelled {
+                acknowledge_generation_cancelled(&mut store, &request.job_id)?;
+            }
             return generation_cancelled(&request.job_id);
         }
         if existing.status == GenerationJobStatus::Completed {
@@ -323,6 +336,7 @@ where
     }
 
     if generation_cancel_requested(&store, &request.job_id)? {
+        acknowledge_generation_cancelled(&mut store, &request.job_id)?;
         return generation_cancelled(&request.job_id);
     }
 
@@ -334,6 +348,7 @@ where
 
     start_generation_chunk(&mut store, &request.job_id, chunk.chunk_index)?;
     if generation_cancel_requested(&store, &request.job_id)? {
+        acknowledge_generation_cancelled(&mut store, &request.job_id)?;
         return generation_cancelled(&request.job_id);
     }
 
@@ -348,17 +363,44 @@ where
         kind: request.kind,
         cancel_token: CancelToken::new(),
     };
-    let generated = generate(generator, &context)?;
+    let generated = match generate(generator, &context) {
+        Ok(generated) => generated,
+        Err(error) => {
+            if generation_cancel_requested(&store, &request.job_id)? || context.is_cancelled() {
+                acknowledge_generation_cancelled(&mut store, &request.job_id)?;
+                return generation_cancelled(&request.job_id);
+            }
+            fail_generation_chunk(
+                &mut store,
+                &request.job_id,
+                chunk.chunk_index,
+                &error.to_string(),
+            )?;
+            return Err(error);
+        }
+    };
     if generated.bytes.is_empty() {
-        return Err(generation_error(
+        let error = generation_error(&request.job_id, "generated artifact is empty");
+        fail_generation_chunk(
+            &mut store,
             &request.job_id,
-            "generated artifact is empty",
-        ));
+            chunk.chunk_index,
+            &error.to_string(),
+        )?;
+        return Err(error);
     }
     if generated.mime != expected_mime {
-        return Err(generation_error(&request.job_id, "generated MIME mismatch"));
+        let error = generation_error(&request.job_id, "generated MIME mismatch");
+        fail_generation_chunk(
+            &mut store,
+            &request.job_id,
+            chunk.chunk_index,
+            &error.to_string(),
+        )?;
+        return Err(error);
     }
     if generation_cancel_requested(&store, &request.job_id)? || context.is_cancelled() {
+        acknowledge_generation_cancelled(&mut store, &request.job_id)?;
         return generation_cancelled(&request.job_id);
     }
 
@@ -425,6 +467,16 @@ fn upsert_generation_dependencies(
             "artifact-generation:v1",
         )),
     ];
+    if let Some(material_id) = &request.material_id {
+        dependencies.push(DependencyUpsert::new(ArtifactDependency::material(
+            material_id.as_str(),
+        )));
+    }
+    if let Some(resource_id) = &request.resource_id {
+        dependencies.push(DependencyUpsert::new(ArtifactDependency::resource(
+            resource_id.as_str(),
+        )));
+    }
     if let Some(source) = &request.source_fingerprint {
         dependencies.push(DependencyUpsert::new(
             ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
@@ -432,6 +484,30 @@ fn upsert_generation_dependencies(
                 source.clone(),
             )),
         ));
+        if let Some(material_id) = &request.material_id {
+            dependencies.push(DependencyUpsert::new(
+                ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
+                    format!("source:{material_id}"),
+                    source.clone(),
+                )),
+            ));
+        }
+        if let Some(resource_id) = &request.resource_id {
+            dependencies.push(DependencyUpsert::new(
+                ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
+                    resource_id.as_str(),
+                    source.clone(),
+                )),
+            ));
+        }
+        if let Some(source_ref) = &request.source_ref {
+            dependencies.push(DependencyUpsert::new(
+                ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
+                    source_ref.as_str(),
+                    source.clone(),
+                )),
+            ));
+        }
     }
     if let Some(runtime) = &request.runtime_capability_fingerprint {
         dependencies.push(DependencyUpsert::new(

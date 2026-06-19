@@ -3020,6 +3020,83 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "getArtifactStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "getArtifactStatus" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "refreshArtifactStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "refreshArtifactStatus" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "retryArtifactGeneration" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "retryArtifactGeneration" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "resumeArtifactGeneration" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "resumeArtifactGeneration" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "cancelArtifactGeneration" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "cancelArtifactGeneration" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "getArtifactQuotaStatus" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "getArtifactQuotaStatus" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "runArtifactGarbageCollection" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "runArtifactGarbageCollection" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "startExport" },
                 "payload": {
                     "properties": {

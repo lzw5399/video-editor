@@ -79,7 +79,6 @@ pub fn plan_garbage_collection(store: &ArtifactStore) -> Result<GcPlan, Artifact
              WHERE blob_relative_path IS NOT NULL
                 AND blob_fingerprint IS NOT NULL
                 AND status IN ('dirty', 'failed', 'tombstoned')
-                AND artifact_id NOT IN (SELECT artifact_id FROM artifact_dependency)
                 AND artifact_id NOT IN (SELECT artifact_id FROM artifact_tombstone)
              ORDER BY artifact_id",
         )
@@ -277,11 +276,6 @@ fn live_artifact_ids(store: &ArtifactStore) -> Result<BTreeSet<String>, Artifact
          WHERE status IN ('ready', 'waiting', 'running')
             OR dirty = 0
          ORDER BY artifact_id",
-    )?;
-    extend_live_ids(
-        store,
-        &mut live,
-        "SELECT artifact_id FROM artifact_dependency ORDER BY artifact_id",
     )?;
     extend_live_ids(
         store,

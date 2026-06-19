@@ -51,7 +51,7 @@ fn gc_quota_manifest_gc_dry_run_preserves_live_artifacts_jobs_and_source_media()
     store
         .connection()
         .execute(
-            "UPDATE artifact SET dirty = 1, status = 'dirty' WHERE artifact_id = ?1",
+            "UPDATE artifact SET dirty = 1, status = 'running' WHERE artifact_id = ?1",
             ["artifact-dirty-live"],
         )
         .expect("dirty row should update");
@@ -70,6 +70,9 @@ fn gc_quota_manifest_gc_dry_run_preserves_live_artifacts_jobs_and_source_media()
             artifact_id: Some("artifact-job-live".to_owned()),
             kind: ArtifactKind::Proxy,
             stable_key: "material:source:job-live".to_owned(),
+            resource_id: None,
+            material_id: None,
+            source_ref: None,
             generation_parameters_json: json!({ "kind": "proxy" }),
             source_fingerprint: Some("source:v1".to_owned()),
             runtime_capability_fingerprint: Some("runtime:v1".to_owned()),

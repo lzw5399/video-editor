@@ -299,6 +299,9 @@ fn job_request(
         artifact_id: Some(artifact_id.to_owned()),
         kind,
         stable_key: format!("material:material-001:{}", kind.as_str()),
+        resource_id: None,
+        material_id: None,
+        source_ref: None,
         generation_parameters_json: json!({
             "materialId": "material-001",
             "sourceRef": "media/source.mp4",
