@@ -12,7 +12,7 @@ pub mod texture_cache;
 
 pub use compositor::{
     RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewCompositorError,
-    RealtimePreviewCompositorOutput,
+    RealtimePreviewCompositorOutput, RealtimePreviewSurfacePresentationOutput,
 };
 pub use device::{
     RealtimePreviewGpuBackend, RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,
@@ -22,8 +22,8 @@ pub use pipelines::RealtimePreviewPipelineSet;
 pub use surface::{
     NativeParentWindowHandle, PreviewSurfaceAttachment, PreviewSurfaceBounds,
     PreviewSurfaceDescriptor, PreviewSurfaceDiagnosticKind, PreviewSurfaceError,
-    PreviewSurfaceHost, PreviewSurfaceStatus, RealtimePreviewGpuTarget,
-    RealtimePreviewTargetFormat,
+    PreviewSurfaceHost, PreviewSurfaceStatus, RealtimePreviewGpuPresentationTarget,
+    RealtimePreviewGpuTarget, RealtimePreviewTargetFormat,
 };
 pub use text::{TEXT_PARITY_UNPROVEN_REASON, TextPreviewOutcome, classify_text_preview_outcome};
 pub use texture_cache::{

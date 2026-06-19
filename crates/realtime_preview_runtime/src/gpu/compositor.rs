@@ -15,8 +15,9 @@ use crate::{
 };
 
 use super::{
-    RealtimePreviewGpuDevice, RealtimePreviewGpuTarget, RealtimePreviewPipelineSet,
-    RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
+    RealtimePreviewGpuDevice, RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget,
+    RealtimePreviewPipelineSet, RealtimePreviewTexture, RealtimePreviewTextureCache,
+    RealtimePreviewTextureCacheError,
 };
 
 use super::text::{TextRasterizationError, rasterize_text_overlay};
@@ -151,6 +152,16 @@ impl RealtimePreviewCompositor {
     pub fn pipelines(&self) -> &RealtimePreviewPipelineSet {
         &self.pipelines
     }
+
+    pub fn present_to_surface(
+        &mut self,
+        _graph: &RenderGraph,
+        _target: &mut RealtimePreviewGpuPresentationTarget,
+        _frame_provider: &mut impl PreviewFrameProvider,
+        _texture_cache: &mut RealtimePreviewTextureCache,
+    ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
+        Err(RealtimePreviewCompositorError::WgpuSurfacePresentUnavailable)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,10 +175,23 @@ pub struct RealtimePreviewCompositorOutput {
     pub diagnostics: Vec<RealtimePreviewDiagnostic>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealtimePreviewSurfacePresentationOutput {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Option<Vec<u8>>,
+    pub submitted_draws: u32,
+    pub presented_frames: u32,
+    pub render_backend: RealtimePreviewCompositorBackend,
+    pub support: RealtimePreviewGraphSupport,
+    pub diagnostics: Vec<RealtimePreviewDiagnostic>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RealtimePreviewCompositorBackend {
     CpuReference,
     WgpuRenderPass,
+    WgpuSurfacePresent,
 }
 
 #[derive(Debug)]
@@ -182,6 +206,7 @@ pub enum RealtimePreviewCompositorError {
     WgpuReadbackMap(String),
     WgpuReadbackTimeout,
     WgpuPoll(String),
+    WgpuSurfacePresentUnavailable,
 }
 
 impl fmt::Display for RealtimePreviewCompositorError {
@@ -203,6 +228,9 @@ impl fmt::Display for RealtimePreviewCompositorError {
             Self::WgpuReadbackMap(error) => write!(formatter, "wgpu readback map failed: {error}"),
             Self::WgpuReadbackTimeout => formatter.write_str("wgpu readback timed out"),
             Self::WgpuPoll(error) => write!(formatter, "wgpu device poll failed: {error}"),
+            Self::WgpuSurfacePresentUnavailable => {
+                formatter.write_str("wgpu surface presentation is not implemented")
+            }
         }
     }
 }

@@ -3,7 +3,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::surface::{
-    RealtimePreviewGpuTarget, RealtimePreviewTargetError, RealtimePreviewTargetFormat,
+    NativeParentWindowHandle, PreviewSurfaceDescriptor, PreviewSurfaceDiagnosticKind,
+    PreviewSurfaceError, RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget,
+    RealtimePreviewTargetError, RealtimePreviewTargetFormat,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +48,8 @@ pub struct RealtimePreviewGpuDeviceDescriptor {
 #[derive(Debug)]
 pub struct RealtimePreviewGpuDevice {
     backend: RealtimePreviewGpuBackend,
+    instance: Option<Arc<wgpu::Instance>>,
+    adapter: Option<Arc<wgpu::Adapter>>,
     device: Option<Arc<wgpu::Device>>,
     queue: Option<Arc<wgpu::Queue>>,
 }
@@ -59,6 +63,8 @@ impl RealtimePreviewGpuDevice {
             RealtimePreviewGpuBackend::Mock | RealtimePreviewGpuBackend::OffscreenOnly => {
                 Ok(Self {
                     backend,
+                    instance: None,
+                    adapter: None,
                     device: None,
                     queue: None,
                 })
@@ -102,6 +108,8 @@ impl RealtimePreviewGpuDevice {
 
         Ok(Self {
             backend,
+            instance: Some(Arc::new(instance)),
+            adapter: Some(Arc::new(adapter)),
             device: Some(Arc::new(device)),
             queue: Some(Arc::new(queue)),
         })
@@ -146,6 +154,89 @@ impl RealtimePreviewGpuDevice {
             .map_err(RealtimePreviewGpuError::InvalidTarget)
     }
 
+    pub fn create_presentation_target(
+        &self,
+        descriptor: PreviewSurfaceDescriptor,
+        requested_format: RealtimePreviewTargetFormat,
+    ) -> Result<RealtimePreviewGpuPresentationTarget, PreviewSurfaceError> {
+        let descriptor = descriptor.validate()?;
+        let PreviewSurfaceDescriptor::NativeChild {
+            parent_window_handle,
+            ..
+        } = descriptor
+        else {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "offscreen targets cannot satisfy product presentation",
+            ));
+        };
+        if matches!(parent_window_handle, NativeParentWindowHandle::Mock(_)) {
+            return Err(PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "mock targets cannot satisfy product presentation",
+            ));
+        }
+
+        let instance = self.instance.as_deref().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "product presentation requires a real WGPU instance",
+            )
+        })?;
+        let adapter = self.adapter.as_deref().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "product presentation requires a real WGPU adapter",
+            )
+        })?;
+        let device = self.device.as_deref().ok_or_else(|| {
+            PreviewSurfaceError::new(
+                PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                "product presentation requires a real WGPU device",
+            )
+        })?;
+
+        let surface = create_native_surface(instance, parent_window_handle)?;
+        let bounds = descriptor.bounds();
+        let mut config = surface
+            .get_default_config(adapter, bounds.width, bounds.height)
+            .ok_or_else(|| {
+                PreviewSurfaceError::new(
+                    PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                    "native preview surface is not compatible with the WGPU adapter",
+                )
+            })?;
+        let requested_wgpu_format = requested_format.wgpu_format();
+        let capabilities = surface.get_capabilities(adapter);
+        let configured_format = if capabilities.formats.contains(&requested_wgpu_format) {
+            requested_format
+        } else {
+            capabilities
+                .formats
+                .iter()
+                .copied()
+                .find_map(RealtimePreviewTargetFormat::from_wgpu_format)
+                .ok_or_else(|| {
+                    PreviewSurfaceError::new(
+                        PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+                        "native preview surface has no supported sRGB presentation format",
+                    )
+                })?
+        };
+        config.format = configured_format.wgpu_format();
+        config.width = bounds.width;
+        config.height = bounds.height;
+        config.usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+        surface.configure(device, &config);
+
+        Ok(RealtimePreviewGpuPresentationTarget::new(
+            descriptor,
+            configured_format,
+            surface,
+            config,
+        ))
+    }
+
     pub(crate) fn device(&self) -> Option<&wgpu::Device> {
         self.device.as_deref()
     }
@@ -153,6 +244,49 @@ impl RealtimePreviewGpuDevice {
     pub(crate) fn queue(&self) -> Option<&wgpu::Queue> {
         self.queue.as_deref()
     }
+}
+
+fn create_native_surface(
+    instance: &wgpu::Instance,
+    handle: NativeParentWindowHandle,
+) -> Result<wgpu::Surface<'static>, PreviewSurfaceError> {
+    #[cfg(target_os = "macos")]
+    {
+        let raw_handle = crate::platform::macos::raw_window_handle(handle)?;
+        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: None,
+            raw_window_handle: raw_handle.into(),
+        };
+        return unsafe { instance.create_surface_unsafe(target) }
+            .map_err(|error| surface_error(error.to_string()));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let raw_handle = crate::platform::windows::raw_window_handle(handle)?;
+        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: None,
+            raw_window_handle: raw_handle.into(),
+        };
+        return unsafe { instance.create_surface_unsafe(target) }
+            .map_err(|error| surface_error(error.to_string()));
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (instance, handle);
+        Err(PreviewSurfaceError::new(
+            PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+            "native WGPU preview surfaces are supported only on macOS and Windows",
+        ))
+    }
+}
+
+fn surface_error(message: String) -> PreviewSurfaceError {
+    PreviewSurfaceError::new(
+        PreviewSurfaceDiagnosticKind::PlatformUnavailable,
+        format!("failed to create native WGPU preview surface: {message}"),
+    )
 }
 
 #[derive(Debug)]

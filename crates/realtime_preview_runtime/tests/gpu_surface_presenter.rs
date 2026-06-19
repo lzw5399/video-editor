@@ -1,10 +1,8 @@
 use draft_model::{DraftId, Microseconds, RationalFrameRate, TargetTimerange};
 use realtime_preview_runtime::gpu::{
     NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor,
-    RealtimePreviewCompositor, RealtimePreviewCompositorBackend,
-    RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,
-    RealtimePreviewGpuPresentationTarget, RealtimePreviewTargetFormat,
-    RealtimePreviewTextureCache,
+    RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewGpuDevice,
+    RealtimePreviewGpuDeviceDescriptor, RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
 };
 use realtime_preview_runtime::{
     PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError,
@@ -16,7 +14,7 @@ use render_graph::{
 };
 
 #[test]
-fn offscreen_targets_do_not_emit_product_surface_presentation_evidence() {
+fn gpu_surface_presenter_offscreen_targets_do_not_emit_product_surface_presentation_evidence() {
     let device = mock_device();
     let descriptor = PreviewSurfaceDescriptor::Offscreen {
         width: 4,
@@ -40,7 +38,7 @@ fn offscreen_targets_do_not_emit_product_surface_presentation_evidence() {
 }
 
 #[test]
-fn mock_native_handles_do_not_emit_product_surface_presentation_evidence() {
+fn gpu_surface_presenter_mock_native_handles_do_not_emit_product_surface_presentation_evidence() {
     let device = mock_device();
     let descriptor = PreviewSurfaceDescriptor::NativeChild {
         parent_window_handle: NativeParentWindowHandle::Mock(42),
@@ -64,9 +62,15 @@ fn mock_native_handles_do_not_emit_product_surface_presentation_evidence() {
 
 #[test]
 #[ignore = "manual platform smoke: run with VIDEO_EDITOR_TEST_WGPU_SURFACE=1 and a live native preview handle"]
-fn presented_surface_output_carries_no_cpu_pixels_or_readback_success() {
-    if std::env::var("VIDEO_EDITOR_TEST_WGPU_SURFACE").ok().as_deref() != Some("1") {
-        eprintln!("set VIDEO_EDITOR_TEST_WGPU_SURFACE=1 with VIDEO_EDITOR_TEST_NATIVE_SURFACE_HANDLE");
+fn gpu_surface_presenter_presented_surface_output_carries_no_cpu_pixels_or_readback_success() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU_SURFACE")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        eprintln!(
+            "set VIDEO_EDITOR_TEST_WGPU_SURFACE=1 with VIDEO_EDITOR_TEST_NATIVE_SURFACE_HANDLE"
+        );
         return;
     }
 

@@ -298,18 +298,28 @@ impl Error for PreviewSurfaceError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RealtimePreviewTargetFormat {
     Rgba8UnormSrgb,
+    Bgra8UnormSrgb,
 }
 
 impl RealtimePreviewTargetFormat {
     pub const fn bytes_per_pixel(self) -> usize {
         match self {
-            Self::Rgba8UnormSrgb => 4,
+            Self::Rgba8UnormSrgb | Self::Bgra8UnormSrgb => 4,
         }
     }
 
     pub(crate) const fn wgpu_format(self) -> wgpu::TextureFormat {
         match self {
             Self::Rgba8UnormSrgb => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Self::Bgra8UnormSrgb => wgpu::TextureFormat::Bgra8UnormSrgb,
+        }
+    }
+
+    pub(crate) const fn from_wgpu_format(format: wgpu::TextureFormat) -> Option<Self> {
+        match format {
+            wgpu::TextureFormat::Rgba8UnormSrgb => Some(Self::Rgba8UnormSrgb),
+            wgpu::TextureFormat::Bgra8UnormSrgb => Some(Self::Bgra8UnormSrgb),
+            _ => None,
         }
     }
 }
@@ -321,6 +331,88 @@ pub struct RealtimePreviewGpuTarget {
     scale_factor_millis: u32,
     format: RealtimePreviewTargetFormat,
     texture: Option<wgpu::Texture>,
+}
+
+#[derive(Debug)]
+pub struct RealtimePreviewGpuPresentationTarget {
+    descriptor: PreviewSurfaceDescriptor,
+    bounds: PreviewSurfaceBounds,
+    format: RealtimePreviewTargetFormat,
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+}
+
+impl RealtimePreviewGpuPresentationTarget {
+    pub(crate) fn new(
+        descriptor: PreviewSurfaceDescriptor,
+        format: RealtimePreviewTargetFormat,
+        surface: wgpu::Surface<'static>,
+        config: wgpu::SurfaceConfiguration,
+    ) -> Self {
+        let bounds = descriptor.bounds();
+        Self {
+            descriptor,
+            bounds,
+            format,
+            surface,
+            config,
+        }
+    }
+
+    pub const fn descriptor(&self) -> PreviewSurfaceDescriptor {
+        self.descriptor
+    }
+
+    pub const fn bounds(&self) -> PreviewSurfaceBounds {
+        self.bounds
+    }
+
+    pub const fn width(&self) -> u32 {
+        self.bounds.width
+    }
+
+    pub const fn height(&self) -> u32 {
+        self.bounds.height
+    }
+
+    pub const fn scale_factor_millis(&self) -> u32 {
+        self.bounds.scale_factor_millis
+    }
+
+    pub const fn format(&self) -> RealtimePreviewTargetFormat {
+        self.format
+    }
+
+    pub(crate) fn surface(&self) -> &wgpu::Surface<'static> {
+        &self.surface
+    }
+
+    pub(crate) fn update_bounds(
+        &mut self,
+        device: &wgpu::Device,
+        bounds: PreviewSurfaceBounds,
+    ) -> Result<(), PreviewSurfaceError> {
+        let bounds = bounds.validate()?;
+        self.bounds = bounds;
+        self.config.width = bounds.width;
+        self.config.height = bounds.height;
+        self.surface.configure(device, &self.config);
+        self.descriptor = match self.descriptor {
+            PreviewSurfaceDescriptor::NativeChild {
+                parent_window_handle,
+                ..
+            } => PreviewSurfaceDescriptor::NativeChild {
+                parent_window_handle,
+                bounds,
+            },
+            PreviewSurfaceDescriptor::Offscreen { .. } => PreviewSurfaceDescriptor::Offscreen {
+                width: bounds.width,
+                height: bounds.height,
+                scale_factor_millis: bounds.scale_factor_millis,
+            },
+        };
+        Ok(())
+    }
 }
 
 impl RealtimePreviewGpuTarget {
