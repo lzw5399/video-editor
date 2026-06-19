@@ -280,7 +280,6 @@ impl PreviewInvalidationRequest {
 
     fn has_v2_facts(&self) -> bool {
         !self.changed_graph_node_keys.is_empty()
-            || !self.changed_domains.is_empty()
             || self.runtime_capability_fingerprint.is_some()
             || self.output_profile_fingerprint.is_some()
             || self.full_draft
