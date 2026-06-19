@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 use draft_model::{DraftId, RationalFrameRate, TargetTimerange};
 use serde::{Deserialize, Serialize};
@@ -116,6 +116,52 @@ fn node_fingerprints(
             runtime_capability_fingerprint,
         )
     }));
+    let mut effect_node_ids = BTreeSet::new();
+    for layer in &graph.video_layers {
+        extend_filter_fingerprints(
+            &mut fingerprints,
+            &mut effect_node_ids,
+            &layer.filters,
+            output_profile_fingerprint,
+            runtime_capability_fingerprint,
+        );
+        if let Some(transition) = &layer.transition {
+            extend_transition_fingerprint(
+                &mut fingerprints,
+                &mut effect_node_ids,
+                transition,
+                output_profile_fingerprint,
+                runtime_capability_fingerprint,
+            );
+        }
+    }
+    for mix in &graph.audio_mixes {
+        extend_filter_fingerprints(
+            &mut fingerprints,
+            &mut effect_node_ids,
+            &mix.filters,
+            output_profile_fingerprint,
+            runtime_capability_fingerprint,
+        );
+    }
+    for overlay in &graph.text_overlays {
+        extend_filter_fingerprints(
+            &mut fingerprints,
+            &mut effect_node_ids,
+            &overlay.filters,
+            output_profile_fingerprint,
+            runtime_capability_fingerprint,
+        );
+        if let Some(transition) = &overlay.transition {
+            extend_transition_fingerprint(
+                &mut fingerprints,
+                &mut effect_node_ids,
+                transition,
+                output_profile_fingerprint,
+                runtime_capability_fingerprint,
+            );
+        }
+    }
     fingerprints.extend(graph.sampled_frames.iter().map(|frame| {
         sampled_frame_fingerprint(
             frame,
@@ -241,6 +287,86 @@ fn text_overlay_fingerprint(
             font_ref: overlay.overlay.font_ref.as_deref(),
             font_candidate: &overlay.overlay.font_candidate,
             fallback_candidates: &overlay.overlay.fallback_candidates,
+        },
+        output_profile_fingerprint,
+        runtime_capability_fingerprint,
+    )
+}
+
+fn extend_filter_fingerprints(
+    fingerprints: &mut Vec<RenderGraphNodeFingerprint>,
+    seen_node_ids: &mut BTreeSet<RenderGraphNodeId>,
+    filters: &[RenderFilterIntent],
+    output_profile_fingerprint: &str,
+    runtime_capability_fingerprint: &str,
+) {
+    fingerprints.extend(filters.iter().filter_map(|filter| {
+        seen_node_ids.insert(filter.node_id.clone()).then(|| {
+            filter_fingerprint(
+                filter,
+                output_profile_fingerprint,
+                runtime_capability_fingerprint,
+            )
+        })
+    }));
+}
+
+fn extend_transition_fingerprint(
+    fingerprints: &mut Vec<RenderGraphNodeFingerprint>,
+    seen_node_ids: &mut BTreeSet<RenderGraphNodeId>,
+    transition: &RenderTransitionIntent,
+    output_profile_fingerprint: &str,
+    runtime_capability_fingerprint: &str,
+) {
+    if seen_node_ids.insert(transition.node_id.clone()) {
+        fingerprints.push(transition_fingerprint(
+            transition,
+            output_profile_fingerprint,
+            runtime_capability_fingerprint,
+        ));
+    }
+}
+
+fn filter_fingerprint(
+    filter: &RenderFilterIntent,
+    output_profile_fingerprint: &str,
+    runtime_capability_fingerprint: &str,
+) -> RenderGraphNodeFingerprint {
+    fingerprint_parts(
+        filter.node_id.clone(),
+        &FilterSemanticInput {
+            name: &filter.name,
+            parameters: &filter.parameters,
+            support: filter.support,
+            reason: &filter.reason,
+        },
+        &EffectInputFacts {
+            track_id: filter.node_id.track_id.as_ref(),
+            segment_id: filter.node_id.segment_id.as_ref(),
+            material_id: filter.node_id.material_id.as_ref(),
+        },
+        output_profile_fingerprint,
+        runtime_capability_fingerprint,
+    )
+}
+
+fn transition_fingerprint(
+    transition: &RenderTransitionIntent,
+    output_profile_fingerprint: &str,
+    runtime_capability_fingerprint: &str,
+) -> RenderGraphNodeFingerprint {
+    fingerprint_parts(
+        transition.node_id.clone(),
+        &TransitionSemanticInput {
+            name: &transition.name,
+            duration: transition.duration,
+            support: transition.support,
+            reason: &transition.reason,
+        },
+        &EffectInputFacts {
+            track_id: transition.node_id.track_id.as_ref(),
+            segment_id: transition.node_id.segment_id.as_ref(),
+            material_id: transition.node_id.material_id.as_ref(),
         },
         output_profile_fingerprint,
         runtime_capability_fingerprint,
@@ -416,6 +542,32 @@ struct TextOverlayInputFacts<'a> {
     font_ref: Option<&'a str>,
     font_candidate: &'a str,
     fallback_candidates: &'a [String],
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FilterSemanticInput<'a> {
+    name: &'a str,
+    parameters: &'a std::collections::BTreeMap<String, String>,
+    support: crate::RenderIntentSupport,
+    reason: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransitionSemanticInput<'a> {
+    name: &'a str,
+    duration: draft_model::Microseconds,
+    support: crate::RenderIntentSupport,
+    reason: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EffectInputFacts<'a> {
+    track_id: Option<&'a draft_model::TrackId>,
+    segment_id: Option<&'a draft_model::SegmentId>,
+    material_id: Option<&'a draft_model::MaterialId>,
 }
 
 #[derive(Serialize)]

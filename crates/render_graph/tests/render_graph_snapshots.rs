@@ -666,6 +666,16 @@ fn render_graph_snapshot_collects_in_memory_node_fingerprints() {
     assert!(snapshot
         .node_fingerprint_by_key("draft:draft-render-graph:track:video-track:segment:video-a:video")
         .is_some());
+    assert!(snapshot
+        .node_fingerprint_by_key(
+            "draft:draft-render-graph:track:video-track:segment:video-a:filter:0"
+        )
+        .is_some());
+    assert!(snapshot
+        .node_fingerprint_by_key(
+            "draft:draft-render-graph:track:video-track:segment:video-a:transition"
+        )
+        .is_some());
     assert_eq!(
         snapshot
             .node_fingerprints
