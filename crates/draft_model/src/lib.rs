@@ -1047,6 +1047,7 @@ pub enum CommandErrorKind {
     MissingMaterial,
     InvalidTimelineEdit,
     PreviewServiceFailed,
+    ArtifactStoreFailed,
     ExportServiceFailed,
     Internal,
 }

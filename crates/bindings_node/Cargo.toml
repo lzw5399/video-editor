@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
+artifact_store = { path = "../artifact_store" }
 draft_commands = { path = "../draft_commands" }
 draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }

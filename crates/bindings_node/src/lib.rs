@@ -21,6 +21,7 @@ use project_store::{ProjectStoreError, StdPlatformFileSystem};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+use crate::artifact_store_service::handle_artifact_store_command;
 use crate::material_service::{
     ImportMaterialRequest, MaterialServiceError, MissingMaterialDiagnostic,
     MissingMaterialDiagnosticKind, import_material_and_save, list_materials,
@@ -38,6 +39,7 @@ use crate::realtime_preview_service::{
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
+pub mod artifact_store_service;
 pub mod material_service;
 pub mod preview_export_service;
 pub mod realtime_preview_service;
@@ -92,6 +94,13 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
+                | "getArtifactStatus"
+                | "refreshArtifactStatus"
+                | "retryArtifactGeneration"
+                | "resumeArtifactGeneration"
+                | "cancelArtifactGeneration"
+                | "getArtifactQuotaStatus"
+                | "runArtifactGarbageCollection"
                 | "startExport"
                 | "getExportJobStatus"
                 | "cancelExport"
@@ -166,6 +175,16 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             }
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
+        CommandName::GetArtifactStatus
+        | CommandName::RefreshArtifactStatus
+        | CommandName::RetryArtifactGeneration
+        | CommandName::ResumeArtifactGeneration
+        | CommandName::CancelArtifactGeneration
+        | CommandName::GetArtifactQuotaStatus
+        | CommandName::RunArtifactGarbageCollection => to_js_value(handle_artifact_store_command(
+            envelope.command,
+            envelope.payload,
+        )),
         CommandName::StartExport => match envelope.payload {
             CommandPayload::StartExport(payload) => start_export_command(payload),
             _ => unreachable!("command/payload pair was validated during deserialization"),

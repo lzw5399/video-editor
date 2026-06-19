@@ -57,7 +57,7 @@ fn artifact_store_commands_return_status_quota_and_gc_summaries() {
 }
 
 #[test]
-fn artifact_store_generation_actions_classify_unknown_jobs_without_panics() {
+fn artifact_store_commands_generation_actions_classify_unknown_jobs_without_panics() {
     let temp = tempfile::tempdir().expect("tempdir");
     let bundle_path = temp.path().join("draft.veproj");
 
@@ -78,7 +78,10 @@ fn artifact_store_generation_actions_classify_unknown_jobs_without_panics() {
         }))
         .expect("artifact action command should return envelope");
 
-        assert_eq!(envelope["ok"], false, "{command} should classify missing jobs");
+        assert_eq!(
+            envelope["ok"], false,
+            "{command} should classify missing jobs"
+        );
         assert_eq!(envelope["error"]["kind"], "artifactStoreFailed");
         assert_ui_safe(&envelope);
     }

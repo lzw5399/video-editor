@@ -3,7 +3,7 @@
 import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from "./Draft";
 import type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from "./CommandEnvelope";
 
-export type CommandErrorKind = "unsupportedCommand" | "invalidPayload" | "runtimeDiscoveryFailed" | "invalidProject" | "projectIoFailed" | "materialProbeFailed" | "missingMaterial" | "invalidTimelineEdit" | "previewServiceFailed" | "exportServiceFailed" | "internal";
+export type CommandErrorKind = "unsupportedCommand" | "invalidPayload" | "runtimeDiscoveryFailed" | "invalidProject" | "projectIoFailed" | "materialProbeFailed" | "missingMaterial" | "invalidTimelineEdit" | "previewServiceFailed" | "artifactStoreFailed" | "exportServiceFailed" | "internal";
 export type CommandError = { kind: CommandErrorKind, message: string, command: string | null, };
 export type CommandEvent = { kind: string, message: string | null, };
 export type CommandResultEnvelope<T> = { ok: boolean, data: T | null, error: CommandError | null, events: Array<CommandEvent>, };
