@@ -1,13 +1,20 @@
 # No Product Fallback Policy
 
-This policy is a mandatory review gate for the desktop realtime preview product
-path.
+This policy is a mandatory review gate for every product-facing editing path.
+It is especially strict for desktop realtime preview, but the same rule applies
+to import, timeline editing, preview, export, resource generation, and future
+mobile/server surfaces whenever a feature claims user-visible success.
 
 ## Rule
 
-Normal product realtime preview must not report success through fallback output.
-If the true realtime GPU/native texture/composited/present path is unavailable,
-the feature must fail closed with a clear unavailable diagnostic.
+Normal product behavior must not report success through fallback output. If the
+production implementation for a supported path is unavailable, the feature must
+fail closed with a clear unavailable diagnostic instead of silently switching to
+an approximate, mock, debug, artifact, CPU, or legacy path.
+
+When a fallback path already exists and can be exercised by normal users, remove
+or gate that path before replacing it with the production implementation. Do not
+leave the fallback active as a temporary product behavior.
 
 The product path must not use any of these as proof that playback works:
 
@@ -27,14 +34,23 @@ not continue playback, mark playback as passed, or satisfy product E2E evidence.
 Developer diagnostics may explain why realtime preview is unavailable. They may
 not turn fallback artifacts into a product preview surface.
 
+Internal conservative recovery is allowed only when it fails closed or preserves
+correctness without pretending the target capability succeeded. Examples:
+recording full-draft invalidation when precise dependency facts are missing, or
+returning an explicit unsupported/degraded compatibility report for external
+draft import. These paths must be named as diagnostics, not product success.
+
 ## Review Checklist
 
-Every review touching realtime preview must check:
+Every review touching product behavior must check:
 
 - Product playback evidence is `composited` output from the realtime preview
   surface, not decoded CPU media evidence.
-- Electron renderer and main process do not choose fallback paths.
-- Rust binding APIs do not expose FFmpeg CPU probes as realtime preview
-  evidence.
-- Product E2E tests fail when composited GPU evidence is absent.
+- Electron renderer and main process do not choose fallback paths or mutate
+  semantic state to simulate success.
+- Rust binding APIs do not expose debug, mock, FFmpeg CPU, preview artifact, or
+  legacy paths as product-success evidence.
+- Product E2E tests fail when the production path evidence is absent.
+- Any fallback wording in code, docs, tests, and telemetry is either a diagnostic
+  for unavailable/degraded behavior or a non-product test harness utility.
 - `pnpm run test:no-product-fallback` passes.

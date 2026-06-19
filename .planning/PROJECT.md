@@ -52,6 +52,7 @@ The Electron desktop UI should use Simplified Chinese as the default user-facing
 - **Terminology**: Product language, desktop code, Rust domain types, IPC commands, docs, schema, and tests should follow Jianying concepts wherever possible. Prefer draft/material/track/segment/keyframe/filter/transition-style terms over invented equivalents.
 - **Time model**: Core time math must use integer microseconds, frame indices, or rational frame rates. Avoid naked floating-point time in persisted semantics.
 - **Rendering**: Render Graph isolates editing semantics from FFmpeg. FFmpeg Runtime executes jobs and reports progress/errors; it does not decide editing behavior.
+- **No product fallback**: Product-facing paths must fail closed with explicit diagnostics when the production implementation is unavailable. Debug, mock, artifact, CPU, legacy, or approximate paths may not be reported as successful product behavior. Reviewers must apply `docs/no-product-fallback-policy.md` and run `pnpm run test:no-product-fallback` when touching preview/playback/rendering or other success-evidence paths.
 - **References**: Kdenlive and MLT are conceptual references only. Do not copy GPL code, assets, XML definitions, presets, or UI implementation.
 - **Compatibility**: External drafts go through adapters and produce compatibility reports. Proprietary IDs are external references, not internal render semantics.
 - **Testing**: Each roadmap phase must define executable gates before implementation is considered complete.
