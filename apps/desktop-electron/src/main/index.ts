@@ -4,6 +4,9 @@ import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
+  ArtifactMaintenanceResult,
+  ArtifactStatusSummary,
+  ArtifactQuotaStatus,
   CommandResultEnvelope,
   ExportJobStatusResponse,
   PreviewArtifactResponse,
@@ -94,6 +97,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testExportResponse = maybeBuildTestExportResponse(command);
   if (testExportResponse !== null) {
     return testExportResponse;
+  }
+  const testArtifactResponse = maybeBuildTestArtifactResponse(command);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
   }
   return executeCommand(command);
 });
@@ -259,7 +266,11 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const jobId =
-    command.payload.kind === "getExportJobStatus" || command.payload.kind === "cancelExport"
+    command.payload.kind === "getExportJobStatus" ||
+    command.payload.kind === "cancelExport" ||
+    command.payload.kind === "retryArtifactGeneration" ||
+    command.payload.kind === "resumeArtifactGeneration" ||
+    command.payload.kind === "cancelArtifactGeneration"
       ? command.payload.jobId
       : null;
 
@@ -861,4 +872,191 @@ function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEn
   }
 
   return null;
+}
+
+function maybeBuildTestArtifactResponse(
+  command: CommandEnvelope
+):
+  | CommandResultEnvelope<ArtifactStatusSummary>
+  | CommandResultEnvelope<ArtifactQuotaStatus>
+  | CommandResultEnvelope<ArtifactMaintenanceResult>
+  | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS !== "1") {
+    return null;
+  }
+
+  if (command.payload.kind === "getArtifactStatus" || command.payload.kind === "refreshArtifactStatus") {
+    return {
+      ok: true,
+        data: buildTestArtifactStatusSummary(command.payload.sessionId, "生成中"),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "cancelArtifactGeneration") {
+    return {
+      ok: true,
+      data: buildTestArtifactStatusSummary(command.payload.sessionId, "资源任务已更新", command.payload.jobId),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "retryArtifactGeneration" || command.payload.kind === "resumeArtifactGeneration") {
+    return {
+      ok: true,
+      data: buildTestArtifactStatusSummary(command.payload.sessionId, "资源任务已恢复"),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "getArtifactQuotaStatus") {
+    return {
+      ok: true,
+      data: buildTestArtifactQuotaStatus(),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "runArtifactGarbageCollection") {
+    return {
+      ok: true,
+      data: {
+        sessionId: command.payload.sessionId,
+        statusLabel: command.payload.dryRun ? "缓存空间偏高" : "缓存清理完成",
+        mode: command.payload.dryRun ? "dryRun" : "apply",
+        affectedCount: command.payload.dryRun ? 3 : 2,
+        reclaimableLabel: "860 MB",
+        releasedLabel: command.payload.dryRun ? "0 MB" : "640 MB",
+        completed: !command.payload.dryRun
+      },
+      error: null,
+      events: []
+    };
+  }
+
+  return null;
+}
+
+function buildTestArtifactStatusSummary(
+  sessionId: string,
+  statusLabel: string,
+  cancelledJobId: string | null = null
+): ArtifactStatusSummary {
+  return {
+    sessionId,
+    statusLabel,
+    materials: [
+      {
+        materialId: "material-workspace-video",
+        materialLabel: "城市街景.mp4",
+        artifactKind: "thumbnail",
+        status: "ready",
+        statusLabel: "资源就绪",
+        progressPerMille: 1000,
+        canRefresh: true,
+        canRetry: false,
+        canResume: false,
+        canCancel: false,
+        displayRef: null,
+        errorCategory: null
+      },
+      {
+        materialId: "material-workspace-video",
+        materialLabel: "城市街景.mp4",
+        artifactKind: "waveform",
+        status: "running",
+        statusLabel: "生成中",
+        progressPerMille: 420,
+        canRefresh: true,
+        canRetry: false,
+        canResume: false,
+        canCancel: true,
+        displayRef: null,
+        errorCategory: null
+      },
+      {
+        materialId: "material-workspace-audio",
+        materialLabel: "背景音乐.wav",
+        artifactKind: "proxy",
+        status: "resumable",
+        statusLabel: "可继续",
+        progressPerMille: 510,
+        canRefresh: true,
+        canRetry: false,
+        canResume: true,
+        canCancel: false,
+        displayRef: null,
+        errorCategory: null
+      },
+      {
+        materialId: "material-workspace-missing",
+        materialLabel: "封面图.png",
+        artifactKind: "thumbnail",
+        status: "failed",
+        statusLabel: "生成失败",
+        progressPerMille: null,
+        canRefresh: true,
+        canRetry: true,
+        canResume: false,
+        canCancel: false,
+        displayRef: null,
+        errorCategory: "missingSource"
+      }
+    ],
+    tasks: [
+      {
+        jobId: "artifact-job-waveform",
+        artifactKind: "waveform",
+        displayLabel: "城市街景.mp4",
+        status: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "cancelRequested" : "running",
+        statusLabel: cancelledJobId === null || cancelledJobId === "artifact-job-waveform" ? "正在取消" : "生成中",
+        progressPerMille: 420,
+        canRetry: false,
+        canResume: false,
+        canCancel: true,
+        errorCategory: null
+      },
+      {
+        jobId: "artifact-job-thumbnail",
+        artifactKind: "thumbnail",
+        displayLabel: "封面图.png",
+        status: "failed",
+        statusLabel: "生成失败",
+        progressPerMille: null,
+        canRetry: true,
+        canResume: false,
+        canCancel: false,
+        errorCategory: "missingSource"
+      },
+      {
+        jobId: "artifact-job-proxy",
+        artifactKind: "proxy",
+        displayLabel: "背景音乐.wav",
+        status: "resumable",
+        statusLabel: "可继续",
+        progressPerMille: 510,
+        canRetry: false,
+        canResume: true,
+        canCancel: false,
+        errorCategory: null
+      }
+    ],
+    quota: buildTestArtifactQuotaStatus(),
+    refreshAvailable: true
+  };
+}
+
+function buildTestArtifactQuotaStatus(): ArtifactQuotaStatus {
+  return {
+    statusLabel: "缓存空间偏高",
+    severity: "warning",
+    usedLabel: "2.4 GB",
+    reclaimableLabel: "860 MB",
+    releasedLabel: "0 MB",
+    cleanupAvailable: true
+  };
 }

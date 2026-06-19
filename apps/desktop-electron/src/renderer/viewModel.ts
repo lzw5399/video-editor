@@ -2,9 +2,14 @@ import type { CSSProperties } from "react";
 
 import type { CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
+  ArtifactMaintenanceResult,
+  ArtifactQuotaStatus,
+  ArtifactStatusSummary,
+  ArtifactTaskStatus,
   ExportDiagnosticKind,
   ExportJobPhase,
   ExportValidationReport,
+  MaterialArtifactStatus,
   MissingMaterialCommandDiagnostic,
   PreviewStatus
 } from "../generated/CommandResultEnvelope";
@@ -74,12 +79,64 @@ export type WorkspaceState = {
   selection: TimelineSelection;
   materials: Material[];
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
+  resourcePanel: ResourcePanelState;
   preview: PreviewDisplayState;
   export: ExportDisplayState;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   bindingStatus: BindingStatus;
   pendingCommand: string | null;
   commandError: string | null;
+};
+
+export type ResourceStatusTone = "ready" | "active" | "warning" | "error" | "muted";
+
+export type MaterialResourceChipView = {
+  key: string;
+  label: string;
+  statusLabel: string;
+  tone: ResourceStatusTone;
+  progressPerMille: number | null;
+};
+
+export type MaterialResourceStatusView = {
+  materialId: string;
+  materialLabel: string;
+  chips: MaterialResourceChipView[];
+};
+
+export type ResourceTaskView = {
+  jobId: string;
+  label: string;
+  statusLabel: string;
+  tone: ResourceStatusTone;
+  progressPerMille: number | null;
+  canCancel: boolean;
+  canRetry: boolean;
+  canResume: boolean;
+};
+
+export type ResourceMaintenanceView = {
+  statusLabel: string;
+  severity: ResourceStatusTone;
+  usedLabel: string;
+  reclaimableLabel: string;
+  releasedLabel: string;
+  cleanupAvailable: boolean;
+  resultLabel: string | null;
+  errorLabel: string | null;
+};
+
+export type ResourcePanelState = {
+  sessionId: string;
+  statusLabel: string;
+  materials: MaterialResourceStatusView[];
+  tasks: ResourceTaskView[];
+  maintenance: ResourceMaintenanceView;
+  refreshAvailable: boolean;
+  cleanupConfirming: boolean;
+  cleanupRunning: boolean;
+  pendingJobId: string | null;
+  notice: string | null;
 };
 
 export type PreviewDisplayState = {
@@ -477,6 +534,7 @@ export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft):
     selection: initialTimelineSelection,
     materials: draft.materials,
     materialDiagnostics: [],
+    resourcePanel: createInitialResourcePanelState(),
     preview: {
       frameArtifactPath: null,
       frameDisplayUrl: null,
@@ -509,6 +567,212 @@ export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft):
     pendingCommand: null,
     commandError: null
   };
+}
+
+export function createInitialResourcePanelState(): ResourcePanelState {
+  return {
+    sessionId: "desktop-artifact-session",
+    statusLabel: "资源待刷新",
+    materials: [],
+    tasks: [],
+    maintenance: {
+      statusLabel: "缓存空间正常",
+      severity: "ready",
+      usedLabel: "待统计",
+      reclaimableLabel: "待统计",
+      releasedLabel: "0 MB",
+      cleanupAvailable: false,
+      resultLabel: null,
+      errorLabel: null
+    },
+    refreshAvailable: true,
+    cleanupConfirming: false,
+    cleanupRunning: false,
+    pendingJobId: null,
+    notice: null
+  };
+}
+
+export function resourcePanelFromArtifactStatus(summary: ArtifactStatusSummary): ResourcePanelState {
+  return {
+    sessionId: summary.sessionId,
+    statusLabel: summary.statusLabel,
+    materials: materialResourceViews(summary.materials),
+    tasks: summary.tasks.map((task) => ({
+      jobId: task.jobId,
+      label: `${artifactKindLabel(task.artifactKind)} · ${task.displayLabel}`,
+      statusLabel: safeArtifactStatusLabel(task.statusLabel, task.status),
+      tone: artifactStatusTone(task.status),
+      progressPerMille: normalizeProgress(task.progressPerMille),
+      canCancel: task.canCancel,
+      canRetry: task.canRetry,
+      canResume: task.canResume
+    })),
+    maintenance: maintenanceFromQuota(summary.quota, null, null),
+    refreshAvailable: summary.refreshAvailable,
+    cleanupConfirming: false,
+    cleanupRunning: false,
+    pendingJobId: null,
+    notice: null
+  };
+}
+
+export function resourcePanelWithQuota(current: ResourcePanelState, quota: ArtifactQuotaStatus): ResourcePanelState {
+  return {
+    ...current,
+    maintenance: maintenanceFromQuota(quota, current.maintenance.resultLabel, null)
+  };
+}
+
+export function resourcePanelWithMaintenanceResult(
+  current: ResourcePanelState,
+  result: ArtifactMaintenanceResult
+): ResourcePanelState {
+  return {
+    ...current,
+    cleanupConfirming: false,
+    cleanupRunning: false,
+    notice: result.completed ? "缓存清理完成" : result.statusLabel,
+    maintenance: {
+      ...current.maintenance,
+      resultLabel: `${result.statusLabel} · 已释放 ${result.releasedLabel}`,
+      releasedLabel: result.releasedLabel,
+      reclaimableLabel: result.reclaimableLabel,
+      errorLabel: null
+    }
+  };
+}
+
+export function resourcePanelWithError(current: ResourcePanelState, message: string): ResourcePanelState {
+  return {
+    ...current,
+    cleanupRunning: false,
+    pendingJobId: null,
+    maintenance: {
+      ...current.maintenance,
+      errorLabel: message
+    }
+  };
+}
+
+export function artifactPreviewStatusLabel(resourcePanel: ResourcePanelState): string | null {
+  if (resourcePanel.tasks.some((task) => task.tone === "active")) {
+    return "预览资源生成中";
+  }
+
+  if (resourcePanel.tasks.some((task) => task.tone === "error")) {
+    return "生成失败";
+  }
+
+  if (resourcePanel.tasks.some((task) => task.statusLabel === "已取消")) {
+    return "已取消";
+  }
+
+  if (resourcePanel.materials.some((material) => material.chips.some((chip) => chip.statusLabel === "待刷新"))) {
+    return "预览待刷新";
+  }
+
+  if (resourcePanel.materials.some((material) => material.chips.length > 0)) {
+    return "预览就绪";
+  }
+
+  return null;
+}
+
+function materialResourceViews(statuses: MaterialArtifactStatus[]): MaterialResourceStatusView[] {
+  const grouped = new Map<string, MaterialResourceStatusView>();
+
+  for (const status of statuses) {
+    const view =
+      grouped.get(status.materialId) ??
+      {
+        materialId: status.materialId,
+        materialLabel: status.materialLabel,
+        chips: []
+      };
+    view.chips.push({
+      key: `${status.materialId}-${status.artifactKind}`,
+      label: artifactKindLabel(status.artifactKind),
+      statusLabel: safeArtifactStatusLabel(status.statusLabel, status.status),
+      tone: artifactStatusTone(status.status),
+      progressPerMille: normalizeProgress(status.progressPerMille)
+    });
+    grouped.set(status.materialId, view);
+  }
+
+  return Array.from(grouped.values());
+}
+
+function maintenanceFromQuota(
+  quota: ArtifactQuotaStatus,
+  resultLabel: string | null,
+  errorLabel: string | null
+): ResourceMaintenanceView {
+  return {
+    statusLabel: quota.statusLabel,
+    severity: quota.severity === "warning" ? "warning" : quota.severity === "error" ? "error" : "ready",
+    usedLabel: quota.usedLabel,
+    reclaimableLabel: quota.reclaimableLabel,
+    releasedLabel: quota.releasedLabel,
+    cleanupAvailable: quota.cleanupAvailable,
+    resultLabel,
+    errorLabel
+  };
+}
+
+function artifactKindLabel(kind: string): string {
+  if (kind === "thumbnail") {
+    return "缩略图";
+  }
+  if (kind === "waveform") {
+    return "波形";
+  }
+  if (kind === "proxy") {
+    return "代理";
+  }
+  if (kind === "preview") {
+    return "预览";
+  }
+  return "资源";
+}
+
+function safeArtifactStatusLabel(label: string, status: ArtifactTaskStatus): string {
+  const allowed: Record<ArtifactTaskStatus, string> = {
+    waiting: "等待生成",
+    running: "生成中",
+    ready: "资源就绪",
+    dirty: "待刷新",
+    resumable: "可继续",
+    cancelRequested: "正在取消",
+    cancelled: "已取消",
+    failed: "生成失败"
+  };
+
+  return Object.values(allowed).includes(label) ? label : allowed[status];
+}
+
+function artifactStatusTone(status: ArtifactTaskStatus): ResourceStatusTone {
+  if (status === "ready") {
+    return "ready";
+  }
+  if (status === "running" || status === "cancelRequested") {
+    return "active";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "waiting" || status === "dirty" || status === "resumable" || status === "cancelled") {
+    return "warning";
+  }
+  return "muted";
+}
+
+function normalizeProgress(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1000, Math.round(value)));
 }
 
 export function createWaitingRuntimeDiagnosticsState(): RuntimeDiagnosticsDisplayState {

@@ -9,6 +9,9 @@ import type {
   DirtyRange,
   EditTextSegmentCommandPayload,
   ExportPreset,
+  ArtifactGenerationActionCommandPayload,
+  GetArtifactQuotaStatusCommandPayload,
+  GetArtifactStatusCommandPayload,
   GetExportJobStatusCommandPayload,
   ImportSubtitleSrtCommandPayload,
   ImportMaterialCommandPayload,
@@ -21,10 +24,12 @@ import type {
   RemoveSegmentKeyframeCommandPayload,
   RequestPreviewFrameCommandPayload,
   RequestPreviewSegmentCommandPayload,
+  RefreshArtifactStatusCommandPayload,
   SelectTimelineSegmentsCommandPayload,
   SetSegmentKeyframeCommandPayload,
   SplitSegmentCommandPayload,
   StartExportCommandPayload,
+  RunArtifactGarbageCollectionCommandPayload,
   TimelineSelection,
   TrimSegmentCommandPayload,
   TrackId,
@@ -519,6 +524,91 @@ export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCac
   } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
 
   return envelope("invalidatePreviewCache", payload);
+}
+
+type ArtifactStatusCommandOptions = {
+  sessionId: string;
+  bundlePath: string;
+  materialId?: MaterialId | null;
+};
+
+export function buildGetArtifactStatusCommand(options: ArtifactStatusCommandOptions): CommandEnvelope {
+  const payload = {
+    kind: "getArtifactStatus",
+    sessionId: options.sessionId,
+    bundlePath: options.bundlePath,
+    materialId: options.materialId ?? null
+  } satisfies GetArtifactStatusCommandPayload & { kind: "getArtifactStatus" };
+
+  return envelope("getArtifactStatus", payload);
+}
+
+export function buildRefreshArtifactStatusCommand(options: ArtifactStatusCommandOptions): CommandEnvelope {
+  const payload = {
+    kind: "refreshArtifactStatus",
+    sessionId: options.sessionId,
+    bundlePath: options.bundlePath,
+    materialId: options.materialId ?? null
+  } satisfies RefreshArtifactStatusCommandPayload & { kind: "refreshArtifactStatus" };
+
+  return envelope("refreshArtifactStatus", payload);
+}
+
+type ArtifactGenerationActionOptions = {
+  sessionId: string;
+  bundlePath: string;
+  jobId: string;
+};
+
+export function buildRetryArtifactGenerationCommand(options: ArtifactGenerationActionOptions): CommandEnvelope {
+  return buildArtifactGenerationActionCommand("retryArtifactGeneration", options);
+}
+
+export function buildResumeArtifactGenerationCommand(options: ArtifactGenerationActionOptions): CommandEnvelope {
+  return buildArtifactGenerationActionCommand("resumeArtifactGeneration", options);
+}
+
+export function buildCancelArtifactGenerationCommand(options: ArtifactGenerationActionOptions): CommandEnvelope {
+  return buildArtifactGenerationActionCommand("cancelArtifactGeneration", options);
+}
+
+function buildArtifactGenerationActionCommand(
+  kind: "retryArtifactGeneration" | "resumeArtifactGeneration" | "cancelArtifactGeneration",
+  options: ArtifactGenerationActionOptions
+): CommandEnvelope {
+  const payload = {
+    kind,
+    sessionId: options.sessionId,
+    bundlePath: options.bundlePath,
+    jobId: options.jobId
+  } satisfies ArtifactGenerationActionCommandPayload & { kind: typeof kind };
+
+  return envelope(kind, payload);
+}
+
+export function buildGetArtifactQuotaStatusCommand(sessionId: string, bundlePath: string): CommandEnvelope {
+  const payload = {
+    kind: "getArtifactQuotaStatus",
+    sessionId,
+    bundlePath
+  } satisfies GetArtifactQuotaStatusCommandPayload & { kind: "getArtifactQuotaStatus" };
+
+  return envelope("getArtifactQuotaStatus", payload);
+}
+
+export function buildRunArtifactGarbageCollectionCommand(
+  sessionId: string,
+  bundlePath: string,
+  dryRun: boolean
+): CommandEnvelope {
+  const payload = {
+    kind: "runArtifactGarbageCollection",
+    sessionId,
+    bundlePath,
+    dryRun
+  } satisfies RunArtifactGarbageCollectionCommandPayload & { kind: "runArtifactGarbageCollection" };
+
+  return envelope("runArtifactGarbageCollection", payload);
 }
 
 type StartExportOptions = {

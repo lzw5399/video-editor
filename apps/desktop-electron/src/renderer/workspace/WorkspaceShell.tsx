@@ -1,6 +1,7 @@
 import {
   WORKSPACE_CATEGORIES,
   WORKSPACE_CATEGORY_META,
+  artifactPreviewStatusLabel,
   getSelectedSegmentView,
   type WorkspaceCategory,
   type WorkspaceState
@@ -38,6 +39,13 @@ type WorkspaceShellProps = {
   onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
+  onRefreshArtifactStatus: () => void;
+  onCancelArtifactGeneration: (jobId: string) => void;
+  onRetryArtifactGeneration: (jobId: string) => void;
+  onResumeArtifactGeneration: (jobId: string) => void;
+  onPrepareArtifactCleanup: () => void;
+  onConfirmArtifactCleanup: () => void;
+  onDismissResourceNotice: () => void;
   onAddTextSegment: Parameters<typeof FeaturePanel>[0]["onAddTextSegment"];
   onImportSubtitleSrt: Parameters<typeof FeaturePanel>[0]["onImportSubtitleSrt"];
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
@@ -89,6 +97,13 @@ export function WorkspaceShell({
   onImportMaterialFromPath,
   onRefreshMaterials,
   onListMissingMaterials,
+  onRefreshArtifactStatus,
+  onCancelArtifactGeneration,
+  onRetryArtifactGeneration,
+  onResumeArtifactGeneration,
+  onPrepareArtifactCleanup,
+  onConfirmArtifactCleanup,
+  onDismissResourceNotice,
   onAddTextSegment,
   onImportSubtitleSrt,
   onAddAudioSegment,
@@ -152,6 +167,13 @@ export function WorkspaceShell({
           onImportMaterialFromPath={onImportMaterialFromPath}
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}
+          onRefreshArtifactStatus={onRefreshArtifactStatus}
+          onCancelArtifactGeneration={onCancelArtifactGeneration}
+          onRetryArtifactGeneration={onRetryArtifactGeneration}
+          onResumeArtifactGeneration={onResumeArtifactGeneration}
+          onPrepareArtifactCleanup={onPrepareArtifactCleanup}
+          onConfirmArtifactCleanup={onConfirmArtifactCleanup}
+          onDismissResourceNotice={onDismissResourceNotice}
           onAddTextSegment={onAddTextSegment}
           onImportSubtitleSrt={onImportSubtitleSrt}
           onAddAudioSegment={onAddAudioSegment}
@@ -166,6 +188,7 @@ export function WorkspaceShell({
           canvasConfig={workspace.draft.canvasConfig}
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
+          resourcePreviewStatusLabel={artifactPreviewStatusLabel(workspace.resourcePanel)}
           exportState={workspace.export}
           runtimeDiagnostics={workspace.runtimeDiagnostics}
           selectedSegment={selectedSegment}

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
+  ArtifactMaintenanceResult,
+  ArtifactQuotaStatus,
+  ArtifactStatusSummary,
   CommandResultEnvelope,
   ExportJobStatusResponse,
   ImportMaterialResponse,
@@ -32,9 +35,12 @@ import {
   buildAddSegmentCommand,
   buildAddAudioSegmentCommand,
   buildAddTextSegmentCommand,
+  buildCancelArtifactGenerationCommand,
   buildDeleteSegmentCommand,
   buildEditTextSegmentCommand,
   buildCancelExportCommand,
+  buildGetArtifactQuotaStatusCommand,
+  buildGetArtifactStatusCommand,
   buildGetExportJobStatusCommand,
   buildImportMaterialCommand,
   buildImportSubtitleSrtCommand,
@@ -44,8 +50,12 @@ import {
   buildProbeRuntimeCapabilitiesCommand,
   buildRequestPreviewFrameCommand,
   buildRequestPreviewSegmentCommand,
+  buildRefreshArtifactStatusCommand,
   buildRedoTimelineEditCommand,
   buildRemoveSegmentKeyframeCommand,
+  buildResumeArtifactGenerationCommand,
+  buildRetryArtifactGenerationCommand,
+  buildRunArtifactGarbageCollectionCommand,
   buildSelectTimelineSegmentsCommand,
   buildSetSegmentKeyframeCommand,
   buildSetSegmentVolumeCommand,
@@ -63,6 +73,7 @@ import {
 import {
   createCheckingRuntimeDiagnosticsState,
   createInitialWorkspaceState,
+  artifactPreviewStatusLabel,
   findFirstMaterialByKind,
   findTrackByKind,
   formatExportDiagnostic,
@@ -72,6 +83,10 @@ import {
   getSelectedSegmentView,
   getSelectedTrackView,
   nextTrackStart,
+  resourcePanelFromArtifactStatus,
+  resourcePanelWithError,
+  resourcePanelWithMaintenanceResult,
+  resourcePanelWithQuota,
   resolveWorkspaceStartupDraft,
   type ExportDisplayState,
   type PreviewDisplayState,
@@ -113,6 +128,10 @@ type ExecutedDraftCommand<T> = {
 type ExportCommandResultApplier = (
   current: WorkspaceState,
   result: CommandResultEnvelope<ExportJobStatusResponse>
+) => WorkspaceState;
+type ArtifactCommandResultApplier<T> = (
+  current: WorkspaceState,
+  result: CommandResultEnvelope<T>
 ) => WorkspaceState;
 type DerivedStateInvalidationCopy = {
   frameStatusLabel: string;
@@ -364,6 +383,7 @@ export function App(): React.ReactElement {
         commandError: null
       }));
 
+      void handleGetArtifactStatus();
       void handleProbeRuntimeCapabilities();
     }
 
@@ -660,6 +680,193 @@ export function App(): React.ReactElement {
     } finally {
       commandInFlightRef.current = false;
     }
+  }
+
+  async function executeArtifactCommand<T>(
+    buildCommand: (current: WorkspaceState) => CommandEnvelope,
+    pendingCommand: string,
+    applyResult: ArtifactCommandResultApplier<T>
+  ): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
+        const next = {
+          ...current,
+          commandError: message,
+          resourcePanel: resourcePanelWithError(current.resourcePanel, message)
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    commandInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand,
+        commandError: null,
+        resourcePanel: {
+          ...current.resourcePanel,
+          cleanupRunning: pendingCommand === "清理缓存",
+          pendingJobId: pendingCommand.startsWith("资源任务") ? current.resourcePanel.pendingJobId : current.resourcePanel.pendingJobId
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const command = buildCommand(workspaceRef.current);
+      const result = await window.videoEditorCore.executeCommand<T>(command);
+      setWorkspace((current) => {
+        const next = applyResult(current, result);
+        workspaceRef.current = next;
+        return next;
+      });
+    } catch (error: unknown) {
+      const message = commandErrorMessage(error instanceof Error ? error.message : String(error));
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: null,
+          commandError: message,
+          resourcePanel: resourcePanelWithError(current.resourcePanel, message)
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
+  function handleGetArtifactStatus(): void {
+    void executeArtifactCommand<ArtifactStatusSummary>(
+      (current) =>
+        buildGetArtifactStatusCommand({
+          sessionId: current.resourcePanel.sessionId,
+          bundlePath
+        }),
+      "读取资源状态",
+      applyArtifactStatusResult
+    );
+  }
+
+  function handleRefreshArtifactStatus(): void {
+    void (async () => {
+      await executeArtifactCommand<ArtifactStatusSummary>(
+        (current) =>
+          buildGetArtifactStatusCommand({
+            sessionId: current.resourcePanel.sessionId,
+            bundlePath
+          }),
+        "读取资源状态",
+        applyArtifactStatusResult
+      );
+      await executeArtifactCommand<ArtifactStatusSummary>(
+        (current) =>
+          buildRefreshArtifactStatusCommand({
+            sessionId: current.resourcePanel.sessionId,
+            bundlePath
+          }),
+        "刷新状态",
+        applyArtifactStatusResult
+      );
+    })();
+  }
+
+  function handleArtifactTaskAction(action: "cancel" | "retry" | "resume", jobId: string): void {
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        resourcePanel: {
+          ...current.resourcePanel,
+          pendingJobId: jobId,
+          tasks:
+            action === "cancel"
+              ? current.resourcePanel.tasks.map((task) =>
+                  task.jobId === jobId ? { ...task, statusLabel: "正在取消", tone: "active" as const } : task
+                )
+              : current.resourcePanel.tasks
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    const buildCommand =
+      action === "cancel"
+        ? buildCancelArtifactGenerationCommand
+        : action === "retry"
+          ? buildRetryArtifactGenerationCommand
+          : buildResumeArtifactGenerationCommand;
+    void executeArtifactCommand<ArtifactStatusSummary>(
+      (current) =>
+        buildCommand({
+          sessionId: current.resourcePanel.sessionId,
+          bundlePath,
+          jobId
+        }),
+      `资源任务${action}`,
+      applyArtifactStatusResult
+    );
+  }
+
+  function handlePrepareArtifactCleanup(): void {
+    void executeArtifactCommand<ArtifactQuotaStatus>(
+      (current) => buildGetArtifactQuotaStatusCommand(current.resourcePanel.sessionId, bundlePath),
+      "检查缓存空间",
+      (current, result) => ({
+        ...current,
+        pendingCommand: null,
+        commandError: result.ok ? null : commandErrorMessage(result),
+        resourcePanel:
+          result.ok && result.data !== null
+            ? {
+                ...resourcePanelWithQuota(current.resourcePanel, result.data),
+                cleanupConfirming: true
+              }
+            : resourcePanelWithError(current.resourcePanel, commandErrorMessage(result))
+      })
+    );
+  }
+
+  function handleConfirmArtifactCleanup(): void {
+    void executeArtifactCommand<ArtifactMaintenanceResult>(
+      (current) => buildRunArtifactGarbageCollectionCommand(current.resourcePanel.sessionId, bundlePath, false),
+      "清理缓存",
+      (current, result) => ({
+        ...current,
+        pendingCommand: null,
+        commandError: result.ok ? null : commandErrorMessage(result),
+        resourcePanel:
+          result.ok && result.data !== null
+            ? resourcePanelWithMaintenanceResult(current.resourcePanel, result.data)
+            : resourcePanelWithError(current.resourcePanel, commandErrorMessage(result))
+      })
+    );
+  }
+
+  function handleDismissResourceNotice(): void {
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        resourcePanel: {
+          ...current.resourcePanel,
+          cleanupConfirming: false,
+          notice: null,
+          maintenance: {
+            ...current.resourcePanel.maintenance,
+            resultLabel: null,
+            errorLabel: null
+          }
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }
 
   async function handleProbeRuntimeCapabilities(): Promise<void> {
@@ -1498,9 +1705,9 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <WorkspaceShell
-      workspace={workspace}
-      activeCategory={activeCategory}
+        <WorkspaceShell
+          workspace={workspace}
+          activeCategory={activeCategory}
       showDeveloperDiagnostics={showDeveloperDiagnostics}
       bundlePath={bundlePath}
       materialPath={materialPath}
@@ -1521,10 +1728,17 @@ export function App(): React.ReactElement {
       onRefreshExportStatus={handleRefreshExportStatus}
       onCancelExport={handleCancelExport}
       onImportMaterial={handleImportMaterial}
-      onImportMaterialFromPath={handleImportMaterialFromPath}
-      onRefreshMaterials={handleRefreshMaterials}
-      onListMissingMaterials={handleListMissingMaterials}
-      onAddTextSegment={handleAddTextSegment}
+          onImportMaterialFromPath={handleImportMaterialFromPath}
+          onRefreshMaterials={handleRefreshMaterials}
+          onListMissingMaterials={handleListMissingMaterials}
+          onRefreshArtifactStatus={handleRefreshArtifactStatus}
+          onCancelArtifactGeneration={(jobId) => handleArtifactTaskAction("cancel", jobId)}
+          onRetryArtifactGeneration={(jobId) => handleArtifactTaskAction("retry", jobId)}
+          onResumeArtifactGeneration={(jobId) => handleArtifactTaskAction("resume", jobId)}
+          onPrepareArtifactCleanup={handlePrepareArtifactCleanup}
+          onConfirmArtifactCleanup={handleConfirmArtifactCleanup}
+          onDismissResourceNotice={handleDismissResourceNotice}
+          onAddTextSegment={handleAddTextSegment}
       onImportSubtitleSrt={handleImportSubtitleSrt}
       onAddAudioSegment={handleAddAudioSegment}
       onEditSelectedText={handleEditSelectedText}
@@ -1545,6 +1759,28 @@ export function App(): React.ReactElement {
       onRedoTimelineEdit={handleRedoTimelineEdit}
     />
   );
+}
+
+function applyArtifactStatusResult(
+  current: WorkspaceState,
+  result: CommandResultEnvelope<ArtifactStatusSummary>
+): WorkspaceState {
+  if (!result.ok || result.data === null) {
+    const message = commandErrorMessage(result);
+    return {
+      ...current,
+      pendingCommand: null,
+      commandError: message,
+      resourcePanel: resourcePanelWithError(current.resourcePanel, message)
+    };
+  }
+
+  return {
+    ...current,
+    pendingCommand: null,
+    commandError: null,
+    resourcePanel: resourcePanelFromArtifactStatus(result.data)
+  };
 }
 
 function applyExportCommandResult(

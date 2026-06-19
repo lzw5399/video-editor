@@ -33,6 +33,7 @@ type PreviewMonitorProps = {
   canvasConfig: DraftCanvasConfig;
   bindingStatus: BindingStatus;
   preview: PreviewDisplayState;
+  resourcePreviewStatusLabel: string | null;
   exportState: ExportDisplayState;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   selectedSegment: SelectedSegmentView | null;
@@ -137,6 +138,7 @@ export function PreviewMonitor({
   canvasConfig,
   bindingStatus,
   preview,
+  resourcePreviewStatusLabel,
   exportState,
   runtimeDiagnostics,
   selectedSegment,
@@ -179,7 +181,7 @@ export function PreviewMonitor({
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
   const previewStatusLabel = showDeveloperDiagnostics
     ? preview.error ?? preview.frameStatusLabel
-    : formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
+    : resourcePreviewStatusLabel ?? formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
     preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;

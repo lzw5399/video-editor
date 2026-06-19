@@ -501,6 +501,178 @@ h2 {
   line-height: 1.4;
 }
 
+.resource-task-strip,
+.resource-maintenance {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #343431;
+  border-radius: 6px;
+  background: #252522;
+}
+
+.resource-task-strip {
+  max-height: 96px;
+  overflow: hidden;
+}
+
+.resource-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resource-section-header h3 {
+  margin: 0;
+  color: #f0eee8;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.resource-section-header span {
+  min-width: 0;
+  overflow: hidden;
+  color: #20c7d9;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-action {
+  height: 28px;
+  min-width: 58px;
+  padding: 0 8px;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #e9e7df;
+  background: #292926;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+.compact-action.primary {
+  border-color: #20c7d9;
+  color: #061314;
+  background: #20c7d9;
+}
+
+.compact-action:disabled,
+.resource-task-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.resource-empty,
+.resource-safe-copy,
+.resource-quota,
+.resource-maintenance-result,
+.resource-cleanup-confirm,
+.resource-maintenance-error {
+  margin: 0;
+  min-width: 0;
+  color: #9b9890;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.resource-empty {
+  display: grid;
+  gap: 2px;
+}
+
+.resource-empty strong {
+  color: #f0eee8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.resource-task-list {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resource-task-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resource-task-copy {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resource-task-copy strong,
+.resource-task-copy span,
+.resource-overflow {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-task-copy strong {
+  min-width: 0;
+  color: #f0eee8;
+  font-weight: 600;
+}
+
+.resource-task-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.resource-task-actions button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #f0eee8;
+  background: #292926;
+  font-size: 11px;
+  line-height: 26px;
+}
+
+.resource-progress {
+  width: 52px;
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #151515;
+}
+
+.resource-progress.compact {
+  width: 24px;
+}
+
+.resource-progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #151515;
+}
+
+.resource-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: #20c7d9;
+}
+
+.resource-progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: #20c7d9;
+}
+
 .material-list {
   display: grid;
   align-content: start;
@@ -595,6 +767,81 @@ h2 {
 
 .material-warning {
   margin-top: 4px;
+}
+
+.material-resource-status {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  height: 20px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.resource-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid #343431;
+  border-radius: 4px;
+  background: #191917;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.resource-chip strong,
+.resource-chip em {
+  overflow: hidden;
+  max-width: 56px;
+  font-style: normal;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-chip strong {
+  color: #f0eee8;
+}
+
+.resource-tone-ready {
+  color: #5f9f73;
+}
+
+.resource-tone-active {
+  color: #20c7d9;
+}
+
+.resource-tone-warning {
+  color: #d6a23f;
+}
+
+.resource-tone-error,
+.resource-maintenance-error {
+  color: #e45a5a;
+}
+
+.resource-tone-muted {
+  color: #9b9890;
+}
+
+.resource-cleanup-confirm,
+.resource-maintenance-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.resource-cleanup-confirm span,
+.resource-maintenance-result span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview-monitor {

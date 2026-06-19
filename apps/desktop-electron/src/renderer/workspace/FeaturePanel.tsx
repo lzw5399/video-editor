@@ -12,6 +12,9 @@ import {
   getSelectedSegmentView,
   getSelectedTrackView,
   materialStatusMessage,
+  type MaterialResourceStatusView,
+  type ResourcePanelState,
+  type ResourceStatusTone,
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
@@ -28,6 +31,13 @@ type FeaturePanelProps = {
   onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
+  onRefreshArtifactStatus: () => void;
+  onCancelArtifactGeneration: (jobId: string) => void;
+  onRetryArtifactGeneration: (jobId: string) => void;
+  onResumeArtifactGeneration: (jobId: string) => void;
+  onPrepareArtifactCleanup: () => void;
+  onConfirmArtifactCleanup: () => void;
+  onDismissResourceNotice: () => void;
   onAddTextSegment: (text: TextSegment, durationUs: number) => void;
   onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
   onAddAudioSegment: (materialId: string, durationUs: number) => void;
@@ -69,7 +79,14 @@ function MaterialPanel({
   onImportMaterial,
   onImportMaterialFromPath,
   onRefreshMaterials,
-  onListMissingMaterials
+  onListMissingMaterials,
+  onRefreshArtifactStatus,
+  onCancelArtifactGeneration,
+  onRetryArtifactGeneration,
+  onResumeArtifactGeneration,
+  onPrepareArtifactCleanup,
+  onConfirmArtifactCleanup,
+  onDismissResourceNotice
 }: FeaturePanelProps): React.ReactElement {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("全部");
@@ -161,7 +178,24 @@ function MaterialPanel({
         </div>
       ) : null}
 
-      <MaterialList materials={filteredMaterials} />
+      <ResourceTaskStrip
+        resourcePanel={workspace.resourcePanel}
+        pending={workspace.pendingCommand !== null}
+        onRefresh={onRefreshArtifactStatus}
+        onCancel={onCancelArtifactGeneration}
+        onRetry={onRetryArtifactGeneration}
+        onResume={onResumeArtifactGeneration}
+      />
+
+      <MaterialList materials={filteredMaterials} resourceStatuses={workspace.resourcePanel.materials} />
+
+      <ResourceMaintenance
+        resourcePanel={workspace.resourcePanel}
+        pending={workspace.pendingCommand !== null}
+        onPrepareCleanup={onPrepareArtifactCleanup}
+        onConfirmCleanup={onConfirmArtifactCleanup}
+        onDismiss={onDismissResourceNotice}
+      />
     </div>
   );
 }
@@ -406,7 +440,13 @@ function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): R
   );
 }
 
-function MaterialList({ materials }: { materials: Material[] }): React.ReactElement {
+function MaterialList({
+  materials,
+  resourceStatuses
+}: {
+  materials: Material[];
+  resourceStatuses: MaterialResourceStatusView[];
+}): React.ReactElement {
   if (materials.length === 0) {
     return (
       <div className="empty-state">
@@ -420,6 +460,7 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
     <div className="material-list">
       {materials.map((material) => {
         const statusMessage = materialStatusMessage(material);
+        const resourceStatus = resourceStatuses.find((status) => status.materialId === material.materialId);
 
         return (
           <article className="material-row" aria-label={`素材 ${material.displayName}`} key={material.materialId}>
@@ -433,6 +474,7 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
                 <span>{formatMicroseconds(material.metadata.duration)}</span>
                 <span>{formatMaterialDetail(material)}</span>
               </div>
+              <MaterialResourceStatusLine status={resourceStatus} />
               {statusMessage === null ? null : <p className="material-warning">{statusMessage}</p>}
             </div>
           </article>
@@ -440,6 +482,160 @@ function MaterialList({ materials }: { materials: Material[] }): React.ReactElem
       })}
     </div>
   );
+}
+
+function ResourceTaskStrip({
+  resourcePanel,
+  pending,
+  onRefresh,
+  onCancel,
+  onRetry,
+  onResume
+}: {
+  resourcePanel: ResourcePanelState;
+  pending: boolean;
+  onRefresh: () => void;
+  onCancel: (jobId: string) => void;
+  onRetry: (jobId: string) => void;
+  onResume: (jobId: string) => void;
+}): React.ReactElement {
+  const visibleTasks = resourcePanel.tasks.slice(0, 3);
+  const overflowCount = Math.max(0, resourcePanel.tasks.length - visibleTasks.length);
+
+  return (
+    <section className="resource-task-strip" aria-label="资源任务">
+      <div className="resource-section-header">
+        <h3>资源任务</h3>
+        <span>{resourcePanel.statusLabel}</span>
+        <button type="button" className="compact-action" onClick={onRefresh} disabled={pending || !resourcePanel.refreshAvailable}>
+          刷新状态
+        </button>
+      </div>
+      {visibleTasks.length === 0 ? (
+        <p className="resource-empty">
+          <strong>暂无资源任务</strong>
+          <span>导入素材或请求预览后，会显示缩略图、波形、代理和预览资源状态。</span>
+        </p>
+      ) : (
+        <div className="resource-task-list">
+          {visibleTasks.map((task) => (
+            <div className="resource-task-row" key={task.jobId}>
+              <div className="resource-task-copy">
+                <strong title={task.label}>{task.label}</strong>
+                <span className={`resource-tone-${task.tone}`}>{task.statusLabel}</span>
+              </div>
+              <ResourceProgress value={task.progressPerMille} />
+              <div className="resource-task-actions">
+                {task.canCancel ? (
+                  <button type="button" aria-label="取消生成" title="取消生成" onClick={() => onCancel(task.jobId)} disabled={pending}>
+                    取消
+                  </button>
+                ) : null}
+                {task.canRetry ? (
+                  <button type="button" aria-label="重新生成" title="重新生成" onClick={() => onRetry(task.jobId)} disabled={pending}>
+                    重试
+                  </button>
+                ) : null}
+                {task.canResume ? (
+                  <button type="button" aria-label="继续生成" title="继续生成" onClick={() => onResume(task.jobId)} disabled={pending}>
+                    继续
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {overflowCount > 0 ? <span className="resource-overflow">另有 {overflowCount} 个资源任务</span> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MaterialResourceStatusLine({ status }: { status: MaterialResourceStatusView | undefined }): React.ReactElement {
+  const chips =
+    status?.chips.length === 0 || status === undefined
+      ? [
+          { key: "thumbnail", label: "缩略图", statusLabel: "等待生成", tone: "warning" as const, progressPerMille: null },
+          { key: "waveform", label: "波形", statusLabel: "等待生成", tone: "warning" as const, progressPerMille: null },
+          { key: "proxy", label: "代理", statusLabel: "等待生成", tone: "warning" as const, progressPerMille: null }
+        ]
+      : status.chips;
+
+  return (
+    <div className="material-resource-status" aria-label="素材资源状态">
+      {chips.map((chip) => (
+        <span className={`resource-chip resource-tone-${chip.tone}`} key={chip.key}>
+          <strong>{chip.label}</strong>
+          <em>{chip.statusLabel}</em>
+          {chip.progressPerMille === null ? null : <ResourceProgress value={chip.progressPerMille} compact />}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ResourceMaintenance({
+  resourcePanel,
+  pending,
+  onPrepareCleanup,
+  onConfirmCleanup,
+  onDismiss
+}: {
+  resourcePanel: ResourcePanelState;
+  pending: boolean;
+  onPrepareCleanup: () => void;
+  onConfirmCleanup: () => void;
+  onDismiss: () => void;
+}): React.ReactElement {
+  const maintenance = resourcePanel.maintenance;
+  const summary = `${maintenance.statusLabel} · ${maintenance.usedLabel}`;
+
+  return (
+    <section className="resource-maintenance" aria-label="资源维护">
+      <div className="resource-section-header">
+        <h3>资源维护</h3>
+        <button
+          type="button"
+          className="compact-action primary"
+          aria-label="清理缓存"
+          onClick={onPrepareCleanup}
+          disabled={pending || !maintenance.cleanupAvailable}
+        >
+          清理缓存
+        </button>
+      </div>
+      <p className={`resource-quota resource-tone-${maintenance.severity}`} aria-label="缓存空间状态">
+        {summary}
+      </p>
+      <p className="resource-safe-copy">可清理 {maintenance.reclaimableLabel} · 不会删除原始素材</p>
+      {resourcePanel.cleanupConfirming ? (
+        <div className="resource-cleanup-confirm" aria-label="确认清理缓存">
+          <span>将清理未被草稿使用的缓存，不会删除原始素材。继续清理？</span>
+          <button type="button" className="compact-action primary" onClick={onConfirmCleanup} disabled={pending}>
+            确认清理缓存
+          </button>
+        </div>
+      ) : null}
+      {resourcePanel.cleanupRunning ? <p className="resource-safe-copy">正在清理缓存</p> : null}
+      {maintenance.resultLabel !== null ? (
+        <div className="resource-maintenance-result">
+          <span>{maintenance.resultLabel}</span>
+          <button type="button" className="compact-action" onClick={onDismiss}>
+            知道了
+          </button>
+        </div>
+      ) : null}
+      {maintenance.errorLabel !== null ? <p className="resource-maintenance-error">{maintenance.errorLabel}</p> : null}
+    </section>
+  );
+}
+
+function ResourceProgress({ value, compact = false }: { value: number | null; compact?: boolean }): React.ReactElement | null {
+  if (value === null) {
+    return null;
+  }
+
+  return <progress className={compact ? "resource-progress compact" : "resource-progress"} max={1000} value={value} />;
 }
 
 function toPositiveInteger(value: number, fallback: number): number {
