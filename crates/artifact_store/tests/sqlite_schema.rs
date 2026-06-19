@@ -1,8 +1,7 @@
 use std::fs;
 
 use artifact_store::schema::{
-    ARTIFACT_STORE_DB_FILE_NAME, ARTIFACT_STORE_SCHEMA_VERSION, open_artifact_store,
-    run_migrations,
+    ARTIFACT_STORE_DB_FILE_NAME, ARTIFACT_STORE_SCHEMA_VERSION, open_artifact_store, run_migrations,
 };
 use rusqlite::Connection;
 use serde_json::json;
@@ -16,7 +15,9 @@ fn sqlite_schema_creates_store_with_required_pragmas() {
 
     assert_eq!(
         store.db_path,
-        bundle_path.join("derived").join(ARTIFACT_STORE_DB_FILE_NAME)
+        bundle_path
+            .join("derived")
+            .join(ARTIFACT_STORE_DB_FILE_NAME)
     );
     assert!(store.db_path.exists());
     assert_eq!(pragma_i64(store.connection(), "foreign_keys"), 1);

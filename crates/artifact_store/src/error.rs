@@ -10,4 +10,11 @@ pub enum ArtifactStoreError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("artifact store SQLite operation failed at {path}: {source}")]
+    Sqlite {
+        path: PathBuf,
+        #[source]
+        source: rusqlite::Error,
+    },
 }
