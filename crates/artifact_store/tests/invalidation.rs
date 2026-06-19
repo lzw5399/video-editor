@@ -2,10 +2,15 @@ use artifact_store::dependencies::{
     ArtifactDependency, DependencyFingerprint, DependencyUpsert, upsert_artifact_dependencies,
 };
 use artifact_store::invalidation::{
-    InvalidationFallbackReason, SourceChange, SourceChangeKind, mark_dirty_for_source_change,
+    ArtifactInvalidationRequest, FingerprintChange, InvalidationFallbackReason, SourceChange,
+    SourceChangeKind, mark_dirty_by_fingerprint_mismatch, mark_dirty_for_source_change,
+    mark_dirty_from_command_delta,
 };
 use artifact_store::schema::open_artifact_store;
-use draft_model::MaterialId;
+use draft_model::{
+    CommandDelta, CommandName, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
+    MaterialId, TargetTimerange,
+};
 use rusqlite::params;
 
 #[test]
@@ -228,6 +233,220 @@ fn invalidation_source_change_without_stable_dependency_records_unknown_fallback
     );
     assert_artifact_status(store.connection(), "artifact-a", "dirty");
     assert_artifact_status(store.connection(), "artifact-b", "dirty");
+}
+
+#[test]
+fn invalidation_command_delta_dirties_by_range_domain_material_and_graph_node() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    insert_artifact(store.connection(), "artifact-graph");
+    insert_artifact(store.connection(), "artifact-material");
+    insert_artifact(store.connection(), "artifact-range");
+    insert_artifact(store.connection(), "artifact-unrelated-range");
+
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-graph",
+        vec![DependencyUpsert::new(ArtifactDependency::graph_node(
+            "draft:draft-001:track:v1:segment:s1:video",
+        ))],
+    )
+    .expect("graph dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-material",
+        vec![DependencyUpsert::new(ArtifactDependency::material(
+            "video-001",
+        ))],
+    )
+    .expect("material dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-range",
+        vec![
+            DependencyUpsert::new(ArtifactDependency::dirty_domain(DirtyDomain::PreviewCache)),
+            DependencyUpsert::new(ArtifactDependency::target_range(0, 1_000_000)),
+        ],
+    )
+    .expect("range dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-unrelated-range",
+        vec![
+            DependencyUpsert::new(ArtifactDependency::dirty_domain(DirtyDomain::PreviewCache)),
+            DependencyUpsert::new(ArtifactDependency::target_range(2_000_000, 500_000)),
+        ],
+    )
+    .expect("unrelated range dependency should insert");
+
+    let delta = CommandDelta::targeted(
+        CommandName::MoveSegment,
+        Vec::new(),
+        vec![DirtyDomain::Visual],
+        vec![DirtyRange {
+            target_timerange: TargetTimerange::new(500_000, 100_000),
+            source: DirtyRangeSource::Current,
+        }],
+        InvalidationScope {
+            full_draft: false,
+            material_ids: vec![MaterialId::new("video-001")],
+            graph_node_ids: vec!["draft:draft-001:track:v1:segment:s1:video".to_owned()],
+            consumer_domains: vec![DirtyDomain::PreviewCache],
+        },
+        "localized move",
+    );
+
+    let result =
+        mark_dirty_from_command_delta(&mut store, &delta).expect("command delta should dirty");
+
+    assert_eq!(
+        dirty_ids(&result),
+        vec!["artifact-graph", "artifact-material", "artifact-range"]
+    );
+    assert!(result.fallbacks.is_empty());
+    assert_artifact_status(store.connection(), "artifact-unrelated-range", "ready");
+}
+
+#[test]
+fn invalidation_fingerprint_mismatch_dirties_only_rows_recording_changed_fingerprints() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    insert_artifact(store.connection(), "artifact-runtime-old");
+    insert_artifact(store.connection(), "artifact-runtime-current");
+    insert_artifact(store.connection(), "artifact-output-old");
+    insert_artifact(store.connection(), "artifact-source-old");
+    insert_artifact(store.connection(), "artifact-graph-old");
+
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-runtime-old",
+        vec![DependencyUpsert::new(
+            ArtifactDependency::runtime_capability_fingerprint(DependencyFingerprint::new(
+                "runtime",
+                "runtime:v1",
+            )),
+        )],
+    )
+    .expect("old runtime dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-runtime-current",
+        vec![DependencyUpsert::new(
+            ArtifactDependency::runtime_capability_fingerprint(DependencyFingerprint::new(
+                "runtime",
+                "runtime:v2",
+            )),
+        )],
+    )
+    .expect("current runtime dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-output-old",
+        vec![DependencyUpsert::new(
+            ArtifactDependency::output_profile_fingerprint(DependencyFingerprint::new(
+                "output",
+                "output:v1",
+            )),
+        )],
+    )
+    .expect("output dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-source-old",
+        vec![DependencyUpsert::new(
+            ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
+                "source:video-001",
+                "source:v1",
+            )),
+        )],
+    )
+    .expect("source dependency should insert");
+    upsert_artifact_dependencies(
+        &mut store,
+        "artifact-graph-old",
+        vec![DependencyUpsert::new(
+            ArtifactDependency::graph_fingerprint(DependencyFingerprint::new("graph", "graph:v1")),
+        )],
+    )
+    .expect("graph dependency should insert");
+
+    let request = ArtifactInvalidationRequest {
+        dirty_ranges: Vec::new(),
+        changed_material_ids: Vec::new(),
+        changed_resource_ids: Vec::new(),
+        changed_graph_node_keys: Vec::new(),
+        changed_domains: Vec::new(),
+        source_fingerprint: Some(FingerprintChange::new("source:video-001", "source:v2")),
+        graph_fingerprint: Some(FingerprintChange::new("graph", "graph:v2")),
+        runtime_capability_fingerprint: Some(FingerprintChange::new("runtime", "runtime:v2")),
+        output_profile_fingerprint: Some(FingerprintChange::new("output", "output:v2")),
+        artifact_schema_version: None,
+        generator_version: None,
+        full_draft: false,
+        reason: "fingerprint refresh".to_owned(),
+    };
+
+    let result = mark_dirty_by_fingerprint_mismatch(&mut store, &request)
+        .expect("fingerprint mismatch should dirty");
+
+    assert_eq!(
+        dirty_ids(&result),
+        vec![
+            "artifact-graph-old",
+            "artifact-output-old",
+            "artifact-runtime-old",
+            "artifact-source-old",
+        ]
+    );
+    assert_artifact_status(store.connection(), "artifact-runtime-current", "ready");
+    for row in &result.dirty_artifacts {
+        assert!(
+            row.reason.starts_with("fingerprintMismatch:"),
+            "dirty reason should be audit-safe, got {}",
+            row.reason
+        );
+        assert!(
+            !row.reason.contains("runtime:v1") && !row.reason.contains("source:v1"),
+            "raw old fingerprints should not be exposed by default: {}",
+            row.reason
+        );
+    }
+}
+
+#[test]
+fn invalidation_command_delta_range_overflow_records_full_draft_fallback() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    insert_artifact(store.connection(), "artifact-a");
+    insert_artifact(store.connection(), "artifact-b");
+
+    let delta = CommandDelta::targeted(
+        CommandName::MoveSegment,
+        Vec::new(),
+        vec![DirtyDomain::PreviewCache],
+        vec![DirtyRange {
+            target_timerange: TargetTimerange::new(u64::MAX, 1),
+            source: DirtyRangeSource::Current,
+        }],
+        InvalidationScope::empty(),
+        "overflowing range",
+    );
+
+    let result = mark_dirty_from_command_delta(&mut store, &delta)
+        .expect("overflow should fail closed through fallback");
+
+    assert_eq!(dirty_ids(&result), vec!["artifact-a", "artifact-b"]);
+    assert_eq!(
+        result
+            .fallbacks
+            .iter()
+            .map(|fallback| fallback.reason)
+            .collect::<Vec<_>>(),
+        vec![InvalidationFallbackReason::RangeOverflow]
+    );
 }
 
 fn insert_artifact(conn: &rusqlite::Connection, artifact_id: &str) {
