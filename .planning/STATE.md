@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-current_phase: 13
-current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 8
-total_plans_in_phase: 8
+current_phase: 14
+current_phase_name: asset-resource-manager-and-derived-artifact-store
+current_plan: 0
+total_plans_in_phase: 0
 stopped_at: None
-last_updated: "2026-06-19T01:46:42.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 05B: binding-safe preview/export dirty fact contracts and regenerated TypeScript."
+last_updated: "2026-06-19T02:34:58.968Z"
+last_activity: "2026-06-19 - Completed Phase 13: incremental render graph, dirty ranges, and cache coherence."
 progress:
   total_phases: 20
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 98
-  completed_plans: 97
-  percent: 99
+  completed_plans: 98
+  percent: 75
 ---
 
 # Project State
@@ -25,24 +25,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 13 incremental render graph, dirty ranges, and cache coherence
+**Current focus:** Phase 14 asset resource manager and derived artifact store
 
 ## Current Position
 
-Phase: 13
-Plan: 7/8 complete; next plan 13-06
-Status: Phase 13 in progress; binding-safe preview/export dirty fact contracts are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 05B: binding-safe preview/export dirty fact contracts and regenerated TypeScript.
+Phase: 14
+Plan: Not planned
+Status: Phase 13 complete; Phase 14 is ready for discussion/planning.
+Last activity: 2026-06-19 - Completed Phase 13: incremental render graph, dirty ranges, and cache coherence.
 
-Progress: [██████████] 99%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 97
+- Total plans completed: 98
 - Average duration: 9 min
-- Total execution time: 940 min
+- Total execution time: 950 min
 
 **By Phase:**
 
@@ -60,7 +60,7 @@ Progress: [██████████] 99%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 7 | 98 min | 14 min |
+| 13 | 8 | 108 min | 14 min |
 
 **Recent Trend:**
 

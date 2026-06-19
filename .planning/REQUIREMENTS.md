@@ -299,11 +299,11 @@
 | MEDIAIO-03 | Phase 12 | Complete |
 | MEDIAIO-04 | Phase 12 | Complete |
 | MEDIAIO-05 | Phase 12 | Complete |
-| INCR-01 | Phase 13 | Planned |
-| INCR-02 | Phase 13 | Planned |
-| INCR-03 | Phase 13 | Planned |
-| INCR-04 | Phase 13 | Planned |
-| INCR-05 | Phase 13 | Planned |
+| INCR-01 | Phase 13 | Complete |
+| INCR-02 | Phase 13 | Complete |
+| INCR-03 | Phase 13 | Complete |
+| INCR-04 | Phase 13 | Complete |
+| INCR-05 | Phase 13 | Complete |
 | ASSET-01 | Phase 14 | Planned |
 | ASSET-02 | Phase 14 | Planned |
 | ASSET-03 | Phase 14 | Planned |
