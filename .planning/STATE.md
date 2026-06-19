@@ -5,17 +5,17 @@ milestone_name: milestone
 status: executing
 current_phase: 13
 current_phase_name: incremental-render-graph-dirty-ranges-and-cache-coherence
-current_plan: 5
+current_plan: 6
 total_plans_in_phase: 8
 stopped_at: None
-last_updated: "2026-06-18T22:00:56.000Z"
-last_activity: "2026-06-19 - Completed Phase 13 Plan 03: domain-aware command deltas, material dependency expansion, and undo/redo invalidation."
+last_updated: "2026-06-19T01:17:55.000Z"
+last_activity: "2026-06-19 - Completed Phase 13 Plan 04: stable render graph node IDs, fingerprints, snapshots, and deterministic graph diffs."
 progress:
   total_phases: 20
   completed_phases: 14
   total_plans: 98
-  completed_plans: 94
-  percent: 96
+  completed_plans: 95
+  percent: 97
 ---
 
 # Project State
@@ -30,19 +30,19 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 13
-Plan: 4/8 complete; next plan 13-04
-Status: Phase 13 in progress; command delta domain coverage and undo/redo invalidation are complete.
-Last activity: 2026-06-19 - Completed Phase 13 Plan 03: domain-aware command deltas, material dependency expansion, and undo/redo invalidation.
+Plan: 5/8 complete; next plan 13-05
+Status: Phase 13 in progress; render graph identity, fingerprints, snapshots, and diff helpers are complete.
+Last activity: 2026-06-19 - Completed Phase 13 Plan 04: stable render graph node IDs, fingerprints, snapshots, and deterministic graph diffs.
 
-Progress: [██████████] 96%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 94
+- Total plans completed: 95
 - Average duration: 9 min
-- Total execution time: 873 min
+- Total execution time: 891 min
 
 **By Phase:**
 
@@ -60,11 +60,11 @@ Progress: [██████████] 96%
 | 10 | 5 | 92 min | 18 min |
 | 11 | 10 | 159 min | 16 min |
 | 12 | 9 | 181 min | 20 min |
-| 13 | 4 | 31 min | 8 min |
+| 13 | 5 | 49 min | 10 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 51 min
+- Last 5 plans: 49 min
 - Trend: baseline established
 
 | Phase 01 P04 | 5 min | 2 tasks | 6 files |
@@ -152,6 +152,7 @@ Progress: [██████████] 96%
 | Phase 13 P02 | 8 min | 2 tasks | 17 files |
 | Phase 13 P02B | 4 min | 2 tasks | 1 files |
 | Phase 13 P03 | 9 min | 3 tasks | 11 files |
+| Phase 13 P04 | 18 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -170,6 +171,9 @@ Progress: [██████████] 96%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13]: Render graph node identity is now semantic and separate from output validity. — Plan 04 added stable `RenderGraphNodeId` keys for canvas/material/segment/filter/transition/frame roles, while keeping fingerprints as reuse facts.
+- [Phase 13]: Render graph fingerprints include semantic, input, output profile, runtime capability, schema, and generator dimensions. — Runtime or output changes invalidate outputs without changing stable semantic node keys.
+- [Phase 13]: Graph snapshots remain in-memory render_graph contracts and diffs compare node ID before fingerprint. — Diff helpers classify added/removed/changed/unchanged nodes and carry Rust-owned dirty ranges/domains without renderer, scheduler, SQLite, FFmpeg, or UI dependencies.
 - [Phase 13]: Domain-aware command deltas now cover text, subtitle, audio, visual, keyframe, canvas/profile, track mute, and material dependency changes. — Plan 03 added Rust-owned delta builders and tests for every accepted semantic edit family before downstream graph/cache reuse.
 - [Phase 13]: Material dependency invalidation maps changed material IDs to dependent segment ranges when possible and falls back to material-wide scope when not. — This preserves correctness without putting cache or renderer decisions into command code.
 - [Phase 13]: Undo/redo restores semantic snapshots first, then emits deterministic invalidation ranges or full-draft fallback. — Stale cache reuse is blocked unless later graph snapshot plans prove exact fingerprints.
