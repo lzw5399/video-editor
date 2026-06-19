@@ -653,6 +653,102 @@ fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
 }
 
 #[test]
+fn schema_exports_include_phase14_artifact_status_and_maintenance_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+
+    for command_name in [
+        "getArtifactStatus",
+        "refreshArtifactStatus",
+        "retryArtifactGeneration",
+        "resumeArtifactGeneration",
+        "cancelArtifactGeneration",
+        "getArtifactQuotaStatus",
+        "runArtifactGarbageCollection",
+    ] {
+        assert!(
+            command_schema.to_string().contains(command_name)
+                && command_envelope_ts.contains(command_name),
+            "generated command contracts should include artifact command {command_name}"
+        );
+    }
+
+    for expected_contract in [
+        "GetArtifactStatusCommandPayload",
+        "RefreshArtifactStatusCommandPayload",
+        "ArtifactGenerationActionCommandPayload",
+        "GetArtifactQuotaStatusCommandPayload",
+        "RunArtifactGarbageCollectionCommandPayload",
+        "ArtifactStatusSummary",
+        "MaterialArtifactStatus",
+        "ArtifactTaskStatus",
+        "ArtifactQuotaStatus",
+        "ArtifactMaintenanceResult",
+        "DisplayableArtifactRef",
+    ] {
+        assert!(
+            defs.contains_key(expected_contract)
+                || command_envelope_ts.contains(&format!("export type {expected_contract}"))
+                || command_result_ts.contains(&format!("export type {expected_contract}")),
+            "artifact contracts should generate {expected_contract}"
+        );
+    }
+
+    for forbidden in [
+        "artifactRoot",
+        "blobRoot",
+        "blobPath",
+        "cacheKey",
+        "fingerprint",
+        "graphNode",
+        "dirtyRange",
+        "sqlite",
+        "SQLite",
+        "ffmpegArgs",
+        "schedulerPriority",
+    ] {
+        assert!(
+            !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
+            "artifact transport contracts must not expose internal field {forbidden}"
+        );
+    }
+
+    let mismatched_action = serde_json::json!({
+        "command": "retryArtifactGeneration",
+        "payload": {
+            "kind": "cancelArtifactGeneration",
+            "sessionId": "session-a",
+            "bundlePath": "/tmp/project.veproj",
+            "jobId": "job-a"
+        }
+    });
+    assert!(
+        serde_json::from_value::<CommandEnvelope>(mismatched_action).is_err(),
+        "artifact generation action payloads must reject mismatched command names"
+    );
+
+    let mismatched_gc = serde_json::json!({
+        "command": "getArtifactQuotaStatus",
+        "payload": {
+            "kind": "runArtifactGarbageCollection",
+            "sessionId": "session-a",
+            "bundlePath": "/tmp/project.veproj",
+            "dryRun": true
+        }
+    });
+    assert!(
+        serde_json::from_value::<CommandEnvelope>(mismatched_gc).is_err(),
+        "artifact maintenance payloads must reject mismatched command names"
+    );
+}
+
+#[test]
 fn schema_exports_include_timeline_edit_command_contracts() {
     let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
