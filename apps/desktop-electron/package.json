@@ -16,6 +16,7 @@
     "test:packaged": "pnpm run test:packaged-smoke && pnpm run test:packaged-real-workflow",
     "test:packaged-real-workflow": "pnpm run package:dir && playwright test tests/real-workflow.spec.ts --grep \"packaged\"",
     "test:packaged-smoke": "pnpm run package:dir && playwright test tests/packaged-smoke.spec.ts",
+    "test:product-user-journey": "pnpm run build && playwright test tests/product-user-journey.spec.ts",
     "test:real-workflow": "pnpm run build && playwright test tests/real-workflow.spec.ts --grep \"dev\"",
     "test:runtime-diagnostics": "pnpm run build && playwright test tests/runtime-diagnostics.spec.ts",
     "test:workspace": "pnpm run build && playwright test tests/workspace.spec.ts"
