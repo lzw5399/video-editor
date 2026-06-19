@@ -324,10 +324,17 @@ export class RealtimePreviewHost {
       });
       return this.state("实时预览不可用");
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.fallbackLabel = attachFailureLabel(error);
+      if (isSurfaceOccludedAcquire(errorMessage)) {
+        recordRealtimePreviewHostCall({
+          kind: "surfaceAcquireOccluded",
+          errorMessage
+        });
+      }
       recordRealtimePreviewHostCall({
         kind: "playRejectedMissingCompositor",
-        errorMessage: error instanceof Error ? error.message : String(error)
+        errorMessage
       });
       try {
         this.refreshTelemetry();
@@ -664,6 +671,10 @@ function nativeParentHandleToHex(handle: Buffer): string {
 function attachFailureLabel(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return `实时预览不可用：${message}`;
+}
+
+function isSurfaceOccludedAcquire(message: string): boolean {
+  return message.includes("wgpu surface texture acquire failed: surface is occluded");
 }
 
 function recordRealtimePreviewHostCall(call: RealtimePreviewHostRecord): void {

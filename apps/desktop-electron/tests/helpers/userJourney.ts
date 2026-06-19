@@ -18,6 +18,7 @@ type RealtimePreviewHostCall = {
   kind: string;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  errorMessage?: string;
 };
 
 type RealtimePreviewHostState = {
@@ -85,6 +86,19 @@ export async function waitForCompositedPreviewEvidence(
     `Timed out waiting for composited preview evidence. Last host state: ${JSON.stringify(
       lastEvidence?.hostState ?? null
     )}`
+  );
+}
+
+export function expectNoRejectedSurfaceAcquire(calls: RealtimePreviewHostCall[]): void {
+  expect(
+    calls,
+    "product playback must not pass through an occluded WGPU surface acquire"
+  ).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: "surfaceAcquireOccluded"
+      })
+    ])
   );
 }
 

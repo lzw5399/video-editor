@@ -4,6 +4,7 @@ import {
   USER_JOURNEY_MOVING_VIDEO,
   addMaterialToTimeline,
   capturePreviewEvidence,
+  expectNoRejectedSurfaceAcquire,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   readExecuteCommandCalls,
@@ -122,11 +123,11 @@ test("product user can import a repo video, add it to the timeline, and see rend
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
     await playButton.click();
-    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
 
     const after = await waitForCompositedPreviewEvidence(page, 12_000);
     const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const hostCallKinds = (await readRealtimePreviewHostCalls(app)).map((call) => call.kind);
+    expectNoRejectedSurfaceAcquire(await readRealtimePreviewHostCalls(app));
 
     expect(after.hostState?.ok).toBe(true);
     expect(after.hostState?.productReady).toBe(true);
@@ -164,6 +165,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
       ])
     );
     expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
+    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
   } finally {
     await app.close();
   }
