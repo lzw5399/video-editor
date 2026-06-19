@@ -51,16 +51,18 @@ fn gc_quota_manifest_gc_dry_run_preserves_live_artifacts_jobs_and_source_media()
     store
         .connection()
         .execute(
-            "UPDATE artifact SET dirty = 1, status = 'running' WHERE artifact_id = ?1",
+            "UPDATE artifact SET dirty = 1, status = 'dirty' WHERE artifact_id = ?1",
             ["artifact-dirty-live"],
         )
         .expect("dirty row should update");
+    insert_resource_row(&store, "material:material-001", "material", "ready");
     upsert_artifact_dependencies(
         &mut store,
         "artifact-dirty-live",
-        vec![DependencyUpsert::new(ArtifactDependency::material(
-            "material-001",
-        ))],
+        vec![
+            DependencyUpsert::new(ArtifactDependency::material("material-001")),
+            DependencyUpsert::new(ArtifactDependency::resource("material:material-001")),
+        ],
     )
     .expect("dirty live dependency should persist");
     create_generation_job(
@@ -111,7 +113,7 @@ fn gc_quota_manifest_gc_dry_run_preserves_live_artifacts_jobs_and_source_media()
 }
 
 #[test]
-fn gc_quota_manifest_gc_includes_dirty_generated_artifacts_with_dependencies() {
+fn gc_quota_manifest_gc_includes_dirty_generated_artifacts_without_live_resources() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let stale = write_artifact(
@@ -552,6 +554,24 @@ fn insert_artifact_row(
             ],
         )
         .expect("artifact row should insert");
+}
+
+fn insert_resource_row(
+    store: &artifact_store::schema::ArtifactStore,
+    resource_id: &str,
+    resource_kind: &str,
+    status: &str,
+) {
+    store
+        .connection()
+        .execute(
+            "INSERT INTO resource (
+                resource_id, resource_kind, stable_key, source_uri, project_relative_ref, status,
+                created_at_unix_ms, updated_at_unix_ms
+            ) VALUES (?1, ?2, ?1, 'media/source.mp4', 'media/source.mp4', ?3, 0, 0)",
+            params![resource_id, resource_kind, status],
+        )
+        .expect("resource row should insert");
 }
 
 fn artifact_status(store: &artifact_store::schema::ArtifactStore, artifact_id: &str) -> String {

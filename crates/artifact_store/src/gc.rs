@@ -280,6 +280,24 @@ fn live_artifact_ids(store: &ArtifactStore) -> Result<BTreeSet<String>, Artifact
     extend_live_ids(
         store,
         &mut live,
+        "SELECT artifact_id FROM (
+            SELECT artifact_dependency.artifact_id
+            FROM artifact_dependency
+            JOIN resource ON resource.resource_id = artifact_dependency.dependency_key
+            WHERE artifact_dependency.dependency_kind = 'resource'
+                AND resource.status = 'ready'
+            UNION
+            SELECT artifact_dependency.artifact_id
+            FROM artifact_dependency
+            JOIN resource ON resource.resource_id = 'material:' || artifact_dependency.dependency_key
+            WHERE artifact_dependency.dependency_kind = 'material'
+                AND resource.status = 'ready'
+         )
+         ORDER BY artifact_id",
+    )?;
+    extend_live_ids(
+        store,
+        &mut live,
         "SELECT artifact_id FROM generation_job
          WHERE artifact_id IS NOT NULL
             AND status NOT IN ('completed', 'failed', 'cancelled')
