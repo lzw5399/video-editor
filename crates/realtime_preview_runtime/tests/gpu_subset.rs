@@ -4,9 +4,9 @@ use draft_model::{
     TrackId,
 };
 use realtime_preview_runtime::gpu::{
-    RealtimePreviewCompositor, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
-    RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuTarget, RealtimePreviewTargetFormat,
-    RealtimePreviewTextureCache,
+    RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewGpuBackend,
+    RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuTarget,
+    RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
 };
 use realtime_preview_runtime::{
     CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
@@ -34,6 +34,11 @@ fn gpu_subset_solid_canvas_produces_deterministic_pixels() {
     );
     assert_eq!(output.submitted_draws, 0);
     assert_eq!(output.support, RealtimePreviewGraphSupport::Supported);
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::CpuReference,
+        "mock/offscreen deterministic output is a CPU reference path, not product GPU compositor success"
+    );
 }
 
 #[test]
@@ -61,6 +66,10 @@ fn gpu_subset_textured_quads_use_graph_stack_order_and_provider_frames() {
         [0, 0, 255, 255]
     );
     assert_eq!(output.submitted_draws, 2);
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::CpuReference
+    );
 }
 
 #[test]
@@ -76,6 +85,10 @@ fn gpu_subset_opacity_affects_composited_color() {
         [0, 0, 128, 255]
     );
     assert_eq!(output.submitted_draws, 2);
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::CpuReference
+    );
 }
 
 #[test]
@@ -95,6 +108,46 @@ fn gpu_subset_unsupported_intent_does_not_submit_draws() {
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.reason.contains("unsupported test canvas"))
+    );
+}
+
+#[test]
+#[ignore = "manual platform smoke: run with VIDEO_EDITOR_TEST_WGPU=1 on Windows/macOS GPU hosts"]
+fn real_wgpu_compositor_clears_canvas_with_render_pass() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU").ok().as_deref() != Some("1") {
+        eprintln!("set VIDEO_EDITOR_TEST_WGPU=1 to run the real compositor smoke");
+        return;
+    }
+
+    let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
+        backend: RealtimePreviewGpuBackend::Auto,
+        label: Some("real-wgpu-compositor-canvas-test".to_owned()),
+    })
+    .expect("real wgpu adapter should initialize on a supported platform host");
+    assert!(device.uses_physical_adapter());
+
+    let target = device
+        .create_offscreen_target(4, 4, 1_000, RealtimePreviewTargetFormat::Rgba8UnormSrgb)
+        .expect("real GPU target should allocate a wgpu texture");
+    let mut compositor = RealtimePreviewCompositor::new(
+        device,
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
+    );
+    let mut texture_cache = RealtimePreviewTextureCache::new();
+    let output = compositor
+        .render_offscreen(
+            &solid_canvas_graph("#112233"),
+            &target,
+            &mut EmptyProvider,
+            &mut texture_cache,
+        )
+        .expect("real GPU compositor should render a solid canvas");
+
+    assert_eq!(output.render_backend, RealtimePreviewCompositorBackend::WgpuRenderPass);
+    assert_eq!(output.submitted_draws, 0);
+    assert_eq!(
+        rgba_at(&output.pixels, 0, 0, output.width),
+        [0x11, 0x22, 0x33, 0xff]
     );
 }
 
