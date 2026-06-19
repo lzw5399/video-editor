@@ -5,7 +5,7 @@ use draft_model::{MaterialId, Microseconds};
 use media_runtime::{
     DecodeError, DecodedVideoFrame, MediaIoError, MediaIoFallbackReason, MediaIoFallbackSelection,
     MediaOpenRequest, MediaReader, MediaSession, RuntimeDeviceId, SelectedDecodePath, StreamId,
-    VideoDecodeRequest, VideoDecoder, VideoFrameStorage,
+    NativeTextureLeaseRegistry, VideoDecodeRequest, VideoDecoder, VideoFrameStorage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -140,6 +140,7 @@ pub struct MediaIoFrameProvider {
     telemetry: PreviewMediaIoTelemetry,
     desired_storage: PreviewFrameStoragePreference,
     device: PreviewDecodeDeviceContext,
+    native_texture_registry: Option<NativeTextureLeaseRegistry>,
 }
 
 impl MediaIoFrameProvider {
@@ -152,6 +153,7 @@ impl MediaIoFrameProvider {
             device: PreviewDecodeDeviceContext::unproven(
                 "preview GPU device context has not been attached to media IO",
             ),
+            native_texture_registry: None,
         }
     }
 
@@ -162,6 +164,11 @@ impl MediaIoFrameProvider {
 
     pub fn with_preview_device_context(mut self, device: PreviewDecodeDeviceContext) -> Self {
         self.device = device;
+        self
+    }
+
+    pub fn with_native_texture_registry(mut self, registry: NativeTextureLeaseRegistry) -> Self {
+        self.native_texture_registry = Some(registry);
         self
     }
 
@@ -250,17 +257,9 @@ impl MediaIoFrameProvider {
         } else {
             fallback_reason_from_media_io(selected_path, fallback_reason)
         };
-        let presentable = !stale_rejected
-            && fallback.is_none()
-            && storage_kind.is_presentable(texture_compatible);
-
         if stale_rejected {
             self.telemetry.stale_rejected_count =
                 self.telemetry.stale_rejected_count.saturating_add(1);
-        }
-        if presentable {
-            self.telemetry.presentable_frame_count =
-                self.telemetry.presentable_frame_count.saturating_add(1);
         }
         if fallback.is_some() {
             self.telemetry.fallback_count = self.telemetry.fallback_count.saturating_add(1);
@@ -333,7 +332,14 @@ impl PreviewFrameProvider for MediaIoFrameProvider {
                 )
             })?;
 
-        preview_input_from_media_io_output(self.provider_name(), output)
+        let input = preview_input_from_media_io_output(
+            self.provider_name(),
+            output,
+            self.native_texture_registry.as_ref(),
+        )?;
+        self.telemetry.presentable_frame_count =
+            self.telemetry.presentable_frame_count.saturating_add(1);
+        Ok(input)
     }
 }
 
@@ -416,15 +422,10 @@ fn storage_kind_for(storage: &VideoFrameStorage) -> PreviewFrameStorageKind {
     }
 }
 
-impl PreviewFrameStorageKind {
-    fn is_presentable(self, texture_compatible: bool) -> bool {
-        matches!(self, Self::Texture) && texture_compatible
-    }
-}
-
 fn preview_input_from_media_io_output(
     provider_name: &'static str,
     output: PreviewMaterialDecodeOutput,
+    native_texture_registry: Option<&NativeTextureLeaseRegistry>,
 ) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
     if output.stale_rejected {
         return Err(PreviewFrameProviderError::unavailable(
@@ -486,6 +487,33 @@ fn preview_input_from_media_io_output(
                     source_position,
                     playback_generation,
                     "media IO reported texture storage without a texture handle",
+                )
+            })?;
+            let expected_handle = descriptor.to_texture_handle().map_err(|error| {
+                PreviewFrameProviderError::invalid_frame(
+                    provider_name,
+                    Some(descriptor.material_id.clone()),
+                    Some(descriptor.source_position),
+                    Some(descriptor.playback_generation),
+                    error,
+                )
+            })?;
+            let registry = native_texture_registry.ok_or_else(|| {
+                PreviewFrameProviderError::unavailable(
+                    provider_name,
+                    descriptor.material_id.clone(),
+                    descriptor.source_position,
+                    descriptor.playback_generation,
+                    "native texture lease registry is not attached to media IO",
+                )
+            })?;
+            registry.resolve(&expected_handle).map_err(|error| {
+                PreviewFrameProviderError::unavailable(
+                    provider_name,
+                    descriptor.material_id.clone(),
+                    descriptor.source_position,
+                    descriptor.playback_generation,
+                    format!("native texture lease unavailable: {error}"),
                 )
             })?;
             Ok(PreviewFrameInput::TextureHandle(descriptor))

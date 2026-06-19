@@ -68,7 +68,11 @@ pub use probe::{
     MaterialProbeMetadata, MaterialProbeStatus, RationalFrameRate, probe_material_metadata,
 };
 pub use process::{DEFAULT_PROCESS_TIMEOUT, run_process_with_timeout};
-pub use texture::{RuntimeDeviceId, TextureBackend, TextureHandle, TextureHandleId};
+pub use texture::{
+    NativeTextureLease, NativeTextureLeaseError, NativeTextureLeaseErrorKind,
+    NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RuntimeDeviceId, TextureBackend,
+    TextureHandle, TextureHandleId,
+};
 pub use validate::{
     OutputValidationError, OutputValidationErrorKind, OutputValidationExpectation,
     OutputValidationReport, validate_rendered_output,

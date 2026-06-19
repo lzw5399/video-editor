@@ -2,7 +2,10 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{MaterialId, Microseconds};
-use media_runtime::{DecodedVideoFrame, TextureBackend, VideoFrameStorage, VideoPixelFormat};
+use media_runtime::{
+    DecodedVideoFrame, FrameDimensions, MediaSessionId, RuntimeDeviceId, TextureBackend,
+    TextureHandle, TextureHandleId, VideoColorMetadata, VideoFrameStorage, VideoPixelFormat,
+};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 
@@ -184,11 +187,14 @@ pub struct TextureHandleDescriptor {
     pub material_id: MaterialId,
     pub source_position: Microseconds,
     pub handle_id: String,
+    pub owner_session: MediaSessionId,
     pub playback_generation: PlaybackGeneration,
     pub backend: String,
+    pub device_id: RuntimeDeviceId,
     pub width: u32,
     pub height: u32,
     pub pixel_format: String,
+    pub color: VideoColorMetadata,
 }
 
 impl TextureHandleDescriptor {
@@ -197,11 +203,14 @@ impl TextureHandleDescriptor {
         material_id: MaterialId,
         source_position: Microseconds,
         handle_id: impl Into<String>,
+        owner_session: MediaSessionId,
         playback_generation: PlaybackGeneration,
         backend: impl Into<String>,
+        device_id: RuntimeDeviceId,
         width: u32,
         height: u32,
         pixel_format: impl Into<String>,
+        color: VideoColorMetadata,
     ) -> Result<Self, FrameValidationError> {
         let handle_id = handle_id.into();
         let backend = backend.into();
@@ -210,11 +219,14 @@ impl TextureHandleDescriptor {
             material_id,
             source_position,
             handle_id,
+            owner_session,
             playback_generation,
             backend,
+            device_id,
             width,
             height,
             pixel_format,
+            color,
         };
         descriptor.validate()?;
         Ok(descriptor)
@@ -233,13 +245,33 @@ impl TextureHandleDescriptor {
             material_id,
             source_position,
             texture.handle_id.0.clone(),
+            texture.owner_session.clone(),
             PlaybackGeneration::new(texture.generation),
             texture_backend_label(texture.backend),
+            texture.device_id.clone(),
             texture.dimensions.width,
             texture.dimensions.height,
             video_pixel_format_label(texture.pixel_format),
+            texture.color.clone(),
         )
         .map(Some)
+    }
+
+    pub fn to_texture_handle(&self) -> Result<TextureHandle, FrameValidationError> {
+        self.validate()?;
+        Ok(TextureHandle {
+            handle_id: TextureHandleId(self.handle_id.clone()),
+            owner_session: self.owner_session.clone(),
+            generation: self.playback_generation.get(),
+            backend: texture_backend_from_label(&self.backend)?,
+            device_id: self.device_id.clone(),
+            dimensions: FrameDimensions {
+                width: self.width,
+                height: self.height,
+            },
+            pixel_format: video_pixel_format_from_label(&self.pixel_format)?,
+            color: self.color.clone(),
+        })
     }
 
     pub fn validate(&self) -> Result<(), FrameValidationError> {
@@ -261,6 +293,12 @@ impl TextureHandleDescriptor {
                 "texture backend must be present",
             ));
         }
+        if texture_backend_from_label(&self.backend)? != self.device_id.backend {
+            return Err(FrameValidationError::new(
+                FrameValidationErrorKind::InvalidTextureHandle,
+                "texture backend must match the runtime device backend",
+            ));
+        }
         if self.width == 0 || self.height == 0 {
             return Err(FrameValidationError::new(
                 FrameValidationErrorKind::InvalidDimensions,
@@ -273,6 +311,7 @@ impl TextureHandleDescriptor {
                 "texture pixel format must be present",
             ));
         }
+        let _ = video_pixel_format_from_label(&self.pixel_format)?;
         Ok(())
     }
 }
@@ -286,6 +325,19 @@ fn texture_backend_label(backend: TextureBackend) -> &'static str {
     }
 }
 
+fn texture_backend_from_label(label: &str) -> Result<TextureBackend, FrameValidationError> {
+    match label {
+        "d3d11Texture2D" => Ok(TextureBackend::D3d11Texture2D),
+        "d3d12Resource" => Ok(TextureBackend::D3d12Resource),
+        "metalTexture" => Ok(TextureBackend::MetalTexture),
+        "coreVideoPixelBuffer" => Ok(TextureBackend::CoreVideoPixelBuffer),
+        _ => Err(FrameValidationError::new(
+            FrameValidationErrorKind::InvalidTextureHandle,
+            format!("unsupported texture backend {label}"),
+        )),
+    }
+}
+
 fn video_pixel_format_label(format: VideoPixelFormat) -> &'static str {
     match format {
         VideoPixelFormat::Nv12 => "nv12",
@@ -294,6 +346,21 @@ fn video_pixel_format_label(format: VideoPixelFormat) -> &'static str {
         VideoPixelFormat::P010 => "p010",
         VideoPixelFormat::Yuv420P => "yuv420P",
         VideoPixelFormat::Unknown => "unknown",
+    }
+}
+
+fn video_pixel_format_from_label(label: &str) -> Result<VideoPixelFormat, FrameValidationError> {
+    match label {
+        "nv12" => Ok(VideoPixelFormat::Nv12),
+        "bgra8" => Ok(VideoPixelFormat::Bgra8),
+        "rgba8" => Ok(VideoPixelFormat::Rgba8),
+        "p010" => Ok(VideoPixelFormat::P010),
+        "yuv420P" => Ok(VideoPixelFormat::Yuv420P),
+        "unknown" => Ok(VideoPixelFormat::Unknown),
+        _ => Err(FrameValidationError::new(
+            FrameValidationErrorKind::InvalidTextureHandle,
+            format!("unsupported texture pixel format {label}"),
+        )),
     }
 }
 

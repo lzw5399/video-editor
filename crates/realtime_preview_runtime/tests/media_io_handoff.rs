@@ -8,7 +8,8 @@ use media_runtime::{
     FrameLeaseRequest, FramePool, FramePoolLimits, FrameStorageRequest, MediaIoError,
     MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection, MediaOpenRequest,
     MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind, RationalFrameRate,
-    RuntimeDeviceId, SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
+    NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RuntimeDeviceId,
+    SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
     VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoFrameStorage, VideoPixelFormat,
 };
 use realtime_preview_runtime::{
@@ -85,7 +86,10 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
     };
     let reader = MockMediaReader::new(
         Rc::new(RefCell::new(Vec::new())),
-        MockStorage::Texture(device.clone()),
+        MockStorage::Texture {
+            device: device.clone(),
+            registry: None,
+        },
         selected_fallback(
             SelectedDecodePath::NativeHardwareTexture,
             MediaIoFallbackReason::TextureInteropUnavailable,
@@ -152,6 +156,7 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
 fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_imported_material()
 {
     let material_id = MaterialId::new("texture-provider-material");
+    let registry = NativeTextureLeaseRegistry::new();
     let device = RuntimeDeviceId {
         backend: TextureBackend::D3d11Texture2D,
         adapter_id: "adapter-1".to_owned(),
@@ -160,12 +165,16 @@ fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_
     let recorded_requests = Rc::new(RefCell::new(Vec::new()));
     let reader = MockMediaReader::new(
         recorded_requests.clone(),
-        MockStorage::Texture(device.clone()),
+        MockStorage::Texture {
+            device: device.clone(),
+            registry: Some(registry.clone()),
+        },
         None,
     );
     let mut provider = MediaIoFrameProvider::new(Box::new(reader))
         .with_desired_storage(PreviewFrameStoragePreference::Texture)
-        .with_preview_device_context(PreviewDecodeDeviceContext::compatible(device));
+        .with_preview_device_context(PreviewDecodeDeviceContext::compatible(device))
+        .with_native_texture_registry(registry);
     provider
         .register_material(PreviewMaterialDecodeSource {
             material_id: material_id.clone(),
@@ -211,7 +220,10 @@ fn media_io_handoff_rejects_texture_handle_without_registered_native_lease() {
     };
     let reader = MockMediaReader::new(
         Rc::new(RefCell::new(Vec::new())),
-        MockStorage::Texture(device.clone()),
+        MockStorage::Texture {
+            device: device.clone(),
+            registry: None,
+        },
         None,
     );
     let mut provider = MediaIoFrameProvider::new(Box::new(reader))
@@ -453,7 +465,10 @@ fn repo_media_fixture(name: &str) -> PathBuf {
 #[derive(Debug, Clone)]
 enum MockStorage {
     Cpu,
-    Texture(RuntimeDeviceId),
+    Texture {
+        device: RuntimeDeviceId,
+        registry: Option<NativeTextureLeaseRegistry>,
+    },
     PlatformOpaque,
 }
 
@@ -552,19 +567,31 @@ impl VideoDecoder for MockVideoDecoder {
             MockStorage::Cpu => FrameStorageRequest::Cpu {
                 estimated_byte_len: 320 * 180 * 4,
             },
-            MockStorage::Texture(device) => FrameStorageRequest::Texture(TextureHandle {
-                handle_id: TextureHandleId("texture-1".to_owned()),
-                owner_session: self.owner_session.clone(),
-                generation: request.playback_generation.unwrap_or_default(),
-                backend: device.backend,
-                device_id: device.clone(),
-                dimensions: FrameDimensions {
-                    width: 320,
-                    height: 180,
-                },
-                pixel_format: VideoPixelFormat::Nv12,
-                color: VideoColorMetadata::unknown_with_diagnostic("test texture color"),
-            }),
+            MockStorage::Texture { device, registry } => {
+                let handle = TextureHandle {
+                    handle_id: TextureHandleId("texture-1".to_owned()),
+                    owner_session: self.owner_session.clone(),
+                    generation: request.playback_generation.unwrap_or_default(),
+                    backend: device.backend,
+                    device_id: device.clone(),
+                    dimensions: FrameDimensions {
+                        width: 320,
+                        height: 180,
+                    },
+                    pixel_format: VideoPixelFormat::Nv12,
+                    color: VideoColorMetadata::unknown_with_diagnostic("test texture color"),
+                };
+                if let Some(registry) = registry {
+                    registry
+                        .register_resource(
+                            handle.clone(),
+                            NativeTextureLeaseResourceKind::PlatformOpaque,
+                            "mock-live-native-texture-lease".to_owned(),
+                        )
+                        .expect("mock native texture lease registers");
+                }
+                FrameStorageRequest::Texture(handle)
+            }
             MockStorage::PlatformOpaque => FrameStorageRequest::PlatformOpaque {
                 label: "mock-native-sample".to_owned(),
             },

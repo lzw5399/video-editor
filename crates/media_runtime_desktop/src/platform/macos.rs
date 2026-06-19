@@ -9,7 +9,8 @@ use media_runtime::{
     FrameLeaseRequest, FramePool, FramePoolCloseReport, FramePoolError, FramePoolLimits,
     FrameReleaseDiagnostic, FrameStorageRequest, MacosMediaIoCapabilities, MediaIoError,
     MediaIoErrorKind, MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection,
-    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
+    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo,
+    MediaStreamKind, NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind,
     RationalFrameRate, RuntimeCapabilityStatus, RuntimeDeviceId, RuntimeFeatureCapability,
     SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
     VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
@@ -129,6 +130,7 @@ pub fn select_macos_texture_interop_fallback(
 pub struct MacosMediaReader {
     frame_pool_limits: FramePoolLimits,
     texture_policy: MacosTextureInteropPolicy,
+    native_texture_registry: Option<NativeTextureLeaseRegistry>,
 }
 
 impl Default for MacosMediaReader {
@@ -144,6 +146,7 @@ impl MacosMediaReader {
                 max_outstanding_leases: DEFAULT_MAX_OUTSTANDING_LEASES,
             },
             texture_policy: MacosTextureInteropPolicy::default(),
+            native_texture_registry: None,
         }
     }
 
@@ -154,6 +157,11 @@ impl MacosMediaReader {
 
     pub fn with_texture_interop_policy(mut self, policy: MacosTextureInteropPolicy) -> Self {
         self.texture_policy = policy;
+        self
+    }
+
+    pub fn with_native_texture_registry(mut self, registry: NativeTextureLeaseRegistry) -> Self {
+        self.native_texture_registry = Some(registry);
         self
     }
 
@@ -182,6 +190,7 @@ pub struct MacosMediaSession {
     streams: Vec<MediaStreamInfo>,
     frame_state: Rc<RefCell<MacosFrameState>>,
     texture_policy: MacosTextureInteropPolicy,
+    native_texture_registry: Option<NativeTextureLeaseRegistry>,
     last_fallback_selection: Rc<RefCell<Option<MediaIoFallbackSelection>>>,
 }
 
@@ -208,6 +217,7 @@ impl MacosMediaSession {
             stream: stream.clone(),
             frame_state: Rc::clone(&self.frame_state),
             texture_policy: self.texture_policy.clone(),
+            native_texture_registry: self.native_texture_registry.clone(),
             last_fallback_selection: Rc::clone(&self.last_fallback_selection),
         })
     }
@@ -267,6 +277,7 @@ pub struct MacosVideoDecoder {
     stream: MediaStreamInfo,
     frame_state: Rc<RefCell<MacosFrameState>>,
     texture_policy: MacosTextureInteropPolicy,
+    native_texture_registry: Option<NativeTextureLeaseRegistry>,
     last_fallback_selection: Rc<RefCell<Option<MediaIoFallbackSelection>>>,
 }
 
@@ -353,6 +364,15 @@ struct MacosNativeLease {
         Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>>,
     _metal_chroma_texture:
         Option<objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct MacosRegisteredTextureLease {
+    _metal_texture_cache:
+        objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>,
+    _metal_luma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
+    _metal_chroma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -476,6 +496,7 @@ fn platform_open_session(
             reader.frame_pool_limits.clone(),
         ))),
         texture_policy: reader.texture_policy.clone(),
+        native_texture_registry: reader.native_texture_registry.clone(),
         last_fallback_selection: Rc::new(RefCell::new(None)),
     })
 }
@@ -613,6 +634,23 @@ fn platform_decode_frame(
         .frame_rate
         .and_then(|rate| frame_index_at(source_time_us, rate));
     let storage = if let Some(texture_interop) = &texture_interop {
+        if let Some(registry) = &decoder.native_texture_registry {
+            registry
+                .register_resource(
+                    texture_interop.handle.clone(),
+                    NativeTextureLeaseResourceKind::MacosCoreVideoMetalTexture,
+                    MacosRegisteredTextureLease {
+                        _metal_texture_cache: texture_interop.cache.clone(),
+                        _metal_luma_texture: texture_interop.luma_texture.clone(),
+                        _metal_chroma_texture: texture_interop.chroma_texture.clone(),
+                    },
+                )
+                .map_err(|error| {
+                    platform_decode_error(format!(
+                        "failed to register macOS native texture lease: {error}"
+                    ))
+                })?;
+        }
         FrameStorageRequest::Texture(texture_interop.handle.clone())
     } else {
         FrameStorageRequest::PlatformOpaque {
