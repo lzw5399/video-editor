@@ -1,19 +1,11 @@
 ---
 phase: 14-asset-resource-manager-and-derived-artifact-store
-reviewed: 2026-06-19T07:18:45Z
+reviewed: 2026-06-19T07:33:03Z
 depth: standard
-files_reviewed: 10
+files_reviewed: 2
 files_reviewed_list:
   - crates/artifact_store/src/gc.rs
-  - crates/artifact_store/src/generation.rs
-  - crates/artifact_store/src/jobs.rs
-  - crates/artifact_store/tests/artifact_generation.rs
-  - crates/artifact_store/tests/artifact_jobs.rs
   - crates/artifact_store/tests/gc_quota_manifest.rs
-  - crates/bindings_node/src/artifact_store_service.rs
-  - crates/bindings_node/tests/artifact_store_commands.rs
-  - crates/draft_model/tests/schema_exports.rs
-  - schemas/command.schema.json
 findings:
   critical: 0
   warning: 0
@@ -24,28 +16,26 @@ status: clean
 
 # Phase 14: Code Review Report
 
-**Reviewed:** 2026-06-19T07:18:45Z
+**Reviewed:** 2026-06-19T07:33:03Z
 **Depth:** standard
-**Files Reviewed:** 10
+**Files Reviewed:** 2
 **Status:** clean
 
 ## Summary
 
-Final re-review covered the scoped Phase 14 artifact store, generation job lifecycle, Node binding command boundary, command schema/export coverage, and regression tests.
+Reviewed the latest GC dependency-liveness fix in `crates/artifact_store/src/gc.rs` and the scoped regression coverage in `crates/artifact_store/tests/gc_quota_manifest.rs`.
 
-The prior blocker is fixed. `retry_generation` and `resume_generation` in `crates/bindings_node/src/artifact_store_service.rs` now take a mutable service, call `restart_generation_job`, and return the restarted job summary. The command handler creates mutable services for retry/resume/cancel, and `crates/bindings_node/tests/artifact_store_commands.rs` verifies both `retryArtifactGeneration` and `resumeArtifactGeneration` persist `status = resumable` with `cancel_requested = 0`.
+The current liveness query preserves dirty artifacts whose `material` or `resource` dependencies resolve to ready resource rows, including the canonical `material:{id}` resource mapping used by the resource index. It does not root artifacts from dependency metadata alone: generation parameters, graph nodes, fingerprints, dirty/range facts, schema version, and generator version rows remain non-root metadata unless paired with a ready material/resource row or another existing liveness source such as ready/clean status or active generation work.
 
-The lower-level restart lifecycle is also covered: `restart_generation_job` reopens failed, cancelled, and resumable jobs by setting the job to `resumable` and clearing cancellation state, while pending failed/cancelled chunks remain discoverable for the worker path through `next_pending_chunk` and can be started and completed.
+Regression coverage now includes both sides of the boundary: a dirty dependency-backed artifact with a ready material/resource row is excluded from GC candidates, while a dirty generated artifact with dependency metadata but no live resource row is still selected as reclaimable. This addresses the previous Phase 14 verification gap without making all dependency rows permanent GC roots.
 
 Verification run:
 
 ```text
-cargo test -p artifact_store --test artifact_jobs --test artifact_generation --test gc_quota_manifest
-cargo test -p bindings_node --test artifact_store_commands
-cargo test -p draft_model schema_exports_include_phase14_artifact_status_and_maintenance_contracts
+cargo test -p artifact_store gc_quota_manifest -- --nocapture
 ```
 
-All reviewed files meet quality standards. No issues found.
+Result: 10 `gc_quota_manifest` tests passed.
 
 ## Narrative Findings (AI reviewer)
 
@@ -53,6 +43,6 @@ No Critical, Warning, or Info findings.
 
 ---
 
-_Reviewed: 2026-06-19T07:18:45Z_
+_Reviewed: 2026-06-19T07:33:03Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
