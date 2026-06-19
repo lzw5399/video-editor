@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 15-03-PLAN.md
-last_updated: "2026-06-19T10:38:51.833Z"
+stopped_at: Completed 15-04-PLAN.md
+last_updated: "2026-06-19T11:04:43.449Z"
 last_activity: 2026-06-19 -- Completed 15-03-PLAN.md
 progress:
   total_phases: 20
   completed_phases: 16
   total_plans: 112
-  completed_plans: 109
-  percent: 97
+  completed_plans: 110
+  percent: 80
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15 (audio-engine-and-dsp-timeline-pipeline) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-06-19 -- Completed 15-03-PLAN.md
 
@@ -162,6 +162,7 @@ Progress: [██████████] 97%
 | Phase 15 P02 | 9 min | 2 tasks | 11 files |
 | Phase 15 P06 | 14 min | 2 tasks | 13 files |
 | Phase 15 P03 | 8min | 2 tasks | 11 files |
+| Phase 15 P04 | 975 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -380,6 +381,9 @@ Recent decisions affecting current work:
 - [Phase 15]: Approved only crates.io cpal 0.18.1 for audio_output_desktop; rubato was not added.
 - [Phase 15]: CPAL native device and stream values remain private in Rust; desktop audio output exports only safe backend status, device summaries, fallback reasons, and diagnostics.
 - [Phase 15]: Mock output remains the default audio_output_desktop factory for generic CI, while native proof requires VIDEO_EDITOR_TEST_NATIVE_AUDIO=1.
+- [Phase ?]: 15-04: Audio preview command transport shares AudioPreviewCommandPayload; handlers validate command-specific required fields.
+- [Phase ?]: 15-04: Waveform display responses are bounded display peaks, not canonical draft state or artifact-store internals.
+- [Phase ?]: 15-04: Bindings expose audio-session-* IDs and keep audio_engine session IDs private.
 
 ### Pending Todos
 
@@ -416,6 +420,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T10:38:51.829Z
-Stopped at: Completed 15-03-PLAN.md
+Last session: 2026-06-19T11:04:35.671Z
+Stopped at: Completed 15-04-PLAN.md
 Resume file: None

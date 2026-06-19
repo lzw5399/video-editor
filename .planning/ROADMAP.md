@@ -585,7 +585,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 output completion)*
 
-- [ ] 15-04-PLAN.md - Expose generated audio preview, device, and waveform binding contracts
+- [x] 15-04-PLAN.md - Expose generated audio preview, device, and waveform binding contracts
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -677,7 +677,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
 | 14. Asset Resource Manager And Derived Artifact Store | 7/7 | Complete    | 2026-06-19 |
-| 15. Audio Engine And DSP Timeline Pipeline | 4/7 | In Progress|  |
+| 15. Audio Engine And DSP Timeline Pipeline | 5/7 | In Progress|  |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
