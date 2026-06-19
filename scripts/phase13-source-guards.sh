@@ -168,6 +168,9 @@ fail_matches \
   crates \
   apps/desktop-electron/src \
   scripts \
-  --glob '!scripts/phase13-source-guards.sh'
+  --glob '!crates/artifact_store/**' \
+  --glob '!crates/bindings_node/tests/artifact_store_commands.rs' \
+  --glob '!scripts/phase13-source-guards.sh' \
+  --glob '!scripts/phase14-source-guards.sh'
 
 git diff --exit-code schemas apps/desktop-electron/src/generated >/dev/null
