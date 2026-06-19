@@ -1,7 +1,7 @@
 use draft_model::{MaterialId, Microseconds};
 use realtime_preview_runtime::{
-    CpuVideoFrame, FrameColorInfo, FrameValidationErrorKind, PlaybackGeneration,
-    PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError, TextureHandleDescriptor,
+    CpuVideoFrame, FrameColorInfo, FrameValidationErrorKind, PlaybackGeneration, PreviewFrameInput,
+    PreviewFrameProvider, PreviewFrameProviderError, TextureHandleDescriptor,
 };
 
 #[test]
@@ -39,7 +39,10 @@ fn frame_provider_invalid_dimensions_stride_and_pixel_lengths_return_typed_error
         vec![0, 0, 0, 255],
     )
     .expect_err("zero width rejected");
-    assert_eq!(zero_width.kind(), FrameValidationErrorKind::InvalidDimensions);
+    assert_eq!(
+        zero_width.kind(),
+        FrameValidationErrorKind::InvalidDimensions
+    );
 
     let short_stride = CpuVideoFrame::new(
         MaterialId::new("video-material"),
@@ -65,7 +68,10 @@ fn frame_provider_invalid_dimensions_stride_and_pixel_lengths_return_typed_error
         vec![0; 8],
     )
     .expect_err("pixel buffer shorter than stride * height rejected");
-    assert_eq!(short_pixels.kind(), FrameValidationErrorKind::InvalidPixelLength);
+    assert_eq!(
+        short_pixels.kind(),
+        FrameValidationErrorKind::InvalidPixelLength
+    );
 }
 
 #[test]
@@ -81,7 +87,10 @@ fn frame_provider_material_and_generation_metadata_are_validated_and_preserved_f
         vec![0, 0, 0, 255],
     )
     .expect_err("empty material id rejected");
-    assert_eq!(empty_material.kind(), FrameValidationErrorKind::MissingMaterialId);
+    assert_eq!(
+        empty_material.kind(),
+        FrameValidationErrorKind::MissingMaterialId
+    );
 
     let static_frame = PreviewFrameInput::static_image(
         MaterialId::new("poster-image"),
@@ -136,21 +145,29 @@ fn frame_provider_unavailable_frames_include_provider_diagnostics() {
         .expect_err("unavailable frame returns typed diagnostics");
 
     assert_eq!(error.provider_name(), "test-unavailable-provider");
-    assert_eq!(error.material_id().map(MaterialId::as_str), Some("video-material"));
+    assert_eq!(
+        error.material_id().map(MaterialId::as_str),
+        Some("video-material")
+    );
     assert_eq!(error.source_position(), Some(Microseconds::new(500_000)));
-    assert_eq!(error.playback_generation(), Some(PlaybackGeneration::new(2)));
+    assert_eq!(
+        error.playback_generation(),
+        Some(PlaybackGeneration::new(2))
+    );
     assert!(error.to_string().contains("session cache"));
 }
 
 #[test]
 fn frame_provider_texture_handle_descriptors_serialize_without_native_pointers() {
     let descriptor = TextureHandleDescriptor::new(
-        42,
+        MaterialId::new("video-material"),
+        Microseconds::new(125_000),
+        "macos-metal-texture-42",
         PlaybackGeneration::new(9),
-        "phase12-metal-placeholder",
+        "metalTexture",
         1920,
         1080,
-        "rgba8unorm",
+        "nv12",
     )
     .expect("valid opaque descriptor");
 
@@ -158,10 +175,12 @@ fn frame_provider_texture_handle_descriptors_serialize_without_native_pointers()
         .expect("texture descriptor serializes");
 
     assert_eq!(value["kind"], "textureHandle");
-    assert_eq!(value["handle"]["handleId"], 42);
-    assert_eq!(value["handle"]["ownerGeneration"], 9);
-    assert_eq!(value["handle"]["backend"], "phase12-metal-placeholder");
-    assert_eq!(value["handle"]["pixelFormat"], "rgba8unorm");
+    assert_eq!(value["handle"]["materialId"], "video-material");
+    assert_eq!(value["handle"]["sourcePosition"], 125_000);
+    assert_eq!(value["handle"]["handleId"], "macos-metal-texture-42");
+    assert_eq!(value["handle"]["playbackGeneration"], 9);
+    assert_eq!(value["handle"]["backend"], "metalTexture");
+    assert_eq!(value["handle"]["pixelFormat"], "nv12");
     assert!(value.get("nativePointer").is_none());
     assert!(value["handle"].get("nativePointer").is_none());
 }

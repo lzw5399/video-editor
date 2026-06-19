@@ -4,7 +4,10 @@ use std::fmt;
 
 use draft_model::{MaterialId, Microseconds};
 
-use crate::{CpuVideoFrame, FrameValidationError, PlaybackGeneration, PreviewFrameInput};
+use crate::{
+    CpuVideoFrame, FrameValidationError, PlaybackGeneration, PreviewFrameInput,
+    TextureHandleDescriptor,
+};
 
 use super::device::RealtimePreviewGpuDevice;
 
@@ -25,13 +28,46 @@ pub struct RealtimePreviewTexture {
     pub playback_generation: PlaybackGeneration,
     pub width: u32,
     pub height: u32,
-    pixels: Vec<u8>,
+    storage: RealtimePreviewTextureStorage,
 }
 
 impl RealtimePreviewTexture {
-    pub fn pixels(&self) -> &[u8] {
-        &self.pixels
+    pub fn cpu_pixels(&self) -> Option<&[u8]> {
+        match &self.storage {
+            RealtimePreviewTextureStorage::CpuRgba { pixels } => Some(pixels),
+            RealtimePreviewTextureStorage::ExternalHandle(_) => None,
+        }
     }
+
+    pub fn external_handle(&self) -> Option<&TextureHandleDescriptor> {
+        match &self.storage {
+            RealtimePreviewTextureStorage::CpuRgba { .. } => None,
+            RealtimePreviewTextureStorage::ExternalHandle(handle) => Some(handle),
+        }
+    }
+
+    pub fn storage_kind(&self) -> RealtimePreviewTextureStorageKind {
+        match &self.storage {
+            RealtimePreviewTextureStorage::CpuRgba { .. } => {
+                RealtimePreviewTextureStorageKind::CpuRgba
+            }
+            RealtimePreviewTextureStorage::ExternalHandle(_) => {
+                RealtimePreviewTextureStorageKind::ExternalHandle
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealtimePreviewTextureStorageKind {
+    CpuRgba,
+    ExternalHandle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RealtimePreviewTextureStorage {
+    CpuRgba { pixels: Vec<u8> },
+    ExternalHandle(TextureHandleDescriptor),
 }
 
 #[derive(Debug, Default)]
@@ -54,40 +90,47 @@ impl RealtimePreviewTextureCache {
         input: PreviewFrameInput,
     ) -> Result<RealtimePreviewTexture, RealtimePreviewTextureCacheError> {
         let _physical_upload_path_available = device.device().is_some() && device.queue().is_some();
-        let frame = match input {
-            PreviewFrameInput::CpuRgba(frame) | PreviewFrameInput::StaticImage(frame) => frame,
+        match input {
+            PreviewFrameInput::CpuRgba(frame) | PreviewFrameInput::StaticImage(frame) => {
+                frame
+                    .validate()
+                    .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
+
+                let texture_id = self.next_id();
+                let texture = texture_from_frame(texture_id, frame);
+                self.textures.insert(texture_id, texture.clone());
+                Ok(texture)
+            }
             PreviewFrameInput::TextureHandle(handle) => {
-                return Err(RealtimePreviewTextureCacheError::UnsupportedTextureHandle {
-                    handle_id: handle.handle_id,
-                    backend: handle.backend,
-                });
+                handle
+                    .validate()
+                    .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
+
+                let texture_id = self.next_id();
+                let texture = texture_from_handle(texture_id, handle);
+                self.textures.insert(texture_id, texture.clone());
+                Ok(texture)
             }
             PreviewFrameInput::Unavailable { reason } => {
-                return Err(RealtimePreviewTextureCacheError::Unavailable { reason });
+                Err(RealtimePreviewTextureCacheError::Unavailable { reason })
             }
-        };
-
-        frame
-            .validate()
-            .map_err(RealtimePreviewTextureCacheError::InvalidFrame)?;
-
-        let texture_id = RealtimePreviewTextureId(self.next_texture_id);
-        self.next_texture_id = self.next_texture_id.saturating_add(1);
-
-        let texture = texture_from_frame(texture_id, frame);
-        self.textures.insert(texture_id, texture.clone());
-        Ok(texture)
+        }
     }
 
     pub fn get(&self, texture_id: RealtimePreviewTextureId) -> Option<&RealtimePreviewTexture> {
         self.textures.get(&texture_id)
+    }
+
+    fn next_id(&mut self) -> RealtimePreviewTextureId {
+        let texture_id = RealtimePreviewTextureId(self.next_texture_id);
+        self.next_texture_id = self.next_texture_id.saturating_add(1);
+        texture_id
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealtimePreviewTextureCacheError {
     InvalidFrame(FrameValidationError),
-    UnsupportedTextureHandle { handle_id: u64, backend: String },
     Unavailable { reason: String },
 }
 
@@ -95,12 +138,6 @@ impl fmt::Display for RealtimePreviewTextureCacheError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidFrame(error) => write!(formatter, "invalid texture frame: {error}"),
-            Self::UnsupportedTextureHandle { backend, .. } => {
-                write!(
-                    formatter,
-                    "external {backend} texture handles are not uploadable in Phase 11"
-                )
-            }
             Self::Unavailable { reason } => {
                 write!(formatter, "texture frame unavailable: {reason}")
             }
@@ -121,6 +158,23 @@ fn texture_from_frame(
         playback_generation: frame.playback_generation,
         width: frame.width,
         height: frame.height,
-        pixels: frame.pixels,
+        storage: RealtimePreviewTextureStorage::CpuRgba {
+            pixels: frame.pixels,
+        },
+    }
+}
+
+fn texture_from_handle(
+    id: RealtimePreviewTextureId,
+    handle: TextureHandleDescriptor,
+) -> RealtimePreviewTexture {
+    RealtimePreviewTexture {
+        id,
+        material_id: handle.material_id.clone(),
+        source_position: handle.source_position,
+        playback_generation: handle.playback_generation,
+        width: handle.width,
+        height: handle.height,
+        storage: RealtimePreviewTextureStorage::ExternalHandle(handle),
     }
 }

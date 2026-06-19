@@ -26,7 +26,10 @@ fn texture_cache_accepts_external_texture_handles_without_cpu_pixels() {
     .expect("external texture descriptor is valid");
 
     let texture = cache
-        .upload_frame(&device, PreviewFrameInput::TextureHandle(descriptor.clone()))
+        .upload_frame(
+            &device,
+            PreviewFrameInput::TextureHandle(descriptor.clone()),
+        )
         .expect("external texture handles should be retained for the GPU compositor");
 
     assert_eq!(texture.material_id, MaterialId::new("dashcam-video"));

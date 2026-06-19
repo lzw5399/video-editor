@@ -15,7 +15,7 @@ use media_runtime::{
 use realtime_preview_runtime::{
     MediaIoFrameProvider, PlaybackGeneration, PreviewDecodeDeviceContext, PreviewFrameStorageKind,
     PreviewFrameStoragePreference, PreviewMaterialDecodeRequest, PreviewMaterialDecodeSource,
-    RealtimePreviewFallbackReason,
+    RealtimePreviewFallbackReason, TextureHandleDescriptor,
 };
 
 #[test]
@@ -133,6 +133,19 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
         output.decoded_frame.storage,
         VideoFrameStorage::Texture(_)
     ));
+    let descriptor = TextureHandleDescriptor::from_decoded_frame(
+        output.material_id.clone(),
+        output.source_position,
+        &output.decoded_frame,
+    )
+    .expect("texture frame should convert to preview texture descriptor")
+    .expect("texture frame should produce a descriptor");
+    assert_eq!(descriptor.material_id, output.material_id);
+    assert_eq!(descriptor.source_position, output.source_position);
+    assert_eq!(descriptor.handle_id, "texture-1");
+    assert_eq!(descriptor.playback_generation, PlaybackGeneration::new(5));
+    assert_eq!(descriptor.backend, "d3d11Texture2D");
+    assert_eq!(descriptor.pixel_format, "nv12");
 }
 
 #[test]

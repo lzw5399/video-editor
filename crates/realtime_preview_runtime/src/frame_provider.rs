@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{MaterialId, Microseconds};
+use media_runtime::{DecodedVideoFrame, TextureBackend, VideoFrameStorage, VideoPixelFormat};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 
@@ -180,8 +181,10 @@ impl FrameColorInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextureHandleDescriptor {
-    pub handle_id: u64,
-    pub owner_generation: PlaybackGeneration,
+    pub material_id: MaterialId,
+    pub source_position: Microseconds,
+    pub handle_id: String,
+    pub playback_generation: PlaybackGeneration,
     pub backend: String,
     pub width: u32,
     pub height: u32,
@@ -189,48 +192,108 @@ pub struct TextureHandleDescriptor {
 }
 
 impl TextureHandleDescriptor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        handle_id: u64,
-        owner_generation: PlaybackGeneration,
+        material_id: MaterialId,
+        source_position: Microseconds,
+        handle_id: impl Into<String>,
+        playback_generation: PlaybackGeneration,
         backend: impl Into<String>,
         width: u32,
         height: u32,
         pixel_format: impl Into<String>,
     ) -> Result<Self, FrameValidationError> {
+        let handle_id = handle_id.into();
         let backend = backend.into();
         let pixel_format = pixel_format.into();
-        if handle_id == 0 {
+        let descriptor = Self {
+            material_id,
+            source_position,
+            handle_id,
+            playback_generation,
+            backend,
+            width,
+            height,
+            pixel_format,
+        };
+        descriptor.validate()?;
+        Ok(descriptor)
+    }
+
+    pub fn from_decoded_frame(
+        material_id: MaterialId,
+        source_position: Microseconds,
+        frame: &DecodedVideoFrame,
+    ) -> Result<Option<Self>, FrameValidationError> {
+        let VideoFrameStorage::Texture(texture) = &frame.storage else {
+            return Ok(None);
+        };
+
+        Self::new(
+            material_id,
+            source_position,
+            texture.handle_id.0.clone(),
+            PlaybackGeneration::new(texture.generation),
+            texture_backend_label(texture.backend),
+            texture.dimensions.width,
+            texture.dimensions.height,
+            video_pixel_format_label(texture.pixel_format),
+        )
+        .map(Some)
+    }
+
+    pub fn validate(&self) -> Result<(), FrameValidationError> {
+        if self.material_id.as_str().trim().is_empty() {
             return Err(FrameValidationError::new(
-                FrameValidationErrorKind::InvalidTextureHandle,
-                "texture handle id must be nonzero",
+                FrameValidationErrorKind::MissingMaterialId,
+                "texture material id must be present",
             ));
         }
-        if backend.trim().is_empty() {
+        if self.handle_id.trim().is_empty() {
+            return Err(FrameValidationError::new(
+                FrameValidationErrorKind::InvalidTextureHandle,
+                "texture handle id must be present",
+            ));
+        }
+        if self.backend.trim().is_empty() {
             return Err(FrameValidationError::new(
                 FrameValidationErrorKind::InvalidTextureHandle,
                 "texture backend must be present",
             ));
         }
-        if width == 0 || height == 0 {
+        if self.width == 0 || self.height == 0 {
             return Err(FrameValidationError::new(
                 FrameValidationErrorKind::InvalidDimensions,
                 "texture dimensions must be nonzero",
             ));
         }
-        if pixel_format.trim().is_empty() {
+        if self.pixel_format.trim().is_empty() {
             return Err(FrameValidationError::new(
                 FrameValidationErrorKind::InvalidTextureHandle,
                 "texture pixel format must be present",
             ));
         }
-        Ok(Self {
-            handle_id,
-            owner_generation,
-            backend,
-            width,
-            height,
-            pixel_format,
-        })
+        Ok(())
+    }
+}
+
+fn texture_backend_label(backend: TextureBackend) -> &'static str {
+    match backend {
+        TextureBackend::D3d11Texture2D => "d3d11Texture2D",
+        TextureBackend::D3d12Resource => "d3d12Resource",
+        TextureBackend::MetalTexture => "metalTexture",
+        TextureBackend::CoreVideoPixelBuffer => "coreVideoPixelBuffer",
+    }
+}
+
+fn video_pixel_format_label(format: VideoPixelFormat) -> &'static str {
+    match format {
+        VideoPixelFormat::Nv12 => "nv12",
+        VideoPixelFormat::Bgra8 => "bgra8",
+        VideoPixelFormat::Rgba8 => "rgba8",
+        VideoPixelFormat::P010 => "p010",
+        VideoPixelFormat::Yuv420P => "yuv420P",
+        VideoPixelFormat::Unknown => "unknown",
     }
 }
 

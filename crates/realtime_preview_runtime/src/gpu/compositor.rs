@@ -135,6 +135,7 @@ pub struct RealtimePreviewCompositorOutput {
 #[derive(Debug)]
 pub enum RealtimePreviewCompositorError {
     InvalidCanvasColor(String),
+    ExternalTextureRequiresGpuCompositor { handle_id: String, backend: String },
     PixelBufferOverflow,
 }
 
@@ -142,6 +143,10 @@ impl fmt::Display for RealtimePreviewCompositorError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidCanvasColor(color) => write!(formatter, "invalid canvas color {color}"),
+            Self::ExternalTextureRequiresGpuCompositor { backend, .. } => write!(
+                formatter,
+                "external {backend} texture handles require the GPU compositor path"
+            ),
             Self::PixelBufferOverflow => formatter.write_str("compositor pixel buffer overflow"),
         }
     }
@@ -248,6 +253,18 @@ fn draw_textured_quad(
     visual: &SegmentVisual,
     texture: &RealtimePreviewTexture,
 ) -> Result<(), RealtimePreviewCompositorError> {
+    let texture_pixels = texture.cpu_pixels().ok_or_else(|| {
+        RealtimePreviewCompositorError::ExternalTextureRequiresGpuCompositor {
+            handle_id: texture
+                .external_handle()
+                .map(|handle| handle.handle_id.clone())
+                .unwrap_or_else(|| "unknown".to_owned()),
+            backend: texture
+                .external_handle()
+                .map(|handle| handle.backend.clone())
+                .unwrap_or_else(|| "unknown".to_owned()),
+        }
+    })?;
     let source = Dimensions {
         width: material.width.unwrap_or(texture.width).max(1),
         height: material.height.unwrap_or(texture.height).max(1),
@@ -284,7 +301,7 @@ fn draw_textured_quad(
             let dest_index = ((canvas_y as u32 * target.width() + canvas_x as u32) * 4) as usize;
             blend_pixel(
                 &mut pixels[dest_index..dest_index + 4],
-                &texture.pixels()[source_index..source_index + 4],
+                &texture_pixels[source_index..source_index + 4],
                 opacity,
             );
         }
