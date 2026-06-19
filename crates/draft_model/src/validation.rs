@@ -7,11 +7,13 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    reduce_ratio, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
-    KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
+    AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
+    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentAudio,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual,
     SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion,
-    TextSegment, TextStyle, MAX_SEGMENT_VOLUME_MILLIS,
+    TextSegment, TextStyle, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -23,6 +25,7 @@ pub enum DraftValidationError {
     InvalidRationalFrameRate { field: String, reason: String },
     InvalidCanvasConfig { field: String, reason: String },
     InvalidSegmentVisual { field: String, reason: String },
+    InvalidSegmentAudio { field: String, reason: String },
     InvalidTextSegment { field: String, reason: String },
     InvalidKeyframe { field: String, reason: String },
     DuplicateId { id_kind: String, id: String },
@@ -53,6 +56,9 @@ impl fmt::Display for DraftValidationError {
             }
             Self::InvalidSegmentVisual { field, reason } => {
                 write!(formatter, "invalid segment visual {field}: {reason}")
+            }
+            Self::InvalidSegmentAudio { field, reason } => {
+                write!(formatter, "invalid segment audio {field}: {reason}")
             }
             Self::InvalidTextSegment { field, reason } => {
                 write!(formatter, "invalid text segment {field}: {reason}")
@@ -202,6 +208,11 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                 validate_text_segment("tracks[].segments[].text", text)?;
             }
             validate_segment_volume("tracks[].segments[].volume", segment.volume.level_millis)?;
+            validate_segment_audio(
+                "tracks[].segments[].audio",
+                &segment.audio,
+                segment.target_timerange.duration,
+            )?;
             validate_segment_visual(draft, "tracks[].segments[].visual", &segment.visual)?;
         }
     }
@@ -798,6 +809,105 @@ fn validate_segment_volume(field: &str, level_millis: u32) -> Result<(), DraftVa
     Ok(())
 }
 
+fn validate_segment_audio(
+    field: &str,
+    audio: &SegmentAudio,
+    target_duration: Microseconds,
+) -> Result<(), DraftValidationError> {
+    if audio.gain_millis > MAX_SEGMENT_VOLUME_MILLIS {
+        return Err(invalid_segment_audio(
+            &format!("{field}.gainMillis"),
+            &format!("gain must be <= {MAX_SEGMENT_VOLUME_MILLIS} millis"),
+        ));
+    }
+    if audio.pan_balance_millis.balance_millis < MIN_AUDIO_PAN_BALANCE_MILLIS
+        || audio.pan_balance_millis.balance_millis > MAX_AUDIO_PAN_BALANCE_MILLIS
+    {
+        return Err(invalid_segment_audio(
+            &format!("{field}.panBalanceMillis"),
+            &format!(
+                "pan balance must be between {MIN_AUDIO_PAN_BALANCE_MILLIS} and {MAX_AUDIO_PAN_BALANCE_MILLIS} millis"
+            ),
+        ));
+    }
+    validate_audio_fade(
+        &format!("{field}.fadeInDuration"),
+        audio.fade_in_duration.duration,
+        target_duration,
+    )?;
+    validate_audio_fade(
+        &format!("{field}.fadeOutDuration"),
+        audio.fade_out_duration.duration,
+        target_duration,
+    )?;
+
+    let mut seen_slot_ids = BTreeSet::new();
+    for slot in &audio.effect_slots {
+        if slot.slot_id.trim().is_empty() {
+            return Err(invalid_segment_audio(
+                &format!("{field}.effectSlots[].slotId"),
+                "effect slot ID must not be empty",
+            ));
+        }
+        if !seen_slot_ids.insert(slot.slot_id.as_str().to_owned()) {
+            return Err(invalid_segment_audio(
+                &format!("{field}.effectSlots[]"),
+                "effect slot IDs must be unique",
+            ));
+        }
+        match &slot.kind {
+            AudioEffectSlotKind::Unsupported { name, external_ref } => {
+                validate_required_audio_text(&format!("{field}.effectSlots[].kind.name"), name)?;
+                validate_optional_audio_external_ref(
+                    &format!("{field}.effectSlots[].kind.externalRef"),
+                    external_ref,
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_audio_fade(
+    field: &str,
+    duration: Microseconds,
+    target_duration: Microseconds,
+) -> Result<(), DraftValidationError> {
+    if duration.get() > MAX_AUDIO_FADE_DURATION_MICROSECONDS {
+        return Err(invalid_segment_audio(
+            field,
+            &format!(
+                "fade duration must be <= {MAX_AUDIO_FADE_DURATION_MICROSECONDS} microseconds"
+            ),
+        ));
+    }
+    if duration > target_duration {
+        return Err(invalid_segment_audio(
+            field,
+            "fade duration must not exceed the segment target duration",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_required_audio_text(field: &str, value: &str) -> Result<(), DraftValidationError> {
+    if value.trim().is_empty() {
+        return Err(invalid_segment_audio(field, "value must not be empty"));
+    }
+    Ok(())
+}
+
+fn validate_optional_audio_external_ref(
+    field: &str,
+    external_ref: &Option<String>,
+) -> Result<(), DraftValidationError> {
+    if let Some(external_ref) = external_ref {
+        validate_required_audio_text(field, external_ref)?;
+    }
+    Ok(())
+}
+
 fn validate_segment_visual(
     draft: &Draft,
     field: &str,
@@ -999,6 +1109,13 @@ fn invalid_canvas(field: &str, reason: &str) -> DraftValidationError {
 
 fn invalid_segment_visual(field: &str, reason: &str) -> DraftValidationError {
     DraftValidationError::InvalidSegmentVisual {
+        field: field.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+fn invalid_segment_audio(field: &str, reason: &str) -> DraftValidationError {
+    DraftValidationError::InvalidSegmentAudio {
         field: field.to_owned(),
         reason: reason.to_owned(),
     }

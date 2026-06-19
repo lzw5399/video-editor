@@ -80,6 +80,7 @@ fn draft_schema_serializes_material_track_and_segment_records() {
         }),
         text: None,
         volume: Default::default(),
+        audio: Default::default(),
         visual: SegmentVisual::default(),
     };
 
@@ -223,7 +224,7 @@ fn audio_semantics_defaults_preserve_legacy_segment_volume() {
     );
     assert_eq!(
         loaded_segment.audio.pan_balance_millis,
-        AudioPanBalance::center().balance_millis
+        AudioPanBalance::center()
     );
     assert!(loaded_segment.audio.effect_slots.is_empty());
 }
@@ -235,8 +236,7 @@ fn audio_semantics_validate_gain_pan_fades_and_effect_slots() {
         gain_millis: 1_250,
         pan_balance_millis: AudioPanBalance {
             balance_millis: -250,
-        }
-        .balance_millis,
+        },
         fade_in_duration: AudioFade {
             duration: Microseconds::new(100_000),
         },
@@ -895,11 +895,15 @@ fn set_audio_gain_overflow(audio: &mut SegmentAudio) {
 }
 
 fn set_audio_pan_below_min(audio: &mut SegmentAudio) {
-    audio.pan_balance_millis = MIN_AUDIO_PAN_BALANCE_MILLIS - 1;
+    audio.pan_balance_millis = AudioPanBalance {
+        balance_millis: MIN_AUDIO_PAN_BALANCE_MILLIS - 1,
+    };
 }
 
 fn set_audio_pan_above_max(audio: &mut SegmentAudio) {
-    audio.pan_balance_millis = MAX_AUDIO_PAN_BALANCE_MILLIS + 1;
+    audio.pan_balance_millis = AudioPanBalance {
+        balance_millis: MAX_AUDIO_PAN_BALANCE_MILLIS + 1,
+    };
 }
 
 fn set_audio_fade_longer_than_segment(audio: &mut SegmentAudio) {

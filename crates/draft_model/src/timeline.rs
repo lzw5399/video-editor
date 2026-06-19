@@ -1,12 +1,15 @@
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
 use crate::{MaterialId, Microseconds, SegmentId, TrackId};
 
 pub const MAX_SEGMENT_VOLUME_MILLIS: u32 = 4_000;
+pub const MIN_AUDIO_PAN_BALANCE_MILLIS: i32 = -1_000;
+pub const MAX_AUDIO_PAN_BALANCE_MILLIS: i32 = 1_000;
+pub const MAX_AUDIO_FADE_DURATION_MICROSECONDS: u64 = 3_600_000_000;
 pub const MAX_SEGMENT_OPACITY_MILLIS: u32 = 1_000;
 pub const MAX_SEGMENT_CROP_MILLIS: u32 = 1_000;
 pub const MAX_SEGMENT_ANCHOR_MILLIS: u32 = 1_000;
@@ -429,6 +432,131 @@ impl Default for SegmentVolume {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TS)]
+#[ts(type = "number")]
+pub struct AudioPanBalance {
+    pub balance_millis: i32,
+}
+
+impl Serialize for AudioPanBalance {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.balance_millis)
+    }
+}
+
+impl<'de> Deserialize<'de> for AudioPanBalance {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self {
+            balance_millis: i32::deserialize(deserializer)?,
+        })
+    }
+}
+
+impl JsonSchema for AudioPanBalance {
+    fn schema_name() -> Cow<'static, str> {
+        "AudioPanBalance".into()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        concat!(module_path!(), "::AudioPanBalance").into()
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "integer",
+            "format": "int32",
+            "minimum": MIN_AUDIO_PAN_BALANCE_MILLIS,
+            "maximum": MAX_AUDIO_PAN_BALANCE_MILLIS
+        })
+    }
+}
+
+impl AudioPanBalance {
+    pub const fn center() -> Self {
+        Self { balance_millis: 0 }
+    }
+}
+
+impl Default for AudioPanBalance {
+    fn default() -> Self {
+        Self::center()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioFade {
+    pub duration: Microseconds,
+}
+
+impl AudioFade {
+    pub const fn none() -> Self {
+        Self {
+            duration: Microseconds::ZERO,
+        }
+    }
+}
+
+impl Default for AudioFade {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AudioEffectSlotKind {
+    Unsupported {
+        name: String,
+        #[serde(rename = "externalRef")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        external_ref: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioEffectSlot {
+    pub slot_id: String,
+    pub kind: AudioEffectSlotKind,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SegmentAudio {
+    pub gain_millis: u32,
+    pub pan_balance_millis: AudioPanBalance,
+    pub fade_in_duration: AudioFade,
+    pub fade_out_duration: AudioFade,
+    pub effect_slots: Vec<AudioEffectSlot>,
+}
+
+impl SegmentAudio {
+    pub fn unity() -> Self {
+        Self {
+            gain_millis: SegmentVolume::unity().level_millis,
+            pan_balance_millis: AudioPanBalance::center(),
+            fade_in_duration: AudioFade::default(),
+            fade_out_duration: AudioFade::default(),
+            effect_slots: Vec::new(),
+        }
+    }
+}
+
+impl Default for SegmentAudio {
+    fn default() -> Self {
+        Self::unity()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SegmentPosition {
@@ -698,6 +826,8 @@ pub struct Segment {
     #[serde(default)]
     pub volume: SegmentVolume,
     #[serde(default)]
+    pub audio: SegmentAudio,
+    #[serde(default)]
     pub visual: SegmentVisual,
 }
 
@@ -719,6 +849,7 @@ impl Segment {
             transition: None,
             text: None,
             volume: SegmentVolume::default(),
+            audio: SegmentAudio::default(),
             visual: SegmentVisual::default(),
         }
     }
