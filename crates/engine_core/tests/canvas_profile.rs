@@ -1,8 +1,8 @@
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasPixelPoint, Draft, DraftCanvasConfig,
-    Material, MaterialKind, Microseconds, NormalizedCanvasPoint, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, TextAlignment, TextSegment, TextStyle, Track, TrackKind,
-    normalized_to_canvas_pixel,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasPixelPoint, Draft,
+    DraftCanvasConfig, Material, MaterialKind, Microseconds, NormalizedCanvasPoint,
+    RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment, TextSegment,
+    TextStyle, Track, TrackKind, normalized_to_canvas_pixel,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_frame_state, resolve_render_range};
 
@@ -16,6 +16,7 @@ fn vertical_draft_canvas_resolves_engine_profile_and_text_layout() {
             height: 1_920,
             frame_rate: RationalFrameRate::new(25, 1),
             background: draft_model::CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
 
@@ -50,6 +51,7 @@ fn square_draft_canvas_drives_render_range_without_mvp_defaults() {
             height: 1_024,
             frame_rate: RationalFrameRate::new(24, 1),
             background: draft_model::CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
 
@@ -82,6 +84,7 @@ fn coordinate_conversion_uses_documented_center_origin_canvas_contract() {
             height: 1_200,
             frame_rate: RationalFrameRate::new(48, 1),
             background: draft_model::CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     let profile =

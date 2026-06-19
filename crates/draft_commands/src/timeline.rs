@@ -12,7 +12,8 @@ use crate::{
     audio::{add_audio_segment, set_segment_volume, set_track_mute, update_segment_audio},
     canvas::update_draft_canvas_config,
     delta::{
-        current_range, moved_segment_delta, previous_range, segment_delta, split_segment_delta,
+        current_range, moved_segment_delta, previous_range, segment_delta,
+        segment_with_canvas_delta, split_segment_delta,
     },
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
@@ -310,23 +311,51 @@ pub fn add_segment(
     let material = find_material(&next_draft, &material_id)?.clone();
     validate_track_material_compatibility(&next_draft.tracks[track_index], &material)?;
 
+    let auto_adapted_canvas = should_auto_adapt_canvas(&next_draft)
+        .then(|| crate::canvas::first_visual_material_canvas_config(&next_draft.canvas_config, &material))
+        .flatten();
+    if let Some(canvas_config) = auto_adapted_canvas.clone() {
+        next_draft.canvas_config = canvas_config;
+    }
+
     let segment = Segment::new(
         segment_id.clone(),
         material_id.clone(),
         source_timerange,
         target_timerange.clone(),
     );
-    let delta = segment_delta(
-        CommandName::AddSegment,
-        &track_id,
-        &segment,
-        vec![current_range(target_timerange)],
-        "segment added",
-    );
     next_draft.tracks[track_index].segments.push(segment);
     validate_timeline_rules(&next_draft)?;
+    let segment = next_draft.tracks[track_index]
+        .segments
+        .last()
+        .expect("segment was just pushed");
+    let delta = if auto_adapted_canvas.is_some() {
+        segment_with_canvas_delta(
+            &track_id,
+            segment,
+            &next_draft,
+            "segment added and draft canvas auto adapted",
+        )
+    } else {
+        segment_delta(
+            CommandName::AddSegment,
+            &track_id,
+            segment,
+            vec![current_range(target_timerange)],
+            "segment added",
+        )
+    };
+    let extra_events = if auto_adapted_canvas.is_some() {
+        vec![CommandEvent {
+            kind: "draftCanvasAutoAdapted".to_owned(),
+            message: None,
+        }]
+    } else {
+        Vec::new()
+    };
 
-    Ok(response(
+    Ok(response_with_events(
         next_draft,
         command_state_after_commit(command_state, draft, _selection, "addSegment"),
         TimelineSelection {
@@ -334,6 +363,7 @@ pub fn add_segment(
             track_ids: vec![track_id],
         },
         "segmentAdded",
+        extra_events,
         delta,
     ))
 }
@@ -909,4 +939,12 @@ fn is_visual_track(kind: TrackKind) -> bool {
         kind,
         TrackKind::Video | TrackKind::Text | TrackKind::Sticker | TrackKind::Filter
     )
+}
+
+fn should_auto_adapt_canvas(draft: &Draft) -> bool {
+    !draft
+        .tracks
+        .iter()
+        .filter(|track| is_visual_track(track.kind))
+        .any(|track| !track.segments.is_empty())
 }

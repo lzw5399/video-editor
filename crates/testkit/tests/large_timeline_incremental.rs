@@ -1,7 +1,7 @@
 use draft_model::{
-    CanvasAspectRatio, CanvasBackground, DirtyDomain, DirtyRange, DirtyRangeSource, Draft,
-    DraftCanvasConfig, Microseconds, RationalFrameRate, SegmentOpacity, SegmentVolume,
-    TargetTimerange, TextSegment, TrackKind, validate_draft,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, DirtyDomain, DirtyRange,
+    DirtyRangeSource, Draft, DraftCanvasConfig, Microseconds, RationalFrameRate, SegmentOpacity,
+    SegmentVolume, TargetTimerange, TextSegment, TrackKind, validate_draft,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use preview_service::{
@@ -284,6 +284,7 @@ fn large_timeline_incremental_canvas_profile_change_uses_full_draft_invalidation
         background: CanvasBackground::SolidColor {
             color: "#101820".to_owned(),
         },
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     };
     let current = snapshot_for(&edited, full_range);
     let diff = RenderGraphDiff::between(

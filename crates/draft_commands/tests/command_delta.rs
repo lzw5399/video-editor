@@ -12,14 +12,14 @@ use draft_commands::timeline::{
 };
 use draft_commands::visual::update_segment_visual;
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, ChangedEntity, CommandDelta,
-    CommandName, CommandState, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig,
-    ImportSubtitleSrtCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialId, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SegmentOpacity, SegmentPosition, SegmentVisual,
-    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion,
-    TextSegment, TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
-    TrimSegmentDirection,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    ChangedEntity, CommandDelta, CommandName, CommandState, DirtyDomain, DirtyRange,
+    DirtyRangeSource, Draft, DraftCanvasConfig, ImportSubtitleSrtCommandPayload,
+    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SegmentOpacity, SegmentPosition, SegmentVisual, SegmentVolume, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextStyle, TextWrapping, TimelineSelection, Track, TrackKind, TrimSegmentDirection,
 };
 
 #[test]
@@ -519,6 +519,7 @@ fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
             background: CanvasBackground::SolidColor {
                 color: "#101820".to_owned(),
             },
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     )
     .expect("canvas update should commit");

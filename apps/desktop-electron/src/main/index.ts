@@ -755,7 +755,7 @@ function defaultTestSegmentVisual(draft: Draft): SegmentVisual {
         crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
         anchor: { xMillis: 500, yMillis: 500 }
       },
-      fitMode: "stretch",
+      fitMode: "fit",
       backgroundFilling: { kind: "none" },
       blendMode: { kind: "normal" },
       mask: { kind: "none" }

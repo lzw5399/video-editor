@@ -191,7 +191,7 @@ fn segment_visual_defaults_preserve_mvp_rendering_contract() {
     let visual = &draft.tracks[0].segments[0].visual;
 
     assert!(visual.visible);
-    assert_eq!(visual.fit_mode, SegmentFitMode::Stretch);
+    assert_eq!(visual.fit_mode, SegmentFitMode::Fit);
     assert_eq!(visual.transform.position.x, 0);
     assert_eq!(visual.transform.position.y, 0);
     assert_eq!(visual.transform.scale.x_millis, 1_000);

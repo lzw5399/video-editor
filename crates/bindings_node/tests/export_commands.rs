@@ -6,9 +6,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bindings_node::execute_command;
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CommandErrorKind, Draft,
-    DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase, ExportPreset, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    CommandErrorKind, Draft, DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase,
+    ExportPreset, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use serde_json::{Value, json};
 
@@ -136,6 +137,7 @@ fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() 
                         height: 1920,
                         frame_rate: RationalFrameRate::new(24, 1),
                         background: CanvasBackground::Black,
+                        adaptation_policy: CanvasAdaptationPolicy::Auto,
                     }
                 ),
                 "outputPath": output,

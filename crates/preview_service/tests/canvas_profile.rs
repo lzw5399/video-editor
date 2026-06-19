@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft, DraftCanvasConfig,
-    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
-    TargetTimerange, Track, TrackKind,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft,
+    DraftCanvasConfig, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::{
@@ -32,6 +32,7 @@ fn preview_frame_uses_draft_canvas_profile_and_preserves_vertical_aspect_ratio()
             height: 1920,
             frame_rate: RationalFrameRate::new(24, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
 
@@ -65,6 +66,7 @@ fn preview_segment_uses_square_and_custom_draft_canvas_profiles() {
             height: 1080,
             frame_rate: RationalFrameRate::new(25, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     assert_eq!(square.ffmpeg_job.validation.expected_width, 540);
@@ -82,6 +84,7 @@ fn preview_segment_uses_square_and_custom_draft_canvas_profiles() {
             height: 800,
             frame_rate: RationalFrameRate::new(48, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     assert_eq!(custom.ffmpeg_job.validation.expected_width, 810);
@@ -102,6 +105,7 @@ fn preview_keeps_degraded_and_unsupported_canvas_background_diagnostics() {
             height: 1080,
             frame_rate: RationalFrameRate::new(30, 1),
             background: CanvasBackground::BlurFill,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     assert_eq!(degraded.ffmpeg_job.canvas_diagnostics.len(), 1);
@@ -122,6 +126,7 @@ fn preview_keeps_degraded_and_unsupported_canvas_background_diagnostics() {
             height: 1080,
             frame_rate: RationalFrameRate::new(30, 1),
             background: CanvasBackground::Image { material_id: None },
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     assert_eq!(unsupported.ffmpeg_job.canvas_diagnostics.len(), 1);

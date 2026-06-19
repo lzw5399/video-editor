@@ -21,9 +21,9 @@ pub mod timeline;
 pub mod validation;
 
 pub use canvas::{
-    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAspectRatio,
-    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, CanvasPixelPoint,
-    DraftCanvasConfig, NormalizedCanvasPoint,
+    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAdaptationPolicy,
+    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
+    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint,
 };
 pub use delta::{
     ChangedEntity, CommandDelta, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,

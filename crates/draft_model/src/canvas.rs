@@ -4,6 +4,19 @@ use ts_rs::TS;
 
 use crate::{MaterialId, RationalFrameRate};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CanvasAdaptationPolicy {
+    Auto,
+    Manual,
+}
+
+impl Default for CanvasAdaptationPolicy {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DraftCanvasConfig {
@@ -12,6 +25,8 @@ pub struct DraftCanvasConfig {
     pub height: u32,
     pub frame_rate: RationalFrameRate,
     pub background: CanvasBackground,
+    #[serde(default)]
+    pub adaptation_policy: CanvasAdaptationPolicy,
 }
 
 impl DraftCanvasConfig {
@@ -25,6 +40,7 @@ impl DraftCanvasConfig {
             height: Self::DEFAULT_HEIGHT,
             frame_rate: RationalFrameRate::new(30, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         }
     }
 }

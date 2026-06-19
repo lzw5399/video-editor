@@ -5,9 +5,9 @@ use draft_commands::{
     timeline::execute_timeline_edit,
 };
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CommandPayload, CommandState,
-    Draft, DraftCanvasConfig, Material, MaterialKind, RationalFrameRate, TimelineSelection,
-    UpdateDraftCanvasConfigCommandPayload,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    CommandPayload, CommandState, Draft, DraftCanvasConfig, Material, MaterialKind,
+    RationalFrameRate, TimelineSelection, UpdateDraftCanvasConfigCommandPayload,
 };
 
 #[test]
@@ -20,7 +20,10 @@ fn canvas_update_commits_after_validation() {
     let response = update_draft_canvas_config(&draft, &state, &selection, canvas_config.clone())
         .expect("valid canvas config should commit");
 
-    assert_eq!(response.draft.canvas_config, canvas_config);
+    assert_eq!(
+        response.draft.canvas_config,
+        accepted_manual_canvas_config(canvas_config)
+    );
     assert_eq!(
         draft.canvas_config,
         DraftCanvasConfig::mvp_default(),
@@ -119,7 +122,10 @@ fn execute_timeline_edit_routes_canvas_command() {
     ))
     .expect("timeline dispatcher should route canvas updates");
 
-    assert_eq!(response.draft.canvas_config, canvas_config);
+    assert_eq!(
+        response.draft.canvas_config,
+        accepted_manual_canvas_config(canvas_config)
+    );
     assert_eq!(response.events[0].kind, "draftCanvasConfigUpdated");
 }
 
@@ -156,6 +162,7 @@ fn vertical_canvas_config() -> DraftCanvasConfig {
         background: CanvasBackground::SolidColor {
             color: "#101820".to_owned(),
         },
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     }
 }
 
@@ -166,6 +173,7 @@ fn square_canvas_config() -> DraftCanvasConfig {
         height: 1080,
         frame_rate: RationalFrameRate::new(30, 1),
         background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     }
 }
 
@@ -176,6 +184,7 @@ fn aspect_ratio_mismatch_config() -> DraftCanvasConfig {
         height: 1920,
         frame_rate: RationalFrameRate::new(25, 1),
         background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     }
 }
 
@@ -218,4 +227,9 @@ fn video_image_material_config() -> DraftCanvasConfig {
         },
         ..vertical_canvas_config()
     }
+}
+
+fn accepted_manual_canvas_config(mut canvas_config: DraftCanvasConfig) -> DraftCanvasConfig {
+    canvas_config.adaptation_policy = CanvasAdaptationPolicy::Manual;
+    canvas_config
 }

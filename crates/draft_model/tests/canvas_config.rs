@@ -1,8 +1,8 @@
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
-    CanvasPixelPoint, Draft, DraftCanvasConfig, DraftValidationError, Material, MaterialKind,
-    Microseconds, NormalizedCanvasPoint, RationalFrameRate, canvas_pixel_to_normalized,
-    normalized_to_canvas_pixel, validate_draft,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
+    CanvasBackgroundCapability, CanvasPixelPoint, Draft, DraftCanvasConfig, DraftValidationError,
+    Material, MaterialKind, Microseconds, NormalizedCanvasPoint, RationalFrameRate,
+    canvas_pixel_to_normalized, normalized_to_canvas_pixel, validate_draft,
 };
 
 #[test]
@@ -17,6 +17,7 @@ fn draft_new_creates_default_canvas_config() {
             height: 1080,
             frame_rate: RationalFrameRate::new(30, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         }
     );
 
@@ -27,6 +28,7 @@ fn draft_new_creates_default_canvas_config() {
         serialized["canvasConfig"]["frameRate"],
         serde_json::json!({ "numerator": 30, "denominator": 1 })
     );
+    assert_eq!(serialized["canvasConfig"]["adaptationPolicy"], "auto");
 }
 
 #[test]
@@ -57,6 +59,7 @@ fn canvas_config_validates_dimensions_frame_rate_and_aspect_ratio() {
         height: 1080,
         frame_rate: RationalFrameRate::new(24, 1),
         background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     };
     validate_draft(&draft).expect("matching custom aspect ratio should validate");
 }

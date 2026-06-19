@@ -731,7 +731,7 @@ pub enum SegmentFitMode {
 
 impl Default for SegmentFitMode {
     fn default() -> Self {
-        Self::Stretch
+        Self::Fit
     }
 }
 

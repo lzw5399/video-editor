@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use draft_model::{
-    CanvasAspectRatio, CanvasBackground, CommandDelta, CommandName, DirtyDomain, DirtyRange,
-    DirtyRangeSource, Draft, DraftCanvasConfig, InvalidationScope, Material, MaterialId,
-    MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, CommandDelta, CommandName,
+    DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, InvalidationScope,
+    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion,
+    TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track,
+    TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, FfmpegCompileErrorKind, compile_ffmpeg_job};
@@ -156,6 +157,7 @@ fn preview_export_parity_compiles_custom_canvas_metadata_from_draft() -> RenderC
             height: 180,
             frame_rate: RationalFrameRate::new(24, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     );
     let sandbox = tempfile::tempdir()?;
@@ -601,6 +603,7 @@ fn golden_draft(video_path: &Path, audio_path: &Path) -> Draft {
             height: HEIGHT,
             frame_rate: RationalFrameRate::new(FPS, 1),
             background: CanvasBackground::Black,
+            adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     )
 }

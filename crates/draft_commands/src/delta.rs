@@ -197,6 +197,54 @@ pub fn segment_delta(
     )
 }
 
+pub fn segment_with_canvas_delta(
+    track_id: &TrackId,
+    segment: &Segment,
+    draft: &Draft,
+    reason: &'static str,
+) -> CommandDelta {
+    let mut changed_entities = vec![
+        ChangedEntity::Draft {
+            draft_id: draft.draft_id.clone(),
+        },
+        ChangedEntity::Canvas {
+            draft_id: draft.draft_id.clone(),
+        },
+    ];
+    changed_entities.extend(segment_entities(
+        track_id,
+        &segment.segment_id,
+        &segment.material_id,
+    ));
+
+    let mut changed_domains = CANVAS_DOMAINS.to_vec();
+    push_domain(&mut changed_domains, DirtyDomain::Timing);
+    push_domain(&mut changed_domains, DirtyDomain::Visual);
+    push_domain(&mut changed_domains, DirtyDomain::Material);
+
+    let mut consumer_domains = CANVAS_CONSUMERS.to_vec();
+    for domain in SEGMENT_CONSUMERS {
+        push_domain(&mut consumer_domains, *domain);
+    }
+
+    CommandDelta {
+        command: CommandName::AddSegment,
+        changed_entities,
+        changed_domains,
+        changed_ranges: vec![DirtyRange {
+            target_timerange: draft_duration_range(draft),
+            source: DirtyRangeSource::FullDraft,
+        }],
+        invalidation: InvalidationScope {
+            full_draft: true,
+            material_ids: segment_material_ids(&segment.material_id),
+            graph_node_ids: Vec::new(),
+            consumer_domains,
+        },
+        reason: reason.to_owned(),
+    }
+}
+
 pub fn moved_segment_delta(
     source_track_id: &TrackId,
     target_track_id: &TrackId,

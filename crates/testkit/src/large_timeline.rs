@@ -1,10 +1,10 @@
 use std::fmt;
 
 use draft_model::{
-    CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig, Material, MaterialId,
-    MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange,
-    TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackId, TrackKind,
-    validate_draft,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig,
+    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SourceTimerange, TargetTimerange, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
+    Track, TrackId, TrackKind, validate_draft,
 };
 
 pub const MAX_SEGMENTS_PER_TRACK: usize = 10_000;
@@ -89,6 +89,7 @@ impl Default for LargeTimelineConfig {
                 height: 1080,
                 frame_rate: RationalFrameRate::new(30, 1),
                 background: CanvasBackground::Black,
+                adaptation_policy: CanvasAdaptationPolicy::Auto,
             },
         }
     }

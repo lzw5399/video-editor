@@ -102,6 +102,13 @@
       "maximum": 1000,
       "minimum": -1000
     },
+    "CanvasAdaptationPolicy": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "manual"
+      ]
+    },
     "CanvasAspectRatio": {
       "oneOf": [
         {
@@ -225,6 +232,10 @@
     "DraftCanvasConfig": {
       "type": "object",
       "properties": {
+        "adaptationPolicy": {
+          "$ref": "#/$defs/CanvasAdaptationPolicy",
+          "default": "auto"
+        },
         "aspectRatio": {
           "$ref": "#/$defs/CanvasAspectRatio"
         },
@@ -661,7 +672,7 @@
             "blendMode": {
               "kind": "normal"
             },
-            "fitMode": "stretch",
+            "fitMode": "fit",
             "mask": {
               "kind": "none"
             },

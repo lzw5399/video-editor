@@ -63,6 +63,8 @@ const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "字幕", "滤镜", "
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
+const MEDIA_FIXTURE_DIR = join(REPO_ROOT, "apps/desktop-electron/tests/fixtures/media");
+const PORTRAIT_VIDEO_FIXTURE = join(MEDIA_FIXTURE_DIR, "p0-portrait-testsrc.mp4");
 
 type VideoEditorCoreApi = {
   executeCommand: (command: unknown) => Promise<unknown>;
@@ -900,6 +902,34 @@ test("material import routes through the same executeCommand bridge", async () =
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toContain("importMaterial");
+  } finally {
+    await app.close();
+  }
+});
+
+test("auto canvas adopts the first imported portrait material without renderer-owned canvas math", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "blank",
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([PORTRAIT_VIDEO_FIXTURE])
+    }
+  });
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await expect(page.getByText("还没有素材")).toBeVisible();
+    await page.getByRole("button", { name: "导入素材" }).click();
+    await expectCommandCall(app, "importMaterial");
+    await expect(page.locator('[aria-label="素材 p0-portrait-testsrc.mp4"]')).toBeVisible();
+
+    await page.getByRole("button", { name: "添加片段" }).click();
+    await expectCommandCall(app, "addSegment");
+    await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
+    await expect(
+      page.getByLabel("预览窗口").getByText("画布 9:16 · 180 x 320 · 30000/1001 fps", { exact: true })
+    ).toBeVisible();
+    await expect(page.getByLabel("预览选中框")).toHaveAttribute("data-fit-mode", "fit");
   } finally {
     await app.close();
   }

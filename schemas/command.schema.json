@@ -454,6 +454,13 @@
       "title": "CancelExportCommandPayload",
       "type": "object"
     },
+    "CanvasAdaptationPolicy": {
+      "enum": [
+        "auto",
+        "manual"
+      ],
+      "type": "string"
+    },
     "CanvasAspectRatio": {
       "oneOf": [
         {
@@ -3368,6 +3375,10 @@
     "DraftCanvasConfig": {
       "additionalProperties": false,
       "properties": {
+        "adaptationPolicy": {
+          "$ref": "#/$defs/CanvasAdaptationPolicy",
+          "default": "auto"
+        },
         "aspectRatio": {
           "$ref": "#/$defs/CanvasAspectRatio"
         },
@@ -5644,7 +5655,7 @@
             "blendMode": {
               "kind": "normal"
             },
-            "fitMode": "stretch",
+            "fitMode": "fit",
             "mask": {
               "kind": "none"
             },

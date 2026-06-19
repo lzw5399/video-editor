@@ -1,6 +1,6 @@
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft, DraftCanvasConfig,
-    Microseconds, RationalFrameRate, TargetTimerange,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft,
+    DraftCanvasConfig, Microseconds, RationalFrameRate, TargetTimerange,
 };
 use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
 use render_graph::{
@@ -113,6 +113,7 @@ fn canvas_graph(background: CanvasBackground) -> RenderGraph {
         height: 720,
         frame_rate: RationalFrameRate::new(24, 1),
         background,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     };
     let profile = EngineProfile::from_draft_canvas(&draft).expect("canvas profile should resolve");
     let normalized = normalize_draft(&draft, &profile).expect("draft should normalize");

@@ -1,6 +1,6 @@
 use draft_model::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft, DraftCanvasConfig,
-    Microseconds, RationalFrameRate, TargetTimerange,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft,
+    DraftCanvasConfig, Microseconds, RationalFrameRate, TargetTimerange,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, compile_ffmpeg_job};
@@ -16,6 +16,7 @@ fn export_encode_settings_and_validation_use_vertical_draft_canvas_profile() {
         height: 1_920,
         frame_rate: RationalFrameRate::new(25, 1),
         background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     });
     let job = compile_ffmpeg_job(&plan, &compile_context())
         .expect("vertical canvas export job should compile");
@@ -44,6 +45,7 @@ fn export_encode_settings_and_validation_use_square_custom_draft_canvas_profile(
         background: CanvasBackground::SolidColor {
             color: "#222222".to_owned(),
         },
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     });
     let job = compile_ffmpeg_job(&plan, &compile_context())
         .expect("square canvas export job should compile");
@@ -75,6 +77,7 @@ fn unsupported_image_canvas_background_is_visible_in_compiled_job_diagnostics() 
         height: 720,
         frame_rate: RationalFrameRate::new(30, 1),
         background: CanvasBackground::Image { material_id: None },
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
     });
     let job = compile_ffmpeg_job(&plan, &compile_context())
         .expect("diagnostic-only image background job should still compile");
