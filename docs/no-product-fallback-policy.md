@@ -16,6 +16,11 @@ When a fallback path already exists and can be exercised by normal users, remove
 or gate that path before replacing it with the production implementation. Do not
 leave the fallback active as a temporary product behavior.
 
+Because this editor is being built from scratch, refactors should prefer
+removing obsolete paths over preserving compatibility with partial historical
+implementations. Apply `docs/refactor-and-legacy-cleanup-policy.md` whenever a
+change replaces a product path.
+
 The product path must not use any of these as proof that playback works:
 
 - mock realtime backends or synthetic frame tokens
@@ -44,12 +49,15 @@ draft import. These paths must be named as diagnostics, not product success.
 
 Every review touching product behavior must check:
 
-- Product playback evidence is `composited` output from the realtime preview
-  surface, not decoded CPU media evidence.
-- Product playback evidence comes from the render-graph compositor for timelines
-  that include visible editing semantics. A native single-video player layer may
-  be used only as an explicit diagnostic/unsupported bridge and must not be
-  labeled as realtime GPU composition.
+- Product playback success backend is `renderGraphGpu` only. `mock`, `gpu`
+  frame requests, `offscreen`, `previewArtifact`, `ffmpegArtifact`, and
+  `nativeVideoBridge` cannot be product success.
+- Product playback evidence is `renderGraphGpuComposited` output from the
+  realtime preview surface, not decoded CPU media evidence or native
+  single-video player output.
+- A native single-video player layer may be used only as an explicit
+  diagnostic/unsupported bridge and must not be labeled as realtime GPU
+  composition, available product presentation, or playback success.
 - Electron renderer and main process do not choose fallback paths or mutate
   semantic state to simulate success.
 - Rust binding APIs do not expose debug, mock, FFmpeg CPU, preview artifact, or

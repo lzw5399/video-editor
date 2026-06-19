@@ -87,6 +87,7 @@
 - [ ] **TEST-E2E-01**: Every default visible editing feature added or changed after Phase 15.1 has Playwright/Electron coverage that performs the real user workflow and verifies visible preview, timeline state, saved draft, or exported media evidence.
 - [ ] **TEST-E2E-02**: Repository-owned media fixtures cover the main product workflow matrix: video, image, audio, text, timeline edit, playback, save/reopen, and export.
 - [ ] **NO-FALLBACK-01**: Product-facing success states cannot be satisfied by fallback, mock, artifact, first-frame, DOM overlay, decoded CPU probe, or legacy/native player evidence that bypasses the claimed production implementation.
+- [ ] **NO-FALLBACK-02**: Refactors remove or gate obsolete legacy implementations from normal product flows instead of preserving them as compatibility or fallback paths.
 
 ## v2 Requirements
 
@@ -185,7 +186,8 @@
 
 - **P0-UI-01**: Default production UI hides FFmpeg, ffprobe, runtime/backend telemetry, artifact/cache paths, raw diagnostics, graph/cache internals, and developer-only readouts unless developer mode is enabled.
 - **P0-UI-02**: The desktop workspace uses a Jianying-style five-zone information architecture: top product/category/export bar, left category resource library, center preview/player, right contextual inspector, and bottom timeline.
-- **P0-UI-03**: Export is launched from the top/right export button and completed in a modal with path, resolution, frame rate, bitrate, audio settings, progress, cancel, and open-location controls.
+- **P0-UI-03**: Export is launched from the top-right export button and completed in a modal with path, resolution, frame rate, bitrate, audio settings, progress, cancel, and open-location controls.
+- **P0-UI-03A**: Default product flow starts from a project entry state where the user creates a new project or opens an existing project before importing materials into the editor workspace.
 - **P0-UI-04**: Preview defaults to canvas, timecode, play/pause, previous/next frame, fit, aspect, and fullscreen controls; realtime status appears only as productized exception copy.
 - **P0-UI-05**: Left resource pages and bottom timeline behave like editor surfaces, not debug dashboards: material library cards, text/audio entry points, lightweight generation status, drag move, edge trim, draggable playhead, add-track, snapping, zoom, split, delete, undo, and redo.
 - **P0-UI-06**: Right inspector is contextual for draft/canvas, video/image, text, and audio parameters; screenshot-backed regression keeps 1280x800 and 1120x720 layouts stable and default-mode debug copy absent.

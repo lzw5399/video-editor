@@ -680,20 +680,21 @@ Plans:
 
 ### Phase 15.3: P0 Jianying-Style Production UI Convergence (INSERTED)
 
-**Goal**: Converge the desktop workspace from an engineering/debug console into a Jianying-style production editor UI while keeping the product feature set smaller: default UI shows editing controls only, export is a right-side/top modal flow, and diagnostics stay behind developer mode.
+**Goal**: Converge the desktop workspace from an engineering/debug console into a Jianying-style production editor UI while keeping the product feature set smaller: default flow starts from creating/opening a project, default UI shows editing controls only, export is a top-right modal flow, and diagnostics stay behind developer mode.
 **Depends on**: Phase 15.2
-**Requirements**: P0-UI-01, P0-UI-02, P0-UI-03, P0-UI-04, P0-UI-05, P0-UI-06
+**Requirements**: P0-UI-01, P0-UI-02, P0-UI-03, P0-UI-03A, P0-UI-04, P0-UI-05, P0-UI-06
 **Success Criteria** (what must be TRUE):
 
   1. Default UI does not show FFmpeg, ffprobe, runtime/backend telemetry, artifact/cache paths, raw diagnostics, graph/cache internals, or developer-only status readouts.
   2. The five-zone layout matches the intended Jianying-style model: top product/category/export bar, left resource library by category, center preview canvas/playback controls, right focused inspector, and bottom timeline.
-  3. Export is opened from the top/right export button in a modal containing path, resolution, frame rate, bitrate, audio options, progress, cancel, and open-location actions; preview no longer hosts a permanent export panel.
-  4. Preview defaults to画面, timecode, play/pause, previous/next frame, fit/aspect/fullscreen controls, with realtime status shown only as productized exception copy.
-  5. Left resource pages behave like a material library, text/audio entry panel, and lightweight generation status surface instead of a debug task dashboard.
-  6. Timeline defaults to editor interactions: drag move, edge trim, draggable playhead, undo/redo, split, delete, snapping, add-track, and zoom; numeric move/trim inputs are not default toolbar controls.
-  7. Right inspector is contextual: unselected draft/canvas parameters, selected video/image visual controls, selected text controls, and selected audio controls; developer details are hidden unless developer mode is enabled.
-  8. Regression tests compare against `docs/ui-reference/jianying-pro/screenshots/` for layout/information hierarchy and assert 1280x800 and 1120x720 stability with no debug copy in default mode.
-  9. New production UI icons are selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets before use unless no suitable icon exists.
+  3. The product has a project entry state where a user creates a new project or opens an existing project before importing materials into the editor workspace.
+  4. Export is opened from the top-right export button in a modal containing path, resolution, frame rate, bitrate, audio options, progress, cancel, and open-location actions; preview no longer hosts a permanent export panel.
+  5. Preview defaults to画面, timecode, play/pause, previous/next frame, fit/aspect/fullscreen controls, with realtime status shown only as productized exception copy.
+  6. Left resource pages behave like a material library, text/audio entry panel, and lightweight generation status surface instead of a debug task dashboard.
+  7. Timeline defaults to editor interactions: drag move, edge trim, draggable playhead, undo/redo, split, delete, snapping, add-track, and zoom; numeric move/trim inputs are not default toolbar controls.
+  8. Right inspector is contextual: unselected draft/canvas parameters, selected video/image visual controls, selected text controls, and selected audio controls; developer details are hidden unless developer mode is enabled.
+  9. Regression tests compare against `docs/ui-reference/jianying-pro/screenshots/` for layout/information hierarchy and assert 1280x800 and 1120x720 stability with no debug copy in default mode.
+  10. New production UI icons are selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets before use unless no suitable icon exists.
 
 **Plans:** 0 plans
 

@@ -32,4 +32,26 @@ fail_if_matches \
   'source:\s*"decoded"\s*\|\s*"composited"|source:\s*"decoded"' \
   apps/desktop-electron/tests/helpers/userJourney.ts apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
 
+fail_if_matches \
+  "Product host state must not expose runtime/mock/artifact/native bridge values as the product backend" \
+  'backend:\s*RealtimePreviewBackendUsed|this\.lastFrame\?\.backend\s*\?\?|backend:\s*"mock"|backend:\s*"gpu"|backend:\s*"offscreen"|backend:\s*"previewArtifact"|backend:\s*"ffmpegArtifact"|backend:\s*"nativeVideo' \
+  apps/desktop-electron/src/main/realtimePreviewHost.ts \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx \
+  apps/desktop-electron/tests/helpers/userJourney.ts
+
+fail_if_matches \
+  "Native video bridge must not use a generic available product presentation constructor" \
+  'NativePreviewPresentationState::available\(|pub fn available\(' \
+  crates/bindings_node/src/native_preview_presenter.rs
+
+if ! rg -q 'model\.backend !== "renderGraphGpu"' apps/desktop-electron/src/renderer/viewModel.ts; then
+  echo "no-product-fallback violation: product realtime preview summary must reject every backend except renderGraphGpu" >&2
+  exit 1
+fi
+
+if ! rg -q 'backend: "renderGraphGpu" \| "none"' apps/desktop-electron/tests/helpers/userJourney.ts; then
+  echo "no-product-fallback violation: product user journey host backend must be renderGraphGpu or none only" >&2
+  exit 1
+fi
+
 echo "no-product-fallback guards passed"

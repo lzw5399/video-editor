@@ -20,6 +20,8 @@ The test must start from the UI whenever possible:
    that a user would judge.
 5. Assert that fallback, mock, debug, first-frame, artifact, or CPU-probe paths
    did not satisfy the success condition.
+6. Assert that replaced legacy implementations are not still reachable as a
+   product substitute for the new path.
 
 ## Required Case Families
 
@@ -71,4 +73,5 @@ Every review touching user-visible behavior must ask:
 - Are unsupported visible controls hidden or explicitly unavailable instead of
   appearing functional?
 - Did the change extend the matrix when it added a new visible editing behavior?
-
+- Did the review apply `docs/refactor-and-legacy-cleanup-policy.md` when the
+  feature replaces an older implementation?
