@@ -695,6 +695,37 @@ fn schema_exports_include_phase14_artifact_status_and_maintenance_contracts() {
         );
     }
 
+    let command_name_enum = defs
+        .get("CommandName")
+        .and_then(|schema| schema.get("enum"))
+        .and_then(|entries| entries.as_array())
+        .expect("CommandName should expose string enum")
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .expect("CommandName enum entry should be a string")
+                .to_owned()
+        })
+        .collect::<BTreeSet<_>>();
+    let paired_command_names = command_schema
+        .get("oneOf")
+        .and_then(|entries| entries.as_array())
+        .expect("CommandEnvelope schema should expose root command/payload pairing constraints")
+        .iter()
+        .filter_map(|entry| entry.pointer("/properties/command/const"))
+        .map(|entry| {
+            entry
+                .as_str()
+                .expect("paired command entry should be a string")
+                .to_owned()
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        paired_command_names, command_name_enum,
+        "every CommandName variant must appear exactly once in root command/payload pairing constraints"
+    );
+
     for expected_contract in [
         "GetArtifactStatusCommandPayload",
         "RefreshArtifactStatusCommandPayload",

@@ -6,11 +6,19 @@ use artifact_store::generation::{
     WaveformGenerationRequest, generate_proxy_artifact, generate_thumbnail_artifact,
     generate_waveform_artifact,
 };
-use artifact_store::jobs::{ArtifactKind, GenerationJobStatus, cancel_generation_job};
+use artifact_store::invalidation::{
+    SourceChange, SourceChangeKind, mark_dirty_for_source_change, mark_dirty_from_command_delta,
+};
+use artifact_store::jobs::{
+    ArtifactKind, GenerationChunkStatus, GenerationJobStatus, cancel_generation_job,
+    list_generation_jobs,
+};
 use artifact_store::paths::derived_root_path;
 use artifact_store::resource_index::ResourceId;
 use artifact_store::schema::open_artifact_store;
-use draft_model::MaterialId;
+use draft_model::{
+    ChangedEntity, CommandDelta, CommandName, DirtyDomain, InvalidationScope, MaterialId,
+};
 use serde_json::json;
 
 #[test]
@@ -208,6 +216,142 @@ fn artifact_generation_worker_context_exposes_persisted_cancel_probe() {
         error.to_string().contains("cancel"),
         "unexpected cancel probe error: {error}"
     );
+
+    let job = persisted_job(&bundle_path, "job-context-cancel");
+    assert_eq!(job.status, GenerationJobStatus::Cancelled);
+    assert_eq!(job.chunks[0].status, GenerationChunkStatus::Cancelled);
+    assert_eq!(artifact_count(&open_artifact_store(&bundle_path).expect("store should open")), 0);
+}
+
+#[test]
+fn artifact_generation_failure_paths_persist_terminal_status() {
+    let cases = [
+        FailureMode::GeneratorError,
+        FailureMode::EmptyOutput,
+        FailureMode::MimeMismatch,
+    ];
+
+    for mode in cases {
+        let sandbox = tempfile::tempdir().expect("tempdir should be created");
+        let bundle_path = sandbox.path().join("draft.veproj");
+        let request = proxy_request(
+            &format!("job-failure-{}", mode.label()),
+            &format!("artifact-failure-{}", mode.label()),
+        );
+        let mut generator = FailureGenerator { mode };
+
+        let error = generate_proxy_artifact(&bundle_path, &mut generator, request.clone())
+            .expect_err("failed generation should return an error");
+        assert!(
+            error.to_string().contains(mode.expected_error()),
+            "unexpected generation error for {mode:?}: {error}"
+        );
+
+        let job = persisted_job(&bundle_path, &request.job_id);
+        assert_eq!(
+            job.status,
+            GenerationJobStatus::Failed,
+            "failed generation should not leave job running for {mode:?}"
+        );
+        assert_eq!(
+            job.chunks[0].status,
+            GenerationChunkStatus::Failed,
+            "failed generation should not leave chunk running for {mode:?}"
+        );
+        assert_eq!(
+            artifact_count(&open_artifact_store(&bundle_path).expect("store should open")),
+            0,
+            "failed generation must not create a ready artifact row for {mode:?}"
+        );
+    }
+}
+
+#[test]
+fn artifact_generation_records_material_resource_and_source_dependencies_for_invalidation() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut generator = FakeArtifactGenerator::new();
+    generator.proxy_bytes = b"proxy bytes".to_vec();
+    generator.thumbnail_bytes = b"thumb bytes".to_vec();
+    generator.waveform_bytes = br#"{"samples":[1,2,3]}"#.to_vec();
+
+    generate_proxy_artifact(
+        &bundle_path,
+        &mut generator,
+        proxy_request("job-dep-proxy", "artifact-dep-proxy"),
+    )
+    .expect("proxy should generate");
+    generate_thumbnail_artifact(
+        &bundle_path,
+        &mut generator,
+        thumbnail_request("job-dep-thumb", "artifact-dep-thumb"),
+    )
+    .expect("thumbnail should generate");
+    generate_waveform_artifact(
+        &bundle_path,
+        &mut generator,
+        waveform_request("job-dep-wave", "artifact-dep-wave"),
+    )
+    .expect("waveform should generate");
+
+    let mut store = open_artifact_store(&bundle_path).expect("store should reopen");
+    let delta = CommandDelta::targeted(
+        CommandName::ImportMaterial,
+        vec![ChangedEntity::Material {
+            material_id: MaterialId::new("material-001"),
+        }],
+        vec![DirtyDomain::Material],
+        Vec::new(),
+        InvalidationScope::targeted(
+            vec![MaterialId::new("material-001")],
+            vec![DirtyDomain::Proxy, DirtyDomain::Thumbnail, DirtyDomain::Waveform],
+        ),
+        "material relinked",
+    );
+    let dirty = mark_dirty_from_command_delta(&mut store, &delta)
+        .expect("material command delta should dirty generated artifacts");
+    assert_dirty_ids(
+        &dirty.dirty_artifacts,
+        &["artifact-dep-proxy", "artifact-dep-thumb", "artifact-dep-wave"],
+    );
+
+    store
+        .connection()
+        .execute("UPDATE artifact SET status = 'ready', dirty = 0", [])
+        .expect("artifacts should reset for source change check");
+    let deleted = mark_dirty_for_source_change(
+        &mut store,
+        SourceChange {
+            kind: SourceChangeKind::Deleted,
+            material_id: Some(MaterialId::new("material-001")),
+            resource_id: Some("material:material-001".to_owned()),
+            old_project_relative_ref: Some("media/source.mp4".to_owned()),
+            new_project_relative_ref: None,
+            old_source_fingerprint: Some("source-proxy-v1".to_owned()),
+            new_source_fingerprint: None,
+            reason: "source deleted".to_owned(),
+        },
+    )
+    .expect("source delete should tombstone generated artifacts");
+    assert_dirty_ids(
+        &deleted.dirty_artifacts,
+        &["artifact-dep-proxy", "artifact-dep-thumb", "artifact-dep-wave"],
+    );
+    for artifact_id in [
+        "artifact-dep-proxy",
+        "artifact-dep-thumb",
+        "artifact-dep-wave",
+    ] {
+        let status: String = store
+            .connection()
+            .query_row(
+                "SELECT status FROM artifact WHERE artifact_id = ?1",
+                [artifact_id],
+                |row| row.get(0),
+            )
+            .expect("artifact status should exist");
+        assert_eq!(status, "tombstoned");
+    }
 }
 
 struct FakeArtifactGenerator {
@@ -215,6 +359,76 @@ struct FakeArtifactGenerator {
     thumbnail_bytes: Vec<u8>,
     waveform_bytes: Vec<u8>,
     proxy_calls: Mutex<usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FailureMode {
+    GeneratorError,
+    EmptyOutput,
+    MimeMismatch,
+}
+
+impl FailureMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::GeneratorError => "generator",
+            Self::EmptyOutput => "empty",
+            Self::MimeMismatch => "mime",
+        }
+    }
+
+    fn expected_error(self) -> &'static str {
+        match self {
+            Self::GeneratorError => "generator failed",
+            Self::EmptyOutput => "generated artifact is empty",
+            Self::MimeMismatch => "generated MIME mismatch",
+        }
+    }
+}
+
+struct FailureGenerator {
+    mode: FailureMode,
+}
+
+impl ArtifactGenerator for FailureGenerator {
+    fn generate_proxy(
+        &mut self,
+        _context: &GenerationWorkerContext,
+        _request: &ProxyGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        match self.mode {
+            FailureMode::GeneratorError => Err(artifact_store::ArtifactStoreError::InvalidDerivedPath {
+                path: "artifact-failure".to_owned(),
+                reason: "generator failed".to_owned(),
+            }),
+            FailureMode::EmptyOutput => Ok(GeneratedArtifact::new(
+                GeneratedArtifactMime::VideoMp4,
+                "mp4",
+                Vec::new(),
+            )),
+            FailureMode::MimeMismatch => Ok(GeneratedArtifact::new(
+                GeneratedArtifactMime::ImagePng,
+                "png",
+                b"wrong mime".to_vec(),
+            )),
+        }
+    }
+
+    fn generate_thumbnail(
+        &mut self,
+        _context: &GenerationWorkerContext,
+        _request: &ThumbnailGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        unreachable!("failure test should only generate proxy")
+    }
+
+    fn generate_waveform(
+        &mut self,
+        _context: &GenerationWorkerContext,
+        _request: &WaveformGenerationRequest,
+    ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        unreachable!("failure test should only generate proxy")
+    }
 }
 
 impl FakeArtifactGenerator {
@@ -403,4 +617,22 @@ fn artifact_count(store: &artifact_store::schema::ArtifactStore) -> i64 {
             |row| row.get(0),
         )
         .expect("artifact count should read")
+}
+
+fn persisted_job(bundle_path: &std::path::Path, job_id: &str) -> artifact_store::jobs::ArtifactGenerationJob {
+    let store = open_artifact_store(bundle_path).expect("store should open");
+    list_generation_jobs(&store)
+        .expect("jobs should list")
+        .into_iter()
+        .find(|job| job.job_id == job_id)
+        .expect("job should persist")
+}
+
+fn assert_dirty_ids(rows: &[artifact_store::invalidation::DirtyArtifactRow], expected: &[&str]) {
+    let mut actual = rows
+        .iter()
+        .map(|row| row.artifact_id.as_str())
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    assert_eq!(actual, expected);
 }
