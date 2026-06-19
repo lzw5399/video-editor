@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Replanned Phase 15.2 Plan 04A blocker into Plan 04B native WGPU surface visibility closure
-last_updated: "2026-06-19T23:12:00Z"
-last_activity: 2026-06-20 -- Plan 04A added Rust-owned scheduler playback, CoreVideo/Metal to WGPU NV12 import, and Electron host wiring, but product playback still fails closed because WGPU surface texture acquire reports surface is occluded; Plan 04B added as the next gate
+stopped_at: Blocked 15.2-04B-PLAN.md: WGPU native surface remains occluded during product E2E
+last_updated: "2026-06-19T23:34:04.142Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04B added RED occluded-surface coverage and an AppKit child-window WGPU surface attachment attempt, but product E2E remains blocked on `surface is occluded`; no fallback route accepted
 progress:
   total_phases: 23
   completed_phases: 18
@@ -170,6 +170,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04A complete/blocked honestly
 | Phase 15.2 P03A | 9 min | 3 tasks | 5 files |
 | Phase 15.2 P03B | 14 min | 3 tasks | 11 files |
 | Phase 15.2 P04A | 61 min | 3 tasks | 16 files |
+| Phase 15.2-p0-real-gpu-realtime-compositor-closure P04B | 20min | 2/3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -416,6 +417,7 @@ Recent decisions affecting current work:
 - [Phase 15.2]: The WGPU compositor samples registered WGPU texture lease resources directly and rejects unregistered, stale, incompatible, or unsupported native resources as unavailable diagnostics.
 - [Phase 15.2]: CoreVideo/Metal lease inspection belongs at the Rust binding/platform edge, while realtime_preview_runtime::gpu consumes a generic native texture importer and does not depend on media_runtime_desktop.
 - [Phase 15.2]: Plan 04A cannot release 05/06 until Electron native WGPU surface acquisition is non-occluded and product E2E observes real visible advancement with `renderGraphGpuComposited` evidence.
+- [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Do not advance from 15.2-04B to downstream realtime preview closure plans until macOS/Electron WGPU playback emits visible renderGraphGpu/renderGraphGpuComposited evidence. — Plan 04B preserved fail-closed no-fallback behavior, but product E2E still reports WGPU surface acquire failure with 'surface is occluded'. Treating this as progress would route product success around the real GPU compositor acceptance policy.
 
 ### Pending Todos
 
@@ -431,6 +433,7 @@ None yet.
 - Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
 - 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
 - Plan 15.2-04 product playback E2E still fails: Rust binding/host now fail closed without nativeVideoBridge, and NV12 WGPU ExternalTexture plane sampling is implemented for WGPU plane leases, but no Rust-owned desktop compositor scheduler currently decodes timeline media into sampleable native leases and presents renderGraphGpuComposited frames to the native WGPU surface during normal play.
+- Phase 15.2 Plan 04B blocked: macOS/Electron native WGPU surface reaches acquire through Rust scheduler but still fails with 'surface is occluded' in product E2E; no fallback route accepted.
 
 ## Deferred Items
 
@@ -459,6 +462,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T23:12:00Z
-Stopped at: Replanned 15.2-04A blocker into 15.2-04B native WGPU surface visibility closure
+Last session: 2026-06-19T23:33:12.328Z
+Stopped at: Blocked 15.2-04B-PLAN.md: WGPU native surface remains occluded during product E2E
 Resume file: None
