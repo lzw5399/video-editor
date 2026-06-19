@@ -82,6 +82,36 @@ fn preview_generation_segment_uses_same_compiler_path_and_reuses_existing_cache_
 }
 
 #[test]
+fn preview_generation_resolves_project_derived_root_from_bundle_path() {
+    let temp = tempfile::tempdir().expect("project temp dir");
+    let bundle_path = temp.path().join("draft.veproj");
+    let fallback_cache = temp.path().join("renderer-fallback-cache");
+    let executor = FakePreviewExecutor::successful();
+    let config = PreviewServiceConfig::new(&fallback_cache, "/bin/ffmpeg")
+        .with_project_artifact_root(&bundle_path);
+    let request = PreviewFrameRequest {
+        draft: preview_draft(),
+        target_time: Microseconds::new(600_000),
+    };
+
+    let response =
+        request_preview_frame(&executor, &config, &request).expect("preview frame should generate");
+
+    assert!(
+        response
+            .artifact
+            .path
+            .contains("draft.veproj/derived/blobs/preview"),
+        "preview artifact should live under project-derived blob boundary: {}",
+        response.artifact.path
+    );
+    assert!(
+        !response.artifact.path.contains("renderer-fallback-cache"),
+        "renderer cache root must remain fallback only"
+    );
+}
+
+#[test]
 fn preview_generation_classifies_runtime_failure_and_preserves_input_draft() {
     let temp = tempfile::tempdir().expect("cache temp dir");
     let executor = FakePreviewExecutor::failed();

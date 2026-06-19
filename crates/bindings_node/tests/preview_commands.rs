@@ -73,6 +73,46 @@ fn preview_commands_request_frame_and_segment_through_preview_service_adapter() 
 }
 
 #[test]
+fn preview_commands_resolve_project_local_artifact_root_without_renderer_cache_root() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let bundle_path = temp.path().join("draft.veproj");
+    let executor = FakePreviewExecutor::successful();
+    let config = PreviewServiceConfig::new(temp.path().join("fallback-cache"), "/bin/ffmpeg")
+        .with_project_artifact_root(&bundle_path);
+    let draft = preview_draft();
+
+    let frame = request_preview_frame_with_executor(
+        &executor,
+        &config,
+        RequestPreviewFrameCommandPayload {
+            draft,
+            cache_root: None,
+            bundle_path: Some(bundle_path.display().to_string()),
+            target_time: Microseconds::new(500_000),
+        },
+    )
+    .expect("project-local preview should not require renderer cache root");
+
+    assert!(frame.path.contains("draft.veproj/derived/blobs/preview"));
+    assert!(!frame.path.contains("fallback-cache"));
+    assert_eq!(executor.calls(), 1);
+
+    let envelope = execute_command(json!({
+        "command": "requestPreviewFrame",
+        "payload": {
+            "kind": "requestPreviewFrame",
+            "draft": preview_draft(),
+            "bundlePath": bundle_path,
+            "targetTime": 500000
+        },
+        "requestId": "req-preview-project-root"
+    }))
+    .expect("preview command should return envelope");
+
+    assert_ne!(envelope["error"]["kind"], "invalidPayload", "{envelope:#}");
+}
+
+#[test]
 fn preview_commands_invalidate_cache_without_mutating_draft() {
     let payload = InvalidatePreviewCacheCommandPayload {
         entries: vec![
