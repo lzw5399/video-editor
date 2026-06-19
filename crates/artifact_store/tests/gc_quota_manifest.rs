@@ -13,6 +13,7 @@ use artifact_store::jobs::{
     start_generation_chunk,
 };
 use artifact_store::paths::{blob_tmp_path, derived_root_path};
+use artifact_store::quota::{QuotaPolicy, QuotaSeverity, compute_quota_state, set_quota_policy};
 use artifact_store::schema::open_artifact_store;
 use rusqlite::params;
 use serde_json::json;
@@ -200,6 +201,110 @@ fn gc_quota_manifest_temp_blob_sweep_removes_abandoned_temp_files_only() {
     assert!(path_exists(&bundle_path, &ready));
 }
 
+#[test]
+fn gc_quota_manifest_quota_counts_artifact_rows_and_gc_candidates_not_path_scans() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let ready = write_artifact(&bundle_path, "artifact-quota-ready", "thumbnail", b"ready");
+    let stale = write_artifact(&bundle_path, "artifact-quota-stale", "proxy", b"stale bytes");
+    fs::write(
+        sandbox.path().join("external-source.mp4"),
+        vec![1_u8; 10 * 1024],
+    )
+    .expect("external source should be written");
+    fs::write(
+        derived_root_path(&bundle_path).join("blobs/untracked.bin"),
+        vec![2_u8; 8 * 1024],
+    )
+    .expect("untracked derived file should be written");
+
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    store
+        .connection()
+        .execute(
+            "UPDATE artifact SET dirty = 1, status = 'dirty' WHERE artifact_id = ?1",
+            ["artifact-quota-stale"],
+        )
+        .expect("stale artifact should be dirty");
+
+    let state = compute_quota_state(&store).expect("quota state should compute");
+
+    assert_eq!(state.snapshot.used_bytes, ready.byte_count + stale.byte_count);
+    assert_eq!(state.snapshot.reclaimable_bytes, stale.byte_count);
+    assert_eq!(state.snapshot.source_media_bytes, 0);
+    assert_eq!(state.snapshot.untracked_blob_bytes, 0);
+    assert_eq!(state.labels.reclaimable_label, format_bytes(stale.byte_count));
+}
+
+#[test]
+fn gc_quota_manifest_quota_warning_and_labels_are_rust_owned_and_ui_safe() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let ready = write_artifact(&bundle_path, "artifact-quota-warning", "thumbnail", b"warning");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    set_quota_policy(
+        &mut store,
+        QuotaPolicy {
+            byte_limit: Some(ready.byte_count),
+            warning_ratio_per_mille: 750,
+        },
+    )
+    .expect("quota policy should persist");
+
+    let state = compute_quota_state(&store).expect("quota state should compute");
+
+    assert_eq!(state.severity, QuotaSeverity::Warning);
+    assert!(state.cleanup_available);
+    assert_eq!(state.status_label, "缓存空间偏高");
+    assert_eq!(state.labels.used_label, format_bytes(ready.byte_count));
+    assert_eq!(state.labels.released_label, "0 B");
+    let serialized = serde_json::to_string(&state).expect("quota state should serialize");
+    for forbidden in [
+        "artifact-store.sqlite",
+        ".sqlite",
+        ".veproj/derived",
+        "blake3:v1:",
+        "graphNode",
+        "dirtyRange",
+        "/",
+        "C:\\",
+    ] {
+        assert!(
+            !serialized.contains(forbidden),
+            "quota state leaked forbidden internal string {forbidden}: {serialized}"
+        );
+    }
+}
+
+#[test]
+fn gc_quota_manifest_quota_reports_cleanup_completion_from_tombstones() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let stale = write_artifact(
+        &bundle_path,
+        "artifact-quota-cleaned",
+        "waveform",
+        b"cleanup bytes",
+    );
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    store
+        .connection()
+        .execute(
+            "UPDATE artifact SET dirty = 1, status = 'dirty' WHERE artifact_id = ?1",
+            ["artifact-quota-cleaned"],
+        )
+        .expect("stale artifact should be dirty");
+    collect_garbage(&mut store, GcMode::Apply).expect("cleanup should tombstone stale artifact");
+
+    let state = compute_quota_state(&store).expect("quota state should compute after cleanup");
+
+    assert_eq!(state.severity, QuotaSeverity::Normal);
+    assert!(!state.cleanup_available);
+    assert_eq!(state.status_label, "缓存清理完成");
+    assert_eq!(state.snapshot.released_bytes, stale.byte_count);
+    assert_eq!(state.labels.released_label, format_bytes(stale.byte_count));
+}
+
 fn write_artifact(
     bundle_path: &Path,
     artifact_id: &str,
@@ -294,4 +399,12 @@ fn tombstone_for(
         )
         .expect("tombstone should exist");
     (path, fingerprint, bytes as u64, reason)
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    }
 }
