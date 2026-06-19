@@ -206,7 +206,12 @@ fn gc_quota_manifest_quota_counts_artifact_rows_and_gc_candidates_not_path_scans
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let ready = write_artifact(&bundle_path, "artifact-quota-ready", "thumbnail", b"ready");
-    let stale = write_artifact(&bundle_path, "artifact-quota-stale", "proxy", b"stale bytes");
+    let stale = write_artifact(
+        &bundle_path,
+        "artifact-quota-stale",
+        "proxy",
+        b"stale bytes",
+    );
     fs::write(
         sandbox.path().join("external-source.mp4"),
         vec![1_u8; 10 * 1024],
@@ -218,7 +223,7 @@ fn gc_quota_manifest_quota_counts_artifact_rows_and_gc_candidates_not_path_scans
     )
     .expect("untracked derived file should be written");
 
-    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    let store = open_artifact_store(&bundle_path).expect("store should open");
     store
         .connection()
         .execute(
@@ -229,18 +234,29 @@ fn gc_quota_manifest_quota_counts_artifact_rows_and_gc_candidates_not_path_scans
 
     let state = compute_quota_state(&store).expect("quota state should compute");
 
-    assert_eq!(state.snapshot.used_bytes, ready.byte_count + stale.byte_count);
+    assert_eq!(
+        state.snapshot.used_bytes,
+        ready.byte_count + stale.byte_count
+    );
     assert_eq!(state.snapshot.reclaimable_bytes, stale.byte_count);
     assert_eq!(state.snapshot.source_media_bytes, 0);
     assert_eq!(state.snapshot.untracked_blob_bytes, 0);
-    assert_eq!(state.labels.reclaimable_label, format_bytes(stale.byte_count));
+    assert_eq!(
+        state.labels.reclaimable_label,
+        format_bytes(stale.byte_count)
+    );
 }
 
 #[test]
 fn gc_quota_manifest_quota_warning_and_labels_are_rust_owned_and_ui_safe() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
-    let ready = write_artifact(&bundle_path, "artifact-quota-warning", "thumbnail", b"warning");
+    let ready = write_artifact(
+        &bundle_path,
+        "artifact-quota-warning",
+        "thumbnail",
+        b"warning",
+    );
     let mut store = open_artifact_store(&bundle_path).expect("store should open");
     set_quota_policy(
         &mut store,

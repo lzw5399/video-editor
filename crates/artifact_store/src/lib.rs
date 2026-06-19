@@ -12,6 +12,7 @@ pub mod generation;
 pub mod invalidation;
 pub mod jobs;
 pub mod paths;
+pub mod quota;
 pub mod resource_index;
 pub mod schema;
 
