@@ -12,15 +12,15 @@ use draft_model::{
     CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
     DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
     DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
-    ExportJobPhase, ExportJobStatusResponse, ExportPreset, ExportValidationReport, Filter,
-    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
-    ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload, InvalidationScope,
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
-    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
-    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
-    MaterialId, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
+    ExportValidationReport, Filter, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
+    ImportMaterialResponse, ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload,
+    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
+    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
+    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
     PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
     PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
@@ -527,6 +527,127 @@ fn schema_exports_include_phase13_delta_contracts() {
 }
 
 #[test]
+fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
+
+    for expected_contract in [
+        "PreviewCacheEntryRef",
+        "InvalidatePreviewCacheCommandPayload",
+        "PreviewCacheInvalidationResponse",
+        "ExportPrepDirtyFacts",
+        "StartExportCommandPayload",
+        "ExportJobStatusResponse",
+    ] {
+        assert!(
+            defs.contains_key(expected_contract),
+            "command schema should include Phase 13 dirty fact contract {expected_contract}"
+        );
+    }
+
+    let invalidation_payload = defs
+        .get("InvalidatePreviewCacheCommandPayload")
+        .expect("InvalidatePreviewCacheCommandPayload should be generated");
+    assert_eq!(
+        invalidation_payload
+            .pointer("/properties/changedRanges/items/$ref")
+            .and_then(|value| value.as_str()),
+        Some("#/$defs/DirtyRange"),
+        "preview invalidation changedRanges must use DirtyRange transport"
+    );
+    for expected_field in [
+        "changedMaterialIds",
+        "changedGraphNodeIds",
+        "changedDomains",
+        "runtimeCapabilityFingerprint",
+        "outputProfileFingerprint",
+        "fullDraft",
+        "reason",
+        "artifactSchemaVersion",
+        "generatorVersion",
+    ] {
+        assert!(
+            invalidation_payload
+                .pointer(&format!("/properties/{expected_field}"))
+                .is_some(),
+            "preview invalidation payload should expose {expected_field}"
+        );
+    }
+
+    let entry_ref = defs
+        .get("PreviewCacheEntryRef")
+        .expect("PreviewCacheEntryRef should be generated");
+    for expected_field in [
+        "graphNodeIds",
+        "semanticFingerprint",
+        "inputFingerprint",
+        "outputProfileFingerprint",
+        "runtimeCapabilityFingerprint",
+        "artifactSchemaVersion",
+        "generatorVersion",
+    ] {
+        assert!(
+            entry_ref
+                .pointer(&format!("/properties/{expected_field}"))
+                .is_some(),
+            "preview cache entry refs should expose v2 key fact field {expected_field}"
+        );
+    }
+
+    for (contract_name, field_name) in [
+        ("StartExportCommandPayload", "dirtyFacts"),
+        ("ExportJobStatusResponse", "dirtyFacts"),
+    ] {
+        assert!(
+            property_references_def(
+                defs.get(contract_name).expect("contract should exist"),
+                field_name,
+                "#/$defs/ExportPrepDirtyFacts",
+            ),
+            "{contract_name}.{field_name} should reference ExportPrepDirtyFacts"
+        );
+    }
+
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+    for expected_export in [
+        "export type ExportPrepDirtyFacts",
+        "dirtyRanges: Array<DirtyRange>",
+        "changedGraphNodeIds: Array<string>",
+        "runtimeCapabilityFingerprint",
+        "fullDraft: boolean",
+        "artifactSchemaVersion: number",
+        "generatorVersion: string",
+        "dirtyFacts",
+    ] {
+        assert!(
+            command_envelope_ts.contains(expected_export)
+                || command_result_ts.contains(expected_export),
+            "generated TypeScript contracts should include dirty fact surface {expected_export}"
+        );
+    }
+
+    for forbidden in [
+        "previewCacheKey",
+        "cacheKeyFormula",
+        "graphDiff",
+        "ffmpegArgs",
+        "filterComplex",
+        "artifactStoreSqlite",
+        "priorityQueue",
+    ] {
+        assert!(
+            !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
+            "dirty fact contracts must not expose renderer-owned or later-phase {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn schema_exports_include_timeline_edit_command_contracts() {
     let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
@@ -1021,8 +1142,12 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<RequestPreviewFrameCommandPayload>(),
             export_decl::<RequestPreviewSegmentCommandPayload>(),
             export_decl::<PreviewCacheEntryRef>(),
+            export_decl::<DirtyDomain>(),
+            export_decl::<DirtyRangeSource>(),
+            export_decl::<DirtyRange>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<ExportPreset>(),
+            export_decl::<ExportPrepDirtyFacts>(),
             export_decl::<StartExportCommandPayload>(),
             export_decl::<GetExportJobStatusCommandPayload>(),
             export_decl::<CancelExportCommandPayload>(),
@@ -1057,6 +1182,7 @@ fn command_result_ts_contract() -> String {
             export_decl::<ExportDiagnosticKind>(),
             export_decl::<ExportDiagnostic>(),
             export_decl::<ExportValidationReport>(),
+            export_decl::<ExportPrepDirtyFacts>(),
             export_decl::<ExportJobStatusResponse>(),
             export_decl::<RuntimeCapabilityStatus>(),
             export_decl::<RuntimeBinaryKind>(),
@@ -1127,6 +1253,29 @@ fn assert_handle_safe_runtime_contracts_do_not_expose_raw_payloads(contract: &st
             "handle-capable runtime contracts must not expose raw payload field {forbidden}"
         );
     }
+}
+
+fn property_references_def(contract: &serde_json::Value, field: &str, expected_ref: &str) -> bool {
+    let pointer = format!("/properties/{field}");
+    let Some(property) = contract.pointer(&pointer) else {
+        return false;
+    };
+
+    property
+        .get("$ref")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| value == expected_ref)
+        || property
+            .get("anyOf")
+            .and_then(|value| value.as_array())
+            .is_some_and(|variants| {
+                variants.iter().any(|variant| {
+                    variant
+                        .get("$ref")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(|value| value == expected_ref)
+                })
+            })
 }
 
 fn ts_contract(declarations: &[String]) -> String {
@@ -1360,6 +1509,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<InvalidatePreviewCacheCommandPayload>(
         &mut schema_value,
         "InvalidatePreviewCacheCommandPayload",
+    );
+    include_command_contract_schema::<ExportPrepDirtyFacts>(
+        &mut schema_value,
+        "ExportPrepDirtyFacts",
     );
     include_command_contract_schema::<StartExportCommandPayload>(
         &mut schema_value,
