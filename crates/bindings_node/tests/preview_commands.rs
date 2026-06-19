@@ -144,6 +144,112 @@ fn preview_commands_invalidate_cache_without_mutating_draft() {
 }
 
 #[test]
+fn preview_commands_transport_v2_dirty_facts_without_renderer_owned_overrides() {
+    let envelope = execute_command(json!({
+        "command": "invalidatePreviewCache",
+        "payload": {
+            "kind": "invalidatePreviewCache",
+            "entries": [
+                {
+                    "profile": "framePng",
+                    "targetTimerange": { "start": 0, "duration": 200000 },
+                    "materialDependencies": ["video"],
+                    "artifactPath": "/cache/video.png",
+                    "graphNodeIds": ["draft:draft-preview:track:video-track:segment:video-a:video"],
+                    "semanticFingerprint": "video-semantic-v1",
+                    "inputFingerprint": "video-input-v1",
+                    "outputProfileFingerprint": "profile-v1",
+                    "runtimeCapabilityFingerprint": "runtime-v1",
+                    "artifactSchemaVersion": 2,
+                    "generatorVersion": "preview-cache-generator-v2"
+                },
+                {
+                    "profile": "framePng",
+                    "targetTimerange": { "start": 400000, "duration": 100000 },
+                    "materialDependencies": ["text"],
+                    "artifactPath": "/cache/text.png",
+                    "graphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
+                    "semanticFingerprint": "text-semantic-v1",
+                    "inputFingerprint": "text-input-v1",
+                    "outputProfileFingerprint": "profile-v1",
+                    "runtimeCapabilityFingerprint": "runtime-v1",
+                    "artifactSchemaVersion": 2,
+                    "generatorVersion": "preview-cache-generator-v2"
+                }
+            ],
+            "changedRanges": [
+                { "targetTimerange": { "start": 450000, "duration": 50000 }, "source": "current" }
+            ],
+            "changedMaterialIds": [],
+            "changedGraphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
+            "changedDomains": ["text", "previewCache"],
+            "runtimeCapabilityFingerprint": "runtime-v1",
+            "outputProfileFingerprint": "profile-v1",
+            "fullDraft": false,
+            "reason": "accepted text edit",
+            "artifactSchemaVersion": 2,
+            "generatorVersion": "preview-cache-generator-v2"
+        },
+        "requestId": "req-invalidate-preview-v2"
+    }))
+    .expect("invalidate preview command should return envelope");
+
+    assert_eq!(envelope["ok"], true, "{envelope:#}");
+    assert_eq!(envelope["data"]["invalidatedCount"], 1);
+    assert_eq!(envelope["data"]["retainedCount"], 1);
+    assert_eq!(
+        envelope["data"]["changedGraphNodeIds"],
+        json!(["draft:draft-preview:track:text-track:segment:text-a:text"])
+    );
+    assert_eq!(envelope["data"]["dirtyRanges"][0]["source"], "current");
+    assert_eq!(
+        envelope["data"]["runtimeCapabilityFingerprint"],
+        "runtime-v1"
+    );
+    assert_eq!(envelope["data"]["generatorVersion"], "preview-cache-generator-v2");
+
+    let export_only = execute_command(json!({
+        "command": "invalidatePreviewCache",
+        "payload": {
+            "kind": "invalidatePreviewCache",
+            "entries": [
+                {
+                    "profile": "framePng",
+                    "targetTimerange": { "start": 400000, "duration": 100000 },
+                    "materialDependencies": ["text"],
+                    "artifactPath": "/cache/text.png",
+                    "graphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
+                    "semanticFingerprint": "text-semantic-v1",
+                    "inputFingerprint": "text-input-v1",
+                    "outputProfileFingerprint": "profile-v1",
+                    "runtimeCapabilityFingerprint": "runtime-v1",
+                    "artifactSchemaVersion": 2,
+                    "generatorVersion": "preview-cache-generator-v2"
+                }
+            ],
+            "changedRanges": [
+                { "targetTimerange": { "start": 450000, "duration": 50000 }, "source": "current" }
+            ],
+            "changedMaterialIds": [],
+            "changedGraphNodeIds": [],
+            "changedDomains": ["exportPrep"],
+            "runtimeCapabilityFingerprint": "runtime-v1",
+            "outputProfileFingerprint": "profile-v1",
+            "fullDraft": false,
+            "reason": "export-only dirty fact",
+            "artifactSchemaVersion": 2,
+            "generatorVersion": "preview-cache-generator-v2"
+        },
+        "requestId": "req-invalidate-preview-export-only"
+    }))
+    .expect("invalidate preview command should return envelope");
+
+    assert_eq!(export_only["ok"], true, "{export_only:#}");
+    assert_eq!(export_only["data"]["invalidatedCount"], 0);
+    assert_eq!(export_only["data"]["retainedCount"], 1);
+}
+
+#[test]
 fn preview_commands_reject_mismatched_preview_command_payload_pair() {
     let envelope = execute_command(json!({
         "command": "requestPreviewFrame",

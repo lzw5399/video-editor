@@ -57,6 +57,59 @@ fn export_commands_start_status_and_complete_through_binding_registry() {
 }
 
 #[test]
+fn export_commands_transport_export_prep_dirty_facts() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("export-dirty-facts");
+    let ffmpeg = sandbox.ffmpeg_complete();
+    let ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
+    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let output = sandbox.root.join("dirty-facts.mp4");
+
+    let started = execute_command(json!({
+        "command": "startExport",
+        "payload": {
+            "kind": "startExport",
+            "draft": export_draft("draft-export-dirty-facts"),
+            "outputPath": output,
+            "preset": ExportPreset::H264AacBalanced,
+            "dirtyFacts": {
+                "dirtyRanges": [
+                    { "targetTimerange": { "start": 250000, "duration": 250000 }, "source": "current" }
+                ],
+                "changedMaterialIds": ["video-material"],
+                "changedGraphNodeIds": ["draft:draft-export-dirty-facts:track:video-track:segment:video-a:video"],
+                "changedDomains": ["visual", "exportPrep", "previewCache"],
+                "runtimeCapabilityFingerprint": "runtime-export-v1",
+                "outputProfileFingerprint": "profile-export-v1",
+                "fullDraft": false,
+                "reason": "accepted visual edit",
+                "artifactSchemaVersion": 2,
+                "generatorVersion": "preview-cache-generator-v2"
+            }
+        },
+        "requestId": "req-export-dirty-facts"
+    }))
+    .expect("start export should return envelope");
+
+    assert_eq!(started["ok"], true, "{started:#}");
+    assert_eq!(started["data"]["phase"], "running");
+    assert_eq!(started["data"]["dirtyFacts"]["fullDraft"], false);
+    assert_eq!(
+        started["data"]["dirtyFacts"]["changedGraphNodeIds"],
+        json!(["draft:draft-export-dirty-facts:track:video-track:segment:video-a:video"])
+    );
+    assert_eq!(
+        started["data"]["dirtyFacts"]["runtimeCapabilityFingerprint"],
+        "runtime-export-v1"
+    );
+    assert_eq!(
+        started["data"]["dirtyFacts"]["generatorVersion"],
+        "preview-cache-generator-v2"
+    );
+}
+
+#[test]
 fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
 
