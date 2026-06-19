@@ -542,7 +542,7 @@ Plans:
   4. Proxy, thumbnail, and waveform generation is chunked, resumable, cancellable, and isolated from interactive preview responsiveness.
   5. Cache garbage collection, storage quotas, and optional cloud/server synchronization manifests are defined before remote rendering depends on them.
 
-**Plans**: 0/7 plans complete
+**Plans**: 2/7 plans complete
 Plans:
 
 - [x] 14-01 - Artifact store crate, SQLite schema, blob paths, and initial guards
