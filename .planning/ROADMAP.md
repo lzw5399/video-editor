@@ -32,6 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts (completed 2026-06-19)
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
+- [ ] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (INSERTED)
+- [ ] **Phase 15.2: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -595,10 +597,52 @@ Plans:
 
 - [x] 15-07-PLAN.md - Add final Phase 15 source guards and aggregate verification gates
 
+### Phase 15.1: P0 Basic Editing Chain Repair (INSERTED)
+
+**Goal**: Make the default editor chain behave like a production video editor before scheduler work: realtime playback must be the normal path, baseline video/text/audio preview must not rely on fallback success, first media should establish an appropriate canvas, multitrack editing must be explicit, and import/edit/play/save/reopen/export must be a hard user-flow gate.
+**Depends on**: Phase 15
+**Requirements**: P0-EDIT-01, P0-EDIT-02, P0-EDIT-03, P0-EDIT-04, P0-EDIT-05, P0-EDIT-06
+**Success Criteria** (what must be TRUE):
+
+  1. Clicking play does not continuously trigger `requestPreviewFrame`; playback, pause, seek, and scrub route through the formal realtime preview runtime, with `requestPreviewFrame` reserved for paused single-frame preview or developer diagnostics.
+  2. 1080p video with baseline text and audio can play continuously on the supported path; baseline video/image/text/audio editing does not treat FFmpeg PNG/segment fallback as normal success.
+  3. Text preview and export use the same stable bundled open-source font registry entry, with explicit license/file/glyph validation.
+  4. Empty drafts adopt the first video/image material's orientation, aspect ratio, and video frame rate unless the user has manually changed the canvas; default segment visual fit avoids stretch distortion.
+  5. Users can add/select target video/audio/text tracks, stack video/image/text layers, mix audio tracks, and rename/lock/show/mute tracks through Rust-owned commands.
+  6. A real fixture E2E proves import vertical video, auto vertical canvas, play, add bundled-font text, add music, trim, split, undo/redo, save, reopen, and export.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run $gsd-plan-phase 15.1 to break down)
+
+### Phase 15.2: P0 Jianying-Style Production UI Convergence (INSERTED)
+
+**Goal**: Converge the desktop workspace from an engineering/debug console into a Jianying-style production editor UI while keeping the product feature set smaller: default UI shows editing controls only, export is a right-side/top modal flow, and diagnostics stay behind developer mode.
+**Depends on**: Phase 15.1
+**Requirements**: P0-UI-01, P0-UI-02, P0-UI-03, P0-UI-04, P0-UI-05, P0-UI-06
+**Success Criteria** (what must be TRUE):
+
+  1. Default UI does not show FFmpeg, ffprobe, runtime/backend telemetry, artifact/cache paths, raw diagnostics, graph/cache internals, or developer-only status readouts.
+  2. The five-zone layout matches the intended Jianying-style model: top product/category/export bar, left resource library by category, center preview canvas/playback controls, right focused inspector, and bottom timeline.
+  3. Export is opened from the top/right export button in a modal containing path, resolution, frame rate, bitrate, audio options, progress, cancel, and open-location actions; preview no longer hosts a permanent export panel.
+  4. Preview defaults to画面, timecode, play/pause, previous/next frame, fit/aspect/fullscreen controls, with realtime status shown only as productized exception copy.
+  5. Left resource pages behave like a material library, text/audio entry panel, and lightweight generation status surface instead of a debug task dashboard.
+  6. Timeline defaults to editor interactions: drag move, edge trim, draggable playhead, undo/redo, split, delete, snapping, add-track, and zoom; numeric move/trim inputs are not default toolbar controls.
+  7. Right inspector is contextual: unselected draft/canvas parameters, selected video/image visual controls, selected text controls, and selected audio controls; developer details are hidden unless developer mode is enabled.
+  8. Regression tests compare against `docs/ui-reference/jianying-pro/screenshots/` for layout/information hierarchy and assert 1280x800 and 1120x720 stability with no debug copy in default mode.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run $gsd-plan-phase 15.2 to break down)
+
 ### Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry
 
 **Goal**: Add a production job scheduler that isolates preview, decode, cache, IO, export, and analysis work while aligning all time-sensitive jobs to the shared timeline clock.
-**Depends on**: Phase 15
+**Depends on**: Phase 15.2
 **Requirements**: SCHED-01, SCHED-02, SCHED-03, SCHED-04
 **Success Criteria** (what must be TRUE):
 
@@ -612,7 +656,7 @@ Plans:
 
 Plans:
 
-- [ ] TBD - Plan after Phase 15 completion
+- [ ] TBD - Plan after Phase 15.2 completion
 
 ### Phase 17: Mobile/Server Binding Architecture And Runtime Ports
 

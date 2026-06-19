@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_for_p0_insert
-stopped_at: Completed Phase 15 verification and clean code review
-last_updated: "2026-06-19T12:36:54Z"
-last_activity: 2026-06-19 -- Phase 15 verified; next insert two P0 phases before Phase 16
+status: planning
+stopped_at: Inserted Phase 15.1 and Phase 15.2 before Phase 16
+last_updated: "2026-06-19T12:39:21Z"
+last_activity: 2026-06-19 -- Inserted two P0 phases before Phase 16; next plan Phase 15.1
 progress:
-  total_phases: 20
+  total_phases: 22
   completed_phases: 17
   total_plans: 112
   completed_plans: 112
-  percent: 85
+  percent: 77
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Insert two P0 phases before Phase 16 — basic editing chain repair and Jianying-style production UI convergence
+**Current focus:** Phase 15.1 — P0 Basic Editing Chain Repair
 
 ## Current Position
 
-Phase: 15 (audio-engine-and-dsp-timeline-pipeline) — VERIFIED
-Plan: 7 of 7
-Status: Phase complete — verification passed and code review clean
-Last activity: 2026-06-19 -- Phase 15 verified; next insert two P0 phases before Phase 16
+Phase: 15.1 (p0-basic-editing-chain-repair) — INSERTED
+Plan: 0 of TBD
+Status: Not planned yet — run `$gsd-plan-phase 15.1`
+Last activity: 2026-06-19 -- Inserted Phase 15.1 and Phase 15.2 before Phase 16
 
-Progress: [██████████] 100% for Phase 15
+Progress: [░░░░░░░░░░] 0% for Phase 15.1
 
 ## Performance Metrics
 
@@ -170,6 +170,8 @@ Progress: [██████████] 100% for Phase 15
 
 ### Roadmap Evolution
 
+- Phase 15.1 inserted after Phase 15 as urgent P0 work before Phase 16: P0 Basic Editing Chain Repair. (URGENT)
+- Phase 15.2 inserted after Phase 15 as urgent P0 work before Phase 16: P0 Jianying-Style Production UI Convergence. (URGENT)
 - Confirmed production editor architecture decisions captured for Phase 11+: Windows/macOS desktop first; Rust `wgpu` realtime preview; native Windows Media Foundation/DXVA/D3D and macOS AVFoundation/VideoToolbox/CoreVideo/Metal media paths; FFmpeg as export/fallback; `CommandDelta` and stable render graph node IDs; SQLite artifact store under `.veproj/derived`; shared `TimelineClock + PlaybackGeneration`; scheduler-aligned jobs; ref-counted opaque handle registry; capability-first retiming/effects/transitions.
 - Production-grade architecture Phases 11-18 added after Phase 10.1 to address the external audit concerns directly: realtime GPU preview, hardware media IO, incremental render graph/cache coherence, asset/resource management, audio DSP, scheduler/telemetry, mobile/server bindings, and production retiming/effects/transitions.
 - Phase 10.1 completed all seven usable-editor MVP closure plans. The desktop editor now has system import, real PNG preview display, seek/scrub preview requests, transform/text/audio/subtitle editing, preview selection/text overlays, waveform placeholder, and final source guards.
