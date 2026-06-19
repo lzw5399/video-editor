@@ -3,9 +3,9 @@ use artifact_store::resource_index::{
     resource_ref_for_effect, resource_ref_for_font, resource_ref_for_material, upsert_resource,
 };
 use draft_model::{
-    Draft, Filter, Material, MaterialKind, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextFont, TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
-    Transition,
+    Draft, Filter, Material, MaterialKind, Segment, SourceTimerange, TargetTimerange,
+    TextAlignment, TextFont, TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track,
+    TrackKind, Transition,
 };
 
 #[test]
@@ -23,7 +23,10 @@ fn resource_index_indexes_material_font_effect_filter_transition_rows() {
     assert_eq!(material.kind, ResourceKind::Material);
     assert_eq!(material.stable_key, "material:video-001");
     assert_eq!(material.source_ref.as_deref(), Some("media/source.mp4"));
-    assert_eq!(material.project_relative_ref.as_deref(), Some("media/source.mp4"));
+    assert_eq!(
+        material.project_relative_ref.as_deref(),
+        Some("media/source.mp4")
+    );
     assert_eq!(material.status, ResourceStatus::Ready);
     assert!(
         !material
@@ -63,10 +66,10 @@ fn resource_index_indexes_material_font_effect_filter_transition_rows() {
         ResourceKind::Effect
     );
 
-    assert_eq!(
-        resource_ref_for_material("video-001"),
-        ResourceRef::new(ResourceKind::Material, "material:video-001", "video-001")
-    );
+    let material_ref = resource_ref_for_material("video-001");
+    assert_eq!(material_ref.kind, ResourceKind::Material);
+    assert_eq!(material_ref.resource_id.as_str(), "material:video-001");
+    assert_eq!(material_ref.stable_key, "material:video-001");
     assert_eq!(
         resource_ref_for_font("fonts/PingFangSC.ttf"),
         ResourceRef::new(
@@ -77,7 +80,11 @@ fn resource_index_indexes_material_font_effect_filter_transition_rows() {
     );
     assert_eq!(
         resource_ref_for_effect(ResourceKind::Filter, "lut-cinematic"),
-        ResourceRef::new(ResourceKind::Filter, "filter:lut-cinematic", "lut-cinematic")
+        ResourceRef::new(
+            ResourceKind::Filter,
+            "filter:lut-cinematic",
+            "lut-cinematic"
+        )
     );
 }
 

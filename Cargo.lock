@@ -57,7 +57,9 @@ name = "artifact_store"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "draft_model",
  "fs2",
+ "project_store",
  "rusqlite",
  "serde",
  "serde_json",

@@ -11,12 +11,13 @@ path = "src/lib.rs"
 
 [dependencies]
 blake3 = "1.8.5"
+draft_model = { path = "../draft_model" }
 fs2 = "0.4.3"
+project_store = { path = "../project_store" }
 rusqlite = "0.40.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 thiserror = "2.0.18"
 
 [dev-dependencies]
-draft_model = { path = "../draft_model" }
 tempfile = "3.27.0"

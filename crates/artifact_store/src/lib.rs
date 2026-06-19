@@ -7,6 +7,7 @@ pub mod blob_store;
 pub mod error;
 pub mod fingerprint;
 pub mod paths;
+pub mod resource_index;
 pub mod schema;
 
 pub use error::ArtifactStoreError;

@@ -29,4 +29,7 @@ pub enum ArtifactStoreError {
         expected: String,
         actual: String,
     },
+
+    #[error("invalid resource reference for {resource_id}: {reason}")]
+    InvalidResourceRef { resource_id: String, reason: String },
 }
