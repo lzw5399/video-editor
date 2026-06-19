@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Phase 15.2 Plan 03; next is Plan 04 desktop compositor presentation bridge
-last_updated: "2026-06-19T20:40:31Z"
-last_activity: 2026-06-20 -- Completed Phase 15.2 Plan 03 media IO texture handoff and audio sync state; next is desktop compositor presentation
+stopped_at: Blocked at Phase 15.2 Plan 04 after RED desktop compositor presentation E2E
+last_updated: "2026-06-19T20:51:12Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04 RED E2E added; implementation blocked by missing native decoded texture import into WGPU compositor
 progress:
   total_phases: 23
   completed_phases: 18
@@ -414,7 +414,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- Phase 15.2 Plan 04 blocked: imported-video render-graph GPU desktop presentation requires a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success.
 
 ## Deferred Items
 
@@ -443,6 +443,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T11:57:35.749Z
-Stopped at: Completed 15-07-PLAN.md
+Last session: 2026-06-19T20:51:12Z
+Stopped at: Blocked at 15.2-04 after RED E2E; requires native decoded texture import/presentation architecture
 Resume file: None
