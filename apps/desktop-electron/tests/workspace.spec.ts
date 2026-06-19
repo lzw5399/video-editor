@@ -87,6 +87,7 @@ async function launchWorkspaceApp(
     mockPreviewCommands?: boolean;
     mockExportCommands?: boolean;
     mockArtifactCommands?: boolean;
+    mockAudioCommands?: boolean;
     showDeveloperDiagnostics?: boolean;
     env?: NodeJS.ProcessEnv;
   } = {}
@@ -100,6 +101,7 @@ async function launchWorkspaceApp(
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: options.mockArtifactCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS: options.mockAudioCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: options.showDeveloperDiagnostics === true ? "1" : "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"]),
       ...options.env
@@ -966,6 +968,60 @@ test("预览播放按钮推进播放头并请求连续预览帧", async () => {
     await expect(timelineControls.getByRole("button", { name: "暂停" })).toBeEnabled();
     await timelineControls.getByRole("button", { name: "停止" }).click();
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:00.000");
+  } finally {
+    await app.close();
+  }
+});
+
+test("音频预览 controls send generated command envelopes and preserve state after rejection", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_AUDIO_REJECT_COMMAND: "pauseAudioPreview"
+    }
+  });
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
+    await expect(page.getByLabel("输出设备")).toContainText("系统默认");
+
+    await page.getByRole("button", { name: "播放预览" }).first().click();
+    await expectCommandCall(app, "createAudioPreviewSession");
+    await expectCommandCall(app, "playAudioPreview");
+    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放");
+
+    await page.getByRole("button", { name: "暂停预览" }).first().click();
+    await expectCommandCall(app, "pauseAudioPreview");
+    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放");
+
+    await page.getByLabel("预览时间").fill("1200000");
+    await expectCommandCall(app, "seekAudioPreview");
+    await page.getByRole("button", { name: "停止预览" }).first().click();
+    await expectCommandCall(app, "stopAudioPreview");
+    await page.getByRole("button", { name: "重试音频" }).click();
+    await expectCommandCall(app, "cancelAudioPreview");
+    await expectCommandCall(app, "getAudioPreviewStatus");
+
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
+    await page.getByLabel("输出设备").selectOption("desktop-output-secondary");
+    await expectCommandCall(app, "selectAudioOutputDevice");
+    await expect(page.getByLabel("输出设备")).toContainText("外接监听");
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toEqual(
+      expect.arrayContaining([
+        "createAudioPreviewSession",
+        "playAudioPreview",
+        "pauseAudioPreview",
+        "stopAudioPreview",
+        "seekAudioPreview",
+        "cancelAudioPreview",
+        "getAudioPreviewStatus",
+        "listAudioOutputDevices",
+        "selectAudioOutputDevice"
+      ])
+    );
   } finally {
     await app.close();
   }
