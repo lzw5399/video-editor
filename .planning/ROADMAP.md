@@ -611,11 +611,27 @@ Plans:
   5. Users can add/select target video/audio/text tracks, stack video/image/text layers, mix audio tracks, and rename/lock/show/mute tracks through Rust-owned commands.
   6. A real fixture E2E proves import vertical video, auto vertical canvas, play, add bundled-font text, add music, trim, split, undo/redo, save, reopen, and export.
 
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run $gsd-plan-phase 15.1 to break down)
+**Wave 1**
+
+- [ ] 15.1-01-PLAN.md - Repair realtime playback control chain and stop playback from driving repeated preview-frame artifact requests
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15.1-02-PLAN.md - Enforce baseline video/image/text/audio realtime preview capability and productized unsupported states
+- [ ] 15.1-03-PLAN.md - Add bundled font registry shared by text preview and export
+
+**Wave 3** *(blocked on Wave 1 completion)*
+
+- [ ] 15.1-04-PLAN.md - Add first-material canvas adaptation and non-stretch default visual fit
+- [ ] 15.1-05-PLAN.md - Add Rust-owned multitrack commands and minimal timeline controls
+
+**Wave 4** *(blocked on Waves 1-3 completion)*
+
+- [ ] 15.1-06-PLAN.md - Add full import-edit-play-save-reopen-export user-chain gate and source guards
 
 ### Phase 15.2: P0 Jianying-Style Production UI Convergence (INSERTED)
 
