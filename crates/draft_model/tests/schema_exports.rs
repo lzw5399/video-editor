@@ -8,14 +8,15 @@ use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
-    CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
-    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
-    CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
-    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
-    DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
-    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts,
-    ExportPreset, ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
+    AudioEffectSlot, AudioFade, AudioPanBalance, CancelExportCommandPayload, CanvasAspectRatio,
+    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, ChangedEntity,
+    CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
+    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
+    DecodedPreviewFrameResponse, DeleteSegmentCommandPayload, DirtyDomain, DirtyRange,
+    DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
+    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
+    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
+    ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
     ImportMaterialCommandPayload, ImportMaterialResponse, ImportSubtitleSrtCommandPayload,
     InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
@@ -42,17 +43,17 @@ use draft_model::{
     RuntimePixelFormatCapability, RuntimeSelectedDecodePath, RuntimeTextureBackend,
     RuntimeTextureHandleMetadata, RuntimeTextureInteropCapability, RuntimeVideoColorMetadata,
     RuntimeVideoPixelFormat, RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId,
-    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
-    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
+    SegmentId, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
+    SegmentTransform, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackMuteCommandPayload,
     SnappingSettings, SourceTimerange, SplitSegmentCommandPayload, StartExportCommandPayload,
     TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
     TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
     TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
     Transition, TrimSegmentCommandPayload, UndoTimelineEditCommandPayload,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentVisualCommandPayload,
-    VersionCommandPayload,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -946,6 +947,65 @@ fn schema_exports_include_audio_command_contracts() {
 }
 
 #[test]
+fn schema_exports_include_phase15_audio_semantic_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
+
+    assert!(
+        defs.contains_key("UpdateSegmentAudioCommandPayload"),
+        "command schema should include UpdateSegmentAudioCommandPayload"
+    );
+    assert_command_pairing_occurs_once(&command_schema, "updateSegmentAudio");
+
+    let draft_ts = ts_contract(&[
+        export_decl::<SegmentAudio>(),
+        export_decl::<AudioFade>(),
+        export_decl::<AudioPanBalance>(),
+        export_decl::<AudioEffectSlot>(),
+    ]);
+    let command_envelope_ts = command_envelope_ts_contract();
+    for expected_export in [
+        "export type SegmentAudio",
+        "export type AudioFade",
+        "export type AudioPanBalance",
+        "export type AudioEffectSlot",
+        "export type UpdateSegmentAudioCommandPayload",
+        "updateSegmentAudio",
+    ] {
+        assert!(
+            draft_ts.contains(expected_export) || command_envelope_ts.contains(expected_export),
+            "generated TypeScript contracts should include {expected_export}"
+        );
+    }
+
+    for forbidden in [
+        "waveformPath",
+        "waveformBlob",
+        "waveformPeaks",
+        "artifactRoot",
+        "sqlite",
+        "cacheKey",
+        "fingerprint",
+        "nativeHandle",
+        "outputDeviceHandle",
+        "rawBuffer",
+        "mixBuffer",
+        "ringBuffer",
+        "ffmpegAudioFilter",
+        "filterComplex",
+    ] {
+        assert!(
+            !draft_ts.contains(forbidden) && !command_envelope_ts.contains(forbidden),
+            "audio contracts must not expose renderer-owned or derived field {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn schema_exports_include_preview_command_contracts() {
     let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
@@ -1461,6 +1521,25 @@ fn property_references_def(contract: &serde_json::Value, field: &str, expected_r
                         .is_some_and(|value| value == expected_ref)
                 })
             })
+}
+
+fn assert_command_pairing_occurs_once(command_schema: &serde_json::Value, command_name: &str) {
+    let count = command_schema
+        .get("oneOf")
+        .and_then(|entries| entries.as_array())
+        .expect("CommandEnvelope schema should expose root command/payload pairing constraints")
+        .iter()
+        .filter(|entry| {
+            entry
+                .pointer("/properties/command/const")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value == command_name)
+        })
+        .count();
+    assert_eq!(
+        count, 1,
+        "{command_name} should appear exactly once in command/payload pairing constraints"
+    );
 }
 
 fn ts_contract(declarations: &[String]) -> String {
