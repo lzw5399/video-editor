@@ -2,6 +2,7 @@ use bindings_node::audio_service::{
     AudioPreviewBindingErrorKind, AudioPreviewBindingRegistry, AudioPreviewSessionBindingConfig,
 };
 use draft_model::{AudioPreviewPlaybackStatus, Microseconds, WaveformDisplayStatus};
+use realtime_preview_runtime::{PlaybackGeneration, RealtimePreviewAudioSyncState};
 
 fn test_config() -> AudioPreviewSessionBindingConfig {
     AudioPreviewSessionBindingConfig {
@@ -79,7 +80,12 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
         .expect("stale audio play should return classified response");
     assert!(!stale.accepted);
     assert_eq!(stale.status, AudioPreviewPlaybackStatus::StaleRejected);
-    assert!(stale.diagnostics.iter().any(|message| message.contains("stale")));
+    assert!(
+        stale
+            .diagnostics
+            .iter()
+            .any(|message| message.contains("stale"))
+    );
 
     let current = registry
         .status(&created.session_id)
@@ -95,7 +101,10 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
     let status_after_seek_play = registry
         .status(&created.session_id)
         .expect("play should update runtime target time");
-    assert_eq!(status_after_seek_play.target_time, Microseconds::new(600_000));
+    assert_eq!(
+        status_after_seek_play.target_time,
+        Microseconds::new(600_000)
+    );
 
     let paused = registry
         .pause(&created.session_id)
@@ -111,6 +120,58 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
         .stop(&created.session_id)
         .expect("audio stop should be accepted");
     assert_eq!(stopped.status, AudioPreviewPlaybackStatus::Stopped);
+}
+
+#[test]
+fn audio_service_status_can_seed_realtime_preview_sync_state() {
+    let mut registry = AudioPreviewBindingRegistry::new();
+    let created = registry
+        .create_session(test_config())
+        .expect("audio session should be created");
+    let playing = registry
+        .play(
+            &created.session_id,
+            Microseconds::new(900_000),
+            created.generation,
+        )
+        .expect("audio play should be accepted");
+    let status = registry
+        .status(&created.session_id)
+        .expect("audio status should be readable");
+
+    let sync = RealtimePreviewAudioSyncState {
+        session_id: status.session_id.clone(),
+        playback_generation: PlaybackGeneration::new(status.generation),
+        target_time: status.target_time,
+        buffered_until: status.buffered_until,
+        status: status.status,
+        diagnostics: status.diagnostics.clone(),
+    };
+
+    assert!(playing.accepted);
+    assert_eq!(sync.session_id, created.session_id);
+    assert_eq!(
+        sync.playback_generation,
+        PlaybackGeneration::new(status.generation)
+    );
+    assert_eq!(sync.target_time, Microseconds::new(900_000));
+    assert_eq!(sync.buffered_until, Microseconds::new(900_000));
+    assert_eq!(sync.status, AudioPreviewPlaybackStatus::Playing);
+
+    let serialized = serde_json::to_string(&sync).expect("audio sync state serializes");
+    for forbidden in [
+        "nativeHandle",
+        "rawBuffer",
+        "audioDeviceHandle",
+        "sampleData",
+        "ffmpegFilter",
+        "cacheKey",
+    ] {
+        assert!(
+            !serialized.contains(forbidden),
+            "audio sync state must not expose {forbidden}"
+        );
+    }
 }
 
 #[test]
@@ -147,9 +208,12 @@ fn audio_service_returns_safe_devices_and_bounded_waveform_payloads() {
     assert_eq!(waveform.requested_peak_bins, 16);
     assert_eq!(waveform.returned_peak_bins, 0);
     assert!(waveform.peaks.is_empty());
-    assert!(waveform.diagnostics.iter().any(|message| {
-        message.contains("ready waveform artifact")
-    }));
+    assert!(
+        waveform
+            .diagnostics
+            .iter()
+            .any(|message| { message.contains("ready waveform artifact") })
+    );
 
     let serialized = serde_json::to_string(&waveform).expect("waveform should serialize");
     for forbidden in [

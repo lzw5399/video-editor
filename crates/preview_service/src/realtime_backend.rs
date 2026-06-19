@@ -6,23 +6,23 @@ use draft_model::{Draft, Microseconds, RationalFrameRate};
 use ffmpeg_compiler::{CompilerCapabilities, FfmpegJob};
 use media_runtime::FfmpegExecutor;
 use realtime_preview_runtime::{
+    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewFrameProvider,
+    PreviewGpuBackend, PreviewRequestMode, RealtimePreviewCapabilityClassifier,
+    RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewFallbackReason,
+    RealtimePreviewFrameRequest, RealtimePreviewFrameResult, RealtimePreviewGraphInput,
+    RealtimePreviewGraphSupport, RealtimePreviewRuntime, RealtimePreviewSessionConfig,
     gpu::{
         RealtimePreviewCompositor, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
         RealtimePreviewGpuDeviceDescriptor, RealtimePreviewTargetFormat,
         RealtimePreviewTextureCache,
     },
-    prepare_realtime_preview_graph, PlaybackGeneration, PlaybackRate, PreviewCancellationToken,
-    PreviewFrameProvider, PreviewGpuBackend, PreviewRequestMode,
-    RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnostic,
-    RealtimePreviewDiagnosticDomain, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
-    RealtimePreviewFrameResult, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
-    RealtimePreviewRuntime, RealtimePreviewSessionConfig,
+    prepare_realtime_preview_graph,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    request_preview_frame, PreviewArtifact, PreviewCacheEntry, PreviewFrameRequest,
-    PreviewServiceConfig, PreviewServiceError, PreviewServiceErrorKind,
+    PreviewArtifact, PreviewCacheEntry, PreviewFrameRequest, PreviewServiceConfig,
+    PreviewServiceError, PreviewServiceErrorKind, request_preview_frame,
 };
 
 #[derive(Debug)]
@@ -424,6 +424,7 @@ fn runtime_frame(
             RealtimePreviewFrameRequest {
                 target_time: request.target_time,
                 playback_generation: request.playback_generation,
+                audio_sync: None,
                 cancellation_token: request.cancellation_token,
                 mode: request.mode,
                 queue_latency_ms: 0,

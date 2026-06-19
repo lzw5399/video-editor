@@ -6,9 +6,10 @@ use std::path::PathBuf;
 use draft_model::{Draft, Microseconds, RationalFrameRate};
 use realtime_preview_runtime::{
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
-    PreviewRequestMode, PreviewSessionId, RealtimePreviewBackendUsed, RealtimePreviewDiagnostic,
-    RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
-    RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
+    PreviewRequestMode, PreviewSessionId, RealtimePreviewAudioSyncState,
+    RealtimePreviewBackendUsed, RealtimePreviewDiagnostic, RealtimePreviewError,
+    RealtimePreviewFallbackReason, RealtimePreviewFrameRequest, RealtimePreviewRuntime,
+    RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
 };
 use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
@@ -265,6 +266,7 @@ impl RealtimePreviewBindingRegistry {
             stale_rejected: result.stale_rejected,
             canceled: result.canceled,
             cancellation_token: result.cancellation_token,
+            audio_sync: result.audio_sync,
             backend: result.backend,
             fallback: result.fallback,
             diagnostics: result.diagnostics,
@@ -525,6 +527,8 @@ pub struct RealtimePreviewGenerationBindingResponse {
 pub struct RealtimePreviewFrameBindingRequest {
     pub target_time_microseconds: u64,
     pub playback_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_sync: Option<RealtimePreviewAudioSyncState>,
     pub queue_latency_ms: u64,
     pub render_duration_ms: u64,
     pub mode: PreviewRequestMode,
@@ -540,6 +544,7 @@ impl RealtimePreviewFrameBindingRequest {
         RealtimePreviewFrameRequest {
             target_time: Microseconds::new(self.target_time_microseconds),
             playback_generation: PlaybackGeneration::new(self.playback_generation),
+            audio_sync: self.audio_sync.clone(),
             cancellation_token: self.cancellation_token,
             mode: self.mode,
             queue_latency_ms: self.queue_latency_ms,
@@ -562,6 +567,8 @@ pub struct RealtimePreviewFrameBindingResponse {
     pub canceled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_token: Option<PreviewCancellationToken>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_sync: Option<RealtimePreviewAudioSyncState>,
     pub backend: RealtimePreviewBackendUsed,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback: Option<RealtimePreviewFallbackReason>,
@@ -760,7 +767,11 @@ mod realtime_preview_bindings {
         RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
         RealtimePreviewSurfaceBindingKind,
     };
-    use realtime_preview_runtime::PreviewRequestMode;
+    use draft_model::{AudioPreviewPlaybackStatus, Microseconds};
+    use realtime_preview_runtime::{
+        PlaybackGeneration, PreviewRequestMode, RealtimePreviewAudioSyncState,
+        RealtimePreviewFallbackReason,
+    };
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -848,6 +859,7 @@ mod realtime_preview_bindings {
                 RealtimePreviewFrameBindingRequest {
                     target_time_microseconds: 1_234_567,
                     playback_generation: generation.playback_generation,
+                    audio_sync: None,
                     queue_latency_ms: 3,
                     render_duration_ms: 4,
                     mode: PreviewRequestMode::Seek,
@@ -875,6 +887,7 @@ mod realtime_preview_bindings {
                 RealtimePreviewFrameBindingRequest {
                     target_time_microseconds: 33_333,
                     playback_generation: generation.playback_generation,
+                    audio_sync: None,
                     queue_latency_ms: 1,
                     render_duration_ms: 1,
                     mode: PreviewRequestMode::PlaybackTick,
@@ -922,6 +935,92 @@ mod realtime_preview_bindings {
     }
 
     #[test]
+    fn realtime_frame_request_carries_audio_preview_sync_state() {
+        let (mut registry, session_id) = registry_with_session();
+        let generation = registry
+            .seek(&session_id, 700_000)
+            .expect("seek returns generation");
+        let audio_sync = RealtimePreviewAudioSyncState {
+            session_id: "audio-session-0000000000000001".to_owned(),
+            playback_generation: PlaybackGeneration::new(generation.playback_generation),
+            target_time: Microseconds::new(700_000),
+            buffered_until: Microseconds::new(733_333),
+            status: AudioPreviewPlaybackStatus::Playing,
+            diagnostics: vec!["audio output primed".to_owned()],
+        };
+
+        let result = registry
+            .request_frame(
+                &session_id,
+                RealtimePreviewFrameBindingRequest {
+                    target_time_microseconds: 700_000,
+                    playback_generation: generation.playback_generation,
+                    audio_sync: Some(audio_sync.clone()),
+                    queue_latency_ms: 2,
+                    render_duration_ms: 4,
+                    mode: PreviewRequestMode::PlaybackTick,
+                    cancellation_token: None,
+                    fallback_reason: None,
+                    cache_hit: false,
+                },
+            )
+            .expect("synchronized audio frame request succeeds");
+
+        assert!(result.presented);
+        assert_eq!(result.audio_sync, Some(audio_sync));
+        assert_eq!(result.fallback, None);
+    }
+
+    #[test]
+    fn realtime_frame_request_rejects_stale_audio_preview_state() {
+        let (mut registry, session_id) = registry_with_session();
+        let generation = registry
+            .seek(&session_id, 800_000)
+            .expect("seek returns generation");
+        let audio_sync = RealtimePreviewAudioSyncState {
+            session_id: "audio-session-0000000000000001".to_owned(),
+            playback_generation: PlaybackGeneration::new(0),
+            target_time: Microseconds::new(800_000),
+            buffered_until: Microseconds::new(800_000),
+            status: AudioPreviewPlaybackStatus::Playing,
+            diagnostics: Vec::new(),
+        };
+
+        let result = registry
+            .request_frame(
+                &session_id,
+                RealtimePreviewFrameBindingRequest {
+                    target_time_microseconds: 800_000,
+                    playback_generation: generation.playback_generation,
+                    audio_sync: Some(audio_sync),
+                    queue_latency_ms: 2,
+                    render_duration_ms: 4,
+                    mode: PreviewRequestMode::PlaybackTick,
+                    cancellation_token: None,
+                    fallback_reason: None,
+                    cache_hit: false,
+                },
+            )
+            .expect("stale audio state returns classified preview response");
+
+        assert!(!result.presented);
+        assert!(result.stale_rejected);
+        assert_eq!(result.backend, RealtimePreviewBackendUsed::None);
+        assert_eq!(
+            result.fallback,
+            Some(RealtimePreviewFallbackReason::StaleGeneration)
+        );
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.reason.contains("audio generation")),
+            "diagnostics should identify audio sync rejection: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
     fn telemetry_is_queryable_without_native_or_gpu_handles() {
         let (mut registry, session_id) = registry_with_session();
         let generation = registry.seek(&session_id, 42).expect("seek succeeds");
@@ -931,6 +1030,7 @@ mod realtime_preview_bindings {
                 RealtimePreviewFrameBindingRequest {
                     target_time_microseconds: 42,
                     playback_generation: generation.playback_generation,
+                    audio_sync: None,
                     queue_latency_ms: 5,
                     render_duration_ms: 7,
                     mode: PreviewRequestMode::Seek,

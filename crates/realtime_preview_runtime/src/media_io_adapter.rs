@@ -10,8 +10,8 @@ use media_runtime::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    fallback_reason_from_media_io, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
-    PreviewFrameProviderError, RealtimePreviewFallbackReason, TextureHandleDescriptor,
+    PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError,
+    RealtimePreviewFallbackReason, TextureHandleDescriptor, fallback_reason_from_media_io,
 };
 
 const PROVIDER_NAME: &str = "media-io-frame-provider";

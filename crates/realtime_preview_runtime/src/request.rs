@@ -1,4 +1,4 @@
-use draft_model::Microseconds;
+use draft_model::{AudioPreviewPlaybackStatus, Microseconds};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -35,6 +35,8 @@ pub struct RealtimePreviewFrameRequest {
     pub target_time: Microseconds,
     pub playback_generation: PlaybackGeneration,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_sync: Option<RealtimePreviewAudioSyncState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_token: Option<PreviewCancellationToken>,
     pub mode: PreviewRequestMode,
     pub queue_latency_ms: u64,
@@ -48,6 +50,17 @@ pub struct RealtimePreviewFrameRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewAudioSyncState {
+    pub session_id: String,
+    pub playback_generation: PlaybackGeneration,
+    pub target_time: Microseconds,
+    pub buffered_until: Microseconds,
+    pub status: AudioPreviewPlaybackStatus,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RealtimePreviewFrameResult {
     pub target_time: Microseconds,
     pub playback_generation: PlaybackGeneration,
@@ -56,6 +69,8 @@ pub struct RealtimePreviewFrameResult {
     pub canceled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_token: Option<PreviewCancellationToken>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_sync: Option<RealtimePreviewAudioSyncState>,
     pub backend: RealtimePreviewBackendUsed,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback: Option<RealtimePreviewFallbackReason>,

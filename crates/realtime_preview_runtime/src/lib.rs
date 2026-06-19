@@ -39,8 +39,8 @@ pub use media_io_adapter::{
 };
 pub use parity::{RealtimePreviewParityDiagnostic, realtime_preview_parity_diagnostics};
 pub use request::{
-    PreviewCancellationToken, PreviewRequestMode, RealtimePreviewBackendUsed,
-    RealtimePreviewFrameRequest, RealtimePreviewFrameResult,
+    PreviewCancellationToken, PreviewRequestMode, RealtimePreviewAudioSyncState,
+    RealtimePreviewBackendUsed, RealtimePreviewFrameRequest, RealtimePreviewFrameResult,
 };
 pub use session::{
     PreviewGpuBackend, PreviewSessionId, RealtimePreviewError, RealtimePreviewRuntime,

@@ -32,6 +32,7 @@ fn cancellation_telemetry_canceled_current_generation_is_not_presented() {
             realtime_preview_runtime::RealtimePreviewFrameRequest {
                 target_time: Microseconds::new(2_000_000),
                 playback_generation: generation,
+                audio_sync: None,
                 cancellation_token: Some(token),
                 mode: PreviewRequestMode::Scrub,
                 queue_latency_ms: 8,

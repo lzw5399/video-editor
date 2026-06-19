@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
-use draft_model::{Draft, Microseconds, RationalFrameRate};
+use draft_model::{AudioPreviewPlaybackStatus, Draft, Microseconds, RationalFrameRate};
 use render_graph::RenderGraph;
 use serde::{Deserialize, Serialize};
 
@@ -311,7 +311,9 @@ impl RealtimePreviewSession {
         &mut self,
         request: RealtimePreviewFrameRequest,
     ) -> RealtimePreviewFrameResult {
-        let stale_rejected = request.playback_generation != self.clock.generation();
+        let audio_rejection = audio_sync_rejection(&request);
+        let stale_rejected =
+            request.playback_generation != self.clock.generation() || audio_rejection.is_some();
         let canceled = request
             .cancellation_token
             .map(|token| self.canceled_tokens.contains(&token))
@@ -338,12 +340,53 @@ impl RealtimePreviewSession {
             stale_rejected,
             canceled,
             cancellation_token: request.cancellation_token,
+            audio_sync: request.audio_sync,
             backend,
             fallback,
             diagnostics,
             telemetry: self.telemetry.clone(),
         }
     }
+}
+
+fn audio_sync_rejection(request: &RealtimePreviewFrameRequest) -> Option<String> {
+    let audio = request.audio_sync.as_ref()?;
+    if audio.session_id.trim().is_empty() {
+        return Some("audio preview session id is missing".to_owned());
+    }
+    if audio.playback_generation != request.playback_generation {
+        return Some(format!(
+            "audio generation {} does not match preview generation {}",
+            audio.playback_generation.get(),
+            request.playback_generation.get()
+        ));
+    }
+    if audio.target_time != request.target_time {
+        return Some(format!(
+            "audio target time {} does not match preview target time {}",
+            audio.target_time.get(),
+            request.target_time.get()
+        ));
+    }
+    if audio.buffered_until < request.target_time {
+        return Some(format!(
+            "audio buffered until {} but preview target is {}",
+            audio.buffered_until.get(),
+            request.target_time.get()
+        ));
+    }
+    if matches!(
+        audio.status,
+        AudioPreviewPlaybackStatus::StaleRejected
+            | AudioPreviewPlaybackStatus::Unavailable
+            | AudioPreviewPlaybackStatus::Failed
+    ) {
+        return Some(format!(
+            "audio preview status {:?} cannot be synchronized for presentation",
+            audio.status
+        ));
+    }
+    None
 }
 
 fn backend_for(
@@ -378,11 +421,12 @@ fn diagnostics_for(
     fallback: Option<RealtimePreviewFallbackReason>,
 ) -> Vec<RealtimePreviewDiagnostic> {
     if stale_rejected {
+        let reason =
+            audio_sync_rejection(request).unwrap_or_else(|| "stale playback generation".to_owned());
+        let message = format!("preview result rejected because {reason}");
         return vec![RealtimePreviewDiagnostic::runtime(
-            "preview result rejected because request generation no longer matches session clock",
-            RealtimePreviewSupport::Unsupported {
-                reason: "stale playback generation".to_owned(),
-            },
+            message,
+            RealtimePreviewSupport::Unsupported { reason },
             Some(RealtimePreviewFallbackReason::StaleGeneration),
             false,
             false,

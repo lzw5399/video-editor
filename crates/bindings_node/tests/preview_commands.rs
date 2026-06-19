@@ -344,6 +344,7 @@ fn preview_commands_realtime_binding_preserves_fallback_and_cancellation_telemet
             RealtimePreviewFrameBindingRequest {
                 target_time_microseconds: 500_000,
                 playback_generation: session.playback_generation,
+                audio_sync: None,
                 queue_latency_ms: 2,
                 render_duration_ms: 9,
                 mode: PreviewRequestMode::Seek,
