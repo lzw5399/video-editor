@@ -18,11 +18,11 @@ updated: "2026-06-19"
 ## Current Focus
 
 - hypothesis: Existing tests validate realtime-preview host routing and playhead clock movement, but the product UI lacks an end-to-end assertion that visible preview pixels advance during playback.
-- test: Add a Playwright normal-user workflow using moving fixture media, product-mode UI, and screenshot/pixel evidence before/after playback.
-- expecting: The new test should fail before the implementation fix, proving the current completion standard is insufficient.
-- next_action: Remove mock-surface visual leakage from product UI, then add true decoded-frame/content fingerprints before claiming video playback correctness.
+- test: Keep the Playwright normal-user workflow on moving fixture media, but require native decoded/composited content evidence instead of mock frame tokens or screenshot color proxies.
+- expecting: Product playback must fail if the realtime host only advances clocks, telemetry, mock frame tokens, or PNG preview artifacts.
+- next_action: Replace the remaining Mock realtime backend/product presentation path with a true decoded/composited preview surface; content fingerprints are only a guard, not the final GPU playback implementation.
 - reasoning_checkpoint:
-- tdd_checkpoint: RED product-user-journey test added and failing on presentedFrameCount
+- tdd_checkpoint: Product journey now requires decoded/composited content evidence; GPU/composited visible preview remains open.
 
 ## Evidence
 
@@ -47,6 +47,18 @@ updated: "2026-06-19"
 - timestamp: "2026-06-19T15:36:00Z"
   observation: "User reproduced a real import/playback flow with dashcam footage and saw a green/cyan flashing overlay during playback. This was caused by the Playwright-visible mock frame display being painted into the product preview surface. The prior region-pixel assertion was therefore a false-positive test proxy, not proof of decoded video playback correctness."
   source: "user screenshot and apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx"
+- timestamp: "2026-06-19T15:18:03Z"
+  observation: "The product user journey was tightened to reject mock frame tokens and require decoded/composited content evidence. The first run failed with contentEvidence.source=null, proving presentedFrameCount and playhead movement were still insufficient evidence."
+  source: "apps/desktop-electron/tests/product-user-journey.spec.ts; pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-19T15:18:03Z"
+  observation: "RealtimePreviewHost now exposes test-only native content evidence collected from Rust via requestRealtimePreviewContentEvidence. The binding resolves the active video segment at the runtime target time, resolves the material URI at the native boundary, decodes one FFmpeg CPU frame, and returns only a blake3 digest plus dimensions/time metadata. Mock frame display evidence is no longer exposed unless VIDEO_EDITOR_TEST_EXPOSE_MOCK_FRAME_DISPLAY=1."
+  source: "apps/desktop-electron/src/main/realtimePreviewHost.ts; crates/bindings_node/src/realtime_preview_service.rs; crates/media_runtime_desktop/src/ffmpeg_fallback.rs"
+- timestamp: "2026-06-19T15:18:03Z"
+  observation: "The first content-evidence integration timed out because media_runtime::run_process_with_timeout waited for FFmpeg exit without concurrently draining stdout/stderr. Rawvideo output could fill the pipe and block FFmpeg even though the same command completed quickly in a shell."
+  source: "crates/media_runtime/src/process.rs; crates/media_runtime/tests/process.rs"
+- timestamp: "2026-06-19T15:18:03Z"
+  observation: "After fixing process stdout/stderr draining, the product journey passes with decoded content evidence while still asserting playback does not repeatedly call requestPreviewFrame. This is a guard against fake playback, not proof that the desktop product is rendering through the final GPU compositing backend."
+  source: "pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
 
 ## Eliminated
 
@@ -54,10 +66,14 @@ updated: "2026-06-19"
   reason: "The test successfully imports a repository fixture through the normal 导入素材 path and adds it to the timeline before failing on runtime frame presentation."
 - hypothesis: "Existing requestPreviewFrame-based tests prove playback."
   reason: "The new journey explicitly verifies product playback without additional requestPreviewFrame calls, and the realtime host still reports zero presented frames."
+- hypothesis: "Mock host frame tokens or preview-region color changes prove video playback."
+  reason: "The green/cyan overlay was synthetic mock evidence leaked into product UI. The product journey now requires decoded/composited content evidence and requires frameDisplay to remain null in normal product playback."
+- hypothesis: "The decoded content evidence failure was caused by missing media or bad timeline target selection."
+  reason: "A diagnostic run showed requestRealtimePreviewContentEvidence was called for the active segment but FFmpeg timed out; the root cause was the shared process runner not draining rawvideo stdout while waiting."
 
 ## Resolution
 
-- root_cause: Playback started the realtime preview host but no host-owned playback frame loop requested/presented runtime frames, and the renderer did not refresh host state while playing. The later mock-surface visual proxy fixed test observability by painting synthetic colors, but leaked into product UI and was not real decoded video content.
-- fix: Added a main-process playback tick loop that calls the realtime preview runtime with `playbackTick` frames, presents a seek frame on seek, stops the loop on pause/stop/close, and keeps mock frame evidence available to tests without painting it into the product preview surface. PreviewMonitor polls host telemetry during playback without calling preview PNG commands.
-- verification: `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters" --reporter=line`; `cargo test -p bindings_node preview_commands -- --nocapture`; `git diff --check -- . ':!reference'`
-- files_changed: apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/src/renderer/workspace/preview-inspector.css; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/workspace.spec.ts; apps/desktop-electron/package.json; apps/desktop-electron/tests/fixtures/media/*
+- root_cause: Playback had two distinct gaps. First, the product path originally advanced only UI clocks/telemetry and later leaked synthetic mock surface colors into the preview. Second, the native content evidence path initially deadlocked on rawvideo stdout because the shared FFmpeg process runner did not drain pipes while waiting. The remaining product gap is that the desktop realtime session still uses the Mock backend instead of a true visible GPU/composited preview surface.
+- fix: Added a product E2E gate that rejects requestPreviewFrame loops, mock frame tokens, and synthetic preview pixels as playback proof. Added native decoded-frame content evidence through the realtime host for test/recording mode, returning only a digest and metadata. Fixed the shared FFmpeg process runner to drain stdout/stderr concurrently so raw frame extraction cannot deadlock on pipe buffers.
+- verification: `cargo test -p media_runtime process -- --nocapture`; `cargo test -p media_runtime_desktop ffmpeg_fallback_frame_fingerprint -- --nocapture`; `cargo test -p bindings_node realtime_preview -- --nocapture`; `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters" --reporter=line`; `git diff --check -- . ':!reference'`
+- files_changed: crates/media_runtime/src/process.rs; crates/media_runtime/tests/process.rs; crates/media_runtime_desktop/src/ffmpeg_fallback.rs; crates/media_runtime_desktop/tests/ffmpeg_fallback.rs; crates/bindings_node/src/realtime_preview_service.rs; crates/bindings_node/src/lib.rs; apps/desktop-electron/src/main/nativeBinding.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/preload/index.ts; apps/desktop-electron/src/renderer/App.tsx; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts

@@ -106,6 +106,7 @@ type RealtimePreviewHostState = {
   fallbackArtifactVisible: boolean;
   telemetry: RealtimePreviewHostTelemetry | null;
   frameDisplay: RealtimePreviewHostFrameDisplay | null;
+  contentEvidence: RealtimePreviewHostContentEvidence | null;
 };
 
 type RealtimePreviewHostFrameDisplay = {
@@ -116,10 +117,22 @@ type RealtimePreviewHostFrameDisplay = {
   accentColor: string;
 };
 
+type RealtimePreviewHostContentEvidence = {
+  source: "decoded" | "composited";
+  digest: string;
+  width: number;
+  height: number;
+  byteCount: number;
+  targetTimeMicroseconds: number;
+  sourceTimeMicroseconds: number;
+  materialId: string;
+  streamId: number;
+};
+
 type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
   getTelemetry: () => Promise<RealtimePreviewHostState>;
-  updateDraftSnapshot: (draft: Draft) => Promise<RealtimePreviewHostState>;
+  updateDraftSnapshot: (draft: Draft, bundlePath?: string) => Promise<RealtimePreviewHostState>;
   seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
   play: () => Promise<RealtimePreviewHostState>;
   pause: () => Promise<RealtimePreviewHostState>;
@@ -145,7 +158,8 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   currentRequestCanceled: false,
   fallbackArtifactVisible: false,
   telemetry: null,
-  frameDisplay: null
+  frameDisplay: null,
+  contentEvidence: null
 };
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [

@@ -1,8 +1,14 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::path::{Path, PathBuf};
 
-use draft_model::{Draft, Microseconds, RationalFrameRate};
+use draft_model::{Draft, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TrackKind};
+use media_runtime::{FfmpegExecutor, RuntimeConfig};
+use media_runtime_desktop::{
+    decode_ffmpeg_cpu_frame_fingerprint, FfmpegCpuFrameFingerprintRequest,
+};
+use project_store::resolve_material_uri;
 use realtime_preview_runtime::{
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
@@ -249,6 +255,60 @@ impl RealtimePreviewBindingRegistry {
         ))
     }
 
+    pub fn request_content_evidence(
+        &self,
+        request: RealtimePreviewContentEvidenceBindingRequest,
+        executor: &impl FfmpegExecutor,
+        runtime: &RuntimeConfig,
+    ) -> Result<Option<RealtimePreviewContentEvidenceBindingResponse>, RealtimePreviewBindingError>
+    {
+        let runtime_id = self.runtime_session_id(&request.session_id)?;
+        let active_generation = self
+            .runtime
+            .clock(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?
+            .generation();
+        if active_generation != PlaybackGeneration::new(request.playback_generation) {
+            return Ok(None);
+        }
+
+        let Some(probe) = active_video_content_probe(
+            &request.draft,
+            request.bundle_path.as_deref(),
+            request.target_time_microseconds,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        let fingerprint = decode_ffmpeg_cpu_frame_fingerprint(
+            executor,
+            runtime,
+            &FfmpegCpuFrameFingerprintRequest {
+                material_uri: probe.material_path,
+                source_time_us: probe.source_time_microseconds,
+            },
+        )
+        .map_err(|error| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                format!("realtime preview content fingerprint failed: {error}"),
+            )
+        })?;
+
+        Ok(Some(RealtimePreviewContentEvidenceBindingResponse {
+            source: RealtimePreviewContentEvidenceSource::Decoded,
+            digest: fingerprint.digest,
+            width: fingerprint.width,
+            height: fingerprint.height,
+            byte_count: fingerprint.byte_count,
+            target_time_microseconds: request.target_time_microseconds,
+            source_time_microseconds: fingerprint.source_time_us,
+            material_id: probe.material_id,
+            stream_id: fingerprint.stream_id.0,
+        }))
+    }
+
     fn runtime_session_id(
         &self,
         session_id: &str,
@@ -477,6 +537,38 @@ impl RealtimePreviewTelemetryBindingResponse {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewContentEvidenceBindingRequest {
+    pub session_id: String,
+    pub draft: Draft,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_path: Option<String>,
+    pub target_time_microseconds: u64,
+    pub playback_generation: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RealtimePreviewContentEvidenceSource {
+    Decoded,
+    Composited,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewContentEvidenceBindingResponse {
+    pub source: RealtimePreviewContentEvidenceSource,
+    pub digest: String,
+    pub width: u32,
+    pub height: u32,
+    pub byte_count: usize,
+    pub target_time_microseconds: u64,
+    pub source_time_microseconds: u64,
+    pub material_id: MaterialId,
+    pub stream_id: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RealtimePreviewBindingError {
     kind: RealtimePreviewBindingErrorKind,
@@ -535,6 +627,91 @@ pub enum RealtimePreviewBindingErrorKind {
     InvalidPayload,
     RuntimeSurface,
     Runtime,
+}
+
+struct ActiveVideoContentProbe {
+    material_id: MaterialId,
+    material_path: PathBuf,
+    source_time_microseconds: u64,
+}
+
+fn active_video_content_probe(
+    draft: &Draft,
+    bundle_path: Option<&str>,
+    target_time_microseconds: u64,
+) -> Result<Option<ActiveVideoContentProbe>, RealtimePreviewBindingError> {
+    for track in draft.tracks.iter().filter(|track| track.kind == TrackKind::Video && !track.muted)
+    {
+        for segment in &track.segments {
+            let target_start = segment.target_timerange.start.get();
+            let target_duration = segment.target_timerange.duration.get();
+            let Some(target_end) = target_start.checked_add(target_duration) else {
+                continue;
+            };
+            if target_time_microseconds < target_start || target_time_microseconds >= target_end {
+                continue;
+            }
+            let Some(material) = material_for(draft, &segment.material_id) else {
+                continue;
+            };
+            if material.kind != MaterialKind::Video || !material.metadata.has_video {
+                continue;
+            }
+            let Some(material_path) = resolve_content_material_path(material, bundle_path)? else {
+                continue;
+            };
+            let source_offset = target_time_microseconds.saturating_sub(target_start);
+            let source_duration = segment.source_timerange.duration.get();
+            let bounded_offset = if source_duration == 0 {
+                0
+            } else {
+                source_offset.min(source_duration.saturating_sub(1))
+            };
+            return Ok(Some(ActiveVideoContentProbe {
+                material_id: material.material_id.clone(),
+                material_path,
+                source_time_microseconds: segment
+                    .source_timerange
+                    .start
+                    .get()
+                    .saturating_add(bounded_offset),
+            }));
+        }
+    }
+
+    Ok(None)
+}
+
+fn material_for<'a>(draft: &'a Draft, material_id: &MaterialId) -> Option<&'a Material> {
+    draft
+        .materials
+        .iter()
+        .find(|material| &material.material_id == material_id)
+}
+
+fn resolve_content_material_path(
+    material: &Material,
+    bundle_path: Option<&str>,
+) -> Result<Option<PathBuf>, RealtimePreviewBindingError> {
+    let uri = material.uri.trim();
+    if uri.is_empty() {
+        return Ok(None);
+    }
+
+    let path = Path::new(uri);
+    if path.is_absolute() {
+        return Ok(Some(path.to_path_buf()));
+    }
+
+    let Some(bundle_path) = bundle_path else {
+        return Ok(None);
+    };
+    resolve_material_uri(bundle_path, uri).map_err(|error| {
+        RealtimePreviewBindingError::new(
+            RealtimePreviewBindingErrorKind::InvalidPayload,
+            error.to_string(),
+        )
+    })
 }
 
 fn validate_binding_session_id(session_id: &str) -> Result<(), RealtimePreviewBindingError> {

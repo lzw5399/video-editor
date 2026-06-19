@@ -1135,6 +1135,7 @@ dependencies = [
 name = "media_runtime_desktop"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "media_runtime",
  "objc2",
  "objc2-av-foundation",

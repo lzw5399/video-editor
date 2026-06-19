@@ -31,6 +31,49 @@ pub struct FfmpegCpuFrameDecodeRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FfmpegCpuFrameFingerprintRequest {
+    pub material_uri: PathBuf,
+    pub source_time_us: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FfmpegCpuFrameFingerprint {
+    pub digest: String,
+    pub width: u32,
+    pub height: u32,
+    pub byte_count: usize,
+    pub source_time_us: u64,
+    pub stream_id: StreamId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FfmpegCpuFrameFingerprintError {
+    message: String,
+}
+
+impl FfmpegCpuFrameFingerprintError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl std::fmt::Display for FfmpegCpuFrameFingerprintError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for FfmpegCpuFrameFingerprintError {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FfmpegDecodeDiagnostic {
     pub selected_path: SelectedDecodePath,
     pub fallback_reason: Option<MediaIoFallbackReason>,
@@ -278,30 +321,11 @@ where
     }
 
     fn decode_args(&self, request: &VideoDecodeRequest) -> Vec<OsString> {
-        os_args(&[
-            "-hide_banner",
-            "-v",
-            "error",
-            "-nostdin",
-            "-ss",
-            &format_microseconds(request.source_time_us),
-            "-i",
-        ])
-        .into_iter()
-        .chain([self.material_uri.as_os_str().to_owned()])
-        .chain(os_args(&[
-            "-map",
-            &format!("0:{}", self.stream.stream_id.0),
-            "-frames:v",
-            "1",
-            "-an",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-",
-        ]))
-        .collect()
+        raw_rgba_decode_args(
+            &self.material_uri,
+            self.stream.stream_id,
+            request.source_time_us,
+        )
     }
 
     fn process_launch_error(&mut self, error: io::Error) -> DecodeError {
@@ -337,6 +361,73 @@ where
     fn flush(&mut self) -> Result<(), DecodeError> {
         Ok(())
     }
+}
+
+pub fn decode_ffmpeg_cpu_frame_fingerprint(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+    request: &FfmpegCpuFrameFingerprintRequest,
+) -> Result<FfmpegCpuFrameFingerprint, FfmpegCpuFrameFingerprintError> {
+    ensure_input_file(&request.material_uri)
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?;
+    ensure_binary_available(executor, &runtime.ffmpeg.path, "ffmpeg")
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?;
+    ensure_binary_available(executor, &runtime.ffprobe.path, "ffprobe")
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?;
+
+    let stream = probe_streams(executor, runtime, &request.material_uri)
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?
+        .into_iter()
+        .find(|stream| stream.kind == MediaStreamKind::Video && stream.dimensions.is_some())
+        .ok_or_else(|| {
+            FfmpegCpuFrameFingerprintError::new(format!(
+                "ffprobe reported no decodable video stream for {}",
+                request.material_uri.display()
+            ))
+        })?;
+    let dimensions = stream.dimensions.ok_or_else(|| {
+        FfmpegCpuFrameFingerprintError::new(format!(
+            "video stream {} did not report dimensions",
+            stream.stream_id.0
+        ))
+    })?;
+    let expected_byte_len = expected_rgba_byte_len(dimensions)
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?;
+    let args = raw_rgba_decode_args(
+        &request.material_uri,
+        stream.stream_id,
+        request.source_time_us,
+    );
+    let output = executor
+        .run(&runtime.ffmpeg.path, &args)
+        .map_err(|error| FfmpegCpuFrameFingerprintError::new(error.to_string()))?;
+
+    if !output.status.success() {
+        return Err(FfmpegCpuFrameFingerprintError::new(format!(
+            "ffmpeg frame fingerprint decode failed for {} at {} us: stdout={} stderr={}",
+            request.material_uri.display(),
+            request.source_time_us,
+            summary_or_empty(&output.stdout),
+            summary_or_empty(&output.stderr)
+        )));
+    }
+    if output.stdout.len() < expected_byte_len {
+        return Err(FfmpegCpuFrameFingerprintError::new(format!(
+            "ffmpeg frame fingerprint decode returned {} bytes, expected at least {}",
+            output.stdout.len(),
+            expected_byte_len
+        )));
+    }
+
+    let pixels = &output.stdout[..expected_byte_len];
+    Ok(FfmpegCpuFrameFingerprint {
+        digest: format!("blake3:v1:{}", blake3::hash(pixels).to_hex()),
+        width: dimensions.width,
+        height: dimensions.height,
+        byte_count: expected_byte_len,
+        source_time_us: request.source_time_us,
+        stream_id: stream.stream_id,
+    })
 }
 
 fn ensure_input_file(path: &Path) -> Result<(), MediaIoError> {
@@ -522,6 +613,37 @@ fn stream_by_id(
                 format!("stream {} not found", stream_id.0),
             )
         })
+}
+
+fn raw_rgba_decode_args(
+    material_uri: &Path,
+    stream_id: StreamId,
+    source_time_us: u64,
+) -> Vec<OsString> {
+    os_args(&[
+        "-hide_banner",
+        "-v",
+        "error",
+        "-nostdin",
+        "-ss",
+        &format_microseconds(source_time_us),
+        "-i",
+    ])
+    .into_iter()
+    .chain([material_uri.as_os_str().to_owned()])
+    .chain(os_args(&[
+        "-map",
+        &format!("0:{}", stream_id.0),
+        "-frames:v",
+        "1",
+        "-an",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "-",
+    ]))
+    .collect()
 }
 
 fn expected_rgba_byte_len(dimensions: FrameDimensions) -> Result<usize, DecodeError> {

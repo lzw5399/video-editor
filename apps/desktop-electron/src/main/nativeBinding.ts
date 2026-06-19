@@ -24,6 +24,9 @@ type NativeBinding = {
   pauseRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
   stopRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
   requestRealtimePreviewFrame: (request: RealtimePreviewFrameRequest) => RealtimePreviewFrameResponse;
+  requestRealtimePreviewContentEvidence: (
+    request: RealtimePreviewContentEvidenceRequest
+  ) => RealtimePreviewContentEvidenceResponse | null;
   nextRealtimePreviewCancellationToken: (request: RealtimePreviewSessionRequest) => number;
   cancelRealtimePreviewRequest: (request: RealtimePreviewCancellationRequest) => RealtimePreviewCanceledResponse;
   getRealtimePreviewTelemetry: (request: RealtimePreviewSessionRequest) => RealtimePreviewTelemetryResponse;
@@ -149,6 +152,26 @@ export type RealtimePreviewFrameResponse = {
   telemetry: RealtimePreviewTelemetryResponse;
 };
 
+export type RealtimePreviewContentEvidenceRequest = {
+  sessionId: string;
+  draft: Draft;
+  bundlePath?: string;
+  targetTimeMicroseconds: number;
+  playbackGeneration: number;
+};
+
+export type RealtimePreviewContentEvidenceResponse = {
+  source: "decoded" | "composited";
+  digest: string;
+  width: number;
+  height: number;
+  byteCount: number;
+  targetTimeMicroseconds: number;
+  sourceTimeMicroseconds: number;
+  materialId: string;
+  streamId: number;
+};
+
 export type RealtimePreviewCancellationRequest = {
   sessionId: string;
   cancellationToken: number;
@@ -253,6 +276,12 @@ export function requestRealtimePreviewFrame(request: RealtimePreviewFrameRequest
   return requireLoadedBinding().requestRealtimePreviewFrame(request);
 }
 
+export function requestRealtimePreviewContentEvidence(
+  request: RealtimePreviewContentEvidenceRequest
+): RealtimePreviewContentEvidenceResponse | null {
+  return requireLoadedBinding().requestRealtimePreviewContentEvidence(request);
+}
+
 export function nextRealtimePreviewCancellationToken(request: RealtimePreviewSessionRequest): number {
   return requireLoadedBinding().nextRealtimePreviewCancellationToken(request);
 }
@@ -288,6 +317,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.pauseRealtimePreview !== "function" ||
       typeof loaded.stopRealtimePreview !== "function" ||
       typeof loaded.requestRealtimePreviewFrame !== "function" ||
+      typeof loaded.requestRealtimePreviewContentEvidence !== "function" ||
       typeof loaded.nextRealtimePreviewCancellationToken !== "function" ||
       typeof loaded.cancelRealtimePreviewRequest !== "function" ||
       typeof loaded.getRealtimePreviewTelemetry !== "function"
@@ -310,6 +340,7 @@ function loadNativeBinding(): NativeBinding | null {
       pauseRealtimePreview: loaded.pauseRealtimePreview,
       stopRealtimePreview: loaded.stopRealtimePreview,
       requestRealtimePreviewFrame: loaded.requestRealtimePreviewFrame,
+      requestRealtimePreviewContentEvidence: loaded.requestRealtimePreviewContentEvidence,
       nextRealtimePreviewCancellationToken: loaded.nextRealtimePreviewCancellationToken,
       cancelRealtimePreviewRequest: loaded.cancelRealtimePreviewRequest,
       getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry

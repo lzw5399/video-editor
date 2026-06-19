@@ -30,7 +30,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
     getTelemetry: () => ipcRenderer.invoke("realtimePreviewHost:getTelemetry"),
-    updateDraftSnapshot: (draft: Draft) => ipcRenderer.invoke("realtimePreviewHost:updateDraftSnapshot", draft),
+    updateDraftSnapshot: (draft: Draft, bundlePath?: string) =>
+      ipcRenderer.invoke("realtimePreviewHost:updateDraftSnapshot", draft, bundlePath),
     seek: (targetTimeMicroseconds: number) =>
       ipcRenderer.invoke("realtimePreviewHost:seek", sanitizeTargetTimeMicroseconds(targetTimeMicroseconds)),
     play: () => ipcRenderer.invoke("realtimePreviewHost:play"),

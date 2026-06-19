@@ -1679,7 +1679,7 @@ export function App(): React.ReactElement {
     }
 
     try {
-      return applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft));
+      return applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft, bundlePath));
     } catch (error: unknown) {
       return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
     }

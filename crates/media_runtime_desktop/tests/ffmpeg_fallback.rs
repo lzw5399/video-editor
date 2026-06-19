@@ -11,7 +11,10 @@ use media_runtime::{
     FfmpegExecutor, MediaIoErrorKind, MediaOpenRequest, MediaReader, RuntimeConfig, StreamId,
     VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat, MAX_STDERR_SUMMARY_BYTES,
 };
-use media_runtime_desktop::{DesktopFfmpegExecutor, FfmpegFallbackMediaReader};
+use media_runtime_desktop::{
+    decode_ffmpeg_cpu_frame_fingerprint, DesktopFfmpegExecutor, FfmpegCpuFrameFingerprintRequest,
+    FfmpegFallbackMediaReader,
+};
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -63,6 +66,54 @@ fn ffmpeg_fallback_decodes_h264_fixture_into_cpu_frame_lease() {
         }
         other => panic!("expected CPU frame storage, got {other:?}"),
     }
+}
+
+#[test]
+fn ffmpeg_fallback_frame_fingerprint_hashes_decoded_rgba_bytes_without_returning_pixels() {
+    let temp = TempDir::new("ffmpeg-fallback-fingerprint");
+    let media = temp.path.join("input.mp4");
+    fs::write(&media, b"placeholder").expect("media placeholder should write");
+    let runtime = fake_runtime(temp.path.join("ffmpeg"), temp.path.join("ffprobe"));
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let pixels = vec![
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+    ];
+    let executor = ScriptedExecutor {
+        calls: Rc::clone(&calls),
+        ffprobe_stdout: br#"{"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":2,"height":2,"r_frame_rate":"30/1","duration":"1.000000"}],"format":{"duration":"1.000000"}}"#
+            .to_vec(),
+        ffmpeg_output: ScriptedFfmpegOutput::Success {
+            stdout: pixels.clone(),
+        },
+    };
+
+    let fingerprint = decode_ffmpeg_cpu_frame_fingerprint(
+        &executor,
+        &runtime,
+        &FfmpegCpuFrameFingerprintRequest {
+            material_uri: media.clone(),
+            source_time_us: 500_000,
+        },
+    )
+    .expect("scripted RGBA frame should fingerprint");
+
+    assert!(fingerprint.digest.starts_with("blake3:v1:"));
+    assert_eq!(fingerprint.width, 2);
+    assert_eq!(fingerprint.height, 2);
+    assert_eq!(fingerprint.byte_count, pixels.len());
+    assert_eq!(fingerprint.source_time_us, 500_000);
+
+    let calls = calls.borrow();
+    let ffmpeg_call = calls
+        .iter()
+        .find(|call| call.binary.ends_with("ffmpeg"))
+        .expect("fingerprint should call ffmpeg");
+    assert!(ffmpeg_call.args.contains(&"-ss".to_owned()));
+    assert!(ffmpeg_call.args.contains(&"0.500000".to_owned()));
+    assert!(ffmpeg_call.args.contains(&"-f".to_owned()));
+    assert!(ffmpeg_call.args.contains(&"rawvideo".to_owned()));
+    assert!(ffmpeg_call.args.contains(&"rgba".to_owned()));
+    assert!(ffmpeg_call.args.contains(&media.display().to_string()));
 }
 
 #[test]
@@ -214,6 +265,7 @@ struct ScriptedExecutor {
 }
 
 enum ScriptedFfmpegOutput {
+    Success { stdout: Vec<u8> },
     Failure { stdout: Vec<u8>, stderr: Vec<u8> },
 }
 
@@ -248,6 +300,11 @@ impl FfmpegExecutor for ScriptedExecutor {
         }
 
         match &self.ffmpeg_output {
+            ScriptedFfmpegOutput::Success { stdout } => Ok(Output {
+                status: success_status(),
+                stdout: stdout.clone(),
+                stderr: Vec::new(),
+            }),
             ScriptedFfmpegOutput::Failure { stdout, stderr } => Ok(Output {
                 status: failure_status(),
                 stdout: stdout.clone(),

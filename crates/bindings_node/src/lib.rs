@@ -34,9 +34,9 @@ use crate::preview_export_service::{
     request_preview_segment_with_executor, ExportCommandError, PreviewCommandError,
 };
 use crate::realtime_preview_service::{
-    RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
-    RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
-    RealtimePreviewSurfaceBoundsBindingRequest,
+    RealtimePreviewBindingRegistry, RealtimePreviewContentEvidenceBindingRequest,
+    RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
+    RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBoundsBindingRequest,
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
@@ -325,6 +325,21 @@ pub fn request_realtime_preview_frame(request: serde_json::Value) -> Result<serd
     let request = parse_realtime_preview_payload::<RealtimePreviewFrameRequest>(request)?;
     with_realtime_preview_registry(|registry| {
         registry.request_frame(&request.session_id, request.frame)
+    })
+}
+
+#[napi(js_name = "requestRealtimePreviewContentEvidence")]
+pub fn request_realtime_preview_content_evidence(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewContentEvidenceBindingRequest>(
+        request,
+    )?;
+    let executor = DesktopFfmpegExecutor::default();
+    let runtime = discover_runtime_config()
+        .map_err(|error| napi::Error::from_reason(runtime_discovery_message(error)))?;
+    with_realtime_preview_registry(|registry| {
+        registry.request_content_evidence(request, &executor, &runtime)
     })
 }
 

@@ -38,6 +38,13 @@ type RealtimePreviewHostState = {
     dominantColor: string;
     accentColor: string;
   } | null;
+  contentEvidence: {
+    source: "decoded" | "composited";
+    digest: string;
+    width: number;
+    height: number;
+    targetTimeMicroseconds: number;
+  } | null;
 };
 
 declare global {

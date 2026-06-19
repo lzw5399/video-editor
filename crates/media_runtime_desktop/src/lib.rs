@@ -17,7 +17,9 @@ mod platform;
 
 pub use capabilities::probe_desktop_runtime_capabilities;
 pub use ffmpeg_fallback::{
-    FfmpegCpuFrameDecodeRequest, FfmpegCpuVideoDecoder, FfmpegDecodeDiagnostic,
+    decode_ffmpeg_cpu_frame_fingerprint, FfmpegCpuFrameDecodeRequest,
+    FfmpegCpuFrameFingerprint, FfmpegCpuFrameFingerprintError,
+    FfmpegCpuFrameFingerprintRequest, FfmpegCpuVideoDecoder, FfmpegDecodeDiagnostic,
     FfmpegFallbackMediaReader, FfmpegFallbackMediaSession,
 };
 pub use platform::{

@@ -11,12 +11,14 @@ import {
   nextRealtimePreviewCancellationToken,
   pauseRealtimePreview,
   playRealtimePreview,
+  requestRealtimePreviewContentEvidence,
   requestRealtimePreviewFrame,
   seekRealtimePreview,
   stopRealtimePreview,
   updateRealtimePreviewDraftSnapshot,
   updateRealtimePreviewSurfaceBounds,
   type RealtimePreviewBackendUsed,
+  type RealtimePreviewContentEvidenceResponse,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
   type RealtimePreviewRequestMode,
@@ -46,6 +48,7 @@ export type RealtimePreviewHostDisplayState = {
   fallbackArtifactVisible: boolean;
   telemetry: RealtimePreviewTelemetryResponse | null;
   frameDisplay: RealtimePreviewHostFrameDisplay | null;
+  contentEvidence: RealtimePreviewHostContentEvidence | null;
 };
 
 export type RealtimePreviewHostFrameDisplay = {
@@ -56,6 +59,8 @@ export type RealtimePreviewHostFrameDisplay = {
   accentColor: string;
 };
 
+export type RealtimePreviewHostContentEvidence = RealtimePreviewContentEvidenceResponse;
+
 type RealtimePreviewHostRecord = {
   kind: string;
   parentHandleByteLength?: number;
@@ -63,6 +68,8 @@ type RealtimePreviewHostRecord = {
   bounds?: RealtimePreviewSurfaceBounds;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  contentDigest?: string;
+  errorMessage?: string;
 };
 
 declare global {
@@ -97,9 +104,9 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
     assertAllowedSender(event);
     return hostForEvent(event).getTelemetryState();
   });
-  ipcMain.handle("realtimePreviewHost:updateDraftSnapshot", (event, draft: Draft) => {
+  ipcMain.handle("realtimePreviewHost:updateDraftSnapshot", (event, draft: Draft, bundlePath?: string) => {
     assertAllowedSender(event);
-    return hostForEvent(event).updateDraftSnapshot(draft);
+    return hostForEvent(event).updateDraftSnapshot(draft, bundlePath);
   });
   ipcMain.handle("realtimePreviewHost:seek", (event, targetTimeMicroseconds: number) => {
     assertAllowedSender(event);
@@ -136,8 +143,10 @@ export class RealtimePreviewHost {
   private fallbackLabel: string | null = null;
   private telemetry: RealtimePreviewTelemetryResponse | null = null;
   private lastFrame: RealtimePreviewFrameResponse | null = null;
+  private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private draftSnapshot: Draft | null = null;
+  private bundlePath: string | null = null;
   private playbackTimer: ReturnType<typeof setInterval> | null = null;
   private playbackPositionMicroseconds = 0;
   private lastPlaybackTickMs: number | null = null;
@@ -214,14 +223,16 @@ export class RealtimePreviewHost {
     return this.state(this.fallbackLabel === null ? "实时预览数据已更新" : "实时预览降级显示");
   }
 
-  updateDraftSnapshot(draft: Draft): RealtimePreviewHostDisplayState {
+  updateDraftSnapshot(draft: Draft, bundlePath?: string): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
       this.draftSnapshot = draft;
+      this.bundlePath = typeof bundlePath === "string" && bundlePath.trim().length > 0 ? bundlePath : null;
       this.lastFrame = null;
+      this.lastContentEvidence = null;
       this.telemetry = null;
       this.playbackPositionMicroseconds = Math.min(
         this.playbackPositionMicroseconds,
@@ -467,6 +478,9 @@ export class RealtimePreviewHost {
         cacheHit: false
       }
     });
+    if (this.lastFrame.presented && this.shouldRequestContentEvidence(targetTime)) {
+      this.lastContentEvidence = this.requestContentEvidence(targetTime);
+    }
     this.telemetry = this.lastFrame.telemetry;
     recordRealtimePreviewHostCall({
       kind: mode === "playbackTick" ? "requestPlaybackFrame" : "requestSeekFrame",
@@ -568,8 +582,55 @@ export class RealtimePreviewHost {
       currentRequestCanceled: this.lastFrame?.canceled ?? false,
       fallbackArtifactVisible: backend === "previewArtifact" || backend === "ffmpegArtifact",
       telemetry: this.telemetry,
-      frameDisplay: mockFrameDisplay(this.lastFrame)
+      frameDisplay: shouldExposeMockFrameDisplay() ? mockFrameDisplay(this.lastFrame) : null,
+      contentEvidence: this.lastContentEvidence
     };
+  }
+
+  private shouldRequestContentEvidence(targetTimeMicroseconds: number): boolean {
+    if (!shouldCollectContentEvidence()) {
+      return false;
+    }
+    if (this.draftSnapshot === null || this.sessionId === null || this.playbackGeneration === null) {
+      return false;
+    }
+    if (this.lastContentEvidence === null) {
+      return true;
+    }
+    return Math.abs(targetTimeMicroseconds - this.lastContentEvidence.targetTimeMicroseconds) >= 250_000;
+  }
+
+  private requestContentEvidence(targetTimeMicroseconds: number): RealtimePreviewHostContentEvidence | null {
+    if (this.sessionId === null || this.playbackGeneration === null || this.draftSnapshot === null) {
+      return null;
+    }
+
+    try {
+      const evidence = requestRealtimePreviewContentEvidence({
+        sessionId: this.sessionId,
+        draft: this.draftSnapshot,
+        ...(this.bundlePath === null ? {} : { bundlePath: this.bundlePath }),
+        targetTimeMicroseconds,
+        playbackGeneration: this.playbackGeneration
+      });
+      if (evidence !== null) {
+        recordRealtimePreviewHostCall({
+          kind: "contentEvidence",
+          targetTimeMicroseconds,
+          playbackGeneration: this.playbackGeneration,
+          contentDigest: evidence.digest
+        });
+      }
+      return evidence;
+    } catch (error) {
+      recordRealtimePreviewHostCall({
+        kind: "contentEvidenceUnavailable",
+        targetTimeMicroseconds,
+        playbackGeneration: this.playbackGeneration,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
   }
 }
 
@@ -649,6 +710,17 @@ function mockFrameDisplay(frame: RealtimePreviewFrameResponse | null): RealtimeP
     dominantColor: `hsl(${dominantHue} 72% 34%)`,
     accentColor: `hsl(${accentHue} 78% 48%)`
   };
+}
+
+function shouldExposeMockFrameDisplay(): boolean {
+  return process.env.VIDEO_EDITOR_TEST_EXPOSE_MOCK_FRAME_DISPLAY === "1";
+}
+
+function shouldCollectContentEvidence(): boolean {
+  return (
+    process.env.VIDEO_EDITOR_TEST_REALTIME_CONTENT_EVIDENCE === "1" ||
+    process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1"
+  );
 }
 
 function nativeSurfaceKind(): RealtimePreviewSurfaceDescriptor["kind"] {

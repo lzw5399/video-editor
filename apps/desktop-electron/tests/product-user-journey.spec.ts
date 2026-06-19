@@ -46,9 +46,22 @@ test("product user can import a repo video, add it to the timeline, and see play
       after.hostState?.telemetry?.targetTimeMicroseconds ?? 0,
       "runtime-presented frame time must advance with the user-visible playhead"
     ).toBeGreaterThan(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
-    expect(after.hostState?.frameDisplay?.frameToken ?? null, "host surface frame token must advance during playback").not.toBe(
-      before.hostState?.frameDisplay?.frameToken ?? null
-    );
+    expect(
+      after.hostState?.contentEvidence?.source ?? null,
+      "normal product playback evidence must come from decoded/composited video content, not mock frame tokens"
+    ).toMatch(/^(decoded|composited)$/);
+    expect(
+      after.hostState?.contentEvidence?.digest ?? null,
+      "native decoded/composited content fingerprint must advance during playback"
+    ).not.toBe(before.hostState?.contentEvidence?.digest ?? null);
+    expect(
+      after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0,
+      "content fingerprint time must advance with the user-visible playhead"
+    ).toBeGreaterThan(before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0);
+    expect(
+      after.hostState?.frameDisplay,
+      "normal product playback must not expose mock frame display evidence"
+    ).toBeNull();
 
     expect(after.placeholderText, "playback should not be left on the empty-preview placeholder").not.toContain("显示预览");
     await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
