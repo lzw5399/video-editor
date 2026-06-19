@@ -13,7 +13,8 @@ use media_runtime::{
     select_media_io_fallback,
 };
 use realtime_preview_runtime::{
-    MediaIoFrameProvider, PlaybackGeneration, PreviewDecodeDeviceContext, PreviewFrameStorageKind,
+    MediaIoFrameProvider, PlaybackGeneration, PreviewDecodeDeviceContext, PreviewFrameInput,
+    PreviewFrameProvider, PreviewFrameProviderError, PreviewFrameStorageKind,
     PreviewFrameStoragePreference, PreviewMaterialDecodeRequest, PreviewMaterialDecodeSource,
     RealtimePreviewFallbackReason, TextureHandleDescriptor,
 };
@@ -146,6 +147,100 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
     assert_eq!(descriptor.playback_generation, PlaybackGeneration::new(5));
     assert_eq!(descriptor.backend, "d3d11Texture2D");
     assert_eq!(descriptor.pixel_format, "nv12");
+}
+
+#[test]
+fn media_io_frame_provider_supplies_compatible_native_texture_input_for_imported_material() {
+    let material_id = MaterialId::new("texture-provider-material");
+    let device = RuntimeDeviceId {
+        backend: TextureBackend::D3d11Texture2D,
+        adapter_id: "adapter-1".to_owned(),
+        device_id: "device-1".to_owned(),
+    };
+    let recorded_requests = Rc::new(RefCell::new(Vec::new()));
+    let reader = MockMediaReader::new(
+        recorded_requests.clone(),
+        MockStorage::Texture(device.clone()),
+        None,
+    );
+    let mut provider = MediaIoFrameProvider::new(Box::new(reader))
+        .with_desired_storage(PreviewFrameStoragePreference::Texture)
+        .with_preview_device_context(PreviewDecodeDeviceContext::compatible(device));
+    provider
+        .register_material(PreviewMaterialDecodeSource {
+            material_id: material_id.clone(),
+            material_uri: repo_media_fixture("p0-moving-testsrc.mp4"),
+            stream_id: StreamId(0),
+            selected_path: SelectedDecodePath::NativeHardwareTexture,
+            fallback_selection: None,
+        })
+        .expect("repo-owned material registers through media IO");
+
+    let input = provider
+        .frame_for(
+            &material_id,
+            Microseconds::new(999_990),
+            PlaybackGeneration::new(9),
+        )
+        .expect("compatible native texture is compositor-ready");
+
+    let PreviewFrameInput::TextureHandle(handle) = input else {
+        panic!("expected native texture handle input, got {input:?}");
+    };
+    assert_eq!(handle.material_id, material_id);
+    assert_eq!(handle.source_position, Microseconds::new(999_990));
+    assert_eq!(handle.playback_generation, PlaybackGeneration::new(9));
+    assert_eq!(handle.handle_id, "texture-1");
+    assert_eq!(handle.backend, "d3d11Texture2D");
+    assert_eq!(
+        recorded_requests.borrow().as_slice(),
+        &[VideoDecodeRequest {
+            source_time_us: 999_990,
+            playback_generation: Some(9),
+        }]
+    );
+}
+
+#[test]
+fn media_io_frame_provider_rejects_ffmpeg_fallback_as_product_compositor_input() {
+    let material_id = MaterialId::new("ffmpeg-fallback-material");
+    let reader = MockMediaReader::new(
+        Rc::new(RefCell::new(Vec::new())),
+        MockStorage::Cpu,
+        selected_fallback(
+            SelectedDecodePath::FfmpegCpuFrame,
+            MediaIoFallbackReason::HardwareDecodeUnavailable,
+        ),
+    );
+    let mut provider = MediaIoFrameProvider::new(Box::new(reader));
+    provider
+        .register_material(PreviewMaterialDecodeSource {
+            material_id: material_id.clone(),
+            material_uri: repo_media_fixture("p0-moving-testsrc.mp4"),
+            stream_id: StreamId(0),
+            selected_path: SelectedDecodePath::FfmpegCpuFrame,
+            fallback_selection: selected_fallback(
+                SelectedDecodePath::FfmpegCpuFrame,
+                MediaIoFallbackReason::HardwareDecodeUnavailable,
+            ),
+        })
+        .expect("repo-owned material registers through media IO");
+
+    let error = provider
+        .frame_for(
+            &material_id,
+            Microseconds::ZERO,
+            PlaybackGeneration::new(10),
+        )
+        .expect_err("FFmpeg fallback must fail closed for product compositor input");
+
+    assert!(matches!(error, PreviewFrameProviderError::Unavailable { .. }));
+    assert!(
+        error.to_string().contains("fallback"),
+        "error should explain fallback rejection: {error}"
+    );
+    assert_eq!(provider.telemetry().fallback_count, 1);
+    assert_eq!(provider.telemetry().presentable_frame_count, 1);
 }
 
 #[test]
@@ -293,6 +388,18 @@ fn selected_fallback(
         ],
         reason,
     )
+}
+
+fn repo_media_fixture(name: &str) -> PathBuf {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../apps/desktop-electron/tests/fixtures/media")
+        .join(name);
+    assert!(
+        path.is_file(),
+        "repo-owned media fixture must exist: {}",
+        path.display()
+    );
+    path
 }
 
 #[derive(Debug, Clone)]
