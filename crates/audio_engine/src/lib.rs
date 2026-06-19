@@ -2,6 +2,9 @@
 
 pub mod dsp_timeline;
 pub mod mix_intent;
+pub mod output;
+pub mod session;
+pub mod telemetry;
 
 pub use dsp_timeline::{
     DspEffectSlotClassification, DspEffectSlotSupport, DspEvaluationDiagnostic, DspFadeEnvelope,
@@ -9,3 +12,13 @@ pub use dsp_timeline::{
     DspTimelineConfig, DspTimelineError, DspTimelinePlan, DspTrack, evaluate_dsp_timeline,
 };
 pub use mix_intent::{AudioMixClassification, AudioMixIntent, AudioMixSegment, AudioMixSummary};
+pub use output::{
+    AudioOutputCapabilities, AudioOutputDevice, AudioOutputError, AudioOutputStream,
+    MockAudioOutputDevice, MockAudioOutputStream,
+};
+pub use session::{
+    AudioBufferRequest, AudioBufferResult, AudioCancellationToken, AudioPreviewDiagnostic,
+    AudioPreviewError, AudioPreviewRuntime, AudioPreviewSessionConfig, AudioPreviewSessionId,
+    AudioPreviewStatus, AudioPreviewStatusLabel,
+};
+pub use telemetry::AudioPreviewTelemetry;

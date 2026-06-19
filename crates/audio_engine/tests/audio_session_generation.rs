@@ -14,10 +14,18 @@ fn audio_session_generation_reuses_timeline_clock_events() {
     assert_eq!(initial.playback_generation.get(), 0);
     assert_eq!(initial.playback_state, PlaybackState::Stopped);
 
-    let after_seek = runtime.seek(session_id, Microseconds::new(1_000_000)).unwrap();
+    let after_seek = runtime
+        .seek(session_id, Microseconds::new(1_000_000))
+        .unwrap();
     assert_eq!(after_seek.get(), 1);
-    assert_eq!(runtime.status(session_id).unwrap().playback_generation, after_seek);
-    assert_eq!(runtime.status(session_id).unwrap().playback_generation, after_seek);
+    assert_eq!(
+        runtime.status(session_id).unwrap().playback_generation,
+        after_seek
+    );
+    assert_eq!(
+        runtime.status(session_id).unwrap().playback_generation,
+        after_seek
+    );
 
     let after_pause = runtime.pause(session_id).unwrap();
     assert_eq!(after_pause.get(), 2);
@@ -46,9 +54,14 @@ fn audio_session_generation_rejects_stale_and_canceled_buffers_with_telemetry() 
         .request_buffer(session_id, buffer_request(current_generation))
         .unwrap();
     assert!(presented.presented);
-    assert_eq!(presented.presented_frame_count, presented.requested_frame_count);
+    assert_eq!(
+        presented.presented_frame_count,
+        presented.requested_frame_count
+    );
 
-    runtime.seek(session_id, Microseconds::new(500_000)).unwrap();
+    runtime
+        .seek(session_id, Microseconds::new(500_000))
+        .unwrap();
     let stale = runtime
         .request_buffer(session_id, buffer_request(current_generation))
         .unwrap();
@@ -67,10 +80,12 @@ fn audio_session_generation_rejects_stale_and_canceled_buffers_with_telemetry() 
         .unwrap();
     assert!(!canceled.presented);
     assert!(canceled.canceled);
-    assert!(canceled
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.canceled));
+    assert!(
+        canceled
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.canceled)
+    );
 
     let telemetry = runtime.telemetry(session_id).unwrap();
     assert_eq!(telemetry.presented_buffer_count, 1);
@@ -99,9 +114,17 @@ fn audio_session_generation_bounds_buffer_contracts_and_uses_mock_output_only() 
     assert!(!result.presented);
     assert_eq!(result.requested_frame_count, 96_000);
     assert_eq!(result.presented_frame_count, 0);
-    assert_eq!(result.max_buffer_duration_microseconds, Microseconds::new(50_000));
+    assert_eq!(
+        result.max_buffer_duration_microseconds,
+        Microseconds::new(50_000)
+    );
     assert_eq!(result.status_label, AudioPreviewStatusLabel::Rejected);
-    assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.bounded));
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.bounded)
+    );
 
     let device = MockAudioOutputDevice::default();
     let capabilities = device.capabilities();
