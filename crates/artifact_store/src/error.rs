@@ -32,4 +32,13 @@ pub enum ArtifactStoreError {
 
     #[error("invalid resource reference for {resource_id}: {reason}")]
     InvalidResourceRef { resource_id: String, reason: String },
+
+    #[error("dependency range overflow for start {start_us} duration {duration_us}")]
+    RangeOverflow { start_us: u64, duration_us: u64 },
+
+    #[error("invalid artifact dependency `{dependency_key}`: {reason}")]
+    InvalidDependency {
+        dependency_key: String,
+        reason: String,
+    },
 }

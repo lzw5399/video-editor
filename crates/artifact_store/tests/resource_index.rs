@@ -145,7 +145,7 @@ fn resource_index_links_proxy_thumbnail_and_waveform_refs_to_material_resources(
 }
 
 #[test]
-fn dependency_rows_store_typed_invalidation_facts() {
+fn resource_index_dependency_rows_store_typed_invalidation_facts() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut store = open_artifact_store(&bundle_path).expect("store should open");
@@ -189,13 +189,38 @@ fn dependency_rows_store_typed_invalidation_facts() {
     let rows = dependencies_for_artifact(&store, "artifact-preview-001")
         .expect("dependencies should query");
     assert_eq!(rows.len(), 13);
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::Material && row.dependency_key == "video-001"));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::Resource && row.dependency_key == "material:video-001"));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::GraphNode && row.dependency_key.contains(":segment:s1:")));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::DirtyDomain && row.dirty_domain == Some(DirtyDomain::PreviewCache)));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::TargetRange && row.target_range == Some(DependencyRange::new(0, 1_000_000))));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::SourceRange && row.source_range == Some(DependencyRange::new(250_000, 500_000))));
-    assert!(rows.iter().any(|row| row.kind == ArtifactDependencyKind::GenerationParameters && row.dependency_key.starts_with("generationParameters:")));
+    assert!(rows.iter().any(
+        |row| row.kind == ArtifactDependencyKind::Material && row.dependency_key == "video-001"
+    ));
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == ArtifactDependencyKind::Resource
+                && row.dependency_key == "material:video-001")
+    );
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == ArtifactDependencyKind::GraphNode
+                && row.dependency_key.contains(":segment:s1:"))
+    );
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == ArtifactDependencyKind::DirtyDomain
+                && row.dirty_domain == Some(DirtyDomain::PreviewCache))
+    );
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == ArtifactDependencyKind::TargetRange
+                && row.target_range == Some(DependencyRange::new(0, 1_000_000)))
+    );
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == ArtifactDependencyKind::SourceRange
+                && row.source_range == Some(DependencyRange::new(250_000, 500_000)))
+    );
+    assert!(rows.iter().any(
+        |row| row.kind == ArtifactDependencyKind::GenerationParameters
+            && row.dependency_key.starts_with("generationParameters:")
+    ));
 
     let artifacts = artifact_ids_for_dependency(
         &store,
@@ -206,7 +231,7 @@ fn dependency_rows_store_typed_invalidation_facts() {
 }
 
 #[test]
-fn dependency_range_normalization_uses_checked_microseconds() {
+fn resource_index_dependency_range_normalization_uses_checked_microseconds() {
     let normalized = normalize_dependency_ranges(vec![
         DependencyRange::new(0, 100),
         DependencyRange::new(100, 50),
@@ -224,10 +249,35 @@ fn dependency_range_normalization_uses_checked_microseconds() {
         overflow.to_string().contains("overflow"),
         "unexpected overflow error: {overflow}"
     );
+
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    insert_artifact(store.connection(), "artifact-overflow-001");
+    let error = upsert_artifact_dependencies(
+        &mut store,
+        "artifact-overflow-001",
+        vec![
+            DependencyUpsert::new(ArtifactDependency::material("video-001")),
+            DependencyUpsert::new(ArtifactDependency::target_range(u64::MAX, 1)),
+        ],
+    )
+    .expect_err("overflow should reject dependency upsert");
+    assert!(
+        error.to_string().contains("overflow"),
+        "unexpected upsert overflow error: {error}"
+    );
+    assert!(
+        dependencies_for_artifact(&store, "artifact-overflow-001")
+            .expect("dependency query should run")
+            .is_empty(),
+        "overflow must not insert partial dependency rows"
+    );
 }
 
 #[test]
-fn dependency_rows_cascade_with_artifact_and_survive_resource_delete_for_invalidation() {
+fn resource_index_dependency_rows_cascade_with_artifact_and_survive_resource_delete_for_invalidation()
+ {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
     let mut store = open_artifact_store(&bundle_path).expect("store should open");
@@ -244,20 +294,23 @@ fn dependency_rows_cascade_with_artifact_and_survive_resource_delete_for_invalid
     .expect("dependency should insert");
     store
         .connection()
-        .execute("DELETE FROM resource WHERE resource_id = ?1", ["material:video-001"])
+        .execute(
+            "DELETE FROM resource WHERE resource_id = ?1",
+            ["material:video-001"],
+        )
         .expect("resource row delete should not erase dependency facts");
     assert_eq!(
-        artifact_ids_for_dependency(
-            &store,
-            ArtifactDependency::resource("material:video-001")
-        )
-        .expect("resource dependency lookup should still work"),
+        artifact_ids_for_dependency(&store, ArtifactDependency::resource("material:video-001"))
+            .expect("resource dependency lookup should still work"),
         vec!["artifact-preview-001"]
     );
 
     store
         .connection()
-        .execute("DELETE FROM artifact WHERE artifact_id = ?1", ["artifact-preview-001"])
+        .execute(
+            "DELETE FROM artifact WHERE artifact_id = ?1",
+            ["artifact-preview-001"],
+        )
         .expect("artifact delete should cascade dependencies");
     assert!(
         dependencies_for_artifact(&store, "artifact-preview-001")

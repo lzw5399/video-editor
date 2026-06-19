@@ -4,6 +4,7 @@
 //! semantics remain in `.veproj/project.json`.
 
 pub mod blob_store;
+pub mod dependencies;
 pub mod error;
 pub mod fingerprint;
 pub mod paths;
