@@ -543,7 +543,6 @@ Plans:
   5. Cache garbage collection, storage quotas, and optional cloud/server synchronization manifests are defined before remote rendering depends on them.
 
 **Plans**: TBD
-
 Plans:
 
 - [ ] TBD - Plan after Phase 13 completion
