@@ -5,6 +5,7 @@ members = [
   "crates/engine_core",
   "crates/render_graph",
   "crates/realtime_preview_runtime",
+  "crates/audio_engine",
   "crates/ffmpeg_compiler",
   "crates/media_runtime",
   "crates/media_runtime_desktop",

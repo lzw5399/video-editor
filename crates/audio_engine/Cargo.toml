@@ -1,0 +1,15 @@
+[package]
+name = "audio_engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+draft_model = { path = "../draft_model" }
+realtime_preview_runtime = { path = "../realtime_preview_runtime" }
+serde = { version = "1.0.228", features = ["derive"] }
