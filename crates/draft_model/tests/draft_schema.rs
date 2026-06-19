@@ -1,15 +1,18 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, DraftSchemaVersion, DraftValidationError, Filter, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material,
-    MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, RationalFrameRate, Segment,
-    SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
-    SegmentMask, SegmentOpacity, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
-    TextAlignment, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind, Transition, add_material,
-    mark_material_available, mark_material_missing, mark_material_probe_failed, migrate_draft_json,
-    upsert_material, validate_draft,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, DraftSchemaVersion,
+    DraftValidationError, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
+    MainTrackMagnet, Material, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
+    RationalFrameRate, Segment, SegmentAnchor, SegmentAudio, SegmentBackgroundFilling,
+    SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentScale,
+    SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextBubbleRef,
+    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle,
+    TextWrapping, Track, TrackKind, Transition, add_material, mark_material_available,
+    mark_material_missing, mark_material_probe_failed, migrate_draft_json, upsert_material,
+    validate_draft,
 };
 use serde_json::json;
 
@@ -199,6 +202,125 @@ fn segment_visual_defaults_preserve_mvp_rendering_contract() {
     assert_eq!(visual.background_filling, SegmentBackgroundFilling::None);
     assert_eq!(visual.blend_mode, SegmentBlendMode::Normal);
     assert_eq!(visual.mask, SegmentMask::None);
+}
+
+#[test]
+fn audio_semantics_defaults_preserve_legacy_segment_volume() {
+    let mut legacy = serde_json::to_value(valid_draft()).expect("draft should serialize");
+    let segment = legacy["tracks"][0]["segments"][0]
+        .as_object_mut()
+        .expect("fixture should expose segment object");
+    segment.remove("audio");
+
+    let migrated = migrate_draft_json(legacy).expect("legacy segment should load");
+    let loaded_segment = &migrated.tracks[0].segments[0];
+
+    assert_eq!(loaded_segment.volume.level_millis, 1_000);
+    assert_eq!(loaded_segment.audio, SegmentAudio::default());
+    assert_eq!(
+        loaded_segment.audio.gain_millis,
+        loaded_segment.volume.level_millis
+    );
+    assert_eq!(
+        loaded_segment.audio.pan_balance_millis,
+        AudioPanBalance::center().balance_millis
+    );
+    assert!(loaded_segment.audio.effect_slots.is_empty());
+}
+
+#[test]
+fn audio_semantics_validate_gain_pan_fades_and_effect_slots() {
+    let mut draft = valid_draft();
+    draft.tracks[0].segments[0].audio = SegmentAudio {
+        gain_millis: 1_250,
+        pan_balance_millis: AudioPanBalance {
+            balance_millis: -250,
+        }
+        .balance_millis,
+        fade_in_duration: AudioFade {
+            duration: Microseconds::new(100_000),
+        },
+        fade_out_duration: AudioFade {
+            duration: Microseconds::new(150_000),
+        },
+        effect_slots: vec![AudioEffectSlot {
+            slot_id: "slot-eq-1".to_owned(),
+            kind: AudioEffectSlotKind::Unsupported {
+                name: "future-eq".to_owned(),
+                external_ref: Some("jianying://audio/effect/future-eq".to_owned()),
+            },
+            enabled: true,
+        }],
+    };
+    validate_draft(&draft).expect("bounded audio semantics should validate");
+
+    for (label, mutate, expected) in [
+        (
+            "gain overflow",
+            set_audio_gain_overflow as fn(&mut SegmentAudio),
+            "gainMillis",
+        ),
+        ("pan below min", set_audio_pan_below_min, "panBalanceMillis"),
+        ("pan above max", set_audio_pan_above_max, "panBalanceMillis"),
+        (
+            "fade longer than segment",
+            set_audio_fade_longer_than_segment,
+            "fadeInDuration",
+        ),
+        (
+            "fade over absolute max",
+            set_audio_fade_over_absolute_max,
+            "fadeOutDuration",
+        ),
+        (
+            "empty effect slot",
+            set_audio_empty_effect_slot,
+            "effectSlots",
+        ),
+    ] {
+        let mut invalid = draft.clone();
+        mutate(&mut invalid.tracks[0].segments[0].audio);
+        let error = validate_draft(&invalid).expect_err(label);
+        assert!(
+            error.to_string().contains(expected),
+            "{label} should mention {expected}: {error}"
+        );
+    }
+}
+
+#[test]
+fn audio_semantics_schema_excludes_derived_audio_artifacts() {
+    let draft_schema = schemars::schema_for!(Draft);
+    let schema_text = serde_json::to_string(&draft_schema).expect("schema should serialize");
+
+    for expected in [
+        "SegmentAudio",
+        "AudioFade",
+        "AudioPanBalance",
+        "AudioEffectSlot",
+    ] {
+        assert!(
+            schema_text.contains(expected),
+            "draft schema should expose {expected}"
+        );
+    }
+
+    for forbidden in [
+        "waveformPath",
+        "waveformBlob",
+        "waveformPeaks",
+        "sqlite",
+        "cacheKey",
+        "fingerprint",
+        "outputDeviceHandle",
+        "mixBuffer",
+        "ringBuffer",
+    ] {
+        assert!(
+            !schema_text.contains(forbidden),
+            "draft schema must not expose derived audio artifact field {forbidden}"
+        );
+    }
 }
 
 #[test]
@@ -766,6 +888,41 @@ fn set_missing_mask_name(visual: &mut SegmentVisual) {
     visual.mask = SegmentMask::Unsupported {
         name: String::new(),
     };
+}
+
+fn set_audio_gain_overflow(audio: &mut SegmentAudio) {
+    audio.gain_millis = MAX_SEGMENT_VOLUME_MILLIS + 1;
+}
+
+fn set_audio_pan_below_min(audio: &mut SegmentAudio) {
+    audio.pan_balance_millis = MIN_AUDIO_PAN_BALANCE_MILLIS - 1;
+}
+
+fn set_audio_pan_above_max(audio: &mut SegmentAudio) {
+    audio.pan_balance_millis = MAX_AUDIO_PAN_BALANCE_MILLIS + 1;
+}
+
+fn set_audio_fade_longer_than_segment(audio: &mut SegmentAudio) {
+    audio.fade_in_duration = AudioFade {
+        duration: Microseconds::new(1_000_001),
+    };
+}
+
+fn set_audio_fade_over_absolute_max(audio: &mut SegmentAudio) {
+    audio.fade_out_duration = AudioFade {
+        duration: Microseconds::new(MAX_AUDIO_FADE_DURATION_MICROSECONDS + 1),
+    };
+}
+
+fn set_audio_empty_effect_slot(audio: &mut SegmentAudio) {
+    audio.effect_slots = vec![AudioEffectSlot {
+        slot_id: String::new(),
+        kind: AudioEffectSlotKind::Unsupported {
+            name: String::new(),
+            external_ref: Some(" ".to_owned()),
+        },
+        enabled: true,
+    }];
 }
 
 #[test]
