@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 15.2-03A-PLAN.md
-last_updated: "2026-06-19T21:18:20.904Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 03A completed native WGPU surface presentation prerequisite; next execute Plan 03B decoded texture import before retrying desktop host playback
+stopped_at: Completed 15.2-03B-PLAN.md
+last_updated: "2026-06-19T21:37:36.610Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 03B completed decoded native texture lease registry and WGPU compositor import prerequisite; next execute Plan 04 desktop product playback scheduler integration
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 126
-  completed_plans: 122
-  percent: 97
+  completed_plans: 123
+  percent: 98
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-03B
-Status: Executing — continue with decoded native texture import prerequisite
-Last activity: 2026-06-20 -- Phase 15.2 Plan 03A completed native WGPU surface presentation prerequisite; next execute Plan 03B decoded texture import before retrying desktop host playback
+Plan: 15.2-04
+Status: Ready — Plan 03B complete; next retry desktop compositor playback integration
+Last activity: 2026-06-20 -- Phase 15.2 Plan 03B completed decoded native texture lease registry and WGPU compositor import prerequisite; next execute Plan 04 desktop product playback scheduler integration
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-03A complete, 4 P0 compositor/user-E2E/no-fallback plans remain after splitting native surface and texture-import prerequisites; Phase 15.3 UI convergence follows
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-03B complete, 3 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
 
 ## Performance Metrics
 
@@ -168,6 +168,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-03A complete, 4 P0 compositor
 | Phase 15.2 P02 | 42 min | 3 tasks | 11 files |
 | Phase 15.2 P03 | 22 min | 3 tasks | 10 files |
 | Phase 15.2 P03A | 9 min | 3 tasks | 5 files |
+| Phase 15.2 P03B | 14 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -409,6 +410,8 @@ Recent decisions affecting current work:
 - [Phase 15]: Renderer source guards allow generated command helpers and safe display-model formatting while blocking renderer ownership of audio graph, DSP, buffers, devices, FFmpeg audio filters, waveform artifact internals, cache keys, fingerprints, dirty ranges, and timeline generation mutation. — This preserves the Phase 15 Rust-owned audio boundary while avoiding false positives on generated transport helpers.
 - [Phase 15]: The env-gated native audio proof ran on macOS with VIDEO_EDITOR_TEST_NATIVE_AUDIO=1 and passed. — Native proof is optional by design but available on this host, so the result is recorded for Phase 15 closure.
 - [Phase 15.2]: Product WGPU preview surface presentation rejects offscreen/mock descriptors and reports WgpuSurfacePresent without CPU pixel evidence. — Product WGPU preview surface presentation rejects offscreen/mock descriptors and reports WgpuSurfacePresent without CPU pixel evidence.
+- [Phase 15.2]: Decoded texture handles must resolve through a Rust-owned native lease registry before media IO can return product compositor input.
+- [Phase 15.2]: The WGPU compositor samples registered WGPU texture lease resources directly and rejects unregistered, stale, incompatible, or unsupported native resources as unavailable diagnostics.
 
 ### Pending Todos
 
@@ -445,6 +448,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T21:18:13.006Z
-Stopped at: Completed 15.2-03A-PLAN.md
+Last session: 2026-06-19T21:36:37.529Z
+Stopped at: Completed 15.2-03B-PLAN.md
 Resume file: None
