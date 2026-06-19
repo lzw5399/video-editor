@@ -890,15 +890,17 @@ function audioWarningFromPlaybackStatus(status: AudioPreviewPlaybackStatus): str
 }
 
 export function artifactPreviewStatusLabel(resourcePanel: ResourcePanelState): string | null {
-  if (resourcePanel.tasks.some((task) => task.tone === "active")) {
+  const previewTasks = resourcePanel.tasks.filter((task) => task.label.startsWith("预览"));
+
+  if (previewTasks.some((task) => task.tone === "active")) {
     return "预览资源生成中";
   }
 
-  if (resourcePanel.tasks.some((task) => task.tone === "error")) {
+  if (previewTasks.some((task) => task.tone === "error")) {
     return "生成失败";
   }
 
-  if (resourcePanel.tasks.some((task) => task.statusLabel === "已取消")) {
+  if (previewTasks.some((task) => task.statusLabel === "已取消")) {
     return "已取消";
   }
 

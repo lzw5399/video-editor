@@ -326,12 +326,21 @@
   pointer-events: none;
 }
 
+.audio-waveform-ready {
+  grid-template-columns: repeat(auto-fit, minmax(2px, 1fr));
+}
+
 .audio-waveform-bar {
   display: block;
   width: 100%;
   border-radius: 999px;
   background: rgba(237, 247, 232, 0.58);
   box-shadow: 0 0 0 1px rgba(25, 39, 27, 0.18);
+}
+
+.audio-waveform-ready .audio-waveform-bar {
+  align-self: center;
+  background: rgba(95, 159, 115, 0.78);
 }
 
 .audio-waveform-bar[data-height="short"] {
@@ -344,6 +353,27 @@
 
 .audio-waveform-bar[data-height="tall"] {
   height: 12px;
+}
+
+.audio-waveform-pending .audio-waveform-bar {
+  background: rgba(214, 162, 63, 0.52);
+}
+
+.audio-waveform-failed .audio-waveform-bar {
+  background: rgba(228, 90, 90, 0.52);
+}
+
+.audio-waveform-state {
+  position: absolute;
+  right: 0;
+  bottom: 14px;
+  left: 0;
+  overflow: hidden;
+  color: rgba(240, 238, 232, 0.8);
+  font-size: 10px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segment-kind-text {

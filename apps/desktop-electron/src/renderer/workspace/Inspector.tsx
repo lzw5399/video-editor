@@ -48,6 +48,12 @@ type InspectorProps = {
   ) => void;
   onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty, at: number) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
+  onUpdateSelectedSegmentAudio: (options: {
+    gainMillis: number;
+    panBalanceMillis: number;
+    fadeInDuration: number;
+    fadeOutDuration: number;
+  }) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
 
@@ -226,13 +232,17 @@ export function Inspector({
   onSetSelectedSegmentKeyframe,
   onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
+  onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
   const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
   const [activeTab, setActiveTab] = useState<InspectorTab>("画面");
   const [focusedKeyframeProperty, setFocusedKeyframeProperty] = useState<KeyframeProperty>("visualPositionX");
   const [textState, setTextState] = useState<TextFormState>(DEFAULT_TEXT_STATE);
-  const [volume, setVolume] = useState(1000);
+  const [volumePercent, setVolumePercent] = useState(100);
+  const [panPercent, setPanPercent] = useState(0);
+  const [fadeInUs, setFadeInUs] = useState(0);
+  const [fadeOutUs, setFadeOutUs] = useState(0);
   const sequenceDuration = getSequenceDuration(workspace);
   const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
   const relativePlayheadUs =
@@ -259,11 +269,17 @@ export function Inspector({
   useEffect(() => {
     if (selected === null) {
       setTextState(DEFAULT_TEXT_STATE);
-      setVolume(1000);
+      setVolumePercent(100);
+      setPanPercent(0);
+      setFadeInUs(0);
+      setFadeOutUs(0);
       return;
     }
 
-    setVolume(selected.segment.volume.levelMillis);
+    setVolumePercent(Math.round((selected.segment.audio?.gainMillis ?? selected.segment.volume.levelMillis) / 10));
+    setPanPercent(Math.round((selected.segment.audio?.panBalanceMillis ?? 0) / 10));
+    setFadeInUs(selected.segment.audio?.fadeInDuration.duration ?? 0);
+    setFadeOutUs(selected.segment.audio?.fadeOutDuration.duration ?? 0);
 
     if (selected.segment.text === null || selected.segment.text === undefined) {
       setTextState(DEFAULT_TEXT_STATE);
@@ -299,6 +315,10 @@ export function Inspector({
   }, [
     selected?.segment.segmentId,
     selected?.segment.volume.levelMillis,
+    selected?.segment.audio?.gainMillis,
+    selected?.segment.audio?.panBalanceMillis,
+    selected?.segment.audio?.fadeInDuration.duration,
+    selected?.segment.audio?.fadeOutDuration.duration,
     selected?.segment.text?.content,
     selected?.segment.text?.style.fontSize,
     selected?.segment.text?.style.color,
@@ -759,25 +779,49 @@ export function Inspector({
                 <span>音量</span>
                 <span className="field-with-action">
                   <input
+                    aria-label="音量"
                     type="range"
                     min="0"
-                    max="4000"
-                    step="50"
-                    value={volume}
-                    onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
+                    max="400"
+                    step="5"
+                    value={volumePercent}
+                    onChange={(event) => setVolumePercent(toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400))}
                   />
                   {renderKeyframeButton("volume", "音量")}
                 </span>
               </label>
               <label className="field-row compact-row">
-                <span>毫音量</span>
+                <span>声像</span>
                 <input
+                  aria-label="声像"
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="5"
+                  value={panPercent}
+                  onChange={(event) => setPanPercent(toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100))}
+                />
+              </label>
+              <label className="field-row compact-row">
+                <span>淡入</span>
+                <input
+                  aria-label="淡入"
                   type="number"
                   min="0"
-                  max="4000"
-                  step="50"
-                  value={volume}
-                  onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
+                  step="10000"
+                  value={fadeInUs}
+                  onChange={(event) => setFadeInUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeInUs, 0, 60_000_000))}
+                />
+              </label>
+              <label className="field-row compact-row">
+                <span>淡出</span>
+                <input
+                  aria-label="淡出"
+                  type="number"
+                  min="0"
+                  step="10000"
+                  value={fadeOutUs}
+                  onChange={(event) => setFadeOutUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeOutUs, 0, 60_000_000))}
                 />
               </label>
               <label className="toggle-row compact-toggle">
@@ -792,10 +836,17 @@ export function Inspector({
               <button
                 type="button"
                 className="secondary-action wide-action"
-                onClick={() => onSetSelectedSegmentVolume(volume)}
+                onClick={() =>
+                  onUpdateSelectedSegmentAudio({
+                    gainMillis: volumePercent * 10,
+                    panBalanceMillis: panPercent * 10,
+                    fadeInDuration: fadeInUs,
+                    fadeOutDuration: fadeOutUs
+                  })
+                }
                 disabled={workspace.pendingCommand !== null}
               >
-                应用音量
+                应用音频
               </button>
             </section>
           ) : null}
@@ -2235,6 +2286,11 @@ function parseIntegerInRange(value: string, min: number, max: number): number | 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function toBoundedNumber(value: number, fallback: number, min: number, max: number): number {
+  const rounded = Math.round(Number.isFinite(value) ? value : fallback);
+  return clamp(rounded, min, max);
 }
 
 function isHexColor(value: string): boolean {

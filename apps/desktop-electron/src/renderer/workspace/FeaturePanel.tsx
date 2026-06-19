@@ -43,6 +43,12 @@ type FeaturePanelProps = {
   onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
   onAddAudioSegment: (materialId: string, durationUs: number) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
+  onUpdateSelectedSegmentAudio: (options: {
+    gainMillis: number;
+    panBalanceMillis: number;
+    fadeInDuration: number;
+    fadeOutDuration: number;
+  }) => void;
   onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
 };
 
@@ -337,13 +343,17 @@ function AudioPanel({
   onAddAudioSegment,
   onSelectAudioOutputDevice,
   onSetSelectedSegmentVolume,
+  onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute
 }: FeaturePanelProps): React.ReactElement {
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
   const firstAudioMaterial = findFirstMaterialByKind(workspace.draft, "audio");
   const [materialId, setMaterialId] = useState(firstAudioMaterial?.materialId ?? "");
   const [durationUs, setDurationUs] = useState(4_000_000);
-  const [volume, setVolume] = useState(1000);
+  const [volumePercent, setVolumePercent] = useState(100);
+  const [panPercent, setPanPercent] = useState(0);
+  const [fadeInUs, setFadeInUs] = useState(0);
+  const [fadeOutUs, setFadeOutUs] = useState(0);
   const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
   const selectedTrack = getSelectedTrackView(workspace.draft, workspace.selection);
   const audioTrack = findTrackByKind(workspace.draft, "audio");
@@ -413,26 +423,64 @@ function AudioPanel({
       </div>
 
       <div className="function-card field-stack">
-        <h3>音量与静音</h3>
+        <h3>音频</h3>
         <label className="field-row">
-          <span>音量（毫音量）</span>
+          <span>音量</span>
           <input
             type="number"
             min="0"
-            max="4000"
-            step="50"
-            value={volume}
-            onChange={(event) => setVolume(event.currentTarget.valueAsNumber || 0)}
+            max="400"
+            step="5"
+            value={volumePercent}
+            onChange={(event) => setVolumePercent(toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400))}
+          />
+        </label>
+        <label className="field-row">
+          <span>声像</span>
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            step="5"
+            value={panPercent}
+            onChange={(event) => setPanPercent(toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100))}
+          />
+        </label>
+        <label className="field-row">
+          <span>淡入</span>
+          <input
+            type="number"
+            min="0"
+            step="10000"
+            value={fadeInUs}
+            onChange={(event) => setFadeInUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeInUs, 0, 60_000_000))}
+          />
+        </label>
+        <label className="field-row">
+          <span>淡出</span>
+          <input
+            type="number"
+            min="0"
+            step="10000"
+            value={fadeOutUs}
+            onChange={(event) => setFadeOutUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeOutUs, 0, 60_000_000))}
           />
         </label>
         <div className="button-row">
           <button
             type="button"
             className="secondary-action"
-            onClick={() => onSetSelectedSegmentVolume(volume)}
+            onClick={() =>
+              onUpdateSelectedSegmentAudio({
+                gainMillis: volumePercent * 10,
+                panBalanceMillis: panPercent * 10,
+                fadeInDuration: fadeInUs,
+                fadeOutDuration: fadeOutUs
+              })
+            }
             disabled={workspace.pendingCommand !== null || selectedSegment === null}
           >
-            应用到所选片段
+            应用音频
           </button>
           <button
             type="button"
@@ -662,4 +710,9 @@ function ResourceProgress({ value, compact = false }: { value: number | null; co
 
 function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
+}
+
+function toBoundedNumber(value: number, fallback: number, min: number, max: number): number {
+  const rounded = Math.round(Number.isFinite(value) ? value : fallback);
+  return Math.max(min, Math.min(max, rounded));
 }

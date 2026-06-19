@@ -689,6 +689,19 @@
   border-color: rgba(228, 90, 90, 0.76);
 }
 
+.waveform-status-ready {
+  border-color: rgba(95, 159, 115, 0.7);
+}
+
+.waveform-status-pending,
+.waveform-status-missing {
+  border-color: rgba(214, 162, 63, 0.72);
+}
+
+.waveform-status-failed {
+  border-color: rgba(228, 90, 90, 0.76);
+}
+
 .audio-retry-button {
   flex: 0 0 auto;
   height: 20px;

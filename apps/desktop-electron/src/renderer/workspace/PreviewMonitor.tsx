@@ -26,7 +26,8 @@ import {
   type RealtimePreviewFallbackReason,
   type RuntimeDiagnosticsDisplayState,
   type RuntimeDiagnosticsRow,
-  type RuntimeDiagnosticsTone
+  type RuntimeDiagnosticsTone,
+  type WaveformDisplayModel
 } from "../viewModel";
 
 import "./preview-inspector.css";
@@ -41,6 +42,7 @@ type PreviewMonitorProps = {
   audioPreview: AudioPreviewDisplayModel;
   audioDevices: AudioDeviceDisplayModel;
   audioParity: AudioParityDisplayModel;
+  waveform: WaveformDisplayModel;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   selectedSegment: SelectedSegmentView | null;
   showDeveloperDiagnostics: boolean;
@@ -150,6 +152,7 @@ export function PreviewMonitor({
   audioPreview,
   audioDevices,
   audioParity,
+  waveform,
   runtimeDiagnostics,
   selectedSegment,
   showDeveloperDiagnostics,
@@ -190,9 +193,12 @@ export function PreviewMonitor({
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
+  const productPreviewStatusLabel = formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const previewStatusLabel = showDeveloperDiagnostics
     ? preview.error ?? preview.frameStatusLabel
-    : resourcePreviewStatusLabel ?? formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
+    : productPreviewStatusLabel === "画面已更新，预览待刷新"
+      ? productPreviewStatusLabel
+      : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
     preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
@@ -499,6 +505,9 @@ export function PreviewMonitor({
         </span>
         <span className="audio-status-chip" aria-label="输出设备状态">
           {audioDeviceChipText(audioDevices)}
+        </span>
+        <span className={`audio-status-chip waveform-status-${waveform.status}`} aria-label="波形状态">
+          {waveform.statusLabel}
         </span>
         <button
           type="button"

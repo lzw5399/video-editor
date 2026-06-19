@@ -822,7 +822,7 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
     packageStatusLabel: report.licensePosture.externalRuntime ? "外部运行环境" : "打包应用已就绪",
     rows: [
       binaryRow("媒体运行环境", report.ffmpeg),
-      binaryRow("ffprobe 状态", report.ffprobe),
+      binaryRow("媒体探测环境", report.ffprobe),
       featurePairRow("编码能力", report.h264Encoder, report.aacEncoder),
       featurePairRow("字幕能力", report.assFilter, report.subtitlesFilter),
       fontRow("字体环境", report.fontReadiness),
@@ -854,8 +854,8 @@ export function runtimeDiagnosticsFromError(message: string): RuntimeDiagnostics
         tone: "error"
       },
       {
-        label: "ffprobe 状态",
-        value: message.includes("ffprobe") ? "未找到" : "待检测",
+        label: "媒体探测环境",
+        value: message.includes("媒体探测环境") ? "未找到" : "待检测",
         detail: message,
         tone: "error"
       }

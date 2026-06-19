@@ -61,6 +61,7 @@ type WorkspaceShellProps = {
   ) => void;
   onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty, at: number) => void;
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
+  onUpdateSelectedSegmentAudio: Parameters<typeof FeaturePanel>[0]["onUpdateSelectedSegmentAudio"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
   onAddTimelineSegment: Parameters<typeof Timeline>[0]["onAddSegment"];
@@ -117,6 +118,7 @@ export function WorkspaceShell({
   onSetSelectedSegmentKeyframe,
   onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
+  onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute,
   onSelectTimelineSegment,
   onAddTimelineSegment,
@@ -183,6 +185,7 @@ export function WorkspaceShell({
           onImportSubtitleSrt={onImportSubtitleSrt}
           onAddAudioSegment={onAddAudioSegment}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
+          onUpdateSelectedSegmentAudio={onUpdateSelectedSegmentAudio}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
         />
       </section>
@@ -198,6 +201,7 @@ export function WorkspaceShell({
           audioPreview={workspace.audioPreview}
           audioDevices={workspace.audioDevices}
           audioParity={workspace.audioParity}
+          waveform={workspace.waveform}
           runtimeDiagnostics={workspace.runtimeDiagnostics}
           selectedSegment={selectedSegment}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
@@ -230,6 +234,7 @@ export function WorkspaceShell({
           onSetSelectedSegmentKeyframe={onSetSelectedSegmentKeyframe}
           onRemoveSelectedSegmentKeyframe={onRemoveSelectedSegmentKeyframe}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
+          onUpdateSelectedSegmentAudio={onUpdateSelectedSegmentAudio}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
         />
       </aside>

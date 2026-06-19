@@ -530,10 +530,13 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
 
     await topFeatureNav.getByRole("button", { name: "音频" }).click();
-    await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加音频" })).toBeVisible();
-    await expect(page.getByText("音量与静音")).toBeVisible();
+    await expect(page.getByText("音量", { exact: true })).toBeVisible();
+    await expect(page.getByText("声像", { exact: true })).toBeVisible();
+    await expect(page.getByText("淡入", { exact: true })).toBeVisible();
+    await expect(page.getByText("淡出", { exact: true })).toBeVisible();
 
     for (const category of DEFERRED_CATEGORIES) {
       await topFeatureNav.getByRole("button", { name: category }).click();
@@ -651,7 +654,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await spyExecuteCommandCalls(app, page);
 
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
-    await expect(page.getByRole("heading", { name: "音频" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(1);
 
     await page.getByRole("button", { name: "添加音频" }).click();
@@ -661,10 +664,14 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByLabel("片段信息")).toContainText("音频轨道 1 / 音频");
 
     await page.getByRole("tab", { name: "音频" }).click();
-    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "毫音量" }).fill("1350");
-    await page.getByRole("button", { name: "应用音量" }).click();
-    await expectCommandCall(app, "setSegmentVolume");
-    await expect(page.getByLabel("音频参数").getByRole("spinbutton", { name: "毫音量" })).toHaveValue("1350");
+    await page.getByLabel("音频参数").getByRole("slider", { name: "音量" }).fill("135");
+    await page.getByLabel("音频参数").getByRole("slider", { name: "声像" }).fill("-20");
+    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "淡入" }).fill("450000");
+    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "淡出" }).fill("300000");
+    await page.getByLabel("音频参数").getByRole("button", { name: "应用音频" }).click();
+    await expectCommandCall(app, "updateSegmentAudio");
+    await expect(page.getByLabel("音频参数").getByRole("slider", { name: "音量" })).toHaveValue("135");
+    await expect(page.getByLabel("音频参数").getByRole("slider", { name: "声像" })).toHaveValue("-20");
 
     await page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" }).click();
     await expectCommandCall(app, "setTrackMute");
@@ -673,7 +680,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toEqual(
-      expect.arrayContaining(["addAudioSegment", "setSegmentVolume", "setTrackMute"])
+      expect.arrayContaining(["addAudioSegment", "updateSegmentAudio", "setTrackMute"])
     );
   } finally {
     await app.close();
@@ -681,7 +688,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
 });
 
 test("audio segment blocks expose deterministic P0 waveform placeholder stripe", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "missing" } });
 
   try {
     const audioSegment = page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first();
@@ -760,7 +767,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByRole("button", { name: "文本关键帧需要文字片段" })).toBeDisabled();
 
     await page.getByRole("tab", { name: "音频" }).click();
-    await expect(page.getByLabel("音频参数")).toContainText("应用音量");
+    await expect(page.getByLabel("音频参数")).toContainText("应用音频");
     await expect(page.getByRole("button", { name: "添加音量关键帧" }).first()).toBeVisible();
     await expect(page.getByLabel("画面变换")).toHaveCount(0);
     await page.getByRole("tab", { name: "动画" }).click();
@@ -1087,7 +1094,7 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
 
   const pending = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "pending" } });
   try {
-    await expect(pending.page.getByText("波形生成中")).toBeVisible();
+    await expect(pending.page.getByLabel("波形状态")).toContainText("波形生成中");
     await expect(pending.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();
   } finally {
     await pending.app.close();
@@ -1095,7 +1102,7 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
 
   const failed = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "failed" } });
   try {
-    await expect(failed.page.getByText("波形生成失败")).toBeVisible();
+    await expect(failed.page.getByLabel("波形状态")).toContainText("波形生成失败");
     await expect(failed.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();
   } finally {
     await failed.app.close();
@@ -1209,7 +1216,7 @@ test("实时预览 native preview fallback displays main-provided attach diagnos
   }
 });
 
-test("实时预览 telemetry shows supported backend without FFmpeg active label", async () => {
+test("实时预览 telemetry shows supported backend without media fallback active label", async () => {
   const { app, page } = await launchWorkspaceApp({
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
@@ -1272,9 +1279,9 @@ test("实时预览 fallback artifact appears only when Rust reports fallback", a
 
   try {
     await expectNativePreviewHostLayout(fallback.app, fallback.page, 1280, 800);
-    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("备用产物：FFmpeg");
+    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("备用产物：媒体运行环境");
     await expect(fallback.page.getByLabel("实时预览数据")).toContainText("降级 1");
-    await expect(fallback.page.getByLabel("实时预览备用产物")).toContainText("已生成 FFmpeg 备用产物");
+    await expect(fallback.page.getByLabel("实时预览备用产物")).toContainText("已生成媒体备用产物");
   } finally {
     await fallback.app.close();
   }
@@ -1397,7 +1404,7 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   };
 
   expect(formatRealtimePreviewBackendLabel(supported.backend)).toBe("实时后端：Mock");
-  expect(formatRealtimePreviewBackendLabel(fallback.backend)).toBe("备用产物：FFmpeg");
+  expect(formatRealtimePreviewBackendLabel(fallback.backend)).toBe("备用产物：媒体运行环境");
   expect(formatRealtimePreviewFallbackReason("previewArtifactCacheHit")).toBe("命中预览缓存");
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("首帧 18 ms");
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("重复 1");

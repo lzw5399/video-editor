@@ -8,6 +8,7 @@ import {
   formatKeyframeProperty,
   formatTimelineTime,
   segmentBlockStyle,
+  type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
 
@@ -168,6 +169,7 @@ export function Timeline({
           <TimelineTrackRow
             key={row.track.trackId}
             row={row}
+            waveform={workspace.waveform}
             timelineDuration={timeline.duration}
             onSelectSegment={onSelectSegment}
             onSetTrackMute={onSetTrackMute}
@@ -421,12 +423,14 @@ function TimelineIconButton({
 
 function TimelineTrackRow({
   row,
+  waveform,
   timelineDuration,
   onSelectSegment,
   onSetTrackMute,
   pending
 }: {
   row: ReturnType<typeof deriveTimelineRows>["rows"][number];
+  waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
   onSetTrackMute?: (trackId: string, muted: boolean) => void;
@@ -465,6 +469,7 @@ function TimelineTrackRow({
           <TimelineSegmentBlock
             key={segment.segment.segmentId}
             segment={segment}
+            waveform={waveform}
             timelineDuration={timelineDuration}
             onSelectSegment={onSelectSegment}
           />
@@ -476,10 +481,12 @@ function TimelineTrackRow({
 
 function TimelineSegmentBlock({
   segment,
+  waveform,
   timelineDuration,
   onSelectSegment
 }: {
   segment: ReturnType<typeof deriveTimelineRows>["rows"][number]["segments"][number];
+  waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
 }): React.ReactElement {
@@ -498,7 +505,7 @@ function TimelineSegmentBlock({
     >
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
-      {showAudioWaveform ? <AudioWaveformPlaceholder /> : null}
+      {showAudioWaveform ? <AudioWaveform waveform={waveform} materialId={segment.segment.materialId} /> : null}
       {segment.segment.keyframes.length > 0 && showKeyframeStrip ? (
         <span className="segment-keyframe-strip" aria-label="关键帧标记">
           {segment.segment.keyframes.map((keyframe) => (
@@ -520,12 +527,39 @@ function TimelineSegmentBlock({
   );
 }
 
-function AudioWaveformPlaceholder(): React.ReactElement {
+function AudioWaveform({
+  waveform,
+  materialId
+}: {
+  waveform: WaveformDisplayModel;
+  materialId: string;
+}): React.ReactElement {
+  if (waveform.status === "ready" && waveform.materialId === materialId && waveform.peaks.length > 0) {
+    return (
+      <span className="audio-waveform-placeholder audio-waveform-ready" aria-label="音频波形" title={waveform.statusLabel}>
+        {waveform.peaks.map((peak, index) => {
+          const heightMillis = Math.max(Math.abs(peak.minMillis), Math.abs(peak.maxMillis));
+          return (
+            <span
+              key={`${peak.minMillis}-${peak.maxMillis}-${index}`}
+              className="audio-waveform-bar"
+              style={{ height: `${Math.max(3, Math.min(14, Math.round((heightMillis / 1000) * 14)))}px` }}
+              aria-hidden="true"
+            />
+          );
+        })}
+      </span>
+    );
+  }
+
   return (
-    <span className="audio-waveform-placeholder" aria-label="音频波形占位">
+    <span className={`audio-waveform-placeholder audio-waveform-${waveform.status}`} aria-label="音频波形占位" title={waveform.statusLabel}>
       {AUDIO_WAVEFORM_PLACEHOLDER_PATTERN.map((height, index) => (
         <span key={`${height}-${index}`} className="audio-waveform-bar" data-height={height} aria-hidden="true" />
       ))}
+      {waveform.status === "pending" || waveform.status === "failed" ? (
+        <span className="audio-waveform-state">{waveform.statusLabel}</span>
+      ) : null}
     </span>
   );
 }

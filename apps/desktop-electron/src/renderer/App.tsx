@@ -193,6 +193,14 @@ const KEYFRAME_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
   exportLogSummary: "关键帧已更新，请重新开始导出"
 };
 
+const AUDIO_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  frameStatusLabel: "音频已更新，请重新请求预览帧",
+  frameMetadataLabel: "预览帧需要重新生成",
+  segmentStatusLabel: "音频已更新，请重新生成预览片段",
+  segmentMetadataLabel: "预览片段需要重新生成",
+  exportLogSummary: "音频已更新，请重新开始导出"
+};
+
 declare global {
   interface Window {
     videoEditorAppConfig?: {
@@ -406,6 +414,9 @@ export function App(): React.ReactElement {
 
       void handleGetArtifactStatus();
       void handleProbeRuntimeCapabilities();
+      window.setTimeout(() => {
+        void refreshWaveformDisplay();
+      }, 250);
     }
 
     void bootstrapWorkspace().catch((error: unknown) => {
@@ -540,6 +551,21 @@ export function App(): React.ReactElement {
           ...next,
           preview: clearDerivedPreviewState(current.preview, KEYFRAME_DERIVED_STATE_COPY),
           export: clearDerivedExportState(current.export, KEYFRAME_DERIVED_STATE_COPY.exportLogSummary)
+        };
+      }
+
+      if (
+        result.ok &&
+        result.data !== null &&
+        (command.payload.kind === "setSegmentVolume" ||
+          command.payload.kind === "updateSegmentAudio" ||
+          command.payload.kind === "setTrackMute" ||
+          command.payload.kind === "addAudioSegment")
+      ) {
+        return {
+          ...next,
+          preview: clearDerivedPreviewState(current.preview, AUDIO_DERIVED_STATE_COPY),
+          export: clearDerivedExportState(current.export, AUDIO_DERIVED_STATE_COPY.exportLogSummary)
         };
       }
 
@@ -1332,6 +1358,33 @@ export function App(): React.ReactElement {
     }, "切换轨道静音");
   }
 
+  function handleUpdateSelectedSegmentAudio(options: {
+    gainMillis: number;
+    panBalanceMillis: number;
+    fadeInDuration: number;
+    fadeOutDuration: number;
+  }): void {
+    void executeTimelineCommand(
+      (current) => {
+        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
+        if (selectedSegment === null) {
+          throw new Error("请先选择一个音频片段");
+        }
+
+        return buildUpdateSegmentAudioCommand({
+          context: current,
+          segmentId: selectedSegment.segment.segmentId,
+          gainMillis: Math.max(0, Math.min(4000, Math.round(options.gainMillis))),
+          panBalanceMillis: Math.max(-1000, Math.min(1000, Math.round(options.panBalanceMillis))),
+          fadeInDuration: { duration: Math.max(0, Math.round(options.fadeInDuration)) },
+          fadeOutDuration: { duration: Math.max(0, Math.round(options.fadeOutDuration)) },
+          effectSlots: []
+        });
+      },
+      "应用音频"
+    );
+  }
+
   function handleSelectTimelineSegment(segmentId: string): void {
     void executeTimelineCommand(
       (current) => {
@@ -2033,6 +2086,7 @@ export function App(): React.ReactElement {
       onSetSelectedSegmentKeyframe={handleSetSelectedSegmentKeyframe}
       onRemoveSelectedSegmentKeyframe={handleRemoveSelectedSegmentKeyframe}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
+      onUpdateSelectedSegmentAudio={handleUpdateSelectedSegmentAudio}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
       onSelectTimelineSegment={handleSelectTimelineSegment}
       onAddTimelineSegment={handleAddTimelineSegment}
