@@ -1854,7 +1854,7 @@ test("素材资源状态 uses generated artifact command envelopes", async () =>
     await spyExecuteCommandCalls(app, page);
 
     await expect(page.getByLabel("素材资源状态").first()).toBeVisible();
-    await page.getByRole("button", { name: "刷新状态" }).click();
+    await page.getByRole("button", { name: "更新状态" }).click();
     await page.getByRole("button", { name: "取消生成" }).click();
     await page.getByRole("button", { name: "重新生成" }).click();
     await page.getByRole("button", { name: "继续生成" }).click();
@@ -1911,7 +1911,7 @@ test("资源任务 limits visible rows and 素材资源状态 keeps material row
     await expect(page.locator(".resource-task-row")).toHaveCount(3);
     await expect(page.getByLabel("资源任务")).toContainText("另有 1 个资源任务");
 
-    await page.getByRole("button", { name: "刷新状态" }).click();
+    await page.getByRole("button", { name: "更新状态" }).click();
     await expectCommandCall(app, "refreshArtifactStatus");
     const after = await expectStableBox(firstMaterialRow, "资源状态刷新后素材行");
     expectSameSize(before, after, "素材资源状态刷新");

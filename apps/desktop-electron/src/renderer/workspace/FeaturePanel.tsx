@@ -578,7 +578,7 @@ function ResourceTaskStrip({
         <h3>资源任务</h3>
         <span>{resourcePanel.statusLabel}</span>
         <button type="button" className="compact-action" onClick={onRefresh} disabled={pending || !resourcePanel.refreshAvailable}>
-          刷新状态
+          更新状态
         </button>
       </div>
       {visibleTasks.length === 0 ? (
