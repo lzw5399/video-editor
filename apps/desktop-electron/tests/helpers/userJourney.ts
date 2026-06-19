@@ -27,6 +27,7 @@ type RealtimePreviewHostState = {
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
+  backend: "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
   telemetry: {
     presentedFrameCount: number;
     targetTimeMicroseconds: number;

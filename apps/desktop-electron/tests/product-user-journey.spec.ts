@@ -47,9 +47,13 @@ test("product user can import a repo video, add it to the timeline, and see play
       "runtime-presented frame time must advance with the user-visible playhead"
     ).toBeGreaterThan(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
     expect(
+      after.hostState?.backend ?? null,
+      "normal product playback must use the realtime GPU backend, not mock/offscreen/artifact fallback"
+    ).toBe("gpu");
+    expect(
       after.hostState?.contentEvidence?.source ?? null,
-      "normal product playback evidence must come from decoded/composited video content, not mock frame tokens"
-    ).toMatch(/^(decoded|composited)$/);
+      "normal product playback evidence must come from the composited GPU preview output, not decoded CPU probes or mock frame tokens"
+    ).toBe("composited");
     expect(
       after.hostState?.contentEvidence?.digest ?? null,
       "native decoded/composited content fingerprint must advance during playback"

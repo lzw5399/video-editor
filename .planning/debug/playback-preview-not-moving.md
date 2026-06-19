@@ -20,9 +20,9 @@ updated: "2026-06-19"
 - hypothesis: Existing tests validate realtime-preview host routing and playhead clock movement, but the product UI lacks an end-to-end assertion that visible preview pixels advance during playback.
 - test: Keep the Playwright normal-user workflow on moving fixture media, but require native decoded/composited content evidence instead of mock frame tokens or screenshot color proxies.
 - expecting: Product playback must fail if the realtime host only advances clocks, telemetry, mock frame tokens, or PNG preview artifacts.
-- next_action: Replace the remaining Mock realtime backend/product presentation path with a true decoded/composited preview surface; content fingerprints are only a guard, not the final GPU playback implementation.
-- reasoning_checkpoint:
-- tdd_checkpoint: Product journey now requires decoded/composited content evidence; GPU/composited visible preview remains open.
+- next_action: Replace the remaining Mock realtime backend/product presentation path with true GPU/native texture decode-to-compositor presentation. Offscreen/CPU decoded probes are not an acceptable P0 completion path.
+- reasoning_checkpoint: User rejected treating Phase 12 contract/platform-opaque decode work as implementation-complete; Phase 12 must be corrected because it did not connect native texture interop and visible GPU preview into the desktop product.
+- tdd_checkpoint: Product journey now requires backend `gpu` and composited output evidence; current product fails because it still reports backend `mock`.
 
 ## Evidence
 
@@ -59,6 +59,9 @@ updated: "2026-06-19"
 - timestamp: "2026-06-19T15:18:03Z"
   observation: "After fixing process stdout/stderr draining, the product journey passes with decoded content evidence while still asserting playback does not repeatedly call requestPreviewFrame. This is a guard against fake playback, not proof that the desktop product is rendering through the final GPU compositing backend."
   source: "pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-19T15:31:00Z"
+  observation: "The product journey was tightened again to require backend `gpu` and composited preview evidence. It fails with Expected `gpu`, Received `mock`, proving Phase 12/15.1 cannot be considered product-complete."
+  source: "apps/desktop-electron/tests/product-user-journey.spec.ts; pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
 
 ## Eliminated
 
@@ -73,7 +76,7 @@ updated: "2026-06-19"
 
 ## Resolution
 
-- root_cause: Playback had two distinct gaps. First, the product path originally advanced only UI clocks/telemetry and later leaked synthetic mock surface colors into the preview. Second, the native content evidence path initially deadlocked on rawvideo stdout because the shared FFmpeg process runner did not drain pipes while waiting. The remaining product gap is that the desktop realtime session still uses the Mock backend instead of a true visible GPU/composited preview surface.
+- root_cause: Playback had three distinct gaps. First, the product path originally advanced only UI clocks/telemetry and later leaked synthetic mock surface colors into the preview. Second, the native content evidence path initially deadlocked on rawvideo stdout because the shared FFmpeg process runner did not drain pipes while waiting. Third, Phase 12 completed contracts, capability probes, platform-opaque native decode, and handle metadata, but did not implement production native texture interop into the realtime GPU compositor and visible desktop preview surface. The desktop realtime session still uses the Mock backend.
 - fix: Added a product E2E gate that rejects requestPreviewFrame loops, mock frame tokens, and synthetic preview pixels as playback proof. Added native decoded-frame content evidence through the realtime host for test/recording mode, returning only a digest and metadata. Fixed the shared FFmpeg process runner to drain stdout/stderr concurrently so raw frame extraction cannot deadlock on pipe buffers.
 - verification: `cargo test -p media_runtime process -- --nocapture`; `cargo test -p media_runtime_desktop ffmpeg_fallback_frame_fingerprint -- --nocapture`; `cargo test -p bindings_node realtime_preview -- --nocapture`; `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters" --reporter=line`; `git diff --check -- . ':!reference'`
 - files_changed: crates/media_runtime/src/process.rs; crates/media_runtime/tests/process.rs; crates/media_runtime_desktop/src/ffmpeg_fallback.rs; crates/media_runtime_desktop/tests/ffmpeg_fallback.rs; crates/bindings_node/src/realtime_preview_service.rs; crates/bindings_node/src/lib.rs; apps/desktop-electron/src/main/nativeBinding.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/preload/index.ts; apps/desktop-electron/src/renderer/App.tsx; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts
