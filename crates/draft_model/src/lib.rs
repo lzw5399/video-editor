@@ -96,6 +96,13 @@ pub enum CommandName {
     RequestPreviewFrame,
     RequestPreviewSegment,
     InvalidatePreviewCache,
+    GetArtifactStatus,
+    RefreshArtifactStatus,
+    RetryArtifactGeneration,
+    ResumeArtifactGeneration,
+    CancelArtifactGeneration,
+    GetArtifactQuotaStatus,
+    RunArtifactGarbageCollection,
     StartExport,
     GetExportJobStatus,
     CancelExport,
@@ -135,6 +142,13 @@ pub enum CommandPayload {
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
     RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
     InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
+    GetArtifactStatus(GetArtifactStatusCommandPayload),
+    RefreshArtifactStatus(RefreshArtifactStatusCommandPayload),
+    RetryArtifactGeneration(ArtifactGenerationActionCommandPayload),
+    ResumeArtifactGeneration(ArtifactGenerationActionCommandPayload),
+    CancelArtifactGeneration(ArtifactGenerationActionCommandPayload),
+    GetArtifactQuotaStatus(GetArtifactQuotaStatusCommandPayload),
+    RunArtifactGarbageCollection(RunArtifactGarbageCollectionCommandPayload),
     StartExport(StartExportCommandPayload),
     GetExportJobStatus(GetExportJobStatusCommandPayload),
     CancelExport(CancelExportCommandPayload),
@@ -174,6 +188,13 @@ impl CommandPayload {
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
             Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
             Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
+            Self::GetArtifactStatus(_) => CommandName::GetArtifactStatus,
+            Self::RefreshArtifactStatus(_) => CommandName::RefreshArtifactStatus,
+            Self::RetryArtifactGeneration(_) => CommandName::RetryArtifactGeneration,
+            Self::ResumeArtifactGeneration(_) => CommandName::ResumeArtifactGeneration,
+            Self::CancelArtifactGeneration(_) => CommandName::CancelArtifactGeneration,
+            Self::GetArtifactQuotaStatus(_) => CommandName::GetArtifactQuotaStatus,
+            Self::RunArtifactGarbageCollection(_) => CommandName::RunArtifactGarbageCollection,
             Self::StartExport(_) => CommandName::StartExport,
             Self::GetExportJobStatus(_) => CommandName::GetExportJobStatus,
             Self::CancelExport(_) => CommandName::CancelExport,
@@ -667,6 +688,158 @@ pub struct InvalidatePreviewCacheCommandPayload {
     pub artifact_schema_version: u32,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub generator_version: String,
+}
+
+/// Common project-scoped artifact status request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GetArtifactStatusCommandPayload {
+    pub session_id: String,
+    pub bundle_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+}
+
+/// Project-scoped artifact refresh request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RefreshArtifactStatusCommandPayload {
+    pub session_id: String,
+    pub bundle_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+}
+
+/// Job action request for retry, resume, and cancellation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactGenerationActionCommandPayload {
+    pub session_id: String,
+    pub bundle_path: String,
+    pub job_id: String,
+}
+
+/// Project-scoped quota request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GetArtifactQuotaStatusCommandPayload {
+    pub session_id: String,
+    pub bundle_path: String,
+}
+
+/// Project-scoped cache cleanup request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunArtifactGarbageCollectionCommandPayload {
+    pub session_id: String,
+    pub bundle_path: String,
+    pub dry_run: bool,
+}
+
+/// Status classes safe for default production UI display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ArtifactTaskStatus {
+    Waiting,
+    Running,
+    Ready,
+    Dirty,
+    Resumable,
+    CancelRequested,
+    Cancelled,
+    Failed,
+}
+
+/// Project-relative artifact reference safe to show only where allowed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DisplayableArtifactRef {
+    pub label: String,
+    pub project_relative_ref: String,
+    pub artifact_kind: String,
+}
+
+/// Per-material artifact status summary for the resource panel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MaterialArtifactStatus {
+    pub material_id: MaterialId,
+    pub material_label: String,
+    pub artifact_kind: String,
+    pub status: ArtifactTaskStatus,
+    pub status_label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub progress_per_mille: Option<u16>,
+    pub can_refresh: bool,
+    pub can_retry: bool,
+    pub can_resume: bool,
+    pub can_cancel: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub display_ref: Option<DisplayableArtifactRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub error_category: Option<String>,
+}
+
+/// Active generation task summary safe for UI transport.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactGenerationTaskSummary {
+    pub job_id: String,
+    pub artifact_kind: String,
+    pub display_label: String,
+    pub status: ArtifactTaskStatus,
+    pub status_label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub progress_per_mille: Option<u16>,
+    pub can_retry: bool,
+    pub can_resume: bool,
+    pub can_cancel: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub error_category: Option<String>,
+}
+
+/// Rust-owned quota status labels and maintenance availability.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactQuotaStatus {
+    pub status_label: String,
+    pub severity: String,
+    pub used_label: String,
+    pub reclaimable_label: String,
+    pub released_label: String,
+    pub cleanup_available: bool,
+}
+
+/// Project artifact status response safe for renderer transport.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactStatusSummary {
+    pub session_id: String,
+    pub status_label: String,
+    pub materials: Vec<MaterialArtifactStatus>,
+    pub tasks: Vec<ArtifactGenerationTaskSummary>,
+    pub quota: ArtifactQuotaStatus,
+    pub refresh_available: bool,
+}
+
+/// Result from artifact maintenance actions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactMaintenanceResult {
+    pub session_id: String,
+    pub status_label: String,
+    pub mode: String,
+    pub affected_count: u32,
+    pub reclaimable_label: String,
+    pub released_label: String,
+    pub completed: bool,
 }
 
 /// H.264/AAC export presets exposed through Rust-owned export services.

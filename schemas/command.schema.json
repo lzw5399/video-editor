@@ -514,6 +514,13 @@
         "requestPreviewFrame",
         "requestPreviewSegment",
         "invalidatePreviewCache",
+        "getArtifactStatus",
+        "refreshArtifactStatus",
+        "retryArtifactGeneration",
+        "resumeArtifactGeneration",
+        "cancelArtifactGeneration",
+        "getArtifactQuotaStatus",
+        "runArtifactGarbageCollection",
         "startExport",
         "getExportJobStatus",
         "cancelExport"
@@ -1554,6 +1561,196 @@
             "changedRanges",
             "changedMaterialIds",
             "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Common project-scoped artifact status request.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "getArtifactStatus",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Project-scoped artifact refresh request.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "refreshArtifactStatus",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Job action request for retry, resume, and cancellation.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "retryArtifactGeneration",
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Job action request for retry, resume, and cancellation.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "resumeArtifactGeneration",
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Job action request for retry, resume, and cancellation.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "cancelArtifactGeneration",
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Project-scoped quota request.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "getArtifactQuotaStatus",
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Project-scoped cache cleanup request.",
+          "properties": {
+            "bundlePath": {
+              "type": "string"
+            },
+            "dryRun": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "runArtifactGarbageCollection",
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sessionId",
+            "bundlePath",
+            "dryRun"
           ],
           "type": "object"
         },

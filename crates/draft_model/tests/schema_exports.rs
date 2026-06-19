@@ -6,32 +6,36 @@ use std::{
 
 use draft_model::{
     AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
+    ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
+    ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
     CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
     CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
     CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
     CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
-    DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
-    DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic, ExportDiagnosticKind,
-    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
-    ExportValidationReport, Filter, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
-    ImportMaterialResponse, ImportSubtitleSrtCommandPayload, InvalidatePreviewCacheCommandPayload,
-    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
-    KeyframeValue, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS,
-    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
-    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    MoveSegmentCommandPayload, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
-    PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
-    PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
-    PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
-    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RedoTimelineEditCommandPayload, ReleasePreviewFrameCommandPayload,
+    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
+    DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
+    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts,
+    ExportPreset, ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
+    GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
+    ImportMaterialCommandPayload, ImportMaterialResponse, ImportSubtitleSrtCommandPayload,
+    InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, ListMaterialsCommandPayload,
+    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS,
+    MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId,
+    MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload, PingCommandPayload,
+    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
+    PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
+    PreviewFrameReleaseResponse, PreviewFrameStorageKind, PreviewFrameStoragePreference,
+    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
+    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
+    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
     RemoveSegmentKeyframeCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
-    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
-    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
-    RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
+    RequestPreviewSegmentCommandPayload, RunArtifactGarbageCollectionCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
+    RuntimeColorRange, RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
     RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
     RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
     RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
@@ -125,6 +129,11 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<GetArtifactStatusCommandPayload>(),
+            export_decl::<RefreshArtifactStatusCommandPayload>(),
+            export_decl::<ArtifactGenerationActionCommandPayload>(),
+            export_decl::<GetArtifactQuotaStatusCommandPayload>(),
+            export_decl::<RunArtifactGarbageCollectionCommandPayload>(),
             export_decl::<ExportPreset>(),
             export_decl::<ExportPrepDirtyFacts>(),
             export_decl::<StartExportCommandPayload>(),
@@ -206,6 +215,13 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<InvalidationScope>(),
             export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
+            export_decl::<ArtifactTaskStatus>(),
+            export_decl::<DisplayableArtifactRef>(),
+            export_decl::<MaterialArtifactStatus>(),
+            export_decl::<ArtifactGenerationTaskSummary>(),
+            export_decl::<ArtifactQuotaStatus>(),
+            export_decl::<ArtifactStatusSummary>(),
+            export_decl::<ArtifactMaintenanceResult>(),
         ],
     );
     assert_or_update_contract_file(
@@ -700,6 +716,31 @@ fn schema_exports_include_phase14_artifact_status_and_maintenance_contracts() {
         );
     }
 
+    let artifact_contract_text = [
+        "GetArtifactStatusCommandPayload",
+        "RefreshArtifactStatusCommandPayload",
+        "ArtifactGenerationActionCommandPayload",
+        "GetArtifactQuotaStatusCommandPayload",
+        "RunArtifactGarbageCollectionCommandPayload",
+        "ArtifactStatusSummary",
+        "MaterialArtifactStatus",
+        "ArtifactGenerationTaskSummary",
+        "ArtifactTaskStatus",
+        "ArtifactQuotaStatus",
+        "ArtifactMaintenanceResult",
+        "DisplayableArtifactRef",
+    ]
+    .into_iter()
+    .filter_map(|contract_name| {
+        command_envelope_ts
+            .lines()
+            .chain(command_result_ts.lines())
+            .find(|line| line.starts_with(&format!("export type {contract_name}")))
+            .map(str::to_owned)
+    })
+    .collect::<Vec<_>>()
+    .join("\n");
+
     for forbidden in [
         "artifactRoot",
         "blobRoot",
@@ -714,7 +755,7 @@ fn schema_exports_include_phase14_artifact_status_and_maintenance_contracts() {
         "schedulerPriority",
     ] {
         assert!(
-            !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
+            !artifact_contract_text.contains(forbidden),
             "artifact transport contracts must not expose internal field {forbidden}"
         );
     }
@@ -1247,6 +1288,11 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
             export_decl::<InvalidatePreviewCacheCommandPayload>(),
+            export_decl::<GetArtifactStatusCommandPayload>(),
+            export_decl::<RefreshArtifactStatusCommandPayload>(),
+            export_decl::<ArtifactGenerationActionCommandPayload>(),
+            export_decl::<GetArtifactQuotaStatusCommandPayload>(),
+            export_decl::<RunArtifactGarbageCollectionCommandPayload>(),
             export_decl::<ExportPreset>(),
             export_decl::<ExportPrepDirtyFacts>(),
             export_decl::<StartExportCommandPayload>(),
@@ -1326,6 +1372,13 @@ fn command_result_ts_contract() -> String {
             export_decl::<InvalidationScope>(),
             export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
+            export_decl::<ArtifactTaskStatus>(),
+            export_decl::<DisplayableArtifactRef>(),
+            export_decl::<MaterialArtifactStatus>(),
+            export_decl::<ArtifactGenerationTaskSummary>(),
+            export_decl::<ArtifactQuotaStatus>(),
+            export_decl::<ArtifactStatusSummary>(),
+            export_decl::<ArtifactMaintenanceResult>(),
         ],
     )
 }
