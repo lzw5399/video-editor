@@ -452,7 +452,8 @@ export function buildRemoveSegmentKeyframeCommand(
 
 type RequestPreviewFrameOptions = {
   draft: Draft;
-  cacheRoot: string;
+  cacheRoot?: string;
+  bundlePath?: string;
   targetTime: Microseconds;
 };
 
@@ -460,7 +461,8 @@ export function buildRequestPreviewFrameCommand(options: RequestPreviewFrameOpti
   const payload = {
     kind: "requestPreviewFrame",
     draft: options.draft,
-    cacheRoot: options.cacheRoot,
+    ...(options.cacheRoot === undefined ? {} : { cacheRoot: options.cacheRoot }),
+    ...(options.bundlePath === undefined ? {} : { bundlePath: options.bundlePath }),
     targetTime: options.targetTime
   } satisfies RequestPreviewFrameCommandPayload & { kind: "requestPreviewFrame" };
 
@@ -469,7 +471,8 @@ export function buildRequestPreviewFrameCommand(options: RequestPreviewFrameOpti
 
 type RequestPreviewSegmentOptions = {
   draft: Draft;
-  cacheRoot: string;
+  cacheRoot?: string;
+  bundlePath?: string;
   targetTimerange: TargetTimerange;
 };
 
@@ -477,7 +480,8 @@ export function buildRequestPreviewSegmentCommand(options: RequestPreviewSegment
   const payload = {
     kind: "requestPreviewSegment",
     draft: options.draft,
-    cacheRoot: options.cacheRoot,
+    ...(options.cacheRoot === undefined ? {} : { cacheRoot: options.cacheRoot }),
+    ...(options.bundlePath === undefined ? {} : { bundlePath: options.bundlePath }),
     targetTimerange: options.targetTimerange
   } satisfies RequestPreviewSegmentCommandPayload & { kind: "requestPreviewSegment" };
 

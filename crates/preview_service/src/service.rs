@@ -5,13 +5,14 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
+use artifact_store::paths::derived_root_path;
 use draft_model::{Draft, MaterialId, Microseconds, TargetTimerange};
-use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
-use ffmpeg_compiler::{CompileContext, CompilerCapabilities, FfmpegJob, compile_ffmpeg_job};
+use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
+use ffmpeg_compiler::{compile_ffmpeg_job, CompileContext, CompilerCapabilities, FfmpegJob};
 use media_runtime::{FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES};
 use render_graph::{
-    OutputDimensions, RenderGraphPlan, RenderGraphSnapshot, RenderOutputProfile,
-    build_render_graph, deterministic_fingerprint,
+    build_render_graph, deterministic_fingerprint, OutputDimensions, RenderGraphPlan,
+    RenderGraphSnapshot, RenderOutputProfile,
 };
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,7 @@ use crate::cache::{PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewC
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreviewServiceConfig {
     pub cache_root: PathBuf,
+    pub project_artifact_root: Option<PathBuf>,
     pub ffmpeg_path: PathBuf,
     pub compiler_capabilities: CompilerCapabilities,
     pub preview_frame_max_dimensions: OutputDimensions,
@@ -30,6 +32,7 @@ impl PreviewServiceConfig {
     pub fn new(cache_root: impl Into<PathBuf>, ffmpeg_path: impl Into<PathBuf>) -> Self {
         Self {
             cache_root: cache_root.into(),
+            project_artifact_root: None,
             ffmpeg_path: ffmpeg_path.into(),
             compiler_capabilities: CompilerCapabilities::all_available_for_tests(),
             preview_frame_max_dimensions: OutputDimensions::new(960, 540),
@@ -40,6 +43,17 @@ impl PreviewServiceConfig {
     pub fn with_compiler_capabilities(mut self, capabilities: CompilerCapabilities) -> Self {
         self.compiler_capabilities = capabilities;
         self
+    }
+
+    pub fn with_project_artifact_root(mut self, bundle_path: impl AsRef<Path>) -> Self {
+        self.project_artifact_root = Some(project_preview_artifact_root(bundle_path));
+        self
+    }
+
+    pub fn artifact_root(&self) -> &Path {
+        self.project_artifact_root
+            .as_deref()
+            .unwrap_or(&self.cache_root)
     }
 }
 
@@ -237,7 +251,7 @@ fn prepare_preview(
         &snapshot,
         material_dependencies,
     );
-    let artifact_path = artifact_path(&config.cache_root, &key);
+    let artifact_path = artifact_path(config.artifact_root(), &key);
     let artifact = PreviewArtifact {
         profile,
         path: path_to_string(&artifact_path),
@@ -249,7 +263,7 @@ fn prepare_preview(
             format!("preview output profile failed: {error}"),
         )
     })?;
-    let sidecar_dir = config.cache_root.join("sidecars");
+    let sidecar_dir = config.artifact_root().join("sidecars");
     let compile_context = CompileContext::new(&artifact_path, &sidecar_dir)
         .with_capabilities(config.compiler_capabilities.clone());
     let ffmpeg_job = compile_ffmpeg_job(&plan, &compile_context).map_err(|error| {
@@ -341,7 +355,7 @@ fn write_sidecars_and_run(
     config: &PreviewServiceConfig,
     job: &FfmpegJob,
 ) -> Result<(), PreviewServiceError> {
-    fs::create_dir_all(&config.cache_root).map_err(io_error)?;
+    fs::create_dir_all(config.artifact_root()).map_err(io_error)?;
     for sidecar in &job.sidecars {
         let path = Path::new(&sidecar.path);
         if let Some(parent) = path.parent() {
@@ -395,6 +409,12 @@ fn preview_cache_key(
 
 fn artifact_path(cache_root: &Path, key: &PreviewCacheKey) -> PathBuf {
     cache_root.join(format!("{}.{}", key.key_id, key.profile.extension()))
+}
+
+fn project_preview_artifact_root(bundle_path: impl AsRef<Path>) -> PathBuf {
+    derived_root_path(bundle_path.as_ref())
+        .join("blobs")
+        .join("preview")
 }
 
 fn artifact_exists(path: &str) -> bool {

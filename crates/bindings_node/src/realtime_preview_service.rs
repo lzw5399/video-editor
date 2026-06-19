@@ -4,13 +4,13 @@ use std::fmt;
 
 use draft_model::{Draft, Microseconds, RationalFrameRate};
 use realtime_preview_runtime::{
+    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
     PreviewRequestMode, PreviewSessionId, RealtimePreviewBackendUsed, RealtimePreviewDiagnostic,
     RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
-    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
 };
-use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
+use serde::{de::Error as SerdeDeError, Deserialize, Deserializer, Serialize};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 

@@ -44,7 +44,8 @@ fn preview_commands_request_frame_and_segment_through_preview_service_adapter() 
         &config,
         RequestPreviewFrameCommandPayload {
             draft: draft.clone(),
-            cache_root: temp.path().display().to_string(),
+            cache_root: Some(temp.path().display().to_string()),
+            bundle_path: None,
             target_time: Microseconds::new(500_000),
         },
     )
@@ -55,7 +56,8 @@ fn preview_commands_request_frame_and_segment_through_preview_service_adapter() 
         &config,
         RequestPreviewSegmentCommandPayload {
             draft,
-            cache_root: temp.path().display().to_string(),
+            cache_root: Some(temp.path().display().to_string()),
+            bundle_path: None,
             target_timerange: TargetTimerange::new(
                 Microseconds::new(500_000),
                 Microseconds::new(100_000),

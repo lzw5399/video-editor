@@ -10,6 +10,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+artifact_store = { path = "../artifact_store" }
 draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }
 ffmpeg_compiler = { path = "../ffmpeg_compiler" }

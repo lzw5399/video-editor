@@ -84,7 +84,6 @@ import { WorkspaceShell } from "./workspace/WorkspaceShell";
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
 
-const PREVIEW_CACHE_ROOT = "/tmp/video-editor-preview-cache";
 const PREVIEW_SEGMENT_DURATION_US = 2_000_000;
 
 type VideoEditorCoreApi = {
@@ -1310,7 +1309,7 @@ export function App(): React.ReactElement {
       (current) =>
         buildRequestPreviewFrameCommand({
           draft: current.draft,
-          cacheRoot: PREVIEW_CACHE_ROOT,
+          bundlePath,
           targetTime
         }),
       "请求预览帧",
@@ -1378,7 +1377,7 @@ export function App(): React.ReactElement {
       (current) =>
         buildRequestPreviewSegmentCommand({
           draft: current.draft,
-          cacheRoot: PREVIEW_CACHE_ROOT,
+          bundlePath,
           targetTimerange
         }),
       "生成预览片段",

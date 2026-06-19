@@ -20,9 +20,9 @@ pub mod timeline;
 pub mod validation;
 
 pub use canvas::{
-    CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
-    CanvasPixelPoint, DraftCanvasConfig, NormalizedCanvasPoint, canvas_pixel_to_normalized,
-    normalized_to_canvas_pixel, reduce_ratio,
+    canvas_pixel_to_normalized, normalized_to_canvas_pixel, reduce_ratio, CanvasAspectRatio,
+    CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability, CanvasPixelPoint,
+    DraftCanvasConfig, NormalizedCanvasPoint,
 };
 pub use delta::{
     ChangedEntity, CommandDelta, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
@@ -30,23 +30,22 @@ pub use delta::{
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
 pub use material::{
-    Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
-    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
+    add_material, mark_material_available, mark_material_missing, mark_material_probe_failed,
+    upsert_material, Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate,
 };
 pub use time::Microseconds;
 pub use timeline::{
     Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_OPACITY_MILLIS,
-    MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
-    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment,
-    SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
-    SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
-    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
-    TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
-    Transition,
+    MainTrackMagnet, Segment, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
+    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, Track, TrackKind, Transition, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
 };
-pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
+pub use validation::{migrate_draft_json, validate_draft, DraftValidationError};
 
 /// Current version label for the draft model contract surface.
 pub const DRAFT_MODEL_VERSION: &str = "0.1.0";
@@ -528,7 +527,12 @@ pub enum PreviewStatus {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestPreviewFrameCommandPayload {
     pub draft: Draft,
-    pub cache_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub cache_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundle_path: Option<String>,
     pub target_time: Microseconds,
 }
 
@@ -537,7 +541,12 @@ pub struct RequestPreviewFrameCommandPayload {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestPreviewSegmentCommandPayload {
     pub draft: Draft,
-    pub cache_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub cache_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub bundle_path: Option<String>,
     pub target_timerange: TargetTimerange,
 }
 

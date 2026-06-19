@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe, KeyframeProperty,
-    KeyframeValue, MAX_SEGMENT_VOLUME_MILLIS, MaterialId, MaterialKind, Microseconds,
-    RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask,
-    SegmentVisual, SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef,
-    TextLayoutRegion, TextSegment, TextStyle, reduce_ratio,
+    reduce_ratio, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
+    KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual,
+    SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion,
+    TextSegment, TextStyle, MAX_SEGMENT_VOLUME_MILLIS,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

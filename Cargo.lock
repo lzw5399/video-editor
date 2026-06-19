@@ -1525,6 +1525,7 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 name = "preview_service"
 version = "0.1.0"
 dependencies = [
+ "artifact_store",
  "draft_model",
  "engine_core",
  "ffmpeg_compiler",

@@ -5,15 +5,16 @@
 
 use draft_model::{
     CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandName,
-    CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
+    CommandPayload, CommandResultEnvelope, ExportJobStatusResponse,
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
     ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
     PreviewDecodeRequest, ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
     RequestPreviewSegmentCommandPayload, StartExportCommandPayload, VersionResponse,
+    DRAFT_MODEL_VERSION,
 };
-use media_runtime::{DiscoveryError, discover_runtime_config};
+use media_runtime::{discover_runtime_config, DiscoveryError};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
@@ -23,14 +24,13 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::artifact_store_service::handle_artifact_store_command;
 use crate::material_service::{
-    ImportMaterialRequest, MaterialServiceError, MissingMaterialDiagnostic,
-    MissingMaterialDiagnosticKind, import_material_and_save, list_materials,
-    list_missing_materials,
+    import_material_and_save, list_materials, list_missing_materials, ImportMaterialRequest,
+    MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
 };
 use crate::preview_export_service::{
-    ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
-    global_preview_frame_handle_registry, invalidate_preview_cache_command,
-    request_preview_frame_with_executor, request_preview_segment_with_executor,
+    export_error_diagnostic, global_export_registry, global_preview_frame_handle_registry,
+    invalidate_preview_cache_command, request_preview_frame_with_executor,
+    request_preview_segment_with_executor, ExportCommandError, PreviewCommandError,
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
@@ -456,8 +456,11 @@ fn request_preview_frame_command(
             ));
         }
     };
-    let config =
-        preview_service::PreviewServiceConfig::new(&payload.cache_root, runtime.ffmpeg.path);
+    let config = preview_service_config_from_preview_payload(
+        payload.cache_root.as_deref(),
+        payload.bundle_path.as_deref(),
+        runtime.ffmpeg.path,
+    );
     match request_preview_frame_with_executor(&executor, &config, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(preview_error_envelope("requestPreviewFrame", error)),
@@ -478,8 +481,11 @@ fn request_preview_segment_command(
             ));
         }
     };
-    let config =
-        preview_service::PreviewServiceConfig::new(&payload.cache_root, runtime.ffmpeg.path);
+    let config = preview_service_config_from_preview_payload(
+        payload.cache_root.as_deref(),
+        payload.bundle_path.as_deref(),
+        runtime.ffmpeg.path,
+    );
     match request_preview_segment_with_executor(&executor, &config, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(preview_error_envelope("requestPreviewSegment", error)),
@@ -490,6 +496,20 @@ fn invalidate_preview_cache_binding_command(
     payload: InvalidatePreviewCacheCommandPayload,
 ) -> Result<serde_json::Value> {
     to_js_value(ok_envelope(invalidate_preview_cache_command(payload)))
+}
+
+fn preview_service_config_from_preview_payload(
+    cache_root: Option<&str>,
+    bundle_path: Option<&str>,
+    ffmpeg_path: PathBuf,
+) -> preview_service::PreviewServiceConfig {
+    let fallback_cache_root = cache_root.unwrap_or(".video-editor-preview-cache");
+    let config = preview_service::PreviewServiceConfig::new(fallback_cache_root, ffmpeg_path);
+    if let Some(bundle_path) = bundle_path {
+        config.with_project_artifact_root(bundle_path)
+    } else {
+        config
+    }
 }
 
 fn start_export_command(payload: StartExportCommandPayload) -> Result<serde_json::Value> {
