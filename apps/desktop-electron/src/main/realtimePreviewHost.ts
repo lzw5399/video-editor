@@ -19,7 +19,6 @@ import {
   type RealtimePreviewBackendUsed,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
-  type RealtimePreviewRequestMode,
   type RealtimePreviewSurfaceBounds,
   type RealtimePreviewSurfaceDescriptor,
   type RealtimePreviewTelemetryResponse
@@ -151,9 +150,7 @@ export class RealtimePreviewHost {
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private draftSnapshot: Draft | null = null;
   private bundlePath: string | null = null;
-  private playbackTimer: ReturnType<typeof setInterval> | null = null;
   private playbackPositionMicroseconds = 0;
-  private lastPlaybackTickMs: number | null = null;
   private closed = false;
 
   constructor(private readonly window: BrowserWindow) {
@@ -268,7 +265,6 @@ export class RealtimePreviewHost {
       }
       const targetTime = sanitizeTargetTimeMicroseconds(targetTimeMicroseconds);
       this.playbackPositionMicroseconds = targetTime;
-      this.lastPlaybackTickMs = null;
       const response = seekRealtimePreview({
         sessionId: this.sessionId,
         targetTimeMicroseconds: targetTime
@@ -280,7 +276,6 @@ export class RealtimePreviewHost {
         playbackGeneration: response.playbackGeneration
       });
       this.fallbackLabel = null;
-      this.presentRealtimePreviewFrame("seek", targetTime);
       this.refreshTelemetry();
       return this.state("实时预览已寻帧");
     } catch (error) {
@@ -290,21 +285,23 @@ export class RealtimePreviewHost {
   }
 
   play(): RealtimePreviewHostDisplayState {
+    if (!this.hasProductionCompositedPresenter()) {
+      this.fallbackLabel = "实时预览不可用：GPU 合成播放尚未接入";
+      recordRealtimePreviewHostCall({ kind: "playRejectedMissingCompositor" });
+      this.refreshTelemetry();
+      return this.state("实时预览不可用");
+    }
+
     const state = this.applySessionPlaybackCommand("play", () => {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
       return playRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
     }, "实时预览播放中");
-    if (state.ok) {
-      this.startPlaybackFrameLoop();
-      return this.state("实时预览播放中");
-    }
     return state;
   }
 
   pause(): RealtimePreviewHostDisplayState {
-    this.stopPlaybackFrameLoop();
     return this.applySessionPlaybackCommand("pause", () => {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
@@ -314,9 +311,7 @@ export class RealtimePreviewHost {
   }
 
   stop(): RealtimePreviewHostDisplayState {
-    this.stopPlaybackFrameLoop();
     this.playbackPositionMicroseconds = 0;
-    this.lastPlaybackTickMs = null;
     return this.applySessionPlaybackCommand("stop", () => {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
@@ -331,7 +326,6 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
-    this.stopPlaybackFrameLoop();
     if (this.sessionId === null) {
       return;
     }
@@ -426,71 +420,6 @@ export class RealtimePreviewHost {
     }
   }
 
-  private startPlaybackFrameLoop(): void {
-    this.stopPlaybackFrameLoop();
-    this.lastPlaybackTickMs = Date.now();
-    this.presentRealtimePreviewFrame("playbackTick", this.playbackPositionMicroseconds);
-    this.playbackTimer = setInterval(() => {
-      this.tickPlaybackFrame();
-    }, playbackFrameDurationMs(this.draftSnapshot));
-  }
-
-  private stopPlaybackFrameLoop(): void {
-    if (this.playbackTimer !== null) {
-      clearInterval(this.playbackTimer);
-      this.playbackTimer = null;
-    }
-  }
-
-  private tickPlaybackFrame(): void {
-    if (this.sessionId === null || this.playbackGeneration === null || this.closed) {
-      this.stopPlaybackFrameLoop();
-      return;
-    }
-
-    const nowMs = Date.now();
-    const lastMs = this.lastPlaybackTickMs ?? nowMs;
-    this.lastPlaybackTickMs = nowMs;
-    const elapsedMicroseconds = Math.max(playbackFrameDurationMicroseconds(this.draftSnapshot), Math.round((nowMs - lastMs) * 1000));
-    const sequenceDuration = sequenceDurationMicroseconds(this.draftSnapshot);
-    this.playbackPositionMicroseconds = Math.min(
-      sequenceDuration > 0 ? sequenceDuration : Number.MAX_SAFE_INTEGER,
-      this.playbackPositionMicroseconds + elapsedMicroseconds
-    );
-
-    this.presentRealtimePreviewFrame("playbackTick", this.playbackPositionMicroseconds);
-
-    if (sequenceDuration > 0 && this.playbackPositionMicroseconds >= sequenceDuration) {
-      this.stopPlaybackFrameLoop();
-    }
-  }
-
-  private presentRealtimePreviewFrame(mode: RealtimePreviewRequestMode, targetTimeMicroseconds: number): void {
-    if (this.sessionId === null || this.playbackGeneration === null) {
-      return;
-    }
-
-    const targetTime = sanitizeTargetTimeMicroseconds(targetTimeMicroseconds);
-    this.lastFrame = requestRealtimePreviewFrame({
-      sessionId: this.sessionId,
-      frame: {
-        targetTimeMicroseconds: targetTime,
-        playbackGeneration: this.playbackGeneration,
-        queueLatencyMs: mode === "playbackTick" ? 1 : 2,
-        renderDurationMs: mode === "playbackTick" ? 4 : 5,
-        mode,
-        cacheHit: false
-      }
-    });
-    this.lastContentEvidence = null;
-    this.telemetry = this.lastFrame.telemetry;
-    recordRealtimePreviewHostCall({
-      kind: mode === "playbackTick" ? "requestPlaybackFrame" : "requestSeekFrame",
-      targetTimeMicroseconds: targetTime,
-      playbackGeneration: this.playbackGeneration
-    });
-  }
-
   private mockRealtimeFrameForTest(): void {
     if (this.sessionId === null || this.playbackGeneration === null || this.lastFrame !== null) {
       return;
@@ -552,6 +481,10 @@ export class RealtimePreviewHost {
     recordRealtimePreviewHostCall({ kind: "requestFirstFrame" });
   }
 
+  private hasProductionCompositedPresenter(): boolean {
+    return false;
+  }
+
   private state(statusLabel: string): RealtimePreviewHostDisplayState {
     const backend = this.lastFrame?.backend ?? "none";
     const fallbackReason = this.lastFrame?.fallback ?? null;
@@ -608,17 +541,6 @@ function sameBounds(first: RealtimePreviewSurfaceBounds | null, second: Realtime
     first.height === second.height &&
     first.scaleFactorMillis === second.scaleFactorMillis
   );
-}
-
-function playbackFrameDurationMicroseconds(draft: Draft | null): number {
-  const frameRate = draft?.canvasConfig.frameRate;
-  const numerator = Math.max(1, Math.round(frameRate?.numerator ?? 30));
-  const denominator = Math.max(1, Math.round(frameRate?.denominator ?? 1));
-  return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
-}
-
-function playbackFrameDurationMs(draft: Draft | null): number {
-  return Math.max(8, Math.round(playbackFrameDurationMicroseconds(draft) / 1000));
 }
 
 function sequenceDurationMicroseconds(draft: Draft | null): number {
