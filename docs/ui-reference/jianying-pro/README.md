@@ -60,9 +60,12 @@ Known missing or incomplete states:
 ## Alignment Rules
 
 - Preserve the five-zone editor structure: top feature bar, left resource panel, center preview, right inspector, bottom timeline.
+- Add a production project entry state before the editor workspace: users create
+  a new project or open an existing project before importing materials.
 - Keep primary category navigation in the top bar. Do not duplicate primary feature tabs in the left panel.
+- Put export in the top-right product bar as a modal flow. Do not keep a
+  permanent export panel inside the preview monitor area in production mode.
 - Use compact icon buttons for editor tools; text buttons are reserved for clear commands such as import/export/apply.
 - Keep debug/runtime/internal information out of the default production UI. FFmpeg paths, probe details, artifact paths, cache paths, and raw diagnostics may only appear behind an explicit developer diagnostics mode.
 - Use Jianying-style Chinese terminology where the product already has an equivalent: 草稿, 素材, 轨道, 片段, 关键帧, 滤镜, 转场, 导出.
 - Keep renderer behavior command-driven. UI controls may collect intent, but Rust command responses remain the accepted source for draft/timeline changes.
-

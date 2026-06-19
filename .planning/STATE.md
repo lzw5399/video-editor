@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Blocked at Phase 15.2 Plan 04 after RED desktop compositor presentation E2E
-last_updated: "2026-06-19T20:51:12Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04 RED E2E added; implementation blocked by missing native decoded texture import into WGPU compositor
+stopped_at: Replanned Phase 15.2 after Plan 04 RED E2E exposed missing GPU surface and decoded texture prerequisites
+last_updated: "2026-06-19T21:18:00Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04 RED E2E split into Plan 03A native WGPU surface presentation and Plan 03B decoded texture import prerequisites
 progress:
   total_phases: 23
   completed_phases: 18
-  total_plans: 119
+  total_plans: 121
   completed_plans: 115
   percent: 78
 ---
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-04
-Status: Executing — continue with desktop compositor presentation bridge
-Last activity: 2026-06-20 -- Phase 15.2 Plan 03 completed; media IO texture handoff and audio sync state now feed realtime preview contracts
+Plan: 15.2-03A
+Status: Executing — continue with native WGPU surface presentation prerequisite
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04 RED E2E proved product playback still lacks visible render-graph GPU presentation; next execute Plan 03A then 03B before retrying desktop host playback
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-03 complete, 3 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-03 complete, 5 P0 compositor/user-E2E/no-fallback plans remain after splitting native surface and texture-import prerequisites; Phase 15.3 UI convergence follows
 
 ## Performance Metrics
 
@@ -414,7 +414,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 15.2 Plan 04 blocked: imported-video render-graph GPU desktop presentation requires a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success.
+- Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
 
 ## Deferred Items
 
@@ -443,6 +443,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T20:51:12Z
-Stopped at: Blocked at 15.2-04 after RED E2E; requires native decoded texture import/presentation architecture
+Last session: 2026-06-19T21:18:00Z
+Stopped at: Replanned 15.2-04 blocker into 15.2-03A native WGPU surface presentation and 15.2-03B decoded texture import before desktop product playback
 Resume file: None

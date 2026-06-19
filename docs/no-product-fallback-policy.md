@@ -24,6 +24,8 @@ change replaces a product path.
 The product path must not use any of these as proof that playback works:
 
 - mock realtime backends or synthetic frame tokens
+- product-visible backend selectors, mock backend switches, or debug runtime
+  choices that let a normal user route around the production implementation
 - preview PNG/frame requests during playback
 - preview artifact or FFmpeg artifact frames
 - FFmpeg CPU decode probes or decoded-frame fingerprints
@@ -60,6 +62,9 @@ Every review touching product behavior must check:
   composition, available product presentation, or playback success.
 - Electron renderer and main process do not choose fallback paths or mutate
   semantic state to simulate success.
+- Normal product UI does not expose backend/runtime/mock selectors. Runtime
+  selection and capability diagnostics are internal or developer-diagnostics
+  surfaces only, and cannot be used as a user-facing workaround.
 - Rust binding APIs do not expose debug, mock, FFmpeg CPU, preview artifact, or
   legacy paths as product-success evidence.
 - Product E2E tests fail when the production path evidence is absent.

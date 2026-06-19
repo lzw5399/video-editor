@@ -18,9 +18,13 @@ Existing gates to extend:
 ## Interaction Gates
 
 - Top feature tabs switch panels without changing accepted draft state.
+- Production entry flow creates or opens a project before the editor workspace
+  allows material import.
 - Material import uses the system dialog by default; manual path import is developer diagnostics only.
 - Preview controls route through generated command envelopes and update accepted preview status without exposing derived artifact paths in production.
-- Export controls remain command-driven and should eventually move toward a modal/dropdown pattern matching the reference capture.
+- Export controls remain command-driven and open from a top-right modal/dropdown
+  pattern matching the reference capture; preview-area permanent export panels
+  are not production UI.
 - Timeline buttons, ruler seeking, playhead drag, track mute, segment select/add/split/trim/delete, undo/redo, and zoom must remain stable across desktop viewport sizes.
 
 ## Source Guards
@@ -44,4 +48,3 @@ Allowed exceptions:
 3. Introduce modal/dropdown tests for export and draft parameter editing.
 4. Add icon parity work: map existing compact controls to known symbols first, then add generated SVG only where no suitable symbol exists.
 5. Run full workspace tests, source guards, and visual screenshot inspection before accepting the UI pass.
-

@@ -12,15 +12,17 @@ would perform and verifies the visible or exported result.
 
 The test must start from the UI whenever possible:
 
-1. Import repository-owned fixture media through the product import path.
-2. Add or drag the material to a timeline track.
-3. Perform the edit through visible controls, mouse/keyboard interaction, or the
+1. Create a new project or open an existing project first when the product
+   entry shell exists.
+2. Import repository-owned fixture media through the product import path.
+3. Add or drag the material to a timeline track.
+4. Perform the edit through visible controls, mouse/keyboard interaction, or the
    same command bridge the UI uses.
-4. Verify the preview, timeline, inspector, save/reopen state, or export output
+5. Verify the preview, timeline, inspector, save/reopen state, or export output
    that a user would judge.
-5. Assert that fallback, mock, debug, first-frame, artifact, or CPU-probe paths
+6. Assert that fallback, mock, debug, first-frame, artifact, or CPU-probe paths
    did not satisfy the success condition.
-6. Assert that replaced legacy implementations are not still reachable as a
+7. Assert that replaced legacy implementations are not still reachable as a
    product substitute for the new path.
 
 ## Required Case Families
@@ -30,6 +32,8 @@ matrix should grow over time and must cover these families before a feature is
 called production-ready:
 
 - material import: video, image, audio, missing/unavailable media
+- project entry: create new project, open existing project, enter editor before
+  material import
 - timeline: add, drag/move, edge trim, split, delete, undo, redo, snapping
 - playback: play, pause, seek, scrub, playhead drag, previous/next frame
 - composition: video layer, image overlay, text overlay, track visibility,
@@ -38,7 +42,8 @@ called production-ready:
 - audio: playback, mute, volume, multiple-track mix state where exposed
 - persistence: save, close/reopen, semantic equality for edited drafts
 - export: output file, duration, resolution, fps, audio stream, preview/export
-  parity for the supported subset
+  parity for the supported subset, launched from the top-right modal flow once
+  the production UI convergence phase lands
 - production UI: default visible controls must either work in the E2E matrix or
   be hidden/gated until implemented
 

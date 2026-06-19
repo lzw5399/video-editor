@@ -55,6 +55,7 @@ The Electron desktop UI should use Simplified Chinese as the default user-facing
 - **No product fallback**: Product-facing paths must fail closed with explicit diagnostics when the production implementation is unavailable. Debug, mock, artifact, CPU, legacy, or approximate paths may not be reported as successful product behavior. Reviewers must apply `docs/no-product-fallback-policy.md` and run `pnpm run test:no-product-fallback` when touching preview/playback/rendering or other success-evidence paths.
 - **No legacy compatibility by default**: This is a greenfield editor. Refactors should replace incomplete historical implementations with the current intended architecture instead of preserving old product paths. Reviewers must apply `docs/refactor-and-legacy-cleanup-policy.md` and check that obsolete fallback, mock, debug, and alias paths are removed or gated from normal UI flows.
 - **Product E2E acceptance**: User-visible editor features are not complete until Playwright/Electron tests perform the real user workflow and verify product evidence: visible preview, timeline state, saved project, or exported media. Reviews must apply `docs/product-e2e-acceptance-policy.md`; unit tests and binding contracts are necessary but insufficient for production completion.
+- **Production UI flow**: The default desktop flow starts at a project entry state where the user creates a new project or opens an existing project before importing materials. Export is a top-right product action that opens a modal; permanent export panels inside the preview area are not the target production interaction.
 - **UI icon sourcing**: New production UI iconography should first use SVG assets selected from `/Users/zhiwen/code/video-editor/icons` and copy the chosen assets into the application before use. Only create new icons when the provided set has no suitable match.
 - **References**: Kdenlive and MLT are conceptual references only. Do not copy GPL code, assets, XML definitions, presets, or UI implementation.
 - **Compatibility**: External drafts go through adapters and produce compatibility reports. Proprietary IDs are external references, not internal render semantics.
@@ -76,6 +77,7 @@ The Electron desktop UI should use Simplified Chinese as the default user-facing
 | Treat product E2E as the completion gate for visible editing features | Code-level correctness can still produce a confusing or nonfunctional editor; normal user workflows must prove preview/playback/edit/export behavior end to end | `docs/product-e2e-acceptance-policy.md` is a mandatory review reference starting before Phase 15.2 |
 | Disallow fallback as product success | Fallback output hides missing production implementation and creates false confidence in playback/preview/export | `docs/no-product-fallback-policy.md` is a mandatory review reference and `pnpm run test:no-product-fallback` remains a required gate for success-evidence paths |
 | Prefer replacing legacy paths over preserving compatibility | The editor is being built from scratch; keeping old partial paths creates hidden fallback behavior and weakens production validation | `docs/refactor-and-legacy-cleanup-policy.md` is mandatory for refactors and review must check for obsolete code that should be removed or gated |
+| Use project-entry and top-right export as production workflow anchors | Jianying-style usage starts from a draft/project context and keeps export as a global product action, not a preview-panel debug tool | Phase 15.3 must add create/open project entry before import and move export into a top-right modal flow |
 | Treat canvas, transform, compositing, text, keyframes, retiming, effects, and transitions as core semantics | Template fidelity depends on shared draft/render behavior, not adapter-only strings or renderer-local state | Phases 7-13 added after MVP packaging to build these capabilities in Rust/domain/schema/IPC/UI with Jianying-aligned terms |
 
 ## Evolution
@@ -96,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after post-MVP core editing roadmap expansion*
+*Last updated: 2026-06-20 after Phase 15.2/15.3 P0 production preview and UI-flow corrections*
