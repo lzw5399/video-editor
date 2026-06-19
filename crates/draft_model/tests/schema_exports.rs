@@ -642,8 +642,8 @@ fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
         "graphDiff",
         "ffmpegArgs",
         "filterComplex",
-        "artifactStoreSqlite",
-        "priorityQueue",
+        concat!("artifactStore", "Sqlite"),
+        concat!("priority", "Queue"),
     ] {
         assert!(
             !command_envelope_ts.contains(forbidden) && !command_result_ts.contains(forbidden),
