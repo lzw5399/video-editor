@@ -9,7 +9,10 @@ use draft_model::{Draft, MaterialId, Microseconds, TargetTimerange};
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, FfmpegJob, compile_ffmpeg_job};
 use media_runtime::{FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES};
-use render_graph::{OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph};
+use render_graph::{
+    OutputDimensions, RenderGraphPlan, RenderGraphSnapshot, RenderOutputProfile,
+    build_render_graph, deterministic_fingerprint,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::cache::{PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewCacheProfile};
@@ -205,24 +208,6 @@ fn prepare_preview(
         )
     })?;
 
-    let material_dependencies = graph
-        .materials
-        .iter()
-        .map(|material| material.material_id.clone())
-        .collect::<Vec<_>>();
-    let semantic_fingerprint = semantic_fingerprint(draft)?;
-    let key = preview_cache_key(
-        profile,
-        target_timerange.clone(),
-        semantic_fingerprint,
-        material_dependencies,
-    );
-    let artifact_path = artifact_path(&config.cache_root, &key);
-    let artifact = PreviewArtifact {
-        profile,
-        path: path_to_string(&artifact_path),
-        mime_type: profile.mime_type().to_owned(),
-    };
     let output_profile = match profile {
         PreviewCacheProfile::FramePng => RenderOutputProfile::preview_frame_png(
             preview_output_dimensions(&normalized.profile, config.preview_frame_max_dimensions),
@@ -234,6 +219,29 @@ fn prepare_preview(
             range.frame_rate.clone(),
             target_timerange,
         ),
+    };
+    let runtime_capability_fingerprint = deterministic_fingerprint(
+        "preview-runtime-capabilities",
+        &config.compiler_capabilities,
+    );
+    let snapshot =
+        RenderGraphSnapshot::from_graph(&graph, &output_profile, &runtime_capability_fingerprint);
+    let material_dependencies = graph
+        .materials
+        .iter()
+        .map(|material| material.material_id.clone())
+        .collect::<Vec<_>>();
+    let key = preview_cache_key(
+        profile,
+        snapshot.target_timerange.clone(),
+        &snapshot,
+        material_dependencies,
+    );
+    let artifact_path = artifact_path(&config.cache_root, &key);
+    let artifact = PreviewArtifact {
+        profile,
+        path: path_to_string(&artifact_path),
+        mime_type: profile.mime_type().to_owned(),
     };
     let plan = RenderGraphPlan::new(graph, output_profile).map_err(|error| {
         PreviewServiceError::new(
@@ -374,22 +382,15 @@ fn write_sidecars_and_run(
 fn preview_cache_key(
     profile: PreviewCacheProfile,
     target_timerange: TargetTimerange,
-    semantic_fingerprint: String,
+    snapshot: &RenderGraphSnapshot,
     material_dependencies: Vec<MaterialId>,
 ) -> PreviewCacheKey {
-    PreviewCacheKey {
-        key_id: format!(
-            "{}-{}-{}-{}",
-            profile.as_str(),
-            target_timerange.start.get(),
-            target_timerange.duration.get(),
-            semantic_fingerprint
-        ),
+    PreviewCacheKey::from_node_fingerprints(
         profile,
         target_timerange,
-        semantic_fingerprint,
+        &snapshot.node_fingerprints,
         material_dependencies,
-    }
+    )
 }
 
 fn artifact_path(cache_root: &Path, key: &PreviewCacheKey) -> PathBuf {
@@ -400,21 +401,6 @@ fn artifact_exists(path: &str) -> bool {
     fs::metadata(path)
         .map(|metadata| metadata.is_file() && metadata.len() > 0)
         .unwrap_or(false)
-}
-
-fn semantic_fingerprint(draft: &Draft) -> Result<String, PreviewServiceError> {
-    let json = serde_json::to_string(draft).map_err(|error| {
-        PreviewServiceError::new(
-            PreviewServiceErrorKind::EngineFailed,
-            format!("preview semantic fingerprint serialization failed: {error}"),
-        )
-    })?;
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in json.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    Ok(format!("{hash:016x}"))
 }
 
 fn io_error(error: io::Error) -> PreviewServiceError {

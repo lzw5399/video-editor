@@ -466,7 +466,10 @@ fn invalidation_v2_from_command_delta_expands_export_prep_and_preview_cache_fact
             DirtyDomain::PreviewCache,
         ]
     );
-    assert_eq!(request.changed_material_ids, vec![MaterialId::new("video-material")]);
+    assert_eq!(
+        request.changed_material_ids,
+        vec![MaterialId::new("video-material")]
+    );
     assert_eq!(export_facts.dirty_ranges, request.dirty_ranges);
     assert_eq!(export_facts.changed_domains, request.changed_domains);
     assert_eq!(export_facts.reason, "visual edit");
@@ -487,11 +490,17 @@ fn entry(
                 Microseconds::new(start),
                 Microseconds::new(duration),
             ),
+            graph_node_keys: Vec::new(),
             semantic_fingerprint: format!("fingerprint-{id}"),
+            input_fingerprint: String::new(),
+            output_profile_fingerprint: String::new(),
+            runtime_capability_fingerprint: String::new(),
             material_dependencies: material_ids
                 .iter()
                 .map(|value| MaterialId::new(*value))
                 .collect(),
+            artifact_schema_version: 0,
+            generator_version: String::new(),
         },
         artifact: PreviewArtifact {
             profile,

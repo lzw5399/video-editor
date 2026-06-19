@@ -4,8 +4,7 @@ use draft_model::{
 };
 use preview_service::{
     ExportPrepDirtyFacts, PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewCacheProfile,
-    PreviewInvalidationRequest,
-    accepted_audio_edit_invalidation, accepted_text_edit_invalidation,
+    PreviewInvalidationRequest, accepted_audio_edit_invalidation, accepted_text_edit_invalidation,
     accepted_timeline_edit_invalidation, consumer_domains_for_dirty_domains,
     invalidate_preview_cache,
 };
@@ -142,8 +141,14 @@ fn export_prep_dirty_facts_match_preview_invalidation_facts() {
     let export_facts = ExportPrepDirtyFacts::from_invalidation_request(&request);
 
     assert_eq!(export_facts.dirty_ranges, request.dirty_ranges);
-    assert_eq!(export_facts.changed_material_ids, request.changed_material_ids);
-    assert_eq!(export_facts.changed_graph_node_keys, request.changed_graph_node_keys);
+    assert_eq!(
+        export_facts.changed_material_ids,
+        request.changed_material_ids
+    );
+    assert_eq!(
+        export_facts.changed_graph_node_keys,
+        request.changed_graph_node_keys
+    );
     assert_eq!(export_facts.changed_domains, request.changed_domains);
     assert_eq!(
         export_facts.runtime_capability_fingerprint.as_deref(),
@@ -183,7 +188,11 @@ fn dirty_domain_range_invalidation_requires_preview_cache_consumer_domain() {
         "preview cache",
     );
 
-    assert!(invalidate_preview_cache(&entries, &audio_only).invalidated.is_empty());
+    assert!(
+        invalidate_preview_cache(&entries, &audio_only)
+            .invalidated
+            .is_empty()
+    );
     assert_eq!(
         invalidate_preview_cache(&entries, &preview_cache).invalidated[0]
             .key
@@ -198,8 +207,14 @@ fn entry(id: &str, start: u64, duration: u64, profile: PreviewCacheProfile) -> P
             key_id: id.to_owned(),
             profile,
             target_timerange: range(start, duration),
+            graph_node_keys: Vec::new(),
             semantic_fingerprint: format!("fingerprint-{id}"),
+            input_fingerprint: String::new(),
+            output_profile_fingerprint: String::new(),
+            runtime_capability_fingerprint: String::new(),
             material_dependencies: Vec::new(),
+            artifact_schema_version: 0,
+            generator_version: String::new(),
         },
         artifact: PreviewArtifact {
             profile,

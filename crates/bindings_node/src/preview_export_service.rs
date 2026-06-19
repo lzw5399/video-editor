@@ -156,11 +156,19 @@ pub fn invalidate_preview_cache_command(
         .collect::<Vec<_>>();
     let result = invalidate_preview_cache(
         &entries,
-        &PreviewInvalidationRequest {
-            changed_ranges: payload.changed_ranges,
-            changed_material_ids: payload.changed_material_ids,
-            reason: payload.reason,
-        },
+        &PreviewInvalidationRequest::new(
+            payload
+                .changed_ranges
+                .into_iter()
+                .map(|target_timerange| draft_model::DirtyRange {
+                    target_timerange,
+                    source: draft_model::DirtyRangeSource::Current,
+                }),
+            payload.changed_material_ids,
+            [],
+            [draft_model::DirtyDomain::PreviewCache],
+            payload.reason,
+        ),
     );
 
     PreviewCacheInvalidationResponse {
@@ -988,8 +996,14 @@ fn cache_entry_ref(index: usize, entry: PreviewCacheEntryRef) -> PreviewCacheEnt
             key_id: format!("binding-entry-{index}"),
             profile,
             target_timerange: entry.target_timerange,
+            graph_node_keys: Vec::new(),
             semantic_fingerprint: "binding-provided".to_owned(),
+            input_fingerprint: String::new(),
+            output_profile_fingerprint: String::new(),
+            runtime_capability_fingerprint: String::new(),
             material_dependencies: entry.material_dependencies,
+            artifact_schema_version: 0,
+            generator_version: String::new(),
         },
         artifact: PreviewArtifact {
             profile,

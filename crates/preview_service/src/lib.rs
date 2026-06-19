@@ -10,6 +10,7 @@ pub mod realtime_frame_provider;
 pub mod service;
 
 pub use cache::{
+    ExportPrepDirtyFacts, PREVIEW_CACHE_ARTIFACT_SCHEMA_VERSION, PREVIEW_CACHE_GENERATOR_VERSION,
     PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewCacheProfile,
     PreviewInvalidationRequest, PreviewInvalidationResult, accepted_audio_edit_invalidation,
     accepted_edit_ranges_invalidation, accepted_text_edit_invalidation,
