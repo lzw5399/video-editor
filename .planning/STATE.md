@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-06-19T05:29:36.249Z"
-last_activity: 2026-06-19 -- Completed 14-04 generation jobs and derived artifact generation
+stopped_at: Completed 14-05-PLAN.md
+last_updated: "2026-06-19T05:42:07.627Z"
+last_activity: 2026-06-19 -- Completed 14-05 GC, quota, and local sync manifest semantics
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 105
-  completed_plans: 102
-  percent: 97
+  completed_plans: 103
+  percent: 98
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 14 (asset-resource-manager-and-derived-artifact-store) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 14-04 generation jobs and derived artifact generation
+Last activity: 2026-06-19 -- Completed 14-05 GC, quota, and local sync manifest semantics
 
-Progress: [██████████] 97%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 98
+- Total plans completed: 99
 - Average duration: 9 min
 - Total execution time: 950 min
 
@@ -155,6 +155,7 @@ Progress: [██████████] 97%
 | Phase 14 P02 | 7 min | 2 tasks | 7 files |
 | Phase 14 P03 | 8min | 2 tasks | 4 files |
 | Phase 14 P04 | 12 min | 3 tasks | 7 files |
+| Phase 14 P05 | 8 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -173,6 +174,9 @@ Progress: [██████████] 97%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 14]: GC candidates are selected from SQLite artifact rows and excluded by live artifact status, dependency rows, active generation jobs/chunks, and existing tombstones before any file deletion.
+- [Phase 14]: Quota labels are Rust-owned strings for UI transport; TypeScript does not compute totals from paths or inspect SQLite/blob internals.
+- [Phase 14]: Sync manifests are local deterministic contracts only; remote/cloud provider transport, auth, URLs, upload/download, and server rendering stay out of Phase 14.
 - [Phase 13]: Preview/export dirty facts now cross the binding boundary as generated transport data. — Plan 05B exposed DirtyRange-based invalidation payloads, graph node IDs, dirty domains, runtime/output fingerprints, full-draft flags, schema/generator versions, and export dirty facts without renderer-owned invalidation logic.
 - [Phase 13]: `ExportPrepDirtyFacts` lives in `draft_model` for schema and TypeScript generation. — It remains classification data only; no scheduler, SQLite artifact store, FFmpeg command construction, graph diff computation, or cache key derivation moved into bindings or renderer code.
 - [Phase 13]: Desktop command helper changes are type alignment only. — `commandHelpers.ts` now accepts generated `DirtyRange[]` for invalidation payload transport, with source guards continuing to block renderer-owned dirty/cache decisions.
