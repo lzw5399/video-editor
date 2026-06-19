@@ -27,6 +27,7 @@ pub use surface::{
 };
 pub use text::{TEXT_PARITY_UNPROVEN_REASON, TextPreviewOutcome, classify_text_preview_outcome};
 pub use texture_cache::{
-    RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
-    RealtimePreviewTextureId, RealtimePreviewTextureStorage, RealtimePreviewTextureStorageKind,
+    RealtimePreviewExternalTexturePlanes, RealtimePreviewTexture, RealtimePreviewTextureCache,
+    RealtimePreviewTextureCacheError, RealtimePreviewTextureId, RealtimePreviewTextureStorage,
+    RealtimePreviewTextureStorageKind,
 };

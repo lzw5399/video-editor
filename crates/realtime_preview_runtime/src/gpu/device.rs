@@ -2,6 +2,8 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+use super::texture_cache::RealtimePreviewExternalTexturePlanes;
+
 use super::surface::{
     NativeParentWindowHandle, PreviewSurfaceDescriptor, PreviewSurfaceDiagnosticKind,
     PreviewSurfaceError, RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget,
@@ -93,10 +95,12 @@ impl RealtimePreviewGpuDevice {
             .map_err(|_| RealtimePreviewGpuError::NoGpuAdapter { backend })?;
 
         let label_ref = label.as_deref();
+        let supported_features = adapter.features();
+        let required_features = supported_features & wgpu::Features::EXTERNAL_TEXTURE;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: label_ref,
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits: wgpu::Limits::downlevel_defaults(),
                 ..Default::default()
             })
@@ -121,6 +125,13 @@ impl RealtimePreviewGpuDevice {
 
     pub const fn uses_physical_adapter(&self) -> bool {
         self.device.is_some() && self.queue.is_some()
+    }
+
+    pub fn supports_external_texture(&self) -> bool {
+        self.device
+            .as_deref()
+            .map(|device| device.features().contains(wgpu::Features::EXTERNAL_TEXTURE))
+            .unwrap_or(false)
     }
 
     pub fn create_offscreen_target(
@@ -237,6 +248,111 @@ impl RealtimePreviewGpuDevice {
         ))
     }
 
+    pub fn create_nv12_external_texture_planes(
+        &self,
+        width: u32,
+        height: u32,
+        luma_pixels: &[u8],
+        chroma_pixels: &[u8],
+    ) -> Result<RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuError> {
+        let device = self
+            .device
+            .as_deref()
+            .ok_or(RealtimePreviewGpuError::WgpuDeviceUnavailable)?;
+        let queue = self
+            .queue
+            .as_deref()
+            .ok_or(RealtimePreviewGpuError::WgpuQueueUnavailable)?;
+        if !device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
+            return Err(RealtimePreviewGpuError::ExternalTextureUnsupported);
+        }
+        if width == 0 || height == 0 || width % 2 != 0 || height % 2 != 0 {
+            return Err(RealtimePreviewGpuError::InvalidExternalTexturePlanes(
+                "NV12 external texture planes require non-zero even dimensions".to_owned(),
+            ));
+        }
+        let expected_luma = width as usize * height as usize;
+        let expected_chroma = width as usize * (height as usize / 2);
+        if luma_pixels.len() != expected_luma || chroma_pixels.len() != expected_chroma {
+            return Err(RealtimePreviewGpuError::InvalidExternalTexturePlanes(
+                format!(
+                    "NV12 plane byte lengths must be luma={expected_luma}, chroma={expected_chroma}"
+                ),
+            ));
+        }
+
+        let luma = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("realtime-preview-nv12-luma-plane"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let chroma = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("realtime-preview-nv12-chroma-plane"),
+            size: wgpu::Extent3d {
+                width: width / 2,
+                height: height / 2,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &luma,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            luma_pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &chroma,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            chroma_pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height / 2),
+            },
+            wgpu::Extent3d {
+                width: width / 2,
+                height: height / 2,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        Ok(RealtimePreviewExternalTexturePlanes::new(
+            width, height, luma, chroma,
+        ))
+    }
+
     pub fn resize_presentation_target(
         &self,
         target: &mut RealtimePreviewGpuPresentationTarget,
@@ -316,6 +432,10 @@ pub enum RealtimePreviewGpuError {
         backend: RealtimePreviewGpuBackend,
         message: String,
     },
+    WgpuDeviceUnavailable,
+    WgpuQueueUnavailable,
+    ExternalTextureUnsupported,
+    InvalidExternalTexturePlanes(String),
     InvalidTarget(RealtimePreviewTargetError),
 }
 
@@ -330,6 +450,14 @@ impl fmt::Display for RealtimePreviewGpuError {
             }
             Self::DeviceRequest { backend, message } => {
                 write!(formatter, "failed to request {backend:?} device: {message}")
+            }
+            Self::WgpuDeviceUnavailable => formatter.write_str("wgpu device is unavailable"),
+            Self::WgpuQueueUnavailable => formatter.write_str("wgpu queue is unavailable"),
+            Self::ExternalTextureUnsupported => {
+                formatter.write_str("wgpu external texture feature is unavailable")
+            }
+            Self::InvalidExternalTexturePlanes(message) => {
+                write!(formatter, "invalid external texture planes: {message}")
             }
             Self::InvalidTarget(error) => error.fmt(formatter),
         }

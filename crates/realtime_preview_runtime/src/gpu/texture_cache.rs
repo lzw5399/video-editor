@@ -12,6 +12,34 @@ use crate::{
 
 use super::device::RealtimePreviewGpuDevice;
 
+#[derive(Debug)]
+pub struct RealtimePreviewExternalTexturePlanes {
+    pub width: u32,
+    pub height: u32,
+    luma: wgpu::Texture,
+    chroma: wgpu::Texture,
+}
+
+impl RealtimePreviewExternalTexturePlanes {
+    pub(crate) fn new(width: u32, height: u32, luma: wgpu::Texture, chroma: wgpu::Texture) -> Self {
+        Self {
+            width,
+            height,
+            luma,
+            chroma,
+        }
+    }
+
+    pub(crate) fn create_plane_views(&self) -> [wgpu::TextureView; 2] {
+        [
+            self.luma
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+            self.chroma
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+        ]
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RealtimePreviewTextureId(u64);
 

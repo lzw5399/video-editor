@@ -16,9 +16,9 @@ use crate::{
 };
 
 use super::{
-    RealtimePreviewGpuDevice, RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget,
-    RealtimePreviewPipelineSet, RealtimePreviewTexture, RealtimePreviewTextureCache,
-    RealtimePreviewTextureCacheError,
+    RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuDevice,
+    RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget, RealtimePreviewPipelineSet,
+    RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
 };
 
 use super::text::{TextRasterizationError, rasterize_text_overlay};
@@ -551,8 +551,8 @@ fn encode_wgpu_graph_to_view(
             multiview_mask: None,
         });
         if let Some(resources) = pipeline_resources.as_ref() {
-            pass.set_pipeline(&resources.pipeline);
             for draw in &layer_draws {
+                pass.set_pipeline(resources.pipeline(draw.pipeline_kind));
                 pass.set_bind_group(0, &draw.bind_group, &[]);
                 pass.set_vertex_buffer(0, draw.vertex_buffer.slice(..));
                 pass.draw(0..6, 0..1);
@@ -563,8 +563,10 @@ fn encode_wgpu_graph_to_view(
 }
 
 struct RealtimePreviewWgpuPipelines {
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
+    texture_pipeline: wgpu::RenderPipeline,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    external_pipeline: Option<wgpu::RenderPipeline>,
+    external_bind_group_layout: Option<wgpu::BindGroupLayout>,
     sampler: wgpu::Sampler,
 }
 
@@ -617,7 +619,7 @@ impl RealtimePreviewWgpuPipelines {
                 shader_location: 2,
             },
         ];
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let texture_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("realtime-preview-textured-quad-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
@@ -659,25 +661,97 @@ impl RealtimePreviewWgpuPipelines {
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
+        let (external_pipeline, external_bind_group_layout) =
+            if device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
+                let external_bind_group_layout =
+                    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: Some("realtime-preview-external-texture-bind-group-layout"),
+                        entries: &[wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::ExternalTexture,
+                            count: None,
+                        }],
+                    });
+                let external_pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("realtime-preview-external-texture-pipeline-layout"),
+                        bind_group_layouts: &[Some(&external_bind_group_layout)],
+                        immediate_size: 0,
+                    });
+                let external_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("realtime-preview-external-texture-shader"),
+                    source: wgpu::ShaderSource::Wgsl(EXTERNAL_TEXTURE_QUAD_SHADER.into()),
+                });
+                let external_pipeline =
+                    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some("realtime-preview-external-texture-pipeline"),
+                        layout: Some(&external_pipeline_layout),
+                        vertex: wgpu::VertexState {
+                            module: &external_shader,
+                            entry_point: Some("vs_main"),
+                            compilation_options: wgpu::PipelineCompilationOptions::default(),
+                            buffers: &[wgpu::VertexBufferLayout {
+                                array_stride: 20,
+                                step_mode: wgpu::VertexStepMode::Vertex,
+                                attributes: &vertex_attributes,
+                            }],
+                        },
+                        primitive: wgpu::PrimitiveState {
+                            topology: wgpu::PrimitiveTopology::TriangleList,
+                            ..Default::default()
+                        },
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        fragment: Some(wgpu::FragmentState {
+                            module: &external_shader,
+                            entry_point: Some("fs_main"),
+                            compilation_options: wgpu::PipelineCompilationOptions::default(),
+                            targets: &[Some(wgpu::ColorTargetState {
+                                format: format.wgpu_format(),
+                                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                                write_mask: wgpu::ColorWrites::ALL,
+                            })],
+                        }),
+                        multiview_mask: None,
+                        cache: None,
+                    });
+                (Some(external_pipeline), Some(external_bind_group_layout))
+            } else {
+                (None, None)
+            };
 
         Self {
-            pipeline,
-            bind_group_layout,
+            texture_pipeline,
+            texture_bind_group_layout: bind_group_layout,
+            external_pipeline,
+            external_bind_group_layout,
             sampler,
+        }
+    }
+
+    fn pipeline(&self, kind: WgpuLayerPipelineKind) -> &wgpu::RenderPipeline {
+        match kind {
+            WgpuLayerPipelineKind::Texture => &self.texture_pipeline,
+            WgpuLayerPipelineKind::ExternalTexture => self
+                .external_pipeline
+                .as_ref()
+                .expect("external texture draw should be rejected before render pass"),
         }
     }
 }
 
 struct WgpuLayerDraw {
-    _texture: WgpuLayerTexture,
-    _view: wgpu::TextureView,
+    _resources: WgpuLayerResources,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
+    pipeline_kind: WgpuLayerPipelineKind,
 }
 
 enum WgpuLayerTexture {
     Owned(wgpu::Texture),
     Imported(Rc<wgpu::Texture>),
+    ExternalNv12(Rc<RealtimePreviewExternalTexturePlanes>),
 }
 
 impl WgpuLayerTexture {
@@ -685,8 +759,29 @@ impl WgpuLayerTexture {
         match self {
             Self::Owned(texture) => texture,
             Self::Imported(texture) => texture.as_ref(),
+            Self::ExternalNv12(_) => {
+                panic!("external texture planes cannot be used as a sampled rgba texture")
+            }
         }
     }
+}
+
+enum WgpuLayerResources {
+    Texture {
+        _texture: WgpuLayerTexture,
+        _view: wgpu::TextureView,
+    },
+    ExternalTexture {
+        _planes: Rc<RealtimePreviewExternalTexturePlanes>,
+        _views: [wgpu::TextureView; 2],
+        _external_texture: wgpu::ExternalTexture,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum WgpuLayerPipelineKind {
+    Texture,
+    ExternalTexture,
 }
 
 fn prepare_wgpu_layer_draws(
@@ -831,7 +926,7 @@ fn push_wgpu_video_layer_draw(
         }
     };
     let visual = sampled_visual_for(graph, layer).unwrap_or(&layer.visual);
-    push_wgpu_texture_draw(
+    push_wgpu_layer_draw(
         device,
         queue,
         resources,
@@ -876,7 +971,7 @@ fn push_wgpu_text_layer_draw(
         &rasterized.pixels,
         "realtime-preview-text-layer-texture",
     )?;
-    push_wgpu_texture_draw(
+    push_wgpu_layer_draw(
         device,
         queue,
         resources,
@@ -894,7 +989,7 @@ fn push_wgpu_text_layer_draw(
     Ok(())
 }
 
-fn push_wgpu_texture_draw(
+fn push_wgpu_layer_draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
@@ -902,23 +997,73 @@ fn push_wgpu_texture_draw(
     texture: WgpuLayerTexture,
     vertices: Vec<u8>,
 ) {
-    let view = texture
-        .texture()
-        .create_view(&wgpu::TextureViewDescriptor::default());
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("realtime-preview-textured-quad-bind-group"),
-        layout: &resources.bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&resources.sampler),
-            },
-        ],
-    });
+    let (layer_resources, bind_group, pipeline_kind) = match texture {
+        WgpuLayerTexture::ExternalNv12(planes) => {
+            let Some(layout) = resources.external_bind_group_layout.as_ref() else {
+                return;
+            };
+            let views = planes.create_plane_views();
+            let external_texture = device.create_external_texture(
+                &wgpu::ExternalTextureDescriptor {
+                    label: Some("realtime-preview-nv12-external-texture"),
+                    width: planes.width,
+                    height: planes.height,
+                    format: wgpu::ExternalTextureFormat::Nv12,
+                    yuv_conversion_matrix: BT709_LIMITED_YUV_TO_RGBA,
+                    gamut_conversion_matrix: IDENTITY_3X3,
+                    src_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
+                    dst_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
+                    sample_transform: IDENTITY_3X2,
+                    load_transform: IDENTITY_3X2,
+                },
+                &[&views[0], &views[1]],
+            );
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("realtime-preview-external-texture-bind-group"),
+                layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::ExternalTexture(&external_texture),
+                }],
+            });
+            (
+                WgpuLayerResources::ExternalTexture {
+                    _planes: planes,
+                    _views: views,
+                    _external_texture: external_texture,
+                },
+                bind_group,
+                WgpuLayerPipelineKind::ExternalTexture,
+            )
+        }
+        texture => {
+            let view = texture
+                .texture()
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("realtime-preview-textured-quad-bind-group"),
+                layout: &resources.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&resources.sampler),
+                    },
+                ],
+            });
+            (
+                WgpuLayerResources::Texture {
+                    _texture: texture,
+                    _view: view,
+                },
+                bind_group,
+                WgpuLayerPipelineKind::Texture,
+            )
+        }
+    };
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("realtime-preview-textured-quad-vertices"),
         size: vertices.len() as wgpu::BufferAddress,
@@ -927,10 +1072,10 @@ fn push_wgpu_texture_draw(
     });
     queue.write_buffer(&vertex_buffer, 0, &vertices);
     draws.push(WgpuLayerDraw {
-        _texture: texture,
-        _view: view,
+        _resources: layer_resources,
         bind_group,
         vertex_buffer,
+        pipeline_kind,
     });
 }
 
@@ -1006,6 +1151,25 @@ fn upload_wgpu_layer_texture(
                 .map_err(|error| {
                     RealtimePreviewCompositorError::WgpuFrameUpload(error.to_string())
                 })?;
+            if handle.pixel_format == "nv12" {
+                if !device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
+                    return Err(
+                        RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                            handle_id: handle.handle_id,
+                            backend: format!("{}:external-texture-unavailable", handle.backend),
+                        },
+                    );
+                }
+                if let Some(planes) = lease.resource_as::<RealtimePreviewExternalTexturePlanes>() {
+                    return Ok(WgpuLayerTexture::ExternalNv12(planes));
+                }
+                return Err(
+                    RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                        handle_id: handle.handle_id,
+                        backend: format!("{}:{}", handle.backend, handle.pixel_format),
+                    },
+                );
+            }
             let Some(texture) = lease.resource_as::<wgpu::Texture>() else {
                 return Err(
                     RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
@@ -1227,6 +1391,48 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     return vec4<f32>(color.rgb, color.a * in.opacity);
 }
 "#;
+
+const EXTERNAL_TEXTURE_QUAD_SHADER: &str = r#"
+struct VertexOut {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) opacity: f32,
+};
+
+@vertex
+fn vs_main(
+    @location(0) position: vec2<f32>,
+    @location(1) uv: vec2<f32>,
+    @location(2) opacity: f32,
+) -> VertexOut {
+    var out: VertexOut;
+    out.position = vec4<f32>(position, 0.0, 1.0);
+    out.uv = uv;
+    out.opacity = opacity;
+    return out;
+}
+
+@group(0) @binding(0) var layer_texture: texture_external;
+
+@fragment
+fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
+    let color = textureSampleBaseClampToEdge(layer_texture, in.uv);
+    return vec4<f32>(color.rgb, color.a * in.opacity);
+}
+"#;
+
+const IDENTITY_3X2: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+const IDENTITY_3X3: [f32; 9] = [
+    1.0, 0.0, 0.0, //
+    0.0, 1.0, 0.0, //
+    0.0, 0.0, 1.0,
+];
+const BT709_LIMITED_YUV_TO_RGBA: [f32; 16] = [
+    1.164383, 1.164383, 1.164383, 0.0, //
+    0.0, -0.213249, 2.112402, 0.0, //
+    1.792741, -0.532909, 0.0, 0.0, //
+    -0.972945, 0.301483, -1.133402, 1.0,
+];
 
 fn canvas_clear_color(graph: &RenderGraph) -> Result<wgpu::Color, RealtimePreviewCompositorError> {
     let color = match graph.canvas.background.mode {

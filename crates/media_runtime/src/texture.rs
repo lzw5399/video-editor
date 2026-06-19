@@ -47,6 +47,7 @@ pub struct TextureHandle {
 #[serde(rename_all = "camelCase")]
 pub enum NativeTextureLeaseResourceKind {
     WgpuTexture,
+    WgpuExternalTexturePlanes,
     MacosCoreVideoMetalTexture,
     WindowsD3dTexture,
     PlatformOpaque,

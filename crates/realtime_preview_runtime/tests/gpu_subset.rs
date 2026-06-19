@@ -4,6 +4,10 @@ use draft_model::{
     TargetTimerange, TextAlignment, TextLayoutRegion, TextSegment, TextStyle, Track, TrackId,
     TrackKind,
 };
+use media_runtime::{
+    MediaSessionId, NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RuntimeDeviceId,
+    TextureBackend, VideoColorMetadata,
+};
 use realtime_preview_runtime::gpu::{
     RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewGpuBackend,
     RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuTarget,
@@ -13,7 +17,7 @@ use realtime_preview_runtime::{
     CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
     PreviewFrameProvider, PreviewFrameProviderError, RealtimePreviewCapabilityClassifier,
     RealtimePreviewGraphInput, RealtimePreviewGraphSupport, SoftwareVideoFrameProvider,
-    prepare_realtime_preview_graph,
+    TextureHandleDescriptor, prepare_realtime_preview_graph,
 };
 use render_graph::{
     OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
@@ -215,6 +219,112 @@ fn real_wgpu_compositor_renders_bundled_text_overlay_with_render_pass() {
 }
 
 #[test]
+fn nv12_opaque_texture_handles_do_not_satisfy_gpu_compositor_success() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU").ok().as_deref() != Some("1") {
+        eprintln!("set VIDEO_EDITOR_TEST_WGPU=1 to run the real compositor import contract");
+        return;
+    }
+
+    let video_id = MaterialId::from("video");
+    let descriptor = nv12_texture_descriptor(&video_id, "opaque-nv12-texture");
+    let registry = NativeTextureLeaseRegistry::new();
+    registry
+        .register_resource(
+            descriptor
+                .to_texture_handle()
+                .expect("descriptor should convert to a texture handle"),
+            NativeTextureLeaseResourceKind::PlatformOpaque,
+            "opaque-platform-resource".to_owned(),
+        )
+        .expect("opaque native texture lease should register");
+
+    let output = render_graph_with_real_wgpu_registry(
+        single_video_graph(&video_id, 2, 2),
+        TextureHandleProvider::new(video_id, descriptor),
+        registry,
+    );
+
+    assert_eq!(output.support, RealtimePreviewGraphSupport::Unsupported);
+    assert_eq!(output.submitted_draws, 0);
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic
+            .reason
+            .contains("external metalTexture:nv12 texture handles are not imported")),
+        "opaque NV12 handles must fail closed, diagnostics: {:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
+#[ignore = "manual platform smoke: run with VIDEO_EDITOR_TEST_WGPU=1 on WGPU hosts with ExternalTexture support"]
+fn real_wgpu_compositor_samples_nv12_external_texture_planes() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU").ok().as_deref() != Some("1") {
+        eprintln!("set VIDEO_EDITOR_TEST_WGPU=1 to run the real compositor import smoke");
+        return;
+    }
+
+    let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
+        backend: RealtimePreviewGpuBackend::Auto,
+        label: Some("real-wgpu-nv12-external-texture-test".to_owned()),
+    })
+    .expect("real GPU device should bootstrap");
+    assert!(device.uses_physical_adapter());
+    if !device.supports_external_texture() {
+        eprintln!("WGPU adapter does not expose ExternalTexture; fail-closed contract covers this");
+        return;
+    }
+
+    let video_id = MaterialId::from("video");
+    let descriptor = nv12_texture_descriptor(&video_id, "wgpu-nv12-texture");
+    let planes = device
+        .create_nv12_external_texture_planes(2, 2, &[235, 235, 235, 235], &[128, 128])
+        .expect("NV12 planes should allocate as WGPU textures");
+    let registry = NativeTextureLeaseRegistry::new();
+    registry
+        .register_resource(
+            descriptor
+                .to_texture_handle()
+                .expect("descriptor should convert to a texture handle"),
+            NativeTextureLeaseResourceKind::WgpuExternalTexturePlanes,
+            planes,
+        )
+        .expect("WGPU external texture planes should register");
+    let target = device
+        .create_offscreen_target(2, 2, 1_000, RealtimePreviewTargetFormat::Rgba8UnormSrgb)
+        .expect("real GPU target should be valid");
+    let mut compositor = RealtimePreviewCompositor::new(
+        device,
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
+    );
+    let mut provider = TextureHandleProvider::new(video_id, descriptor);
+    let mut texture_cache =
+        RealtimePreviewTextureCache::new().with_native_texture_registry(registry);
+
+    let output = compositor
+        .render_offscreen(
+            &single_video_graph(&provider.material_id, 2, 2),
+            &target,
+            &mut provider,
+            &mut texture_cache,
+        )
+        .expect("real GPU compositor should render NV12 external texture planes");
+
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::WgpuRenderPass
+    );
+    assert_eq!(output.support, RealtimePreviewGraphSupport::Supported);
+    assert_eq!(output.submitted_draws, 1);
+    assert!(
+        output
+            .pixels
+            .chunks_exact(4)
+            .any(|pixel| pixel[0] > 160 && pixel[1] > 160 && pixel[2] > 160),
+        "NV12 luma should produce visible GPU-sampled output pixels"
+    );
+}
+
+#[test]
 fn gpu_subset_gpu_module_does_not_import_forbidden_runtime_boundaries() {
     let gpu_sources = [
         include_str!("../src/gpu/mod.rs"),
@@ -296,6 +406,37 @@ fn render_graph_with_real_wgpu_provider(
         .expect("real GPU composition should render")
 }
 
+fn render_graph_with_real_wgpu_registry(
+    graph: RenderGraph,
+    mut provider: impl PreviewFrameProvider,
+    registry: NativeTextureLeaseRegistry,
+) -> realtime_preview_runtime::gpu::RealtimePreviewCompositorOutput {
+    let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
+        backend: RealtimePreviewGpuBackend::Auto,
+        label: Some("real-wgpu-gpu-registry-test".to_owned()),
+    })
+    .expect("real GPU device should bootstrap");
+    assert!(device.uses_physical_adapter());
+    let target = device
+        .create_offscreen_target(
+            graph.canvas.width,
+            graph.canvas.height,
+            1_000,
+            RealtimePreviewTargetFormat::Rgba8UnormSrgb,
+        )
+        .expect("real GPU target should be valid");
+    let mut compositor = RealtimePreviewCompositor::new(
+        device,
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
+    );
+    let mut texture_cache =
+        RealtimePreviewTextureCache::new().with_native_texture_registry(registry);
+
+    compositor
+        .render_offscreen(&graph, &target, &mut provider, &mut texture_cache)
+        .expect("real GPU composition should render")
+}
+
 fn solid_canvas_graph(color: &str) -> RenderGraph {
     RenderGraph {
         draft_id: DraftId::from("draft"),
@@ -355,6 +496,50 @@ fn textured_graph(image_id: &MaterialId, video_id: &MaterialId, video_opacity: u
         ),
     ];
     graph
+}
+
+fn single_video_graph(video_id: &MaterialId, width: u32, height: u32) -> RenderGraph {
+    let mut graph = solid_canvas_graph("#000000");
+    graph.canvas.width = width;
+    graph.canvas.height = height;
+    graph.materials = vec![material(video_id, MaterialKind::Video)];
+    graph.materials[0].width = Some(width);
+    graph.materials[0].height = Some(height);
+    graph.video_layers = vec![layer(
+        "video-segment",
+        video_id,
+        MaterialKind::Video,
+        0,
+        0,
+        0,
+        1_000,
+    )];
+    graph.video_layers[0].visual.transform.scale = SegmentScale {
+        x_millis: 1_000,
+        y_millis: 1_000,
+    };
+    graph
+}
+
+fn nv12_texture_descriptor(material_id: &MaterialId, handle_id: &str) -> TextureHandleDescriptor {
+    TextureHandleDescriptor::new(
+        material_id.clone(),
+        Microseconds::ZERO,
+        handle_id,
+        MediaSessionId("session-texture-1".to_owned()),
+        PlaybackGeneration::initial(),
+        "metalTexture",
+        RuntimeDeviceId {
+            backend: TextureBackend::MetalTexture,
+            adapter_id: "metal-adapter".to_owned(),
+            device_id: "metal-device".to_owned(),
+        },
+        2,
+        2,
+        "nv12",
+        VideoColorMetadata::unknown_with_diagnostic("test texture color"),
+    )
+    .expect("NV12 texture descriptor should be valid")
 }
 
 fn text_overlay_graph() -> RenderGraph {
@@ -507,6 +692,47 @@ struct ImageThenSoftwareVideoProvider {
     image_id: MaterialId,
     image_frame: CpuVideoFrame,
     video_provider: SoftwareVideoFrameProvider,
+}
+
+struct TextureHandleProvider {
+    material_id: MaterialId,
+    descriptor: TextureHandleDescriptor,
+}
+
+impl TextureHandleProvider {
+    fn new(material_id: MaterialId, descriptor: TextureHandleDescriptor) -> Self {
+        Self {
+            material_id,
+            descriptor,
+        }
+    }
+}
+
+impl PreviewFrameProvider for TextureHandleProvider {
+    fn provider_name(&self) -> &'static str {
+        "texture-handle-provider"
+    }
+
+    fn frame_for(
+        &mut self,
+        material_id: &MaterialId,
+        source_position: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
+        if material_id != &self.material_id {
+            return Err(PreviewFrameProviderError::unavailable(
+                self.provider_name(),
+                material_id.clone(),
+                source_position,
+                playback_generation,
+                "unexpected material id",
+            ));
+        }
+        let mut descriptor = self.descriptor.clone();
+        descriptor.source_position = source_position;
+        descriptor.playback_generation = playback_generation;
+        Ok(PreviewFrameInput::TextureHandle(descriptor))
+    }
 }
 
 impl ImageThenSoftwareVideoProvider {
