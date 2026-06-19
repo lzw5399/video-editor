@@ -3,10 +3,12 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
-    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
-    TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
@@ -128,6 +130,48 @@ pub fn export_plan_with_wrapped_text() -> RenderGraphPlan {
         .expect("compiler draft should include text");
     text.content = "abcdefghij".to_owned();
     text.text_box.width_millis = 100;
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
+pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.audio.gain_millis = 750;
+    audio.audio.pan_balance_millis = AudioPanBalance {
+        balance_millis: -500,
+    };
+    audio.audio.fade_in_duration = AudioFade {
+        duration: Microseconds::new(100_000),
+    };
+    audio.audio.fade_out_duration = AudioFade {
+        duration: Microseconds::new(200_000),
+    };
+    audio.audio.effect_slots.push(AudioEffectSlot {
+        slot_id: "slot-external-space".to_owned(),
+        enabled: true,
+        kind: AudioEffectSlotKind::Unsupported {
+            name: "external-space".to_owned(),
+            external_ref: Some("jianying://effect/external-space".to_owned()),
+        },
+    });
+    audio.keyframes.push(Keyframe {
+        at: Microseconds::new(650_000),
+        property: KeyframeProperty::Volume,
+        value: KeyframeValue::Uint { value: 1_250 },
+        interpolation: KeyframeInterpolation::Linear,
+        easing: KeyframeEasing::None,
+    });
 
     let graph = sample_graph_from_draft(&draft);
     RenderGraphPlan::new(

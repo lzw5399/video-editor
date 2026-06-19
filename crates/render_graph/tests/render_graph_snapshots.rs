@@ -3,17 +3,18 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
-    KeyframeValue, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef,
-    TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
-    TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    Microseconds, RationalFrameRate, Segment, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentFitMode, SegmentMask, SegmentPosition, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    Transition,
 };
-use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
-    build_render_graph, ExportMp4Preset, OutputDimensions, PreviewFrameFormat,
-    RenderGraphErrorKind, RenderGraphPlan, RenderGraphSnapshot, RenderOutputProfile,
+    ExportMp4Preset, OutputDimensions, PreviewFrameFormat, RenderGraphErrorKind, RenderGraphPlan,
+    RenderGraphSnapshot, RenderOutputProfile, build_render_graph,
 };
 
 #[test]
@@ -508,6 +509,76 @@ fn keyframe_render_graph_preserves_typed_intent_and_sampled_animation_states() {
 }
 
 #[test]
+fn audio_render_graph_maps_dsp_mix_intent_for_export_without_ffmpeg_syntax() {
+    let mut draft = render_graph_draft();
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.audio.gain_millis = 750;
+    audio.audio.pan_balance_millis = AudioPanBalance {
+        balance_millis: -400,
+    };
+    audio.audio.fade_in_duration = AudioFade {
+        duration: Microseconds::new(125_000),
+    };
+    audio.audio.fade_out_duration = AudioFade {
+        duration: Microseconds::new(250_000),
+    };
+    audio.audio.effect_slots.push(AudioEffectSlot {
+        slot_id: "slot-vendor-space".to_owned(),
+        enabled: true,
+        kind: AudioEffectSlotKind::Unsupported {
+            name: "vendor-space".to_owned(),
+            external_ref: Some("jianying://audio/effects/space".to_owned()),
+        },
+    });
+    audio
+        .keyframes
+        .push(uint_keyframe(KeyframeProperty::Volume, 625_000, 1_250));
+
+    let normalized =
+        normalize_draft(&draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+    )
+    .expect("range state should resolve");
+
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+    let mix = graph
+        .audio_mixes
+        .iter()
+        .find(|mix| mix.segment_id.as_str() == "audio-a")
+        .expect("audio segment should map into render graph");
+
+    assert_eq!(mix.gain_millis, 750);
+    assert_eq!(mix.pan_balance_millis, -400);
+    assert_eq!(mix.fade_in_duration, Microseconds::new(125_000));
+    assert_eq!(mix.fade_out_duration, Microseconds::new(250_000));
+    assert_eq!(mix.volume_keyframes.len(), 1);
+    assert_eq!(
+        mix.volume_keyframes[0].target_time,
+        Microseconds::new(625_000)
+    );
+    assert_eq!(mix.volume_keyframes[0].gain_millis, 1_250);
+    assert_eq!(mix.effect_slots.len(), 1);
+    assert_eq!(mix.effect_slots[0].slot_id, "slot-vendor-space");
+    assert_eq!(
+        mix.effect_slots[0].support,
+        render_graph::RenderAudioEffectSlotSupport::Unsupported
+    );
+
+    let snapshot = serde_json::to_string_pretty(&graph).expect("graph should serialize");
+    assert!(snapshot.contains("\"gainMillis\": 750"));
+    assert!(snapshot.contains("\"panBalanceMillis\": -400"));
+    assert!(snapshot.contains("\"fadeInDuration\": 125000"));
+    assert!(snapshot.contains("\"fadeOutDuration\": 250000"));
+    assert!(snapshot.contains("\"support\": \"unsupported\""));
+    assert!(!snapshot.contains("filter_complex"));
+    assert!(!snapshot.contains("atrim"));
+    assert!(!snapshot.contains("volume="));
+    assert!(!snapshot.contains("pan="));
+}
+
+#[test]
 fn render_graph_preserves_filter_and_transition_intents_without_ffmpeg_syntax() {
     let normalized = normalize_draft(&render_graph_draft(), &EngineProfile::mvp_default())
         .expect("draft should normalize");
@@ -660,22 +731,32 @@ fn render_graph_snapshot_collects_in_memory_node_fingerprints() {
         snapshot.generator_version,
         render_graph::GRAPH_GENERATOR_VERSION
     );
-    assert!(snapshot
-        .node_fingerprint_by_key("draft:draft-render-graph:canvas")
-        .is_some());
-    assert!(snapshot
-        .node_fingerprint_by_key("draft:draft-render-graph:track:video-track:segment:video-a:video")
-        .is_some());
-    assert!(snapshot
-        .node_fingerprint_by_key(
-            "draft:draft-render-graph:track:video-track:segment:video-a:filter:0"
-        )
-        .is_some());
-    assert!(snapshot
-        .node_fingerprint_by_key(
-            "draft:draft-render-graph:track:video-track:segment:video-a:transition"
-        )
-        .is_some());
+    assert!(
+        snapshot
+            .node_fingerprint_by_key("draft:draft-render-graph:canvas")
+            .is_some()
+    );
+    assert!(
+        snapshot
+            .node_fingerprint_by_key(
+                "draft:draft-render-graph:track:video-track:segment:video-a:video"
+            )
+            .is_some()
+    );
+    assert!(
+        snapshot
+            .node_fingerprint_by_key(
+                "draft:draft-render-graph:track:video-track:segment:video-a:filter:0"
+            )
+            .is_some()
+    );
+    assert!(
+        snapshot
+            .node_fingerprint_by_key(
+                "draft:draft-render-graph:track:video-track:segment:video-a:transition"
+            )
+            .is_some()
+    );
     assert_eq!(
         snapshot
             .node_fingerprints

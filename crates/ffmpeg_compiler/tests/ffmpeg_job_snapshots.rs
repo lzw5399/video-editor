@@ -91,6 +91,33 @@ fn filters_snapshot_uses_stable_labels_for_video_audio_text_outputs() {
 }
 
 #[test]
+fn audio_filters_compile_gain_pan_fades_and_classify_unsupported_effect_slots() {
+    let job = compile_ffmpeg_job(
+        &common::export_plan_with_audio_mix_intent(),
+        &common::compile_context(),
+    )
+    .expect("audio mix intent export should compile");
+
+    assert!(
+        job.filter_script
+            .contains("atrim=start=0.600000:duration=0.100000")
+    );
+    assert!(job.filter_script.contains("volume=0.750"));
+    assert!(
+        job.filter_script
+            .contains("pan=stereo|c0=1.000*c0|c1=0.500*c1")
+    );
+    assert!(job.filter_script.contains("afade=t=in:st=0:d=0.100000"));
+    assert!(job.filter_script.contains("afade=t=out:st=0:d=0.200000"));
+    assert_eq!(job.filter_script_diagnostics.len(), 1);
+    assert_eq!(
+        job.filter_script_diagnostics[0].reason,
+        "unsupported audio effect slot external-space is preserved for diagnostics"
+    );
+    assert_eq!(job.validation.expect_audio_stream, true);
+}
+
+#[test]
 fn ffmpeg_job_classifies_missing_encoder_and_output_path_preconditions() {
     let encoder_error = compile_ffmpeg_job(&common::export_plan(), &common::no_h264_context())
         .expect_err("missing h264 encoder should be classified");
