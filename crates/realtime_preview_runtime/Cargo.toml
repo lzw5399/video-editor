@@ -14,6 +14,7 @@ draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }
 media_runtime = { path = "../media_runtime" }
 render_graph = { path = "../render_graph" }
+fontdue = "0.9.3"
 pollster = "0.4.0"
 raw-window-handle = "0.6.2"
 serde = { version = "1.0.228", features = ["derive"] }

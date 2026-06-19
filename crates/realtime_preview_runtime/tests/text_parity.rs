@@ -42,7 +42,7 @@ fn text_parity_classifies_gpu_text_as_unsupported_without_repository_font_proof(
 }
 
 #[test]
-fn text_parity_default_classifier_never_marks_export_supported_text_as_realtime_supported() {
+fn text_parity_default_classifier_supports_bundled_font_text_without_fallback() {
     let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: text_draft(),
         target_time: Microseconds::new(500_000),
@@ -58,12 +58,10 @@ fn text_parity_default_classifier_never_marks_export_supported_text_as_realtime_
         .find(|diagnostic| diagnostic.domain == RealtimePreviewDiagnosticDomain::Text)
         .expect("text diagnostic emitted");
 
-    assert_ne!(report.support, RealtimePreviewGraphSupport::Supported);
-    assert!(matches!(
-        text.support,
-        RealtimePreviewSupport::Unsupported { .. }
-    ));
-    assert!(text.fallback_used);
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
+    assert_eq!(text.support, RealtimePreviewSupport::Supported);
+    assert!(text.reason.contains(BUNDLED_TEXT_FONT_REF));
+    assert!(!text.fallback_used);
 }
 
 #[test]

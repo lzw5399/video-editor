@@ -1,7 +1,8 @@
 use draft_model::{
-    DraftId, MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentFitMode,
-    SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
-    TrackId,
+    Draft, DraftId, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
+    SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange,
+    TargetTimerange, TextAlignment, TextLayoutRegion, TextSegment, TextStyle, Track, TrackId,
+    TrackKind,
 };
 use realtime_preview_runtime::gpu::{
     RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewGpuBackend,
@@ -11,11 +12,13 @@ use realtime_preview_runtime::gpu::{
 use realtime_preview_runtime::{
     CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
     PreviewFrameProvider, PreviewFrameProviderError, RealtimePreviewCapabilityClassifier,
-    RealtimePreviewGraphSupport, SoftwareVideoFrameProvider,
+    RealtimePreviewGraphInput, RealtimePreviewGraphSupport, SoftwareVideoFrameProvider,
+    prepare_realtime_preview_graph,
 };
 use render_graph::{
-    RenderAudioMix, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode, RenderGraph,
-    RenderGraphNodeId, RenderIntentSupport, RenderMaterial, RenderSampledFrame, RenderVideoLayer,
+    OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
+    RenderCanvasBackgroundMode, RenderGraph, RenderGraphNodeId, RenderIntentSupport,
+    RenderMaterial, RenderSampledFrame, RenderVideoLayer,
 };
 
 #[test]
@@ -143,11 +146,71 @@ fn real_wgpu_compositor_clears_canvas_with_render_pass() {
         )
         .expect("real GPU compositor should render a solid canvas");
 
-    assert_eq!(output.render_backend, RealtimePreviewCompositorBackend::WgpuRenderPass);
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::WgpuRenderPass
+    );
     assert_eq!(output.submitted_draws, 0);
     assert_eq!(
         rgba_at(&output.pixels, 0, 0, output.width),
         [0x11, 0x22, 0x33, 0xff]
+    );
+}
+
+#[test]
+#[ignore = "manual platform smoke: run with VIDEO_EDITOR_TEST_WGPU=1 on Windows/macOS GPU hosts"]
+fn real_wgpu_compositor_samples_textured_layers_with_render_pass() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU").ok().as_deref() != Some("1") {
+        eprintln!("set VIDEO_EDITOR_TEST_WGPU=1 to run the real compositor smoke");
+        return;
+    }
+
+    let image_id = MaterialId::from("image");
+    let video_id = MaterialId::from("video");
+    let graph = textured_graph(&image_id, &video_id, 1_000);
+    let provider = ImageThenSoftwareVideoProvider::new(&image_id, &video_id);
+    let output = render_graph_with_real_wgpu_provider(graph, provider);
+
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::WgpuRenderPass
+    );
+    assert_eq!(output.submitted_draws, 2);
+    assert_eq!(
+        rgba_at(&output.pixels, 1, 1, output.width),
+        [255, 0, 0, 255]
+    );
+    assert_eq!(
+        rgba_at(&output.pixels, 2, 2, output.width),
+        [0, 0, 255, 255]
+    );
+}
+
+#[test]
+#[ignore = "manual platform smoke: run with VIDEO_EDITOR_TEST_WGPU=1 on Windows/macOS GPU hosts"]
+fn real_wgpu_compositor_renders_bundled_text_overlay_with_render_pass() {
+    if std::env::var("VIDEO_EDITOR_TEST_WGPU").ok().as_deref() != Some("1") {
+        eprintln!("set VIDEO_EDITOR_TEST_WGPU=1 to run the real compositor smoke");
+        return;
+    }
+
+    let output = render_graph_with_real_wgpu_provider(text_overlay_graph(), EmptyProvider);
+
+    assert_eq!(
+        output.render_backend,
+        RealtimePreviewCompositorBackend::WgpuRenderPass
+    );
+    assert_eq!(
+        output.submitted_draws, 1,
+        "text overlay should submit one draw; diagnostics: {:?}",
+        output.diagnostics
+    );
+    assert!(
+        output
+            .pixels
+            .chunks_exact(4)
+            .any(|pixel| pixel[0] > 120 && pixel[1] < 80 && pixel[2] < 80),
+        "real GPU text overlay render should produce visible red text pixels"
     );
 }
 
@@ -202,6 +265,35 @@ fn render_graph_with_provider(
     compositor
         .render_offscreen(&graph, &target, &mut provider, &mut texture_cache)
         .expect("mock offscreen composition should render")
+}
+
+fn render_graph_with_real_wgpu_provider(
+    graph: RenderGraph,
+    mut provider: impl PreviewFrameProvider,
+) -> realtime_preview_runtime::gpu::RealtimePreviewCompositorOutput {
+    let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
+        backend: RealtimePreviewGpuBackend::Auto,
+        label: Some("real-wgpu-gpu-subset-test".to_owned()),
+    })
+    .expect("real GPU device should bootstrap");
+    assert!(device.uses_physical_adapter());
+    let target = device
+        .create_offscreen_target(
+            graph.canvas.width,
+            graph.canvas.height,
+            1_000,
+            RealtimePreviewTargetFormat::Rgba8UnormSrgb,
+        )
+        .expect("real GPU target should be valid");
+    let mut compositor = RealtimePreviewCompositor::new(
+        device,
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
+    );
+    let mut texture_cache = RealtimePreviewTextureCache::new();
+
+    compositor
+        .render_offscreen(&graph, &target, &mut provider, &mut texture_cache)
+        .expect("real GPU composition should render")
 }
 
 fn solid_canvas_graph(color: &str) -> RenderGraph {
@@ -262,6 +354,59 @@ fn textured_graph(image_id: &MaterialId, video_id: &MaterialId, video_opacity: u
             video_opacity,
         ),
     ];
+    graph
+}
+
+fn text_overlay_graph() -> RenderGraph {
+    let mut draft = Draft::new("text-gpu", "Text GPU");
+    draft.canvas_config.width = 128;
+    draft.canvas_config.height = 72;
+    draft.materials.push(Material::new(
+        "text-material",
+        MaterialKind::Text,
+        "text://title",
+        "text-material",
+    ));
+
+    let mut segment = Segment::new(
+        "text-a",
+        "text-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    );
+    let mut style = TextStyle::default_title();
+    style.font_size = 18;
+    style.color = "#ff0000".to_owned();
+    style.alignment = TextAlignment::Left;
+    segment.text = Some(TextSegment {
+        content: "标题".to_owned(),
+        source: Default::default(),
+        style,
+        text_box: Default::default(),
+        layout_region: TextLayoutRegion {
+            x_millis: 0,
+            y_millis: 0,
+            width_millis: 1_000,
+            height_millis: 1_000,
+        },
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
+    });
+
+    let mut track = Track::new("text-track", TrackKind::Text, "Text");
+    track.segments.push(segment);
+    draft.tracks.push(track);
+
+    let graph = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft,
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(128, 72),
+    })
+    .expect("text overlay graph should prepare")
+    .graph;
+    assert_eq!(graph.text_overlays.len(), 1);
+    assert_eq!(graph.text_overlays[0].overlay.content, "标题");
     graph
 }
 

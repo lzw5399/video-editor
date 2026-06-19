@@ -38,7 +38,7 @@ impl RealtimePreviewCapabilityClassifier {
             runtime_backend_available: true,
             surface_available: true,
             gpu_text_parity: false,
-            bundled_text_font_registry_available: false,
+            bundled_text_font_registry_available: true,
         }
     }
 
@@ -218,17 +218,15 @@ fn classify_visual_layers(graph: &RenderGraph, diagnostics: &mut Vec<RealtimePre
 
 fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePreviewDiagnostic>) {
     let visual = &layer.visual;
-    if visual.transform.rotation.degrees == 0
-        && matches!(
-            visual.fit_mode,
-            SegmentFitMode::Fit | SegmentFitMode::Fill | SegmentFitMode::Stretch
-        )
-    {
+    if matches!(
+        visual.fit_mode,
+        SegmentFitMode::Fit | SegmentFitMode::Fill | SegmentFitMode::Stretch
+    ) {
         diagnostics.push(RealtimePreviewDiagnostic::new(
             Some(layer.segment_id.as_str().to_owned()),
             RealtimePreviewDiagnosticDomain::Transform,
             RealtimePreviewSupport::Supported,
-            "position scale opacity crop and fit mode are realtime supported",
+            "position scale rotation opacity crop and fit mode are realtime supported",
             None,
             false,
         ));

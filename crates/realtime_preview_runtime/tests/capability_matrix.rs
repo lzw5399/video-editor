@@ -8,9 +8,9 @@ use draft_model::{
     Transition,
 };
 use realtime_preview_runtime::{
-    prepare_realtime_preview_graph, RealtimePreviewCapabilityClassifier,
-    RealtimePreviewDiagnosticDomain, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
-    RealtimePreviewSupport,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
+    RealtimePreviewGraphInput, RealtimePreviewGraphSupport, RealtimePreviewSupport,
+    prepare_realtime_preview_graph,
 };
 use render_graph::OutputDimensions;
 
@@ -56,7 +56,9 @@ fn capability_matrix_supports_canvas_visual_transform_opacity_fit_and_keyframe_s
 fn capability_matrix_marks_text_unsupported_when_gpu_text_parity_is_not_enabled() {
     let report = classify_draft(
         text_draft(),
-        RealtimePreviewCapabilityClassifier::supported_for_tests().with_gpu_text_parity(false),
+        RealtimePreviewCapabilityClassifier::supported_for_tests()
+            .with_gpu_text_parity(false)
+            .with_bundled_text_font_registry_available(false),
     );
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);
@@ -80,7 +82,7 @@ fn capability_matrix_marks_text_unsupported_when_gpu_text_parity_is_not_enabled(
 fn capability_matrix_supports_baseline_video_image_text_and_audio_when_text_parity_is_proven() {
     let report = classify_draft(
         baseline_video_image_text_audio_draft(),
-        RealtimePreviewCapabilityClassifier::supported_for_tests().with_gpu_text_parity(true),
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
     );
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);

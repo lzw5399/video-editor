@@ -11,7 +11,8 @@ pub mod text;
 pub mod texture_cache;
 
 pub use compositor::{
-    RealtimePreviewCompositor, RealtimePreviewCompositorError, RealtimePreviewCompositorOutput,
+    RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewCompositorError,
+    RealtimePreviewCompositorOutput,
 };
 pub use device::{
     RealtimePreviewGpuBackend, RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,

@@ -3,8 +3,8 @@ use draft_model::{
     Segment, SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
 };
 use realtime_preview_runtime::{
-    prepare_realtime_preview_graph, realtime_preview_parity_diagnostics,
     RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
+    prepare_realtime_preview_graph, realtime_preview_parity_diagnostics,
 };
 use render_graph::OutputDimensions;
 
@@ -37,9 +37,8 @@ fn realtime_preview_parity_baseline_video_image_text_and_audio_has_no_fallback_d
     })
     .expect("baseline draft prepares graph");
 
-    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
-        .with_gpu_text_parity(true)
-        .classify(&prepared.graph);
+    let report =
+        RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
@@ -58,8 +57,9 @@ fn realtime_preview_parity_golden_records_text_and_effect_divergence() {
     })
     .expect("divergent draft prepares graph");
 
-    let report =
-        RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_bundled_text_font_registry_available(false)
+        .classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);

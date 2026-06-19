@@ -80,6 +80,7 @@ fn parity_diagnostics_snapshot_serializes_realtime_export_divergence() {
     .expect("text draft prepares graph");
     let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
         .with_gpu_text_parity(false)
+        .with_bundled_text_font_registry_available(false)
         .classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
