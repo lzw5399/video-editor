@@ -165,6 +165,22 @@ pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
             external_ref: Some("jianying://effect/external-space".to_owned()),
         },
     });
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
+pub fn export_plan_with_audio_volume_keyframes() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let audio = &mut draft.tracks[2].segments[0];
     audio.keyframes.push(Keyframe {
         at: Microseconds::new(650_000),
         property: KeyframeProperty::Volume,
@@ -189,7 +205,8 @@ pub fn export_plan_with_audio_mix_intent() -> RenderGraphPlan {
 pub fn export_plan_with_delayed_audio_mix() -> RenderGraphPlan {
     let mut draft = compiler_draft();
     let audio = &mut draft.tracks[2].segments[0];
-    audio.target_timerange = TargetTimerange::new(Microseconds::new(500_000), Microseconds::new(500_000));
+    audio.target_timerange =
+        TargetTimerange::new(Microseconds::new(500_000), Microseconds::new(500_000));
 
     let graph = sample_graph_from_draft(&draft);
     RenderGraphPlan::new(
@@ -204,18 +221,48 @@ pub fn export_plan_with_delayed_audio_mix() -> RenderGraphPlan {
     .expect("export plan should validate")
 }
 
+pub fn export_plan_with_audio_outside_output_range() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    draft.materials[0].metadata.has_audio = false;
+    let audio = &mut draft.tracks[2].segments[0];
+    audio.target_timerange =
+        TargetTimerange::new(Microseconds::new(900_000), Microseconds::new(100_000));
+
+    let graph = sample_graph_from_draft_for_range(
+        &draft,
+        TargetTimerange::new(Microseconds::new(900_000), Microseconds::new(100_000)),
+    );
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::ZERO, Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
 fn sample_graph() -> render_graph::RenderGraph {
     sample_graph_from_draft(&compiler_draft())
 }
 
 fn sample_graph_from_draft(draft: &Draft) -> render_graph::RenderGraph {
-    let normalized =
-        normalize_draft(draft, &EngineProfile::mvp_default()).expect("draft should normalize");
-    let range = resolve_render_range(
-        &normalized,
+    sample_graph_from_draft_for_range(
+        draft,
         TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
     )
-    .expect("range state should resolve");
+}
+
+fn sample_graph_from_draft_for_range(
+    draft: &Draft,
+    target_timerange: TargetTimerange,
+) -> render_graph::RenderGraph {
+    let normalized =
+        normalize_draft(draft, &EngineProfile::mvp_default()).expect("draft should normalize");
+    let range =
+        resolve_render_range(&normalized, target_timerange).expect("range state should resolve");
     build_render_graph(&normalized, &range).expect("graph should build")
 }
 

@@ -240,6 +240,7 @@ pub enum FfmpegCompileErrorKind {
     UnsupportedEncoder,
     MissingTextFilterSupport,
     UnsupportedTextResource,
+    UnsupportedAudioAutomation,
     MissingTextFont,
     MissingInputMaterial,
 }

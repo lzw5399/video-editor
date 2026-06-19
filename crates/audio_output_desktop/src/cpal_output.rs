@@ -175,6 +175,14 @@ fn validate_native_output_capabilities(
             ),
         });
     }
+    if requested.max_frame_count > available.max_frame_count {
+        return Err(AudioOutputError::InvalidCapabilities {
+            reason: format!(
+                "native output frame count {} exceeds available {}",
+                requested.max_frame_count, available.max_frame_count
+            ),
+        });
+    }
     Ok(())
 }
 
@@ -417,6 +425,10 @@ mod tests {
         let mut too_many_channels = available.clone();
         too_many_channels.max_channel_count = 8;
         assert!(validate_native_output_capabilities(&too_many_channels, &available).is_err());
+
+        let mut too_many_frames = available.clone();
+        too_many_frames.max_frame_count = 4_800;
+        assert!(validate_native_output_capabilities(&too_many_frames, &available).is_err());
 
         let mut wrong_device = available.clone();
         wrong_device.device_id = "other-device".to_owned();

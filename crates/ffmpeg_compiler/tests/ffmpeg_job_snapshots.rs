@@ -112,18 +112,31 @@ fn audio_filters_compile_gain_pan_fades_and_classify_unsupported_effect_slots() 
         job.filter_script
             .contains("afade=t=out:st=0.000000:d=0.200000")
     );
-    assert_eq!(job.filter_script_diagnostics.len(), 2);
+    assert_eq!(job.filter_script_diagnostics.len(), 1);
     assert_eq!(
         job.filter_script_diagnostics[0].reason,
         "unsupported audio effect slot external-space is preserved for diagnostics"
     );
-    assert!(
-        job.filter_script_diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.property == "audio.volumeKeyframes"
-                && diagnostic.reason.contains("not compiled into FFmpeg volume automation"))
-    );
     assert_eq!(job.validation.expect_audio_stream, true);
+}
+
+#[test]
+fn audio_filters_reject_keyframed_volume_until_automation_is_compiled() {
+    let error = compile_ffmpeg_job(
+        &common::export_plan_with_audio_volume_keyframes(),
+        &common::compile_context(),
+    )
+    .expect_err("keyframed volume must not silently export with constant gain");
+
+    assert_eq!(
+        error.kind,
+        FfmpegCompileErrorKind::UnsupportedAudioAutomation
+    );
+    assert!(
+        error
+            .message
+            .contains("keyframed volume automation that cannot be compiled safely")
+    );
 }
 
 #[test]
@@ -134,11 +147,28 @@ fn audio_filters_preserve_target_timeline_placement_before_mixing() {
     )
     .expect("delayed audio mix export should compile");
 
-    assert!(
-        job.filter_script
-            .contains("atrim=start=0.000000:duration=0.500000,asetpts=PTS-STARTPTS,adelay=500|500,volume=1.000")
-    );
+    assert!(job.filter_script.contains(
+        "atrim=start=0.000000:duration=0.500000,asetpts=PTS-STARTPTS,adelay=500|500,volume=1.000"
+    ));
     assert_eq!(job.validation.expect_audio_stream, true);
+}
+
+#[test]
+fn audio_filters_do_not_emit_empty_audio_output_for_silent_ranges() {
+    let job = compile_ffmpeg_job(
+        &common::export_plan_with_audio_outside_output_range(),
+        &common::compile_context(),
+    )
+    .expect("silent audio range export should compile without audio output mapping");
+
+    assert!(!job.filter_script.contains("amix=inputs=0"));
+    assert!(
+        !job.filter_script.contains("[aout]"),
+        "{}",
+        job.filter_script
+    );
+    assert!(!job.args_as_strings().contains(&"[aout]".to_owned()));
+    assert_eq!(job.validation.expect_audio_stream, false);
 }
 
 #[test]

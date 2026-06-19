@@ -139,17 +139,14 @@ pub fn generate_filter_script(
     }
     lines.push(format!("[{current_video}]format=yuv420p[vout]"));
 
-    let has_audio_output = !matches!(
+    let supports_audio_output = !matches!(
         plan.output_profile,
         RenderOutputProfile::PreviewFrame { .. }
-    ) && !plan.graph.audio_mixes.is_empty();
+    );
     let mut diagnostics = Vec::new();
-    if has_audio_output {
-        let mut audio_labels = Vec::new();
+    let mut audio_labels = Vec::new();
+    if supports_audio_output {
         for (audio_index, audio) in plan.graph.audio_mixes.iter().enumerate() {
-            let input_index = input_indexes
-                .get(&audio.material_id)
-                .ok_or_else(|| missing_input(&audio.material_id))?;
             let output_range = output_timerange(plan);
             let Some(clip) = clipped_source_timerange(
                 &audio.source_timerange,
@@ -158,25 +155,29 @@ pub fn generate_filter_script(
             ) else {
                 continue;
             };
+            reject_unsupported_audio_automation(audio)?;
+            let input_index = input_indexes
+                .get(&audio.material_id)
+                .ok_or_else(|| missing_input(&audio.material_id))?;
             let label = format!("a{audio_index}");
             let filters = compile_audio_mix_filters(audio, &clip, output_range);
             lines.push(format!("[{input_index}:a]{}[{label}]", filters.join(",")));
             diagnostics.extend(audio_effect_slot_diagnostics(audio));
-            diagnostics.extend(audio_volume_keyframe_diagnostics(audio));
             audio_labels.push(label);
         }
-        if audio_labels.len() == 1 {
-            lines.push(format!("[{}]anull[aout]", audio_labels[0]));
-        } else {
-            let inputs = audio_labels
-                .iter()
-                .map(|label| format!("[{label}]"))
-                .collect::<String>();
-            lines.push(format!(
-                "{inputs}amix=inputs={}:duration=longest:normalize=0[aout]",
-                audio_labels.len()
-            ));
-        }
+    }
+    let has_audio_output = !audio_labels.is_empty();
+    if audio_labels.len() == 1 {
+        lines.push(format!("[{}]anull[aout]", audio_labels[0]));
+    } else if audio_labels.len() > 1 {
+        let inputs = audio_labels
+            .iter()
+            .map(|label| format!("[{label}]"))
+            .collect::<String>();
+        lines.push(format!(
+            "{inputs}amix=inputs={}:duration=longest:normalize=0[aout]",
+            audio_labels.len()
+        ));
     }
 
     Ok(GeneratedFilterScript {
@@ -200,7 +201,10 @@ fn compile_audio_mix_filters(
     filters.push("asetpts=PTS-STARTPTS".to_owned());
     let delay = target_delay_from_output(&audio.target_timerange, output);
     if delay.get() > 0 {
-        filters.push(format!("adelay={delay}|{delay}", delay = delay_millis(delay)));
+        filters.push(format!(
+            "adelay={delay}|{delay}",
+            delay = delay_millis(delay)
+        ));
     }
     filters.push(format!("volume={}", volume_arg(audio.gain_millis)));
     if audio.pan_balance_millis != 0 {
@@ -277,19 +281,20 @@ fn audio_effect_slot_diagnostics(audio: &RenderAudioMix) -> Vec<RenderAudioMixDi
         .collect()
 }
 
-fn audio_volume_keyframe_diagnostics(audio: &RenderAudioMix) -> Vec<RenderAudioMixDiagnostic> {
+fn reject_unsupported_audio_automation(audio: &RenderAudioMix) -> Result<(), FfmpegCompileError> {
     if audio.volume_keyframes.is_empty() {
-        return Vec::new();
+        return Ok(());
     }
 
-    vec![RenderAudioMixDiagnostic {
-        track_id: audio.track_id.clone(),
-        segment_id: audio.segment_id.clone(),
-        material_id: audio.material_id.clone(),
-        property: "audio.volumeKeyframes".to_owned(),
-        support: RenderIntentSupport::Unsupported,
-        reason: "keyframed audio volume is preserved for diagnostics but is not compiled into FFmpeg volume automation".to_owned(),
-    }]
+    Err(FfmpegCompileError::new(
+        FfmpegCompileErrorKind::UnsupportedAudioAutomation,
+        format!(
+            "audio segment {} contains keyframed volume automation that cannot be compiled safely",
+            audio.segment_id.as_str()
+        ),
+        "Remove keyframed audio volume automation or compile it into an FFmpeg volume expression before export.",
+    )
+    .with_material_id(audio.material_id.clone()))
 }
 
 fn compile_visual_layer(
