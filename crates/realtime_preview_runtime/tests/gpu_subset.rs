@@ -15,7 +15,7 @@ use realtime_preview_runtime::{
 };
 use render_graph::{
     RenderAudioMix, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode, RenderGraph,
-    RenderIntentSupport, RenderMaterial, RenderSampledFrame, RenderVideoLayer,
+    RenderGraphNodeId, RenderIntentSupport, RenderMaterial, RenderSampledFrame, RenderVideoLayer,
 };
 
 #[test]
@@ -155,6 +155,7 @@ fn solid_canvas_graph(color: &str) -> RenderGraph {
     RenderGraph {
         draft_id: DraftId::from("draft"),
         canvas: RenderCanvas {
+            node_id: RenderGraphNodeId::canvas(&DraftId::from("draft")),
             width: 4,
             height: 4,
             background: RenderCanvasBackground {
@@ -173,6 +174,7 @@ fn solid_canvas_graph(color: &str) -> RenderGraph {
         audio_mixes: Vec::<RenderAudioMix>::new(),
         text_overlays: Vec::new(),
         sampled_frames: vec![RenderSampledFrame {
+            node_id: RenderGraphNodeId::sampled_frame(&DraftId::from("draft"), 0, 0),
             frame_index: 0,
             at: Microseconds::ZERO,
         }],
@@ -212,6 +214,7 @@ fn textured_graph(image_id: &MaterialId, video_id: &MaterialId, video_opacity: u
 
 fn material(material_id: &MaterialId, kind: MaterialKind) -> RenderMaterial {
     RenderMaterial {
+        node_id: RenderGraphNodeId::material(&DraftId::from("draft"), material_id),
         material_id: material_id.clone(),
         kind,
         uri: format!("file:///{}.png", material_id.as_str()),
@@ -245,9 +248,18 @@ fn layer(
         value_millis: opacity,
     };
 
+    let track_id = TrackId::from(format!("track-{stack_index}"));
+    let segment_id = draft_model::SegmentId::from(segment_id);
+
     RenderVideoLayer {
-        track_id: TrackId::from(format!("track-{stack_index}")),
-        segment_id: draft_model::SegmentId::from(segment_id),
+        node_id: RenderGraphNodeId::video_segment(
+            &DraftId::from("draft"),
+            &track_id,
+            &segment_id,
+            material_id,
+        ),
+        track_id,
+        segment_id,
         material_id: material_id.clone(),
         material_kind,
         stack_index,

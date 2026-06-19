@@ -84,6 +84,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "importSubtitleSrt"
                 | "addAudioSegment"
                 | "setSegmentVolume"
+                | "updateSegmentAudio"
                 | "setTrackMute"
                 | "updateDraftCanvasConfig"
                 | "updateSegmentVisual"
@@ -210,6 +211,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::ImportSubtitleSrt
         | CommandName::AddAudioSegment
         | CommandName::SetSegmentVolume
+        | CommandName::UpdateSegmentAudio
         | CommandName::SetTrackMute
         | CommandName::UpdateDraftCanvasConfig
         | CommandName::UpdateSegmentVisual
