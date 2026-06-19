@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-06-19T05:05:38.897Z"
-last_activity: 2026-06-19 -- Completed 14-02 resource index and dependency rows
+stopped_at: Completed 14-03-PLAN.md
+last_updated: "2026-06-19T05:16:55.462Z"
+last_activity: 2026-06-19 -- Completed 14-03 exact artifact invalidation
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 105
-  completed_plans: 100
-  percent: 95
+  completed_plans: 101
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 14 (asset-resource-manager-and-derived-artifact-store) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 14-02 resource index and dependency rows
+Last activity: 2026-06-19 -- Completed 14-03 exact artifact invalidation
 
-Progress: [██████████] 95%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -153,6 +153,7 @@ Progress: [██████████] 95%
 | Phase 13 P05B | 24 min | 2 tasks | 11 files |
 | Phase 14 P01 | 7 min | 3 tasks | 13 files |
 | Phase 14 P02 | 7 min | 2 tasks | 7 files |
+| Phase 14 P03 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -349,6 +350,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Runtime-boundary docs now explicitly reserve Phase 12 media IO, Phase 15 audio, Phase 16 scheduling, and Phase 18 effects outside Phase 11. — Downstream phases can consume the contracts without relocating ownership.
 - [Phase 14]: Resource rows derive from Rust Draft/material/timeline facts and persist only under .veproj/derived/artifact-store.sqlite; canonical project.json remains semantic-only.
 - [Phase 14]: Artifact dependency rows validate all typed dependency facts before transactional writes, rejecting integer range overflow without partial rows.
+- [Phase 14]: Artifact invalidation now records audit-safe dirty reasons and source change kinds on artifact rows while keeping canonical project.json semantic-only.
+- [Phase 14]: Source delete tombstones dependent artifact rows for audit/status instead of deleting source media or derived blobs.
+- [Phase 14]: Dirty domains filter localized range invalidation and do not independently dirty every artifact when tighter material/resource/graph/range facts exist.
 
 ### Pending Todos
 
@@ -385,6 +389,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T05:05:28.875Z
-Stopped at: Completed 14-02-PLAN.md
+Last session: 2026-06-19T05:16:55.415Z
+Stopped at: Completed 14-03-PLAN.md
 Resume file: None

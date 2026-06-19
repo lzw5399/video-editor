@@ -547,7 +547,7 @@ Plans:
 
 - [x] 14-01 - Artifact store crate, SQLite schema, blob paths, and initial guards
 - [x] 14-02 - Resource index and dependency rows
-- [ ] 14-03 - Dependency-driven artifact invalidation
+- [x] 14-03 - Dependency-driven artifact invalidation
 - [ ] 14-04 - Generation jobs plus proxy, thumbnail, and waveform artifact generation
 - [ ] 14-05 - GC, quota, and local sync manifest semantics
 - [ ] 14-06 - Generated artifact contracts and Node binding commands
@@ -653,7 +653,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Complete   | 2026-06-18 |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
-| 14. Asset Resource Manager And Derived Artifact Store | 2/7 | In Progress|  |
+| 14. Asset Resource Manager And Derived Artifact Store | 3/7 | In Progress|  |
 | 15. Audio Engine And DSP Timeline Pipeline | TBD | Not planned | - |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |

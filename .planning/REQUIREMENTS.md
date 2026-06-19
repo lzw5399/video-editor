@@ -306,7 +306,7 @@
 | INCR-05 | Phase 13 | Complete |
 | ASSET-01 | Phase 14 | Planned |
 | ASSET-02 | Phase 14 | Planned |
-| ASSET-03 | Phase 14 | Planned |
+| ASSET-03 | Phase 14 | Complete |
 | ASSET-04 | Phase 14 | Planned |
 | ASSET-05 | Phase 14 | Planned |
 | AUDIO2-01 | Phase 15 | Planned |
