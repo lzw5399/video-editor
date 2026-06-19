@@ -1,6 +1,6 @@
 use draft_model::{
-    Draft, Material, MaterialKind, Microseconds, Segment, SourceTimerange, TargetTimerange,
-    TextSegment, TextStyle, Track, TrackKind,
+    BUNDLED_TEXT_FONT_REF, Draft, Material, MaterialKind, Microseconds, Segment, SourceTimerange,
+    TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
 };
 use realtime_preview_runtime::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
@@ -20,7 +20,8 @@ fn text_parity_classifies_gpu_text_as_unsupported_without_repository_font_proof(
 
     let outcome = realtime_preview_runtime::gpu::text::classify_text_preview_outcome(
         &prepared.graph,
-        &RealtimePreviewCapabilityClassifier::supported_for_tests(),
+        &RealtimePreviewCapabilityClassifier::supported_for_tests()
+            .with_bundled_text_font_registry_available(false),
     );
 
     assert_eq!(outcome.support, RealtimePreviewGraphSupport::Unsupported);
@@ -63,6 +64,32 @@ fn text_parity_default_classifier_never_marks_export_supported_text_as_realtime_
         RealtimePreviewSupport::Unsupported { .. }
     ));
     assert!(text.fallback_used);
+}
+
+#[test]
+fn text_parity_supports_bundled_font_ref_when_registry_is_available() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: text_draft(),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("text draft prepares graph");
+
+    let outcome = realtime_preview_runtime::gpu::text::classify_text_preview_outcome(
+        &prepared.graph,
+        &RealtimePreviewCapabilityClassifier::supported_for_tests()
+            .with_bundled_text_font_registry_available(true),
+    );
+
+    assert_eq!(outcome.support, RealtimePreviewGraphSupport::Supported);
+    assert_eq!(outcome.fallback_reason, None);
+    assert!(outcome.diagnostics.iter().any(|diagnostic| {
+        diagnostic.domain == RealtimePreviewDiagnosticDomain::Text
+            && diagnostic.entity_id.as_deref() == Some("text-a")
+            && diagnostic.support == RealtimePreviewSupport::Supported
+            && diagnostic.reason.contains(BUNDLED_TEXT_FONT_REF)
+            && !diagnostic.fallback_used
+    }));
 }
 
 fn text_draft() -> Draft {

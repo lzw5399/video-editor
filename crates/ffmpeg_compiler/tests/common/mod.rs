@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
-    Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, BUNDLED_TEXT_FONT_REF, Draft,
+    Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
+    TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
@@ -108,6 +108,28 @@ pub fn export_plan_with_unsupported_text_resources() -> RenderGraphPlan {
         name: "花字".to_owned(),
         external_ref: Some("effect-vendor-01".to_owned()),
     });
+
+    let graph = sample_graph_from_draft(&draft);
+    RenderGraphPlan::new(
+        graph,
+        RenderOutputProfile::export_mp4(
+            OutputDimensions::new(1_920, 1_080),
+            RationalFrameRate::new(30, 1),
+            TargetTimerange::new(Microseconds::new(600_000), Microseconds::new(100_000)),
+            ExportMp4Preset::h264_aac_balanced(),
+        ),
+    )
+    .expect("export plan should validate")
+}
+
+pub fn export_plan_with_bundled_font_ref() -> RenderGraphPlan {
+    let mut draft = compiler_draft();
+    let text = draft.tracks[3].segments[0]
+        .text
+        .as_mut()
+        .expect("compiler draft should include text");
+    text.style.font = TextFont::default();
+    assert_eq!(text.style.font.font_ref.as_deref(), Some(BUNDLED_TEXT_FONT_REF));
 
     let graph = sample_graph_from_draft(&draft);
     RenderGraphPlan::new(

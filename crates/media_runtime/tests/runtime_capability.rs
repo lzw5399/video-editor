@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 use std::sync::{Mutex, OnceLock};
 
+use draft_model::{BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF};
 use media_runtime::{
     BinaryKind, DiscoveredBinary, DiscoveryErrorKind, DiscoverySource, FfmpegExecutor,
     RuntimeCapabilityStatus, RuntimeConfig, discover_runtime_config, probe_runtime_capabilities,
@@ -71,6 +72,25 @@ fn runtime_capability_report_contains_binaries_features_fonts_and_license_postur
     assert_eq!(
         report.font_readiness.env_text_font_path,
         Some(font_path.clone())
+    );
+    assert_eq!(
+        report.font_readiness.bundled_font_ref.as_deref(),
+        Some(BUNDLED_TEXT_FONT_REF)
+    );
+    assert_eq!(
+        report.font_readiness.bundled_font_family.as_deref(),
+        Some(BUNDLED_TEXT_FONT_FAMILY)
+    );
+    assert!(
+        report
+            .font_readiness
+            .bundled_font_path
+            .as_ref()
+            .is_some_and(|path| path.is_file())
+    );
+    assert_eq!(
+        report.font_readiness.bundled_font_license.as_deref(),
+        Some("OFL-1.1")
     );
     assert!(
         report

@@ -29,6 +29,7 @@ type ExecuteCommandCall = {
   keyframeAt: number | null;
   textContent: string | null;
   textSource: string | null;
+  textFontRef: string | null;
   srtContent: string | null;
   outputPath: string | null;
   preset: string | null;
@@ -648,8 +649,29 @@ test("command-only text edit routes complete text inspector changes through exec
     const editTextCall = calls.find((call) => call.command === "editTextSegment");
     expect(addTextCall?.textSource).toBe("text");
     expect(addTextCall?.textContent).toBe("开场标题");
+    expect(addTextCall?.textFontRef).toBe("font://bundled/noto-sans-cjk-sc-regular");
     expect(editTextCall?.textContent).toBe("开场标题 已修改");
     expect(calls.filter((call) => call.command === "editTextSegment")).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("bundled font is the default fontRef for new text segments", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByLabel("默认文字").getByLabel("文字内容").fill("默认字体");
+    await page.getByRole("button", { name: "添加文字" }).click();
+    await expectCommandCall(app, "addTextSegment");
+
+    const calls = await readExecuteCommandCalls(app);
+    const addTextCall = calls.find((call) => call.command === "addTextSegment");
+    expect(addTextCall?.textContent).toBe("默认字体");
+    expect(addTextCall?.textFontRef).toBe("font://bundled/noto-sans-cjk-sc-regular");
+    await expect(page.getByLabel("预览文字")).toHaveCSS("font-family", /Noto Sans CJK SC/);
   } finally {
     await app.close();
   }

@@ -1,5 +1,6 @@
 mod common;
 
+use draft_model::{BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_RELATIVE_PATH};
 use ffmpeg_compiler::{FfmpegSidecarKind, compile_ffmpeg_job};
 
 #[test]
@@ -28,6 +29,27 @@ fn ass_text_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() 
     assert!(ass.contents.contains("; TextBox: 1152x280"));
     assert!(ass.contents.contains("; LayoutRegion: 192,756 1536x216"));
     assert!(ass.contents.contains("; LineHeightMillis: 1500"));
+}
+
+#[test]
+fn ass_text_sidecar_resolves_bundled_font_ref_through_registry() {
+    let job = compile_ffmpeg_job(
+        &common::export_plan_with_bundled_font_ref(),
+        &common::compile_context(),
+    )
+    .expect("export with bundled text font should compile");
+    let ass = job
+        .sidecars
+        .iter()
+        .find(|sidecar| sidecar.kind == FfmpegSidecarKind::AssSubtitle)
+        .expect("text overlay should generate an ASS sidecar");
+
+    assert!(ass.contents.contains(&format!(
+        "Style: Default,{BUNDLED_TEXT_FONT_FAMILY},48"
+    )));
+    assert!(ass.contents.contains(&format!(
+        "FontPath: {BUNDLED_TEXT_FONT_RELATIVE_PATH}"
+    )));
 }
 
 #[test]
