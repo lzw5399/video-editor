@@ -87,6 +87,10 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "addAudioSegment"
                 | "setSegmentVolume"
                 | "updateSegmentAudio"
+                | "addTrack"
+                | "renameTrack"
+                | "setTrackLock"
+                | "setTrackVisibility"
                 | "setTrackMute"
                 | "updateDraftCanvasConfig"
                 | "updateSegmentVisual"
@@ -238,6 +242,10 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::AddAudioSegment
         | CommandName::SetSegmentVolume
         | CommandName::UpdateSegmentAudio
+        | CommandName::AddTrack
+        | CommandName::RenameTrack
+        | CommandName::SetTrackLock
+        | CommandName::SetTrackVisibility
         | CommandName::SetTrackMute
         | CommandName::UpdateDraftCanvasConfig
         | CommandName::UpdateSegmentVisual

@@ -497,6 +497,7 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
           name: command.payload.trackName,
           muted: false,
           locked: false,
+          visible: true,
           segments: [segment]
         } satisfies Track
       ];

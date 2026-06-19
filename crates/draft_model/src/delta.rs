@@ -116,6 +116,7 @@ pub enum ChangedEntity {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum DirtyDomain {
+    Track,
     Timing,
     Visual,
     Text,

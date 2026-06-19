@@ -831,6 +831,70 @@ test("command-only timeline edit calls generated command and applies Rust respon
   }
 });
 
+test("multitrack controls add target rename lock visibility and mute through Rust commands", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    const trackControls = page.getByRole("group", { name: "添加轨道" });
+    await expect(trackControls.getByRole("button", { name: "添加视频轨道" })).toBeVisible();
+    await expect(trackControls.getByRole("button", { name: "添加音频轨道" })).toBeVisible();
+    await expect(trackControls.getByRole("button", { name: "添加文字轨道" })).toBeVisible();
+
+    await trackControls.getByRole("button", { name: "添加视频轨道" }).click();
+    await expectCommandCall(app, "addTrack");
+    await expect(page.getByRole("button", { name: "选择轨道 视频轨道 2" })).toBeVisible();
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 2" }).click();
+    await expectCommandCall(app, "selectTimelineSegments");
+    await expect(page.getByRole("button", { name: "选择轨道 视频轨道 2" })).toHaveAttribute("aria-pressed", "true");
+
+    await page.getByRole("button", { name: "添加片段" }).click();
+    await expectCommandCall(app, "addSegment");
+    await expect(page.locator(".track-row.video").nth(1).getByRole("button", { name: /片段 城市街景\.mp4/ })).toBeVisible();
+
+    const nameInput = page.getByRole("textbox", { name: "视频轨道 2 名称" });
+    await nameInput.fill("叠加轨道");
+    await nameInput.press("Enter");
+    await expectCommandCall(app, "renameTrack");
+    await expect(page.getByRole("button", { name: "选择轨道 叠加轨道" })).toBeVisible();
+
+    await page.getByRole("button", { name: "叠加轨道 锁定状态：未锁定" }).click();
+    await expectCommandCall(app, "setTrackLock");
+    await expect(page.getByRole("button", { name: "叠加轨道 锁定状态：已锁定" })).toBeVisible();
+
+    await page.getByRole("button", { name: "叠加轨道 可见状态：画面可见" }).click();
+    await expectCommandCall(app, "setTrackVisibility");
+    await expect(page.getByRole("button", { name: "叠加轨道 可见状态：画面隐藏" })).toBeVisible();
+
+    await page.getByRole("button", { name: "音频轨道 1 静音状态：未静音" }).click();
+    await expectCommandCall(app, "setTrackMute");
+    await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
+
+    await trackControls.getByRole("button", { name: "添加音频轨道" }).click();
+    await trackControls.getByRole("button", { name: "添加文字轨道" }).click();
+    await expect(page.getByRole("button", { name: "选择轨道 音频轨道 2" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "选择轨道 文字轨道 2" })).toBeVisible();
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toEqual(
+      expect.arrayContaining([
+        "addTrack",
+        "selectTimelineSegments",
+        "addSegment",
+        "renameTrack",
+        "setTrackLock",
+        "setTrackVisibility",
+        "setTrackMute"
+      ])
+    );
+    expect(calls.filter((call) => call.command === "addTrack")).toHaveLength(3);
+  } finally {
+    await app.close();
+  }
+});
+
 test("动画 tab and command-only keyframe add/remove update accepted timeline markers", async () => {
   const { app, page } = await launchWorkspaceApp();
 

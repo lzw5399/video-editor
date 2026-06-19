@@ -36,6 +36,7 @@ import type {
 } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
+  buildAddTrackCommand,
   buildAddSegmentCommand,
   buildAddAudioSegmentCommand,
   buildAddTextSegmentCommand,
@@ -63,6 +64,7 @@ import {
   buildRefreshWaveformStatusCommand,
   buildRefreshArtifactStatusCommand,
   buildRedoTimelineEditCommand,
+  buildRenameTrackCommand,
   buildRemoveSegmentKeyframeCommand,
   buildResumeArtifactGenerationCommand,
   buildRetryArtifactGenerationCommand,
@@ -73,7 +75,9 @@ import {
   buildListAudioOutputDevicesCommand,
   buildSetSegmentKeyframeCommand,
   buildSetSegmentVolumeCommand,
+  buildSetTrackLockCommand,
   buildSetTrackMuteCommand,
+  buildSetTrackVisibilityCommand,
   buildSplitSegmentCommand,
   buildStopAudioPreviewCommand,
   buildStartExportCommand,
@@ -516,7 +520,11 @@ export function App(): React.ReactElement {
         commandError: applied.errorMessage
       };
 
-      if (result.ok && result.data !== null && command.payload.kind === "updateSegmentVisual") {
+      if (
+        result.ok &&
+        result.data !== null &&
+        (command.payload.kind === "updateSegmentVisual" || command.payload.kind === "setTrackVisibility")
+      ) {
         return {
           ...next,
           preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
@@ -1354,6 +1362,63 @@ export function App(): React.ReactElement {
     }, "切换轨道静音");
   }
 
+  function handleSelectTimelineTrack(trackId: string): void {
+    void executeTimelineCommand((current) => {
+      const track = current.draft.tracks.find((candidate) => candidate.trackId === trackId);
+      if (track === undefined) {
+        throw new Error("找不到要选择的轨道");
+      }
+
+      return buildSelectTimelineSegmentsCommand(current, [], [trackId]);
+    }, "选择轨道");
+  }
+
+  function handleAddTimelineTrack(trackKind: TrackKind): void {
+    const trackId = `track-${trackKind}-${Date.now().toString(36)}`;
+    void executeTimelineCommand((current) => {
+      const sameKindCount = current.draft.tracks.filter((track) => track.kind === trackKind).length;
+      return buildAddTrackCommand(current, trackId, trackKind, defaultTrackName(trackKind, sameKindCount + 1));
+    }, "添加轨道");
+  }
+
+  function handleRenameTimelineTrack(trackId: string, name: string): void {
+    const trimmedName = name.trim();
+    void executeTimelineCommand((current) => {
+      if (trimmedName.length === 0) {
+        throw new Error("轨道名称不能为空");
+      }
+      if (!current.draft.tracks.some((track) => track.trackId === trackId)) {
+        throw new Error("找不到要重命名的轨道");
+      }
+
+      return buildRenameTrackCommand(current, trackId, trimmedName);
+    }, "重命名轨道");
+  }
+
+  function handleSetTimelineTrackLock(trackId: string, locked: boolean): void {
+    void executeTimelineCommand((current) => {
+      if (!current.draft.tracks.some((track) => track.trackId === trackId)) {
+        throw new Error("找不到要锁定的轨道");
+      }
+
+      return buildSetTrackLockCommand(current, trackId, locked);
+    }, "切换轨道锁定");
+  }
+
+  function handleSetTimelineTrackVisibility(trackId: string, visible: boolean): void {
+    void executeTimelineCommand((current) => {
+      const track = current.draft.tracks.find((candidate) => candidate.trackId === trackId);
+      if (track === undefined) {
+        throw new Error("找不到要显示或隐藏的轨道");
+      }
+      if (track.kind === "audio") {
+        throw new Error("音频轨道没有画面显隐状态");
+      }
+
+      return buildSetTrackVisibilityCommand(current, trackId, visible);
+    }, "切换轨道显示");
+  }
+
   function handleUpdateSelectedSegmentAudio(options: {
     gainMillis: number;
     panBalanceMillis: number;
@@ -1404,7 +1469,17 @@ export function App(): React.ReactElement {
     void executeTimelineCommand(
       (current) => {
         const material = resolveTimelineMaterial(current.draft, materialId);
-        const track = material === null ? null : findTrackByKind(current.draft, compatibleTrackKind(material.kind));
+        const requiredTrackKind = material === null ? null : compatibleTrackKind(material.kind);
+        const selectedTrack =
+          requiredTrackKind === null
+            ? null
+            : current.selection.trackIds
+                .map((trackId) => current.draft.tracks.find((track) => track.trackId === trackId) ?? null)
+                .find((track) => track?.kind === requiredTrackKind) ?? null;
+        const track =
+          material === null || requiredTrackKind === null
+            ? null
+            : selectedTrack ?? findTrackByKind(current.draft, requiredTrackKind);
 
         if (material === null || track === null) {
           throw new Error("没有可添加到时间线的兼容素材或轨道");
@@ -2178,7 +2253,12 @@ export function App(): React.ReactElement {
       onUpdateSelectedSegmentAudio={handleUpdateSelectedSegmentAudio}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
       onSelectTimelineSegment={handleSelectTimelineSegment}
+      onSelectTimelineTrack={handleSelectTimelineTrack}
       onAddTimelineSegment={handleAddTimelineSegment}
+      onAddTimelineTrack={handleAddTimelineTrack}
+      onRenameTimelineTrack={handleRenameTimelineTrack}
+      onSetTimelineTrackLock={handleSetTimelineTrackLock}
+      onSetTimelineTrackVisibility={handleSetTimelineTrackVisibility}
       onMoveSelectedSegment={handleMoveSelectedSegment}
       onSplitSelectedSegment={handleSplitSelectedSegment}
       onTrimSelectedSegment={handleTrimSelectedSegment}
@@ -2421,6 +2501,18 @@ function compatibleTrackKind(materialKind: MaterialKind): TrackKind {
   }
 
   return "video";
+}
+
+function defaultTrackName(kind: TrackKind, index: number): string {
+  const labels: Record<TrackKind, string> = {
+    video: "视频轨道",
+    audio: "音频轨道",
+    text: "文字轨道",
+    sticker: "贴纸轨道",
+    filter: "滤镜轨道"
+  };
+
+  return `${labels[kind]} ${index}`;
 }
 
 function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {

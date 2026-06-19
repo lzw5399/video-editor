@@ -280,6 +280,7 @@ export type SelectedTrackView = {
   kindLabel: string;
   muted: boolean;
   locked: boolean;
+  visible: boolean;
 };
 
 export type SelectedSegmentView = {
@@ -379,6 +380,7 @@ export const blankWorkspaceDraft: Draft = {
       name: "视频轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: []
     },
     {
@@ -387,6 +389,7 @@ export const blankWorkspaceDraft: Draft = {
       name: "音频轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: []
     },
     {
@@ -395,6 +398,7 @@ export const blankWorkspaceDraft: Draft = {
       name: "文字轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: []
     }
   ]
@@ -502,6 +506,7 @@ export const demoWorkspaceDraft: Draft = {
       name: "视频轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: [
         {
           segmentId: "segment-main-video",
@@ -534,6 +539,7 @@ export const demoWorkspaceDraft: Draft = {
       name: "音频轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: [
         {
           segmentId: "segment-bgm",
@@ -569,6 +575,7 @@ export const demoWorkspaceDraft: Draft = {
       name: "文字轨道 1",
       muted: false,
       locked: false,
+      visible: true,
       segments: []
     }
   ]
@@ -1438,7 +1445,8 @@ export function getSelectedTrackView(draft: Draft, selection: TimelineSelection)
     name: track.name,
     kindLabel: formatTrackKind(track.kind),
     muted: track.muted,
-    locked: track.locked
+    locked: track.locked,
+    visible: track.visible
   };
 }
 
@@ -1461,7 +1469,8 @@ export function getSelectedSegmentView(draft: Draft, selection: TimelineSelectio
           name: track.name,
           kindLabel: formatTrackKind(track.kind),
           muted: track.muted,
-          locked: track.locked
+          locked: track.locked,
+          visible: track.visible
         },
         material
       };
@@ -1487,9 +1496,16 @@ export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): 
       kindLabel,
       statusLabel: `${kindLabel} · ${track.segments.length} 片段`,
       lockLabel: track.locked ? "已锁定" : "未锁定",
-      visibilityLabel: track.kind === "audio" ? "听觉开启" : "画面可见",
+      visibilityLabel: track.kind === "audio" ? "听觉开启" : track.visible ? "画面可见" : "画面隐藏",
       muteLabel: track.muted ? "已静音" : "未静音",
-      rowClassName: `track-row ${track.kind}`,
+      rowClassName: [
+        "track-row",
+        track.kind,
+        track.visible ? "" : "hidden",
+        selection.trackIds.includes(track.trackId) ? "selected-track" : ""
+      ]
+        .filter(Boolean)
+        .join(" "),
       segments: track.segments.map((segment) => {
         const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
         const selected = selection.segmentIds.includes(segment.segmentId);

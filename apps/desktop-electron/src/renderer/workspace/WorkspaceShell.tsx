@@ -64,7 +64,12 @@ type WorkspaceShellProps = {
   onUpdateSelectedSegmentAudio: Parameters<typeof FeaturePanel>[0]["onUpdateSelectedSegmentAudio"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
+  onSelectTimelineTrack: Parameters<typeof Timeline>[0]["onSelectTrack"];
   onAddTimelineSegment: Parameters<typeof Timeline>[0]["onAddSegment"];
+  onAddTimelineTrack: Parameters<typeof Timeline>[0]["onAddTrack"];
+  onRenameTimelineTrack: Parameters<typeof Timeline>[0]["onRenameTrack"];
+  onSetTimelineTrackLock: Parameters<typeof Timeline>[0]["onSetTrackLock"];
+  onSetTimelineTrackVisibility: Parameters<typeof Timeline>[0]["onSetTrackVisibility"];
   onMoveSelectedSegment: Parameters<typeof Timeline>[0]["onMoveSelectedSegment"];
   onSplitSelectedSegment: Parameters<typeof Timeline>[0]["onSplitSelectedSegment"];
   onTrimSelectedSegment: Parameters<typeof Timeline>[0]["onTrimSelectedSegment"];
@@ -121,7 +126,12 @@ export function WorkspaceShell({
   onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute,
   onSelectTimelineSegment,
+  onSelectTimelineTrack,
   onAddTimelineSegment,
+  onAddTimelineTrack,
+  onRenameTimelineTrack,
+  onSetTimelineTrackLock,
+  onSetTimelineTrackVisibility,
   onMoveSelectedSegment,
   onSplitSelectedSegment,
   onTrimSelectedSegment,
@@ -248,7 +258,12 @@ export function WorkspaceShell({
           onTogglePlayback={onTogglePlayback}
           onStopPlayback={onStopPlayback}
           onSelectSegment={onSelectTimelineSegment}
+          onSelectTrack={onSelectTimelineTrack}
           onAddSegment={onAddTimelineSegment}
+          onAddTrack={onAddTimelineTrack}
+          onRenameTrack={onRenameTimelineTrack}
+          onSetTrackLock={onSetTimelineTrackLock}
+          onSetTrackVisibility={onSetTimelineTrackVisibility}
           onMoveSelectedSegment={onMoveSelectedSegment}
           onSplitSelectedSegment={onSplitSelectedSegment}
           onTrimSelectedSegment={onTrimSelectedSegment}

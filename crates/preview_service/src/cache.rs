@@ -398,6 +398,15 @@ pub fn consumer_domains_for_dirty_domains(
     let mut consumers = Vec::new();
     for domain in domains {
         match domain {
+            DirtyDomain::Track => push_all(
+                &mut consumers,
+                &[
+                    DirtyDomain::Preview,
+                    DirtyDomain::ExportPrep,
+                    DirtyDomain::GraphSnapshot,
+                    DirtyDomain::PreviewCache,
+                ],
+            ),
             DirtyDomain::Timing => push_all(
                 &mut consumers,
                 &[

@@ -130,6 +130,40 @@
       "title": "AddTextSegmentCommandPayload",
       "type": "object"
     },
+    "AddTrackCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 15.1 track creation command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "name": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        },
+        "trackKind": {
+          "$ref": "#/$defs/TrackKind"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "trackKind",
+        "name"
+      ],
+      "title": "AddTrackCommandPayload",
+      "type": "object"
+    },
     "AudioEffectSlot": {
       "additionalProperties": false,
       "properties": {
@@ -822,6 +856,10 @@
         "addAudioSegment",
         "setSegmentVolume",
         "updateSegmentAudio",
+        "addTrack",
+        "renameTrack",
+        "setTrackLock",
+        "setTrackVisibility",
         "setTrackMute",
         "updateDraftCanvasConfig",
         "updateSegmentVisual",
@@ -1593,6 +1631,146 @@
             "commandState",
             "selection",
             "segmentId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 15.1 track creation command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addTrack",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            },
+            "trackKind": {
+              "$ref": "#/$defs/TrackKind"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "trackKind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 15.1 track rename command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "renameTrack",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 15.1 track lock command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "setTrackLock",
+              "type": "string"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "locked"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Payload accepted by the Phase 15.1 visual track visibility command.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "setTrackVisibility",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackId": {
+              "$ref": "#/$defs/TrackId"
+            },
+            "visible": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackId",
+            "visible"
           ],
           "type": "object"
         },
@@ -3286,6 +3464,7 @@
     "DirtyDomain": {
       "description": "Semantic and derived consumer domains affected by a command.",
       "enum": [
+        "track",
         "timing",
         "visual",
         "text",
@@ -4733,6 +4912,36 @@
         "at"
       ],
       "title": "RemoveSegmentKeyframeCommandPayload",
+      "type": "object"
+    },
+    "RenameTrackCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 15.1 track rename command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "name": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "name"
+      ],
+      "title": "RenameTrackCommandPayload",
       "type": "object"
     },
     "RequestPreviewFrameCommandPayload": {
@@ -6183,6 +6392,36 @@
       "title": "SetSegmentVolumeCommandPayload",
       "type": "object"
     },
+    "SetTrackLockCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 15.1 track lock command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "locked"
+      ],
+      "title": "SetTrackLockCommandPayload",
+      "type": "object"
+    },
     "SetTrackMuteCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 3 track mute command.",
@@ -6211,6 +6450,36 @@
         "muted"
       ],
       "title": "SetTrackMuteCommandPayload",
+      "type": "object"
+    },
+    "SetTrackVisibilityCommandPayload": {
+      "additionalProperties": false,
+      "description": "Payload accepted by the Phase 15.1 visual track visibility command.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackId": {
+          "$ref": "#/$defs/TrackId"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackId",
+        "visible"
+      ],
+      "title": "SetTrackVisibilityCommandPayload",
       "type": "object"
     },
     "SnappingSettings": {
@@ -26766,6 +27035,10 @@
         },
         "trackId": {
           "$ref": "#/$defs/TrackId"
+        },
+        "visible": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -27453,6 +27726,74 @@
           "properties": {
             "kind": {
               "const": "updateSegmentAudio"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "addTrack"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addTrack"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "renameTrack"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "renameTrack"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "setTrackLock"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "setTrackLock"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "setTrackVisibility"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "setTrackVisibility"
             }
           },
           "required": [

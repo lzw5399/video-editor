@@ -870,6 +870,8 @@ pub struct Track {
     pub name: String,
     pub muted: bool,
     pub locked: bool,
+    #[serde(default = "default_track_visible")]
+    pub visible: bool,
     pub segments: Vec<Segment>,
 }
 
@@ -881,7 +883,12 @@ impl Track {
             name: name.into(),
             muted: false,
             locked: false,
+            visible: true,
             segments: Vec::new(),
         }
     }
+}
+
+fn default_track_visible() -> bool {
+    true
 }

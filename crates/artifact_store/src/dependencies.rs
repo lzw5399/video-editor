@@ -498,6 +498,7 @@ fn range_duration_i64(range: Option<DependencyRange>) -> Result<Option<i64>, Art
 
 fn dirty_domain_to_str(domain: DirtyDomain) -> &'static str {
     match domain {
+        DirtyDomain::Track => "track",
         DirtyDomain::Timing => "timing",
         DirtyDomain::Visual => "visual",
         DirtyDomain::Text => "text",
@@ -521,6 +522,7 @@ fn dirty_domain_to_str(domain: DirtyDomain) -> &'static str {
 
 fn dirty_domain_from_str(value: &str) -> Result<DirtyDomain, ArtifactStoreError> {
     match value {
+        "track" => Ok(DirtyDomain::Track),
         "timing" => Ok(DirtyDomain::Timing),
         "visual" => Ok(DirtyDomain::Visual),
         "text" => Ok(DirtyDomain::Text),

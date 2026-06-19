@@ -267,6 +267,9 @@ pub fn normalize_draft(
     let mut tracks = Vec::with_capacity(draft.tracks.len());
 
     for track in &draft.tracks {
+        if is_visual_track(track.kind) && !track.visible {
+            continue;
+        }
         let stack_index = if is_visual_track(track.kind) {
             let index = visual_stack_index;
             visual_stack_index = visual_stack_index.checked_add(1).ok_or_else(|| {

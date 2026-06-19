@@ -21518,6 +21518,10 @@
         },
         "trackId": {
           "$ref": "#/$defs/TrackId"
+        },
+        "visible": {
+          "type": "boolean",
+          "default": true
         }
       },
       "additionalProperties": false,

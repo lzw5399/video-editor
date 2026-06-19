@@ -60,5 +60,5 @@ export type SegmentBlendMode = { "kind": "normal" } | { "kind": "unsupported", n
 export type SegmentMask = { "kind": "none" } | { "kind": "unsupported", name: string, };
 export type SegmentVisual = { visible: boolean, transform: SegmentTransform, fitMode: SegmentFitMode, backgroundFilling: SegmentBackgroundFilling, blendMode: SegmentBlendMode, mask: SegmentMask, };
 export type Segment = { segmentId: SegmentId, materialId: MaterialId, sourceTimerange: SourceTimerange, targetTimerange: TargetTimerange, mainTrackMagnet: MainTrackMagnet, keyframes: Array<Keyframe>, filters: Array<Filter>, transition?: Transition | null, text?: TextSegment | null, volume: SegmentVolume, audio: SegmentAudio, visual: SegmentVisual, };
-export type Track = { trackId: TrackId, kind: TrackKind, name: string, muted: boolean, locked: boolean, segments: Array<Segment>, };
+export type Track = { trackId: TrackId, kind: TrackKind, name: string, muted: boolean, locked: boolean, visible: boolean, segments: Array<Segment>, };
 export type Draft = { schemaVersion: DraftSchemaVersion, draftId: DraftId, metadata: DraftMetadata, canvasConfig: DraftCanvasConfig, materials: Array<Material>, tracks: Array<Track>, };

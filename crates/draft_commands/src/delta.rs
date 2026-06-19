@@ -156,6 +156,15 @@ const MATERIAL_CONSUMERS: &[DirtyDomain] = &[
     DirtyDomain::PreviewCache,
 ];
 
+const TRACK_DOMAINS: &[DirtyDomain] = &[DirtyDomain::Track, DirtyDomain::GraphSnapshot];
+
+const TRACK_CONSUMERS: &[DirtyDomain] = &[
+    DirtyDomain::Preview,
+    DirtyDomain::ExportPrep,
+    DirtyDomain::GraphSnapshot,
+    DirtyDomain::PreviewCache,
+];
+
 pub fn current_range(target_timerange: TargetTimerange) -> DirtyRange {
     DirtyRange {
         target_timerange,
@@ -243,6 +252,58 @@ pub fn segment_with_canvas_delta(
         },
         reason: reason.to_owned(),
     }
+}
+
+pub fn track_delta(command: CommandName, track_id: &TrackId, reason: &'static str) -> CommandDelta {
+    CommandDelta::targeted(
+        command,
+        vec![ChangedEntity::Track {
+            track_id: track_id.clone(),
+        }],
+        TRACK_DOMAINS.to_vec(),
+        Vec::new(),
+        InvalidationScope::targeted(Vec::new(), TRACK_CONSUMERS.to_vec()),
+        reason,
+    )
+}
+
+pub fn track_visibility_delta(track_id: &TrackId, segments: &[Segment]) -> CommandDelta {
+    let mut entities = vec![ChangedEntity::Track {
+        track_id: track_id.clone(),
+    }];
+    let mut ranges = Vec::new();
+    let mut material_ids = Vec::new();
+
+    for segment in segments {
+        entities.push(ChangedEntity::Segment {
+            track_id: track_id.clone(),
+            segment_id: segment.segment_id.clone(),
+        });
+        entities.push(ChangedEntity::Material {
+            material_id: segment.material_id.clone(),
+        });
+        push_material_id(&mut material_ids, &segment.material_id);
+        ranges.push(current_range(segment.target_timerange.clone()));
+    }
+
+    let mut domains = TRACK_DOMAINS.to_vec();
+    push_domain(&mut domains, DirtyDomain::Visual);
+    push_domain(&mut domains, DirtyDomain::Preview);
+    push_domain(&mut domains, DirtyDomain::ExportPrep);
+    push_domain(&mut domains, DirtyDomain::Thumbnail);
+    push_domain(&mut domains, DirtyDomain::PreviewCache);
+
+    let mut consumers = TRACK_CONSUMERS.to_vec();
+    push_domain(&mut consumers, DirtyDomain::Thumbnail);
+
+    CommandDelta::targeted(
+        CommandName::SetTrackVisibility,
+        entities,
+        domains,
+        ranges,
+        InvalidationScope::targeted(material_ids, consumers),
+        "track visibility changed",
+    )
 }
 
 pub fn moved_segment_delta(
@@ -643,6 +704,7 @@ pub fn consumer_domains_for_semantic_domains(domains: &[DirtyDomain]) -> Vec<Dir
     let mut consumers = Vec::new();
     for domain in domains {
         match domain {
+            DirtyDomain::Track => push_all(&mut consumers, TRACK_CONSUMERS),
             DirtyDomain::Timing => push_all(
                 &mut consumers,
                 &[

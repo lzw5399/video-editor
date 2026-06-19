@@ -43,6 +43,10 @@ pub enum TimelineCommandErrorKind {
         material_id: MaterialId,
         material_kind: MaterialKind,
     },
+    InvalidTrackOperation {
+        track_id: TrackId,
+        reason: String,
+    },
     SourceRangeExceedsMaterialDuration {
         segment_id: SegmentId,
         material_id: MaterialId,
@@ -114,6 +118,12 @@ impl fmt::Display for TimelineCommandError {
                 "track {} ({track_kind:?}) is incompatible with material {} ({material_kind:?})",
                 track_id.as_str(),
                 material_id.as_str()
+            ),
+            TimelineCommandErrorKind::InvalidTrackOperation { track_id, reason } => write!(
+                formatter,
+                "invalid track operation on {}: {}",
+                track_id.as_str(),
+                reason
             ),
             TimelineCommandErrorKind::SourceRangeExceedsMaterialDuration {
                 segment_id,

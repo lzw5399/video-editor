@@ -98,6 +98,10 @@ pub enum CommandName {
     AddAudioSegment,
     SetSegmentVolume,
     UpdateSegmentAudio,
+    AddTrack,
+    RenameTrack,
+    SetTrackLock,
+    SetTrackVisibility,
     SetTrackMute,
     UpdateDraftCanvasConfig,
     UpdateSegmentVisual,
@@ -156,6 +160,10 @@ pub enum CommandPayload {
     AddAudioSegment(AddAudioSegmentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     UpdateSegmentAudio(UpdateSegmentAudioCommandPayload),
+    AddTrack(AddTrackCommandPayload),
+    RenameTrack(RenameTrackCommandPayload),
+    SetTrackLock(SetTrackLockCommandPayload),
+    SetTrackVisibility(SetTrackVisibilityCommandPayload),
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
@@ -214,6 +222,10 @@ impl CommandPayload {
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::UpdateSegmentAudio(_) => CommandName::UpdateSegmentAudio,
+            Self::AddTrack(_) => CommandName::AddTrack,
+            Self::RenameTrack(_) => CommandName::RenameTrack,
+            Self::SetTrackLock(_) => CommandName::SetTrackLock,
+            Self::SetTrackVisibility(_) => CommandName::SetTrackVisibility,
             Self::SetTrackMute(_) => CommandName::SetTrackMute,
             Self::UpdateDraftCanvasConfig(_) => CommandName::UpdateDraftCanvasConfig,
             Self::UpdateSegmentVisual(_) => CommandName::UpdateSegmentVisual,
@@ -521,6 +533,51 @@ pub struct UpdateSegmentAudioCommandPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub effect_slots: Option<Vec<AudioEffectSlot>>,
+}
+
+/// Payload accepted by the Phase 15.1 track creation command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTrackCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub track_kind: TrackKind,
+    pub name: String,
+}
+
+/// Payload accepted by the Phase 15.1 track rename command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenameTrackCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub name: String,
+}
+
+/// Payload accepted by the Phase 15.1 track lock command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetTrackLockCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub locked: bool,
+}
+
+/// Payload accepted by the Phase 15.1 visual track visibility command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetTrackVisibilityCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_id: TrackId,
+    pub visible: bool,
 }
 
 /// Payload accepted by the Phase 3 track mute command.

@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import type { SegmentId } from "../../generated/Draft";
+import type { SegmentId, TrackKind } from "../../generated/Draft";
 import {
   deriveTimelineRows,
   formatKeyframeEasing,
@@ -38,7 +38,12 @@ type TimelineProps = {
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
   onSelectSegment?: (segmentId: SegmentId) => void;
+  onSelectTrack?: (trackId: string) => void;
   onAddSegment?: (materialId: string) => void;
+  onAddTrack?: (trackKind: TrackKind) => void;
+  onRenameTrack?: (trackId: string, name: string) => void;
+  onSetTrackLock?: (trackId: string, locked: boolean) => void;
+  onSetTrackVisibility?: (trackId: string, visible: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: (splitAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
@@ -56,7 +61,12 @@ export function Timeline({
   onTogglePlayback,
   onStopPlayback,
   onSelectSegment,
+  onSelectTrack,
   onAddSegment,
+  onAddTrack,
+  onRenameTrack,
+  onSetTrackLock,
+  onSetTrackVisibility,
   onMoveSelectedSegment,
   onSplitSelectedSegment,
   onTrimSelectedSegment,
@@ -135,6 +145,7 @@ export function Timeline({
         onTogglePlayback={onTogglePlayback}
         onStopPlayback={onStopPlayback}
         onAddSegment={onAddSegment}
+        onAddTrack={onAddTrack}
         onMoveSelectedSegment={onMoveSelectedSegment}
         onSplitSelectedSegment={onSplitSelectedSegment}
         onTrimSelectedSegment={onTrimSelectedSegment}
@@ -172,6 +183,10 @@ export function Timeline({
             waveform={workspace.waveform}
             timelineDuration={timeline.duration}
             onSelectSegment={onSelectSegment}
+            onSelectTrack={onSelectTrack}
+            onRenameTrack={onRenameTrack}
+            onSetTrackLock={onSetTrackLock}
+            onSetTrackVisibility={onSetTrackVisibility}
             onSetTrackMute={onSetTrackMute}
             pending={workspace.pendingCommand !== null}
           />
@@ -194,6 +209,7 @@ function TransportStrip({
   onTogglePlayback,
   onStopPlayback,
   onAddSegment,
+  onAddTrack,
   onMoveSelectedSegment,
   onSplitSelectedSegment,
   onTrimSelectedSegment,
@@ -208,6 +224,7 @@ function TransportStrip({
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
   onAddSegment?: (materialId: string) => void;
+  onAddTrack?: (trackKind: TrackKind) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: (splitAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
@@ -280,6 +297,11 @@ function TransportStrip({
       >
         添加片段
       </button>
+      <div className="timeline-tool-group" role="group" aria-label="添加轨道">
+        <TimelineIconButton label="添加视频轨道" symbol="V+" onClick={() => onAddTrack?.("video")} disabled={pending} />
+        <TimelineIconButton label="添加音频轨道" symbol="A+" onClick={() => onAddTrack?.("audio")} disabled={pending} />
+        <TimelineIconButton label="添加文字轨道" symbol="T+" onClick={() => onAddTrack?.("text")} disabled={pending} />
+      </div>
       <label className="playhead-control">
         <span>播放头</span>
         <input
@@ -426,6 +448,10 @@ function TimelineTrackRow({
   waveform,
   timelineDuration,
   onSelectSegment,
+  onSelectTrack,
+  onRenameTrack,
+  onSetTrackLock,
+  onSetTrackVisibility,
   onSetTrackMute,
   pending
 }: {
@@ -433,30 +459,88 @@ function TimelineTrackRow({
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
+  onSelectTrack?: (trackId: string) => void;
+  onRenameTrack?: (trackId: string, name: string) => void;
+  onSetTrackLock?: (trackId: string, locked: boolean) => void;
+  onSetTrackVisibility?: (trackId: string, visible: boolean) => void;
   onSetTrackMute?: (trackId: string, muted: boolean) => void;
   pending: boolean;
 }): React.ReactElement {
+  const [draftName, setDraftName] = useState(row.track.name);
+  const selected = row.rowClassName.includes("selected-track");
+  const canToggleVisibility = row.track.kind !== "audio" && onSetTrackVisibility !== undefined;
+
+  useEffect(() => {
+    setDraftName(row.track.name);
+  }, [row.track.name]);
+
+  const commitName = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      setDraftName(row.track.name);
+      return;
+    }
+    if (trimmed !== row.track.name) {
+      onRenameTrack?.(row.track.trackId, trimmed);
+    }
+  }, [onRenameTrack, row.track.name, row.track.trackId]);
+
   return (
     <div className={row.rowClassName}>
       <div className="track-header">
         <div className="track-header-main">
-          <span className="track-kind-symbol" aria-hidden="true">
-            {row.symbol}
-          </span>
-          <strong>{row.track.name}</strong>
+          <button
+            type="button"
+            className="track-target-button"
+            aria-label={`选择轨道 ${row.track.name}`}
+            aria-pressed={selected}
+            title={`选择轨道 ${row.track.name}`}
+            onClick={() => onSelectTrack?.(row.track.trackId)}
+            disabled={pending || onSelectTrack === undefined}
+          >
+            <span className="track-kind-symbol" aria-hidden="true">
+              {row.symbol}
+            </span>
+          </button>
+          <input
+            className="track-name-input"
+            aria-label={`${row.track.name} 名称`}
+            value={draftName}
+            disabled={pending || onRenameTrack === undefined}
+            onChange={(event) => setDraftName(event.currentTarget.value)}
+            onBlur={(event) => commitName(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitName(event.currentTarget.value);
+              }
+              if (event.key === "Escape") {
+                setDraftName(row.track.name);
+                event.currentTarget.blur();
+              }
+            }}
+          />
         </div>
         <div className="track-header-controls" aria-label={`${row.track.name} 状态`}>
-          <TrackStateButton label={`${row.track.name} 锁定状态：${row.lockLabel}`} symbol="锁" active={row.track.locked} disabled />
+          <TrackStateButton
+            label={`${row.track.name} 锁定状态：${row.lockLabel}`}
+            symbol="锁"
+            active={row.track.locked}
+            disabled={pending || onSetTrackLock === undefined}
+            onClick={() => onSetTrackLock?.(row.track.trackId, !row.track.locked)}
+          />
           <TrackStateButton
             label={`${row.track.name} 可见状态：${row.visibilityLabel}`}
             symbol={row.track.kind === "audio" ? "听" : "眼"}
-            disabled
+            active={row.track.kind === "audio" ? !row.track.muted : row.track.visible}
+            disabled={pending || !canToggleVisibility}
+            onClick={() => onSetTrackVisibility?.(row.track.trackId, !row.track.visible)}
           />
           <TrackStateButton
             label={`${row.track.name} 静音状态：${row.muteLabel}`}
             symbol="静"
             active={row.track.muted}
-            disabled={pending || onSetTrackMute === undefined}
+            disabled={pending || row.track.kind !== "audio" || onSetTrackMute === undefined}
             onClick={() => onSetTrackMute?.(row.track.trackId, !row.track.muted)}
           />
         </div>

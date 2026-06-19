@@ -702,6 +702,7 @@ fn all_artifact_ids(store: &ArtifactStore) -> Result<Vec<String>, ArtifactStoreE
 
 fn dirty_domain_to_str(domain: DirtyDomain) -> &'static str {
     match domain {
+        DirtyDomain::Track => "track",
         DirtyDomain::Timing => "timing",
         DirtyDomain::Visual => "visual",
         DirtyDomain::Text => "text",

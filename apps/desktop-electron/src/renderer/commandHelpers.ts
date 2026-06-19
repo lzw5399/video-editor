@@ -2,6 +2,7 @@ import type {
   AddSegmentCommandPayload,
   AddAudioSegmentCommandPayload,
   AddTextSegmentCommandPayload,
+  AddTrackCommandPayload,
   AudioPreviewCommandPayload,
   CancelExportCommandPayload,
   CommandEnvelope,
@@ -22,18 +23,20 @@ import type {
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
   RedoTimelineEditCommandPayload,
+  RenameTrackCommandPayload,
   RemoveSegmentKeyframeCommandPayload,
   RequestPreviewFrameCommandPayload,
   RequestPreviewSegmentCommandPayload,
   RefreshArtifactStatusCommandPayload,
   SelectTimelineSegmentsCommandPayload,
   SetSegmentKeyframeCommandPayload,
+  SetTrackLockCommandPayload,
+  SetTrackVisibilityCommandPayload,
   SplitSegmentCommandPayload,
   StartExportCommandPayload,
   RunArtifactGarbageCollectionCommandPayload,
   TimelineSelection,
   TrimSegmentCommandPayload,
-  TrackId,
   UndoTimelineEditCommandPayload,
   UpdateDraftCanvasConfigCommandPayload,
   UpdateSegmentAudioCommandPayload,
@@ -66,7 +69,9 @@ import type {
   TextLayoutRegion,
   TextSegment,
   TextStyle,
-  TextWrapping
+  TextWrapping,
+  TrackId,
+  TrackKind
 } from "../generated/Draft";
 import type {
   RuntimeDiagnosticsDisplayState,
@@ -389,6 +394,68 @@ export function buildSetTrackMuteCommand(context: CommandContext, trackId: Track
     trackId,
     muted
   });
+}
+
+export function buildAddTrackCommand(
+  context: CommandContext,
+  trackId: TrackId,
+  trackKind: TrackKind,
+  name: string
+): CommandEnvelope {
+  const payload = {
+    kind: "addTrack",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    trackId,
+    trackKind,
+    name
+  } satisfies AddTrackCommandPayload & { kind: "addTrack" };
+
+  return envelope("addTrack", payload);
+}
+
+export function buildRenameTrackCommand(context: CommandContext, trackId: TrackId, name: string): CommandEnvelope {
+  const payload = {
+    kind: "renameTrack",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    trackId,
+    name
+  } satisfies RenameTrackCommandPayload & { kind: "renameTrack" };
+
+  return envelope("renameTrack", payload);
+}
+
+export function buildSetTrackLockCommand(context: CommandContext, trackId: TrackId, locked: boolean): CommandEnvelope {
+  const payload = {
+    kind: "setTrackLock",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    trackId,
+    locked
+  } satisfies SetTrackLockCommandPayload & { kind: "setTrackLock" };
+
+  return envelope("setTrackLock", payload);
+}
+
+export function buildSetTrackVisibilityCommand(
+  context: CommandContext,
+  trackId: TrackId,
+  visible: boolean
+): CommandEnvelope {
+  const payload = {
+    kind: "setTrackVisibility",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    trackId,
+    visible
+  } satisfies SetTrackVisibilityCommandPayload & { kind: "setTrackVisibility" };
+
+  return envelope("setTrackVisibility", payload);
 }
 
 type UpdateSegmentAudioOptions = {

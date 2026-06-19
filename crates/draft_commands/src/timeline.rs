@@ -13,7 +13,7 @@ use crate::{
     canvas::update_draft_canvas_config,
     delta::{
         current_range, moved_segment_delta, previous_range, segment_delta,
-        segment_with_canvas_delta, split_segment_delta,
+        segment_with_canvas_delta, split_segment_delta, track_delta, track_visibility_delta,
     },
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
@@ -119,7 +119,7 @@ pub fn visual_track_stack_order(draft: &Draft) -> Vec<TrackId> {
     draft
         .tracks
         .iter()
-        .filter(|track| is_visual_track(track.kind))
+        .filter(|track| is_visual_track(track.kind) && track.visible)
         .map(|track| track.track_id.clone())
         .collect()
 }
@@ -251,6 +251,35 @@ pub fn execute_timeline_edit(
                 .map(|fade_out_duration| fade_out_duration.duration),
             payload.effect_slots,
         ),
+        CommandPayload::AddTrack(payload) => add_track(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.track_kind,
+            payload.name,
+        ),
+        CommandPayload::RenameTrack(payload) => rename_track(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.name,
+        ),
+        CommandPayload::SetTrackLock(payload) => set_track_lock(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.locked,
+        ),
+        CommandPayload::SetTrackVisibility(payload) => set_track_visibility(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_id,
+            payload.visible,
+        ),
         CommandPayload::SetTrackMute(payload) => set_track_mute(
             &payload.draft,
             &payload.command_state,
@@ -292,6 +321,113 @@ pub fn execute_timeline_edit(
             },
         )),
     }
+}
+
+pub fn add_track(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    track_id: TrackId,
+    track_kind: TrackKind,
+    name: String,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    next_draft
+        .tracks
+        .push(Track::new(track_id.clone(), track_kind, name));
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "addTrack"),
+        TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec![track_id.clone()],
+        },
+        "trackAdded",
+        track_delta(CommandName::AddTrack, &track_id, "track added"),
+    ))
+}
+
+pub fn rename_track(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    track_id: TrackId,
+    name: String,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let track_index = find_track_index(&next_draft, &track_id)?;
+    next_draft.tracks[track_index].name = name;
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "renameTrack"),
+        TimelineSelection {
+            segment_ids: selection.segment_ids.clone(),
+            track_ids: vec![track_id.clone()],
+        },
+        "trackRenamed",
+        track_delta(CommandName::RenameTrack, &track_id, "track renamed"),
+    ))
+}
+
+pub fn set_track_lock(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    track_id: TrackId,
+    locked: bool,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let track_index = find_track_index(&next_draft, &track_id)?;
+    next_draft.tracks[track_index].locked = locked;
+    validate_timeline_rules(&next_draft)?;
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "setTrackLock"),
+        TimelineSelection {
+            segment_ids: selection.segment_ids.clone(),
+            track_ids: vec![track_id.clone()],
+        },
+        "trackLockChanged",
+        track_delta(CommandName::SetTrackLock, &track_id, "track lock changed"),
+    ))
+}
+
+pub fn set_track_visibility(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    track_id: TrackId,
+    visible: bool,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let track_index = find_track_index(&next_draft, &track_id)?;
+    if !is_visual_track(next_draft.tracks[track_index].kind) {
+        return Err(TimelineCommandError::new(
+            TimelineCommandErrorKind::InvalidTrackOperation {
+                track_id,
+                reason: "visibility is only supported for visual tracks".to_owned(),
+            },
+        ));
+    }
+    next_draft.tracks[track_index].visible = visible;
+    validate_timeline_rules(&next_draft)?;
+    let track_segments = next_draft.tracks[track_index].segments.clone();
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "setTrackVisibility"),
+        TimelineSelection {
+            segment_ids: selection.segment_ids.clone(),
+            track_ids: vec![track_id.clone()],
+        },
+        "trackVisibilityChanged",
+        track_visibility_delta(&track_id, &track_segments),
+    ))
 }
 
 pub fn add_segment(
