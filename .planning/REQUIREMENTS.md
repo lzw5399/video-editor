@@ -307,7 +307,7 @@
 | ASSET-01 | Phase 14 | Planned |
 | ASSET-02 | Phase 14 | Planned |
 | ASSET-03 | Phase 14 | Complete |
-| ASSET-04 | Phase 14 | Planned |
+| ASSET-04 | Phase 14 | Complete |
 | ASSET-05 | Phase 14 | Planned |
 | AUDIO2-01 | Phase 15 | Planned |
 | AUDIO2-02 | Phase 15 | Planned |

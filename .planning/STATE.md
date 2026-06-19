@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-06-19T05:16:55.462Z"
-last_activity: 2026-06-19 -- Completed 14-03 exact artifact invalidation
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-06-19T05:29:36.249Z"
+last_activity: 2026-06-19 -- Completed 14-04 generation jobs and derived artifact generation
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 105
-  completed_plans: 101
-  percent: 96
+  completed_plans: 102
+  percent: 97
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 14 (asset-resource-manager-and-derived-artifact-store) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 14-03 exact artifact invalidation
+Last activity: 2026-06-19 -- Completed 14-04 generation jobs and derived artifact generation
 
-Progress: [██████████] 96%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -154,6 +154,7 @@ Progress: [██████████] 96%
 | Phase 14 P01 | 7 min | 3 tasks | 13 files |
 | Phase 14 P02 | 7 min | 2 tasks | 7 files |
 | Phase 14 P03 | 8min | 2 tasks | 4 files |
+| Phase 14 P04 | 12 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -353,6 +354,9 @@ Recent decisions affecting current work:
 - [Phase 14]: Artifact invalidation now records audit-safe dirty reasons and source change kinds on artifact rows while keeping canonical project.json semantic-only.
 - [Phase 14]: Source delete tombstones dependent artifact rows for audit/status instead of deleting source media or derived blobs.
 - [Phase 14]: Dirty domains filter localized range invalidation and do not independently dirty every artifact when tighter material/resource/graph/range facts exist.
+- [Phase 14]: Generation workers poll persisted SQLite cancellation state through GenerationWorkerContext instead of renderer-owned scheduling or cache state. — ASSET-04 requires cancellable Rust-owned generation while Phase 16 scheduler policy remains deferred.
+- [Phase 14]: Generated proxy, thumbnail, and waveform bytes become ready artifacts only through BlobStore atomic writes. — Derived artifacts must be project-contained and must not be written directly by workers or renderer code.
+- [Phase 14]: Phase 16 scheduler priority and backpressure remain deferred; Phase 14 exposes lifecycle contracts only. — The plan explicitly excludes priority queues and backpressure policy.
 
 ### Pending Todos
 
@@ -389,6 +393,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T05:16:55.415Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-06-19T05:29:36.243Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
