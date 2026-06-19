@@ -1,13 +1,16 @@
 use draft_commands::{
-    audio::{add_audio_segment, set_segment_volume, set_track_mute},
+    audio::{add_audio_segment, set_segment_volume, set_track_mute, update_segment_audio},
+    delta::audio_property_delta,
     history::{redo_timeline_edit, undo_timeline_edit},
+    keyframe::set_segment_keyframe,
     text::{add_text_segment, edit_text_segment},
 };
 use draft_model::{
-    CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, Material, MaterialKind, Microseconds,
-    SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, TimelineSelection, Track, TrackKind,
+    CommandName, CommandState, DirtyDomain, Draft, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    KeyframeProperty, KeyframeValue, MAX_SEGMENT_VOLUME_MILLIS, Material, MaterialKind,
+    Microseconds, SegmentAudio, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
+    TextStroke, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -141,6 +144,10 @@ fn audio_commands() {
         1_500
     );
     assert_eq!(
+        volume_changed.draft.tracks[0].segments[0].audio.gain_millis, 1_500,
+        "legacy volume command should update the canonical audio gain path"
+    );
+    assert_eq!(
         volume_changed.draft.tracks[0].segments[0].target_timerange,
         TargetTimerange::new(0, 1_000_000)
     );
@@ -192,6 +199,124 @@ fn audio_commands() {
     assert!(incompatible.to_string().contains("incompatible"));
 }
 
+#[test]
+fn audio_commands_update_segment_audio_atomically() {
+    let (draft, state, selection) = draft_with_audio_segment();
+
+    let updated = update_segment_audio(
+        &draft,
+        &state,
+        &selection,
+        "audio-segment".into(),
+        Some(1_400),
+        Some(-375),
+        Some(Microseconds::new(120_000)),
+        Some(Microseconds::new(80_000)),
+        None,
+    )
+    .expect("valid audio semantic update should commit");
+
+    let segment = &updated.draft.tracks[0].segments[0];
+    assert_eq!(segment.volume.level_millis, 1_400);
+    assert_eq!(segment.audio.gain_millis, 1_400);
+    assert_eq!(segment.audio.pan_balance_millis.balance_millis, -375);
+    assert_eq!(
+        segment.audio.fade_in_duration.duration,
+        Microseconds::new(120_000)
+    );
+    assert_eq!(
+        segment.audio.fade_out_duration.duration,
+        Microseconds::new(80_000)
+    );
+    assert_eq!(updated.events[0].kind, "segmentAudioUpdated");
+    assert_eq!(updated.command_state.undo_stack.len(), 1);
+    assert_audio_dirty_domains(&updated.delta);
+
+    let invalid = update_segment_audio(
+        &updated.draft,
+        &updated.command_state,
+        &updated.selection,
+        "audio-segment".into(),
+        Some(MAX_SEGMENT_VOLUME_MILLIS + 1),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect_err("invalid gain should reject");
+    assert!(invalid.to_string().contains("gain") || invalid.to_string().contains("volume"));
+    assert_eq!(
+        updated.draft.tracks[0].segments[0].audio, segment.audio,
+        "invalid update must not mutate the accepted draft"
+    );
+    assert_eq!(updated.command_state.undo_stack.len(), 1);
+}
+
+#[test]
+fn audio_commands_update_segment_audio_rejects_locked_tracks() {
+    let (mut draft, state, selection) = draft_with_audio_segment();
+    draft.tracks[0].locked = true;
+
+    let rejected = update_segment_audio(
+        &draft,
+        &state,
+        &selection,
+        "audio-segment".into(),
+        Some(1_250),
+        Some(100),
+        None,
+        None,
+        None,
+    )
+    .expect_err("locked audio track should reject semantic audio edits");
+
+    assert!(rejected.to_string().contains("locked"));
+    assert_eq!(draft.tracks[0].segments[0].audio, SegmentAudio::default());
+    assert!(state.undo_stack.is_empty());
+}
+
+#[test]
+fn audio_commands_dirty_domains_cover_gain_pan_fades_keyframes_and_effect_slots() {
+    let (draft, state, selection) = draft_with_audio_segment();
+    let update = update_segment_audio(
+        &draft,
+        &state,
+        &selection,
+        "audio-segment".into(),
+        Some(1_100),
+        Some(250),
+        Some(Microseconds::new(90_000)),
+        Some(Microseconds::new(70_000)),
+        Some(vec![]),
+    )
+    .expect("audio semantic update should commit");
+    assert_audio_dirty_domains(&update.delta);
+
+    let keyframe = set_segment_keyframe(
+        &update.draft,
+        &update.command_state,
+        &update.selection,
+        "audio-segment".into(),
+        Keyframe {
+            at: Microseconds::new(250_000),
+            property: KeyframeProperty::Volume,
+            value: KeyframeValue::Uint { value: 900 },
+            interpolation: KeyframeInterpolation::Linear,
+            easing: KeyframeEasing::None,
+        },
+    )
+    .expect("volume keyframe should commit");
+    assert_audio_dirty_domains(&keyframe.delta);
+
+    let direct_delta = audio_property_delta(
+        CommandName::UpdateSegmentAudio,
+        &"audio-track".into(),
+        &keyframe.draft.tracks[0].segments[0],
+        "effect slot classification changed",
+    );
+    assert_audio_dirty_domains(&direct_delta);
+}
+
 fn draft_with_text_track() -> Draft {
     let mut draft = Draft::new("text-command-draft", "Text Commands");
     draft
@@ -212,6 +337,45 @@ fn draft_with_audio_track() -> Draft {
         .tracks
         .push(Track::new("audio-track", TrackKind::Audio, "Audio"));
     draft
+}
+
+fn draft_with_audio_segment() -> (Draft, CommandState, TimelineSelection) {
+    let mut draft = draft_with_audio_track();
+    draft.tracks[0].segments.push(draft_model::Segment::new(
+        "audio-segment",
+        "audio-material",
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    ));
+    (
+        draft,
+        CommandState::empty(),
+        TimelineSelection {
+            segment_ids: vec!["audio-segment".into()],
+            track_ids: vec!["audio-track".into()],
+        },
+    )
+}
+
+fn assert_audio_dirty_domains(delta: &draft_model::CommandDelta) {
+    for domain in [
+        DirtyDomain::Audio,
+        DirtyDomain::ExportPrep,
+        DirtyDomain::Waveform,
+        DirtyDomain::GraphSnapshot,
+        DirtyDomain::PreviewCache,
+    ] {
+        assert!(
+            delta.changed_domains.contains(&domain),
+            "changed domains should include {domain:?}: {:?}",
+            delta.changed_domains
+        );
+        assert!(
+            delta.invalidation.consumer_domains.contains(&domain),
+            "consumer domains should include {domain:?}: {:?}",
+            delta.invalidation.consumer_domains
+        );
+    }
 }
 
 fn draft_with_video_track_and_audio_material() -> Draft {
