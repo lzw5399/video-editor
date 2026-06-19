@@ -1,8 +1,8 @@
 use artifact_store::jobs::{
     ArtifactGenerationRequest, ArtifactKind, GenerationChunkStatus, GenerationJobStatus,
-    GenerationProgress, cancel_generation_job, complete_generation_chunk, create_generation_job,
-    fail_generation_chunk, job_status_summary, list_generation_jobs, next_pending_chunk,
-    resume_generation_job, start_generation_chunk,
+    GenerationProgress, acknowledge_generation_cancelled, cancel_generation_job,
+    complete_generation_chunk, create_generation_job, fail_generation_chunk, job_status_summary,
+    list_generation_jobs, next_pending_chunk, resume_generation_job, start_generation_chunk,
 };
 use artifact_store::schema::open_artifact_store;
 use rusqlite::OptionalExtension;
@@ -247,6 +247,45 @@ fn artifact_jobs_cancel_and_status_summary_are_durable_and_ui_safe() {
             "summary leaked forbidden internal string {forbidden}: {serialized}"
         );
     }
+}
+
+#[test]
+fn artifact_jobs_cancel_acknowledgement_persists_terminal_cancelled_state() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+    create_generation_job(
+        &mut store,
+        job_request(
+            "job-cancel-ack",
+            "artifact-cancel-ack",
+            ArtifactKind::Proxy,
+            vec![GenerationProgress::new(Some(0), Some(1_000_000), Some(0))],
+        ),
+    )
+    .expect("job should be created");
+    start_generation_chunk(&mut store, "job-cancel-ack", 0).expect("chunk should start");
+    cancel_generation_job(&mut store, "job-cancel-ack").expect("cancel should be requested");
+
+    let cancelled = acknowledge_generation_cancelled(&mut store, "job-cancel-ack")
+        .expect("cancel acknowledgement should persist");
+    assert_eq!(cancelled.status, GenerationJobStatus::Cancelled);
+    assert_eq!(cancelled.chunks[0].status, GenerationChunkStatus::Cancelled);
+
+    let reopened = open_artifact_store(&bundle_path).expect("store should reopen");
+    let persisted = list_generation_jobs(&reopened)
+        .expect("jobs should list")
+        .into_iter()
+        .find(|job| job.job_id == "job-cancel-ack")
+        .expect("cancelled job should exist");
+    assert_eq!(persisted.status, GenerationJobStatus::Cancelled);
+    assert_eq!(persisted.chunks[0].status, GenerationChunkStatus::Cancelled);
+    assert!(
+        resume_generation_job(&reopened, "job-cancel-ack")
+            .expect("resume should query")
+            .is_some(),
+        "cancelled jobs remain resumable from their cancelled chunks"
+    );
 }
 
 fn job_request(

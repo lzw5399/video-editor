@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use draft_model::MaterialId;
 use media_runtime::CancelToken;
@@ -76,6 +76,7 @@ pub struct ArtifactGenerationOutcome {
 
 #[derive(Debug)]
 pub struct GenerationWorkerContext {
+    bundle_path: PathBuf,
     pub job_id: String,
     pub chunk_index: u32,
     pub artifact_id: String,
@@ -84,8 +85,20 @@ pub struct GenerationWorkerContext {
 }
 
 impl GenerationWorkerContext {
+    pub fn bundle_path(&self) -> &Path {
+        &self.bundle_path
+    }
+
     pub fn is_cancelled(&self) -> bool {
         self.cancel_token.is_cancelled()
+    }
+
+    pub fn cancel_requested(&self) -> Result<bool, ArtifactStoreError> {
+        if self.cancel_token.is_cancelled() {
+            return Ok(true);
+        }
+        let store = open_artifact_store(&self.bundle_path)?;
+        generation_cancel_requested(&store, &self.job_id)
     }
 }
 
@@ -325,6 +338,7 @@ where
     }
 
     let context = GenerationWorkerContext {
+        bundle_path: bundle_path.to_path_buf(),
         job_id: request.job_id.clone(),
         chunk_index: chunk.chunk_index,
         artifact_id: request

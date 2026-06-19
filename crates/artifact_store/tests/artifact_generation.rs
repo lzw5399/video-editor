@@ -199,17 +199,11 @@ fn artifact_generation_cancellation_prevents_blob_commit_and_resume_skips_comple
 fn artifact_generation_worker_context_exposes_persisted_cancel_probe() {
     let sandbox = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = sandbox.path().join("draft.veproj");
-    let mut store = open_artifact_store(&bundle_path).expect("store should open");
     let request = proxy_request("job-context-cancel", "artifact-context-cancel");
-    artifact_store::jobs::create_generation_job(&mut store, request.clone().into_generation_request())
-        .expect("job should be created");
-    artifact_store::jobs::start_generation_chunk(&mut store, "job-context-cancel", 0)
-        .expect("chunk should start");
-    cancel_generation_job(&mut store, "job-context-cancel").expect("cancel should persist");
 
     let mut generator = CancelAwareGenerator;
     let error = generate_proxy_artifact(&bundle_path, &mut generator, request)
-        .expect_err("cancel-aware generator should observe persisted cancel");
+        .expect_err("cancel-aware generator should observe mid-chunk persisted cancel");
     assert!(
         error.to_string().contains("cancel"),
         "unexpected cancel probe error: {error}"
@@ -286,6 +280,8 @@ impl ArtifactGenerator for CancelAwareGenerator {
         context: &GenerationWorkerContext,
         _request: &ProxyGenerationRequest,
     ) -> Result<GeneratedArtifact, artifact_store::ArtifactStoreError> {
+        let mut store = open_artifact_store(context.bundle_path()).expect("store should open");
+        cancel_generation_job(&mut store, &context.job_id).expect("cancel should persist");
         if context.cancel_requested()? {
             return Err(artifact_store::ArtifactStoreError::InvalidDerivedPath {
                 path: context.job_id.clone(),
