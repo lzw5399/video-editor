@@ -1,11 +1,15 @@
 use std::collections::BTreeSet;
 
-use draft_model::MaterialId;
+use draft_model::{
+    ChangedEntity, CommandDelta, DirtyDomain, DirtyRange, MaterialId, TargetTimerange,
+};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 use crate::ArtifactStoreError;
-use crate::dependencies::{ArtifactDependency, artifact_ids_for_dependency};
+use crate::dependencies::{
+    ArtifactDependency, ArtifactDependencyKind, artifact_ids_for_dependency,
+};
 use crate::schema::ArtifactStore;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -98,6 +102,80 @@ pub struct ArtifactInvalidationResult {
     pub fallbacks: Vec<InvalidationFallback>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FingerprintChange {
+    pub key: String,
+    pub fingerprint: String,
+}
+
+impl FingerprintChange {
+    pub fn new(key: impl Into<String>, fingerprint: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            fingerprint: fingerprint.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactInvalidationRequest {
+    pub dirty_ranges: Vec<DirtyRange>,
+    pub changed_material_ids: Vec<MaterialId>,
+    pub changed_resource_ids: Vec<String>,
+    pub changed_graph_node_keys: Vec<String>,
+    pub changed_domains: Vec<DirtyDomain>,
+    pub source_fingerprint: Option<FingerprintChange>,
+    pub graph_fingerprint: Option<FingerprintChange>,
+    pub runtime_capability_fingerprint: Option<FingerprintChange>,
+    pub output_profile_fingerprint: Option<FingerprintChange>,
+    pub artifact_schema_version: Option<u32>,
+    pub generator_version: Option<String>,
+    pub full_draft: bool,
+    pub reason: String,
+}
+
+impl ArtifactInvalidationRequest {
+    pub fn from_command_delta(delta: &CommandDelta) -> Self {
+        let mut changed_material_ids = delta.invalidation.material_ids.clone();
+        changed_material_ids.extend(delta.changed_entities.iter().filter_map(|entity| {
+            if let ChangedEntity::Material { material_id } = entity {
+                Some(material_id.clone())
+            } else {
+                None
+            }
+        }));
+        changed_material_ids.sort_by(|first, second| first.as_str().cmp(second.as_str()));
+        changed_material_ids.dedup();
+
+        let mut changed_graph_node_keys = delta.invalidation.graph_node_ids.clone();
+        changed_graph_node_keys.sort();
+        changed_graph_node_keys.dedup();
+
+        let mut changed_domains = delta.changed_domains.clone();
+        changed_domains.extend(delta.invalidation.consumer_domains.iter().copied());
+        changed_domains.sort();
+        changed_domains.dedup();
+
+        Self {
+            dirty_ranges: delta.changed_ranges.clone(),
+            changed_material_ids,
+            changed_resource_ids: Vec::new(),
+            changed_graph_node_keys,
+            changed_domains,
+            source_fingerprint: None,
+            graph_fingerprint: None,
+            runtime_capability_fingerprint: None,
+            output_profile_fingerprint: None,
+            artifact_schema_version: None,
+            generator_version: None,
+            full_draft: delta.invalidation.full_draft,
+            reason: delta.reason.clone(),
+        }
+    }
+}
+
 pub fn mark_dirty_for_source_change(
     store: &mut ArtifactStore,
     change: SourceChange,
@@ -129,6 +207,122 @@ pub fn mark_dirty_for_source_change(
         status,
         source_change_reason(&change),
         Some(change.kind),
+    )?;
+    Ok(ArtifactInvalidationResult {
+        dirty_artifacts,
+        fallbacks: Vec::new(),
+    })
+}
+
+pub fn mark_dirty_from_command_delta(
+    store: &mut ArtifactStore,
+    delta: &CommandDelta,
+) -> Result<ArtifactInvalidationResult, ArtifactStoreError> {
+    let request = ArtifactInvalidationRequest::from_command_delta(delta);
+    let range_overflow = request
+        .dirty_ranges
+        .iter()
+        .any(|range| range.target_timerange.checked_end().is_none());
+    if request.full_draft || range_overflow {
+        return record_full_draft_fallback(
+            store,
+            if range_overflow {
+                InvalidationFallbackReason::RangeOverflow
+            } else {
+                InvalidationFallbackReason::UnknownDependency
+            },
+            request.reason,
+        );
+    }
+    mark_dirty_by_dependencies(store, &request)
+}
+
+pub fn mark_dirty_by_dependencies(
+    store: &mut ArtifactStore,
+    request: &ArtifactInvalidationRequest,
+) -> Result<ArtifactInvalidationResult, ArtifactStoreError> {
+    let artifact_ids = artifact_ids_for_request_dependencies(store, request)?;
+    let dirty_artifacts = mark_artifacts_dirty(
+        store,
+        artifact_ids,
+        "dirty",
+        dependency_match_reason(request),
+        None,
+    )?;
+    Ok(ArtifactInvalidationResult {
+        dirty_artifacts,
+        fallbacks: Vec::new(),
+    })
+}
+
+pub fn mark_dirty_by_fingerprint_mismatch(
+    store: &mut ArtifactStore,
+    request: &ArtifactInvalidationRequest,
+) -> Result<ArtifactInvalidationResult, ArtifactStoreError> {
+    if request.full_draft {
+        return record_full_draft_fallback(
+            store,
+            InvalidationFallbackReason::UnknownDependency,
+            request.reason.clone(),
+        );
+    }
+
+    let mut ids = BTreeSet::new();
+    if let Some(change) = &request.source_fingerprint {
+        extend_fingerprint_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::SourceFingerprint,
+            change,
+        )?;
+    }
+    if let Some(change) = &request.graph_fingerprint {
+        extend_fingerprint_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::GraphFingerprint,
+            change,
+        )?;
+    }
+    if let Some(change) = &request.runtime_capability_fingerprint {
+        extend_fingerprint_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::RuntimeCapabilityFingerprint,
+            change,
+        )?;
+    }
+    if let Some(change) = &request.output_profile_fingerprint {
+        extend_fingerprint_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::OutputProfileFingerprint,
+            change,
+        )?;
+    }
+    if let Some(version) = request.artifact_schema_version {
+        extend_version_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::SchemaVersion,
+            &format!("schemaVersion:{version}"),
+        )?;
+    }
+    if let Some(version) = &request.generator_version {
+        extend_version_mismatch_ids(
+            store,
+            &mut ids,
+            ArtifactDependencyKind::GeneratorVersion,
+            &format!("generatorVersion:{version}"),
+        )?;
+    }
+
+    let dirty_artifacts = mark_artifacts_dirty(
+        store,
+        ids.into_iter().collect(),
+        "dirty",
+        fingerprint_mismatch_reason(request),
+        None,
     )?;
     Ok(ArtifactInvalidationResult {
         dirty_artifacts,
@@ -210,12 +404,241 @@ fn artifact_ids_for_source_change(
     Ok(ids.into_iter().collect())
 }
 
+fn artifact_ids_for_request_dependencies(
+    store: &ArtifactStore,
+    request: &ArtifactInvalidationRequest,
+) -> Result<Vec<String>, ArtifactStoreError> {
+    let mut ids = BTreeSet::new();
+    for material_id in &request.changed_material_ids {
+        extend_dependency_ids(
+            store,
+            &mut ids,
+            ArtifactDependency::material(material_id.as_str()),
+        )?;
+    }
+    for resource_id in &request.changed_resource_ids {
+        extend_dependency_ids(store, &mut ids, ArtifactDependency::resource(resource_id))?;
+    }
+    for graph_node_key in &request.changed_graph_node_keys {
+        extend_dependency_ids(
+            store,
+            &mut ids,
+            ArtifactDependency::graph_node(graph_node_key),
+        )?;
+    }
+    let has_specific_dependency = !request.dirty_ranges.is_empty()
+        || !request.changed_material_ids.is_empty()
+        || !request.changed_resource_ids.is_empty()
+        || !request.changed_graph_node_keys.is_empty();
+    if !has_specific_dependency {
+        for domain in &request.changed_domains {
+            extend_dependency_ids(store, &mut ids, ArtifactDependency::dirty_domain(*domain))?;
+        }
+    }
+    for range in normalize_dirty_ranges(&request.dirty_ranges)? {
+        extend_range_overlap_ids(store, &mut ids, &range.target_timerange, request)?;
+    }
+    Ok(ids.into_iter().collect())
+}
+
+fn normalize_dirty_ranges(ranges: &[DirtyRange]) -> Result<Vec<DirtyRange>, ArtifactStoreError> {
+    let target_ranges = ranges
+        .iter()
+        .map(|range| range.target_timerange.clone())
+        .collect::<Vec<_>>();
+    let merged = TargetTimerange::merge_sorted(target_ranges).ok_or_else(|| {
+        let overflowing = ranges
+            .iter()
+            .find(|range| range.target_timerange.checked_end().is_none())
+            .map(|range| &range.target_timerange);
+        ArtifactStoreError::RangeOverflow {
+            start_us: overflowing
+                .map(|range| range.start.get())
+                .unwrap_or(u64::MAX),
+            duration_us: overflowing.map(|range| range.duration.get()).unwrap_or(1),
+        }
+    })?;
+    Ok(merged
+        .into_iter()
+        .map(|target_timerange| DirtyRange {
+            target_timerange,
+            source: draft_model::DirtyRangeSource::PreviousAndCurrent,
+        })
+        .collect())
+}
+
 fn extend_dependency_ids(
     store: &ArtifactStore,
     ids: &mut BTreeSet<String>,
     dependency: ArtifactDependency,
 ) -> Result<(), ArtifactStoreError> {
     for artifact_id in artifact_ids_for_dependency(store, dependency)? {
+        ids.insert(artifact_id);
+    }
+    Ok(())
+}
+
+fn extend_range_overlap_ids(
+    store: &ArtifactStore,
+    ids: &mut BTreeSet<String>,
+    changed_range: &TargetTimerange,
+    request: &ArtifactInvalidationRequest,
+) -> Result<(), ArtifactStoreError> {
+    let mut statement = store
+        .connection()
+        .prepare(
+            "SELECT artifact_id, target_start_us, target_duration_us
+             FROM artifact_dependency
+             WHERE dependency_kind = 'targetRange'
+             ORDER BY artifact_id",
+        )
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+
+    for (artifact_id, start_us, duration_us) in rows {
+        let artifact_range = TargetTimerange::new(start_us as u64, duration_us as u64);
+        if changed_range
+            .overlaps_half_open(&artifact_range)
+            .unwrap_or(false)
+            && artifact_matches_domains(store, &artifact_id, &request.changed_domains)?
+        {
+            ids.insert(artifact_id);
+        }
+    }
+    Ok(())
+}
+
+fn artifact_matches_domains(
+    store: &ArtifactStore,
+    artifact_id: &str,
+    changed_domains: &[DirtyDomain],
+) -> Result<bool, ArtifactStoreError> {
+    if changed_domains.is_empty() {
+        return Ok(true);
+    }
+    let mut statement = store
+        .connection()
+        .prepare(
+            "SELECT dirty_domain
+             FROM artifact_dependency
+             WHERE artifact_id = ?1 AND dependency_kind = 'dirtyDomain'",
+        )
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+    let domains = statement
+        .query_map([artifact_id], |row| row.get::<_, Option<String>>(0))
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+    if domains.is_empty() {
+        return Ok(true);
+    }
+    Ok(domains.into_iter().flatten().any(|domain| {
+        changed_domains
+            .iter()
+            .any(|changed| domain == dirty_domain_to_str(*changed))
+    }))
+}
+
+fn extend_fingerprint_mismatch_ids(
+    store: &ArtifactStore,
+    ids: &mut BTreeSet<String>,
+    kind: ArtifactDependencyKind,
+    change: &FingerprintChange,
+) -> Result<(), ArtifactStoreError> {
+    let mut statement = store
+        .connection()
+        .prepare(
+            "SELECT artifact_id
+             FROM artifact_dependency
+             WHERE dependency_kind = ?1
+                AND dependency_key = ?2
+                AND COALESCE(dependency_fingerprint, '') != ?3
+             ORDER BY artifact_id",
+        )
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+    for artifact_id in statement
+        .query_map(
+            params![kind.as_str(), change.key, change.fingerprint],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+    {
+        ids.insert(artifact_id);
+    }
+    Ok(())
+}
+
+fn extend_version_mismatch_ids(
+    store: &ArtifactStore,
+    ids: &mut BTreeSet<String>,
+    kind: ArtifactDependencyKind,
+    expected_dependency_key: &str,
+) -> Result<(), ArtifactStoreError> {
+    let mut statement = store
+        .connection()
+        .prepare(
+            "SELECT artifact_id
+             FROM artifact_dependency
+             WHERE dependency_kind = ?1 AND dependency_key != ?2
+             ORDER BY artifact_id",
+        )
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?;
+    for artifact_id in statement
+        .query_map(params![kind.as_str(), expected_dependency_key], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: store.db_path.clone(),
+            source,
+        })?
+    {
         ids.insert(artifact_id);
     }
     Ok(())
@@ -275,6 +698,29 @@ fn all_artifact_ids(store: &ArtifactStore) -> Result<Vec<String>, ArtifactStoreE
             path: store.db_path.clone(),
             source,
         })
+}
+
+fn dirty_domain_to_str(domain: DirtyDomain) -> &'static str {
+    match domain {
+        DirtyDomain::Timing => "timing",
+        DirtyDomain::Visual => "visual",
+        DirtyDomain::Text => "text",
+        DirtyDomain::Audio => "audio",
+        DirtyDomain::Material => "material",
+        DirtyDomain::Effect => "effect",
+        DirtyDomain::Filter => "filter",
+        DirtyDomain::Transition => "transition",
+        DirtyDomain::Canvas => "canvas",
+        DirtyDomain::OutputProfile => "outputProfile",
+        DirtyDomain::RuntimeCapabilities => "runtimeCapabilities",
+        DirtyDomain::Preview => "preview",
+        DirtyDomain::ExportPrep => "exportPrep",
+        DirtyDomain::Thumbnail => "thumbnail",
+        DirtyDomain::Waveform => "waveform",
+        DirtyDomain::Proxy => "proxy",
+        DirtyDomain::GraphSnapshot => "graphSnapshot",
+        DirtyDomain::PreviewCache => "previewCache",
+    }
 }
 
 fn mark_artifacts_dirty(
@@ -390,6 +836,22 @@ fn source_change_reason(change: &SourceChange) -> String {
         ArtifactDirtyReason::SourceChange.as_str(),
         change.kind.as_str(),
         change.reason
+    )
+}
+
+fn dependency_match_reason(request: &ArtifactInvalidationRequest) -> String {
+    format!(
+        "{}:{}",
+        ArtifactDirtyReason::DependencyMatch.as_str(),
+        request.reason
+    )
+}
+
+fn fingerprint_mismatch_reason(request: &ArtifactInvalidationRequest) -> String {
+    format!(
+        "{}:{}",
+        ArtifactDirtyReason::FingerprintMismatch.as_str(),
+        request.reason
     )
 }
 
