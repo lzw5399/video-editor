@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 14-05-PLAN.md
-last_updated: "2026-06-19T05:42:07.627Z"
-last_activity: 2026-06-19 -- Completed 14-05 GC, quota, and local sync manifest semantics
+stopped_at: Completed 14-06-PLAN.md
+last_updated: "2026-06-19T06:18:31Z"
+last_activity: 2026-06-19 -- Completed 14-06 generated contracts and binding commands
 progress:
   total_phases: 20
   completed_phases: 15
   total_plans: 105
-  completed_plans: 103
-  percent: 98
+  completed_plans: 104
+  percent: 99
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 14 (asset-resource-manager-and-derived-artifact-store) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
-Last activity: 2026-06-19 -- Completed 14-05 GC, quota, and local sync manifest semantics
+Last activity: 2026-06-19 -- Completed 14-06 generated contracts and binding commands
 
-Progress: [██████████] 98%
+Progress: [██████████] 99%
 
 ## Performance Metrics
 
