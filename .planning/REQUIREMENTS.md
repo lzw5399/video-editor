@@ -161,6 +161,24 @@
 - **AUDIO2-03**: Windows preview audio output uses WASAPI and macOS preview audio output uses CoreAudio, while waveform and peak data from the artifact store drive UI display without becoming canonical audio semantics.
 - **AUDIO2-04**: Export audio mixdown remains parity-tested against the preview audio graph with classified differences.
 
+### P0 Basic Editing Chain Repair
+
+- **P0-EDIT-01**: Default playback, pause, seek, and scrub use the formal realtime preview runtime; normal playback does not continuously call `requestPreviewFrame` or pretend FFmpeg PNG/segment fallback is production playback.
+- **P0-EDIT-02**: Baseline supported video/image/text/audio preview can play continuously with audio sync and explicit failure when a supported path is unavailable; basic text and audio are not accepted through silent fallback divergence.
+- **P0-EDIT-03**: Text preview and export share a bundled, license-tracked open-source font registry with stable `fontRef`, file existence validation, and glyph coverage checks.
+- **P0-EDIT-04**: Empty drafts adopt the first video/image material orientation, aspect ratio, and frame rate unless the canvas has been manually changed; default visual fit avoids stretching portrait or square media into 16:9.
+- **P0-EDIT-05**: Users can add, select, rename, lock, show/hide, mute, and target video/audio/text tracks through Rust-owned commands while preserving deterministic visual stacking and audio mixing.
+- **P0-EDIT-06**: A real user-chain E2E proves import vertical video, auto canvas, playback, bundled-font text, music, trim, split, undo/redo, save, reopen, and export before Phase 16 starts.
+
+### P0 Jianying-Style Production UI Convergence
+
+- **P0-UI-01**: Default production UI hides FFmpeg, ffprobe, runtime/backend telemetry, artifact/cache paths, raw diagnostics, graph/cache internals, and developer-only readouts unless developer mode is enabled.
+- **P0-UI-02**: The desktop workspace uses a Jianying-style five-zone information architecture: top product/category/export bar, left category resource library, center preview/player, right contextual inspector, and bottom timeline.
+- **P0-UI-03**: Export is launched from the top/right export button and completed in a modal with path, resolution, frame rate, bitrate, audio settings, progress, cancel, and open-location controls.
+- **P0-UI-04**: Preview defaults to canvas, timecode, play/pause, previous/next frame, fit, aspect, and fullscreen controls; realtime status appears only as productized exception copy.
+- **P0-UI-05**: Left resource pages and bottom timeline behave like editor surfaces, not debug dashboards: material library cards, text/audio entry points, lightweight generation status, drag move, edge trim, draggable playhead, add-track, snapping, zoom, split, delete, undo, and redo.
+- **P0-UI-06**: Right inspector is contextual for draft/canvas, video/image, text, and audio parameters; screenshot-backed regression keeps 1280x800 and 1120x720 layouts stable and default-mode debug copy absent.
+
 ### Scheduler And Performance
 
 - **SCHED-01**: Preview, decode, artifact generation, export, media probing, and filesystem IO run through priority-aware queues with cancellation, backpressure, target timeline microseconds, and `PlaybackGeneration`.
@@ -313,6 +331,18 @@
 | AUDIO2-02 | Phase 15 | Complete |
 | AUDIO2-03 | Phase 15 | Complete |
 | AUDIO2-04 | Phase 15 | Complete |
+| P0-EDIT-01 | Phase 15.1 | Planned |
+| P0-EDIT-02 | Phase 15.1 | Planned |
+| P0-EDIT-03 | Phase 15.1 | Planned |
+| P0-EDIT-04 | Phase 15.1 | Planned |
+| P0-EDIT-05 | Phase 15.1 | Planned |
+| P0-EDIT-06 | Phase 15.1 | Planned |
+| P0-UI-01 | Phase 15.2 | Planned |
+| P0-UI-02 | Phase 15.2 | Planned |
+| P0-UI-03 | Phase 15.2 | Planned |
+| P0-UI-04 | Phase 15.2 | Planned |
+| P0-UI-05 | Phase 15.2 | Planned |
+| P0-UI-06 | Phase 15.2 | Planned |
 | SCHED-01 | Phase 16 | Planned |
 | SCHED-02 | Phase 16 | Planned |
 | SCHED-03 | Phase 16 | Planned |
