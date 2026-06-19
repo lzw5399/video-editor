@@ -28,9 +28,12 @@ fn invalidation_source_replacement_dirties_only_matching_material_and_source_fin
     upsert_artifact_dependencies(
         &mut store,
         "artifact-source-fingerprint",
-        vec![DependencyUpsert::new(ArtifactDependency::source_fingerprint(
-            DependencyFingerprint::new("source:video-001", "blake3:old-source"),
-        ))],
+        vec![DependencyUpsert::new(
+            ArtifactDependency::source_fingerprint(DependencyFingerprint::new(
+                "source:video-001",
+                "blake3:old-source",
+            )),
+        )],
     )
     .expect("source fingerprint dependency should insert");
     upsert_artifact_dependencies(
@@ -57,7 +60,10 @@ fn invalidation_source_replacement_dirties_only_matching_material_and_source_fin
     )
     .expect("source replacement should invalidate");
 
-    assert_eq!(dirty_ids(&result), vec!["artifact-material", "artifact-source-fingerprint"]);
+    assert_eq!(
+        dirty_ids(&result),
+        vec!["artifact-material", "artifact-source-fingerprint"]
+    );
     assert!(result.fallbacks.is_empty());
     assert_artifact_status(store.connection(), "artifact-material", "dirty");
     assert_artifact_status(store.connection(), "artifact-source-fingerprint", "dirty");
