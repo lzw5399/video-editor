@@ -118,8 +118,28 @@
   pointer-events: none;
 }
 
+.preview-native-host-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+}
+
+.preview-native-host-frame::after {
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px 14px);
+  content: "";
+}
+
 .preview-native-host-readout,
 .preview-native-host-fallback {
+  position: relative;
+  z-index: 1;
   justify-self: start;
   max-width: calc(100% - 12px);
   margin: 0 6px 6px;

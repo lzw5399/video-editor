@@ -1362,8 +1362,9 @@ test("developer diagnostics keep realtime fallback backend details available", a
   }
 });
 
-test("实时预览 telemetry displays Rust-reported cancellation counters", async () => {
+test("developer diagnostics display Rust-reported realtime cancellation counters", async () => {
   const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_CANCELED: "1"
     }

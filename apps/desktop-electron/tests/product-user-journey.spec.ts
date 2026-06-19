@@ -46,6 +46,9 @@ test("product user can import a repo video, add it to the timeline, and see play
       after.hostState?.telemetry?.targetTimeMicroseconds ?? 0,
       "runtime-presented frame time must advance with the user-visible playhead"
     ).toBeGreaterThan(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
+    expect(after.hostState?.frameDisplay?.frameToken ?? null, "host surface frame token must advance during playback").not.toBe(
+      before.hostState?.frameDisplay?.frameToken ?? null
+    );
 
     expect(after.placeholderText, "playback should show video content, not a placeholder").not.toContain("显示预览");
     expect(after.regionHash, "preview pixels should change when moving fixture video plays").not.toBe(before.regionHash);

@@ -105,6 +105,15 @@ type RealtimePreviewHostState = {
   currentRequestCanceled: boolean;
   fallbackArtifactVisible: boolean;
   telemetry: RealtimePreviewHostTelemetry | null;
+  frameDisplay: RealtimePreviewHostFrameDisplay | null;
+};
+
+type RealtimePreviewHostFrameDisplay = {
+  surfaceKind: "mock";
+  frameToken: string;
+  targetTimeMicroseconds: number;
+  dominantColor: string;
+  accentColor: string;
 };
 
 type RealtimePreviewHostApi = {
@@ -135,7 +144,8 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   fallbackReason: null,
   currentRequestCanceled: false,
   fallbackArtifactVisible: false,
-  telemetry: null
+  telemetry: null,
+  frameDisplay: null
 };
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
@@ -291,6 +301,40 @@ export function PreviewMonitor({
     };
   }, []);
 
+  useEffect(() => {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined || !playbackRunning) {
+      return;
+    }
+
+    let cancelled = false;
+    const refresh = () => {
+      void bridge.getTelemetry().then(
+        (state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+          }
+        },
+        () => {
+          if (!cancelled) {
+            setNativeHostState((current) => ({
+              ...current,
+              fallbackActive: true,
+              fallbackLabel: "实时预览状态暂不可用"
+            }));
+          }
+        }
+      );
+    };
+
+    refresh();
+    const timer = window.setInterval(refresh, 66);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [playbackRunning]);
+
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
       <div className="preview-titlebar">
@@ -331,6 +375,17 @@ export function PreviewMonitor({
           </div>
         ) : null}
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
+          {nativeHostState.frameDisplay !== null ? (
+            <div
+              className="preview-native-host-frame"
+              aria-label="实时预览帧"
+              data-frame-token={nativeHostState.frameDisplay.frameToken}
+              data-target-time-microseconds={nativeHostState.frameDisplay.targetTimeMicroseconds}
+              style={{
+                background: `linear-gradient(135deg, ${nativeHostState.frameDisplay.dominantColor}, ${nativeHostState.frameDisplay.accentColor})`
+              }}
+            />
+          ) : null}
           <div className="preview-native-host-readout">
             <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
             <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>

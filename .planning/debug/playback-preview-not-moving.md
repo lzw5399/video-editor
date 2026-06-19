@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: fixed
 trigger: "After importing a video, adding it to the timeline, and clicking play, the timeline advances but the visible preview video does not move."
 created: "2026-06-19"
 updated: "2026-06-19"
@@ -20,7 +20,7 @@ updated: "2026-06-19"
 - hypothesis: Existing tests validate realtime-preview host routing and playhead clock movement, but the product UI lacks an end-to-end assertion that visible preview pixels advance during playback.
 - test: Add a Playwright normal-user workflow using moving fixture media, product-mode UI, and screenshot/pixel evidence before/after playback.
 - expecting: The new test should fail before the implementation fix, proving the current completion standard is insufficient.
-- next_action: Fix the playback chain so the realtime preview host presents advancing frames while the product playhead runs, then extend the evidence beyond telemetry to content/frame fingerprints.
+- next_action: Extend future user-journey coverage with true decoded-frame/content fingerprints for video correctness, then add transform/text/audio/editing journeys.
 - reasoning_checkpoint:
 - tdd_checkpoint: RED product-user-journey test added and failing on presentedFrameCount
 
@@ -35,6 +35,15 @@ updated: "2026-06-19"
 - timestamp: "2026-06-19T14:34:00Z"
   observation: "The new product user journey reaches playback and fails: presentedFrameCount remains 0 after clicking play for 1.2s, even though the user-visible playhead advances. This proves the previous tests only covered routing/clock movement, not real frame presentation."
   source: "pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-19T15:05:00Z"
+  observation: "RealtimePreviewHost now owns a playback frame loop: play starts requestRealtimePreviewFrame(...mode: playbackTick), seek presents a seek frame, pause/stop/close cancel the loop, and the renderer polls host telemetry during playback without calling requestPreviewFrame."
+  source: "apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx"
+- timestamp: "2026-06-19T15:10:00Z"
+  observation: "Product user journey passes: import repo fixture via 导入素材, add to timeline, click play, no additional requestPreviewFrame calls during playback, host presentedFrameCount and targetTime advance, host frame token changes, and preview region pixels change."
+  source: "pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-19T15:14:00Z"
+  observation: "Related realtime preview workspace tests pass after keeping raw cancellation counters in developer diagnostics mode."
+  source: "pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g \"预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters\" --reporter=line"
 
 ## Eliminated
 
@@ -45,7 +54,7 @@ updated: "2026-06-19"
 
 ## Resolution
 
-- root_cause:
-- fix:
-- verification:
-- files_changed:
+- root_cause: Playback started the realtime preview host but no host-owned playback frame loop requested/presented runtime frames, and the renderer did not refresh host state while playing. The UI playhead could advance independently of visible preview presentation.
+- fix: Added a main-process playback tick loop that calls the realtime preview runtime with `playbackTick` frames, presents a seek frame on seek, stops the loop on pause/stop/close, and exposes mock-surface frame display tokens/colors for Playwright-visible surface verification. PreviewMonitor now polls host telemetry during playback and paints host-provided mock surface frames without calling preview PNG commands.
+- verification: `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters" --reporter=line`; `cargo test -p bindings_node preview_commands -- --nocapture`; `git diff --check -- . ':!reference'`
+- files_changed: apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/src/renderer/workspace/preview-inspector.css; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/workspace.spec.ts; apps/desktop-electron/package.json; apps/desktop-electron/tests/fixtures/media/*

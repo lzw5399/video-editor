@@ -32,6 +32,12 @@ type RealtimePreviewHostState = {
     targetTimeMicroseconds: number;
     playbackGeneration: number;
   } | null;
+  frameDisplay: {
+    frameToken: string;
+    targetTimeMicroseconds: number;
+    dominantColor: string;
+    accentColor: string;
+  } | null;
 };
 
 declare global {
@@ -125,7 +131,7 @@ export async function clickPreviewPlay(page: Page): Promise<void> {
 }
 
 export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidence> {
-  const previewCanvas = page.getByLabel("预览画面");
+  const previewCanvas = page.getByLabel("预览画面", { exact: true });
   await expect(previewCanvas).toBeVisible();
 
   const screenshot = await previewCanvas.screenshot();
