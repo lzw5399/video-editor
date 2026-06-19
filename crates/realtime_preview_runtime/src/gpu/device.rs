@@ -47,7 +47,7 @@ pub struct RealtimePreviewGpuDeviceDescriptor {
     pub label: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RealtimePreviewGpuDevice {
     backend: RealtimePreviewGpuBackend,
     instance: Option<Arc<wgpu::Instance>>,
@@ -361,13 +361,26 @@ impl RealtimePreviewGpuDevice {
         luma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
         chroma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
     ) -> Result<RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuError> {
-        use objc2_metal::MTLTextureType;
-        use wgpu::hal::{self, CopyExtent};
-
         let device = self
             .device
             .as_deref()
             .ok_or(RealtimePreviewGpuError::WgpuDeviceUnavailable)?;
+        Self::create_nv12_external_texture_planes_from_metal_device(
+            device, width, height, luma, chroma,
+        )
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn create_nv12_external_texture_planes_from_metal_device(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        luma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
+        chroma: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
+    ) -> Result<RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuError> {
+        use objc2_metal::MTLTextureType;
+        use wgpu::hal::{self, CopyExtent};
+
         if !device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
             return Err(RealtimePreviewGpuError::ExternalTextureUnsupported);
         }
@@ -402,9 +415,7 @@ impl RealtimePreviewGpuDevice {
 
         unsafe fn wrap_metal_plane_texture(
             device: &wgpu::Device,
-            raw: objc2::rc::Retained<
-                objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>,
-            >,
+            raw: objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>,
             label: &'static str,
             format: wgpu::TextureFormat,
             raw_type: objc2_metal::MTLTextureType,

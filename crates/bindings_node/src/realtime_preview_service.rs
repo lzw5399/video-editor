@@ -3,20 +3,36 @@ use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
 
-use draft_model::{Draft, Microseconds, RationalFrameRate};
-use realtime_preview_runtime::{
-    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
-    PreviewRequestMode, PreviewSessionId, RealtimePreviewAudioSyncState,
-    RealtimePreviewBackendUsed, RealtimePreviewDiagnostic, RealtimePreviewError,
-    RealtimePreviewFallbackReason, RealtimePreviewFrameRequest, RealtimePreviewRuntime,
-    RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
-    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
+use draft_model::{Draft, MaterialKind, Microseconds, RationalFrameRate};
+use media_runtime::{NativeTextureLeaseRegistry, RuntimeDeviceId, SelectedDecodePath, StreamId};
+#[cfg(target_os = "macos")]
+use media_runtime_desktop::{
+    MacosMediaReader, MacosTextureInteropPolicy, macos_system_metal_device_id,
 };
+use project_store::resolve_material_uri;
+use realtime_preview_runtime::{
+    MediaIoFrameProvider, PlaybackGeneration, PlaybackRate, PlaybackState,
+    PreviewCancellationToken, PreviewDecodeDeviceContext, PreviewFrameStoragePreference,
+    PreviewGpuBackend, PreviewMaterialDecodeSource, PreviewRequestMode, PreviewSessionId,
+    RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
+    RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerPresentation,
+    RealtimePlaybackSchedulerPresenter, RealtimePreviewAudioSyncState, RealtimePreviewBackendUsed,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor, RealtimePreviewDiagnostic,
+    RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
+    RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
+    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
+    gpu::{
+        RealtimePreviewGpuBackend, RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,
+        RealtimePreviewGpuPresentationTarget, RealtimePreviewTargetFormat,
+        RealtimePreviewTextureCache,
+    },
+};
+use render_graph::{OutputDimensions, RenderGraph};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 
 use crate::native_preview_presenter::{
-    NativePreviewPresentationBackend, NativePreviewPresentationState, NativePreviewPresenter,
-    NativePreviewPresenterError,
+    NativePreviewContentEvidence, NativePreviewContentEvidenceSource,
+    NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
@@ -27,6 +43,7 @@ pub struct RealtimePreviewBindingRegistry {
     next_binding_id: u64,
     sessions: BTreeMap<String, PreviewSessionId>,
     presenters: BTreeMap<String, NativePreviewPresenter>,
+    schedulers: BTreeMap<String, RealtimePreviewBindingScheduler>,
 }
 
 impl RealtimePreviewBindingRegistry {
@@ -36,6 +53,7 @@ impl RealtimePreviewBindingRegistry {
             next_binding_id: 1,
             sessions: BTreeMap::new(),
             presenters: BTreeMap::new(),
+            schedulers: BTreeMap::new(),
         }
     }
 
@@ -69,6 +87,15 @@ impl RealtimePreviewBindingRegistry {
         self.sessions.insert(binding_id.clone(), runtime_id);
         self.presenters
             .insert(binding_id.clone(), NativePreviewPresenter::detached());
+        self.schedulers.insert(
+            binding_id.clone(),
+            RealtimePreviewBindingScheduler::new(RealtimePlaybackSchedulerConfig {
+                preview_dimensions: OutputDimensions {
+                    width: 1280,
+                    height: 720,
+                },
+            }),
+        );
         let generation = self
             .runtime
             .clock(runtime_id)
@@ -94,6 +121,7 @@ impl RealtimePreviewBindingRegistry {
         if let Some(mut presenter) = self.presenters.remove(session_id) {
             presenter.detach();
         }
+        self.schedulers.remove(session_id);
         let closed = self.runtime.close_session(runtime_id);
         Ok(RealtimePreviewClosedBindingResponse {
             session_id: session_id.to_owned(),
@@ -112,6 +140,7 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .attach_surface(runtime_id, descriptor)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.scheduler_mut(session_id)?.attach_surface(descriptor)?;
         Ok(generation_response(generation))
     }
 
@@ -125,6 +154,8 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .update_surface_bounds(runtime_id, bounds.to_runtime_bounds())
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.scheduler_mut(session_id)?
+            .update_surface_bounds(bounds.to_runtime_bounds())?;
         Ok(generation_response(generation))
     }
 
@@ -138,6 +169,7 @@ impl RealtimePreviewBindingRegistry {
             .detach_surface(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
         self.presenter_mut(session_id)?.detach();
+        self.scheduler_mut(session_id)?.detach_surface();
         Ok(generation_response(generation))
     }
 
@@ -148,7 +180,8 @@ impl RealtimePreviewBindingRegistry {
         bundle_path: Option<PathBuf>,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let _ = bundle_path;
+        self.scheduler_mut(session_id)?
+            .update_draft_snapshot(draft.clone(), bundle_path.clone());
         let generation = self
             .runtime
             .update_draft_snapshot(runtime_id, draft)
@@ -163,6 +196,7 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let target_time = Microseconds::new(target_time_microseconds);
+        self.scheduler_mut(session_id)?.seek(target_time);
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
@@ -175,21 +209,24 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let presenter = self.presenter_mut(session_id)?;
-        let state = presenter.presentation_state();
-        if state.available != true
-            || state.backend != NativePreviewPresentationBackend::RenderGraphGpu
-        {
-            return Err(RealtimePreviewBindingError::presenter(
-                NativePreviewPresenterError::new(state.unsupported_reason.unwrap_or_else(|| {
-                    "render graph GPU compositor presenter is required for product playback"
-                        .to_owned()
-                })),
-            ));
-        }
+        let target_time = self
+            .runtime
+            .clock(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?
+            .position();
         let generation = self
             .runtime
             .play(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?;
+        let evidence = self
+            .scheduler_mut(session_id)?
+            .present_next_tick(target_time, generation)?;
+        self.runtime
+            .record_presented_output(
+                runtime_id,
+                Microseconds::new(evidence.target_time_microseconds),
+                u64::from(evidence.presented_frames),
+            )
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(generation_response(generation))
     }
@@ -285,24 +322,38 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<NativePreviewPresentationState, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let mut state = self.presenter_mut(session_id)?.presentation_state();
-        if !state.available && state.backend == NativePreviewPresentationBackend::None {
-            state = NativePreviewPresentationState::unavailable(
+        let (clock_state, target_time, generation) = {
+            let clock = self
+                .runtime
+                .clock(runtime_id)
+                .map_err(RealtimePreviewBindingError::runtime)?;
+            (clock.state(), clock.position(), clock.generation())
+        };
+        if clock_state == PlaybackState::Playing {
+            let evidence = self
+                .scheduler_mut(session_id)?
+                .present_next_tick(target_time, generation)?;
+            self.runtime
+                .record_presented_output(
+                    runtime_id,
+                    Microseconds::new(evidence.target_time_microseconds),
+                    u64::from(evidence.presented_frames),
+                )
+                .map_err(RealtimePreviewBindingError::runtime)?;
+        }
+        let evidence = self
+            .scheduler_mut(session_id)?
+            .evidence()
+            .cloned()
+            .map(native_evidence_from_scheduler);
+        match evidence {
+            Some(evidence) => Ok(NativePreviewPresentationState::render_graph_gpu_available(
+                Some(evidence),
+            )),
+            None => Ok(NativePreviewPresentationState::unavailable(
                 "render graph GPU compositor scheduler has not presented product content",
-            );
+            )),
         }
-        if state.backend == NativePreviewPresentationBackend::RenderGraphGpu {
-            if let Some(evidence) = state.evidence.as_ref() {
-                self.runtime
-                    .record_presented_output(
-                        runtime_id,
-                        Microseconds::new(evidence.target_time_microseconds),
-                        1,
-                    )
-                    .map_err(RealtimePreviewBindingError::runtime)?;
-            }
-        }
-        Ok(state)
     }
 
     fn runtime_session_id(
@@ -325,6 +376,468 @@ impl RealtimePreviewBindingRegistry {
             .get_mut(session_id)
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))
     }
+
+    fn scheduler_mut(
+        &mut self,
+        session_id: &str,
+    ) -> Result<&mut RealtimePreviewBindingScheduler, RealtimePreviewBindingError> {
+        validate_binding_session_id(session_id)?;
+        self.schedulers
+            .get_mut(session_id)
+            .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))
+    }
+}
+
+struct RealtimePreviewBindingScheduler {
+    scheduler: RealtimePlaybackScheduler,
+    gpu_device: Option<RealtimePreviewGpuDevice>,
+    surface_target: Option<RealtimePreviewGpuPresentationTarget>,
+    draft_snapshot: Option<Draft>,
+    bundle_path: Option<PathBuf>,
+    last_evidence: Option<RealtimePlaybackSchedulerEvidence>,
+    next_tick_time: Microseconds,
+    #[cfg(test)]
+    test_mock_surface_attached: bool,
+}
+
+impl RealtimePreviewBindingScheduler {
+    fn new(config: RealtimePlaybackSchedulerConfig) -> Self {
+        Self {
+            scheduler: RealtimePlaybackScheduler::new(config),
+            gpu_device: None,
+            surface_target: None,
+            draft_snapshot: None,
+            bundle_path: None,
+            last_evidence: None,
+            next_tick_time: Microseconds::ZERO,
+            #[cfg(test)]
+            test_mock_surface_attached: false,
+        }
+    }
+
+    fn attach_surface(
+        &mut self,
+        descriptor: PreviewSurfaceDescriptor,
+    ) -> Result<(), RealtimePreviewBindingError> {
+        let bounds = descriptor.bounds();
+        self.scheduler.update_preview_dimensions(OutputDimensions {
+            width: bounds.width,
+            height: bounds.height,
+        });
+        #[cfg(test)]
+        if matches!(
+            descriptor,
+            PreviewSurfaceDescriptor::NativeChild {
+                parent_window_handle: NativeParentWindowHandle::Mock(_),
+                ..
+            }
+        ) {
+            self.surface_target = None;
+            self.gpu_device = None;
+            self.test_mock_surface_attached = true;
+            return Ok(());
+        }
+        if std::env::var("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            self.surface_target = None;
+            self.gpu_device = None;
+            #[cfg(test)]
+            {
+                self.test_mock_surface_attached = false;
+            }
+            return Ok(());
+        }
+        let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
+            backend: RealtimePreviewGpuBackend::Auto,
+            label: Some("desktop-realtime-preview-scheduler".to_owned()),
+        })
+        .map_err(|error| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                format!("realtime preview GPU bootstrap failed: {error}"),
+            )
+        })?;
+        let target = device
+            .create_presentation_target(descriptor, RealtimePreviewTargetFormat::Bgra8UnormSrgb)
+            .map_err(|error| {
+                RealtimePreviewBindingError::new(
+                    RealtimePreviewBindingErrorKind::RuntimeSurface,
+                    format!("render graph GPU presentation target unavailable: {error}"),
+                )
+            })?;
+        self.gpu_device = Some(device);
+        self.surface_target = Some(target);
+        #[cfg(test)]
+        {
+            self.test_mock_surface_attached = false;
+        }
+        Ok(())
+    }
+
+    fn update_surface_bounds(
+        &mut self,
+        bounds: PreviewSurfaceBounds,
+    ) -> Result<(), RealtimePreviewBindingError> {
+        self.scheduler.update_preview_dimensions(OutputDimensions {
+            width: bounds.width,
+            height: bounds.height,
+        });
+        if let (Some(device), Some(target)) =
+            (self.gpu_device.as_ref(), self.surface_target.as_mut())
+        {
+            device
+                .resize_presentation_target(target, bounds)
+                .map_err(|error| {
+                    RealtimePreviewBindingError::new(
+                        RealtimePreviewBindingErrorKind::RuntimeSurface,
+                        format!("render graph GPU presentation target resize failed: {error}"),
+                    )
+                })?;
+        }
+        Ok(())
+    }
+
+    fn update_draft_snapshot(&mut self, draft: Draft, bundle_path: Option<PathBuf>) {
+        self.scheduler.update_draft_snapshot(draft.clone());
+        self.draft_snapshot = Some(draft);
+        self.bundle_path = bundle_path;
+        self.last_evidence = None;
+        self.next_tick_time = Microseconds::ZERO;
+    }
+
+    fn seek(&mut self, target_time: Microseconds) {
+        self.next_tick_time = target_time;
+        self.last_evidence = None;
+    }
+
+    fn detach_surface(&mut self) {
+        self.surface_target = None;
+        self.last_evidence = None;
+        #[cfg(test)]
+        {
+            self.test_mock_surface_attached = false;
+        }
+    }
+
+    fn evidence(&self) -> Option<&RealtimePlaybackSchedulerEvidence> {
+        self.last_evidence
+            .as_ref()
+            .or_else(|| self.scheduler.last_evidence())
+    }
+
+    fn present_next_tick(
+        &mut self,
+        target_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<RealtimePlaybackSchedulerEvidence, RealtimePreviewBindingError> {
+        #[cfg(not(test))]
+        if self.gpu_device.is_none() || self.surface_target.is_none() {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "render graph GPU presentation surface is not attached",
+                ),
+            ));
+        }
+        #[cfg(test)]
+        if !self.test_mock_surface_attached
+            && (self.gpu_device.is_none() || self.surface_target.is_none())
+        {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "render graph GPU presentation surface is not attached",
+                ),
+            ));
+        }
+        let tick_time = if target_time.get() > self.next_tick_time.get() {
+            target_time
+        } else {
+            Microseconds::new(self.next_tick_time.get().saturating_add(33_333))
+        };
+        self.next_tick_time = tick_time;
+        #[cfg(test)]
+        if self.test_mock_surface_attached {
+            let mut presenter = BindingSchedulerTestPresenter;
+            let evidence = self
+                .scheduler
+                .present_tick(tick_time, playback_generation, &mut presenter)
+                .map_err(scheduler_error)?;
+            self.last_evidence = Some(evidence.clone());
+            return Ok(evidence);
+        }
+        let registry = NativeTextureLeaseRegistry::new();
+        let mut media_provider = self.build_media_provider(registry.clone())?;
+        let mut presenter = BindingSchedulerPresenter {
+            gpu_device: self.gpu_device.clone(),
+            surface_target: self.surface_target.as_mut(),
+            texture_cache: RealtimePreviewTextureCache::new()
+                .with_native_texture_registry(registry),
+            media_provider: &mut media_provider,
+        };
+        let evidence = self
+            .scheduler
+            .present_tick(tick_time, playback_generation, &mut presenter)
+            .map_err(scheduler_error)?;
+        self.last_evidence = Some(evidence.clone());
+        Ok(evidence)
+    }
+
+    fn build_media_provider(
+        &self,
+        registry: NativeTextureLeaseRegistry,
+    ) -> Result<MediaIoFrameProvider, RealtimePreviewBindingError> {
+        let draft = self.draft_snapshot.as_ref().ok_or_else(|| {
+            RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
+                "accepted draft snapshot is required before scheduler playback",
+            ))
+        })?;
+        let preview_device = preview_runtime_device_id()?;
+        let mut provider = platform_media_provider(preview_device.clone(), registry.clone())?
+            .with_desired_storage(PreviewFrameStoragePreference::Texture)
+            .with_preview_device_context(PreviewDecodeDeviceContext::compatible(preview_device))
+            .with_native_texture_registry(registry);
+        let mut registered = 0usize;
+        for material in &draft.materials {
+            if material.kind != MaterialKind::Video || !material.metadata.has_video {
+                continue;
+            }
+            let material_uri =
+                resolve_scheduler_material_path(self.bundle_path.as_deref(), &material.uri)?;
+            provider
+                .register_material(PreviewMaterialDecodeSource {
+                    material_id: material.material_id.clone(),
+                    material_uri,
+                    stream_id: StreamId(0),
+                    selected_path: SelectedDecodePath::NativeHardwareTexture,
+                    fallback_selection: None,
+                })
+                .map_err(|error| {
+                    RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
+                        error.to_string(),
+                    ))
+                })?;
+            registered = registered.saturating_add(1);
+        }
+        if registered == 0 {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "no video material is registered for scheduler media IO",
+                ),
+            ));
+        }
+        Ok(provider)
+    }
+}
+
+struct BindingSchedulerPresenter<'a> {
+    gpu_device: Option<RealtimePreviewGpuDevice>,
+    surface_target: Option<&'a mut RealtimePreviewGpuPresentationTarget>,
+    texture_cache: RealtimePreviewTextureCache,
+    media_provider: &'a mut MediaIoFrameProvider,
+}
+
+impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
+    fn present_render_graph(
+        &mut self,
+        graph: &RenderGraph,
+        target_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError> {
+        let gpu_device = self.gpu_device.clone().ok_or_else(|| {
+            RealtimePlaybackSchedulerError::MissingPrerequisite {
+                reason: "render graph GPU device is not attached".to_owned(),
+            }
+        })?;
+        let target = self.surface_target.as_deref_mut().ok_or_else(|| {
+            RealtimePlaybackSchedulerError::MissingPrerequisite {
+                reason: "render graph GPU presentation surface is not attached".to_owned(),
+            }
+        })?;
+        let mut compositor = RealtimePreviewCompositor::new(
+            gpu_device,
+            RealtimePreviewCapabilityClassifier {
+                runtime_backend_available: true,
+                surface_available: true,
+                gpu_text_parity: false,
+                bundled_text_font_registry_available: true,
+            },
+        );
+        let output = compositor
+            .present_to_surface(graph, target, self.media_provider, &mut self.texture_cache)
+            .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                reason: error.to_string(),
+            })?;
+        if output.presented_frames == 0 {
+            return Err(RealtimePlaybackSchedulerError::MissingPrerequisite {
+                reason: "render graph GPU compositor produced no presented surface frame"
+                    .to_owned(),
+            });
+        }
+        Ok(RealtimePlaybackSchedulerPresentation {
+            width: output.width,
+            height: output.height,
+            byte_count: 0,
+            presented_frames: output.presented_frames,
+            submitted_draws: output.submitted_draws,
+            digest: compositor_digest(
+                target_time,
+                playback_generation,
+                output.presented_frames,
+                output.submitted_draws,
+            ),
+        })
+    }
+}
+
+#[cfg(test)]
+struct BindingSchedulerTestPresenter;
+
+#[cfg(test)]
+impl RealtimePlaybackSchedulerPresenter for BindingSchedulerTestPresenter {
+    fn present_render_graph(
+        &mut self,
+        graph: &RenderGraph,
+        target_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError> {
+        Ok(RealtimePlaybackSchedulerPresentation {
+            width: graph.canvas.width,
+            height: graph.canvas.height,
+            byte_count: 0,
+            presented_frames: 1,
+            submitted_draws: graph.video_layers.len() as u32,
+            digest: compositor_digest(
+                target_time,
+                playback_generation,
+                1,
+                graph.video_layers.len() as u32,
+            ),
+        })
+    }
+}
+
+fn preview_runtime_device_id() -> Result<RuntimeDeviceId, RealtimePreviewBindingError> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos_system_metal_device_id().ok_or_else(|| {
+            RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
+                "macOS Metal device identity is unavailable for scheduler texture interop",
+            ))
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err(RealtimePreviewBindingError::presenter(
+            NativePreviewPresenterError::new(
+                "native texture import bridge is not attached for this platform",
+            ),
+        ))
+    }
+}
+
+fn platform_media_provider(
+    preview_device: RuntimeDeviceId,
+    registry: NativeTextureLeaseRegistry,
+) -> Result<MediaIoFrameProvider, RealtimePreviewBindingError> {
+    #[cfg(target_os = "macos")]
+    {
+        let reader = MacosMediaReader::new()
+            .with_texture_interop_policy(MacosTextureInteropPolicy::for_preview_device(
+                preview_device,
+            ))
+            .with_native_texture_registry(registry);
+        return Ok(MediaIoFrameProvider::new(Box::new(reader)));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = preview_device;
+        let _ = registry;
+        Err(RealtimePreviewBindingError::presenter(
+            NativePreviewPresenterError::new(
+                "native texture media provider is not attached for this platform",
+            ),
+        ))
+    }
+}
+
+fn resolve_scheduler_material_path(
+    bundle_path: Option<&std::path::Path>,
+    uri: &str,
+) -> Result<PathBuf, RealtimePreviewBindingError> {
+    let trimmed = uri.trim();
+    if let Some(path) = trimmed.strip_prefix("file://") {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Ok(path);
+        }
+        return Err(RealtimePreviewBindingError::presenter(
+            NativePreviewPresenterError::new(format!(
+                "scheduler material file URI does not resolve to a file: {trimmed}"
+            )),
+        ));
+    }
+    let bundle_path = bundle_path.ok_or_else(|| {
+        RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
+            "bundlePath is required to resolve scheduler material URIs",
+        ))
+    })?;
+    let path = resolve_material_uri(bundle_path, trimmed)
+        .map_err(|error| {
+            RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
+                error.to_string(),
+            ))
+        })?
+        .ok_or_else(|| {
+            RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(format!(
+                "scheduler material URI is not a local file path: {trimmed}"
+            )))
+        })?;
+    if !path.is_file() {
+        return Err(RealtimePreviewBindingError::presenter(
+            NativePreviewPresenterError::new(format!(
+                "scheduler material path does not exist or is not a file: {}",
+                path.display()
+            )),
+        ));
+    }
+    Ok(path)
+}
+
+fn native_evidence_from_scheduler(
+    evidence: RealtimePlaybackSchedulerEvidence,
+) -> NativePreviewContentEvidence {
+    NativePreviewContentEvidence {
+        source: NativePreviewContentEvidenceSource::RenderGraphGpuComposited,
+        digest: evidence.digest,
+        width: evidence.width,
+        height: evidence.height,
+        byte_count: evidence.byte_count,
+        target_time_microseconds: evidence.target_time_microseconds,
+    }
+}
+
+fn scheduler_error(error: RealtimePlaybackSchedulerError) -> RealtimePreviewBindingError {
+    RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(format!(
+        "render graph GPU scheduler failed: {error}"
+    )))
+}
+
+fn compositor_digest(
+    target_time: Microseconds,
+    playback_generation: PlaybackGeneration,
+    presented_frames: u32,
+    submitted_draws: u32,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&target_time.get().to_le_bytes());
+    hasher.update(&playback_generation.get().to_le_bytes());
+    hasher.update(&presented_frames.to_le_bytes());
+    hasher.update(&submitted_draws.to_le_bytes());
+    hasher.finalize().to_hex().to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -708,7 +1221,9 @@ mod realtime_preview_bindings {
         RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
         RealtimePreviewSurfaceBindingKind,
     };
-    use crate::native_preview_presenter::NativePreviewContentEvidenceSource;
+    use crate::native_preview_presenter::{
+        NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
+    };
     use draft_model::{
         AudioPreviewPlaybackStatus, Draft, Material, MaterialKind, MaterialMetadata, Microseconds,
         RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
@@ -919,7 +1434,10 @@ mod realtime_preview_bindings {
             "scheduler play returns an advanced playback generation"
         );
         assert!(presentation.available);
-        assert_eq!(presentation.backend, super::NativePreviewPresentationBackend::RenderGraphGpu);
+        assert_eq!(
+            presentation.backend,
+            NativePreviewPresentationBackend::RenderGraphGpu
+        );
         let evidence = presentation
             .evidence
             .as_ref()

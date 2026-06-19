@@ -17,15 +17,16 @@ mod platform;
 
 pub use capabilities::probe_desktop_runtime_capabilities;
 pub use ffmpeg_fallback::{
-    decode_ffmpeg_cpu_frame_fingerprint, FfmpegCpuFrameDecodeRequest,
-    FfmpegCpuFrameFingerprint, FfmpegCpuFrameFingerprintError,
+    FfmpegCpuFrameDecodeRequest, FfmpegCpuFrameFingerprint, FfmpegCpuFrameFingerprintError,
     FfmpegCpuFrameFingerprintRequest, FfmpegCpuVideoDecoder, FfmpegDecodeDiagnostic,
-    FfmpegFallbackMediaReader, FfmpegFallbackMediaSession,
+    FfmpegFallbackMediaReader, FfmpegFallbackMediaSession, decode_ffmpeg_cpu_frame_fingerprint,
 };
+#[cfg(target_os = "macos")]
+pub use platform::macos_system_metal_device_id;
 pub use platform::{
-    MacosMediaReader, MacosMediaSession, MacosRegisteredTextureLease,
-    MacosTextureInteropPolicy, MacosVideoDecoder, WindowsMediaReader, WindowsMediaSession,
-    WindowsTextureInteropPolicy, WindowsVideoDecoder, select_macos_texture_interop_fallback,
+    MacosMediaReader, MacosMediaSession, MacosRegisteredTextureLease, MacosTextureInteropPolicy,
+    MacosVideoDecoder, WindowsMediaReader, WindowsMediaSession, WindowsTextureInteropPolicy,
+    WindowsVideoDecoder, select_macos_texture_interop_fallback,
     select_windows_texture_interop_fallback,
 };
 

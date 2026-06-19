@@ -1919,6 +1919,7 @@ dependencies = [
  "engine_core",
  "fontdue",
  "media_runtime",
+ "media_runtime_desktop",
  "objc2",
  "objc2-core-video",
  "objc2-metal",

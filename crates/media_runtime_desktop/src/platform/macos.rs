@@ -9,11 +9,11 @@ use media_runtime::{
     FrameLeaseRequest, FramePool, FramePoolCloseReport, FramePoolError, FramePoolLimits,
     FrameReleaseDiagnostic, FrameStorageRequest, MacosMediaIoCapabilities, MediaIoError,
     MediaIoErrorKind, MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection,
-    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo,
-    MediaStreamKind, NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind,
-    RationalFrameRate, RuntimeCapabilityStatus, RuntimeDeviceId, RuntimeFeatureCapability,
-    SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
-    VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
+    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
+    NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RationalFrameRate,
+    RuntimeCapabilityStatus, RuntimeDeviceId, RuntimeFeatureCapability, SelectedDecodePath,
+    StreamId, TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata,
+    VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
 };
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
@@ -23,6 +23,11 @@ const DEFAULT_MAX_OUTSTANDING_LEASES: usize = 8;
 
 pub fn probe_macos_media_io_capabilities() -> MacosMediaIoCapabilities {
     platform_macos_capabilities()
+}
+
+#[cfg(target_os = "macos")]
+pub fn macos_system_metal_device_id() -> Option<RuntimeDeviceId> {
+    system_metal_device_id()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -369,8 +374,7 @@ struct MacosNativeLease {
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
 pub struct MacosRegisteredTextureLease {
-    _metal_texture_cache:
-        objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>,
+    _metal_texture_cache: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTextureCache>,
     _metal_luma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
     _metal_chroma_texture: objc2_core_foundation::CFRetained<objc2_core_video::CVMetalTexture>,
 }

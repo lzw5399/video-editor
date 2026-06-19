@@ -1163,6 +1163,39 @@ fn upload_wgpu_layer_texture(
                 if let Some(planes) = lease.resource_as::<RealtimePreviewExternalTexturePlanes>() {
                     return Ok(WgpuLayerTexture::ExternalNv12(planes));
                 }
+                #[cfg(target_os = "macos")]
+                if let Some(macos_lease) =
+                    lease.resource_as::<media_runtime_desktop::MacosRegisteredTextureLease>()
+                {
+                    use objc2_core_video::CVMetalTextureGetTexture;
+
+                    let luma =
+                        CVMetalTextureGetTexture(macos_lease.luma_texture()).ok_or_else(|| {
+                            RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                                handle_id: handle.handle_id.clone(),
+                                backend: "metal:nv12:luma-plane-unavailable".to_owned(),
+                            }
+                        })?;
+                    let chroma = CVMetalTextureGetTexture(macos_lease.chroma_texture())
+                        .ok_or_else(|| {
+                            RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
+                                handle_id: handle.handle_id.clone(),
+                                backend: "metal:nv12:chroma-plane-unavailable".to_owned(),
+                            }
+                        })?;
+                    let planes =
+                        RealtimePreviewGpuDevice::create_nv12_external_texture_planes_from_metal_device(
+                            device,
+                            handle.width,
+                            handle.height,
+                            luma,
+                            chroma,
+                        )
+                        .map_err(|error| {
+                            RealtimePreviewCompositorError::WgpuFrameUpload(error.to_string())
+                        })?;
+                    return Ok(WgpuLayerTexture::ExternalNv12(Rc::new(planes)));
+                }
                 return Err(
                     RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
                         handle_id: handle.handle_id,

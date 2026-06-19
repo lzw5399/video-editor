@@ -11,6 +11,7 @@ pub mod media_io_adapter;
 pub mod parity;
 pub mod platform;
 pub mod request;
+pub mod scheduler;
 pub mod session;
 pub mod software_video_provider;
 pub mod telemetry;
@@ -28,6 +29,10 @@ pub use frame_provider::{
     CpuVideoFrame, FrameColorInfo, FrameValidationError, FrameValidationErrorKind,
     PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError, TextureHandleDescriptor,
 };
+pub use gpu::{
+    RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewCompositorError,
+    RealtimePreviewSurfacePresentationOutput,
+};
 pub use graph_prepare::{
     PreparedRealtimePreviewGraph, RealtimePreviewGraphInput, RealtimePreviewGraphPrepareError,
     RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
@@ -41,6 +46,11 @@ pub use parity::{RealtimePreviewParityDiagnostic, realtime_preview_parity_diagno
 pub use request::{
     PreviewCancellationToken, PreviewRequestMode, RealtimePreviewAudioSyncState,
     RealtimePreviewBackendUsed, RealtimePreviewFrameRequest, RealtimePreviewFrameResult,
+};
+pub use scheduler::{
+    RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
+    RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerEvidenceSource,
+    RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerPresenter,
 };
 pub use session::{
     PreviewGpuBackend, PreviewSessionId, RealtimePreviewError, RealtimePreviewRuntime,
