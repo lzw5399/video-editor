@@ -17,7 +17,6 @@ import {
   stopRealtimePreview,
   updateRealtimePreviewDraftSnapshot,
   updateRealtimePreviewSurfaceBounds,
-  type RealtimePreviewBackendUsed,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
   type RealtimePreviewPresentationStateResponse,
@@ -36,12 +35,14 @@ export type RealtimePreviewHostRectInput = {
 
 export type RealtimePreviewHostDisplayState = {
   ok: boolean;
+  productReady: boolean;
   hostAttached: boolean;
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
-  backend: RealtimePreviewBackendUsed;
+  backend: RealtimePreviewHostProductBackend;
+  diagnosticSource: RealtimePreviewHostDiagnosticSource;
   fallbackReason: RealtimePreviewFallbackReason | null;
   currentRequestCanceled: boolean;
   fallbackArtifactVisible: boolean;
@@ -49,6 +50,10 @@ export type RealtimePreviewHostDisplayState = {
   frameDisplay: RealtimePreviewHostFrameDisplay | null;
   contentEvidence: RealtimePreviewHostContentEvidence | null;
 };
+
+export type RealtimePreviewHostProductBackend = "renderGraphGpu" | "none";
+
+export type RealtimePreviewHostDiagnosticSource = "nativeVideoBridge" | "runtimeFrameRequest" | "none";
 
 export type RealtimePreviewHostFrameDisplay = {
   surfaceKind: "mock";
@@ -59,7 +64,7 @@ export type RealtimePreviewHostFrameDisplay = {
 };
 
 export type RealtimePreviewHostContentEvidence = {
-  source: "composited";
+  source: "nativeVideoBridge" | "renderGraphGpuComposited";
   digest: string;
   width: number;
   height: number;
@@ -291,9 +296,11 @@ export class RealtimePreviewHost {
   play(): RealtimePreviewHostDisplayState {
     this.refreshPresentationState();
     if (!this.hasProductionCompositedPresenter()) {
-      this.fallbackLabel = this.presentationState?.unsupportedReason
-        ? `实时预览不可用：${this.presentationState.unsupportedReason.slice(0, 120)}`
-        : "实时预览不可用：GPU 合成播放尚未接入";
+      const unavailableReason =
+        this.presentationState?.backend === "nativeVideoBridge"
+          ? "GPU 合成播放尚未接入"
+          : this.presentationState?.unsupportedReason?.slice(0, 120) ?? "GPU 合成播放尚未接入";
+      this.fallbackLabel = `实时预览不可用：${unavailableReason}`;
       recordRealtimePreviewHostCall({ kind: "playRejectedMissingCompositor" });
       this.refreshTelemetry();
       return this.state("实时预览不可用");
@@ -507,23 +514,36 @@ export class RealtimePreviewHost {
   }
 
   private hasProductionCompositedPresenter(): boolean {
-    return this.presentationState?.available === true;
+    return (
+      this.presentationState?.available === true &&
+      this.presentationState.backend === "renderGraphGpu" &&
+      this.presentationState.evidence?.source === "renderGraphGpuComposited"
+    );
   }
 
   private state(statusLabel: string): RealtimePreviewHostDisplayState {
-    const backend = this.presentationState?.backend === "gpu" ? "gpu" : this.lastFrame?.backend ?? "none";
+    const productReady = this.hasProductionCompositedPresenter();
+    const backend: RealtimePreviewHostProductBackend = productReady ? "renderGraphGpu" : "none";
+    const diagnosticSource: RealtimePreviewHostDiagnosticSource =
+      this.presentationState?.backend === "nativeVideoBridge"
+        ? "nativeVideoBridge"
+        : this.lastFrame !== null
+          ? "runtimeFrameRequest"
+          : "none";
     const fallbackReason = this.lastFrame?.fallback ?? null;
     return {
       ok: this.fallbackLabel === null,
+      productReady,
       hostAttached: this.attached,
       fallbackActive: this.fallbackLabel !== null,
       statusLabel,
       fallbackLabel: this.fallbackLabel,
       playbackGeneration: this.playbackGeneration,
       backend,
+      diagnosticSource,
       fallbackReason,
       currentRequestCanceled: this.lastFrame?.canceled ?? false,
-      fallbackArtifactVisible: backend === "previewArtifact" || backend === "ffmpegArtifact",
+      fallbackArtifactVisible: this.lastFrame?.backend === "previewArtifact" || this.lastFrame?.backend === "ffmpegArtifact",
       telemetry: this.telemetry,
       frameDisplay: null,
       contentEvidence: this.lastContentEvidence

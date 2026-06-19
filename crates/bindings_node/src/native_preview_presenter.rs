@@ -52,10 +52,22 @@ impl NativePreviewPresentationState {
         }
     }
 
-    pub fn available(evidence: Option<NativePreviewContentEvidence>) -> Self {
+    pub fn native_video_bridge_diagnostic(evidence: Option<NativePreviewContentEvidence>) -> Self {
+        Self {
+            available: false,
+            backend: NativePreviewPresentationBackend::NativeVideoBridge,
+            unsupported_reason: Some(
+                "native video bridge is diagnostic only; render graph GPU compositor is required for product playback"
+                    .to_owned(),
+            ),
+            evidence,
+        }
+    }
+
+    pub fn render_graph_gpu_available(evidence: Option<NativePreviewContentEvidence>) -> Self {
         Self {
             available: true,
-            backend: NativePreviewPresentationBackend::Gpu,
+            backend: NativePreviewPresentationBackend::RenderGraphGpu,
             unsupported_reason: None,
             evidence,
         }
@@ -65,7 +77,8 @@ impl NativePreviewPresentationState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NativePreviewPresentationBackend {
-    Gpu,
+    NativeVideoBridge,
+    RenderGraphGpu,
     None,
 }
 
@@ -83,7 +96,8 @@ pub struct NativePreviewContentEvidence {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NativePreviewContentEvidenceSource {
-    Composited,
+    NativeVideoBridge,
+    RenderGraphGpuComposited,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -560,7 +574,9 @@ mod macos {
                     self.last_evidence = Some(evidence);
                 }
             }
-            NativePreviewPresentationState::available(self.last_evidence.clone())
+            NativePreviewPresentationState::native_video_bridge_diagnostic(
+                self.last_evidence.clone(),
+            )
         }
 
         pub fn detach(&mut self) {
@@ -642,7 +658,7 @@ mod macos {
 
             let target_time = self.target_time_from_player(player);
             Some(NativePreviewContentEvidence {
-                source: NativePreviewContentEvidenceSource::Composited,
+                source: NativePreviewContentEvidenceSource::NativeVideoBridge,
                 digest: blake3::hash(&pixels).to_hex().to_string(),
                 width,
                 height,
@@ -759,19 +775,28 @@ mod tests {
 
     #[test]
     fn native_player_presentation_serializes_as_native_video_not_gpu_compositor() {
-        let state = NativePreviewPresentationState::available(Some(NativePreviewContentEvidence {
-            source: NativePreviewContentEvidenceSource::Composited,
-            digest: "digest".to_owned(),
-            width: 16,
-            height: 9,
-            byte_count: 16 * 9 * 4,
-            target_time_microseconds: 123_000,
-        }));
+        let state = NativePreviewPresentationState::native_video_bridge_diagnostic(Some(
+            NativePreviewContentEvidence {
+                source: NativePreviewContentEvidenceSource::NativeVideoBridge,
+                digest: "digest".to_owned(),
+                width: 16,
+                height: 9,
+                byte_count: 16 * 9 * 4,
+                target_time_microseconds: 123_000,
+            },
+        ));
 
         let json = serde_json::to_value(state).expect("native preview state serializes");
 
-        assert_eq!(json["backend"], "nativeVideo");
-        assert_eq!(json["evidence"]["source"], "nativeVideo");
+        assert_eq!(json["available"], false);
+        assert_eq!(json["backend"], "nativeVideoBridge");
+        assert_eq!(json["evidence"]["source"], "nativeVideoBridge");
+        assert!(
+            json["unsupportedReason"]
+                .as_str()
+                .expect("unsupported reason")
+                .contains("diagnostic only")
+        );
     }
 
     #[test]

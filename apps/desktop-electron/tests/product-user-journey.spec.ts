@@ -4,18 +4,16 @@ import {
   USER_JOURNEY_MOVING_VIDEO,
   addMaterialToTimeline,
   capturePreviewEvidence,
-  clickPreviewPlay,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
-  requestPreviewFrameCount,
-  waitForCompositedPreviewEvidence
+  requestPreviewFrameCount
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
 
-test("product user can import a repo video, add it to the timeline, and see playback frames advance", async () => {
+test("product playback rejects native video bridge as render-graph GPU compositor evidence", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
 
   try {
@@ -25,61 +23,95 @@ test("product user can import a repo video, add it to the timeline, and see play
     const before = await capturePreviewEvidence(page);
     const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
 
-    await clickPreviewPlay(page);
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    const playButton = controls.getByRole("button", { name: "播放预览" });
+    await expect(playButton).toBeEnabled({ timeout: 20_000 });
+    await playButton.click();
 
-    const duringPlayback = await waitForCompositedPreviewEvidence(page);
     await page.waitForTimeout(800);
     const after = await capturePreviewEvidence(page);
     const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
 
-    expect(after.timecodeUs, "the user-visible playhead must advance after clicking play").toBeGreaterThan(
-      before.timecodeUs + 500_000
-    );
     expect(
-      frameRequestsAfterPlay,
-      "normal product playback must not be implemented by repeatedly requesting preview PNG frames"
-    ).toBe(frameRequestsBeforePlay);
+      after.timecodeUs,
+      "playhead must not advance when only native video bridge evidence is available"
+    ).toBe(before.timecodeUs);
+    await expect(playButton, "failed product playback must leave the play button available").toBeEnabled();
+    await expect(controls.getByRole("button", { name: "暂停预览" })).toHaveCount(0);
 
+    expect(after.hostState?.ok, "play command must fail closed without render-graph GPU compositor").toBe(false);
     expect(
-      after.hostState?.telemetry?.presentedFrameCount ?? 0,
-      "the realtime preview host must present frames while the product playhead is running"
-    ).toBeGreaterThan(before.hostState?.telemetry?.presentedFrameCount ?? 0);
+      after.hostState?.productReady,
+      "native video bridge must not mark product realtime preview as ready"
+    ).toBe(false);
     expect(
-      after.hostState?.telemetry?.targetTimeMicroseconds ?? 0,
-      "runtime-presented frame time must advance with the user-visible playhead"
-    ).toBeGreaterThan(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
+      after.hostState?.fallbackActive,
+      "native video bridge rejection must be visible as unavailable state"
+    ).toBe(true);
+    expect(after.hostState?.fallbackLabel ?? "").toContain("GPU 合成播放尚未接入");
     expect(
       after.hostState?.backend ?? null,
-      "normal product playback must use the render-graph GPU compositor backend, not native-video/mock/offscreen/artifact fallback"
-    ).toBe("renderGraphGpu");
+      "product host backend must expose only renderGraphGpu success or none"
+    ).toBe("none");
+    expect(
+      after.hostState?.diagnosticSource ?? null,
+      "native bridge may be retained only as diagnostic evidence"
+    ).toBe("nativeVideoBridge");
     expect(
       after.hostState?.contentEvidence?.source ?? null,
-      "normal product playback evidence must come from render-graph GPU compositor output, not native-video, decoded CPU probes, or mock frame tokens"
-    ).toBe("renderGraphGpuComposited");
+      "native bridge content evidence must not be relabeled as compositor output"
+    ).toBe("nativeVideoBridge");
     expect(
-      after.hostState?.contentEvidence?.digest ?? null,
-      "native composited content fingerprint must advance during playback"
-    ).not.toBe(duringPlayback.hostState?.contentEvidence?.digest ?? null);
+      after.hostState?.telemetry?.presentedFrameCount ?? 0,
+      "native bridge evidence must not increment realtime compositor presented-frame telemetry"
+    ).toBe(before.hostState?.telemetry?.presentedFrameCount ?? 0);
     expect(
-      after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0,
-      "content fingerprint time must advance with the user-visible playhead"
-    ).toBeGreaterThan((duringPlayback.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0) + 300_000);
+      after.hostState?.telemetry?.targetTimeMicroseconds ?? 0,
+      "runtime-presented frame time must not advance without the compositor"
+    ).toBe(before.hostState?.telemetry?.targetTimeMicroseconds ?? 0);
     expect(
-      after.regionHash,
-      "the user-visible preview region must change while playback is running"
-    ).not.toBe(duringPlayback.regionHash);
+      frameRequestsAfterPlay,
+      "product playback rejection must not fall back to repeated preview PNG frame requests"
+    ).toBe(frameRequestsBeforePlay);
     expect(
       after.hostState?.frameDisplay,
-      "normal product playback must not expose mock frame display evidence"
+      "product playback rejection must not expose mock frame display evidence"
     ).toBeNull();
-
-    expect(after.placeholderText, "playback should not be left on the empty-preview placeholder").not.toContain("显示预览");
+    expect(
+      after.hostState?.contentEvidence?.source ?? null,
+      "render-graph compositor evidence is intentionally absent until the compositor path is connected"
+    ).not.toBe("renderGraphGpuComposited");
     await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
 
     await expect
       .poll(async () => (await readRealtimePreviewHostCalls(app)).map((call) => call.kind), { timeout: 5_000 })
-      .toEqual(expect.arrayContaining(["updateDraftSnapshot", "seek", "play"]));
+      .toEqual(
+        expect.arrayContaining([
+          "updateDraftSnapshot",
+          "seek",
+          "playRejectedMissingCompositor"
+        ])
+      );
+    expect(
+      (await readRealtimePreviewHostCalls(app)).map((call) => call.kind),
+      "native bridge must not receive a product play command"
+    ).not.toContain("play");
+
+    expect(
+      after.placeholderText,
+      "failed playback should not be left on an empty debug/mock preview placeholder"
+    ).not.toContain("实时预览帧");
   } finally {
     await app.close();
   }
 });
+
+test.skip(
+  "product user can import a repo video, add it to the timeline, and see render-graph GPU playback frames advance",
+  async () => {
+    test.info().annotations.push({
+      type: "phase",
+      description: "Re-enabled by Phase 15.2-04 when desktop render-graph GPU presentation is connected"
+    });
+  }
+);

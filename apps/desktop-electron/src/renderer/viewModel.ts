@@ -203,7 +203,14 @@ export type AudioParityDisplayModel = {
   warningLabel: string | null;
 };
 
-export type RealtimePreviewBackendUsed = "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
+export type RealtimePreviewBackendUsed =
+  | "mock"
+  | "gpu"
+  | "renderGraphGpu"
+  | "offscreen"
+  | "previewArtifact"
+  | "ffmpegArtifact"
+  | "none";
 
 export type RealtimePreviewFallbackReason =
   | "noGpuAdapter"
@@ -1069,7 +1076,8 @@ export function formatTimelineTime(time: Microseconds | null | undefined): strin
 export function formatRealtimePreviewBackendLabel(backend: RealtimePreviewBackendUsed): string {
   const labels: Record<RealtimePreviewBackendUsed, string> = {
     mock: "实时后端：Mock",
-    gpu: "实时后端：GPU",
+    gpu: "诊断后端：运行时 GPU 帧请求",
+    renderGraphGpu: "实时后端：GPU 合成",
     offscreen: "实时后端：离屏",
     previewArtifact: "备用产物：预览缓存",
     ffmpegArtifact: "备用产物：媒体运行环境",
@@ -1151,6 +1159,10 @@ export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayMod
 }
 
 export function summarizeRealtimePreviewProductDisplay(model: RealtimePreviewDisplayModel): string {
+  if (model.backend !== "renderGraphGpu") {
+    return "实时预览不可用：GPU 合成播放尚未接入";
+  }
+
   if (model.fallbackReason !== null) {
     return formatRealtimePreviewProductFallbackReason(model.fallbackReason);
   }

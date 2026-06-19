@@ -14,8 +14,9 @@ use realtime_preview_runtime::{
 use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 
 use crate::native_preview_presenter::{
-    NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
-    NativePreviewSurfaceAttach, NativePreviewSurfaceBounds, NativePreviewSurfaceKind,
+    NativePreviewPresentationBackend, NativePreviewPresentationState, NativePreviewPresenter,
+    NativePreviewPresenterError, NativePreviewSurfaceAttach, NativePreviewSurfaceBounds,
+    NativePreviewSurfaceKind,
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
@@ -189,7 +190,19 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.presenter_mut(session_id)?
+        let presenter = self.presenter_mut(session_id)?;
+        let state = presenter.presentation_state();
+        if state.available != true
+            || state.backend != NativePreviewPresentationBackend::RenderGraphGpu
+        {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(state.unsupported_reason.unwrap_or_else(|| {
+                    "render graph GPU compositor presenter is required for product playback"
+                        .to_owned()
+                })),
+            ));
+        }
+        presenter
             .play()
             .map_err(RealtimePreviewBindingError::presenter)?;
         let generation = self
@@ -302,14 +315,16 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<NativePreviewPresentationState, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let state = self.presenter_mut(session_id)?.presentation_state();
-        if let Some(evidence) = state.evidence.as_ref() {
-            self.runtime
-                .record_presented_output(
-                    runtime_id,
-                    Microseconds::new(evidence.target_time_microseconds),
-                    1,
-                )
-                .map_err(RealtimePreviewBindingError::runtime)?;
+        if state.backend == NativePreviewPresentationBackend::RenderGraphGpu {
+            if let Some(evidence) = state.evidence.as_ref() {
+                self.runtime
+                    .record_presented_output(
+                        runtime_id,
+                        Microseconds::new(evidence.target_time_microseconds),
+                        1,
+                    )
+                    .map_err(RealtimePreviewBindingError::runtime)?;
+            }
         }
         Ok(state)
     }
@@ -849,7 +864,7 @@ mod realtime_preview_bindings {
     }
 
     #[test]
-    fn default_product_session_does_not_use_mock_backend() {
+    fn runtime_frame_request_reports_diagnostic_backend_without_mock_default() {
         let (mut registry, session_id) = registry_with_session();
         let generation = registry
             .seek(&session_id, 33_333)

@@ -22,19 +22,14 @@ type RealtimePreviewHostCall = {
 
 type RealtimePreviewHostState = {
   ok: boolean;
+  productReady: boolean;
   hostAttached: boolean;
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
-  backend:
-    | "mock"
-    | "nativeVideo"
-    | "renderGraphGpu"
-    | "offscreen"
-    | "previewArtifact"
-    | "ffmpegArtifact"
-    | "none";
+  backend: "renderGraphGpu" | "none";
+  diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
   telemetry: {
     presentedFrameCount: number;
     targetTimeMicroseconds: number;
@@ -47,7 +42,7 @@ type RealtimePreviewHostState = {
     accentColor: string;
   } | null;
   contentEvidence: {
-    source: "nativeVideo" | "renderGraphGpuComposited";
+    source: "nativeVideoBridge" | "renderGraphGpuComposited";
     digest: string;
     width: number;
     height: number;

@@ -182,13 +182,13 @@ export type RealtimePreviewTelemetryResponse = {
 
 export type RealtimePreviewPresentationStateResponse = {
   available: boolean;
-  backend: "gpu" | "none";
+  backend: "nativeVideoBridge" | "renderGraphGpu" | "none";
   unsupportedReason?: string | null;
   evidence?: RealtimePreviewPresentationEvidence | null;
 };
 
 export type RealtimePreviewPresentationEvidence = {
-  source: "composited";
+  source: "nativeVideoBridge" | "renderGraphGpuComposited";
   digest: string;
   width: number;
   height: number;

@@ -22,7 +22,6 @@ import {
   type BindingStatus,
   type ExportDisplayState,
   type PreviewDisplayState,
-  type RealtimePreviewBackendUsed,
   type RealtimePreviewDisplayModel,
   type RealtimePreviewFallbackReason,
   type RuntimeDiagnosticsDisplayState,
@@ -95,12 +94,14 @@ type RealtimePreviewHostTelemetry = {
 
 type RealtimePreviewHostState = {
   ok: boolean;
+  productReady: boolean;
   hostAttached: boolean;
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
   playbackGeneration: number | null;
-  backend: RealtimePreviewBackendUsed;
+  backend: "renderGraphGpu" | "none";
+  diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
   fallbackReason: RealtimePreviewFallbackReason | null;
   currentRequestCanceled: boolean;
   fallbackArtifactVisible: boolean;
@@ -118,15 +119,12 @@ type RealtimePreviewHostFrameDisplay = {
 };
 
 type RealtimePreviewHostContentEvidence = {
-  source: "composited";
+  source: "nativeVideoBridge" | "renderGraphGpuComposited";
   digest: string;
   width: number;
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
-  sourceTimeMicroseconds: number;
-  materialId: string;
-  streamId: number;
 };
 
 type RealtimePreviewHostApi = {
@@ -148,12 +146,14 @@ declare global {
 const MICROSECONDS_PER_SECOND = 1_000_000;
 const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   ok: false,
+  productReady: false,
   hostAttached: false,
   fallbackActive: false,
   statusLabel: "实时预览等待接入",
   fallbackLabel: null,
   playbackGeneration: null,
   backend: "none",
+  diagnosticSource: "none",
   fallbackReason: null,
   currentRequestCanceled: false,
   fallbackArtifactVisible: false,
@@ -668,16 +668,30 @@ function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): strin
   if (state.fallbackActive) {
     return state.statusLabel;
   }
+  if (!state.productReady) {
+    return state.hostAttached ? "等待 GPU 合成" : "实时预览等待接入";
+  }
   if (state.fallbackArtifactVisible || state.fallbackReason !== null) {
     return "实时预览受限";
   }
-  return state.hostAttached ? "实时预览已接入" : "实时预览等待接入";
+  return "实时预览已接入";
 }
 
 function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDeveloperDiagnostics: boolean): string {
   const { telemetry } = state;
+  if (!showDeveloperDiagnostics && !state.productReady) {
+    return "实时预览不可用：GPU 合成播放尚未接入";
+  }
   if (telemetry === null) {
     return "等待首帧";
+  }
+
+  if (showDeveloperDiagnostics && !state.productReady) {
+    return [
+      formatRealtimePreviewDiagnosticSource(state.diagnosticSource),
+      `运行时帧 ${telemetry.presentedFrameCount}`,
+      `目标 ${formatMicroseconds(telemetry.targetTimeMicroseconds)}`
+    ].join(" · ");
   }
 
   const model: RealtimePreviewDisplayModel = {
@@ -701,6 +715,15 @@ function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDev
   };
 
   return showDeveloperDiagnostics ? summarizeRealtimePreviewDisplay(model) : summarizeRealtimePreviewProductDisplay(model);
+}
+
+function formatRealtimePreviewDiagnosticSource(source: RealtimePreviewHostState["diagnosticSource"]): string {
+  const labels: Record<RealtimePreviewHostState["diagnosticSource"], string> = {
+    nativeVideoBridge: "诊断来源：原生视频桥",
+    runtimeFrameRequest: "诊断来源：运行时帧请求",
+    none: "诊断来源：无"
+  };
+  return labels[source];
 }
 
 function formatRealtimePreviewFallbackArtifact(
