@@ -88,6 +88,7 @@ pub enum CommandName {
     ImportSubtitleSrt,
     AddAudioSegment,
     SetSegmentVolume,
+    UpdateSegmentAudio,
     SetTrackMute,
     UpdateDraftCanvasConfig,
     UpdateSegmentVisual,

@@ -1,9 +1,10 @@
 //! Semantic audio/BGM timeline commands.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS,
-    MaterialId, Segment, SegmentId, SegmentVolume, SourceTimerange, TargetTimerange,
-    TimelineCommandResponse, TimelineSelection, TrackId,
+    AudioEffectSlot, AudioFade, AudioPanBalance, CommandDelta, CommandEvent, CommandName,
+    CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, MaterialId, Microseconds, Segment, SegmentId,
+    SegmentVolume, SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection,
+    TrackId,
 };
 
 use crate::{
@@ -74,6 +75,9 @@ pub fn set_segment_volume(
     validate_track_unlocked(&next_draft.tracks[track_index])?;
 
     next_draft.tracks[track_index].segments[segment_index].volume = volume;
+    next_draft.tracks[track_index].segments[segment_index]
+        .audio
+        .gain_millis = volume.level_millis;
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = audio_property_delta(
@@ -95,6 +99,72 @@ pub fn set_segment_volume(
         "setSegmentVolume",
         "segmentVolumeChanged",
         CommandName::SetSegmentVolume,
+        delta,
+    ))
+}
+
+pub fn update_segment_audio(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+    gain_millis: Option<u32>,
+    pan_balance_millis: Option<i32>,
+    fade_in_duration: Option<Microseconds>,
+    fade_out_duration: Option<Microseconds>,
+    effect_slots: Option<Vec<AudioEffectSlot>>,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+
+    let segment = &mut next_draft.tracks[track_index].segments[segment_index];
+    if let Some(gain_millis) = gain_millis {
+        segment.audio.gain_millis = gain_millis;
+        segment.volume = SegmentVolume {
+            level_millis: gain_millis,
+        };
+    }
+    if let Some(pan_balance_millis) = pan_balance_millis {
+        segment.audio.pan_balance_millis = AudioPanBalance {
+            balance_millis: pan_balance_millis,
+        };
+    }
+    if let Some(fade_in_duration) = fade_in_duration {
+        segment.audio.fade_in_duration = AudioFade {
+            duration: fade_in_duration,
+        };
+    }
+    if let Some(fade_out_duration) = fade_out_duration {
+        segment.audio.fade_out_duration = AudioFade {
+            duration: fade_out_duration,
+        };
+    }
+    if let Some(effect_slots) = effect_slots {
+        segment.audio.effect_slots = effect_slots;
+    }
+
+    validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let delta = audio_property_delta(
+        CommandName::UpdateSegmentAudio,
+        &track_id,
+        &next_draft.tracks[track_index].segments[segment_index],
+        "segment audio changed",
+    );
+
+    Ok(response(
+        next_draft,
+        command_state,
+        draft,
+        selection,
+        TimelineSelection {
+            segment_ids: vec![segment_id],
+            track_ids: vec![track_id],
+        },
+        "updateSegmentAudio",
+        "segmentAudioUpdated",
+        CommandName::UpdateSegmentAudio,
         delta,
     ))
 }
