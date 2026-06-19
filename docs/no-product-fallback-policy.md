@@ -46,11 +46,19 @@ Every review touching product behavior must check:
 
 - Product playback evidence is `composited` output from the realtime preview
   surface, not decoded CPU media evidence.
+- Product playback evidence comes from the render-graph compositor for timelines
+  that include visible editing semantics. A native single-video player layer may
+  be used only as an explicit diagnostic/unsupported bridge and must not be
+  labeled as realtime GPU composition.
 - Electron renderer and main process do not choose fallback paths or mutate
   semantic state to simulate success.
 - Rust binding APIs do not expose debug, mock, FFmpeg CPU, preview artifact, or
   legacy paths as product-success evidence.
 - Product E2E tests fail when the production path evidence is absent.
+- Every visible default editing control has a user-level E2E case or is hidden
+  or gated until the production implementation exists.
+- Reviews apply `docs/product-e2e-acceptance-policy.md` before accepting a
+  product-facing feature as complete.
 - Any fallback wording in code, docs, tests, and telemetry is either a diagnostic
   for unavailable/degraded behavior or a non-product test harness utility.
 - `pnpm run test:no-product-fallback` passes.

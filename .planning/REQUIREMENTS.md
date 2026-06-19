@@ -84,6 +84,9 @@
 - [x] **TEST-06**: Electron E2E test imports material, edits a timeline, previews, exports, and verifies output.
 - [x] **TEST-07**: Packaged app smoke test launches offline and completes import-preview-export.
 - [x] **TEST-08**: Electron workspace tests and source guards verify the professional UI at 1280x800 and 1120x720, including five-region visibility, command-only timeline updates, and no renderer-owned media/render semantics.
+- [ ] **TEST-E2E-01**: Every default visible editing feature added or changed after Phase 15.1 has Playwright/Electron coverage that performs the real user workflow and verifies visible preview, timeline state, saved draft, or exported media evidence.
+- [ ] **TEST-E2E-02**: Repository-owned media fixtures cover the main product workflow matrix: video, image, audio, text, timeline edit, playback, save/reopen, and export.
+- [ ] **NO-FALLBACK-01**: Product-facing success states cannot be satisfied by fallback, mock, artifact, first-frame, DOM overlay, decoded CPU probe, or legacy/native player evidence that bypasses the claimed production implementation.
 
 ## v2 Requirements
 
@@ -98,6 +101,14 @@
 - **MVPEDIT-07**: Audio editing exposes segment volume and track mute through `setSegmentVolume` and `setTrackMute`, with waveform shown as a P0 placeholder and real waveform cache explicitly deferred.
 - **MVPEDIT-08**: Text and SRT subtitle workflows add/edit text segments through `addTextSegment`, `editTextSegment`, and Rust-owned `importSubtitleSrt`; renderer code never constructs subtitle cue segments.
 - **MVPEDIT-09**: Playwright Electron coverage verifies system import, add-to-timeline, preview image display, playhead request/update, transform, audio, text, and SRT flows at 1280x800 and 1120x720.
+
+### P0 Realtime Compositor Closure
+
+- **P0-GPU-01**: Desktop realtime preview playback for supported timelines is driven by the Rust-owned render graph and GPU compositor, not by `requestPreviewFrame`, FFmpeg PNG artifacts, mock/offscreen displays, decoded CPU fingerprints, first-frame snapshots, or native single-video player layers.
+- **P0-GPU-02**: The production preview path supports mainstream editing behavior exposed in the default UI: video/image layers, text overlays with bundled fonts, basic audio state, layer order, fit/fill/stretch, position, scale, rotation, opacity, crop where exposed, trim, split, move, delete, undo, redo, seek, scrub, and save/reopen/export parity for the supported subset.
+- **P0-GPU-03**: Visible default controls that are not backed by production preview/export behavior are hidden or gated with a productized unavailable state; they cannot appear functional.
+- **P0-GPU-04**: Preview evidence proves the rendered compositor output changes with timeline time and edit state. Playhead movement alone, DOM labels, synthetic colors, or diagnostic hashes are insufficient.
+- **P0-GPU-05**: The product E2E matrix fails closed when the compositor path is unavailable and records no fallback success.
 
 ### Core Editing Expansion
 
@@ -334,15 +345,23 @@
 | P0-EDIT-01 | Phase 15.1 | Complete |
 | P0-EDIT-02 | Phase 15.1 | Complete |
 | P0-EDIT-03 | Phase 15.1 | Complete |
-| P0-EDIT-04 | Phase 15.1 | Planned |
-| P0-EDIT-05 | Phase 15.1 | Planned |
-| P0-EDIT-06 | Phase 15.1 | Planned |
-| P0-UI-01 | Phase 15.2 | Planned |
-| P0-UI-02 | Phase 15.2 | Planned |
-| P0-UI-03 | Phase 15.2 | Planned |
-| P0-UI-04 | Phase 15.2 | Planned |
-| P0-UI-05 | Phase 15.2 | Planned |
-| P0-UI-06 | Phase 15.2 | Planned |
+| P0-EDIT-04 | Phase 15.1 | Complete |
+| P0-EDIT-05 | Phase 15.1 | Complete |
+| P0-EDIT-06 | Phase 15.1 | Complete |
+| P0-GPU-01 | Phase 15.2 | Planned |
+| P0-GPU-02 | Phase 15.2 | Planned |
+| P0-GPU-03 | Phase 15.2 | Planned |
+| P0-GPU-04 | Phase 15.2 | Planned |
+| P0-GPU-05 | Phase 15.2 | Planned |
+| TEST-E2E-01 | Phase 15.2 | Planned |
+| TEST-E2E-02 | Phase 15.2 | Planned |
+| NO-FALLBACK-01 | Phase 15.2 | Planned |
+| P0-UI-01 | Phase 15.3 | Planned |
+| P0-UI-02 | Phase 15.3 | Planned |
+| P0-UI-03 | Phase 15.3 | Planned |
+| P0-UI-04 | Phase 15.3 | Planned |
+| P0-UI-05 | Phase 15.3 | Planned |
+| P0-UI-06 | Phase 15.3 | Planned |
 | SCHED-01 | Phase 16 | Planned |
 | SCHED-02 | Phase 16 | Planned |
 | SCHED-03 | Phase 16 | Planned |

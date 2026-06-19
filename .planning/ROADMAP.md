@@ -33,7 +33,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
 - [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
-- [ ] **Phase 15.2: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
+- [ ] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (INSERTED)
+- [ ] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -633,10 +634,54 @@ Plans:
 
 - [x] 15.1-06-PLAN.md - Add full import-edit-play-save-reopen-export user-chain gate and source guards
 
-### Phase 15.2: P0 Jianying-Style Production UI Convergence (INSERTED)
+### Phase 15.2: P0 Real GPU Realtime Compositor Closure (INSERTED)
+
+**Goal**: Make desktop realtime preview represent the actual edited timeline through the render-graph GPU compositor for mainstream editing behavior. Single-video native player presentation, first-frame snapshots, PNG/FFmpeg artifacts, mock/offscreen displays, CPU-only probes, and fallback ladders must not count as product success.
+**Depends on**: Phase 15.1
+**Requirements**: P0-GPU-01, P0-GPU-02, P0-GPU-03, P0-GPU-04, P0-GPU-05, TEST-E2E-01, TEST-E2E-02, NO-FALLBACK-01
+**Success Criteria** (what must be TRUE):
+
+  1. Desktop playback uses a render-graph compositor presentation path for supported timelines; `AVPlayerLayer`/native single-video playback is not labeled or accepted as GPU composition success.
+  2. Importing material, dragging it to the timeline, pressing play, pausing, seeking, scrubbing, splitting, trimming, moving, deleting, and undoing/redoing are verified through Playwright as normal user actions, not only unit-level contracts.
+  3. Supported mainstream timeline composition includes video/image layers, text overlays with the bundled font registry, basic audio playback/mix state, layer ordering, fit/fill/stretch, position, scale, rotation, opacity, crop where exposed, and selected keyframe-sampled visual state.
+  4. The preview image changes because the compositor output changes as timeline time advances; playhead movement, DOM overlays, synthetic colors, first-frame snapshots, decoded CPU hashes, or cached artifacts cannot satisfy E2E evidence.
+  5. Product UI does not expose unsupported mainstream editing controls as usable. Anything visible and clickable in default production UI must either work end to end in this phase or be hidden/gated until implemented.
+  6. The same draft semantics drive preview and export for the supported subset; save/reopen/export parity is tested with repo-owned video, image, text, and audio fixtures.
+  7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
+  8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
+
+**Plans:** 6 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 15.2-01-PLAN.md - Make product compositor evidence honest and reject native-video/fallback success
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15.2-02-PLAN.md - Implement the supported render-graph GPU compositor visual subset
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 15.2-03-PLAN.md - Feed real imported material frames and audio state into realtime preview
+
+**Wave 4** *(blocked on Waves 2-3 completion)*
+
+- [ ] 15.2-04-PLAN.md - Connect compositor output to the desktop preview host
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
+
+**Wave 6** *(blocked on Waves 1-5 completion)*
+
+- [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
+
+### Phase 15.3: P0 Jianying-Style Production UI Convergence (INSERTED)
 
 **Goal**: Converge the desktop workspace from an engineering/debug console into a Jianying-style production editor UI while keeping the product feature set smaller: default UI shows editing controls only, export is a right-side/top modal flow, and diagnostics stay behind developer mode.
-**Depends on**: Phase 15.1
+**Depends on**: Phase 15.2
 **Requirements**: P0-UI-01, P0-UI-02, P0-UI-03, P0-UI-04, P0-UI-05, P0-UI-06
 **Success Criteria** (what must be TRUE):
 
@@ -648,17 +693,18 @@ Plans:
   6. Timeline defaults to editor interactions: drag move, edge trim, draggable playhead, undo/redo, split, delete, snapping, add-track, and zoom; numeric move/trim inputs are not default toolbar controls.
   7. Right inspector is contextual: unselected draft/canvas parameters, selected video/image visual controls, selected text controls, and selected audio controls; developer details are hidden unless developer mode is enabled.
   8. Regression tests compare against `docs/ui-reference/jianying-pro/screenshots/` for layout/information hierarchy and assert 1280x800 and 1120x720 stability with no debug copy in default mode.
+  9. New production UI icons are selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets before use unless no suitable icon exists.
 
 **Plans:** 0 plans
 
 Plans:
 
-- [ ] TBD (run $gsd-plan-phase 15.2 to break down)
+- [ ] TBD (run $gsd-plan-phase 15.3 to break down)
 
 ### Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry
 
 **Goal**: Add a production job scheduler that isolates preview, decode, cache, IO, export, and analysis work while aligning all time-sensitive jobs to the shared timeline clock.
-**Depends on**: Phase 15.2
+**Depends on**: Phase 15.3
 **Requirements**: SCHED-01, SCHED-02, SCHED-03, SCHED-04
 **Success Criteria** (what must be TRUE):
 
@@ -672,7 +718,7 @@ Plans:
 
 Plans:
 
-- [ ] TBD - Plan after Phase 15.2 completion
+- [ ] TBD - Plan after Phase 15.3 completion
 
 ### Phase 17: Mobile/Server Binding Architecture And Runtime Ports
 
