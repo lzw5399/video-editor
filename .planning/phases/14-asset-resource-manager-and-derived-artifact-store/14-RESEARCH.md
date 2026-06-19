@@ -329,25 +329,22 @@ artifact_store.mark_dirty_by_dependencies(
 | A1 | Add new crates `artifact_store` and `asset_resource_manager` instead of folding all logic into `project_store` or `preview_service`. | Summary / Architecture Patterns | Planner may need to rename or collapse crates to match owner preference. |
 | A2 | Use BLAKE3 rather than SHA-256 for source/blob fingerprints. | Standard Stack | Remote/server sync might require SHA-256 for third-party interoperability. |
 | A3 | Use `fs2` as optional advisory lock for GC/compaction. | Standard Stack | If multi-process project opening is out of scope, this dependency may be unnecessary. |
-| A4 | Implement minimal dedicated artifact worker traits in Phase 14 and defer full priority scheduling to Phase 16. | Common Pitfalls | ASSET-04 may require more production scheduling behavior than planned. |
+| A4 | Implement actual Rust-owned proxy, thumbnail, and waveform generation facades/workers in Phase 14, while deferring full priority scheduling/backpressure to Phase 16. | Common Pitfalls / Plan checker resolution | If Phase 14 only persists job rows, ASSET-04 is not actually satisfied. |
 | A5 | Define sync manifests in SQLite/JSON without implementing upload/download. | Phase Requirements / Architecture Patterns | Later server rendering may need a richer manifest contract. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the artifact store be one new crate or split into `artifact_store` plus `asset_resource_manager`?**
    - What we know: the current workspace has clear service crates, and no artifact-store crate exists. [VERIFIED: Cargo.toml]
-   - What's unclear: whether maintainers prefer fewer crates for Phase 14. [ASSUMED]
-   - Recommendation: plan two crates only if dependency direction stays acyclic; otherwise start with one `artifact_store` crate and modules. [ASSUMED]
+   - RESOLVED: Phase 14 starts with one `artifact_store` crate and modules for schema, paths, blob store, resource index, dependencies, invalidation, generation, jobs, GC, quota, and manifest. A separate `asset_resource_manager` crate is deferred unless a later phase proves a clear acyclic boundary is needed. [VERIFIED: 14-CONTEXT.md D-01..D-10; 14-PATTERNS.md]
 
 2. **Should source fingerprints hash full media bytes immediately or use lazy/fast-path hashing?**
    - What we know: BLAKE3 supports streaming readers and file-oriented APIs. [CITED: docs.rs/blake3]
-   - What's unclear: target performance budgets for very large media before Phase 16 telemetry. [ASSUMED]
-   - Recommendation: store full BLAKE3 for generated artifacts and source files when generating proxies/waveforms; allow mtime/size fast-path only when tests prove stale reuse is impossible. [ASSUMED]
+   - RESOLVED: Artifact validity depends on full BLAKE3 source/blob fingerprints when generation touches the source or writes a blob. Size/mtime may be stored as diagnostic or fast pre-check metadata, but must not be the sole validity proof for reusing proxy, thumbnail, waveform, preview, graph, or sync-manifest artifacts. [CITED: docs.rs/blake3; VERIFIED: 14-CONTEXT.md D-03, D-08]
 
 3. **How much UI should Phase 14 expose?**
    - What we know: Phase 14 has `UI hint: yes`, and the current UI already has material/preview status surfaces. [VERIFIED: .planning/ROADMAP.md; apps/desktop-electron/src/renderer/App.tsx]
-   - What's unclear: whether GC/quota controls should be visible now. [ASSUMED]
-   - Recommendation: expose minimal Chinese status badges for material artifact readiness, generation/cancel state, and storage quota diagnostics; defer advanced cache management UI. [ASSUMED]
+   - RESOLVED: Phase 14 exposes only the production resource UI defined in `14-UI-SPEC.md`: compact material resource status chips, a `资源任务` strip, preview/timeline safe status, and one quiet `资源维护` section with quota/GC summary and `清理缓存`. Debug-heavy panels, SQLite paths, absolute cache roots, raw fingerprints, graph keys, dirty ranges, FFmpeg/probe internals, blob folders, tombstones, and advanced cache/file browsing UI are out of scope. [VERIFIED: 14-UI-SPEC.md; 14-CONTEXT.md D-09, D-10]
 
 ## Environment Availability
 
