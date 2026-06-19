@@ -3,8 +3,8 @@ use draft_model::{
     Segment, SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
 };
 use realtime_preview_runtime::{
-    RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
     prepare_realtime_preview_graph, realtime_preview_parity_diagnostics,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
 };
 use render_graph::OutputDimensions;
 
@@ -19,6 +19,27 @@ fn realtime_preview_parity_supported_graph_has_no_export_divergence() {
 
     let report =
         RealtimePreviewCapabilityClassifier::supported_for_tests().classify(&prepared.graph);
+    let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
+
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
+    assert_eq!(
+        serde_json::to_value(&diagnostics).expect("diagnostics serialize"),
+        serde_json::json!([])
+    );
+}
+
+#[test]
+fn realtime_preview_parity_baseline_video_image_text_and_audio_has_no_fallback_divergence() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: baseline_video_image_text_audio_draft(),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("baseline draft prepares graph");
+
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_gpu_text_parity(true)
+        .classify(&prepared.graph);
     let diagnostics = realtime_preview_parity_diagnostics(&prepared.graph, &report);
 
     assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
@@ -86,6 +107,59 @@ fn supported_video_draft() -> Draft {
     draft
 }
 
+fn baseline_video_image_text_audio_draft() -> Draft {
+    let mut draft = supported_video_draft();
+    draft.materials.push(image_material());
+    draft.materials.push(audio_material());
+    draft.materials.push(Material::new(
+        "text-material",
+        MaterialKind::Text,
+        "text://title",
+        "text-material",
+    ));
+
+    let mut image_track = Track::new("image-track", TrackKind::Video, "Image");
+    image_track.segments.push(Segment::new(
+        "image-a",
+        "image-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    ));
+    draft.tracks.push(image_track);
+
+    let mut text = Segment::new(
+        "text-a",
+        "text-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    );
+    text.text = Some(TextSegment {
+        content: "标题".to_owned(),
+        source: Default::default(),
+        style: TextStyle::default_title(),
+        text_box: Default::default(),
+        layout_region: Default::default(),
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
+    });
+
+    let mut text_track = Track::new("text-track", TrackKind::Text, "Text");
+    text_track.segments.push(text);
+    draft.tracks.push(text_track);
+
+    let mut audio_track = Track::new("audio-track", TrackKind::Audio, "Audio");
+    audio_track.segments.push(Segment::new(
+        "audio-a",
+        "audio-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    ));
+    draft.tracks.push(audio_track);
+
+    draft
+}
+
 fn divergent_text_and_effect_draft() -> Draft {
     let mut draft = supported_video_draft();
     draft.materials.push(Material::new(
@@ -136,6 +210,48 @@ fn video_material() -> Material {
         height: Some(1080),
         frame_rate: Some(RationalFrameRate::new(30, 1)),
         has_video: true,
+        has_audio: true,
+        audio_sample_rate: Some(48_000),
+        audio_channels: Some(2),
+        probe_error: None,
+    };
+    material
+}
+
+fn image_material() -> Material {
+    let mut material = Material::new(
+        "image-material",
+        MaterialKind::Image,
+        "file://poster.png",
+        "image-material",
+    );
+    material.metadata = MaterialMetadata {
+        duration: Some(Microseconds::new(1_000_000)),
+        width: Some(1080),
+        height: Some(1080),
+        frame_rate: None,
+        has_video: true,
+        has_audio: false,
+        audio_sample_rate: None,
+        audio_channels: None,
+        probe_error: None,
+    };
+    material
+}
+
+fn audio_material() -> Material {
+    let mut material = Material::new(
+        "audio-material",
+        MaterialKind::Audio,
+        "file://music.m4a",
+        "audio-material",
+    );
+    material.metadata = MaterialMetadata {
+        duration: Some(Microseconds::new(1_000_000)),
+        width: None,
+        height: None,
+        frame_rate: None,
+        has_video: false,
         has_audio: true,
         audio_sample_rate: Some(48_000),
         audio_channels: Some(2),

@@ -8,6 +8,7 @@ import {
   formatRealtimePreviewBackendLabel,
   formatRealtimePreviewFallbackReason,
   summarizeRealtimePreviewDisplay,
+  summarizeRealtimePreviewProductDisplay,
   type RealtimePreviewDisplayModel
 } from "../src/renderer/viewModel";
 
@@ -1290,11 +1291,52 @@ test("实时预览 fallback artifact appears only when Rust reports fallback", a
 
   try {
     await expectNativePreviewHostLayout(fallback.app, fallback.page, 1280, 800);
-    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("备用产物：媒体运行环境");
-    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("降级 1");
-    await expect(fallback.page.getByLabel("实时预览备用产物")).toContainText("已生成媒体备用产物");
+    await expect(fallback.page.getByLabel("实时预览状态")).toContainText("实时预览受限");
+    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("当前画面暂不能实时播放");
+    await expect(fallback.page.getByLabel("实时预览数据")).not.toContainText("备用产物：媒体运行环境");
+    await expect(fallback.page.getByLabel("实时预览受限")).toContainText("当前画面暂不能实时播放");
+    await expect(fallback.page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
     await fallback.app.close();
+  }
+});
+
+test("baseline preview capability productizes realtime fallback without fake success copy", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览受限");
+    await expect(page.getByLabel("实时预览数据")).toContainText("实时预览受限");
+    await expect(page.getByLabel("实时预览数据")).toContainText("当前画面暂不能实时播放");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("已生成媒体备用产物");
+    await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
+    await expect(page.getByLabel("实时预览受限")).toContainText("当前画面暂不能实时播放");
+  } finally {
+    await app.close();
+  }
+});
+
+test("developer diagnostics keep realtime fallback backend details available", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
+    env: {
+      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
+    }
+  });
+
+  try {
+    await expectNativePreviewHostLayout(app, page, 1280, 800);
+    await expect(page.getByLabel("实时预览数据")).toContainText("备用产物：媒体运行环境");
+    await expect(page.getByLabel("实时预览数据")).toContainText("降级 1");
+    await expect(page.getByLabel("实时预览备用产物")).toContainText("已生成媒体备用产物");
+  } finally {
+    await app.close();
   }
 });
 
@@ -1421,6 +1463,7 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("重复 1");
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("缓存 2");
   expect(summarizeRealtimePreviewDisplay(fallback)).toContain("当前请求已取消");
+  expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("实时预览受限：当前画面暂不能实时播放");
   expect(fallback.fallbackArtifactVisible).toBe(true);
 });
 

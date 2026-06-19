@@ -1,15 +1,16 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    Draft, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
-    KeyframeValue, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate,
-    Segment, SegmentBlendMode, SegmentFitMode, SegmentMask, SourceTimerange, TargetTimerange,
-    TextSegment, TextStyle, Track, TrackKind, Transition,
+    AudioEffectSlot, AudioEffectSlotKind, Draft, Filter, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    MaterialMetadata, Microseconds, RationalFrameRate, Segment, SegmentBlendMode, SegmentFitMode,
+    SegmentMask, SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
+    Transition,
 };
 use realtime_preview_runtime::{
-    RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
-    RealtimePreviewGraphInput, RealtimePreviewGraphSupport, RealtimePreviewSupport,
-    prepare_realtime_preview_graph,
+    prepare_realtime_preview_graph, RealtimePreviewCapabilityClassifier,
+    RealtimePreviewDiagnosticDomain, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
+    RealtimePreviewSupport,
 };
 use render_graph::OutputDimensions;
 
@@ -73,6 +74,69 @@ fn capability_matrix_marks_text_unsupported_when_gpu_text_parity_is_not_enabled(
         }
     );
     assert!(text.fallback_used);
+}
+
+#[test]
+fn capability_matrix_supports_baseline_video_image_text_and_audio_when_text_parity_is_proven() {
+    let report = classify_draft(
+        baseline_video_image_text_audio_draft(),
+        RealtimePreviewCapabilityClassifier::supported_for_tests().with_gpu_text_parity(true),
+    );
+
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
+    for material_id in ["video-material", "image-material"] {
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.domain == RealtimePreviewDiagnosticDomain::MaterialFrame
+                && diagnostic.entity_id.as_deref() == Some(material_id)
+                && diagnostic.support == RealtimePreviewSupport::Supported
+                && !diagnostic.fallback_used
+        }));
+    }
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.domain == RealtimePreviewDiagnosticDomain::Text
+            && diagnostic.entity_id.as_deref() == Some("text-a")
+            && diagnostic.support == RealtimePreviewSupport::Supported
+            && !diagnostic.fallback_used
+    }));
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.domain == RealtimePreviewDiagnosticDomain::Audio
+            && diagnostic.entity_id.as_deref() == Some("audio-a")
+            && diagnostic.support == RealtimePreviewSupport::Supported
+            && !diagnostic.fallback_used
+    }));
+}
+
+#[test]
+fn capability_matrix_rejects_unsupported_audio_effects_for_baseline_playback() {
+    let mut draft = audio_draft();
+    draft.tracks[0].segments[0]
+        .audio
+        .effect_slots
+        .push(AudioEffectSlot {
+            slot_id: "audio-effect-1".to_owned(),
+            kind: AudioEffectSlotKind::Unsupported {
+                name: "robot-voice".to_owned(),
+                external_ref: None,
+            },
+            enabled: true,
+        });
+
+    let report = classify_draft(
+        draft,
+        RealtimePreviewCapabilityClassifier::supported_for_tests(),
+    );
+
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.domain == RealtimePreviewDiagnosticDomain::Audio
+            && diagnostic.entity_id.as_deref() == Some("audio-a")
+            && matches!(
+                diagnostic.support,
+                RealtimePreviewSupport::Unsupported { ref reason }
+                    if reason.contains("robot-voice")
+            )
+            && diagnostic.fallback_used
+    }));
 }
 
 #[test]
@@ -219,6 +283,88 @@ fn text_draft() -> Draft {
 
     let mut track = Track::new("text-track", TrackKind::Text, "Text");
     track.segments.push(segment);
+    draft.tracks.push(track);
+    draft
+}
+
+fn baseline_video_image_text_audio_draft() -> Draft {
+    let mut draft = base_video_draft();
+
+    let mut image = image_draft();
+    draft.materials.append(&mut image.materials);
+    draft.tracks.append(&mut image.tracks);
+
+    let mut text = text_draft();
+    draft.materials.append(&mut text.materials);
+    draft.tracks.append(&mut text.tracks);
+
+    let mut audio = audio_draft();
+    draft.materials.append(&mut audio.materials);
+    draft.tracks.append(&mut audio.tracks);
+
+    draft
+}
+
+fn image_draft() -> Draft {
+    let mut draft = Draft::new("capability-image", "Capability image");
+    let mut material = Material::new(
+        "image-material",
+        MaterialKind::Image,
+        "file://poster.png",
+        "image-material",
+    );
+    material.metadata = MaterialMetadata {
+        duration: Some(Microseconds::new(1_000_000)),
+        width: Some(1080),
+        height: Some(1080),
+        frame_rate: None,
+        has_video: true,
+        has_audio: false,
+        audio_sample_rate: None,
+        audio_channels: None,
+        probe_error: None,
+    };
+    draft.materials.push(material);
+
+    let mut track = Track::new("image-track", TrackKind::Video, "Image");
+    track.segments.push(Segment::new(
+        "image-a",
+        "image-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    ));
+    draft.tracks.push(track);
+    draft
+}
+
+fn audio_draft() -> Draft {
+    let mut draft = Draft::new("capability-audio", "Capability audio");
+    let mut material = Material::new(
+        "audio-material",
+        MaterialKind::Audio,
+        "file://music.m4a",
+        "audio-material",
+    );
+    material.metadata = MaterialMetadata {
+        duration: Some(Microseconds::new(1_000_000)),
+        width: None,
+        height: None,
+        frame_rate: None,
+        has_video: false,
+        has_audio: true,
+        audio_sample_rate: Some(48_000),
+        audio_channels: Some(2),
+        probe_error: None,
+    };
+    draft.materials.push(material);
+
+    let mut track = Track::new("audio-track", TrackKind::Audio, "Audio");
+    track.segments.push(Segment::new(
+        "audio-a",
+        "audio-material",
+        SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+    ));
     draft.tracks.push(track);
     draft
 }
