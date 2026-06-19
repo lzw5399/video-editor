@@ -375,17 +375,6 @@ export function PreviewMonitor({
           </div>
         ) : null}
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
-          {nativeHostState.frameDisplay !== null ? (
-            <div
-              className="preview-native-host-frame"
-              aria-label="实时预览帧"
-              data-frame-token={nativeHostState.frameDisplay.frameToken}
-              data-target-time-microseconds={nativeHostState.frameDisplay.targetTimeMicroseconds}
-              style={{
-                background: `linear-gradient(135deg, ${nativeHostState.frameDisplay.dominantColor}, ${nativeHostState.frameDisplay.accentColor})`
-              }}
-            />
-          ) : null}
           <div className="preview-native-host-readout">
             <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
             <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>

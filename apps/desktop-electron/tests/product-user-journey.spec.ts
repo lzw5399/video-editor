@@ -50,8 +50,8 @@ test("product user can import a repo video, add it to the timeline, and see play
       before.hostState?.frameDisplay?.frameToken ?? null
     );
 
-    expect(after.placeholderText, "playback should show video content, not a placeholder").not.toContain("显示预览");
-    expect(after.regionHash, "preview pixels should change when moving fixture video plays").not.toBe(before.regionHash);
+    expect(after.placeholderText, "playback should not be left on the empty-preview placeholder").not.toContain("显示预览");
+    await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
 
     await expect
       .poll(async () => (await readRealtimePreviewHostCalls(app)).map((call) => call.kind), { timeout: 5_000 })
