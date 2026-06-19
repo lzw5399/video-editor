@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 5/8 plans executed
+**Plans:** 6/9 plans executed
 
 Plans:
 
@@ -676,13 +676,17 @@ Plans:
 
 **Wave 6** *(blocked on Waves 4-5 completion)*
 
-- [ ] 15.2-04-PLAN.md - Connect compositor output to the desktop preview host
+- [x] 15.2-04-PLAN.md - Add NV12 external texture sampling and fail closed without compositor scheduler evidence
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
+- [ ] 15.2-04A-PLAN.md - Add Rust-owned realtime playback scheduler for desktop compositor presentation
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
 
-**Wave 8** *(blocked on Waves 1-7 completion)*
+**Wave 9** *(blocked on Waves 1-8 completion)*
 
 - [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
