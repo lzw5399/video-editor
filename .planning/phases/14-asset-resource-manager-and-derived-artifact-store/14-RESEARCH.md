@@ -31,7 +31,7 @@
 
 Phase 14 should add a Rust-owned derived-artifact subsystem without changing the canonical draft schema. Existing `project_store` writes and opens `.veproj/project.json`, validates material URIs, and tests that derived fields such as preview caches are rejected from the draft. [VERIFIED: crates/project_store/src/bundle.rs; crates/project_store/tests/project_bundle.rs] Existing Phase 13 code already emits `CommandDelta`, `DirtyRange`, `DirtyDomain`, `RenderGraphSnapshot`, graph node fingerprints, `PreviewInvalidationRequest`, and `ExportPrepDirtyFacts`; Phase 14 should persist and query those facts rather than recomputing them in Electron. [VERIFIED: crates/draft_model/src/delta.rs; crates/render_graph/src/fingerprint.rs; crates/preview_service/src/cache.rs]
 
-The standard implementation should use a new Rust workspace crate, `artifact_store`, for SQLite schema/migrations/blob paths/GC and a service layer, `asset_resource_manager`, for source-resource indexing, source fingerprinting, generation state, invalidation, and manifests. [ASSUMED] `preview_service` should become a consumer of the store for preview artifacts, while `bindings_node` exposes generated transport commands for status and maintenance only. [VERIFIED: current preview_service stores artifacts only by filesystem path; crates/preview_service/src/service.rs]
+The standard implementation should use a new Rust workspace crate, `artifact_store`, with internal modules for SQLite schema/migrations, blob paths, source-resource indexing, source fingerprinting, actual proxy/thumbnail/waveform generation, job state, invalidation, GC, quota, and manifests. A separate `asset_resource_manager` crate is deferred unless a later phase proves a clean acyclic boundary is needed. [RESOLVED: 14-CONTEXT.md; VERIFIED: current preview_service stores artifacts only by filesystem path; crates/preview_service/src/service.rs] `preview_service` should become a consumer of the store for preview artifacts, while `bindings_node` exposes generated transport commands for status and maintenance only. [VERIFIED: crates/preview_service/src/service.rs]
 
 **Primary recommendation:** Use `rusqlite` for `.veproj/derived/artifact-store.sqlite`, `blake3` for source/blob fingerprints, and project-relative blob paths under `.veproj/derived/blobs`, with SQLite rows as the source of truth for derived artifact validity. [VERIFIED: crates.io/docs.rs + slopcheck; CITED: docs.rs/rusqlite; CITED: docs.rs/blake3]
 
@@ -130,8 +130,7 @@ Accepted Rust command / material relink / runtime capability change
 
 ```text
 crates/
-├── artifact_store/          # SQLite schema, migrations, blob paths, artifact rows, GC primitives
-├── asset_resource_manager/  # material/font/effect resource indexing, generation orchestration, invalidation
+├── artifact_store/          # SQLite schema, migrations, blob paths, resource indexing, generation, invalidation, GC, quota, manifest
 ├── preview_service/         # consume artifact_store for preview cache rows instead of path-only cache entries
 ├── project_store/           # bundle root, project.json, path classification; no SQLite or generation semantics
 ├── draft_model/             # generated transport/status contracts only; Draft remains semantic-only
@@ -326,7 +325,7 @@ artifact_store.mark_dirty_by_dependencies(
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Add new crates `artifact_store` and `asset_resource_manager` instead of folding all logic into `project_store` or `preview_service`. | Summary / Architecture Patterns | Planner may need to rename or collapse crates to match owner preference. |
+| A1 | Use one new `artifact_store` crate with internal resource/generation/invalidation modules; defer a separate `asset_resource_manager` crate unless a later phase proves the boundary is needed. | Summary / Architecture Patterns / Resolved Questions | Planner and executor should not create a second crate in Phase 14 unless the plan is explicitly revised. |
 | A2 | Use BLAKE3 rather than SHA-256 for source/blob fingerprints. | Standard Stack | Remote/server sync might require SHA-256 for third-party interoperability. |
 | A3 | Use `fs2` as optional advisory lock for GC/compaction. | Standard Stack | If multi-process project opening is out of scope, this dependency may be unnecessary. |
 | A4 | Implement actual Rust-owned proxy, thumbnail, and waveform generation facades/workers in Phase 14, while deferring full priority scheduling/backpressure to Phase 16. | Common Pitfalls / Plan checker resolution | If Phase 14 only persists job rows, ASSET-04 is not actually satisfied. |
@@ -380,8 +379,8 @@ artifact_store.mark_dirty_by_dependencies(
 |--------|----------|-----------|-------------------|--------------|
 | ASSET-01 | Material/font/effect/proxy/thumb/waveform resources get stable IDs and project-relative refs | Rust unit/integration | `cargo test -p artifact_store resource_index -- --nocapture` | No, Wave 0 |
 | ASSET-02 | SQLite schema tracks versions, fingerprints, dependencies, dirty state, status | Rust integration | `cargo test -p artifact_store sqlite_schema -- --nocapture` | No, Wave 0 |
-| ASSET-03 | Replace/relink/rename/delete invalidates exactly affected artifact rows | Rust integration | `cargo test -p asset_resource_manager invalidation -- --nocapture` | No, Wave 0 |
-| ASSET-04 | Generation jobs are chunked, resumable, cancellable, and isolated | Rust integration | `cargo test -p asset_resource_manager artifact_jobs -- --nocapture` | No, Wave 0 |
+| ASSET-03 | Replace/relink/rename/delete invalidates exactly affected artifact rows | Rust integration | `cargo test -p artifact_store invalidation -- --nocapture` | No, Wave 0 |
+| ASSET-04 | Proxy, thumbnail, and waveform generation is chunked, resumable, cancellable, isolated, and produces BlobStore-backed derived artifacts | Rust integration | `cargo test -p artifact_store artifact_jobs -- --nocapture && cargo test -p artifact_store artifact_generation -- --nocapture` | No, Wave 0 |
 | ASSET-05 | GC/quota/sync manifest definitions preserve live artifacts and delete only safe blobs | Rust integration | `cargo test -p artifact_store gc_quota_manifest -- --nocapture` | No, Wave 0 |
 
 ### Sampling Rate
@@ -392,8 +391,7 @@ artifact_store.mark_dirty_by_dependencies(
 
 ### Wave 0 Gaps
 
-- [ ] `crates/artifact_store/` - SQLite schema, connection PRAGMAs, blob paths, source/blob fingerprint helpers.
-- [ ] `crates/asset_resource_manager/` or equivalent module - resource indexing, invalidation, job state, generation facade.
+- [ ] `crates/artifact_store/` - SQLite schema, connection PRAGMAs, blob paths, source/blob fingerprint helpers, resource indexing, invalidation, job state, actual proxy/thumbnail/waveform generation facades, GC/quota/manifest modules.
 - [ ] `scripts/phase14-source-guards.sh` - reject renderer-owned artifact store, fingerprints, cache keys, `.veproj/derived`, SQLite, FFmpeg args, and generated drift.
 - [ ] `package.json` scripts `test:phase14-rust`, `test:phase14-source-guards`, `test:phase14`.
 - [ ] Generated contract tests if new binding-visible artifact status/maintenance commands are added.
