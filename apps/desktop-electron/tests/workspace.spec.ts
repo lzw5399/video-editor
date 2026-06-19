@@ -1028,6 +1028,80 @@ test("音频预览 controls send generated command envelopes and preserve state 
   }
 });
 
+test("音频预览 panel and inspector expose production audio controls through updateSegmentAudio", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
+    const audioPanel = page.getByRole("region", { name: "素材面板" });
+    for (const label of ["音量", "声像", "淡入", "淡出", "轨道静音", "输出设备"]) {
+      await expect(audioPanel.getByText(label, { exact: true }).first()).toBeVisible();
+    }
+    await expect(audioPanel.getByText("毫音量")).toHaveCount(0);
+    await expect(audioPanel.getByRole("button", { name: "应用音频" })).toBeVisible();
+
+    await page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().click();
+    await page.getByRole("tab", { name: "音频" }).click();
+    const audioInspector = page.getByLabel("音频参数");
+    for (const label of ["音量", "声像", "淡入", "淡出", "轨道静音"]) {
+      await expect(audioInspector.getByText(label, { exact: true }).first()).toBeVisible();
+    }
+    await expect(audioInspector.getByText("毫音量")).toHaveCount(0);
+
+    await audioInspector.getByRole("slider", { name: "音量" }).fill("120");
+    await audioInspector.getByRole("slider", { name: "声像" }).fill("-20");
+    await audioInspector.getByRole("spinbutton", { name: "淡入" }).fill("300000");
+    await audioInspector.getByRole("spinbutton", { name: "淡出" }).fill("500000");
+    await audioInspector.getByRole("button", { name: "应用音频" }).click();
+    await expectCommandCall(app, "updateSegmentAudio");
+
+    const calls = await readExecuteCommandCalls(app);
+    expect(calls.map((call) => call.command)).toContain("updateSegmentAudio");
+  } finally {
+    await app.close();
+  }
+});
+
+test("波形 display uses Rust-shaped peak payloads and keeps fallback states stable", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    const audioSegment = page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first();
+    await expect(audioSegment.locator('[aria-label="音频波形"]')).toBeVisible();
+    await expect(audioSegment.locator('[aria-label="音频波形"] .audio-waveform-bar')).toHaveCount(16);
+    await expect(page.getByText("波形就绪")).toBeVisible();
+    await expectCommandCall(app, "getWaveformDisplayPeaks");
+    await expectCommandCall(app, "refreshWaveformStatus");
+
+    const waveformBox = await expectStableBox(audioSegment.locator('[aria-label="音频波形"]'), "音频波形");
+    expect(waveformBox.height, "音频波形固定 14px 高").toBeLessThanOrEqual(14);
+    await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
+    await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
+  } finally {
+    await app.close();
+  }
+
+  const pending = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "pending" } });
+  try {
+    await expect(pending.page.getByText("波形生成中")).toBeVisible();
+    await expect(pending.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();
+  } finally {
+    await pending.app.close();
+  }
+
+  const failed = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "failed" } });
+  try {
+    await expect(failed.page.getByText("波形生成失败")).toBeVisible();
+    await expect(failed.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();
+  } finally {
+    await failed.app.close();
+  }
+});
+
 test("native preview host bridge keeps handles in main and exposes narrow telemetry APIs", async () => {
   const { app, page } = await launchWorkspaceApp();
 
