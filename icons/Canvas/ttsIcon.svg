@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+    <g fill="none" fill-rule="evenodd">
+        <g stroke="#FFF" stroke-width="1.08">
+            <g>
+                <g>
+                    <path stroke-linejoin="round" d="M2.73 2.897h8.336c.553 0 1 .448 1 1v5.979c0 .552-.447 1-1 1h-4.21 0l-1.243 1.067-1.435-1.067H2.73c-.552 0-1-.448-1-1V3.897c0-.552.448-1 1-1z" transform="translate(-59 -96) translate(51 91) translate(8 5) matrix(-1 0 0 1 13.796 0)"/>
+                    <g fill-rule="nonzero" transform="translate(-59 -96) translate(51 91) translate(8 5) translate(7.091 5.638)">
+                        <circle cx="1.508" cy="1.508" r="1"/>
+                        <path stroke-linejoin="bevel" d="M3.015 0L3.015 3.015"/>
+                    </g>
+                    <g fill-rule="nonzero" stroke-linejoin="bevel">
+                        <path d="M.232 4.363L1.938.274 3.639 4.363M1.054 3.283L3.133 3.283" transform="translate(-59 -96) translate(51 91) translate(8 5) translate(3.1 4.268)"/>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

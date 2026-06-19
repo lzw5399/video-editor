@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+    <g fill="none" fill-rule="evenodd" stroke-linejoin="bevel">
+        <g fill-rule="nonzero" stroke="#FFF" stroke-width="1.1">
+            <g>
+                <g>
+                    <g>
+                        <path d="M8 8.732L5.18 10.2l.539-3.106-2.281-2.2L6.59 4.44 8 1.614 9.41 4.44l3.152.453-2.281 2.2.538 3.106L8 8.732zm.086 1.322v2.795" transform="translate(-343 -580) translate(120.49 575) translate(214.51) translate(7 5) rotate(-40 8 7.25)"/>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

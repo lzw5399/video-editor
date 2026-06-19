@@ -1,0 +1,16 @@
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_b)">
+<path d="M2.10406 10.1821H11.7658" stroke="#FAFAFA" stroke-width="1.1" stroke-linejoin="bevel"/>
+<path d="M2.10406 7.46826H7.40482" stroke="#FAFAFA" stroke-width="1.1" stroke-linejoin="bevel"/>
+<path d="M2.10406 4.37158H7.40482" stroke="#FAFAFA" stroke-width="1.1" stroke-linejoin="bevel"/>
+<path d="M11.3682 4.16846L9.6241 5.91253L11.3682 7.6566" stroke="#FAFAFA" stroke-width="1.1" stroke-linejoin="bevel"/>
+</g>
+<defs>
+<filter id="filter0_b" x="-20" y="-20" width="54" height="54" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feGaussianBlur in="BackgroundImage" stdDeviation="10"/>
+<feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_backgroundBlur" result="shape"/>
+</filter>
+</defs>
+</svg>

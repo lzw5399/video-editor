@@ -1,0 +1,14 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 14H9.55556" stroke="white"/>
+<path d="M17 14L19 14" stroke="white"/>
+<line x1="3" y1="6.38889" x2="18.8889" y2="6.38889" stroke="white" stroke-width="1.22222"/>
+<path d="M19 5.77783L19 14.5001" stroke="white"/>
+<line x1="6.38574" y1="7" x2="6.38574" y2="9.44444" stroke="white"/>
+<line x1="3.5" y1="7" x2="3.5" y2="14.3333" stroke="white"/>
+<line x1="8.83008" y1="7" x2="8.83008" y2="8.22222" stroke="white"/>
+<line x1="13.719" y1="7" x2="13.719" y2="8.22222" stroke="white"/>
+<line x1="11.2745" y1="7" x2="11.2745" y2="9.44444" stroke="white"/>
+<line x1="16.1635" y1="7" x2="16.1635" y2="9.44444" stroke="white"/>
+<circle cx="13.493" cy="14.1629" r="3.4962" stroke="#FAFAFA" stroke-linejoin="bevel"/>
+<path d="M15.8582 16.4929L17.8652 18.5" stroke="#FAFAFA" stroke-linejoin="bevel"/>
+</svg>
