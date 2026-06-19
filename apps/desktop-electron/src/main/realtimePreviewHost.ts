@@ -8,6 +8,7 @@ import {
   createRealtimePreviewSession,
   detachRealtimePreviewSurface,
   getRealtimePreviewTelemetry,
+  getRealtimePreviewPresentationState,
   nextRealtimePreviewCancellationToken,
   pauseRealtimePreview,
   playRealtimePreview,
@@ -19,6 +20,7 @@ import {
   type RealtimePreviewBackendUsed,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
+  type RealtimePreviewPresentationStateResponse,
   type RealtimePreviewSurfaceBounds,
   type RealtimePreviewSurfaceDescriptor,
   type RealtimePreviewTelemetryResponse
@@ -145,6 +147,7 @@ export class RealtimePreviewHost {
   private attached = false;
   private fallbackLabel: string | null = null;
   private telemetry: RealtimePreviewTelemetryResponse | null = null;
+  private presentationState: RealtimePreviewPresentationStateResponse | null = null;
   private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
@@ -241,7 +244,8 @@ export class RealtimePreviewHost {
       );
       const response = updateRealtimePreviewDraftSnapshot({
         sessionId: this.sessionId,
-        draft
+        draft,
+        ...(this.bundlePath === null ? {} : { bundlePath: this.bundlePath })
       });
       this.playbackGeneration = response.playbackGeneration;
       recordRealtimePreviewHostCall({
@@ -285,8 +289,11 @@ export class RealtimePreviewHost {
   }
 
   play(): RealtimePreviewHostDisplayState {
+    this.refreshPresentationState();
     if (!this.hasProductionCompositedPresenter()) {
-      this.fallbackLabel = "实时预览不可用：GPU 合成播放尚未接入";
+      this.fallbackLabel = this.presentationState?.unsupportedReason
+        ? `实时预览不可用：${this.presentationState.unsupportedReason.slice(0, 120)}`
+        : "实时预览不可用：GPU 合成播放尚未接入";
       recordRealtimePreviewHostCall({ kind: "playRejectedMissingCompositor" });
       this.refreshTelemetry();
       return this.state("实时预览不可用");
@@ -384,6 +391,13 @@ export class RealtimePreviewHost {
         ...bounds
       };
     }
+    if (kind === "macosNsView") {
+      return {
+        kind,
+        parentHandleHex: nativeParentHandleToHex(nativeHandle),
+        ...bounds
+      };
+    }
 
     return {
       kind,
@@ -397,8 +411,19 @@ export class RealtimePreviewHost {
       return;
     }
 
+    this.refreshPresentationState();
     this.telemetry = getRealtimePreviewTelemetry({ sessionId: this.sessionId });
     recordRealtimePreviewHostCall({ kind: "getTelemetry" });
+  }
+
+  private refreshPresentationState(): void {
+    if (this.sessionId === null) {
+      return;
+    }
+
+    this.presentationState = getRealtimePreviewPresentationState({ sessionId: this.sessionId });
+    this.lastContentEvidence = this.presentationState.evidence ?? null;
+    recordRealtimePreviewHostCall({ kind: "getPresentationState" });
   }
 
   private applySessionPlaybackCommand(
@@ -482,11 +507,11 @@ export class RealtimePreviewHost {
   }
 
   private hasProductionCompositedPresenter(): boolean {
-    return false;
+    return this.presentationState?.available === true;
   }
 
   private state(statusLabel: string): RealtimePreviewHostDisplayState {
-    const backend = this.lastFrame?.backend ?? "none";
+    const backend = this.presentationState?.backend === "gpu" ? "gpu" : this.lastFrame?.backend ?? "none";
     const fallbackReason = this.lastFrame?.fallback ?? null;
     return {
       ok: this.fallbackLabel === null,
@@ -580,6 +605,17 @@ function nativeParentHandleToNumber(handle: Buffer): number {
   const safeMask = BigInt(Number.MAX_SAFE_INTEGER);
   const safeValue = Number(value & safeMask);
   return safeValue === 0 ? 1 : safeValue;
+}
+
+function nativeParentHandleToHex(handle: Buffer): string {
+  if (handle.byteLength === 0) {
+    return "";
+  }
+
+  const padded = Buffer.alloc(8);
+  handle.copy(padded, 0, 0, Math.min(handle.byteLength, 8));
+  const value = padded.readBigUInt64LE(0);
+  return value.toString(16);
 }
 
 function attachFailureLabel(error: unknown): string {

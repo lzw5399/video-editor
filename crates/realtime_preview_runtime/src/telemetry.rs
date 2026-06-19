@@ -88,4 +88,20 @@ impl RealtimePreviewTelemetry {
             }
         }
     }
+
+    pub fn record_presented_output(
+        &mut self,
+        target_time: Microseconds,
+        generation: PlaybackGeneration,
+        render_duration_ms: u64,
+    ) {
+        self.target_time = target_time;
+        self.generation = generation;
+        self.queue_latency_ms = 0;
+        self.render_duration_ms = render_duration_ms;
+        self.presented_frame_count = self.presented_frame_count.saturating_add(1);
+        if self.first_frame_latency_ms.is_none() {
+            self.first_frame_latency_ms = Some(render_duration_ms);
+        }
+    }
 }

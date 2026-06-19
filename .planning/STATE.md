@@ -5,13 +5,13 @@ milestone_name: milestone
 status: planning
 stopped_at: Inserted Phase 15.1 and Phase 15.2 before Phase 16
 last_updated: "2026-06-19T17:16:59Z"
-last_activity: 2026-06-20 -- Completed Phase 15.1 Plan 05 Rust-owned multitrack commands and desktop controls
+last_activity: 2026-06-20 -- Completed Phase 15.1 Plan 06 full no-fallback user-chain verification and closed Phase 15.1
 progress:
   total_phases: 22
-  completed_phases: 17
-  total_plans: 112
-  completed_plans: 112
-  percent: 77
+  completed_phases: 18
+  total_plans: 113
+  completed_plans: 113
+  percent: 82
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 15.1 — P0 Basic Editing Chain Repair
+**Current focus:** Phase 15.2 — P0 Jianying-Style Production UI Convergence
 
 ## Current Position
 
-Phase: 15.1 (p0-basic-editing-chain-repair) — INSERTED
-Plan: 5 of 6
-Status: In progress — execute `$gsd-execute-phase 15.1` remaining plans
-Last activity: 2026-06-20 -- Completed Phase 15.1 Plan 05 Rust-owned multitrack commands and desktop controls
+Phase: 15.2 (p0-jianying-style-production-ui-convergence) — INSERTED
+Plan: not planned
+Status: Ready — run `$gsd-plan-phase 15.2` or `$gsd-execute-phase 15.2` after planning
+Last activity: 2026-06-20 -- Completed Phase 15.1 Plan 06 full no-fallback user-chain verification and closed Phase 15.1
 
-Progress: [████████░░] 83% for Phase 15.1
+Progress: Phase 15.1 complete; Phase 15.2 next
 
 ## Performance Metrics
 
@@ -171,6 +171,7 @@ Progress: [████████░░] 83% for Phase 15.1
 ### Roadmap Evolution
 
 - Phase 15.1 inserted after Phase 15 as urgent P0 work before Phase 16: P0 Basic Editing Chain Repair. (URGENT)
+- Phase 15.1 completed all six P0 repair plans, including product playback composited evidence, no-fallback guards, dev/packaged real workflow, and full Phase 15.1 verification. (URGENT)
 - Phase 15.1 planned as six executable P0 gates: realtime playback chain, baseline preview capability, bundled font registry, first-material canvas adaptation, multitrack commands, and full user-chain verification. (URGENT)
 - Phase 15.1 Plan 05 completed Rust-owned multitrack commands, Track.visible, target-track desktop controls, and a multitrack Playwright user flow. (URGENT)
 - Phase 15.1 Plan 04 completed Rust-owned first-material canvas adaptation, auto/manual canvas policy, default non-stretch fit mode, and a blank-draft portrait import E2E. (URGENT)

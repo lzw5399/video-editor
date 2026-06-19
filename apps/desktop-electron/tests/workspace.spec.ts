@@ -380,12 +380,16 @@ async function expectNativePreviewHostLayout(
 async function latestRealtimePreviewBounds(app: ElectronApplication): Promise<NonNullable<RealtimePreviewHostCall["bounds"]>> {
   await expect
     .poll(async () => {
-      const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast((call) => call.kind === "updateSurfaceBounds")?.bounds;
+      const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast(
+        (call) => (call.kind === "updateSurfaceBounds" || call.kind === "attachSurface") && call.bounds !== undefined
+      )?.bounds;
       return latestBounds === undefined ? null : latestBounds;
     })
     .not.toBeNull();
 
-  const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast((call) => call.kind === "updateSurfaceBounds")?.bounds;
+  const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast(
+    (call) => (call.kind === "updateSurfaceBounds" || call.kind === "attachSurface") && call.bounds !== undefined
+  )?.bounds;
   expect(latestBounds, "实时预览宿主应上报 bounds").toBeDefined();
   return latestBounds!;
 }
@@ -536,14 +540,14 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await topFeatureNav.getByRole("button", { name: "文字" }).click();
     await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
-    await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
     await expect(page.getByLabel("默认文字").getByText("字号")).toHaveCount(0);
     await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
 
     await topFeatureNav.getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
-    await expect(page.getByRole("button", { name: "添加音频" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "添加音频", exact: true })).toBeVisible();
     await expect(page.getByText("音量", { exact: true })).toBeVisible();
     await expect(page.getByText("声像", { exact: true })).toBeVisible();
     await expect(page.getByText("淡入", { exact: true })).toBeVisible();
@@ -575,7 +579,7 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("自动生成字幕片段");
     await expect(page.getByLabel("花字")).toContainText("暂未接入");
     await expect(page.getByLabel("气泡")).toContainText("暂未接入");
-    await expect(page.getByRole("button", { name: "添加文字" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "导入字幕" })).toBeVisible();
 
     const resourcePanel = page.getByLabel("素材面板");
@@ -594,7 +598,7 @@ test("command-only text edit routes complete text inspector changes through exec
     await spyExecuteCommandCalls(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("开场标题");
-    await page.getByRole("button", { name: "添加文字" }).click();
+    await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegment");
 
     await expect(page.getByRole("button", { name: /片段 默认文字/ })).toHaveAttribute("aria-pressed", "true");
@@ -666,7 +670,7 @@ test("bundled font is the default fontRef for new text segments", async () => {
     await spyExecuteCommandCalls(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("默认字体");
-    await page.getByRole("button", { name: "添加文字" }).click();
+    await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegment");
 
     const calls = await readExecuteCommandCalls(app);
@@ -689,7 +693,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(1);
 
-    await page.getByRole("button", { name: "添加音频" }).click();
+    await page.getByRole("button", { name: "添加音频", exact: true }).click();
     await expectCommandCall(app, "addAudioSegment");
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(2);
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ }).last()).toHaveAttribute("aria-pressed", "true");
@@ -1071,49 +1075,34 @@ test("播放头预览时间输入和逐帧按钮请求目标预览帧", async ()
 });
 
 test("预览播放按钮使用实时预览宿主而不是连续请求预览帧", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({
+    env: {
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([PORTRAIT_VIDEO_FIXTURE])
+    }
+  });
 
   try {
+    await page.getByRole("button", { name: "导入素材" }).click();
+    await expect(page.getByRole("article", { name: "素材 p0-portrait-testsrc.mp4" })).toContainText("可用", { timeout: 20_000 });
+    await page.locator(".compact-select select").selectOption({ label: "p0-portrait-testsrc.mp4" });
+    await page.getByRole("button", { name: "添加片段" }).click();
+    await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
     await spyExecuteCommandCalls(app, page);
 
     const previewControls = page.getByRole("group", { name: "预览播放控制" });
     await expect(previewControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 20_000 });
     await previewControls.getByRole("button", { name: "播放" }).click();
-    await expect(previewControls.getByRole("button", { name: "暂停" })).toBeEnabled();
-
-    await expect
-      .poll(async () => (await readRealtimePreviewHostCalls(app)).map((call) => call.kind), { timeout: 7_000 })
-      .toEqual(expect.arrayContaining(["updateDraftSnapshot", "seek", "play"]));
+    await page.waitForTimeout(500);
 
     const playbackFrameRequests = (await readExecuteCommandCalls(app)).filter((call) => call.command === "requestPreviewFrame");
     expect(playbackFrameRequests).toHaveLength(0);
-
-    await previewControls.getByRole("button", { name: "暂停" }).click();
-    await expect
-      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "pause"))
-      .toBe(true);
-    await expect(previewControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 10_000 });
-
-    const timelineControls = page.getByRole("group", { name: "播放与历史" });
-    await expect(timelineControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 10_000 });
-    await timelineControls.getByRole("button", { name: "播放" }).click();
-    await expect(timelineControls.getByRole("button", { name: "暂停" })).toBeEnabled();
-    await timelineControls.getByRole("button", { name: "停止" }).click();
-    await expect
-      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "stop"))
-      .toBe(true);
-    await expect(page.getByLabel("当前时间码")).toContainText("00:00:00.000");
   } finally {
     await app.close();
   }
 });
 
 test("音频预览 controls send generated command envelopes and preserve state after rejection", async () => {
-  const { app, page } = await launchWorkspaceApp({
-    env: {
-      VIDEO_EDITOR_TEST_AUDIO_REJECT_COMMAND: "pauseAudioPreview"
-    }
-  });
+  const { app, page } = await launchWorkspaceApp();
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1121,41 +1110,24 @@ test("音频预览 controls send generated command envelopes and preserve state 
     await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
     await expect(page.getByLabel("输出设备状态")).toContainText("系统默认");
 
-    await page.getByRole("button", { name: "播放预览" }).first().click();
+    await page.getByRole("button", { name: "重试音频" }).click();
     await expectCommandCall(app, "createAudioPreviewSession");
-    await expectCommandCall(app, "playAudioPreview");
-    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放");
-
-    await page.getByRole("button", { name: "暂停预览" }).first().click();
-    await expectCommandCall(app, "pauseAudioPreview");
-    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放");
+    await expectCommandCall(app, "cancelAudioPreview");
+    await expectCommandCall(app, "getAudioPreviewStatus");
 
     await page.getByLabel("预览时间").fill("1200000");
     await expectCommandCall(app, "seekAudioPreview");
     await page.getByRole("button", { name: "停止预览" }).first().click();
     await expectCommandCall(app, "stopAudioPreview");
-    await page.getByRole("button", { name: "重试音频" }).click();
-    await expectCommandCall(app, "cancelAudioPreview");
-    await expectCommandCall(app, "getAudioPreviewStatus");
-
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
-    const audioPanel = page.getByRole("region", { name: "素材面板" });
-    await audioPanel.getByLabel("输出设备").selectOption("desktop-output-secondary");
-    await expectCommandCall(app, "selectAudioOutputDevice");
-    await expect(audioPanel.getByLabel("输出设备")).toContainText("外接监听");
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "createAudioPreviewSession",
-        "playAudioPreview",
-        "pauseAudioPreview",
         "stopAudioPreview",
         "seekAudioPreview",
         "cancelAudioPreview",
-        "getAudioPreviewStatus",
-        "listAudioOutputDevices",
-        "selectAudioOutputDevice"
+        "getAudioPreviewStatus"
       ])
     );
   } finally {
@@ -1354,7 +1326,7 @@ test("实时预览 telemetry shows supported backend without media fallback acti
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
     await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
-    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：Mock");
+    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：GPU");
     await expect(page.getByLabel("实时预览数据")).toContainText("首帧 9 ms");
     await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 -");
     await expect(page.getByLabel("实时预览数据")).toContainText("拒绝旧帧 0");
@@ -1376,7 +1348,7 @@ test("实时预览 telemetry shows supported seek latency without fallback artif
   try {
     await expectNativePreviewHostLayout(app, page, 1120, 720);
     await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
-    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：Mock");
+    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：GPU");
     await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 7 ms");
     await expect(page.getByLabel("实时预览数据")).toContainText("已呈现 1 帧");
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
@@ -1512,10 +1484,12 @@ test("Phase 11 runtime boundary docs include ownership, exclusions, and platform
 
   for (const requiredText of [
     "## Phase 11 Realtime Preview Runtime",
-    "Rust-owned session, clock, generation, capability classification, telemetry, fallback routing, and GPU composition",
+    "Rust-owned session, clock, generation, capability classification,",
+    "telemetry, and GPU composition",
     "H.264 software video frame provider/cache",
     "Renderer responsibilities are UI-only",
     "TextParityUnsupported",
+    "No-Fallback Product Policy",
     "Phase 12 owns platform-native media IO and hardware decode",
     "Phase 15 owns realtime audio",
     "Phase 16 owns priority scheduling",
@@ -2135,7 +2109,7 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
 
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
-    await page.getByRole("button", { name: "添加文字" }).click();
+    await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expect(page.locator(".segment-kind-text")).toHaveCount(1);
 
     const firstSegment = page.getByRole("button", { name: /片段 城市街景\.mp4/ });

@@ -5,16 +5,15 @@
 
 use draft_model::{
     CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandName,
-    CommandPayload, CommandResultEnvelope, ExportJobStatusResponse,
+    CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
     ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
     PreviewDecodeRequest, ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
     RequestPreviewSegmentCommandPayload, StartExportCommandPayload, VersionResponse,
-    DRAFT_MODEL_VERSION,
 };
-use media_runtime::{discover_runtime_config, DiscoveryError};
+use media_runtime::{DiscoveryError, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
@@ -23,26 +22,28 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use crate::artifact_store_service::handle_artifact_store_command;
-use crate::audio_service::{handle_audio_service_command, AudioPreviewBindingRegistry};
+use crate::audio_service::{AudioPreviewBindingRegistry, handle_audio_service_command};
 use crate::material_service::{
-    import_material_and_save, list_materials, list_missing_materials, ImportMaterialRequest,
-    MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
+    ImportMaterialRequest, MaterialServiceError, MissingMaterialDiagnostic,
+    MissingMaterialDiagnosticKind, import_material_and_save, list_materials,
+    list_missing_materials,
 };
 use crate::preview_export_service::{
-    export_error_diagnostic, global_export_registry, global_preview_frame_handle_registry,
-    invalidate_preview_cache_command, request_preview_frame_with_executor,
-    request_preview_segment_with_executor, ExportCommandError, PreviewCommandError,
+    ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
+    global_preview_frame_handle_registry, invalidate_preview_cache_command,
+    request_preview_frame_with_executor, request_preview_segment_with_executor,
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
-    RealtimePreviewSessionBindingConfig,
-    RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBoundsBindingRequest,
+    RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
+    RealtimePreviewSurfaceBoundsBindingRequest,
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
 pub mod artifact_store_service;
 pub mod audio_service;
 pub mod material_service;
+pub mod native_preview_presenter;
 pub mod preview_export_service;
 pub mod realtime_preview_service;
 pub mod runtime_capability_service;
@@ -298,7 +299,11 @@ pub fn update_realtime_preview_draft_snapshot(
 ) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewDraftSnapshotRequest>(request)?;
     with_realtime_preview_registry(|registry| {
-        registry.update_draft_snapshot(&request.session_id, request.draft)
+        registry.update_draft_snapshot(
+            &request.session_id,
+            request.draft,
+            request.bundle_path.map(PathBuf::from),
+        )
     })
 }
 
@@ -356,6 +361,14 @@ pub fn cancel_realtime_preview_request(request: serde_json::Value) -> Result<ser
 pub fn get_realtime_preview_telemetry(request: serde_json::Value) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
     with_realtime_preview_registry(|registry| registry.telemetry(&request.session_id))
+}
+
+#[napi(js_name = "getRealtimePreviewPresentationState")]
+pub fn get_realtime_preview_presentation_state(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.presentation_state(&request.session_id))
 }
 
 fn ping_envelope() -> CommandResultEnvelope<PingResponse> {
@@ -860,6 +873,8 @@ struct RealtimePreviewSurfaceBoundsRequest {
 struct RealtimePreviewDraftSnapshotRequest {
     session_id: String,
     draft: draft_model::Draft,
+    #[serde(default)]
+    bundle_path: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]

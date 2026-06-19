@@ -137,6 +137,9 @@ and renderer-neutral `RenderGraph` intent from Rust-owned layers. Supported
 seek, scrub, first-frame, and playback-tick requests use the
 `RealtimePreviewRuntime` path and report `TimelineClock` plus
 `PlaybackGeneration` telemetry so stale results are rejected before presentation.
+The H.264 software video frame provider/cache and diagnostics such as
+`TextParityUnsupported` are runtime capability evidence, not product playback
+success evidence.
 
 Product realtime preview follows [No Product Fallback Policy](no-product-fallback-policy.md):
 normal playback must not report success through mock output, preview PNG loops,

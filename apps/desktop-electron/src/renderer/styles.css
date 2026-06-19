@@ -1084,6 +1084,14 @@ h2 {
   min-width: 56px;
 }
 
+@media (max-width: 1320px) {
+  .snapping-status,
+  .playhead-time,
+  .timeline-status {
+    display: none;
+  }
+}
+
 .timeline-ruler {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);

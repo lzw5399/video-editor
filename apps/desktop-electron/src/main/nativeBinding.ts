@@ -27,6 +27,9 @@ type NativeBinding = {
   nextRealtimePreviewCancellationToken: (request: RealtimePreviewSessionRequest) => number;
   cancelRealtimePreviewRequest: (request: RealtimePreviewCancellationRequest) => RealtimePreviewCanceledResponse;
   getRealtimePreviewTelemetry: (request: RealtimePreviewSessionRequest) => RealtimePreviewTelemetryResponse;
+  getRealtimePreviewPresentationState: (
+    request: RealtimePreviewSessionRequest
+  ) => RealtimePreviewPresentationStateResponse;
 };
 
 export type RealtimePreviewSessionConfig = {
@@ -54,6 +57,7 @@ export type RealtimePreviewClosedResponse = {
 export type RealtimePreviewSurfaceDescriptor = {
   kind: "windowsHwnd" | "macosNsView" | "mock" | "offscreen";
   parentHandle?: number;
+  parentHandleHex?: string;
   x: number;
   y: number;
   width: number;
@@ -86,6 +90,7 @@ export type RealtimePreviewGenerationResponse = {
 export type RealtimePreviewDraftSnapshotRequest = {
   sessionId: string;
   draft: Draft;
+  bundlePath?: string;
 };
 
 export type RealtimePreviewSeekRequest = {
@@ -173,6 +178,22 @@ export type RealtimePreviewTelemetryResponse = {
   cacheHitCount: number;
   targetTimeMicroseconds: number;
   playbackGeneration: number;
+};
+
+export type RealtimePreviewPresentationStateResponse = {
+  available: boolean;
+  backend: "gpu" | "none";
+  unsupportedReason?: string | null;
+  evidence?: RealtimePreviewPresentationEvidence | null;
+};
+
+export type RealtimePreviewPresentationEvidence = {
+  source: "composited";
+  digest: string;
+  width: number;
+  height: number;
+  byteCount: number;
+  targetTimeMicroseconds: number;
 };
 
 const requireNative = createRequire(__filename);
@@ -265,6 +286,12 @@ export function getRealtimePreviewTelemetry(request: RealtimePreviewSessionReque
   return requireLoadedBinding().getRealtimePreviewTelemetry(request);
 }
 
+export function getRealtimePreviewPresentationState(
+  request: RealtimePreviewSessionRequest
+): RealtimePreviewPresentationStateResponse {
+  return requireLoadedBinding().getRealtimePreviewPresentationState(request);
+}
+
 function loadNativeBinding(): NativeBinding | null {
   if (cachedBinding !== undefined) {
     return cachedBinding;
@@ -290,7 +317,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.requestRealtimePreviewFrame !== "function" ||
       typeof loaded.nextRealtimePreviewCancellationToken !== "function" ||
       typeof loaded.cancelRealtimePreviewRequest !== "function" ||
-      typeof loaded.getRealtimePreviewTelemetry !== "function"
+      typeof loaded.getRealtimePreviewTelemetry !== "function" ||
+      typeof loaded.getRealtimePreviewPresentationState !== "function"
     ) {
       throw new Error("Native binding does not expose the required editor and realtime preview functions");
     }
@@ -312,7 +340,8 @@ function loadNativeBinding(): NativeBinding | null {
       requestRealtimePreviewFrame: loaded.requestRealtimePreviewFrame,
       nextRealtimePreviewCancellationToken: loaded.nextRealtimePreviewCancellationToken,
       cancelRealtimePreviewRequest: loaded.cancelRealtimePreviewRequest,
-      getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry
+      getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry,
+      getRealtimePreviewPresentationState: loaded.getRealtimePreviewPresentationState
     };
     cachedLoadError = null;
     return cachedBinding;

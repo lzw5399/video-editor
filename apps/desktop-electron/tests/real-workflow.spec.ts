@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 120_000 });
 
 test("dev no-mock import-preview-export workflow", async () => {
   const fixtures = await generatePhase6MediaFixtures();
-  const { app, page } = await launchDevApp();
+  const { app, page } = await launchDevApp(fixtures);
 
   try {
     await runRealImportPreviewExportWorkflow(app, page, fixtures);
@@ -28,7 +28,10 @@ test("dev no-mock import-preview-export workflow", async () => {
 
 test("packaged no-mock import-preview-export workflow", async () => {
   const fixtures = await generatePhase6MediaFixtures();
-  const { app, page } = await launchPackagedApp(REAL_RUNTIME_TEST_ENV);
+  const { app, page } = await launchPackagedApp({
+    ...REAL_RUNTIME_TEST_ENV,
+    VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.audioPath])
+  });
 
   try {
     await runRealImportPreviewExportWorkflow(app, page, fixtures);
@@ -37,12 +40,13 @@ test("packaged no-mock import-preview-export workflow", async () => {
   }
 });
 
-async function launchDevApp(): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchDevApp(fixtures: Awaited<ReturnType<typeof generatePhase6MediaFixtures>>): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
-      ...REAL_RUNTIME_TEST_ENV
+      ...REAL_RUNTIME_TEST_ENV,
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.audioPath])
     }
   });
   const page = await app.firstWindow();

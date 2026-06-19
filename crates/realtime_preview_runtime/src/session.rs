@@ -218,6 +218,21 @@ impl RealtimePreviewRuntime {
         Ok(&self.session(session_id)?.telemetry)
     }
 
+    pub fn record_presented_output(
+        &mut self,
+        session_id: PreviewSessionId,
+        target_time: Microseconds,
+        render_duration_ms: u64,
+    ) -> Result<(), RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.telemetry.record_presented_output(
+            target_time,
+            session.clock.generation(),
+            render_duration_ms,
+        );
+        Ok(())
+    }
+
     pub fn next_cancellation_token(
         &mut self,
         session_id: PreviewSessionId,

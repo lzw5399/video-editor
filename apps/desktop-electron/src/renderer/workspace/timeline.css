@@ -146,6 +146,13 @@
   min-width: 56px;
 }
 
+@media (max-width: 1320px) {
+  .playhead-time,
+  .timeline-status {
+    display: none;
+  }
+}
+
 .ruler-track {
   cursor: pointer;
   user-select: none;
@@ -551,10 +558,7 @@
     display: none;
   }
 
-  .snapping-status {
-    flex-basis: 42px;
-  }
-
+  .snapping-status,
   .playhead-time,
   .timeline-status {
     display: none;

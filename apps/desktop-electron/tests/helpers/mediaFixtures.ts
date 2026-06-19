@@ -15,6 +15,7 @@ export type Phase6MediaFixtures = {
   outputPath: string;
   videoName: string;
   audioName: string;
+  expectedResolutionLabel: string;
 };
 
 export async function generatePhase6MediaFixtures(): Promise<Phase6MediaFixtures> {
@@ -69,7 +70,8 @@ export async function generatePhase6MediaFixtures(): Promise<Phase6MediaFixtures
     audioPath,
     outputPath,
     videoName: basename(videoPath),
-    audioName: basename(audioPath)
+    audioName: basename(audioPath),
+    expectedResolutionLabel: "160x90"
   };
 }
 

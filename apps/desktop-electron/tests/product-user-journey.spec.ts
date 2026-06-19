@@ -9,7 +9,8 @@ import {
   launchProductJourneyApp,
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
-  requestPreviewFrameCount
+  requestPreviewFrameCount,
+  waitForCompositedPreviewEvidence
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
@@ -25,8 +26,9 @@ test("product user can import a repo video, add it to the timeline, and see play
     const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
 
     await clickPreviewPlay(page);
-    await page.waitForTimeout(1_200);
 
+    const duringPlayback = await waitForCompositedPreviewEvidence(page);
+    await page.waitForTimeout(800);
     const after = await capturePreviewEvidence(page);
     const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
 
@@ -57,11 +59,15 @@ test("product user can import a repo video, add it to the timeline, and see play
     expect(
       after.hostState?.contentEvidence?.digest ?? null,
       "native composited content fingerprint must advance during playback"
-    ).not.toBe(before.hostState?.contentEvidence?.digest ?? null);
+    ).not.toBe(duringPlayback.hostState?.contentEvidence?.digest ?? null);
     expect(
       after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0,
       "content fingerprint time must advance with the user-visible playhead"
-    ).toBeGreaterThan(before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0);
+    ).toBeGreaterThan((duringPlayback.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0) + 300_000);
+    expect(
+      after.regionHash,
+      "the user-visible preview region must change while playback is running"
+    ).not.toBe(duringPlayback.regionHash);
     expect(
       after.hostState?.frameDisplay,
       "normal product playback must not expose mock frame display evidence"

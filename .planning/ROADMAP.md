@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts (completed 2026-06-19)
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
-- [ ] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (INSERTED)
+- [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
 - [ ] **Phase 15.2: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
@@ -611,7 +611,7 @@ Plans:
   5. Users can add/select target video/audio/text tracks, stack video/image/text layers, mix audio tracks, and rename/lock/show/mute tracks through Rust-owned commands.
   6. A real fixture E2E proves import vertical video, auto vertical canvas, play, add bundled-font text, add music, trim, split, undo/redo, save, reopen, and export.
 
-**Plans:** 6 plans
+**Plans:** 6/6 plans complete
 
 Plans:
 
@@ -631,7 +631,7 @@ Plans:
 
 **Wave 4** *(blocked on Waves 1-3 completion)*
 
-- [ ] 15.1-06-PLAN.md - Add full import-edit-play-save-reopen-export user-chain gate and source guards
+- [x] 15.1-06-PLAN.md - Add full import-edit-play-save-reopen-export user-chain gate and source guards
 
 ### Phase 15.2: P0 Jianying-Style Production UI Convergence (INSERTED)
 

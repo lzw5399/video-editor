@@ -64,6 +64,28 @@ export type PreviewEvidence = {
   hostState: RealtimePreviewHostState | null;
 };
 
+export async function waitForCompositedPreviewEvidence(
+  page: Page,
+  timeoutMs = 8_000
+): Promise<PreviewEvidence> {
+  const deadline = Date.now() + timeoutMs;
+  let lastEvidence: PreviewEvidence | null = null;
+
+  while (Date.now() < deadline) {
+    lastEvidence = await capturePreviewEvidence(page);
+    if (lastEvidence.hostState?.contentEvidence?.source === "composited") {
+      return lastEvidence;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for composited preview evidence. Last host state: ${JSON.stringify(
+      lastEvidence?.hostState ?? null
+    )}`
+  );
+}
+
 export async function launchProductJourneyApp(
   openMaterialFiles: string[],
   env: NodeJS.ProcessEnv = {}
@@ -149,8 +171,8 @@ export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidenc
   return {
     regionHash: hashBuffer(screenshot),
     timecodeUs: parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""),
-    placeholderText: (await placeholder.textContent().catch(() => "")) ?? "",
-    imageSrc: await image.getAttribute("src").catch(() => null),
+    placeholderText: (await placeholder.textContent({ timeout: 100 }).catch(() => "")) ?? "",
+    imageSrc: await image.getAttribute("src", { timeout: 100 }).catch(() => null),
     hostState: await readRealtimePreviewHostState(page)
   };
 }

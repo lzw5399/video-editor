@@ -473,23 +473,19 @@ export function App(): React.ReactElement {
     try {
       const command = buildCommand(workspaceRef.current);
       const result = await window.videoEditorCore.executeCommand<T>(command);
-      setWorkspace((current) => {
-        const next = applyResult(current, result, command);
-        workspaceRef.current = next;
-        return next;
-      });
+      const next = applyResult(workspaceRef.current, result, command);
+      workspaceRef.current = next;
+      setWorkspace(next);
       return { command, result };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      setWorkspace((current) => {
-        const next = {
-          ...current,
-          pendingCommand: null,
-          commandError: commandErrorMessage(message)
-        };
-        workspaceRef.current = next;
-        return next;
-      });
+      const next = {
+        ...workspaceRef.current,
+        pendingCommand: null,
+        commandError: commandErrorMessage(message)
+      };
+      workspaceRef.current = next;
+      setWorkspace(next);
       return null;
     } finally {
       commandInFlightRef.current = false;
