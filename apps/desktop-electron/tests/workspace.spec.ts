@@ -86,6 +86,7 @@ async function launchWorkspaceApp(
   options: {
     mockPreviewCommands?: boolean;
     mockExportCommands?: boolean;
+    mockArtifactCommands?: boolean;
     showDeveloperDiagnostics?: boolean;
     env?: NodeJS.ProcessEnv;
   } = {}
@@ -98,6 +99,7 @@ async function launchWorkspaceApp(
       VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: options.mockArtifactCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: options.showDeveloperDiagnostics === true ? "1" : "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"]),
       ...options.env
@@ -1702,6 +1704,55 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
     await expectProfessionalWorkspaceAtViewport(page, app, 1120, 720);
     await expectCompactScrollbarBaseline();
     await savePhase5PreviewScreenshot(page, "export-1120x720.png");
+  } finally {
+    await app.close();
+  }
+});
+
+test("素材资源状态 uses generated artifact command envelopes", async () => {
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+
+  try {
+    await spyExecuteCommandCalls(app, page);
+
+    await expect(page.getByLabel("素材资源状态").first()).toBeVisible();
+    await page.getByRole("button", { name: "刷新状态" }).click();
+    await page.getByRole("button", { name: "取消生成" }).click();
+    await page.getByRole("button", { name: "重新生成" }).click();
+    await page.getByRole("button", { name: "继续生成" }).click();
+    await page.getByRole("button", { name: "清理缓存" }).click();
+    await page.getByRole("button", { name: "确认清理缓存" }).click();
+
+    await expect
+      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command))
+      .toEqual(
+        expect.arrayContaining([
+          "getArtifactStatus",
+          "refreshArtifactStatus",
+          "cancelArtifactGeneration",
+          "retryArtifactGeneration",
+          "resumeArtifactGeneration",
+          "getArtifactQuotaStatus",
+          "runArtifactGarbageCollection"
+        ])
+      );
+  } finally {
+    await app.close();
+  }
+});
+
+test("资源任务 and 资源维护 update from Rust shaped artifact responses", async () => {
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+
+  try {
+    await expect(page.getByLabel("资源任务")).toContainText("生成中");
+    await expect(page.getByLabel("资源任务")).toContainText("正在取消");
+    await expect(page.getByLabel("资源维护")).toContainText("缓存空间偏高");
+
+    await page.getByRole("button", { name: "清理缓存" }).click();
+    await expect(page.getByLabel("确认清理缓存")).toContainText("不会删除原始素材");
+    await page.getByRole("button", { name: "确认清理缓存" }).click();
+    await expect(page.getByLabel("资源维护")).toContainText("缓存清理完成");
   } finally {
     await app.close();
   }
