@@ -1,8 +1,8 @@
 ---
 phase: 14-asset-resource-manager-and-derived-artifact-store
-reviewed: 2026-06-19T07:01:06Z
+reviewed: 2026-06-19T07:12:09Z
 depth: standard
-files_reviewed: 8
+files_reviewed: 9
 files_reviewed_list:
   - crates/artifact_store/src/gc.rs
   - crates/artifact_store/src/generation.rs
@@ -12,6 +12,7 @@ files_reviewed_list:
   - crates/artifact_store/tests/gc_quota_manifest.rs
   - crates/draft_model/tests/schema_exports.rs
   - schemas/command.schema.json
+  - crates/bindings_node/src/artifact_store_service.rs
 findings:
   critical: 1
   warning: 0
@@ -22,64 +23,66 @@ status: issues_found
 
 # Phase 14: Code Review Report
 
-**Reviewed:** 2026-06-19T07:01:06Z
+**Reviewed:** 2026-06-19T07:12:09Z
 **Depth:** standard
-**Files Reviewed:** 8
+**Files Reviewed:** 9
 **Status:** issues_found
 
 ## Summary
 
-Re-reviewed the scoped Phase 14 fixes after the review-fix commits. The previous findings for generation failure/cancel terminal persistence, generated artifact dependency rows, GC liveness with dependency rows, and Phase 14 command/payload schema pairing are addressed in the current code. One blocking lifecycle regression remains: failed and cancelled jobs are advertised as retryable/resumable, but the chunk transition guard prevents those jobs from actually being restarted.
+Re-reviewed the current Phase 14 fixes with emphasis on the prior findings and the `restart_generation_job` lifecycle. The scoped artifact store fixes now address the previous direct failure: `restart_generation_job` reopens failed/cancelled jobs to `resumable`, and `artifact_jobs_restart_terminal_failed_and_cancelled_jobs_before_resume_execution` proves the reopened chunks can start and complete.
 
-Verification run:
+One blocker remains at the command boundary. The fixed restart primitive is not invoked by the user-facing retry/resume command handlers, so retry/resume still return summaries without changing job state.
 
-```bash
-cargo test -p artifact_store --test artifact_generation --test artifact_jobs --test gc_quota_manifest
-cargo test -p draft_model --test schema_exports
-```
-
-Both commands passed.
+Verification run: not run during this final review.
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: BLOCKER - Retry/resume cannot restart terminal failed or cancelled jobs
+### CR-01: BLOCKER - Retry/resume commands never invoke the fixed restart lifecycle
 
-**File:** `crates/artifact_store/src/jobs.rs:388`
-**Issue:** `next_pending_chunk` deliberately returns `failed` and `cancelled` chunks as pending work, and `resume_generation_job` / `job_status_summary` advertise failed or cancelled jobs as resumable/retryable. But the first real restart path calls `start_generation_chunk`, which flows into `transition_chunk`; `transition_chunk` unconditionally calls `ensure_job_not_terminal`, and `ensure_job_not_terminal` rejects `failed` and `cancelled` job statuses. The net behavior is internally contradictory: a failed generation is now correctly persisted as terminal, but any later retry/resume attempt will fail with "terminal job state cannot be overwritten" before the chunk can move back to `running`.
+**File:** `crates/bindings_node/src/artifact_store_service.rs:90`
 
-**Fix:** Add an explicit restart path for resumable terminal jobs instead of reusing the normal active-job transition guard. For example, make retry/resume first move a failed/cancelled job back to `resumable` or `waiting`, clear `cancel_requested`, then allow only failed/cancelled/waiting chunks selected by the resume plan to transition to `running`.
+**Issue:** `resume_generation` only checks that `resume_generation_job` returns a plan and then returns `job_status_summary`; `retry_generation` only checks `summary.can_retry` and returns the same summary. Neither method calls `restart_generation_job`, and both take `&self`, so they cannot mutate the store even though the actual restart primitive requires `&mut ArtifactStore`. The command handler routes `retryArtifactGeneration` and `resumeArtifactGeneration` into these no-op methods, which means the UI can receive a successful action response while the failed/cancelled job remains terminal and no chunk is reopened for execution.
+
+**Fix:**
 
 ```rust
-pub fn restart_generation_job(
-    store: &mut ArtifactStore,
+use artifact_store::jobs::{
+    cancel_generation_job, job_status_summary, list_active_generation_jobs, restart_generation_job,
+    ArtifactGenerationJob, GenerationJobStatus, GenerationStatusSummary,
+};
+
+pub fn resume_generation(
+    &mut self,
     job_id: &str,
-) -> Result<ArtifactGenerationJob, ArtifactStoreError> {
-    // Only failed/cancelled jobs with incomplete chunks should be restartable.
-    let Some(plan) = resume_generation_job(store, job_id)? else {
-        return invalid_job(job_id, "job is not resumable");
-    };
-    if plan.pending_chunks.is_empty() {
-        return invalid_job(job_id, "job has no pending chunks");
+) -> Result<ArtifactGenerationTaskSummary, ArtifactBindingError> {
+    let job = restart_generation_job(&mut self.store, job_id)
+        .map_err(ArtifactBindingError::Store)?;
+    Ok(task_summary_from_job(&job))
+}
+
+pub fn retry_generation(
+    &mut self,
+    job_id: &str,
+) -> Result<ArtifactGenerationTaskSummary, ArtifactBindingError> {
+    let summary = job_status_summary(&self.store, job_id)
+        .map_err(ArtifactBindingError::Store)?
+        .ok_or(ArtifactBindingError::UnknownJob)?;
+    if !summary.can_retry {
+        return Err(ArtifactBindingError::ActionUnavailable);
     }
-
-    store.connection().execute(
-        "UPDATE generation_job
-         SET status = 'waiting', cancel_requested = 0, updated_at_unix_ms = ?2
-         WHERE job_id = ?1 AND status IN ('failed', 'cancelled', 'resumable')",
-        params![job_id, now_unix_ms()],
-    ).map_err(|source| sqlite_error(store, source))?;
-
-    get_generation_job(store, job_id)?
-        .ok_or_else(|| invalid_job_err(job_id, "job disappeared after restart"))
+    let job = restart_generation_job(&mut self.store, job_id)
+        .map_err(ArtifactBindingError::Store)?;
+    Ok(task_summary_from_job(&job))
 }
 ```
 
-Add regression coverage that creates a failed job and an acknowledged cancelled job, asserts `resume_generation_job` returns pending chunks, then verifies the actual restart path can call `start_generation_chunk` and complete the pending chunk successfully. Also assert that completed jobs still reject late mutation.
+Also make the command handler bind these services as mutable before calling retry/resume, and add a binding-level regression test that creates a failed job and an acknowledged cancelled job, invokes `retryArtifactGeneration` / `resumeArtifactGeneration` through `execute_command`, and asserts the persisted job status becomes `resumable` with `cancel_requested = 0`.
 
 ---
 
-_Reviewed: 2026-06-19T07:01:06Z_
+_Reviewed: 2026-06-19T07:12:09Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
