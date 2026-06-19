@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: completed
 stopped_at: Completed 15.2-03B-PLAN.md
-last_updated: "2026-06-19T21:43:26.501Z"
+last_updated: "2026-06-19T21:59:03.995Z"
 last_activity: 2026-06-20 -- Phase 15.2 Plan 03B completed decoded native texture lease registry and WGPU compositor import prerequisite; next execute Plan 04 desktop product playback scheduler integration
 progress:
   total_phases: 23
@@ -421,6 +421,7 @@ None yet.
 
 - Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
 - 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
+- Plan 15.2-04 product playback E2E still fails: Rust binding/host now fail closed without nativeVideoBridge, and NV12 WGPU ExternalTexture plane sampling is implemented for WGPU plane leases, but no Rust-owned desktop compositor scheduler currently decodes timeline media into sampleable native leases and presents renderGraphGpuComposited frames to the native WGPU surface during normal play.
 
 ## Deferred Items
 
