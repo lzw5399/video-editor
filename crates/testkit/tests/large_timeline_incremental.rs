@@ -320,6 +320,72 @@ fn large_timeline_incremental_canvas_profile_change_uses_full_draft_invalidation
     assert!(result.retained.is_empty());
 }
 
+#[test]
+fn large_timeline_incremental_undo_redo_restores_graph_and_reuses_targeted_dirty_ranges() {
+    let fixture = build_large_timeline(
+        LargeTimelineConfig::new(300)
+            .with_localized_edit_index(150)
+            .with_target_stride(Microseconds::new(250_000)),
+    )
+    .expect("large timeline fixture should build");
+    let full_range = full_draft_range(&fixture.draft);
+    let original = snapshot_for(&fixture.draft, full_range.clone());
+    let mut moved = fixture.draft.clone();
+    let moved_start = fixture.localized_edit.target_timerange.start.get() + 100_000;
+    segment_mut(
+        &mut moved,
+        TrackKind::Video,
+        fixture.localized_edit.segment_index,
+    )
+    .target_timerange = TargetTimerange::new(
+        moved_start,
+        fixture.localized_edit.target_timerange.duration,
+    );
+    let moved_snapshot = snapshot_for(&moved, full_range.clone());
+    let restored_snapshot = snapshot_for(&fixture.draft, full_range);
+    let undo_ranges = vec![
+        dirty_range(moved_start, 100_000, DirtyRangeSource::Previous),
+        dirty_range(
+            fixture.localized_edit.target_timerange.start.get(),
+            100_000,
+            DirtyRangeSource::Current,
+        ),
+    ];
+    let redo_ranges = vec![
+        dirty_range(
+            fixture.localized_edit.target_timerange.start.get(),
+            100_000,
+            DirtyRangeSource::Previous,
+        ),
+        dirty_range(moved_start, 100_000, DirtyRangeSource::Current),
+    ];
+    let moved_diff = RenderGraphDiff::between(
+        &original,
+        &moved_snapshot,
+        &redo_ranges,
+        &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+    );
+    let restored_diff = RenderGraphDiff::between(
+        &original,
+        &restored_snapshot,
+        &undo_ranges,
+        &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+    );
+
+    assert!(
+        moved_diff.changed.len() <= 16,
+        "redo/localized move should stay bounded"
+    );
+    assert!(
+        restored_diff.added.is_empty()
+            && restored_diff.removed.is_empty()
+            && restored_diff.changed.is_empty(),
+        "undo/restored snapshot should exactly match original graph"
+    );
+    assert_eq!(restored_diff.dirty_ranges, undo_ranges);
+    assert_eq!(moved_diff.dirty_ranges, redo_ranges);
+}
+
 fn assert_localized_change_is_bounded(
     draft: &Draft,
     full_range: TargetTimerange,

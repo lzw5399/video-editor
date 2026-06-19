@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use draft_model::{
-    CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
-    TextStroke, TextStyle, TextWrapping, Track, TrackKind,
+    CanvasAspectRatio, CanvasBackground, CommandDelta, CommandName, DirtyDomain, DirtyRange,
+    DirtyRangeSource, Draft, DraftCanvasConfig, InvalidationScope, Material, MaterialId,
+    MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, FfmpegCompileErrorKind, compile_ffmpeg_job};
@@ -17,9 +18,13 @@ use media_runtime::{
     validate_rendered_output,
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
-use preview_service::{PreviewFrameRequest, PreviewServiceConfig, request_preview_frame};
+use preview_service::{
+    ExportPrepDirtyFacts, PreviewFrameRequest, PreviewInvalidationRequest, PreviewServiceConfig,
+    request_preview_frame,
+};
 use render_graph::{
-    ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph,
+    ExportMp4Preset, OutputDimensions, RenderGraphDiff, RenderGraphPlan, RenderGraphSnapshot,
+    RenderOutputProfile, build_render_graph,
 };
 use testkit::render_compare::{
     PixelTolerance, RenderCompareError, RenderCompareResult, RenderSetupErrorKind,
@@ -233,6 +238,126 @@ fn preview_export_parity_setup_failures_are_classified() {
     );
 }
 
+#[test]
+fn preview_export_parity_dirty_facts_match_after_localized_edit_and_undo_redo()
+-> RenderCompareResult<()> {
+    let sandbox = tempfile::tempdir()?;
+    let video_path = sandbox.path().join("video.mp4");
+    let audio_path = sandbox.path().join("audio.wav");
+    let before = golden_draft(&video_path, &audio_path);
+    let mut edited = before.clone();
+    edited.tracks[0].segments[0].target_timerange = TargetTimerange::new(100_000, 1_000_000);
+    edited.tracks[0].segments[0].visual.transform.opacity = SegmentOpacity { value_millis: 700 };
+    let restored = before.clone();
+
+    let dirty_ranges = vec![
+        dirty_range(0, 1_000_000, DirtyRangeSource::Previous),
+        dirty_range(100_000, 1_000_000, DirtyRangeSource::Current),
+    ];
+    let delta = CommandDelta::targeted(
+        CommandName::MoveSegment,
+        Vec::new(),
+        vec![DirtyDomain::Timing, DirtyDomain::Visual],
+        dirty_ranges.clone(),
+        InvalidationScope {
+            full_draft: false,
+            material_ids: vec![MaterialId::new("video-material")],
+            graph_node_ids: vec![
+                "draft:draft-phase5-parity:track:video-track:segment:video-a:video".to_owned(),
+            ],
+            consumer_domains: vec![DirtyDomain::PreviewCache, DirtyDomain::ExportPrep],
+        },
+        "localized parity edit",
+    );
+    let preview_request = PreviewInvalidationRequest::from_command_delta(&delta)
+        .with_runtime_capability_fingerprint("runtime:software")
+        .with_output_profile_fingerprint("output:preview-export");
+    let export_facts = ExportPrepDirtyFacts::from_invalidation_request(&preview_request);
+
+    assert_eq!(
+        preview_request.dirty_ranges,
+        vec![dirty_range(
+            0,
+            1_100_000,
+            DirtyRangeSource::PreviousAndCurrent
+        )]
+    );
+    assert_eq!(export_facts.dirty_ranges, preview_request.dirty_ranges);
+    assert_eq!(
+        export_facts.changed_material_ids,
+        preview_request.changed_material_ids
+    );
+    assert_eq!(
+        export_facts.changed_graph_node_keys,
+        preview_request.changed_graph_node_keys
+    );
+    assert_eq!(
+        export_facts.changed_domains,
+        preview_request.changed_domains
+    );
+    assert!(
+        export_facts
+            .changed_domains
+            .contains(&DirtyDomain::ExportPrep)
+    );
+
+    let before_snapshot = snapshot_for(&before, output_profile(160, 90), "runtime:software");
+    let edited_snapshot = snapshot_for(&edited, output_profile(160, 90), "runtime:software");
+    let restored_snapshot = snapshot_for(&restored, output_profile(160, 90), "runtime:software");
+    let edit_diff = RenderGraphDiff::between(
+        &before_snapshot,
+        &edited_snapshot,
+        &preview_request.dirty_ranges,
+        &preview_request.changed_domains,
+    );
+    let undo_diff = RenderGraphDiff::between(
+        &before_snapshot,
+        &restored_snapshot,
+        &preview_request.dirty_ranges,
+        &preview_request.changed_domains,
+    );
+
+    assert!(edit_diff.added.is_empty());
+    assert!(edit_diff.removed.is_empty());
+    assert!(
+        edit_diff
+            .changed
+            .iter()
+            .any(|change| change.node_id.stable_key()
+                == "draft:draft-phase5-parity:track:video-track:segment:video-a:video")
+    );
+    assert!(
+        undo_diff.added.is_empty() && undo_diff.removed.is_empty() && undo_diff.changed.is_empty(),
+        "restored undo snapshot should match the original graph exactly"
+    );
+
+    let capabilities = ffmpeg_compiler::CompilerCapabilities::all_available_for_tests();
+    let preview_job =
+        compile_preview_frame_job(&edited, &capabilities, &sandbox.path().join("preview.png"))?;
+    let export_job =
+        compile_export_job(&edited, &capabilities, &sandbox.path().join("export.mp4"))?;
+
+    assert_eq!(
+        preview_job.validation.expected_width,
+        export_job.validation.expected_width
+    );
+    assert_eq!(
+        preview_job.validation.expected_height,
+        export_job.validation.expected_height
+    );
+    assert_eq!(
+        preview_job.validation.expected_frame_rate,
+        export_job.validation.expected_frame_rate
+    );
+    assert!(
+        preview_job.filter_script.contains("subtitles=")
+            && export_job.filter_script.contains("subtitles="),
+        "preview and export should keep using the shared text render path"
+    );
+
+    Ok(())
+}
+
 fn compile_export_job(
     draft: &Draft,
     capabilities: &ffmpeg_compiler::CompilerCapabilities,
@@ -273,6 +398,43 @@ fn compile_export_job(
         CompileContext::new(output_path, &artifact_dir).with_capabilities(capabilities.clone());
     compile_ffmpeg_job(&plan, &context)
         .map_err(|error| RenderCompareError::Runtime(error.to_string()))
+}
+
+fn snapshot_for(
+    draft: &Draft,
+    output_profile: RenderOutputProfile,
+    runtime_capability_fingerprint: &str,
+) -> RenderGraphSnapshot {
+    let profile = EngineProfile::from_draft_canvas(draft).expect("canvas profile should resolve");
+    let normalized = normalize_draft(draft, &profile).expect("draft should normalize");
+    let range = resolve_render_range(
+        &normalized,
+        TargetTimerange::new(
+            Microseconds::new(TARGET_TIME),
+            Microseconds::new(EXPORT_DURATION),
+        ),
+    )
+    .expect("range should resolve");
+    let graph = build_render_graph(&normalized, &range).expect("graph should build");
+    RenderGraphSnapshot::from_graph(&graph, &output_profile, runtime_capability_fingerprint)
+}
+
+fn output_profile(width: u32, height: u32) -> RenderOutputProfile {
+    RenderOutputProfile::preview_frame_png(
+        OutputDimensions::new(width, height),
+        RationalFrameRate::new(FPS, 1),
+        TargetTimerange::new(
+            Microseconds::new(TARGET_TIME),
+            Microseconds::new(EXPORT_DURATION),
+        ),
+    )
+}
+
+fn dirty_range(start: u64, duration: u64, source: DirtyRangeSource) -> DirtyRange {
+    DirtyRange {
+        target_timerange: TargetTimerange::new(start, duration),
+        source,
+    }
 }
 
 fn compile_preview_frame_job(

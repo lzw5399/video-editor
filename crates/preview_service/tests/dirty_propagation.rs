@@ -201,6 +201,68 @@ fn dirty_domain_range_invalidation_requires_preview_cache_consumer_domain() {
     );
 }
 
+#[test]
+fn export_prep_undo_redo_dirty_facts_preserve_previous_and_current_ranges() {
+    let undo_delta = CommandDelta::targeted(
+        CommandName::UndoTimelineEdit,
+        Vec::new(),
+        vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+        vec![
+            dirty_range(600_000, 100_000, DirtyRangeSource::Previous),
+            dirty_range(100_000, 100_000, DirtyRangeSource::Current),
+        ],
+        InvalidationScope::targeted(
+            vec![MaterialId::new("video-material")],
+            vec![DirtyDomain::PreviewCache, DirtyDomain::ExportPrep],
+        ),
+        "undo localized move",
+    );
+    let redo_delta = CommandDelta::targeted(
+        CommandName::RedoTimelineEdit,
+        Vec::new(),
+        vec![DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
+        vec![
+            dirty_range(100_000, 100_000, DirtyRangeSource::Previous),
+            dirty_range(600_000, 100_000, DirtyRangeSource::Current),
+        ],
+        InvalidationScope::targeted(
+            vec![MaterialId::new("video-material")],
+            vec![DirtyDomain::PreviewCache, DirtyDomain::ExportPrep],
+        ),
+        "redo localized move",
+    );
+
+    for delta in [undo_delta, redo_delta] {
+        let request = PreviewInvalidationRequest::from_command_delta(&delta);
+        let export_facts = ExportPrepDirtyFacts::from_command_delta(&delta);
+
+        assert_eq!(export_facts.dirty_ranges, request.dirty_ranges);
+        assert_eq!(
+            export_facts.changed_material_ids,
+            vec![MaterialId::new("video-material")]
+        );
+        assert_eq!(export_facts.changed_domains, request.changed_domains);
+        assert!(!export_facts.full_draft);
+        assert!(
+            export_facts
+                .changed_domains
+                .contains(&DirtyDomain::ExportPrep)
+        );
+        assert!(
+            export_facts
+                .dirty_ranges
+                .iter()
+                .any(|range| range.source == DirtyRangeSource::Previous)
+        );
+        assert!(
+            export_facts
+                .dirty_ranges
+                .iter()
+                .any(|range| range.source == DirtyRangeSource::Current)
+        );
+    }
+}
+
 fn entry(id: &str, start: u64, duration: u64, profile: PreviewCacheProfile) -> PreviewCacheEntry {
     PreviewCacheEntry {
         key: PreviewCacheKey {
