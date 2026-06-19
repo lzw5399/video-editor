@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
+  AudioOutputDeviceSummary,
+  AudioPreviewCommandResponse,
+  AudioPreviewStatusResponse,
   ArtifactMaintenanceResult,
   ArtifactQuotaStatus,
   ArtifactStatusSummary,
@@ -12,7 +15,8 @@ import type {
   ListMissingMaterialsResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
-  TimelineCommandResponse
+  TimelineCommandResponse,
+  WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
@@ -35,21 +39,28 @@ import {
   buildAddSegmentCommand,
   buildAddAudioSegmentCommand,
   buildAddTextSegmentCommand,
+  buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
   buildDeleteSegmentCommand,
   buildEditTextSegmentCommand,
   buildCancelExportCommand,
+  buildCreateAudioPreviewSessionCommand,
+  buildGetAudioPreviewStatusCommand,
   buildGetArtifactQuotaStatusCommand,
   buildGetArtifactStatusCommand,
   buildGetExportJobStatusCommand,
+  buildGetWaveformDisplayPeaksCommand,
   buildImportMaterialCommand,
   buildImportSubtitleSrtCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSegmentCommand,
   buildProbeRuntimeCapabilitiesCommand,
+  buildPlayAudioPreviewCommand,
+  buildPauseAudioPreviewCommand,
   buildRequestPreviewFrameCommand,
   buildRequestPreviewSegmentCommand,
+  buildRefreshWaveformStatusCommand,
   buildRefreshArtifactStatusCommand,
   buildRedoTimelineEditCommand,
   buildRemoveSegmentKeyframeCommand,
@@ -57,14 +68,19 @@ import {
   buildRetryArtifactGenerationCommand,
   buildRunArtifactGarbageCollectionCommand,
   buildSelectTimelineSegmentsCommand,
+  buildSeekAudioPreviewCommand,
+  buildSelectAudioOutputDeviceCommand,
+  buildListAudioOutputDevicesCommand,
   buildSetSegmentKeyframeCommand,
   buildSetSegmentVolumeCommand,
   buildSetTrackMuteCommand,
   buildSplitSegmentCommand,
+  buildStopAudioPreviewCommand,
   buildStartExportCommand,
   buildTrimSegmentCommand,
   buildUndoTimelineEditCommand,
   buildUpdateDraftCanvasConfigCommand,
+  buildUpdateSegmentAudioCommand,
   buildUpdateSegmentVisualCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
@@ -73,6 +89,9 @@ import {
 import {
   createCheckingRuntimeDiagnosticsState,
   createInitialWorkspaceState,
+  audioDevicesFromSummaries,
+  audioPreviewFromCommandResponse,
+  audioPreviewFromStatusResponse,
   artifactPreviewStatusLabel,
   findFirstMaterialByKind,
   findTrackByKind,
@@ -87,6 +106,7 @@ import {
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
   resourcePanelWithQuota,
+  waveformDisplayFromResponse,
   resolveWorkspaceStartupDraft,
   type ExportDisplayState,
   type PreviewDisplayState,
@@ -198,6 +218,7 @@ export function App(): React.ReactElement {
   const workspaceRef = useRef(workspace);
   const playheadRef = useRef(playheadUs);
   const commandInFlightRef = useRef(false);
+  const audioCommandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
   const pendingAutoPreviewTimeRef = useRef<number | null>(null);
   const autoPreviewRetryTimerRef = useRef<number | null>(null);
@@ -919,6 +940,145 @@ export function App(): React.ReactElement {
     }
   }
 
+  async function executeAudioCommand<T>(
+    buildCommand: (current: WorkspaceState) => CommandEnvelope,
+    pendingAudioCommand: string,
+    applyResult: (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState
+  ): Promise<CommandResultEnvelope<T> | null> {
+    if (audioCommandInFlightRef.current) {
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          commandError: commandErrorMessage("上一个音频操作仍在执行，请稍后重试")
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return null;
+    }
+
+    audioCommandInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingAudioCommand,
+        commandError: null
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const command = buildCommand(workspaceRef.current);
+      const result = await window.videoEditorCore.executeCommand<T>(command);
+      setWorkspace((current) => {
+        const next = applyResult(current, result);
+        workspaceRef.current = next;
+        return next;
+      });
+      return result;
+    } catch (error: unknown) {
+      const message = commandErrorMessage(error instanceof Error ? error.message : String(error));
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingAudioCommand: null,
+          commandError: message
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return null;
+    } finally {
+      audioCommandInFlightRef.current = false;
+    }
+  }
+
+  async function ensureAudioPreviewSession(): Promise<string | null> {
+    const existingSessionId = workspaceRef.current.audioPreview.sessionId;
+    if (existingSessionId !== null) {
+      return existingSessionId;
+    }
+
+    const result = await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildCreateAudioPreviewSessionCommand({
+          draft: current.draft,
+          targetTime: playheadRef.current
+        }),
+      "创建音频预览",
+      applyAudioPreviewCommandResult
+    );
+
+    return result?.ok === true && result.data !== null ? result.data.sessionId : null;
+  }
+
+  async function refreshAudioDevices(): Promise<void> {
+    await executeAudioCommand<AudioOutputDeviceSummary[]>(
+      () => buildListAudioOutputDevicesCommand(),
+      "读取输出设备",
+      (current, result) => ({
+        ...current,
+        pendingAudioCommand: null,
+        commandError: result.ok ? null : commandErrorMessage(result),
+        audioDevices:
+          result.ok && result.data !== null
+            ? audioDevicesFromSummaries(result.data, current.audioDevices.selectedDeviceId)
+            : current.audioDevices
+      })
+    );
+  }
+
+  async function refreshAudioPreviewStatus(): Promise<void> {
+    const sessionId = await ensureAudioPreviewSession();
+    if (sessionId === null) {
+      return;
+    }
+
+    await executeAudioCommand<AudioPreviewStatusResponse>(
+      () =>
+        buildGetAudioPreviewStatusCommand({
+          sessionId,
+          targetTime: playheadRef.current
+        }),
+      "读取音频状态",
+      (current, result) => ({
+        ...current,
+        pendingAudioCommand: null,
+        commandError: result.ok ? null : commandErrorMessage(result),
+        audioPreview: result.ok && result.data !== null ? audioPreviewFromStatusResponse(result.data) : current.audioPreview
+      })
+    );
+  }
+
+  async function refreshWaveformDisplay(): Promise<void> {
+    const materialId = firstAudioMaterialId(workspaceRef.current);
+    if (materialId === null) {
+      return;
+    }
+
+    await executeAudioCommand<WaveformDisplayPeaksResponse>(
+      (current) =>
+        buildGetWaveformDisplayPeaksCommand({
+          draft: current.draft,
+          materialId,
+          maxPeakBins: 16
+        }),
+      "读取波形",
+      applyWaveformResult
+    );
+    await executeAudioCommand<WaveformDisplayPeaksResponse>(
+      (current) =>
+        buildRefreshWaveformStatusCommand({
+          draft: current.draft,
+          materialId,
+          maxPeakBins: 16
+        }),
+      "刷新波形",
+      applyWaveformResult
+    );
+  }
+
   async function importMaterialPath(path: string): Promise<void> {
     await executeDraftCommand<ImportMaterialResponse>(
       (current) =>
@@ -1411,11 +1571,13 @@ export function App(): React.ReactElement {
     const targetTime = normalizePlayheadTime(value);
     setPlaybackRunning(false);
     setPlayheadUs(targetTime);
+    void handleSeekAudioPreview(targetTime);
     requestPreviewFrameAt(targetTime);
   }
 
   function handleTogglePlayback(): void {
     if (playbackRunning) {
+      void handlePauseAudioPreview();
       setPlaybackRunning(false);
       return;
     }
@@ -1447,12 +1609,134 @@ export function App(): React.ReactElement {
       playheadRef.current = 0;
     }
     playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
+    void handlePlayAudioPreview();
     setPlaybackRunning(true);
   }
 
   function handleStopPlayback(): void {
+    void handleStopAudioPreview();
     setPlaybackRunning(false);
     handleSeekPlayhead(0);
+  }
+
+  async function handlePlayAudioPreview(): Promise<void> {
+    const sessionId = await ensureAudioPreviewSession();
+    if (sessionId === null) {
+      return;
+    }
+
+    await refreshAudioDevices();
+    await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildPlayAudioPreviewCommand({
+          draft: current.draft,
+          sessionId,
+          targetTime: playheadRef.current,
+          playbackGeneration: current.audioPreview.generation + 1
+        }),
+      "播放音频",
+      applyAudioPreviewCommandResult
+    );
+  }
+
+  async function handlePauseAudioPreview(): Promise<void> {
+    const sessionId = workspaceRef.current.audioPreview.sessionId;
+    if (sessionId === null) {
+      return;
+    }
+
+    await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildPauseAudioPreviewCommand({
+          sessionId,
+          targetTime: playheadRef.current,
+          playbackGeneration: current.audioPreview.generation
+        }),
+      "暂停音频",
+      applyAudioPreviewCommandResult
+    );
+  }
+
+  async function handleStopAudioPreview(): Promise<void> {
+    const sessionId = workspaceRef.current.audioPreview.sessionId;
+    if (sessionId === null) {
+      return;
+    }
+
+    await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildStopAudioPreviewCommand({
+          sessionId,
+          targetTime: 0,
+          playbackGeneration: current.audioPreview.generation
+        }),
+      "停止音频",
+      applyAudioPreviewCommandResult
+    );
+  }
+
+  async function handleSeekAudioPreview(targetTime: number): Promise<void> {
+    const sessionId = workspaceRef.current.audioPreview.sessionId;
+    if (sessionId === null) {
+      return;
+    }
+
+    await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildSeekAudioPreviewCommand({
+          sessionId,
+          targetTime,
+          playbackGeneration: current.audioPreview.generation
+        }),
+      "定位音频",
+      applyAudioPreviewCommandResult
+    );
+  }
+
+  async function handleRetryAudioPreview(): Promise<void> {
+    const sessionId = await ensureAudioPreviewSession();
+    if (sessionId === null) {
+      return;
+    }
+
+    await executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildCancelAudioPreviewCommand({
+          sessionId,
+          targetTime: playheadRef.current,
+          playbackGeneration: current.audioPreview.generation
+        }),
+      "取消音频请求",
+      applyAudioPreviewCommandResult
+    );
+    await refreshAudioPreviewStatus();
+  }
+
+  function handleSelectAudioOutputDevice(deviceSelectionId: string): void {
+    void executeAudioCommand<AudioPreviewCommandResponse>(
+      (current) =>
+        buildSelectAudioOutputDeviceCommand({
+          sessionId: current.audioPreview.sessionId,
+          deviceSelectionId,
+          playbackGeneration: current.audioPreview.generation
+        }),
+      "选择输出设备",
+      (current, result) => ({
+        ...current,
+        pendingAudioCommand: null,
+        commandError: result.ok ? null : commandErrorMessage(result),
+        audioDevices:
+          result.ok && result.data !== null
+            ? {
+                ...current.audioDevices,
+                selectedDeviceId: deviceSelectionId,
+                statusLabel: current.audioDevices.devices.find((device) => device.selectionId === deviceSelectionId)?.statusLabel ?? current.audioDevices.statusLabel
+              }
+            : current.audioDevices,
+        audioPreview:
+          result.ok && result.data !== null ? audioPreviewFromCommandResponse(current.audioPreview, result.data) : current.audioPreview
+      })
+    );
   }
 
   function queueAutoPreviewFrame(targetTime: number): void {
@@ -1727,6 +2011,8 @@ export function App(): React.ReactElement {
       onStartExport={handleStartExport}
       onRefreshExportStatus={handleRefreshExportStatus}
       onCancelExport={handleCancelExport}
+      onRetryAudioPreview={handleRetryAudioPreview}
+      onSelectAudioOutputDevice={handleSelectAudioOutputDevice}
       onImportMaterial={handleImportMaterial}
           onImportMaterialFromPath={handleImportMaterialFromPath}
           onRefreshMaterials={handleRefreshMaterials}
@@ -1780,6 +2066,46 @@ function applyArtifactStatusResult(
     pendingCommand: null,
     commandError: null,
     resourcePanel: resourcePanelFromArtifactStatus(result.data)
+  };
+}
+
+function applyAudioPreviewCommandResult(
+  current: WorkspaceState,
+  result: CommandResultEnvelope<AudioPreviewCommandResponse>
+): WorkspaceState {
+  if (!result.ok || result.data === null) {
+    return {
+      ...current,
+      pendingAudioCommand: null,
+      commandError: commandErrorMessage(result)
+    };
+  }
+
+  return {
+    ...current,
+    pendingAudioCommand: null,
+    commandError: null,
+    audioPreview: audioPreviewFromCommandResponse(current.audioPreview, result.data)
+  };
+}
+
+function applyWaveformResult(
+  current: WorkspaceState,
+  result: CommandResultEnvelope<WaveformDisplayPeaksResponse>
+): WorkspaceState {
+  if (!result.ok || result.data === null) {
+    return {
+      ...current,
+      pendingAudioCommand: null,
+      commandError: commandErrorMessage(result)
+    };
+  }
+
+  return {
+    ...current,
+    pendingAudioCommand: null,
+    commandError: null,
+    waveform: waveformDisplayFromResponse(result.data)
   };
 }
 
@@ -1918,6 +2244,10 @@ function getSequenceDurationUs(workspace: WorkspaceState): number {
     }, 0);
     return Math.max(duration, trackEnd);
   }, 0);
+}
+
+function firstAudioMaterialId(workspace: WorkspaceState): string | null {
+  return workspace.materials.find((material) => material.kind === "audio" && material.status === "available")?.materialId ?? null;
 }
 
 function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {

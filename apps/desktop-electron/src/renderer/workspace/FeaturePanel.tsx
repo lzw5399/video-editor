@@ -38,6 +38,7 @@ type FeaturePanelProps = {
   onPrepareArtifactCleanup: () => void;
   onConfirmArtifactCleanup: () => void;
   onDismissResourceNotice: () => void;
+  onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
   onAddTextSegment: (text: TextSegment, durationUs: number) => void;
   onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
   onAddAudioSegment: (materialId: string, durationUs: number) => void;
@@ -334,6 +335,7 @@ function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: 
 function AudioPanel({
   workspace,
   onAddAudioSegment,
+  onSelectAudioOutputDevice,
   onSetSelectedSegmentVolume,
   onSetSelectedTrackMute
 }: FeaturePanelProps): React.ReactElement {
@@ -388,6 +390,26 @@ function AudioPanel({
             onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
           />
         </label>
+      </div>
+
+      <div className="function-card field-stack">
+        <h3>输出设备</h3>
+        <label className="field-row">
+          <span>输出设备</span>
+          <select
+            aria-label="输出设备"
+            value={workspace.audioDevices.selectedDeviceId}
+            onChange={(event) => onSelectAudioOutputDevice(event.currentTarget.value)}
+            disabled={workspace.pendingAudioCommand !== null}
+          >
+            {workspace.audioDevices.devices.map((device) => (
+              <option key={device.selectionId} value={device.selectionId}>
+                {device.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="audio-safe-status">{workspace.audioDevices.statusLabel}</p>
       </div>
 
       <div className="function-card field-stack">

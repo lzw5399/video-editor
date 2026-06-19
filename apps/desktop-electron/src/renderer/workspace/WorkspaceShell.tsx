@@ -35,6 +35,8 @@ type WorkspaceShellProps = {
   onStartExport: () => void;
   onRefreshExportStatus: () => void;
   onCancelExport: () => void;
+  onRetryAudioPreview: () => void;
+  onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
   onImportMaterial: () => void;
   onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
@@ -93,6 +95,8 @@ export function WorkspaceShell({
   onStartExport,
   onRefreshExportStatus,
   onCancelExport,
+  onRetryAudioPreview,
+  onSelectAudioOutputDevice,
   onImportMaterial,
   onImportMaterialFromPath,
   onRefreshMaterials,
@@ -174,6 +178,7 @@ export function WorkspaceShell({
           onPrepareArtifactCleanup={onPrepareArtifactCleanup}
           onConfirmArtifactCleanup={onConfirmArtifactCleanup}
           onDismissResourceNotice={onDismissResourceNotice}
+          onSelectAudioOutputDevice={onSelectAudioOutputDevice}
           onAddTextSegment={onAddTextSegment}
           onImportSubtitleSrt={onImportSubtitleSrt}
           onAddAudioSegment={onAddAudioSegment}
@@ -190,6 +195,9 @@ export function WorkspaceShell({
           preview={workspace.preview}
           resourcePreviewStatusLabel={artifactPreviewStatusLabel(workspace.resourcePanel)}
           exportState={workspace.export}
+          audioPreview={workspace.audioPreview}
+          audioDevices={workspace.audioDevices}
+          audioParity={workspace.audioParity}
           runtimeDiagnostics={workspace.runtimeDiagnostics}
           selectedSegment={selectedSegment}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
@@ -207,6 +215,7 @@ export function WorkspaceShell({
           onStartExport={onStartExport}
           onRefreshExportStatus={onRefreshExportStatus}
           onCancelExport={onCancelExport}
+          onRetryAudioPreview={onRetryAudioPreview}
         />
       </section>
 

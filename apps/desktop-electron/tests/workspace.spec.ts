@@ -984,7 +984,7 @@ test("音频预览 controls send generated command envelopes and preserve state 
     await spyExecuteCommandCalls(app, page);
 
     await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
-    await expect(page.getByLabel("输出设备")).toContainText("系统默认");
+    await expect(page.getByLabel("输出设备状态")).toContainText("系统默认");
 
     await page.getByRole("button", { name: "播放预览" }).first().click();
     await expectCommandCall(app, "createAudioPreviewSession");
@@ -1004,9 +1004,10 @@ test("音频预览 controls send generated command envelopes and preserve state 
     await expectCommandCall(app, "getAudioPreviewStatus");
 
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
-    await page.getByLabel("输出设备").selectOption("desktop-output-secondary");
+    const audioPanel = page.getByRole("region", { name: "素材面板" });
+    await audioPanel.getByLabel("输出设备").selectOption("desktop-output-secondary");
     await expectCommandCall(app, "selectAudioOutputDevice");
-    await expect(page.getByLabel("输出设备")).toContainText("外接监听");
+    await expect(audioPanel.getByLabel("输出设备")).toContainText("外接监听");
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toEqual(

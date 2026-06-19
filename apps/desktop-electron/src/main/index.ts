@@ -4,6 +4,10 @@ import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
+  AudioOutputDeviceSummary,
+  AudioPreviewCommandResponse,
+  AudioPreviewPlaybackStatus,
+  AudioPreviewStatusResponse,
   ArtifactMaintenanceResult,
   ArtifactStatusSummary,
   ArtifactQuotaStatus,
@@ -11,7 +15,9 @@ import type {
   ExportJobStatusResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
-  TimelineCommandResponse
+  TimelineCommandResponse,
+  WaveformDisplayPeaksResponse,
+  WaveformDisplayStatus
 } from "../generated/CommandResultEnvelope";
 import type { Draft, Keyframe, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
 import { executeCommand, ping, version } from "./nativeBinding";
@@ -38,6 +44,9 @@ type TestExecuteCommandCall = {
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
+  sessionId: string | null;
+  deviceSelectionId: string | null;
+  maxPeakBins: number | null;
 };
 
 declare global {
@@ -86,6 +95,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   if (testTextResponse !== null) {
     return testTextResponse;
   }
+  const testTimelineAudioResponse = maybeBuildTestTimelineAudioCommandResponse(command);
+  if (testTimelineAudioResponse !== null) {
+    return testTimelineAudioResponse;
+  }
   const testKeyframeResponse = maybeBuildTestKeyframeCommandResponse(command);
   if (testKeyframeResponse !== null) {
     return testKeyframeResponse;
@@ -101,6 +114,10 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   const testArtifactResponse = maybeBuildTestArtifactResponse(command);
   if (testArtifactResponse !== null) {
     return testArtifactResponse;
+  }
+  const testAudioResponse = maybeBuildTestAudioResponse(command);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
   }
   return executeCommand(command);
 });
@@ -265,6 +282,9 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const srtContent = command.payload.kind === "importSubtitleSrt" ? command.payload.srtContent : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
+  const sessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.sessionId ?? null : null;
+  const deviceSelectionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.deviceSelectionId ?? null : null;
+  const maxPeakBins = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.maxPeakBins ?? null : null;
   const jobId =
     command.payload.kind === "getExportJobStatus" ||
     command.payload.kind === "cancelExport" ||
@@ -291,8 +311,38 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     srtContent,
     outputPath,
     preset,
-    jobId
+    jobId,
+    sessionId,
+    deviceSelectionId,
+    maxPeakBins
   });
+}
+
+function isAudioPreviewCommandKind(kind: CommandEnvelope["payload"]["kind"]): kind is
+  | "createAudioPreviewSession"
+  | "playAudioPreview"
+  | "pauseAudioPreview"
+  | "stopAudioPreview"
+  | "seekAudioPreview"
+  | "cancelAudioPreview"
+  | "getAudioPreviewStatus"
+  | "listAudioOutputDevices"
+  | "selectAudioOutputDevice"
+  | "getWaveformDisplayPeaks"
+  | "refreshWaveformStatus" {
+  return (
+    kind === "createAudioPreviewSession" ||
+    kind === "playAudioPreview" ||
+    kind === "pauseAudioPreview" ||
+    kind === "stopAudioPreview" ||
+    kind === "seekAudioPreview" ||
+    kind === "cancelAudioPreview" ||
+    kind === "getAudioPreviewStatus" ||
+    kind === "listAudioOutputDevices" ||
+    kind === "selectAudioOutputDevice" ||
+    kind === "getWaveformDisplayPeaks" ||
+    kind === "refreshWaveformStatus"
+  );
 }
 
 function maybeBuildTestVisualCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
@@ -371,10 +421,11 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
       keyframes: [],
       filters: [],
       transition: null,
-      text: command.payload.text,
-      volume: { levelMillis: 1000 },
-      visual: defaultTestSegmentVisual(command.payload.draft)
-    };
+          text: command.payload.text,
+          volume: { levelMillis: 1000 },
+          audio: defaultTestSegmentAudio(),
+          visual: defaultTestSegmentVisual(command.payload.draft)
+        };
     const draft = {
       ...ensureTestTextMaterial(command.payload.draft, command.payload.materialId, "默认文字"),
       tracks: command.payload.draft.tracks.map((track) =>
@@ -428,6 +479,7 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
     transition: null,
     text: subtitleText,
     volume: { levelMillis: 1000 },
+    audio: defaultTestSegmentAudio(),
     visual: defaultTestSegmentVisual(command.payload.draft)
   };
   const draftWithMaterial = ensureTestTextMaterial(command.payload.draft, materialId, "导入字幕");
@@ -452,6 +504,107 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
   };
 
   return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [segmentId], "subtitleSrtImported");
+}
+
+function maybeBuildTestTimelineAudioCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
+  if (
+    command.payload.kind !== "addAudioSegment" &&
+    command.payload.kind !== "setSegmentVolume" &&
+    command.payload.kind !== "setTrackMute" &&
+    command.payload.kind !== "updateSegmentAudio"
+  ) {
+    return null;
+  }
+
+  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+    return null;
+  }
+
+  if (command.payload.kind === "addAudioSegment") {
+    const segment: Segment = {
+      segmentId: command.payload.segmentId,
+      materialId: command.payload.materialId,
+      sourceTimerange: command.payload.sourceTimerange,
+      targetTimerange: command.payload.targetTimerange,
+      mainTrackMagnet: { enabled: false },
+      keyframes: [],
+      filters: [],
+      transition: null,
+      text: null,
+      volume: { levelMillis: 1000 },
+      audio: defaultTestSegmentAudio(),
+      visual: defaultTestSegmentVisual(command.payload.draft)
+    };
+    const draft: Draft = {
+      ...command.payload.draft,
+      tracks: command.payload.draft.tracks.map((track) =>
+        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
+      )
+    };
+
+    return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [command.payload.segmentId], "audioSegmentAdded");
+  }
+
+  if (command.payload.kind === "setTrackMute") {
+    const draft: Draft = {
+      ...command.payload.draft,
+      tracks: command.payload.draft.tracks.map((track) =>
+        track.trackId === command.payload.trackId ? { ...track, muted: command.payload.muted } : track
+      )
+    };
+
+    return buildTestTimelineCommandResponse(
+      command,
+      draft,
+      command.payload.trackId,
+      command.payload.selection.segmentIds,
+      "trackMuteSet"
+    );
+  }
+
+  const segmentId = command.payload.segmentId;
+  let trackId = command.payload.selection.trackIds[0] ?? "";
+  const draft: Draft = {
+    ...command.payload.draft,
+    tracks: command.payload.draft.tracks.map((track) => ({
+      ...track,
+      segments: track.segments.map((segment) => {
+        if (segment.segmentId !== segmentId) {
+          return segment;
+        }
+
+        trackId = track.trackId;
+        if (command.payload.kind === "setSegmentVolume") {
+          return {
+            ...segment,
+            volume: command.payload.volume,
+            audio: {
+              ...(segment.audio ?? defaultTestSegmentAudio()),
+              gainMillis: command.payload.volume.levelMillis
+            }
+          };
+        }
+
+        return {
+          ...segment,
+          audio: {
+            ...(segment.audio ?? defaultTestSegmentAudio()),
+            gainMillis: command.payload.gainMillis ?? segment.audio?.gainMillis ?? segment.volume.levelMillis,
+            panBalanceMillis: command.payload.panBalanceMillis ?? segment.audio?.panBalanceMillis ?? 0,
+            fadeInDuration: command.payload.fadeInDuration ?? segment.audio?.fadeInDuration ?? { duration: 0 },
+            fadeOutDuration: command.payload.fadeOutDuration ?? segment.audio?.fadeOutDuration ?? { duration: 0 },
+            effectSlots: command.payload.effectSlots ?? segment.audio?.effectSlots ?? []
+          },
+          volume:
+            command.payload.gainMillis === null || command.payload.gainMillis === undefined
+              ? segment.volume
+              : { levelMillis: command.payload.gainMillis }
+        };
+      })
+    }))
+  };
+
+  return buildTestTimelineCommandResponse(command, draft, trackId, [segmentId], "segmentAudioUpdated");
 }
 
 function maybeBuildTestKeyframeCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
@@ -606,6 +759,16 @@ function defaultTestSegmentVisual(draft: Draft): SegmentVisual {
       mask: { kind: "none" }
     }
   );
+}
+
+function defaultTestSegmentAudio() {
+  return {
+    gainMillis: 1000,
+    panBalanceMillis: 0,
+    fadeInDuration: { duration: 0 },
+    fadeOutDuration: { duration: 0 },
+    effectSlots: []
+  };
 }
 
 function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
@@ -872,6 +1035,199 @@ function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEn
   }
 
   return null;
+}
+
+function maybeBuildTestAudioResponse(
+  command: CommandEnvelope
+):
+  | CommandResultEnvelope<AudioPreviewCommandResponse>
+  | CommandResultEnvelope<AudioPreviewStatusResponse>
+  | CommandResultEnvelope<AudioOutputDeviceSummary[]>
+  | CommandResultEnvelope<WaveformDisplayPeaksResponse>
+  | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS !== "1" || !isAudioPreviewCommandKind(command.payload.kind)) {
+    return null;
+  }
+
+  const rejectedCommand = process.env.VIDEO_EDITOR_TEST_AUDIO_REJECT_COMMAND;
+  if (rejectedCommand === command.payload.kind) {
+    return {
+      ok: false,
+      data: null,
+      error: {
+        kind: "previewServiceFailed",
+        message: "音频命令被测试场景拒绝",
+        command: command.payload.kind
+      },
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "listAudioOutputDevices") {
+    return {
+      ok: true,
+      data: buildTestAudioDevices(),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "getAudioPreviewStatus") {
+    return {
+      ok: true,
+      data: buildTestAudioStatusResponse(command.payload.sessionId ?? "desktop-audio-preview-session", "ready", command.payload.targetTime ?? 0),
+      error: null,
+      events: []
+    };
+  }
+
+  if (command.payload.kind === "getWaveformDisplayPeaks" || command.payload.kind === "refreshWaveformStatus") {
+    return {
+      ok: true,
+      data: buildTestWaveformResponse(command.payload.materialId ?? null, command.payload.maxPeakBins ?? 16),
+      error: null,
+      events: []
+    };
+  }
+
+  const status = audioStatusForCommand(command.payload.kind);
+  return {
+    ok: true,
+    data: {
+      sessionId: command.payload.sessionId ?? "desktop-audio-preview-session",
+      generation: command.payload.playbackGeneration ?? 1,
+      accepted: true,
+      status,
+      statusLabel: audioStatusLabel(status),
+      targetTime: command.payload.targetTime ?? 0,
+      diagnostics: []
+    },
+    error: null,
+    events: []
+  };
+}
+
+function audioStatusForCommand(kind: CommandEnvelope["payload"]["kind"]): AudioPreviewPlaybackStatus {
+  if (kind === "playAudioPreview") {
+    return "playing";
+  }
+  if (kind === "pauseAudioPreview") {
+    return "paused";
+  }
+  if (kind === "stopAudioPreview") {
+    return "stopped";
+  }
+  if (kind === "seekAudioPreview") {
+    return "seeking";
+  }
+  if (kind === "cancelAudioPreview") {
+    return "canceled";
+  }
+  return "ready";
+}
+
+function audioStatusLabel(status: AudioPreviewPlaybackStatus): string {
+  const labels: Record<AudioPreviewPlaybackStatus, string> = {
+    ready: "音频就绪",
+    playing: "正在播放",
+    paused: "已暂停",
+    stopped: "已暂停",
+    buffering: "音频缓冲中",
+    seeking: "正在定位声音",
+    canceled: "音频请求已取消",
+    staleRejected: "声音已同步到最新播放头",
+    unavailable: "音频暂不可用",
+    failed: "音频预览失败：请检查素材是否可用，或重新连接输出设备后重试。"
+  };
+
+  return labels[status];
+}
+
+function buildTestAudioStatusResponse(
+  sessionId: string,
+  status: AudioPreviewPlaybackStatus,
+  targetTime: number
+): AudioPreviewStatusResponse {
+  return {
+    sessionId,
+    generation: 1,
+    status,
+    statusLabel: audioStatusLabel(status),
+    targetTime,
+    bufferedUntil: targetTime + 2_000_000,
+    device: buildTestAudioDevices()[0],
+    diagnostics: []
+  };
+}
+
+function buildTestAudioDevices(): AudioOutputDeviceSummary[] {
+  return [
+    {
+      selectionId: "system-default",
+      displayName: "系统默认",
+      status: "ready",
+      statusLabel: "输出设备就绪",
+      isDefault: true,
+      sampleRateHz: 48_000,
+      channelCount: 2,
+      diagnostics: []
+    },
+    {
+      selectionId: "desktop-output-secondary",
+      displayName: "外接监听",
+      status: "ready",
+      statusLabel: "输出设备就绪",
+      isDefault: false,
+      sampleRateHz: 48_000,
+      channelCount: 2,
+      diagnostics: []
+    }
+  ];
+}
+
+function buildTestWaveformResponse(materialId: string | null, maxPeakBins: number): WaveformDisplayPeaksResponse {
+  const status = waveformStatusFromEnv();
+  const safeBins = Math.max(1, Math.min(64, Math.round(maxPeakBins)));
+  const peaks =
+    status === "ready"
+      ? Array.from({ length: safeBins }, (_, index) => {
+          const height = 180 + ((index * 137) % 720);
+          return {
+            minMillis: -height,
+            maxMillis: height
+          };
+        })
+      : [];
+
+  return {
+    materialId,
+    status,
+    statusLabel: waveformStatusLabel(status),
+    targetTimerange: { start: 0, duration: 8_000_000 },
+    requestedPeakBins: safeBins,
+    returnedPeakBins: peaks.length,
+    peaks,
+    diagnostics: []
+  };
+}
+
+function waveformStatusFromEnv(): WaveformDisplayStatus {
+  const status = process.env.VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS;
+  if (status === "pending" || status === "missing" || status === "failed") {
+    return status;
+  }
+  return "ready";
+}
+
+function waveformStatusLabel(status: WaveformDisplayStatus): string {
+  const labels: Record<WaveformDisplayStatus, string> = {
+    ready: "波形就绪",
+    pending: "波形生成中",
+    missing: "暂无波形",
+    failed: "波形生成失败"
+  };
+
+  return labels[status];
 }
 
 function maybeBuildTestArtifactResponse(

@@ -426,6 +426,16 @@ h2 {
   padding: 10px;
 }
 
+.audio-safe-status {
+  margin: 0;
+  overflow: hidden;
+  color: #9b9890;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .text-feature-card {
   gap: 8px;
 }

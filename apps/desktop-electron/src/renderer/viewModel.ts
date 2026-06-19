@@ -2,6 +2,11 @@ import type { CSSProperties } from "react";
 
 import type { CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
+  AudioOutputDeviceStatus,
+  AudioOutputDeviceSummary,
+  AudioPreviewCommandResponse,
+  AudioPreviewPlaybackStatus,
+  AudioPreviewStatusResponse,
   ArtifactMaintenanceResult,
   ArtifactQuotaStatus,
   ArtifactStatusSummary,
@@ -11,7 +16,9 @@ import type {
   ExportValidationReport,
   MaterialArtifactStatus,
   MissingMaterialCommandDiagnostic,
-  PreviewStatus
+  PreviewStatus,
+  WaveformDisplayPeaksResponse,
+  WaveformDisplayStatus
 } from "../generated/CommandResultEnvelope";
 import type {
   CanvasAspectRatio,
@@ -81,10 +88,15 @@ export type WorkspaceState = {
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
   resourcePanel: ResourcePanelState;
   preview: PreviewDisplayState;
+  audioPreview: AudioPreviewDisplayModel;
+  audioDevices: AudioDeviceDisplayModel;
+  waveform: WaveformDisplayModel;
+  audioParity: AudioParityDisplayModel;
   export: ExportDisplayState;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   bindingStatus: BindingStatus;
   pendingCommand: string | null;
+  pendingAudioCommand: string | null;
   commandError: string | null;
 };
 
@@ -150,6 +162,45 @@ export type PreviewDisplayState = {
   error: string | null;
   lastRequestedPlayhead: Microseconds | null;
   lastRequestedRangeLabel: string | null;
+};
+
+export type AudioPreviewDisplayModel = {
+  sessionId: string | null;
+  generation: number;
+  status: AudioPreviewPlaybackStatus;
+  statusLabel: string;
+  targetTime: Microseconds;
+  bufferedUntil: Microseconds;
+  deviceStatusLabel: string;
+  warningLabel: string | null;
+  errorLabel: string | null;
+};
+
+export type AudioDeviceDisplayItem = {
+  selectionId: string;
+  displayName: string;
+  status: AudioOutputDeviceStatus;
+  statusLabel: string;
+  isDefault: boolean;
+};
+
+export type AudioDeviceDisplayModel = {
+  devices: AudioDeviceDisplayItem[];
+  selectedDeviceId: string;
+  statusLabel: string;
+};
+
+export type WaveformDisplayModel = {
+  status: WaveformDisplayStatus;
+  statusLabel: string;
+  materialId: string | null;
+  requestedPeakBins: number;
+  returnedPeakBins: number;
+  peaks: Array<{ minMillis: number; maxMillis: number }>;
+};
+
+export type AudioParityDisplayModel = {
+  warningLabel: string | null;
 };
 
 export type RealtimePreviewBackendUsed = "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
@@ -285,6 +336,16 @@ function defaultSegmentVisual(): SegmentVisual {
     backgroundFilling: { kind: "none" },
     blendMode: { kind: "normal" },
     mask: { kind: "none" }
+  };
+}
+
+function defaultSegmentAudio() {
+  return {
+    gainMillis: 1000,
+    panBalanceMillis: 0,
+    fadeInDuration: { duration: 0 },
+    fadeOutDuration: { duration: 0 },
+    effectSlots: []
   };
 }
 
@@ -462,6 +523,7 @@ export const demoWorkspaceDraft: Draft = {
           volume: {
             levelMillis: 1000
           },
+          audio: defaultSegmentAudio(),
           visual: defaultSegmentVisual()
         }
       ]
@@ -492,6 +554,10 @@ export const demoWorkspaceDraft: Draft = {
           transition: null,
           volume: {
             levelMillis: 800
+          },
+          audio: {
+            ...defaultSegmentAudio(),
+            gainMillis: 800
           },
           visual: defaultSegmentVisual()
         }
@@ -547,6 +613,12 @@ export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft):
       lastRequestedPlayhead: null,
       lastRequestedRangeLabel: null
     },
+    audioPreview: createInitialAudioPreviewDisplayModel(),
+    audioDevices: createInitialAudioDeviceDisplayModel(),
+    waveform: createInitialWaveformDisplayModel(),
+    audioParity: {
+      warningLabel: null
+    },
     export: {
       outputPath: "/tmp/video-editor-export.mp4",
       preset: "h264AacBalanced",
@@ -565,7 +637,49 @@ export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft):
       label: "正在连接剪辑核心"
     },
     pendingCommand: null,
+    pendingAudioCommand: null,
     commandError: null
+  };
+}
+
+export function createInitialAudioPreviewDisplayModel(): AudioPreviewDisplayModel {
+  return {
+    sessionId: null,
+    generation: 0,
+    status: "ready",
+    statusLabel: "音频就绪",
+    targetTime: 0,
+    bufferedUntil: 0,
+    deviceStatusLabel: "输出设备就绪",
+    warningLabel: null,
+    errorLabel: null
+  };
+}
+
+export function createInitialAudioDeviceDisplayModel(): AudioDeviceDisplayModel {
+  return {
+    selectedDeviceId: "system-default",
+    statusLabel: "输出设备就绪",
+    devices: [
+      {
+        selectionId: "system-default",
+        displayName: "系统默认",
+        status: "ready",
+        statusLabel: "输出设备就绪",
+        isDefault: true
+      }
+    ]
+  };
+}
+
+export function createInitialWaveformDisplayModel(): WaveformDisplayModel {
+  return {
+    status: "missing",
+    statusLabel: "暂无波形",
+    materialId: null,
+    requestedPeakBins: 0,
+    returnedPeakBins: 0,
+    peaks: []
   };
 }
 
@@ -653,6 +767,126 @@ export function resourcePanelWithError(current: ResourcePanelState, message: str
       errorLabel: message
     }
   };
+}
+
+export function audioPreviewFromCommandResponse(
+  current: AudioPreviewDisplayModel,
+  response: AudioPreviewCommandResponse
+): AudioPreviewDisplayModel {
+  return {
+    ...current,
+    sessionId: response.sessionId,
+    generation: response.generation,
+    status: response.status,
+    statusLabel: safeAudioPlaybackStatusLabel(response.statusLabel, response.status),
+    targetTime: response.targetTime,
+    warningLabel: audioWarningFromPlaybackStatus(response.status),
+    errorLabel: response.status === "failed" ? "音频预览失败：请检查素材是否可用，或重新连接输出设备后重试。" : null
+  };
+}
+
+export function audioPreviewFromStatusResponse(response: AudioPreviewStatusResponse): AudioPreviewDisplayModel {
+  return {
+    sessionId: response.sessionId,
+    generation: response.generation,
+    status: response.status,
+    statusLabel: safeAudioPlaybackStatusLabel(response.statusLabel, response.status),
+    targetTime: response.targetTime,
+    bufferedUntil: response.bufferedUntil,
+    deviceStatusLabel: safeAudioDeviceStatusLabel(response.device.statusLabel, response.device.status),
+    warningLabel: audioWarningFromPlaybackStatus(response.status),
+    errorLabel: response.status === "failed" ? "音频预览失败：请检查素材是否可用，或重新连接输出设备后重试。" : null
+  };
+}
+
+export function audioDevicesFromSummaries(
+  summaries: AudioOutputDeviceSummary[],
+  selectedDeviceId: string
+): AudioDeviceDisplayModel {
+  const devices = summaries.map((device) => ({
+    selectionId: device.selectionId,
+    displayName: device.isDefault ? "系统默认" : device.displayName,
+    status: device.status,
+    statusLabel: safeAudioDeviceStatusLabel(device.statusLabel, device.status),
+    isDefault: device.isDefault
+  }));
+  const resolvedDevices = devices.length > 0 ? devices : createInitialAudioDeviceDisplayModel().devices;
+  const selected = resolvedDevices.some((device) => device.selectionId === selectedDeviceId)
+    ? selectedDeviceId
+    : resolvedDevices.find((device) => device.isDefault)?.selectionId ?? resolvedDevices[0].selectionId;
+  const selectedDevice = resolvedDevices.find((device) => device.selectionId === selected) ?? resolvedDevices[0];
+
+  return {
+    devices: resolvedDevices,
+    selectedDeviceId: selected,
+    statusLabel: selectedDevice.statusLabel
+  };
+}
+
+export function waveformDisplayFromResponse(response: WaveformDisplayPeaksResponse): WaveformDisplayModel {
+  return {
+    status: response.status,
+    statusLabel: safeWaveformStatusLabel(response.statusLabel, response.status),
+    materialId: response.materialId ?? null,
+    requestedPeakBins: Math.max(0, Math.round(response.requestedPeakBins)),
+    returnedPeakBins: Math.max(0, Math.round(response.returnedPeakBins)),
+    peaks: response.peaks.slice(0, 64).map((peak) => ({
+      minMillis: Math.max(-1000, Math.min(1000, Math.round(peak.minMillis))),
+      maxMillis: Math.max(-1000, Math.min(1000, Math.round(peak.maxMillis)))
+    }))
+  };
+}
+
+function safeAudioPlaybackStatusLabel(label: string, status: AudioPreviewPlaybackStatus): string {
+  const allowed: Record<AudioPreviewPlaybackStatus, string> = {
+    ready: "音频就绪",
+    playing: "正在播放",
+    paused: "已暂停",
+    stopped: "已暂停",
+    buffering: "音频缓冲中",
+    seeking: "正在定位声音",
+    canceled: "音频请求已取消",
+    staleRejected: "声音已同步到最新播放头",
+    unavailable: "音频暂不可用",
+    failed: "音频预览失败：请检查素材是否可用，或重新连接输出设备后重试。"
+  };
+
+  return Object.values(allowed).includes(label) ? label : allowed[status];
+}
+
+function safeAudioDeviceStatusLabel(label: string, status: AudioOutputDeviceStatus): string {
+  const allowed: Record<AudioOutputDeviceStatus, string> = {
+    ready: "输出设备就绪",
+    degraded: "输出设备降级",
+    missing: "未找到输出设备",
+    unavailable: "音频暂不可用"
+  };
+
+  return Object.values(allowed).includes(label) ? label : allowed[status];
+}
+
+function safeWaveformStatusLabel(label: string, status: WaveformDisplayStatus): string {
+  const allowed: Record<WaveformDisplayStatus, string> = {
+    ready: "波形就绪",
+    pending: "波形生成中",
+    missing: "暂无波形",
+    failed: "波形生成失败"
+  };
+
+  return Object.values(allowed).includes(label) ? label : allowed[status];
+}
+
+function audioWarningFromPlaybackStatus(status: AudioPreviewPlaybackStatus): string | null {
+  if (status === "buffering") {
+    return "音频缓冲中";
+  }
+  if (status === "staleRejected") {
+    return "声音已同步到最新播放头";
+  }
+  if (status === "unavailable") {
+    return "音频暂不可用";
+  }
+  return null;
 }
 
 export function artifactPreviewStatusLabel(resourcePanel: ResourcePanelState): string | null {
@@ -779,7 +1013,7 @@ export function createWaitingRuntimeDiagnosticsState(): RuntimeDiagnosticsDispla
   return {
     status: "idle",
     statusLabel: "等待运行环境检测",
-    statusDetail: "打包应用启动后会检测剪辑核心、FFmpeg、编码器和字幕能力。",
+    statusDetail: "打包应用启动后会检测剪辑核心、媒体运行环境、编码器和字幕能力。",
     packageStatusLabel: "打包状态待检测",
     rows: [],
     diagnostics: [],
@@ -829,7 +1063,7 @@ export function formatRealtimePreviewBackendLabel(backend: RealtimePreviewBacken
     gpu: "实时后端：GPU",
     offscreen: "实时后端：离屏",
     previewArtifact: "备用产物：预览缓存",
-    ffmpegArtifact: "备用产物：FFmpeg",
+    ffmpegArtifact: "备用产物：媒体运行环境",
     none: "实时后端：未呈现"
   };
 
@@ -847,7 +1081,7 @@ export function formatRealtimePreviewFallbackReason(reason: RealtimePreviewFallb
     nativeChildWindowFailed: "原生预览窗口接入失败",
     offscreenReadbackRequired: "需要离屏回读",
     previewArtifactCacheHit: "命中预览缓存",
-    ffmpegArtifactGenerated: "已生成 FFmpeg 备用产物",
+    ffmpegArtifactGenerated: "已生成媒体备用产物",
     canceled: "请求已取消",
     staleGeneration: "旧一代请求已拒绝"
   };

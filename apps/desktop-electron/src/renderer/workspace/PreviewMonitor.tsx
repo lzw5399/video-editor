@@ -15,6 +15,9 @@ import {
   formatRealtimePreviewFallbackReason,
   summarizeRealtimePreviewDisplay,
   type SelectedSegmentView,
+  type AudioParityDisplayModel,
+  type AudioDeviceDisplayModel,
+  type AudioPreviewDisplayModel,
   type BindingStatus,
   type ExportDisplayState,
   type PreviewDisplayState,
@@ -35,6 +38,9 @@ type PreviewMonitorProps = {
   preview: PreviewDisplayState;
   resourcePreviewStatusLabel: string | null;
   exportState: ExportDisplayState;
+  audioPreview: AudioPreviewDisplayModel;
+  audioDevices: AudioDeviceDisplayModel;
+  audioParity: AudioParityDisplayModel;
   runtimeDiagnostics: RuntimeDiagnosticsDisplayState;
   selectedSegment: SelectedSegmentView | null;
   showDeveloperDiagnostics: boolean;
@@ -52,6 +58,7 @@ type PreviewMonitorProps = {
   onStartExport: () => void;
   onRefreshExportStatus: () => void;
   onCancelExport: () => void;
+  onRetryAudioPreview: () => void;
 };
 
 type MonitorControl = {
@@ -140,6 +147,9 @@ export function PreviewMonitor({
   preview,
   resourcePreviewStatusLabel,
   exportState,
+  audioPreview,
+  audioDevices,
+  audioParity,
   runtimeDiagnostics,
   selectedSegment,
   showDeveloperDiagnostics,
@@ -156,7 +166,8 @@ export function PreviewMonitor({
   onExportPresetChange,
   onStartExport,
   onRefreshExportStatus,
-  onCancelExport
+  onCancelExport,
+  onRetryAudioPreview
 }: PreviewMonitorProps): React.ReactElement {
   const nativeHostRef = useRef<HTMLDivElement>(null);
   const lastSentHostRectRef = useRef<string | null>(null);
@@ -337,8 +348,8 @@ export function PreviewMonitor({
               key={control.label}
               type="button"
               className={control.label === "画面比例" ? "preview-icon-button ratio-button" : "preview-icon-button"}
-              aria-label={control.label === "播放" && playbackRunning ? "暂停" : control.label}
-              title={control.label === "播放" && playbackRunning ? "暂停" : control.label}
+              aria-label={previewControlLabel(control.label, playbackRunning)}
+              title={previewControlLabel(control.label, playbackRunning)}
               onClick={() => {
                 if (control.label === "播放") {
                   onTogglePlayback();
@@ -483,6 +494,22 @@ export function PreviewMonitor({
       <div className="preview-status-line" aria-live="polite">
         <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
         <span aria-label="预览状态">{previewStatusLabel}</span>
+        <span className={`audio-status-chip audio-status-${audioPreview.status}`} aria-label="音频预览状态">
+          {audioStatusChipText(audioPreview, audioParity)}
+        </span>
+        <span className="audio-status-chip" aria-label="输出设备状态">
+          {audioDeviceChipText(audioDevices)}
+        </span>
+        <button
+          type="button"
+          className="audio-retry-button"
+          aria-label="重试音频"
+          title="重试音频"
+          onClick={onRetryAudioPreview}
+          disabled={pending}
+        >
+          重试音频
+        </button>
         <span className="canvas-readout-chip" title={canvasReadout}>
           {canvasReadout}
         </span>
@@ -520,6 +547,41 @@ function formatProductPreviewStatus(preview: PreviewDisplayState, placeholderLab
   }
 
   return preview.frameArtifactPath === null ? placeholderLabel : "正在准备预览画面";
+}
+
+function previewControlLabel(label: string, playbackRunning: boolean): string {
+  if (label === "播放") {
+    return playbackRunning ? "暂停预览" : "播放预览";
+  }
+  if (label === "停止") {
+    return "停止预览";
+  }
+  return label;
+}
+
+function audioStatusChipText(audioPreview: AudioPreviewDisplayModel, audioParity: AudioParityDisplayModel): string {
+  const facts = [audioPreview.statusLabel];
+  if (audioPreview.warningLabel !== null && audioPreview.warningLabel !== audioPreview.statusLabel) {
+    facts.push(audioPreview.warningLabel);
+  } else if (audioParity.warningLabel !== null) {
+    facts.push(audioParity.warningLabel);
+  } else if (
+    audioPreview.deviceStatusLabel !== "输出设备就绪" &&
+    audioPreview.deviceStatusLabel !== audioPreview.statusLabel
+  ) {
+    facts.push(audioPreview.deviceStatusLabel);
+  }
+
+  return facts.slice(0, 2).join(" · ");
+}
+
+function audioDeviceChipText(audioDevices: AudioDeviceDisplayModel): string {
+  const selected =
+    audioDevices.devices.find((device) => device.selectionId === audioDevices.selectedDeviceId) ??
+    audioDevices.devices.find((device) => device.isDefault) ??
+    audioDevices.devices[0];
+
+  return selected === undefined ? "系统默认" : selected.displayName;
 }
 
 function frameDurationUs(canvasConfig: DraftCanvasConfig): number {

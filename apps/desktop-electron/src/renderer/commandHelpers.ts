@@ -2,6 +2,7 @@ import type {
   AddSegmentCommandPayload,
   AddAudioSegmentCommandPayload,
   AddTextSegmentCommandPayload,
+  AudioPreviewCommandPayload,
   CancelExportCommandPayload,
   CommandEnvelope,
   CommandState,
@@ -35,6 +36,7 @@ import type {
   TrackId,
   UndoTimelineEditCommandPayload,
   UpdateDraftCanvasConfigCommandPayload,
+  UpdateSegmentAudioCommandPayload,
   UpdateSegmentVisualCommandPayload
 } from "../generated/CommandEnvelope";
 import type {
@@ -46,6 +48,8 @@ import type {
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type {
+  AudioFade,
+  AudioPanBalance,
   Draft,
   DraftCanvasConfig,
   Keyframe,
@@ -387,6 +391,33 @@ export function buildSetTrackMuteCommand(context: CommandContext, trackId: Track
   });
 }
 
+type UpdateSegmentAudioOptions = {
+  context: CommandContext;
+  segmentId: SegmentId;
+  gainMillis?: number | null;
+  panBalanceMillis?: AudioPanBalance | null;
+  fadeInDuration?: AudioFade | null;
+  fadeOutDuration?: AudioFade | null;
+  effectSlots?: UpdateSegmentAudioCommandPayload["effectSlots"];
+};
+
+export function buildUpdateSegmentAudioCommand(options: UpdateSegmentAudioOptions): CommandEnvelope {
+  const payload = {
+    kind: "updateSegmentAudio",
+    draft: options.context.draft,
+    commandState: options.context.commandState,
+    selection: options.context.selection,
+    segmentId: options.segmentId,
+    gainMillis: options.gainMillis ?? null,
+    panBalanceMillis: options.panBalanceMillis ?? null,
+    fadeInDuration: options.fadeInDuration ?? null,
+    fadeOutDuration: options.fadeOutDuration ?? null,
+    effectSlots: options.effectSlots ?? null
+  } satisfies UpdateSegmentAudioCommandPayload & { kind: "updateSegmentAudio" };
+
+  return envelope("updateSegmentAudio", payload);
+}
+
 export function buildUpdateDraftCanvasConfigCommand(
   context: CommandContext,
   canvasConfig: DraftCanvasConfig
@@ -524,6 +555,90 @@ export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCac
   } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
 
   return envelope("invalidatePreviewCache", payload);
+}
+
+type AudioPreviewCommandKind =
+  | "createAudioPreviewSession"
+  | "playAudioPreview"
+  | "pauseAudioPreview"
+  | "stopAudioPreview"
+  | "seekAudioPreview"
+  | "cancelAudioPreview"
+  | "getAudioPreviewStatus"
+  | "listAudioOutputDevices"
+  | "selectAudioOutputDevice"
+  | "getWaveformDisplayPeaks"
+  | "refreshWaveformStatus";
+
+type AudioPreviewCommandOptions = {
+  draft?: Draft | null;
+  sessionId?: string | null;
+  materialId?: MaterialId | null;
+  targetTime?: Microseconds | null;
+  targetTimerange?: TargetTimerange | null;
+  playbackGeneration?: number | null;
+  deviceSelectionId?: string | null;
+  maxPeakBins?: number | null;
+};
+
+export function buildCreateAudioPreviewSessionCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("createAudioPreviewSession", options);
+}
+
+export function buildPlayAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("playAudioPreview", options);
+}
+
+export function buildPauseAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("pauseAudioPreview", options);
+}
+
+export function buildStopAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("stopAudioPreview", options);
+}
+
+export function buildSeekAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("seekAudioPreview", options);
+}
+
+export function buildCancelAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("cancelAudioPreview", options);
+}
+
+export function buildGetAudioPreviewStatusCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("getAudioPreviewStatus", options);
+}
+
+export function buildListAudioOutputDevicesCommand(options: AudioPreviewCommandOptions = {}): CommandEnvelope {
+  return buildAudioPreviewCommand("listAudioOutputDevices", options);
+}
+
+export function buildSelectAudioOutputDeviceCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("selectAudioOutputDevice", options);
+}
+
+export function buildGetWaveformDisplayPeaksCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("getWaveformDisplayPeaks", options);
+}
+
+export function buildRefreshWaveformStatusCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
+  return buildAudioPreviewCommand("refreshWaveformStatus", options);
+}
+
+function buildAudioPreviewCommand(kind: AudioPreviewCommandKind, options: AudioPreviewCommandOptions): CommandEnvelope {
+  const payload = {
+    kind,
+    draft: options.draft ?? null,
+    sessionId: options.sessionId ?? null,
+    materialId: options.materialId ?? null,
+    targetTime: options.targetTime ?? null,
+    targetTimerange: options.targetTimerange ?? null,
+    playbackGeneration: options.playbackGeneration ?? null,
+    deviceSelectionId: options.deviceSelectionId ?? null,
+    maxPeakBins: options.maxPeakBins ?? null
+  } satisfies AudioPreviewCommandPayload & { kind: AudioPreviewCommandKind };
+
+  return envelope(kind, payload);
 }
 
 type ArtifactStatusCommandOptions = {
@@ -696,17 +811,17 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
       status === "ready"
         ? "运行环境就绪"
         : status === "error"
-          ? "运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。"
+          ? "运行环境检测失败，请检查媒体运行环境后重试。"
           : "部分能力不可用，可继续编辑，但预览或导出可能受限。",
     statusDetail:
       status === "ready"
         ? "预览和导出能力已通过剪辑核心检测。"
         : status === "error"
-          ? "运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。"
+          ? "运行环境检测失败，请检查媒体运行环境后重试。"
         : "部分能力不可用，可继续编辑，但预览或导出可能受限。",
     packageStatusLabel: report.licensePosture.externalRuntime ? "外部运行环境" : "打包应用已就绪",
     rows: [
-      binaryRow("FFmpeg 状态", report.ffmpeg),
+      binaryRow("媒体运行环境", report.ffmpeg),
       binaryRow("ffprobe 状态", report.ffprobe),
       featurePairRow("编码能力", report.h264Encoder, report.aacEncoder),
       featurePairRow("字幕能力", report.assFilter, report.subtitlesFilter),
@@ -728,13 +843,13 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
 export function runtimeDiagnosticsFromError(message: string): RuntimeDiagnosticsDisplayState {
   return {
     status: "error",
-    statusLabel: "运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。",
+    statusLabel: "运行环境检测失败，请检查媒体运行环境后重试。",
     statusDetail: message,
     packageStatusLabel: "运行环境不可用",
     rows: [
       {
-        label: "FFmpeg 状态",
-        value: message.includes("FFmpeg") ? "未找到" : "待检测",
+        label: "媒体运行环境",
+        value: message.includes("媒体运行环境") ? "未找到" : "待检测",
         detail: message,
         tone: "error"
       },
