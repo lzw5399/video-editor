@@ -6,6 +6,7 @@ import type {
   CommandEnvelope,
   CommandState,
   DeleteSegmentCommandPayload,
+  DirtyRange,
   EditTextSegmentCommandPayload,
   ExportPreset,
   GetExportJobStatusCommandPayload,
@@ -485,7 +486,7 @@ export function buildRequestPreviewSegmentCommand(options: RequestPreviewSegment
 
 type InvalidatePreviewCacheOptions = {
   entries: PreviewCacheEntryRef[];
-  changedRanges: TargetTimerange[];
+  changedRanges: DirtyRange[];
   changedMaterialIds: MaterialId[];
   reason: string;
 };

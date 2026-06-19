@@ -1487,6 +1487,23 @@
           "additionalProperties": false,
           "description": "Payload accepted by the Phase 5 preview cache invalidation command.",
           "properties": {
+            "artifactSchemaVersion": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "changedDomains": {
+              "items": {
+                "$ref": "#/$defs/DirtyDomain"
+              },
+              "type": "array"
+            },
+            "changedGraphNodeIds": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "changedMaterialIds": {
               "items": {
                 "$ref": "#/$defs/MaterialId"
@@ -1495,7 +1512,7 @@
             },
             "changedRanges": {
               "items": {
-                "$ref": "#/$defs/TargetTimerange"
+                "$ref": "#/$defs/DirtyRange"
               },
               "type": "array"
             },
@@ -1505,12 +1522,30 @@
               },
               "type": "array"
             },
+            "fullDraft": {
+              "type": "boolean"
+            },
+            "generatorVersion": {
+              "type": "string"
+            },
             "kind": {
               "const": "invalidatePreviewCache",
               "type": "string"
             },
+            "outputProfileFingerprint": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "reason": {
               "type": "string"
+            },
+            "runtimeCapabilityFingerprint": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -1526,6 +1561,16 @@
           "additionalProperties": false,
           "description": "Payload accepted by the Phase 5 export start command.",
           "properties": {
+            "dirtyFacts": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ExportPrepDirtyFacts"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "draft": {
               "$ref": "#/$defs/Draft"
             },
@@ -1952,6 +1997,16 @@
             }
           ]
         },
+        "dirtyFacts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportPrepDirtyFacts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jobId": {
           "type": "string"
         },
@@ -2007,6 +2062,73 @@
         "preset"
       ],
       "title": "ExportJobStatusResponse",
+      "type": "object"
+    },
+    "ExportPrepDirtyFacts": {
+      "additionalProperties": false,
+      "description": "Binding-safe export-preparation dirty facts produced by Rust services.",
+      "properties": {
+        "artifactSchemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changedDomains": {
+          "items": {
+            "$ref": "#/$defs/DirtyDomain"
+          },
+          "type": "array"
+        },
+        "changedGraphNodeIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "changedMaterialIds": {
+          "items": {
+            "$ref": "#/$defs/MaterialId"
+          },
+          "type": "array"
+        },
+        "dirtyRanges": {
+          "items": {
+            "$ref": "#/$defs/DirtyRange"
+          },
+          "type": "array"
+        },
+        "fullDraft": {
+          "type": "boolean"
+        },
+        "generatorVersion": {
+          "type": "string"
+        },
+        "outputProfileFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "runtimeCapabilityFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "dirtyRanges",
+        "changedMaterialIds",
+        "changedGraphNodeIds",
+        "changedDomains",
+        "fullDraft",
+        "reason",
+        "artifactSchemaVersion",
+        "generatorVersion"
+      ],
       "type": "object"
     },
     "ExportPreset": {
@@ -2175,6 +2297,23 @@
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 5 preview cache invalidation command.",
       "properties": {
+        "artifactSchemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changedDomains": {
+          "items": {
+            "$ref": "#/$defs/DirtyDomain"
+          },
+          "type": "array"
+        },
+        "changedGraphNodeIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "changedMaterialIds": {
           "items": {
             "$ref": "#/$defs/MaterialId"
@@ -2183,7 +2322,7 @@
         },
         "changedRanges": {
           "items": {
-            "$ref": "#/$defs/TargetTimerange"
+            "$ref": "#/$defs/DirtyRange"
           },
           "type": "array"
         },
@@ -2193,8 +2332,26 @@
           },
           "type": "array"
         },
+        "fullDraft": {
+          "type": "boolean"
+        },
+        "generatorVersion": {
+          "type": "string"
+        },
+        "outputProfileFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "reason": {
           "type": "string"
+        },
+        "runtimeCapabilityFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -2591,14 +2748,52 @@
         "artifactPath": {
           "type": "string"
         },
+        "artifactSchemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generatorVersion": {
+          "type": "string"
+        },
+        "graphNodeIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "inputFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "materialDependencies": {
           "items": {
             "$ref": "#/$defs/MaterialId"
           },
           "type": "array"
         },
+        "outputProfileFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "profile": {
           "$ref": "#/$defs/PreviewOutputProfile"
+        },
+        "runtimeCapabilityFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semanticFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "targetTimerange": {
           "$ref": "#/$defs/TargetTimerange"
@@ -2616,15 +2811,65 @@
       "additionalProperties": false,
       "description": "Preview cache invalidation response returned by the invalidation command.",
       "properties": {
+        "artifactSchemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changedDomains": {
+          "items": {
+            "$ref": "#/$defs/DirtyDomain"
+          },
+          "type": "array"
+        },
+        "changedGraphNodeIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "changedMaterialIds": {
+          "items": {
+            "$ref": "#/$defs/MaterialId"
+          },
+          "type": "array"
+        },
+        "dirtyRanges": {
+          "items": {
+            "$ref": "#/$defs/DirtyRange"
+          },
+          "type": "array"
+        },
+        "fullDraft": {
+          "type": "boolean"
+        },
+        "generatorVersion": {
+          "type": "string"
+        },
         "invalidatedCount": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
+        "outputProfileFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
         "retainedCount": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "runtimeCapabilityFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "status": {
           "$ref": "#/$defs/PreviewStatus"
@@ -4416,6 +4661,16 @@
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 5 export start command.",
       "properties": {
+        "dirtyFacts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportPrepDirtyFacts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "draft": {
           "$ref": "#/$defs/Draft"
         },
