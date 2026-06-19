@@ -98,8 +98,7 @@ assert_pattern_rejects \
   "const projectJson = { derivedArtifacts: [], previewCaches: [] };"
 
 require_fixed "$PACKAGE_JSON" "\"test:phase14-rust\""
-require_fixed "$PACKAGE_JSON" "cargo test -p artifact_store sqlite_schema -- --nocapture"
-require_fixed "$PACKAGE_JSON" "cargo test -p artifact_store blob_store -- --nocapture"
+require_fixed "$PACKAGE_JSON" "cargo test -p artifact_store -- --nocapture"
 require_fixed "$PACKAGE_JSON" "\"test:phase14-source-guards\""
 require_fixed "$PACKAGE_JSON" "bash scripts/phase14-source-guards.sh"
 require_fixed "$PACKAGE_JSON" "\"test:phase14\""
