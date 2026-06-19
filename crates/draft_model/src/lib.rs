@@ -623,6 +623,24 @@ pub struct PreviewCacheEntryRef {
     pub target_timerange: TargetTimerange,
     pub material_dependencies: Vec<MaterialId>,
     pub artifact_path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graph_node_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub semantic_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub input_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub output_profile_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub runtime_capability_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub artifact_schema_version: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub generator_version: String,
 }
 
 /// Payload accepted by the Phase 5 preview cache invalidation command.
@@ -630,9 +648,25 @@ pub struct PreviewCacheEntryRef {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InvalidatePreviewCacheCommandPayload {
     pub entries: Vec<PreviewCacheEntryRef>,
-    pub changed_ranges: Vec<TargetTimerange>,
+    pub changed_ranges: Vec<DirtyRange>,
     pub changed_material_ids: Vec<MaterialId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_graph_node_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_domains: Vec<DirtyDomain>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub runtime_capability_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub output_profile_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub full_draft: bool,
     pub reason: String,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub artifact_schema_version: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub generator_version: String,
 }
 
 /// H.264/AAC export presets exposed through Rust-owned export services.
@@ -650,6 +684,9 @@ pub struct StartExportCommandPayload {
     pub draft: Draft,
     pub output_path: String,
     pub preset: ExportPreset,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub dirty_facts: Option<ExportPrepDirtyFacts>,
 }
 
 /// Payload accepted by the Phase 5 export status command.
@@ -896,6 +933,48 @@ pub struct PreviewCacheInvalidationResponse {
     pub invalidated_count: u32,
     pub retained_count: u32,
     pub status: PreviewStatus,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dirty_ranges: Vec<DirtyRange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_material_ids: Vec<MaterialId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_graph_node_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_domains: Vec<DirtyDomain>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub runtime_capability_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub output_profile_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub full_draft: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub artifact_schema_version: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub generator_version: String,
+}
+
+/// Binding-safe export-preparation dirty facts produced by Rust services.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportPrepDirtyFacts {
+    pub dirty_ranges: Vec<DirtyRange>,
+    pub changed_material_ids: Vec<MaterialId>,
+    pub changed_graph_node_ids: Vec<String>,
+    pub changed_domains: Vec<DirtyDomain>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub runtime_capability_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub output_profile_fingerprint: Option<String>,
+    pub full_draft: bool,
+    pub reason: String,
+    pub artifact_schema_version: u32,
+    pub generator_version: String,
 }
 
 /// Stable export job phase displayed by desktop clients.
@@ -983,6 +1062,17 @@ pub struct ExportJobStatusResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub diagnostic: Option<ExportDiagnostic>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub dirty_facts: Option<ExportPrepDirtyFacts>,
+}
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Stable readiness state for runtime diagnostics displayed by desktop clients.

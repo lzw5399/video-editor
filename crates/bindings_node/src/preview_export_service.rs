@@ -8,7 +8,7 @@ use std::thread;
 
 use draft_model::{
     DecodedPreviewFrameResponse, Draft, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
-    ExportJobStatusResponse, ExportPreset, ExportValidationReport,
+    ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset, ExportValidationReport,
     InvalidatePreviewCacheCommandPayload, Material, MaterialKind, Microseconds,
     PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
     PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
@@ -148,33 +148,45 @@ pub fn request_preview_segment_with_executor(
 pub fn invalidate_preview_cache_command(
     payload: InvalidatePreviewCacheCommandPayload,
 ) -> PreviewCacheInvalidationResponse {
+    let artifact_schema_version = payload.artifact_schema_version;
+    let generator_version = payload.generator_version.clone();
+    let mut request = PreviewInvalidationRequest::new(
+        payload.changed_ranges,
+        payload.changed_material_ids,
+        payload.changed_graph_node_ids,
+        if payload.changed_domains.is_empty() {
+            vec![draft_model::DirtyDomain::PreviewCache]
+        } else {
+            payload.changed_domains
+        },
+        payload.reason,
+    );
+    request.runtime_capability_fingerprint = payload.runtime_capability_fingerprint;
+    request.output_profile_fingerprint = payload.output_profile_fingerprint;
+    request.full_draft = payload.full_draft;
+
     let entries = payload
         .entries
         .into_iter()
         .enumerate()
         .map(|(index, entry)| cache_entry_ref(index, entry))
         .collect::<Vec<_>>();
-    let result = invalidate_preview_cache(
-        &entries,
-        &PreviewInvalidationRequest::new(
-            payload
-                .changed_ranges
-                .into_iter()
-                .map(|target_timerange| draft_model::DirtyRange {
-                    target_timerange,
-                    source: draft_model::DirtyRangeSource::Current,
-                }),
-            payload.changed_material_ids,
-            [],
-            [draft_model::DirtyDomain::PreviewCache],
-            payload.reason,
-        ),
-    );
+    let result = invalidate_preview_cache(&entries, &request);
 
     PreviewCacheInvalidationResponse {
         invalidated_count: u32::try_from(result.invalidated.len()).unwrap_or(u32::MAX),
         retained_count: u32::try_from(result.retained.len()).unwrap_or(u32::MAX),
         status: PreviewStatus::Invalidated,
+        dirty_ranges: request.dirty_ranges,
+        changed_material_ids: request.changed_material_ids,
+        changed_graph_node_ids: request.changed_graph_node_keys,
+        changed_domains: request.changed_domains,
+        runtime_capability_fingerprint: request.runtime_capability_fingerprint,
+        output_profile_fingerprint: request.output_profile_fingerprint,
+        full_draft: request.full_draft,
+        reason: request.reason,
+        artifact_schema_version,
+        generator_version,
     }
 }
 
@@ -511,6 +523,7 @@ impl ExportJobRegistry {
             log_summary: Some("导出任务已启动".to_owned()),
             validation: None,
             diagnostic: None,
+            dirty_facts: prepared.dirty_facts.clone(),
         };
 
         self.entries.lock().expect("export registry lock").insert(
@@ -723,6 +736,7 @@ struct PreparedExportJob {
     preset: ExportPreset,
     runtime_job: FfmpegRuntimeJob,
     validation: OutputValidationExpectation,
+    dirty_facts: Option<ExportPrepDirtyFacts>,
 }
 
 fn prepare_export_job(
@@ -731,6 +745,7 @@ fn prepare_export_job(
 ) -> Result<PreparedExportJob, ExportCommandError> {
     let output_path = validate_output_path(&payload.output_path)?;
     let sidecar_dir = export_sidecar_dir(&output_path);
+    let dirty_facts = payload.dirty_facts.clone();
     let draft = payload.draft;
     let engine_profile = EngineProfile::from_draft_canvas(&draft).map_err(|error| {
         ExportCommandError::Engine(format!("export engine profile resolution failed: {error}"))
@@ -773,6 +788,7 @@ fn prepare_export_job(
         preset: payload.preset,
         runtime_job,
         validation,
+        dirty_facts,
     })
 }
 
@@ -996,14 +1012,18 @@ fn cache_entry_ref(index: usize, entry: PreviewCacheEntryRef) -> PreviewCacheEnt
             key_id: format!("binding-entry-{index}"),
             profile,
             target_timerange: entry.target_timerange,
-            graph_node_keys: Vec::new(),
-            semantic_fingerprint: "binding-provided".to_owned(),
-            input_fingerprint: String::new(),
-            output_profile_fingerprint: String::new(),
-            runtime_capability_fingerprint: String::new(),
+            graph_node_keys: entry.graph_node_ids,
+            semantic_fingerprint: entry
+                .semantic_fingerprint
+                .unwrap_or_else(|| "binding-provided".to_owned()),
+            input_fingerprint: entry.input_fingerprint.unwrap_or_default(),
+            output_profile_fingerprint: entry.output_profile_fingerprint.unwrap_or_default(),
+            runtime_capability_fingerprint: entry
+                .runtime_capability_fingerprint
+                .unwrap_or_default(),
             material_dependencies: entry.material_dependencies,
-            artifact_schema_version: 0,
-            generator_version: String::new(),
+            artifact_schema_version: entry.artifact_schema_version,
+            generator_version: entry.generator_version,
         },
         artifact: PreviewArtifact {
             profile,

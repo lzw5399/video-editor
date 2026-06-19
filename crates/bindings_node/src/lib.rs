@@ -547,6 +547,7 @@ fn export_error_envelope(
                 log_summary: None,
                 validation: None,
                 diagnostic: Some(diagnostic),
+                dirty_facts: None,
             })
             .expect("export error status should serialize"),
         ),

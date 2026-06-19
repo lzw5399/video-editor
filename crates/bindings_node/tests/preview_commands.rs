@@ -15,12 +15,12 @@ use bindings_node::realtime_preview_service::{
     RealtimePreviewSessionBindingConfig,
 };
 use draft_model::{
-    CommandErrorKind, DecodedPreviewFrameResponse, Draft, InvalidatePreviewCacheCommandPayload,
-    Material, MaterialId, MaterialKind, Microseconds, PreviewCacheEntryRef,
-    PreviewFrameStorageKind, PreviewOutputProfile, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, RuntimeSelectedDecodePath, Segment, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
-    TextStyle, TextWrapping, Track, TrackKind,
+    CommandErrorKind, DecodedPreviewFrameResponse, DirtyDomain, DirtyRange, DirtyRangeSource,
+    Draft, InvalidatePreviewCacheCommandPayload, Material, MaterialId, MaterialKind, Microseconds,
+    PreviewCacheEntryRef, PreviewFrameStorageKind, PreviewOutputProfile,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RuntimeSelectedDecodePath, Segment, SourceTimerange, TargetTimerange, TextAlignment, TextBox,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::PreviewServiceConfig;
@@ -98,12 +98,22 @@ fn preview_commands_invalidate_cache_without_mutating_draft() {
                 &["audio"],
             ),
         ],
-        changed_ranges: vec![TargetTimerange::new(
-            Microseconds::new(450_000),
-            Microseconds::new(50_000),
-        )],
+        changed_ranges: vec![DirtyRange {
+            target_timerange: TargetTimerange::new(
+                Microseconds::new(450_000),
+                Microseconds::new(50_000),
+            ),
+            source: DirtyRangeSource::Current,
+        }],
         changed_material_ids: vec![MaterialId::new("audio")],
+        changed_graph_node_ids: Vec::new(),
+        changed_domains: vec![DirtyDomain::PreviewCache],
+        runtime_capability_fingerprint: None,
+        output_profile_fingerprint: None,
+        full_draft: false,
         reason: "accepted edit".to_owned(),
+        artifact_schema_version: 0,
+        generator_version: String::new(),
     };
 
     let response = invalidate_preview_cache_command(payload);
@@ -206,7 +216,10 @@ fn preview_commands_transport_v2_dirty_facts_without_renderer_owned_overrides() 
         envelope["data"]["runtimeCapabilityFingerprint"],
         "runtime-v1"
     );
-    assert_eq!(envelope["data"]["generatorVersion"], "preview-cache-generator-v2");
+    assert_eq!(
+        envelope["data"]["generatorVersion"],
+        "preview-cache-generator-v2"
+    );
 
     let export_only = execute_command(json!({
         "command": "invalidatePreviewCache",
@@ -587,6 +600,13 @@ fn cache_entry_ref(
             .map(|material_id| MaterialId::new(*material_id))
             .collect(),
         artifact_path: format!("/cache/{artifact}"),
+        graph_node_ids: Vec::new(),
+        semantic_fingerprint: None,
+        input_fingerprint: None,
+        output_profile_fingerprint: None,
+        runtime_capability_fingerprint: None,
+        artifact_schema_version: 0,
+        generator_version: String::new(),
     }
 }
 
