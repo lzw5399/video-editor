@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Planned Phase 15.2 real GPU realtime compositor closure before UI convergence and Phase 16
-last_updated: "2026-06-19T18:59:24Z"
-last_activity: 2026-06-20 -- Re-scoped current P0 to Phase 15.2 real render-graph GPU compositor closure and moved Jianying-style UI convergence to Phase 15.3
+status: executing
+stopped_at: Completed Phase 15.2 Plan 01; next is Plan 02 real GPU compositor visual subset
+last_updated: "2026-06-19T19:36:52Z"
+last_activity: 2026-06-20 -- Completed Phase 15.2 Plan 01 evidence taxonomy/no-fallback hardening; next is real GPU compositor visual subset
 progress:
   total_phases: 23
   completed_phases: 18
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-01
-Status: Planned — run `$gsd-execute-phase 15.2` or execute 15.2-01 inline
-Last activity: 2026-06-20 -- Planned Phase 15.2 real GPU realtime compositor closure; Phase 15.3 now owns Jianying-style UI convergence
+Plan: 15.2-02
+Status: Executing — continue with real GPU compositor visual subset
+Last activity: 2026-06-20 -- Phase 15.2 Plan 01 completed; product preview success now requires renderGraphGpu and native bridge is diagnostic-only
 
-Progress: Phase 15.1 complete; Phase 15.2 planned with 6 P0 compositor/user-E2E/no-fallback plans; Phase 15.3 UI convergence follows
+Progress: Phase 15.1 complete; Phase 15.2 Plan 01 complete, 5 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
 
 ## Performance Metrics
 
@@ -178,8 +178,11 @@ Progress: Phase 15.1 complete; Phase 15.2 planned with 6 P0 compositor/user-E2E/
 - Phase 15.1 Plan 03 completed bundled Noto Sans CJK SC font registry, stable baseline text `fontRef`, and shared preview/export font resolution. (URGENT)
 - Phase 15.2 re-scoped as urgent P0 real render-graph GPU realtime compositor closure before UI convergence and Phase 16; native single-video playback, fallback, mock, artifacts, first-frame snapshots, CPU probes, and DOM overlays cannot satisfy product preview success. (URGENT)
 - Phase 15.2 planned as six executable gates: evidence taxonomy/no-fallback hardening, real GPU compositor visual subset, real material frame/audio input, desktop compositor presentation, mainstream product E2E matrix, and aggregate verification. (URGENT)
+- Phase 15.2 Plan 01 completed evidence taxonomy/no-fallback hardening: product preview backend is only `renderGraphGpu|none`, native video bridge is diagnostic-only, and product E2E rejects native bridge playback as compositor success. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
+- Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
+- Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
 - Confirmed production editor architecture decisions captured for Phase 11+: Windows/macOS desktop first; Rust `wgpu` realtime preview; native Windows Media Foundation/DXVA/D3D and macOS AVFoundation/VideoToolbox/CoreVideo/Metal media paths; FFmpeg as export/fallback; `CommandDelta` and stable render graph node IDs; SQLite artifact store under `.veproj/derived`; shared `TimelineClock + PlaybackGeneration`; scheduler-aligned jobs; ref-counted opaque handle registry; capability-first retiming/effects/transitions.
 - Production-grade architecture Phases 11-18 added after Phase 10.1 to address the external audit concerns directly: realtime GPU preview, hardware media IO, incremental render graph/cache coherence, asset/resource management, audio DSP, scheduler/telemetry, mobile/server bindings, and production retiming/effects/transitions.
 - Phase 10.1 completed all seven usable-editor MVP closure plans. The desktop editor now has system import, real PNG preview display, seek/scrub preview requests, transform/text/audio/subtitle editing, preview selection/text overlays, waveform placeholder, and final source guards.

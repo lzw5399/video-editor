@@ -656,7 +656,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 15.2-01-PLAN.md - Make product compositor evidence honest and reject native-video/fallback success
+- [x] 15.2-01-PLAN.md - Make product compositor evidence honest and reject native-video/fallback success
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
