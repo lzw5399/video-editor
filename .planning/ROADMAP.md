@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff (completed 2026-06-19)
 - [x] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts (completed 2026-06-19)
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
-- [ ] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity
+- [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -593,7 +593,7 @@ Plans:
 
 **Wave 6** *(blocked on Waves 3-5 completion)*
 
-- [ ] 15-07-PLAN.md - Add final Phase 15 source guards and aggregate verification gates
+- [x] 15-07-PLAN.md - Add final Phase 15 source guards and aggregate verification gates
 
 ### Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry
 
@@ -677,7 +677,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
 | 14. Asset Resource Manager And Derived Artifact Store | 7/7 | Complete    | 2026-06-19 |
-| 15. Audio Engine And DSP Timeline Pipeline | 6/7 | In Progress|  |
+| 15. Audio Engine And DSP Timeline Pipeline | 7/7 | Complete   | 2026-06-19 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
