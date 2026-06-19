@@ -572,7 +572,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 15-01-PLAN.md - Define audio DSP semantic contracts and command-owned audio edit deltas
+- [x] 15-01-PLAN.md - Define audio DSP semantic contracts and command-owned audio edit deltas
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -677,7 +677,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
 | 14. Asset Resource Manager And Derived Artifact Store | 7/7 | Complete    | 2026-06-19 |
-| 15. Audio Engine And DSP Timeline Pipeline | 0/7 | Planned | - |
+| 15. Audio Engine And DSP Timeline Pipeline | 1/7 | In Progress|  |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
