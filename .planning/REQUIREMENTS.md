@@ -331,8 +331,8 @@
 | AUDIO2-02 | Phase 15 | Complete |
 | AUDIO2-03 | Phase 15 | Complete |
 | AUDIO2-04 | Phase 15 | Complete |
-| P0-EDIT-01 | Phase 15.1 | Planned |
-| P0-EDIT-02 | Phase 15.1 | Planned |
+| P0-EDIT-01 | Phase 15.1 | Complete |
+| P0-EDIT-02 | Phase 15.1 | Complete |
 | P0-EDIT-03 | Phase 15.1 | Planned |
 | P0-EDIT-04 | Phase 15.1 | Planned |
 | P0-EDIT-05 | Phase 15.1 | Planned |

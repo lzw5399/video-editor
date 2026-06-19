@@ -621,7 +621,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15.1-02-PLAN.md - Enforce baseline video/image/text/audio realtime preview capability and productized unsupported states
+- [x] 15.1-02-PLAN.md - Enforce baseline video/image/text/audio realtime preview capability and productized unsupported states
 - [ ] 15.1-03-PLAN.md - Add bundled font registry shared by text preview and export
 
 **Wave 3** *(blocked on Wave 1 completion)*

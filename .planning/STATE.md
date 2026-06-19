@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: Inserted Phase 15.1 and Phase 15.2 before Phase 16
-last_updated: "2026-06-19T12:39:21Z"
-last_activity: 2026-06-19 -- Inserted two P0 phases before Phase 16; next plan Phase 15.1
+last_updated: "2026-06-19T13:40:22Z"
+last_activity: 2026-06-19 -- Completed Phase 15.1 Plan 02 baseline preview capability and product fallback state
 progress:
   total_phases: 22
   completed_phases: 17
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.1 (p0-basic-editing-chain-repair) — INSERTED
-Plan: 1 of 6
+Plan: 2 of 6
 Status: In progress — execute `$gsd-execute-phase 15.1` remaining plans
-Last activity: 2026-06-19 -- Completed Phase 15.1 Plan 01 realtime playback chain repair
+Last activity: 2026-06-19 -- Completed Phase 15.1 Plan 02 baseline preview capability and product fallback state
 
-Progress: [██░░░░░░░░] 17% for Phase 15.1
+Progress: [███░░░░░░░] 33% for Phase 15.1
 
 ## Performance Metrics
 
