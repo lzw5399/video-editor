@@ -309,7 +309,7 @@
 | ASSET-03 | Phase 14 | Complete |
 | ASSET-04 | Phase 14 | Complete |
 | ASSET-05 | Phase 14 | Complete |
-| AUDIO2-01 | Phase 15 | Planned |
+| AUDIO2-01 | Phase 15 | Complete |
 | AUDIO2-02 | Phase 15 | Complete |
 | AUDIO2-03 | Phase 15 | Planned |
 | AUDIO2-04 | Phase 15 | Planned |
