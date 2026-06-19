@@ -455,7 +455,11 @@ export class RealtimePreviewHost {
     if (!this.window.isVisible()) {
       this.window.show();
     }
+    if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1") {
+      this.window.setAlwaysOnTop(true, "screen-saver");
+    }
     this.window.focus();
+    this.window.moveTop();
     app.focus({ steal: true });
   }
 
