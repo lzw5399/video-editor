@@ -16,8 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 
 use crate::native_preview_presenter::{
     NativePreviewPresentationBackend, NativePreviewPresentationState, NativePreviewPresenter,
-    NativePreviewPresenterError, NativePreviewSurfaceAttach, NativePreviewSurfaceBounds,
-    NativePreviewSurfaceKind,
+    NativePreviewPresenterError,
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
@@ -108,15 +107,11 @@ impl RealtimePreviewBindingRegistry {
         descriptor: RealtimePreviewSurfaceBindingDescriptor,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let native_attach = descriptor.to_native_attach()?;
         let descriptor = descriptor.to_runtime_descriptor()?;
         let generation = self
             .runtime
             .attach_surface(runtime_id, descriptor)
             .map_err(RealtimePreviewBindingError::runtime)?;
-        self.presenter_mut(session_id)?
-            .attach(native_attach)
-            .map_err(RealtimePreviewBindingError::presenter)?;
         Ok(generation_response(generation))
     }
 
@@ -130,9 +125,6 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .update_surface_bounds(runtime_id, bounds.to_runtime_bounds())
             .map_err(RealtimePreviewBindingError::runtime)?;
-        self.presenter_mut(session_id)?
-            .update_bounds(bounds.to_native_bounds())
-            .map_err(RealtimePreviewBindingError::presenter)?;
         Ok(generation_response(generation))
     }
 
@@ -156,9 +148,7 @@ impl RealtimePreviewBindingRegistry {
         bundle_path: Option<PathBuf>,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.presenter_mut(session_id)?
-            .update_draft(&draft, bundle_path.as_deref())
-            .map_err(RealtimePreviewBindingError::presenter)?;
+        let _ = bundle_path;
         let generation = self
             .runtime
             .update_draft_snapshot(runtime_id, draft)
@@ -173,12 +163,6 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let target_time = Microseconds::new(target_time_microseconds);
-        let presenter = self.presenter_mut(session_id)?;
-        if presenter.is_attached() {
-            presenter
-                .seek(target_time)
-                .map_err(RealtimePreviewBindingError::presenter)?;
-        }
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
@@ -203,9 +187,6 @@ impl RealtimePreviewBindingRegistry {
                 })),
             ));
         }
-        presenter
-            .play()
-            .map_err(RealtimePreviewBindingError::presenter)?;
         let generation = self
             .runtime
             .play(runtime_id)
@@ -218,12 +199,6 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let presenter = self.presenter_mut(session_id)?;
-        if presenter.is_attached() {
-            presenter
-                .pause()
-                .map_err(RealtimePreviewBindingError::presenter)?;
-        }
         let generation = self
             .runtime
             .pause(runtime_id)
@@ -236,12 +211,6 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let presenter = self.presenter_mut(session_id)?;
-        if presenter.is_attached() {
-            presenter
-                .stop()
-                .map_err(RealtimePreviewBindingError::presenter)?;
-        }
         let generation = self
             .runtime
             .stop(runtime_id)
@@ -316,7 +285,12 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<NativePreviewPresentationState, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let state = self.presenter_mut(session_id)?.presentation_state();
+        let mut state = self.presenter_mut(session_id)?.presentation_state();
+        if !state.available && state.backend == NativePreviewPresentationBackend::None {
+            state = NativePreviewPresentationState::unavailable(
+                "render graph GPU compositor scheduler has not presented product content",
+            );
+        }
         if state.backend == NativePreviewPresentationBackend::RenderGraphGpu {
             if let Some(evidence) = state.evidence.as_ref() {
                 self.runtime
@@ -459,29 +433,6 @@ impl RealtimePreviewSurfaceBindingDescriptor {
         };
         Ok(descriptor)
     }
-
-    fn to_native_attach(&self) -> Result<NativePreviewSurfaceAttach, RealtimePreviewBindingError> {
-        Ok(NativePreviewSurfaceAttach {
-            kind: match self.kind {
-                RealtimePreviewSurfaceBindingKind::WindowsHwnd => {
-                    NativePreviewSurfaceKind::WindowsHwnd
-                }
-                RealtimePreviewSurfaceBindingKind::MacosNsView => {
-                    NativePreviewSurfaceKind::MacosNsView
-                }
-                RealtimePreviewSurfaceBindingKind::Mock => NativePreviewSurfaceKind::Mock,
-                RealtimePreviewSurfaceBindingKind::Offscreen => NativePreviewSurfaceKind::Offscreen,
-            },
-            parent_handle: self.native_parent_handle()?,
-            bounds: NativePreviewSurfaceBounds {
-                x: self.x,
-                y: self.y,
-                width: self.width,
-                height: self.height,
-                scale_factor_millis: self.scale_factor_millis,
-            },
-        })
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -497,16 +448,6 @@ pub struct RealtimePreviewSurfaceBoundsBindingRequest {
 impl RealtimePreviewSurfaceBoundsBindingRequest {
     fn to_runtime_bounds(&self) -> PreviewSurfaceBounds {
         PreviewSurfaceBounds {
-            x: self.x,
-            y: self.y,
-            width: self.width,
-            height: self.height,
-            scale_factor_millis: self.scale_factor_millis,
-        }
-    }
-
-    fn to_native_bounds(&self) -> NativePreviewSurfaceBounds {
-        NativePreviewSurfaceBounds {
             x: self.x,
             y: self.y,
             width: self.width,

@@ -14,7 +14,7 @@ import {
 
 test.describe.configure({ timeout: 90_000 });
 
-test("product playback rejects native video bridge as render-graph GPU compositor evidence", async () => {
+test("product playback rejects missing render-graph GPU compositor evidence", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO], {
     VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR: "1"
   });
@@ -51,19 +51,19 @@ test("product playback rejects native video bridge as render-graph GPU composito
       after.hostState?.fallbackActive,
       "native video bridge rejection must be visible as unavailable state"
     ).toBe(true);
-    expect(after.hostState?.fallbackLabel ?? "").toContain("GPU 合成播放尚未接入");
+    expect(after.hostState?.fallbackLabel ?? "").toContain("render graph GPU compositor scheduler");
     expect(
       after.hostState?.backend ?? null,
       "product host backend must expose only renderGraphGpu success or none"
     ).toBe("none");
     expect(
       after.hostState?.diagnosticSource ?? null,
-      "native bridge may be retained only as diagnostic evidence"
-    ).toBe("nativeVideoBridge");
+      "missing compositor evidence must not route through native video diagnostics"
+    ).toBe("none");
     expect(
       after.hostState?.contentEvidence?.source ?? null,
-      "native bridge content evidence must not be relabeled as compositor output"
-    ).toBe("nativeVideoBridge");
+      "native bridge content evidence must not be exposed as product evidence"
+    ).toBeNull();
     expect(
       after.hostState?.telemetry?.presentedFrameCount ?? 0,
       "native bridge evidence must not increment realtime compositor presented-frame telemetry"
