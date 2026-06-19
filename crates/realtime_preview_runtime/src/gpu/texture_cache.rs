@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
 
 use draft_model::{MaterialId, Microseconds};
 use media_runtime::{NativeTextureLease, NativeTextureLeaseRegistry};
@@ -11,6 +12,13 @@ use crate::{
 };
 
 use super::device::RealtimePreviewGpuDevice;
+
+pub type NativeTextureImporter =
+    dyn Fn(
+        &wgpu::Device,
+        &TextureHandleDescriptor,
+        &NativeTextureLease,
+    ) -> Result<Option<Rc<RealtimePreviewExternalTexturePlanes>>, String>;
 
 #[derive(Debug)]
 pub struct RealtimePreviewExternalTexturePlanes {
@@ -111,11 +119,27 @@ pub enum RealtimePreviewTextureStorage {
     },
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct RealtimePreviewTextureCache {
     next_texture_id: u64,
     textures: BTreeMap<RealtimePreviewTextureId, RealtimePreviewTexture>,
     native_texture_registry: Option<NativeTextureLeaseRegistry>,
+    native_texture_importer: Option<Box<NativeTextureImporter>>,
+}
+
+impl fmt::Debug for RealtimePreviewTextureCache {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RealtimePreviewTextureCache")
+            .field("next_texture_id", &self.next_texture_id)
+            .field("textures", &self.textures)
+            .field("native_texture_registry", &self.native_texture_registry)
+            .field(
+                "native_texture_importer_attached",
+                &self.native_texture_importer.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl RealtimePreviewTextureCache {
@@ -124,6 +148,7 @@ impl RealtimePreviewTextureCache {
             next_texture_id: 1,
             textures: BTreeMap::new(),
             native_texture_registry: None,
+            native_texture_importer: None,
         }
     }
 
@@ -134,6 +159,11 @@ impl RealtimePreviewTextureCache {
 
     pub fn set_native_texture_registry(&mut self, registry: NativeTextureLeaseRegistry) {
         self.native_texture_registry = Some(registry);
+    }
+
+    pub fn with_native_texture_importer(mut self, importer: Box<NativeTextureImporter>) -> Self {
+        self.native_texture_importer = Some(importer);
+        self
     }
 
     pub fn upload_frame(
@@ -206,6 +236,20 @@ impl RealtimePreviewTextureCache {
                 reason: format!("native texture lease unavailable: {error}"),
             }
         })
+    }
+
+    pub fn import_native_nv12_external_texture(
+        &self,
+        device: &wgpu::Device,
+        descriptor: &TextureHandleDescriptor,
+        lease: &NativeTextureLease,
+    ) -> Result<Option<Rc<RealtimePreviewExternalTexturePlanes>>, RealtimePreviewTextureCacheError>
+    {
+        let Some(importer) = self.native_texture_importer.as_ref() else {
+            return Ok(None);
+        };
+        importer(device, descriptor, lease)
+            .map_err(|reason| RealtimePreviewTextureCacheError::Unavailable { reason })
     }
 
     fn next_id(&mut self) -> RealtimePreviewTextureId {

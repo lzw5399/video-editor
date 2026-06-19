@@ -146,6 +146,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-core-media",
+ "objc2-core-video",
  "objc2-foundation",
  "objc2-quartz-core",
  "preview_service",
@@ -156,6 +157,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "testkit",
+ "wgpu",
 ]
 
 [[package]]
@@ -1919,7 +1921,6 @@ dependencies = [
  "engine_core",
  "fontdue",
  "media_runtime",
- "media_runtime_desktop",
  "objc2",
  "objc2-app-kit",
  "objc2-core-foundation",

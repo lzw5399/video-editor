@@ -381,7 +381,7 @@ impl RealtimePreviewGpuDevice {
     }
 
     #[cfg(target_os = "macos")]
-    pub(crate) fn create_nv12_external_texture_planes_from_metal_device(
+    pub fn create_nv12_external_texture_planes_from_metal_device(
         device: &wgpu::Device,
         width: u32,
         height: u32,

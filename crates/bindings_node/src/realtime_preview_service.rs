@@ -2,12 +2,16 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use draft_model::{Draft, MaterialKind, Microseconds, RationalFrameRate};
-use media_runtime::{NativeTextureLeaseRegistry, RuntimeDeviceId, SelectedDecodePath, StreamId};
+use media_runtime::{
+    NativeTextureLease, NativeTextureLeaseRegistry, RuntimeDeviceId, SelectedDecodePath, StreamId,
+};
 #[cfg(target_os = "macos")]
 use media_runtime_desktop::{
-    MacosMediaReader, MacosTextureInteropPolicy, macos_system_metal_device_id,
+    MacosMediaReader, MacosRegisteredTextureLease, MacosTextureInteropPolicy,
+    macos_system_metal_device_id,
 };
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{
@@ -20,11 +24,12 @@ use realtime_preview_runtime::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor, RealtimePreviewDiagnostic,
     RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
+    TextureHandleDescriptor,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
-        RealtimePreviewGpuBackend, RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,
-        RealtimePreviewGpuPresentationTarget, RealtimePreviewTargetFormat,
-        RealtimePreviewTextureCache,
+        RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
+        RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuPresentationTarget,
+        RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
     },
 };
 use render_graph::{OutputDimensions, RenderGraph};
@@ -583,7 +588,8 @@ impl RealtimePreviewBindingScheduler {
             gpu_device: self.gpu_device.clone(),
             surface_target: self.surface_target.as_mut(),
             texture_cache: RealtimePreviewTextureCache::new()
-                .with_native_texture_registry(registry),
+                .with_native_texture_registry(registry)
+                .with_native_texture_importer(Box::new(import_native_nv12_external_texture)),
             media_provider: &mut media_provider,
         };
         let evidence = self
@@ -779,6 +785,43 @@ fn platform_media_provider(
                 "native texture media provider is not attached for this platform",
             ),
         ))
+    }
+}
+
+fn import_native_nv12_external_texture(
+    device: &wgpu::Device,
+    descriptor: &TextureHandleDescriptor,
+    lease: &NativeTextureLease,
+) -> Result<Option<Rc<RealtimePreviewExternalTexturePlanes>>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(macos_lease) = lease.resource_as::<MacosRegisteredTextureLease>() else {
+            return Ok(None);
+        };
+        use objc2_core_video::CVMetalTextureGetTexture;
+
+        let luma = CVMetalTextureGetTexture(macos_lease.luma_texture())
+            .ok_or_else(|| "metal:nv12:luma-plane-unavailable".to_owned())?;
+        let chroma = CVMetalTextureGetTexture(macos_lease.chroma_texture())
+            .ok_or_else(|| "metal:nv12:chroma-plane-unavailable".to_owned())?;
+        let planes =
+            RealtimePreviewGpuDevice::create_nv12_external_texture_planes_from_metal_device(
+                device,
+                descriptor.width,
+                descriptor.height,
+                luma,
+                chroma,
+            )
+            .map_err(|error| error.to_string())?;
+        return Ok(Some(Rc::new(planes)));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = device;
+        let _ = descriptor;
+        let _ = lease;
+        Ok(None)
     }
 }
 
