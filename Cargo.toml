@@ -8,6 +8,7 @@ members = [
   "crates/ffmpeg_compiler",
   "crates/media_runtime",
   "crates/media_runtime_desktop",
+  "crates/artifact_store",
   "crates/project_store",
   "crates/preview_service",
   "crates/testkit",
