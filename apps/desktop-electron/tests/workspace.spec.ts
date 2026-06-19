@@ -1758,6 +1758,48 @@ test("资源任务 and 资源维护 update from Rust shaped artifact responses",
   }
 });
 
+test("资源任务 limits visible rows and 素材资源状态 keeps material row height stable", async () => {
+  const { app, page } = await launchWorkspaceApp({
+    mockArtifactCommands: true,
+    env: {
+      VIDEO_EDITOR_TEST_ARTIFACT_TASK_COUNT: "4"
+    }
+  });
+
+  try {
+    const firstMaterialRow = page.locator(".material-row").first();
+    const before = await expectStableBox(firstMaterialRow, "资源状态刷新前素材行");
+
+    await expect(page.locator(".resource-task-row")).toHaveCount(3);
+    await expect(page.getByLabel("资源任务")).toContainText("另有 1 个资源任务");
+
+    await page.getByRole("button", { name: "刷新状态" }).click();
+    await expectCommandCall(app, "refreshArtifactStatus");
+    const after = await expectStableBox(firstMaterialRow, "资源状态刷新后素材行");
+    expectSameSize(before, after, "素材资源状态刷新");
+  } finally {
+    await app.close();
+  }
+});
+
+test("资源维护 and 素材资源状态 hide forbidden internal production copy", async () => {
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+
+  try {
+    const resourceText = [
+      await page.getByLabel("资源任务").textContent(),
+      await page.getByLabel("资源维护").textContent(),
+      await page.getByLabel("素材资源状态").first().textContent()
+    ].join(" ");
+
+    expect(resourceText).not.toMatch(
+      /SQLite|\.sqlite|artifact-store\.sqlite|\.veproj\/derived|cacheRoot|fingerprint|graphNode|dirtyRange|FFmpeg|ffprobe|raw logs|cache key/i
+    );
+  } finally {
+    await app.close();
+  }
+});
+
 test("professional timeline exposes stable toolbar, track, segment, ruler, zoom, and snapping states", async () => {
   const { app, page } = await launchWorkspaceApp();
 
