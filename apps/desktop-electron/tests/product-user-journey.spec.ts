@@ -8,7 +8,8 @@ import {
   launchProductJourneyApp,
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
-  requestPreviewFrameCount
+  requestPreviewFrameCount,
+  waitForCompositedPreviewEvidence
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
@@ -141,6 +142,10 @@ test("product user can import a repo video, add it to the timeline, and see rend
       before.hostState?.telemetry?.presentedFrameCount ?? 0
     );
     expect(after.timecodeUs).toBeGreaterThan(before.timecodeUs);
+    expect(
+      after.regionHash,
+      "visible preview content must advance, not only the playhead or telemetry"
+    ).not.toBe(before.regionHash);
     expect(
       frameRequestsAfterPlay,
       "product playback must not drive a requestPreviewFrame PNG/artifact loop"
