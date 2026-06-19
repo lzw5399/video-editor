@@ -549,6 +549,43 @@ pub fn resume_generation_job(
     }))
 }
 
+pub fn restart_generation_job(
+    store: &mut ArtifactStore,
+    job_id: &str,
+) -> Result<ArtifactGenerationJob, ArtifactStoreError> {
+    let Some(plan) = resume_generation_job(store, job_id)? else {
+        return invalid_job(job_id, "job is not resumable");
+    };
+    if plan.pending_chunks.is_empty() {
+        return invalid_job(job_id, "job has no pending chunks");
+    }
+
+    let Some(status) = job_status(store, job_id)? else {
+        return invalid_job(job_id, "job does not exist");
+    };
+    if !matches!(
+        status,
+        GenerationJobStatus::Failed
+            | GenerationJobStatus::Cancelled
+            | GenerationJobStatus::Resumable
+    ) {
+        return invalid_job(job_id, "job is not in a restartable state");
+    }
+
+    store
+        .connection()
+        .execute(
+            "UPDATE generation_job
+             SET status = 'resumable', cancel_requested = 0, updated_at_unix_ms = ?2
+             WHERE job_id = ?1",
+            params![job_id, now_unix_ms()],
+        )
+        .map_err(|source| sqlite_error(store, source))?;
+
+    get_generation_job(store, job_id)?
+        .ok_or_else(|| invalid_job_err(job_id, "job was not found after restart"))
+}
+
 pub fn list_active_generation_jobs(
     store: &ArtifactStore,
 ) -> Result<Vec<ArtifactGenerationJob>, ArtifactStoreError> {

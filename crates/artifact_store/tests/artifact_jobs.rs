@@ -2,7 +2,8 @@ use artifact_store::jobs::{
     ArtifactGenerationRequest, ArtifactKind, GenerationChunkStatus, GenerationJobStatus,
     GenerationProgress, acknowledge_generation_cancelled, cancel_generation_job,
     complete_generation_chunk, create_generation_job, fail_generation_chunk, job_status_summary,
-    list_generation_jobs, next_pending_chunk, resume_generation_job, start_generation_chunk,
+    list_generation_jobs, next_pending_chunk, restart_generation_job, resume_generation_job,
+    start_generation_chunk,
 };
 use artifact_store::schema::open_artifact_store;
 use rusqlite::OptionalExtension;
@@ -285,6 +286,95 @@ fn artifact_jobs_cancel_acknowledgement_persists_terminal_cancelled_state() {
             .expect("resume should query")
             .is_some(),
         "cancelled jobs remain resumable from their cancelled chunks"
+    );
+}
+
+#[test]
+fn artifact_jobs_restart_terminal_failed_and_cancelled_jobs_before_resume_execution() {
+    let sandbox = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = sandbox.path().join("draft.veproj");
+    let mut store = open_artifact_store(&bundle_path).expect("store should open");
+
+    create_generation_job(
+        &mut store,
+        job_request(
+            "job-restart-failed",
+            "artifact-restart-failed",
+            ArtifactKind::Thumbnail,
+            vec![GenerationProgress::new(Some(0), Some(1_000_000), Some(0))],
+        ),
+    )
+    .expect("failed restart job should be created");
+    start_generation_chunk(&mut store, "job-restart-failed", 0).expect("failed chunk should start");
+    fail_generation_chunk(&mut store, "job-restart-failed", 0, "decode failed")
+        .expect("chunk should fail");
+    assert!(
+        resume_generation_job(&store, "job-restart-failed")
+            .expect("resume should query")
+            .is_some(),
+        "failed job should advertise a resume plan"
+    );
+
+    let restarted_failed = restart_generation_job(&mut store, "job-restart-failed")
+        .expect("failed job should restart");
+    assert_eq!(restarted_failed.status, GenerationJobStatus::Resumable);
+    let running_failed = start_generation_chunk(&mut store, "job-restart-failed", 0)
+        .expect("restarted failed chunk should start");
+    assert_eq!(running_failed.status, GenerationChunkStatus::Running);
+    complete_generation_chunk(
+        &mut store,
+        "job-restart-failed",
+        0,
+        Some("blobs/blake3/v1/dd/restarted-thumb.bin"),
+        Some("blake3:v1:restarted-thumb"),
+        96,
+    )
+    .expect("restarted failed chunk should complete");
+
+    create_generation_job(
+        &mut store,
+        job_request(
+            "job-restart-cancelled",
+            "artifact-restart-cancelled",
+            ArtifactKind::Waveform,
+            vec![GenerationProgress::new(Some(0), Some(2_000_000), Some(0))],
+        ),
+    )
+    .expect("cancelled restart job should be created");
+    start_generation_chunk(&mut store, "job-restart-cancelled", 0)
+        .expect("cancelled chunk should start");
+    cancel_generation_job(&mut store, "job-restart-cancelled").expect("cancel should request");
+    acknowledge_generation_cancelled(&mut store, "job-restart-cancelled")
+        .expect("cancel should be acknowledged");
+    assert!(
+        resume_generation_job(&store, "job-restart-cancelled")
+            .expect("resume should query")
+            .is_some(),
+        "cancelled job should advertise a resume plan"
+    );
+
+    let restarted_cancelled = restart_generation_job(&mut store, "job-restart-cancelled")
+        .expect("cancelled job should restart");
+    assert_eq!(restarted_cancelled.status, GenerationJobStatus::Resumable);
+    let running_cancelled = start_generation_chunk(&mut store, "job-restart-cancelled", 0)
+        .expect("restarted cancelled chunk should start");
+    assert_eq!(running_cancelled.status, GenerationChunkStatus::Running);
+    complete_generation_chunk(
+        &mut store,
+        "job-restart-cancelled",
+        0,
+        Some("blobs/blake3/v1/ee/restarted-waveform.json"),
+        Some("blake3:v1:restarted-waveform"),
+        128,
+    )
+    .expect("restarted cancelled chunk should complete");
+
+    assert!(
+        restart_generation_job(&mut store, "job-restart-failed")
+            .expect_err("completed restarted job should reject another restart")
+            .to_string()
+            .contains("resumable"),
+        "completed jobs must not be reopened by restart"
     );
 }
 
