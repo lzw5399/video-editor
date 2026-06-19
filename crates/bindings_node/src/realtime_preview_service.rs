@@ -3,20 +3,22 @@ use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use draft_model::{Draft, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TrackKind};
+use draft_model::{
+    Draft, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TrackKind,
+};
 use media_runtime::{FfmpegExecutor, RuntimeConfig};
 use media_runtime_desktop::{
-    decode_ffmpeg_cpu_frame_fingerprint, FfmpegCpuFrameFingerprintRequest,
+    FfmpegCpuFrameFingerprintRequest, decode_ffmpeg_cpu_frame_fingerprint,
 };
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{
-    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, PreviewGpuBackend,
     PreviewRequestMode, PreviewSessionId, RealtimePreviewBackendUsed, RealtimePreviewDiagnostic,
     RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
+    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
 };
-use serde::{de::Error as SerdeDeError, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 
@@ -56,7 +58,7 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .create_session(RealtimePreviewSessionConfig {
                 session_label: config.session_label,
-                preferred_backend: PreviewGpuBackend::Mock,
+                preferred_backend: PreviewGpuBackend::Auto,
                 frame_rate,
                 playback_rate,
             })
@@ -640,7 +642,10 @@ fn active_video_content_probe(
     bundle_path: Option<&str>,
     target_time_microseconds: u64,
 ) -> Result<Option<ActiveVideoContentProbe>, RealtimePreviewBindingError> {
-    for track in draft.tracks.iter().filter(|track| track.kind == TrackKind::Video && !track.muted)
+    for track in draft
+        .tracks
+        .iter()
+        .filter(|track| track.kind == TrackKind::Video && !track.muted)
     {
         for segment in &track.segments {
             let target_start = segment.target_timerange.start.get();
@@ -787,9 +792,10 @@ fn generation_response(
 #[cfg(test)]
 mod realtime_preview_bindings {
     use super::{
-        RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind, RealtimePreviewBindingRegistry,
-        RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
-        RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
+        RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
+        RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
+        RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
+        RealtimePreviewSurfaceBindingKind,
     };
     use realtime_preview_runtime::PreviewRequestMode;
 

@@ -7,12 +7,12 @@ use render_graph::RenderGraph;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    gpu::surface::{
-        PreviewSurfaceBounds, PreviewSurfaceDescriptor, PreviewSurfaceError, PreviewSurfaceHost,
-    },
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
     RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewFrameResult, RealtimePreviewSupport, RealtimePreviewTelemetry, TimelineClock,
+    gpu::surface::{
+        PreviewSurfaceBounds, PreviewSurfaceDescriptor, PreviewSurfaceError, PreviewSurfaceHost,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -46,6 +46,28 @@ pub enum PreviewGpuBackend {
     Metal,
     OffscreenOnly,
     Mock,
+}
+
+impl PreviewGpuBackend {
+    pub const fn resolve_for_current_platform(self) -> Self {
+        match self {
+            Self::Auto => {
+                #[cfg(target_os = "windows")]
+                {
+                    Self::D3d12
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    Self::Metal
+                }
+                #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+                {
+                    Self::OffscreenOnly
+                }
+            }
+            backend => backend,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -325,12 +347,11 @@ fn backend_for(
             RealtimePreviewBackendUsed::FfmpegArtifact
         }
         Some(_) => RealtimePreviewBackendUsed::Offscreen,
-        None => match preferred_backend {
+        None => match preferred_backend.resolve_for_current_platform() {
             PreviewGpuBackend::Mock => RealtimePreviewBackendUsed::Mock,
             PreviewGpuBackend::OffscreenOnly => RealtimePreviewBackendUsed::Offscreen,
-            PreviewGpuBackend::Auto | PreviewGpuBackend::D3d12 | PreviewGpuBackend::Metal => {
-                RealtimePreviewBackendUsed::Gpu
-            }
+            PreviewGpuBackend::D3d12 | PreviewGpuBackend::Metal => RealtimePreviewBackendUsed::Gpu,
+            PreviewGpuBackend::Auto => unreachable!("Auto backend must resolve first"),
         },
     }
 }

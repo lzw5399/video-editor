@@ -724,10 +724,7 @@ function shouldCollectContentEvidence(): boolean {
 }
 
 function nativeSurfaceKind(): RealtimePreviewSurfaceDescriptor["kind"] {
-  if (
-    process.env.VIDEO_EDITOR_TEST_REALTIME_PREVIEW_SURFACE_KIND === "mock" ||
-    process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1"
-  ) {
+  if (process.env.VIDEO_EDITOR_TEST_REALTIME_PREVIEW_SURFACE_KIND === "mock") {
     return "mock";
   }
   if (process.platform === "win32") {
