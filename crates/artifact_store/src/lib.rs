@@ -4,6 +4,9 @@
 //! semantics remain in `.veproj/project.json`.
 
 pub mod error;
+pub mod blob_store;
+pub mod fingerprint;
+pub mod paths;
 pub mod schema;
 
 pub use error::ArtifactStoreError;
