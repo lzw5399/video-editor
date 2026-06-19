@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
+import type { Draft } from "../generated/Draft";
 
 type RealtimePreviewHostRect = {
   x: number;
@@ -28,7 +29,13 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   });
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
-    getTelemetry: () => ipcRenderer.invoke("realtimePreviewHost:getTelemetry")
+    getTelemetry: () => ipcRenderer.invoke("realtimePreviewHost:getTelemetry"),
+    updateDraftSnapshot: (draft: Draft) => ipcRenderer.invoke("realtimePreviewHost:updateDraftSnapshot", draft),
+    seek: (targetTimeMicroseconds: number) =>
+      ipcRenderer.invoke("realtimePreviewHost:seek", sanitizeTargetTimeMicroseconds(targetTimeMicroseconds)),
+    play: () => ipcRenderer.invoke("realtimePreviewHost:play"),
+    pause: () => ipcRenderer.invoke("realtimePreviewHost:pause"),
+    stop: () => ipcRenderer.invoke("realtimePreviewHost:stop")
   });
 }
 
@@ -68,4 +75,8 @@ function sanitizeHostRect(rect: RealtimePreviewHostRect): RealtimePreviewHostRec
 
 function finiteRounded(value: number): number {
   return Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+function sanitizeTargetTimeMicroseconds(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }

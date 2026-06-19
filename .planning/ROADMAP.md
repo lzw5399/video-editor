@@ -617,7 +617,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 15.1-01-PLAN.md - Repair realtime playback control chain and stop playback from driving repeated preview-frame artifact requests
+- [x] 15.1-01-PLAN.md - Repair realtime playback control chain and stop playback from driving repeated preview-frame artifact requests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

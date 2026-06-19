@@ -7,12 +7,12 @@ use render_graph::RenderGraph;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
-    RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
-    RealtimePreviewFrameResult, RealtimePreviewSupport, RealtimePreviewTelemetry, TimelineClock,
     gpu::surface::{
         PreviewSurfaceBounds, PreviewSurfaceDescriptor, PreviewSurfaceError, PreviewSurfaceHost,
     },
+    PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
+    RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
+    RealtimePreviewFrameResult, RealtimePreviewSupport, RealtimePreviewTelemetry, TimelineClock,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -99,12 +99,30 @@ impl RealtimePreviewRuntime {
         Ok(session.clock.generation())
     }
 
+    pub fn play(
+        &mut self,
+        session_id: PreviewSessionId,
+    ) -> Result<PlaybackGeneration, RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.clock.play();
+        Ok(session.clock.generation())
+    }
+
     pub fn pause(
         &mut self,
         session_id: PreviewSessionId,
     ) -> Result<PlaybackGeneration, RealtimePreviewError> {
         let session = self.session_mut(session_id)?;
         session.clock.pause();
+        Ok(session.clock.generation())
+    }
+
+    pub fn stop(
+        &mut self,
+        session_id: PreviewSessionId,
+    ) -> Result<PlaybackGeneration, RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.clock.stop();
         Ok(session.clock.generation())
     }
 

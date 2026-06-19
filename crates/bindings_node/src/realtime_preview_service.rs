@@ -152,6 +152,42 @@ impl RealtimePreviewBindingRegistry {
         Ok(generation_response(generation))
     }
 
+    pub fn play(
+        &mut self,
+        session_id: &str,
+    ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
+        let runtime_id = self.runtime_session_id(session_id)?;
+        let generation = self
+            .runtime
+            .play(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?;
+        Ok(generation_response(generation))
+    }
+
+    pub fn pause(
+        &mut self,
+        session_id: &str,
+    ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
+        let runtime_id = self.runtime_session_id(session_id)?;
+        let generation = self
+            .runtime
+            .pause(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?;
+        Ok(generation_response(generation))
+    }
+
+    pub fn stop(
+        &mut self,
+        session_id: &str,
+    ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
+        let runtime_id = self.runtime_session_id(session_id)?;
+        let generation = self
+            .runtime
+            .stop(runtime_id)
+            .map_err(RealtimePreviewBindingError::runtime)?;
+        Ok(generation_response(generation))
+    }
+
     pub fn request_frame(
         &mut self,
         session_id: &str,
@@ -678,6 +714,24 @@ mod realtime_preview_bindings {
         assert_eq!(result.target_time_microseconds, 1_234_567);
         assert_eq!(result.playback_generation, generation.playback_generation);
         assert!(result.presented);
+    }
+
+    #[test]
+    fn playback_controls_return_monotonic_generations() {
+        let (mut registry, session_id) = registry_with_session();
+
+        let seek = registry
+            .seek(&session_id, 500_000)
+            .expect("seek returns generation");
+        let play = registry.play(&session_id).expect("play returns generation");
+        let pause = registry
+            .pause(&session_id)
+            .expect("pause returns generation");
+        let stop = registry.stop(&session_id).expect("stop returns generation");
+
+        assert!(seek.playback_generation < play.playback_generation);
+        assert!(play.playback_generation < pause.playback_generation);
+        assert!(pause.playback_generation < stop.playback_generation);
     }
 
     #[test]

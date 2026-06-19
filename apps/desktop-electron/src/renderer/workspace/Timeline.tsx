@@ -256,7 +256,7 @@ function TransportStrip({
           label={isPlaybackRunning ? "暂停" : "播放"}
           symbol={isPlaybackRunning ? "⏸" : "▶"}
           onClick={togglePlayback}
-          disabled={(pending && !isPlaybackRunning) || !workspace.runtimeDiagnostics.canPreview}
+          disabled={pending && !isPlaybackRunning}
         />
         <TimelineIconButton label="停止" symbol="■" onClick={stopPlayback} disabled={pending && !isPlaybackRunning} />
       </div>

@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 
+import type { Draft } from "../generated/Draft";
 import {
   attachRealtimePreviewSurface,
   cancelRealtimePreviewRequest,
@@ -8,7 +9,12 @@ import {
   detachRealtimePreviewSurface,
   getRealtimePreviewTelemetry,
   nextRealtimePreviewCancellationToken,
+  pauseRealtimePreview,
+  playRealtimePreview,
   requestRealtimePreviewFrame,
+  seekRealtimePreview,
+  stopRealtimePreview,
+  updateRealtimePreviewDraftSnapshot,
   updateRealtimePreviewSurfaceBounds,
   type RealtimePreviewBackendUsed,
   type RealtimePreviewFallbackReason,
@@ -45,6 +51,8 @@ type RealtimePreviewHostRecord = {
   parentHandleByteLength?: number;
   surfaceKind?: string;
   bounds?: RealtimePreviewSurfaceBounds;
+  targetTimeMicroseconds?: number;
+  playbackGeneration?: number;
 };
 
 declare global {
@@ -78,6 +86,26 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
   ipcMain.handle("realtimePreviewHost:getTelemetry", (event) => {
     assertAllowedSender(event);
     return hostForEvent(event).getTelemetryState();
+  });
+  ipcMain.handle("realtimePreviewHost:updateDraftSnapshot", (event, draft: Draft) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).updateDraftSnapshot(draft);
+  });
+  ipcMain.handle("realtimePreviewHost:seek", (event, targetTimeMicroseconds: number) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).seek(targetTimeMicroseconds);
+  });
+  ipcMain.handle("realtimePreviewHost:play", (event) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).play();
+  });
+  ipcMain.handle("realtimePreviewHost:pause", (event) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).pause();
+  });
+  ipcMain.handle("realtimePreviewHost:stop", (event) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).stop();
   });
   realtimePreviewHostIpcInstalled = true;
 }
@@ -172,6 +200,83 @@ export class RealtimePreviewHost {
     return this.state(this.fallbackLabel === null ? "实时预览数据已更新" : "实时预览降级显示");
   }
 
+  updateDraftSnapshot(draft: Draft): RealtimePreviewHostDisplayState {
+    try {
+      this.ensureSession();
+      if (this.sessionId === null) {
+        throw new Error("实时预览会话尚未创建");
+      }
+      const response = updateRealtimePreviewDraftSnapshot({
+        sessionId: this.sessionId,
+        draft
+      });
+      this.playbackGeneration = response.playbackGeneration;
+      recordRealtimePreviewHostCall({
+        kind: "updateDraftSnapshot",
+        playbackGeneration: response.playbackGeneration
+      });
+      this.fallbackLabel = null;
+      this.refreshTelemetry();
+      return this.state("实时预览草稿已更新");
+    } catch (error) {
+      this.fallbackLabel = attachFailureLabel(error);
+      return this.state("实时预览降级显示");
+    }
+  }
+
+  seek(targetTimeMicroseconds: number): RealtimePreviewHostDisplayState {
+    try {
+      this.ensureSession();
+      if (this.sessionId === null) {
+        throw new Error("实时预览会话尚未创建");
+      }
+      const targetTime = sanitizeTargetTimeMicroseconds(targetTimeMicroseconds);
+      const response = seekRealtimePreview({
+        sessionId: this.sessionId,
+        targetTimeMicroseconds: targetTime
+      });
+      this.playbackGeneration = response.playbackGeneration;
+      recordRealtimePreviewHostCall({
+        kind: "seek",
+        targetTimeMicroseconds: targetTime,
+        playbackGeneration: response.playbackGeneration
+      });
+      this.fallbackLabel = null;
+      this.refreshTelemetry();
+      return this.state("实时预览已寻帧");
+    } catch (error) {
+      this.fallbackLabel = attachFailureLabel(error);
+      return this.state("实时预览降级显示");
+    }
+  }
+
+  play(): RealtimePreviewHostDisplayState {
+    return this.applySessionPlaybackCommand("play", () => {
+      if (this.sessionId === null) {
+        throw new Error("实时预览会话尚未创建");
+      }
+      return playRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
+    }, "实时预览播放中");
+  }
+
+  pause(): RealtimePreviewHostDisplayState {
+    return this.applySessionPlaybackCommand("pause", () => {
+      if (this.sessionId === null) {
+        throw new Error("实时预览会话尚未创建");
+      }
+      return pauseRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
+    }, "实时预览已暂停");
+  }
+
+  stop(): RealtimePreviewHostDisplayState {
+    return this.applySessionPlaybackCommand("stop", () => {
+      if (this.sessionId === null) {
+        throw new Error("实时预览会话尚未创建");
+      }
+      return stopRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
+    }, "实时预览已停止");
+  }
+
   close(): void {
     if (this.closed) {
       return;
@@ -251,6 +356,25 @@ export class RealtimePreviewHost {
 
     this.telemetry = getRealtimePreviewTelemetry({ sessionId: this.sessionId });
     recordRealtimePreviewHostCall({ kind: "getTelemetry" });
+  }
+
+  private applySessionPlaybackCommand(
+    kind: "play" | "pause" | "stop",
+    command: () => number,
+    statusLabel: string
+  ): RealtimePreviewHostDisplayState {
+    try {
+      this.ensureSession();
+      const playbackGeneration = command();
+      this.playbackGeneration = playbackGeneration;
+      recordRealtimePreviewHostCall({ kind, playbackGeneration });
+      this.fallbackLabel = null;
+      this.refreshTelemetry();
+      return this.state(statusLabel);
+    } catch (error) {
+      this.fallbackLabel = attachFailureLabel(error);
+      return this.state("实时预览降级显示");
+    }
   }
 
   private mockRealtimeFrameForTest(): void {
@@ -348,6 +472,10 @@ export class RealtimePreviewHost {
       telemetry: this.telemetry
     };
   }
+}
+
+function sanitizeTargetTimeMicroseconds(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
 function normalizeHostRect(rect: RealtimePreviewHostRectInput): RealtimePreviewSurfaceBounds | null {

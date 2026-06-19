@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { DraftCanvasConfig } from "../../generated/Draft";
+import type { Draft, DraftCanvasConfig } from "../../generated/Draft";
 import {
   canvasBackgroundTone,
   formatCanvasAspectRatio,
@@ -109,6 +109,11 @@ type RealtimePreviewHostState = {
 type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
   getTelemetry: () => Promise<RealtimePreviewHostState>;
+  updateDraftSnapshot: (draft: Draft) => Promise<RealtimePreviewHostState>;
+  seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
+  play: () => Promise<RealtimePreviewHostState>;
+  pause: () => Promise<RealtimePreviewHostState>;
+  stop: () => Promise<RealtimePreviewHostState>;
 };
 
 declare global {
@@ -369,7 +374,6 @@ export function PreviewMonitor({
               }}
               disabled={
                 (pending && !(playbackRunning && (control.label === "播放" || control.label === "停止"))) ||
-                (!runtimeDiagnostics.canPreview && control.label === "播放") ||
                 control.label === "适应窗口" ||
                 control.label === "画面比例" ||
                 control.label === "全屏"

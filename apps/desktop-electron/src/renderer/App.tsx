@@ -134,6 +134,12 @@ type VideoEditorPlatformApi = {
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
+type RealtimePreviewHostState = {
+  ok: boolean;
+  statusLabel: string;
+  fallbackLabel: string | null;
+  playbackGeneration: number | null;
+};
 
 type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
 type DraftCommandResultApplier<T> = (
@@ -273,18 +279,14 @@ export function App(): React.ReactElement {
         return;
       }
 
-      if (
-        clock.accumulatedUs >= frameStepUs &&
-        !commandInFlightRef.current &&
-        workspaceRef.current.runtimeDiagnostics.canPreview
-      ) {
+      if (clock.accumulatedUs >= frameStepUs) {
         const elapsedFrames = Math.max(1, Math.floor(clock.accumulatedUs / frameStepUs));
         clock.accumulatedUs %= frameStepUs;
         const targetTime = Math.min(sequenceDurationUs, playheadRef.current + elapsedFrames * frameStepUs);
         setPlayheadUs(targetTime);
-        requestPreviewFrameAt(targetTime);
 
         if (targetTime >= sequenceDurationUs) {
+          void stopRealtimePreviewHost();
           setPlaybackRunning(false);
           return;
         }
@@ -300,12 +302,6 @@ export function App(): React.ReactElement {
       }
     };
   }, [playbackRunning]);
-
-  useEffect(() => {
-    if (playbackRunning && !workspace.runtimeDiagnostics.canPreview) {
-      setPlaybackRunning(false);
-    }
-  }, [playbackRunning, workspace.runtimeDiagnostics.canPreview]);
 
   useEffect(() => {
     return () => {
@@ -1624,52 +1620,145 @@ export function App(): React.ReactElement {
     const targetTime = normalizePlayheadTime(value);
     setPlaybackRunning(false);
     setPlayheadUs(targetTime);
+    void seekRealtimePreviewHost(targetTime);
     void handleSeekAudioPreview(targetTime);
     requestPreviewFrameAt(targetTime);
   }
 
   function handleTogglePlayback(): void {
-    if (playbackRunning) {
-      void handlePauseAudioPreview();
-      setPlaybackRunning(false);
-      return;
-    }
+    void (async () => {
+      if (playbackRunning) {
+        await pauseRealtimePreviewHost();
+        await handlePauseAudioPreview();
+        setPlaybackRunning(false);
+        return;
+      }
 
-    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
-      const message = runtimeUnavailableMessage(workspaceRef.current, "播放暂不可用");
-      setWorkspace((current) => {
-        const next = {
-          ...current,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            error: message
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-      return;
-    }
+      const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+      if (sequenceDurationUs <= 0) {
+        return;
+      }
 
-    const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
-    if (sequenceDurationUs <= 0) {
-      return;
-    }
+      if (playheadRef.current >= sequenceDurationUs) {
+        setPlayheadUs(0);
+        playheadRef.current = 0;
+      }
 
-    if (playheadRef.current >= sequenceDurationUs) {
-      setPlayheadUs(0);
-      playheadRef.current = 0;
-    }
-    playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
-    void handlePlayAudioPreview();
-    setPlaybackRunning(true);
+      const snapshotReady = await updateRealtimePreviewDraftSnapshot();
+      if (!snapshotReady) {
+        return;
+      }
+      const seekReady = await seekRealtimePreviewHost(playheadRef.current);
+      if (!seekReady) {
+        return;
+      }
+      const playbackReady = await playRealtimePreviewHost();
+      if (!playbackReady) {
+        return;
+      }
+
+      playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
+      void handlePlayAudioPreview();
+      setPlaybackRunning(true);
+    })();
   }
 
   function handleStopPlayback(): void {
     void handleStopAudioPreview();
+    void stopRealtimePreviewHost();
     setPlaybackRunning(false);
-    handleSeekPlayhead(0);
+    setPlayheadUs(0);
+    playheadRef.current = 0;
+    requestPreviewFrameAt(0);
+  }
+
+  async function updateRealtimePreviewDraftSnapshot(): Promise<boolean> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return applyRealtimePreviewHostError("实时预览宿主不可用");
+    }
+
+    try {
+      return applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft));
+    } catch (error: unknown) {
+      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function seekRealtimePreviewHost(targetTime: number): Promise<boolean> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return applyRealtimePreviewHostError("实时预览宿主不可用");
+    }
+
+    try {
+      return applyRealtimePreviewHostState(await bridge.seek(Math.max(0, Math.round(targetTime))));
+    } catch (error: unknown) {
+      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function playRealtimePreviewHost(): Promise<boolean> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return applyRealtimePreviewHostError("实时预览宿主不可用");
+    }
+
+    try {
+      return applyRealtimePreviewHostState(await bridge.play());
+    } catch (error: unknown) {
+      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function pauseRealtimePreviewHost(): Promise<boolean> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return applyRealtimePreviewHostError("实时预览宿主不可用");
+    }
+
+    try {
+      return applyRealtimePreviewHostState(await bridge.pause());
+    } catch (error: unknown) {
+      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function stopRealtimePreviewHost(): Promise<boolean> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return applyRealtimePreviewHostError("实时预览宿主不可用");
+    }
+
+    try {
+      return applyRealtimePreviewHostState(await bridge.stop());
+    } catch (error: unknown) {
+      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function applyRealtimePreviewHostState(hostState: RealtimePreviewHostState): boolean {
+    if (hostState.ok) {
+      return true;
+    }
+    return applyRealtimePreviewHostError(hostState.fallbackLabel ?? hostState.statusLabel);
+  }
+
+  function applyRealtimePreviewHostError(message: string): false {
+    const errorMessage = commandErrorMessage(message);
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        commandError: errorMessage,
+        preview: {
+          ...current.preview,
+          error: errorMessage
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+    return false;
   }
 
   async function handlePlayAudioPreview(): Promise<void> {

@@ -302,6 +302,24 @@ pub fn seek_realtime_preview(request: serde_json::Value) -> Result<serde_json::V
     })
 }
 
+#[napi(js_name = "playRealtimePreview")]
+pub fn play_realtime_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.play(&request.session_id))
+}
+
+#[napi(js_name = "pauseRealtimePreview")]
+pub fn pause_realtime_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.pause(&request.session_id))
+}
+
+#[napi(js_name = "stopRealtimePreview")]
+pub fn stop_realtime_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
+    with_realtime_preview_registry(|registry| registry.stop(&request.session_id))
+}
+
 #[napi(js_name = "requestRealtimePreviewFrame")]
 pub fn request_realtime_preview_frame(request: serde_json::Value) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewFrameRequest>(request)?;

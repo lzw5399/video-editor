@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type { CommandResultEnvelope } from "../generated/CommandResultEnvelope";
+import type { Draft } from "../generated/Draft";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -17,6 +18,11 @@ type NativeBinding = {
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
   updateRealtimePreviewSurfaceBounds: (request: RealtimePreviewSurfaceBoundsRequest) => RealtimePreviewGenerationResponse;
   detachRealtimePreviewSurface: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
+  updateRealtimePreviewDraftSnapshot: (request: RealtimePreviewDraftSnapshotRequest) => RealtimePreviewGenerationResponse;
+  seekRealtimePreview: (request: RealtimePreviewSeekRequest) => RealtimePreviewGenerationResponse;
+  playRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
+  pauseRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
+  stopRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
   requestRealtimePreviewFrame: (request: RealtimePreviewFrameRequest) => RealtimePreviewFrameResponse;
   nextRealtimePreviewCancellationToken: (request: RealtimePreviewSessionRequest) => number;
   cancelRealtimePreviewRequest: (request: RealtimePreviewCancellationRequest) => RealtimePreviewCanceledResponse;
@@ -75,6 +81,16 @@ export type RealtimePreviewSurfaceBoundsRequest = {
 
 export type RealtimePreviewGenerationResponse = {
   playbackGeneration: number;
+};
+
+export type RealtimePreviewDraftSnapshotRequest = {
+  sessionId: string;
+  draft: Draft;
+};
+
+export type RealtimePreviewSeekRequest = {
+  sessionId: string;
+  targetTimeMicroseconds: number;
 };
 
 export type RealtimePreviewBackendUsed = "mock" | "gpu" | "offscreen" | "previewArtifact" | "ffmpegArtifact" | "none";
@@ -211,6 +227,28 @@ export function detachRealtimePreviewSurface(request: RealtimePreviewSessionRequ
   return requireLoadedBinding().detachRealtimePreviewSurface(request);
 }
 
+export function updateRealtimePreviewDraftSnapshot(
+  request: RealtimePreviewDraftSnapshotRequest
+): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().updateRealtimePreviewDraftSnapshot(request);
+}
+
+export function seekRealtimePreview(request: RealtimePreviewSeekRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().seekRealtimePreview(request);
+}
+
+export function playRealtimePreview(request: RealtimePreviewSessionRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().playRealtimePreview(request);
+}
+
+export function pauseRealtimePreview(request: RealtimePreviewSessionRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().pauseRealtimePreview(request);
+}
+
+export function stopRealtimePreview(request: RealtimePreviewSessionRequest): RealtimePreviewGenerationResponse {
+  return requireLoadedBinding().stopRealtimePreview(request);
+}
+
 export function requestRealtimePreviewFrame(request: RealtimePreviewFrameRequest): RealtimePreviewFrameResponse {
   return requireLoadedBinding().requestRealtimePreviewFrame(request);
 }
@@ -244,6 +282,11 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
       typeof loaded.updateRealtimePreviewSurfaceBounds !== "function" ||
       typeof loaded.detachRealtimePreviewSurface !== "function" ||
+      typeof loaded.updateRealtimePreviewDraftSnapshot !== "function" ||
+      typeof loaded.seekRealtimePreview !== "function" ||
+      typeof loaded.playRealtimePreview !== "function" ||
+      typeof loaded.pauseRealtimePreview !== "function" ||
+      typeof loaded.stopRealtimePreview !== "function" ||
       typeof loaded.requestRealtimePreviewFrame !== "function" ||
       typeof loaded.nextRealtimePreviewCancellationToken !== "function" ||
       typeof loaded.cancelRealtimePreviewRequest !== "function" ||
@@ -261,6 +304,11 @@ function loadNativeBinding(): NativeBinding | null {
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,
       updateRealtimePreviewSurfaceBounds: loaded.updateRealtimePreviewSurfaceBounds,
       detachRealtimePreviewSurface: loaded.detachRealtimePreviewSurface,
+      updateRealtimePreviewDraftSnapshot: loaded.updateRealtimePreviewDraftSnapshot,
+      seekRealtimePreview: loaded.seekRealtimePreview,
+      playRealtimePreview: loaded.playRealtimePreview,
+      pauseRealtimePreview: loaded.pauseRealtimePreview,
+      stopRealtimePreview: loaded.stopRealtimePreview,
       requestRealtimePreviewFrame: loaded.requestRealtimePreviewFrame,
       nextRealtimePreviewCancellationToken: loaded.nextRealtimePreviewCancellationToken,
       cancelRealtimePreviewRequest: loaded.cancelRealtimePreviewRequest,
