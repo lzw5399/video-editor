@@ -33,7 +33,11 @@ fn artifact_jobs_create_rows_for_all_supported_artifact_kinds() {
             kind,
             vec![
                 GenerationProgress::new(Some(index as u64 * 1_000_000), Some(1_000_000), Some(0)),
-                GenerationProgress::new(Some(index as u64 * 1_000_000 + 1_000_000), Some(1_000_000), Some(0)),
+                GenerationProgress::new(
+                    Some(index as u64 * 1_000_000 + 1_000_000),
+                    Some(1_000_000),
+                    Some(0),
+                ),
             ],
         );
 
@@ -92,8 +96,8 @@ fn artifact_jobs_persist_chunk_transitions_and_progress_transactionally() {
         .expect("first chunk should exist");
     assert_eq!(first.chunk_index, 0);
 
-    let running = start_generation_chunk(&mut store, "job-progress", 0)
-        .expect("chunk should start");
+    let running =
+        start_generation_chunk(&mut store, "job-progress", 0).expect("chunk should start");
     assert_eq!(running.status, GenerationChunkStatus::Running);
     assert_eq!(running.progress_per_mille, Some(0));
 
@@ -214,8 +218,8 @@ fn artifact_jobs_cancel_and_status_summary_are_durable_and_ui_safe() {
     .expect("job should be created");
     start_generation_chunk(&mut store, "job-cancel", 0).expect("chunk should start");
 
-    let cancelled = cancel_generation_job(&mut store, "job-cancel")
-        .expect("cancel should persist request");
+    let cancelled =
+        cancel_generation_job(&mut store, "job-cancel").expect("cancel should persist request");
     assert_eq!(cancelled.status, GenerationJobStatus::CancelRequested);
 
     let reopened = open_artifact_store(&bundle_path).expect("store should reopen");
@@ -270,7 +274,10 @@ fn job_request(
 }
 
 #[allow(dead_code)]
-fn optional_status_for_job(store: &artifact_store::schema::ArtifactStore, job_id: &str) -> Option<String> {
+fn optional_status_for_job(
+    store: &artifact_store::schema::ArtifactStore,
+    job_id: &str,
+) -> Option<String> {
     store
         .connection()
         .query_row(

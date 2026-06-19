@@ -8,6 +8,7 @@ pub mod dependencies;
 pub mod error;
 pub mod fingerprint;
 pub mod invalidation;
+pub mod jobs;
 pub mod paths;
 pub mod resource_index;
 pub mod schema;
