@@ -202,6 +202,51 @@ fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_
 }
 
 #[test]
+fn media_io_handoff_rejects_texture_handle_without_registered_native_lease() {
+    let material_id = MaterialId::new("unregistered-texture-material");
+    let device = RuntimeDeviceId {
+        backend: TextureBackend::MetalTexture,
+        adapter_id: "adapter-1".to_owned(),
+        device_id: "device-1".to_owned(),
+    };
+    let reader = MockMediaReader::new(
+        Rc::new(RefCell::new(Vec::new())),
+        MockStorage::Texture(device.clone()),
+        None,
+    );
+    let mut provider = MediaIoFrameProvider::new(Box::new(reader))
+        .with_desired_storage(PreviewFrameStoragePreference::Texture)
+        .with_preview_device_context(PreviewDecodeDeviceContext::compatible(device));
+    provider
+        .register_material(PreviewMaterialDecodeSource {
+            material_id: material_id.clone(),
+            material_uri: repo_media_fixture("p0-moving-testsrc.mp4"),
+            stream_id: StreamId(0),
+            selected_path: SelectedDecodePath::NativeHardwareTexture,
+            fallback_selection: None,
+        })
+        .expect("repo-owned material registers through media IO");
+
+    let error = provider
+        .frame_for(
+            &material_id,
+            Microseconds::new(33_333),
+            PlaybackGeneration::new(12),
+        )
+        .expect_err("metadata-only texture handles must not satisfy product compositor input");
+
+    assert!(matches!(
+        error,
+        PreviewFrameProviderError::Unavailable { .. }
+    ));
+    assert!(
+        error.to_string().contains("native texture lease"),
+        "error should explain missing live native texture lease: {error}"
+    );
+    assert_eq!(provider.telemetry().presentable_frame_count, 0);
+}
+
+#[test]
 fn media_io_handoff_frame_provider_rejects_ffmpeg_fallback_as_product_compositor_input() {
     let material_id = MaterialId::new("ffmpeg-fallback-material");
     let reader = MockMediaReader::new(

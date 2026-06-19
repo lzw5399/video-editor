@@ -2,9 +2,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use draft_model::{MaterialId, Microseconds, RationalFrameRate};
+use media_runtime::{
+    DecodedVideoFrame, FrameDimensions, FrameHandleId, FrameLeaseId, MediaSessionId,
+    RuntimeDeviceId, TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata,
+    VideoFrameStorage, VideoPixelFormat,
+};
 use realtime_preview_runtime::{
     CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
     PreviewFrameProvider, PreviewFrameProviderError, SoftwareVideoFrameProvider,
+    TextureHandleDescriptor,
 };
 
 #[test]
@@ -113,6 +119,65 @@ fn video_frame_provider_reports_uncached_out_of_range_and_unsupported_codec() {
         PreviewFrameProviderError::UnsupportedCodec { .. }
     ));
     assert!(unsupported.to_string().contains("prores"));
+}
+
+#[test]
+fn video_frame_provider_texture_descriptor_preserves_owner_device_color_and_generation() {
+    let material_id = MaterialId::new("native-texture-material");
+    let owner_session = MediaSessionId("session-texture-1".to_owned());
+    let device_id = RuntimeDeviceId {
+        backend: TextureBackend::MetalTexture,
+        adapter_id: "metal-adapter".to_owned(),
+        device_id: "metal-device".to_owned(),
+    };
+    let color = VideoColorMetadata::unknown_with_diagnostic("test texture color");
+    let frame = DecodedVideoFrame {
+        handle_id: FrameHandleId("frame-1".to_owned()),
+        owner_session: owner_session.clone(),
+        playback_generation: Some(77),
+        source_time_us: 222_222,
+        duration_us: Some(33_333),
+        frame_index: Some(3),
+        dimensions: FrameDimensions {
+            width: 320,
+            height: 180,
+        },
+        pixel_format: VideoPixelFormat::Nv12,
+        color: color.clone(),
+        storage: VideoFrameStorage::Texture(TextureHandle {
+            handle_id: TextureHandleId("texture-live-1".to_owned()),
+            owner_session: owner_session.clone(),
+            generation: 77,
+            backend: TextureBackend::MetalTexture,
+            device_id: device_id.clone(),
+            dimensions: FrameDimensions {
+                width: 320,
+                height: 180,
+            },
+            pixel_format: VideoPixelFormat::Nv12,
+            color: color.clone(),
+        }),
+        release: FrameLeaseId("lease-1".to_owned()),
+    };
+
+    let descriptor = TextureHandleDescriptor::from_decoded_frame(
+        material_id.clone(),
+        Microseconds::new(222_222),
+        &frame,
+    )
+    .expect("decoded texture frame should validate")
+    .expect("decoded texture frame should produce a descriptor");
+
+    assert_eq!(descriptor.material_id, material_id);
+    assert_eq!(descriptor.source_position, Microseconds::new(222_222));
+    assert_eq!(descriptor.handle_id, "texture-live-1");
+    assert_eq!(descriptor.owner_session, owner_session);
+    assert_eq!(descriptor.playback_generation, PlaybackGeneration::new(77));
+    assert_eq!(descriptor.device_id, device_id);
+    assert_eq!(descriptor.width, 320);
+    assert_eq!(descriptor.height, 180);
+    assert_eq!(descriptor.pixel_format, "nv12");
+    assert_eq!(descriptor.color, color);
 }
 
 fn rgba_frame(
