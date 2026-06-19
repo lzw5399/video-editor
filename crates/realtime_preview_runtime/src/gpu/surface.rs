@@ -408,6 +408,20 @@ impl RealtimePreviewGpuPresentationTarget {
         Ok(())
     }
 
+    pub(crate) fn drawable_lifecycle_diagnostic(&self) -> Option<String> {
+        #[cfg(target_os = "macos")]
+        {
+            return self
+                .macos_attachment
+                .as_ref()
+                .map(|attachment| attachment.drawable_lifecycle_diagnostic());
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            None
+        }
+    }
+
     pub(crate) fn update_bounds(
         &mut self,
         device: &wgpu::Device,

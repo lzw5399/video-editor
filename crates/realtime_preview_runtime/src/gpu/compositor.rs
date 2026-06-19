@@ -191,7 +191,7 @@ impl RealtimePreviewCompositor {
         target.prepare_for_present().map_err(|error| {
             RealtimePreviewCompositorError::WgpuSurfaceAcquire(error.to_string())
         })?;
-        let surface_texture = acquire_surface_texture(target.surface())?;
+        let surface_texture = acquire_surface_texture(target)?;
         let view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1489,11 +1489,11 @@ fn poll_wgpu(
 }
 
 fn acquire_surface_texture(
-    surface: &wgpu::Surface<'static>,
+    target: &RealtimePreviewGpuPresentationTarget,
 ) -> Result<wgpu::SurfaceTexture, RealtimePreviewCompositorError> {
     let mut last_transient = None;
     for _ in 0..8 {
-        match surface.get_current_texture() {
+        match target.surface().get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture)
             | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => return Ok(texture),
             wgpu::CurrentSurfaceTexture::Timeout => {
@@ -1521,9 +1521,12 @@ fn acquire_surface_texture(
             }
         }
     }
-    Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(
-        last_transient.unwrap_or("surface acquire failed").into(),
-    ))
+    let reason = last_transient.unwrap_or("surface acquire failed");
+    let details = target
+        .drawable_lifecycle_diagnostic()
+        .map(|diagnostic| format!("{reason}; {diagnostic}"))
+        .unwrap_or_else(|| reason.to_owned());
+    Err(RealtimePreviewCompositorError::WgpuSurfaceAcquire(details))
 }
 
 fn align_to(value: usize, alignment: usize) -> usize {

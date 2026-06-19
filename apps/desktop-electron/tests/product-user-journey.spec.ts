@@ -4,6 +4,7 @@ import {
   USER_JOURNEY_MOVING_VIDEO,
   addMaterialToTimeline,
   capturePreviewEvidence,
+  expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
   expectNoRejectedSurfaceAcquire,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
@@ -124,7 +125,16 @@ test("product user can import a repo video, add it to the timeline, and see rend
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
     await playButton.click();
 
-    const after = await waitForCompositedPreviewEvidence(page, 12_000);
+    let after;
+    try {
+      after = await waitForCompositedPreviewEvidence(page, app, 12_000);
+    } catch (error) {
+      const hostCalls = await readRealtimePreviewHostCalls(app);
+      if (hostCalls.some((call) => call.kind === "surfaceAcquireOccluded")) {
+        expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(hostCalls);
+      }
+      throw error;
+    }
     const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const hostCallKinds = (await readRealtimePreviewHostCalls(app)).map((call) => call.kind);
     expectNoRejectedSurfaceAcquire(await readRealtimePreviewHostCalls(app));

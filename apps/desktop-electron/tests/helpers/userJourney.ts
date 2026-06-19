@@ -16,6 +16,14 @@ type ExecuteCommandCall = {
 
 type RealtimePreviewHostCall = {
   kind: string;
+  parentHandleByteLength?: number;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    scaleFactorMillis: number;
+  };
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
   errorMessage?: string;
@@ -69,6 +77,7 @@ export type PreviewEvidence = {
 
 export async function waitForCompositedPreviewEvidence(
   page: Page,
+  app?: ElectronApplication,
   timeoutMs = 8_000
 ): Promise<PreviewEvidence> {
   const deadline = Date.now() + timeoutMs;
@@ -82,10 +91,11 @@ export async function waitForCompositedPreviewEvidence(
     await page.waitForTimeout(250);
   }
 
+  const hostCalls = app === undefined ? [] : await readRealtimePreviewHostCalls(app);
   throw new Error(
     `Timed out waiting for composited preview evidence. Last host state: ${JSON.stringify(
       lastEvidence?.hostState ?? null
-    )}`
+    )}. Host calls: ${JSON.stringify(hostCalls)}`
   );
 }
 
@@ -100,6 +110,34 @@ export function expectNoRejectedSurfaceAcquire(calls: RealtimePreviewHostCall[])
       })
     ])
   );
+}
+
+export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
+  calls: RealtimePreviewHostCall[]
+): void {
+  const occluded = calls.find((call) => call.kind === "surfaceAcquireOccluded");
+  expect(occluded, "occluded surface acquire must be recorded for fail-closed diagnosis").toBeDefined();
+  expect(
+    occluded?.errorMessage ?? "",
+    "occluded acquire diagnostics must include AppKit/CoreAnimation drawable lifecycle state"
+  ).toEqual(expect.stringContaining("drawableLifecycle{"));
+  for (const field of [
+    "parentWindowVisible=",
+    "parentWindowOcclusionVisible=",
+    "childWindowVisible=",
+    "childWindowOcclusionVisible=",
+    "childHasParent=",
+    "childViewHidden=",
+    "childViewHiddenOrAncestor=",
+    "layerHidden=",
+    "parentViewBounds=",
+    "childWindowFrame=",
+    "childViewFrame=",
+    "layerBounds=",
+    "drawableSize="
+  ]) {
+    expect(occluded?.errorMessage ?? "").toEqual(expect.stringContaining(field));
+  }
 }
 
 export async function launchProductJourneyApp(
