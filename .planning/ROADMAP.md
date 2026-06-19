@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 10.1: Usable Editor MVP Completion** - System file import, real preview image display, playhead seeking, and basic video/audio/text/subtitle editing usability (completed 2026-06-18)
 - [x] **Phase 11: Realtime Preview Runtime And GPU Render Backend** - Production realtime preview runtime, GPU compositor backend, frame pacing, and preview/export parity diagnostics (completed 2026-06-18)
 - [x] **Phase 12: Media IO, Hardware Decode, And Frame/Texture Interop** - Platform media reader/decoder abstraction, hardware decode capability reporting, frame pools, and low-copy texture handoff (completed 2026-06-19)
-- [ ] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts
+- [x] **Phase 13: Incremental Render Graph, Dirty Ranges, And Cache Coherence** - Stable graph IDs, graph diffing, dirty range propagation, undo/redo-aware graph snapshots, and cache invalidation contracts (completed 2026-06-19)
 - [ ] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC
 - [ ] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
@@ -515,7 +515,7 @@ Plans:
   4. Undo/redo restores semantic state and either restores matching graph/cache snapshots or invalidates affected ranges deterministically.
   5. Large-timeline tests cover graph diff cost, cache invalidation correctness, and preview/export consistency after edits.
 
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans:
 
@@ -526,7 +526,7 @@ Plans:
 - [x] 13-04 - Stable render graph node IDs, fingerprints, graph snapshots, and graph diff helpers
 - [x] 13-05 - Preview cache key v2, invalidation request v2, dirty consumer expansion, and export-prep dirty facts
 - [x] 13-05B - Binding-safe invalidation contracts and generated schema/TypeScript updates
-- [ ] 13-06 - Large-timeline, preview/export parity, source guard, and final Phase 13 gates
+- [x] 13-06 - Large-timeline, preview/export parity, source guard, and final Phase 13 gates
 
 ### Phase 14: Asset Resource Manager And Derived Artifact Store
 
@@ -647,7 +647,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 10.1 Usable Editor MVP Completion | 7/7 | Complete | 2026-06-18 |
 | 11. Realtime Preview Runtime And GPU Render Backend | 10/10 | Complete   | 2026-06-18 |
 | 12. Media IO, Hardware Decode, And Frame/Texture Interop | 9/9 | Complete | 2026-06-19 |
-| 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 7/8 | In Progress | - |
+| 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
 | 14. Asset Resource Manager And Derived Artifact Store | TBD | Not planned | - |
 | 15. Audio Engine And DSP Timeline Pipeline | TBD | Not planned | - |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
