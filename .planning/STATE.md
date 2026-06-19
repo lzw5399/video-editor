@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Replanned Phase 15.2 Plan 04 blocker into Plan 04A Rust-owned playback scheduler
-last_updated: "2026-06-19T22:08:00Z"
-last_activity: 2026-06-20 -- Plan 04 implemented NV12 ExternalTexture sampling and fail-closed desktop gating but product playback still lacks Rust-owned decode/render/present scheduler evidence; Plan 04A added as the next gate
+status: blocked
+stopped_at: Phase 15.2 Plan 04A blocked on WGPU native surface occlusion; 15.2-05/06 not released
+last_updated: "2026-06-19T23:01:22Z"
+last_activity: 2026-06-20 -- Plan 04A added Rust-owned scheduler playback, CoreVideo/Metal to WGPU NV12 import, and Electron host wiring, but product playback still fails closed because WGPU surface texture acquire reports surface is occluded
 progress:
   total_phases: 23
   completed_phases: 18
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
 Plan: 15.2-04A
-Status: Executing — continue with Rust-owned realtime playback scheduler
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04 blocked honestly after removing native-video success and adding NV12 WGPU sampling contract; Plan 04A now owns scheduler-driven product playback
+Status: Blocked — WGPU native surface acquisition reports surface is occluded during product playback
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04A implemented the Rust-owned decode/render/present scheduler path and native import bridge, but did not emit `renderGraphGpuComposited` evidence because the real Electron/WGPU surface remains occluded
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04 complete/blocked honestly, Plan 04A added to close scheduler-driven product playback, 3 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04 complete/blocked honestly, Plan 04A executed but remains blocked on native WGPU surface visibility, 15.2-05/06 are not released; Phase 15.3 UI convergence follows after compositor closure
 
 ## Performance Metrics
 
@@ -169,6 +169,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04 complete/blocked honestly,
 | Phase 15.2 P03 | 22 min | 3 tasks | 10 files |
 | Phase 15.2 P03A | 9 min | 3 tasks | 5 files |
 | Phase 15.2 P03B | 14 min | 3 tasks | 11 files |
+| Phase 15.2 P04A | 61 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04 complete/blocked honestly,
 - Phase 15.2 Plan 01 completed evidence taxonomy/no-fallback hardening: product preview backend is only `renderGraphGpu|none`, native video bridge is diagnostic-only, and product E2E rejects native bridge playback as compositor success. (URGENT)
 - Phase 15.2 Plan 02 completed the runtime WGPU compositor subset: supported canvas, video/image texture sampling, transform/opacity/crop/fit handling, stack-order composition, and bundled-font text overlays now render through `WgpuRenderPass`; CPU reference output remains test-only evidence. (URGENT)
 - Phase 15.2 Plan 03 completed media IO texture handoff and audio sync state: compositor input now accepts only proven compatible native texture handles, FFmpeg/CPU/platform-opaque paths fail closed for product preview input, and stale audio sync rejects frame presentation. (URGENT)
+- Phase 15.2 Plan 04A added the Rust-owned realtime playback scheduler, macOS CoreVideo/Metal to WGPU NV12 import bridge, and Electron host wiring, but remains blocked because WGPU surface acquisition reports `surface is occluded`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
@@ -412,6 +414,8 @@ Recent decisions affecting current work:
 - [Phase 15.2]: Product WGPU preview surface presentation rejects offscreen/mock descriptors and reports WgpuSurfacePresent without CPU pixel evidence. — Product WGPU preview surface presentation rejects offscreen/mock descriptors and reports WgpuSurfacePresent without CPU pixel evidence.
 - [Phase 15.2]: Decoded texture handles must resolve through a Rust-owned native lease registry before media IO can return product compositor input.
 - [Phase 15.2]: The WGPU compositor samples registered WGPU texture lease resources directly and rejects unregistered, stale, incompatible, or unsupported native resources as unavailable diagnostics.
+- [Phase 15.2]: CoreVideo/Metal lease inspection belongs at the Rust binding/platform edge, while realtime_preview_runtime::gpu consumes a generic native texture importer and does not depend on media_runtime_desktop.
+- [Phase 15.2]: Plan 04A cannot release 05/06 until Electron native WGPU surface acquisition is non-occluded and product E2E observes real visible advancement with `renderGraphGpuComposited` evidence.
 
 ### Pending Todos
 
@@ -420,6 +424,8 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 15.2 Plan 04 blocked: desktop product playback now fails closed instead of routing through native video, but no Rust-owned scheduler currently decodes timeline media into sampleable leases, builds frame-provider state, presents to the WGPU surface, and records `renderGraphGpuComposited` evidence during normal play. Plan 04A is the required closure plan before 05/06 can execute.
+
+- Phase 15.2 Plan 04A blocked: the Rust-owned scheduler, macOS CoreVideo/Metal to WGPU import bridge, and Electron host wiring are implemented, but the product E2E still fails closed because `wgpu surface texture acquire failed: surface is occluded`. No `renderGraphGpuComposited` evidence is emitted, and 15.2-05/06 remain blocked.
 
 - Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
 - 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
@@ -452,6 +458,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T22:08:00Z
-Stopped at: Replanned 15.2-04 blocker into 15.2-04A Rust-owned playback scheduler before 15.2-05/06
+Last session: 2026-06-19T23:01:22Z
+Stopped at: 15.2-04A WGPU native surface occlusion blocker; 15.2-05/06 not released
 Resume file: None
