@@ -73,6 +73,7 @@
     "test:phase15-source-guards": "bash scripts/phase15-source-guards.sh",
     "test:phase15-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"音频预览|波形|播放状态|五大区域\"",
     "test:phase15": "pnpm run test:phase15-rust && pnpm run test:phase15-source-guards && pnpm run test:phase15-workspace && pnpm run test:contracts",
+    "test:no-product-fallback": "bash scripts/no-product-fallback-guards.sh",
     "test:phase10-1-rust": "cargo test -p draft_commands subtitle -- --nocapture && cargo test -p draft_commands text -- --nocapture && cargo test -p draft_commands audio_commands -- --nocapture && cargo test -p bindings_node text_commands -- --nocapture && cargo test -p bindings_node transform_commands -- --nocapture",
     "test:phase10-1-source-guards": "bash scripts/phase10-1-source-guards.sh",
     "test:phase10-1-workspace": "pnpm --filter @video-editor/desktop test:workspace -g \"SRT|字幕|command-only text|画面变换|音频|预览|播放头|五大区域\"",

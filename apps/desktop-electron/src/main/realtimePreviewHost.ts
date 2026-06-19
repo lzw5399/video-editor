@@ -11,14 +11,12 @@ import {
   nextRealtimePreviewCancellationToken,
   pauseRealtimePreview,
   playRealtimePreview,
-  requestRealtimePreviewContentEvidence,
   requestRealtimePreviewFrame,
   seekRealtimePreview,
   stopRealtimePreview,
   updateRealtimePreviewDraftSnapshot,
   updateRealtimePreviewSurfaceBounds,
   type RealtimePreviewBackendUsed,
-  type RealtimePreviewContentEvidenceResponse,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
   type RealtimePreviewRequestMode,
@@ -59,7 +57,14 @@ export type RealtimePreviewHostFrameDisplay = {
   accentColor: string;
 };
 
-export type RealtimePreviewHostContentEvidence = RealtimePreviewContentEvidenceResponse;
+export type RealtimePreviewHostContentEvidence = {
+  source: "composited";
+  digest: string;
+  width: number;
+  height: number;
+  byteCount: number;
+  targetTimeMicroseconds: number;
+};
 
 type RealtimePreviewHostRecord = {
   kind: string;
@@ -68,7 +73,6 @@ type RealtimePreviewHostRecord = {
   bounds?: RealtimePreviewSurfaceBounds;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
-  contentDigest?: string;
   errorMessage?: string;
 };
 
@@ -207,7 +211,7 @@ export class RealtimePreviewHost {
       this.attached = false;
       this.fallbackLabel = attachFailureLabel(error);
       recordRealtimePreviewHostCall({ kind: "attachFailure", bounds });
-      return this.state("实时预览降级显示");
+      return this.state("实时预览不可用");
     }
   }
 
@@ -220,7 +224,7 @@ export class RealtimePreviewHost {
       this.fallbackLabel = attachFailureLabel(error);
     }
 
-    return this.state(this.fallbackLabel === null ? "实时预览数据已更新" : "实时预览降级显示");
+    return this.state(this.fallbackLabel === null ? "实时预览数据已更新" : "实时预览不可用");
   }
 
   updateDraftSnapshot(draft: Draft, bundlePath?: string): RealtimePreviewHostDisplayState {
@@ -252,7 +256,7 @@ export class RealtimePreviewHost {
       return this.state("实时预览草稿已更新");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
-      return this.state("实时预览降级显示");
+      return this.state("实时预览不可用");
     }
   }
 
@@ -281,7 +285,7 @@ export class RealtimePreviewHost {
       return this.state("实时预览已寻帧");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
-      return this.state("实时预览降级显示");
+      return this.state("实时预览不可用");
     }
   }
 
@@ -337,7 +341,7 @@ export class RealtimePreviewHost {
         detachRealtimePreviewSurface({ sessionId: this.sessionId });
         recordRealtimePreviewHostCall({ kind: "detachSurface" });
       } catch {
-        this.fallbackLabel = "实时预览关闭时已降级";
+        this.fallbackLabel = "实时预览关闭时不可用";
       }
     }
 
@@ -375,7 +379,7 @@ export class RealtimePreviewHost {
     });
 
     if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_ATTACH_FAILURE === "1") {
-      throw new Error("实时预览测试降级");
+      throw new Error("实时预览测试不可用");
     }
 
     const parentHandle = nativeParentHandleToNumber(nativeHandle);
@@ -418,7 +422,7 @@ export class RealtimePreviewHost {
       return this.state(statusLabel);
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
-      return this.state("实时预览降级显示");
+      return this.state("实时预览不可用");
     }
   }
 
@@ -478,9 +482,7 @@ export class RealtimePreviewHost {
         cacheHit: false
       }
     });
-    if (this.lastFrame.presented && this.shouldRequestContentEvidence(targetTime)) {
-      this.lastContentEvidence = this.requestContentEvidence(targetTime);
-    }
+    this.lastContentEvidence = null;
     this.telemetry = this.lastFrame.telemetry;
     recordRealtimePreviewHostCall({
       kind: mode === "playbackTick" ? "requestPlaybackFrame" : "requestSeekFrame",
@@ -513,23 +515,6 @@ export class RealtimePreviewHost {
         }
       });
       recordRealtimePreviewHostCall({ kind: "requestCanceledFrame" });
-      return;
-    }
-
-    if (process.env.VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK === "1") {
-      this.lastFrame = requestRealtimePreviewFrame({
-        sessionId: this.sessionId,
-        frame: {
-          targetTimeMicroseconds: 1_200_000,
-          playbackGeneration: this.playbackGeneration,
-          queueLatencyMs: 2,
-          renderDurationMs: 5,
-          mode: "seek",
-          fallbackReason: "ffmpegArtifactGenerated",
-          cacheHit: false
-        }
-      });
-      recordRealtimePreviewHostCall({ kind: "requestFallbackFrame" });
       return;
     }
 
@@ -582,55 +567,9 @@ export class RealtimePreviewHost {
       currentRequestCanceled: this.lastFrame?.canceled ?? false,
       fallbackArtifactVisible: backend === "previewArtifact" || backend === "ffmpegArtifact",
       telemetry: this.telemetry,
-      frameDisplay: shouldExposeMockFrameDisplay() ? mockFrameDisplay(this.lastFrame) : null,
+      frameDisplay: null,
       contentEvidence: this.lastContentEvidence
     };
-  }
-
-  private shouldRequestContentEvidence(targetTimeMicroseconds: number): boolean {
-    if (!shouldCollectContentEvidence()) {
-      return false;
-    }
-    if (this.draftSnapshot === null || this.sessionId === null || this.playbackGeneration === null) {
-      return false;
-    }
-    if (this.lastContentEvidence === null) {
-      return true;
-    }
-    return Math.abs(targetTimeMicroseconds - this.lastContentEvidence.targetTimeMicroseconds) >= 250_000;
-  }
-
-  private requestContentEvidence(targetTimeMicroseconds: number): RealtimePreviewHostContentEvidence | null {
-    if (this.sessionId === null || this.playbackGeneration === null || this.draftSnapshot === null) {
-      return null;
-    }
-
-    try {
-      const evidence = requestRealtimePreviewContentEvidence({
-        sessionId: this.sessionId,
-        draft: this.draftSnapshot,
-        ...(this.bundlePath === null ? {} : { bundlePath: this.bundlePath }),
-        targetTimeMicroseconds,
-        playbackGeneration: this.playbackGeneration
-      });
-      if (evidence !== null) {
-        recordRealtimePreviewHostCall({
-          kind: "contentEvidence",
-          targetTimeMicroseconds,
-          playbackGeneration: this.playbackGeneration,
-          contentDigest: evidence.digest
-        });
-      }
-      return evidence;
-    } catch (error) {
-      recordRealtimePreviewHostCall({
-        kind: "contentEvidenceUnavailable",
-        targetTimeMicroseconds,
-        playbackGeneration: this.playbackGeneration,
-        errorMessage: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
   }
 }
 
@@ -695,34 +634,6 @@ function sequenceDurationMicroseconds(draft: Draft | null): number {
   }, 0);
 }
 
-function mockFrameDisplay(frame: RealtimePreviewFrameResponse | null): RealtimePreviewHostFrameDisplay | null {
-  if (frame === null || frame.backend !== "mock" || !frame.presented) {
-    return null;
-  }
-
-  const bucket = Math.max(0, Math.floor(frame.targetTimeMicroseconds / 100_000));
-  const dominantHue = (bucket * 47) % 360;
-  const accentHue = (dominantHue + 128) % 360;
-  return {
-    surfaceKind: "mock",
-    frameToken: `${frame.playbackGeneration}:${frame.targetTimeMicroseconds}:${frame.telemetry.presentedFrameCount}`,
-    targetTimeMicroseconds: frame.targetTimeMicroseconds,
-    dominantColor: `hsl(${dominantHue} 72% 34%)`,
-    accentColor: `hsl(${accentHue} 78% 48%)`
-  };
-}
-
-function shouldExposeMockFrameDisplay(): boolean {
-  return process.env.VIDEO_EDITOR_TEST_EXPOSE_MOCK_FRAME_DISPLAY === "1";
-}
-
-function shouldCollectContentEvidence(): boolean {
-  return (
-    process.env.VIDEO_EDITOR_TEST_REALTIME_CONTENT_EVIDENCE === "1" ||
-    process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1"
-  );
-}
-
 function nativeSurfaceKind(): RealtimePreviewSurfaceDescriptor["kind"] {
   if (process.env.VIDEO_EDITOR_TEST_REALTIME_PREVIEW_SURFACE_KIND === "mock") {
     return "mock";
@@ -751,7 +662,7 @@ function nativeParentHandleToNumber(handle: Buffer): number {
 
 function attachFailureLabel(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return `实时预览降级：${message.slice(0, 120)}`;
+  return `实时预览不可用：${message.slice(0, 120)}`;
 }
 
 function recordRealtimePreviewHostCall(call: RealtimePreviewHostRecord): void {

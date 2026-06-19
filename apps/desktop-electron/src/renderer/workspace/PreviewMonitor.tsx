@@ -118,7 +118,7 @@ type RealtimePreviewHostFrameDisplay = {
 };
 
 type RealtimePreviewHostContentEvidence = {
-  source: "decoded" | "composited";
+  source: "composited";
   digest: string;
   width: number;
   height: number;
@@ -286,8 +286,8 @@ export function PreviewMonitor({
             setNativeHostState({
               ...INITIAL_REALTIME_PREVIEW_HOST_STATE,
               fallbackActive: true,
-              statusLabel: "实时预览降级显示",
-              fallbackLabel: "实时预览降级：宿主通信暂不可用"
+              statusLabel: "实时预览不可用",
+              fallbackLabel: "实时预览不可用：宿主通信暂不可用"
             });
           }
         });
@@ -334,7 +334,8 @@ export function PreviewMonitor({
             setNativeHostState((current) => ({
               ...current,
               fallbackActive: true,
-              fallbackLabel: "实时预览状态暂不可用"
+              statusLabel: "实时预览不可用",
+              fallbackLabel: "实时预览不可用：状态暂不可用"
             }));
           }
         }
@@ -394,7 +395,7 @@ export function PreviewMonitor({
             <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>
           </div>
           {nativeHostState.fallbackLabel !== null ? (
-            <div className="preview-native-host-fallback" aria-label="实时预览降级">
+            <div className="preview-native-host-fallback" aria-label="实时预览不可用">
               {nativeHostState.fallbackLabel}
             </div>
           ) : null}

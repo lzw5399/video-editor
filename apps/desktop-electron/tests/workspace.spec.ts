@@ -1232,7 +1232,7 @@ test("实时预览 native preview host rectangle reports integer bounds and tele
   }
 });
 
-test("实时预览 native preview fallback displays main-provided attach diagnostics", async () => {
+test("实时预览 native preview attach failure displays unavailable diagnostics", async () => {
   const { app, page } = await launchWorkspaceApp({
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_ATTACH_FAILURE: "1"
@@ -1241,10 +1241,10 @@ test("实时预览 native preview fallback displays main-provided attach diagnos
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800, { requireBoundsUpdate: false });
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览降级显示");
-    await expect(page.getByLabel("实时预览降级")).toContainText("实时预览降级");
-    await expect(page.getByLabel("实时预览降级")).not.toContainText("HWND");
-    await expect(page.getByLabel("实时预览降级")).not.toContainText("NSView");
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览不可用");
+    await expect(page.getByLabel("实时预览不可用")).toContainText("实时预览不可用");
+    await expect(page.getByLabel("实时预览不可用")).not.toContainText("HWND");
+    await expect(page.getByLabel("实时预览不可用")).not.toContainText("NSView");
   } finally {
     await app.close();
   }
@@ -1291,7 +1291,7 @@ test("实时预览 telemetry shows supported seek latency without fallback artif
   }
 });
 
-test("实时预览 fallback artifact appears only when Rust reports fallback", async () => {
+test("实时预览 product host does not expose artifact fallback as playback", async () => {
   const supported = await launchWorkspaceApp({
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
@@ -1305,58 +1305,46 @@ test("实时预览 fallback artifact appears only when Rust reports fallback", a
     await supported.app.close();
   }
 
-  const fallback = await launchWorkspaceApp({
-    env: {
-      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
-    }
-  });
+  const ignoredFallback = await launchWorkspaceApp();
 
   try {
-    await expectNativePreviewHostLayout(fallback.app, fallback.page, 1280, 800);
-    await expect(fallback.page.getByLabel("实时预览状态")).toContainText("实时预览受限");
-    await expect(fallback.page.getByLabel("实时预览数据")).toContainText("当前画面暂不能实时播放");
-    await expect(fallback.page.getByLabel("实时预览数据")).not.toContainText("备用产物：媒体运行环境");
-    await expect(fallback.page.getByLabel("实时预览受限")).toContainText("当前画面暂不能实时播放");
-    await expect(fallback.page.getByLabel("实时预览备用产物")).toHaveCount(0);
+    await expectNativePreviewHostLayout(ignoredFallback.app, ignoredFallback.page, 1280, 800);
+    await expect(ignoredFallback.page.getByLabel("实时预览数据")).not.toContainText("当前画面暂不能实时播放");
+    await expect(ignoredFallback.page.getByLabel("实时预览数据")).not.toContainText("备用产物：媒体运行环境");
+    await expect(ignoredFallback.page.getByLabel("实时预览受限")).toHaveCount(0);
+    await expect(ignoredFallback.page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
-    await fallback.app.close();
+    await ignoredFallback.app.close();
   }
 });
 
-test("baseline preview capability productizes realtime fallback without fake success copy", async () => {
-  const { app, page } = await launchWorkspaceApp({
-    env: {
-      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
-    }
-  });
+test("baseline preview capability does not productize realtime fallback copy", async () => {
+  const { app, page } = await launchWorkspaceApp();
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览受限");
-    await expect(page.getByLabel("实时预览数据")).toContainText("实时预览受限");
-    await expect(page.getByLabel("实时预览数据")).toContainText("当前画面暂不能实时播放");
+    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("实时预览受限");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("当前画面暂不能实时播放");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("已生成媒体备用产物");
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
-    await expect(page.getByLabel("实时预览受限")).toContainText("当前画面暂不能实时播放");
+    await expect(page.getByLabel("实时预览受限")).toHaveCount(0);
   } finally {
     await app.close();
   }
 });
 
-test("developer diagnostics keep realtime fallback backend details available", async () => {
+test("developer diagnostics do not expose artifact fallback as realtime playback", async () => {
   const { app, page } = await launchWorkspaceApp({
-    showDeveloperDiagnostics: true,
-    env: {
-      VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FFMPEG_FALLBACK: "1"
-    }
+    showDeveloperDiagnostics: true
   });
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
-    await expect(page.getByLabel("实时预览数据")).toContainText("备用产物：媒体运行环境");
-    await expect(page.getByLabel("实时预览数据")).toContainText("降级 1");
-    await expect(page.getByLabel("实时预览备用产物")).toContainText("已生成媒体备用产物");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("备用产物：媒体运行环境");
+    await expect(page.getByLabel("实时预览数据")).not.toContainText("降级 1");
+    await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
     await app.close();
   }

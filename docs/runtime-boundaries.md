@@ -108,7 +108,9 @@ preview runtime concerns enter draft or timeline semantics.
 ## Phase 11 Realtime Preview Runtime
 
 Phase 11 promotes realtime preview from a boundary placeholder into a Rust-owned
-runtime path. Rust-owned session, clock, generation, capability classification, telemetry, fallback routing, and GPU composition stay in `realtime_preview_runtime` and `preview_service`; Electron/React remains the desktop UI shell.
+runtime path. Rust-owned session, clock, generation, capability classification,
+telemetry, and GPU composition stay in `realtime_preview_runtime` and
+`preview_service`; Electron/React remains the desktop UI shell.
 
 ### Ownership Map
 
@@ -118,7 +120,7 @@ runtime path. Rust-owned session, clock, generation, capability classification, 
 | Electron main/preload | `BrowserWindow.getNativeWindowHandle()` acquisition, safe IPC routing, integer host bounds forwarding | Preview composition semantics, fallback decisions, graph interpretation |
 | `bindings_node` | Thin JSON/Node-API route and type mapping, opaque session IDs | GPU rendering logic, native handle exposure to renderer, timeline math |
 | `realtime_preview_runtime` | `TimelineClock`, `PlaybackGeneration`, sessions, `wgpu` device/surface/offscreen targets, compositor, diagnostics, telemetry | Draft command mutation, FFmpeg export compilation, hardware decode, audio output, priority scheduling |
-| `preview_service` | Supported realtime routing, H.264 software video frame provider/cache, artifact fallback coordination, fallback diagnostics | Renderer UI, primary GPU composition internals, export behavior decisions |
+| `preview_service` | Supported realtime routing and frame provider/cache boundaries | Renderer UI, primary GPU composition internals, export behavior decisions |
 | `engine_core` / `render_graph` | Accepted draft normalization, integer-microsecond frame state, renderer-neutral graph intent | `wgpu`, OS handles, FFmpeg process execution |
 
 Renderer responsibilities are UI-only. It may measure the
@@ -128,7 +130,7 @@ status/telemetry returned from main/Rust. It must not construct FFmpeg commands,
 render graphs, GPU command lists, cache keys, dirty ranges, fallback ladders, or
 timeline/keyframe semantics.
 
-### Runtime Inputs And Fallback
+### Runtime Inputs And No-Fallback Product Policy
 
 Realtime preview consumes accepted draft snapshots, engine-resolved frame state,
 and renderer-neutral `RenderGraph` intent from Rust-owned layers. Supported
@@ -136,22 +138,16 @@ seek, scrub, first-frame, and playback-tick requests use the
 `RealtimePreviewRuntime` path and report `TimelineClock` plus
 `PlaybackGeneration` telemetry so stale results are rejected before presentation.
 
-Phase 11 video input is a H.264 software video frame provider/cache boundary.
-Generated MP4/MOV fixture frames may be seeded by testkit or fallback artifact
-preparation, but supported realtime preview requests read cached CPU frames and
-must not spawn FFmpeg per frame. `TextureHandleDescriptor` remains a future
-Phase 12 interop shape, not a Phase 11 hardware decode implementation.
+Product realtime preview follows [No Product Fallback Policy](no-product-fallback-policy.md):
+normal playback must not report success through mock output, preview PNG loops,
+preview artifacts, FFmpeg artifacts, FFmpeg CPU decoded fingerprints, offscreen
+readback, or synthetic DOM/frame-token evidence. If the true
+GPU/native-texture/composited/present path is unavailable, the product must fail
+closed with a clear unavailable diagnostic.
 
-Fallback is Rust-owned and diagnostic-first:
-
-- Native/offscreen `wgpu` realtime preview is the supported path when graph
-  capability classification, surface state, and frame providers are available.
-- Preview artifact cache hits are fallback artifacts and must be labeled as
-  fallback, not as the active realtime backend.
-- FFmpeg artifact generation is allowed only for unsupported/no-adapter/no-frame
-  provider states and must report `ffmpegArtifactGenerated`.
-- Text preview fails closed through `TextParityUnsupported` until repository
-  font parity proves GPU text output matches export semantics.
+Low-level capability reports may still name fallback reasons to explain why a
+path is unavailable. They must not continue product playback or satisfy product
+E2E evidence.
 
 ### Downstream Phase Exclusions
 

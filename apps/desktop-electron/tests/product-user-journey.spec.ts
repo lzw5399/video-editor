@@ -56,7 +56,7 @@ test("product user can import a repo video, add it to the timeline, and see play
     ).toBe("composited");
     expect(
       after.hostState?.contentEvidence?.digest ?? null,
-      "native decoded/composited content fingerprint must advance during playback"
+      "native composited content fingerprint must advance during playback"
     ).not.toBe(before.hostState?.contentEvidence?.digest ?? null);
     expect(
       after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0,

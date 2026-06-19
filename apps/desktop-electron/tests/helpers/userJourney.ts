@@ -40,7 +40,7 @@ type RealtimePreviewHostState = {
     accentColor: string;
   } | null;
   contentEvidence: {
-    source: "decoded" | "composited";
+    source: "composited";
     digest: string;
     width: number;
     height: number;

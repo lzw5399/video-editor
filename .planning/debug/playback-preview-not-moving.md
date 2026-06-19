@@ -2,7 +2,7 @@
 status: investigating
 trigger: "After importing a video, adding it to the timeline, and clicking play, the timeline advances but the visible preview video does not move."
 created: "2026-06-19"
-updated: "2026-06-19"
+updated: "2026-06-20"
 ---
 
 # Debug Session: playback-preview-not-moving
@@ -18,11 +18,11 @@ updated: "2026-06-19"
 ## Current Focus
 
 - hypothesis: Existing tests validate realtime-preview host routing and playhead clock movement, but the product UI lacks an end-to-end assertion that visible preview pixels advance during playback.
-- test: Keep the Playwright normal-user workflow on moving fixture media, but require native decoded/composited content evidence instead of mock frame tokens or screenshot color proxies.
-- expecting: Product playback must fail if the realtime host only advances clocks, telemetry, mock frame tokens, or PNG preview artifacts.
-- next_action: Replace the remaining Mock realtime backend/product presentation path with true GPU/native texture decode-to-compositor presentation. Offscreen/CPU decoded probes are not an acceptable P0 completion path.
+- test: Keep the Playwright normal-user workflow on moving fixture media, but require GPU composited output evidence instead of mock frame tokens, screenshot color proxies, preview artifacts, or decoded CPU probes.
+- expecting: Product playback must fail if the realtime host only advances clocks, telemetry, mock frame tokens, PNG preview artifacts, FFmpeg artifact frames, or decoded CPU fingerprints.
+- next_action: Remove product fallback evidence first, then replace the remaining incomplete product presentation path with true GPU/native texture decode-to-compositor presentation.
 - reasoning_checkpoint: User rejected treating Phase 12 contract/platform-opaque decode work as implementation-complete; Phase 12 must be corrected because it did not connect native texture interop and visible GPU preview into the desktop product.
-- tdd_checkpoint: Product journey now requires backend `gpu` and composited output evidence; current product fails because it still reports backend `mock`.
+- tdd_checkpoint: Product journey requires backend `gpu` and composited output evidence. Decoded/FFmpeg CPU content evidence is now classified as an invalid fallback path, not a completion criterion.
 
 ## Evidence
 
@@ -62,6 +62,15 @@ updated: "2026-06-19"
 - timestamp: "2026-06-19T15:31:00Z"
   observation: "The product journey was tightened again to require backend `gpu` and composited preview evidence. It fails with Expected `gpu`, Received `mock`, proving Phase 12/15.1 cannot be considered product-complete."
   source: "apps/desktop-electron/tests/product-user-journey.spec.ts; pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-20T00:00:00+08:00"
+  observation: "User explicitly rejected fallback/degraded completion. Product realtime preview may not pass through mock output, preview PNG loops, FFmpeg artifacts, offscreen/CPU readback, or decoded CPU fingerprints. Unsupported/incomplete product paths must fail closed until true GPU-native composited output is implemented."
+  source: "user direction; docs/no-product-fallback-policy.md"
+- timestamp: "2026-06-20T00:00:00+08:00"
+  observation: "macOS media IO now returns Metal texture leases and realtime_preview_runtime retains external texture handles, but the desktop product still lacks the final visible compositor/presentation evidence path."
+  source: "commits 846e212 and a30c277"
+- timestamp: "2026-06-20T00:00:00+08:00"
+  observation: "Removed the product decoded/FFmpeg content-evidence N-API and Electron host calls. Product E2E now fails with Expected `composited`, Received `null`, which is the intended RED state after eliminating fallback evidence."
+  source: "apps/desktop-electron/src/main/realtimePreviewHost.ts; crates/bindings_node/src/realtime_preview_service.rs; pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
 
 ## Eliminated
 
@@ -70,13 +79,15 @@ updated: "2026-06-19"
 - hypothesis: "Existing requestPreviewFrame-based tests prove playback."
   reason: "The new journey explicitly verifies product playback without additional requestPreviewFrame calls, and the realtime host still reports zero presented frames."
 - hypothesis: "Mock host frame tokens or preview-region color changes prove video playback."
-  reason: "The green/cyan overlay was synthetic mock evidence leaked into product UI. The product journey now requires decoded/composited content evidence and requires frameDisplay to remain null in normal product playback."
+  reason: "The green/cyan overlay was synthetic mock evidence leaked into product UI. The product journey now requires composited content evidence and requires frameDisplay to remain null in normal product playback."
 - hypothesis: "The decoded content evidence failure was caused by missing media or bad timeline target selection."
   reason: "A diagnostic run showed requestRealtimePreviewContentEvidence was called for the active segment but FFmpeg timed out; the root cause was the shared process runner not draining rawvideo stdout while waiting."
+- hypothesis: "Decoded CPU content evidence is an acceptable interim P0 proof of product playback."
+  reason: "User rejected fallback completion. Decoded CPU fingerprints prove only that FFmpeg can decode a frame; they do not prove the product realtime GPU compositor presented the video."
 
 ## Resolution
 
-- root_cause: Playback had three distinct gaps. First, the product path originally advanced only UI clocks/telemetry and later leaked synthetic mock surface colors into the preview. Second, the native content evidence path initially deadlocked on rawvideo stdout because the shared FFmpeg process runner did not drain pipes while waiting. Third, Phase 12 completed contracts, capability probes, platform-opaque native decode, and handle metadata, but did not implement production native texture interop into the realtime GPU compositor and visible desktop preview surface. The desktop realtime session still uses the Mock backend.
-- fix: Added a product E2E gate that rejects requestPreviewFrame loops, mock frame tokens, and synthetic preview pixels as playback proof. Added native decoded-frame content evidence through the realtime host for test/recording mode, returning only a digest and metadata. Fixed the shared FFmpeg process runner to drain stdout/stderr concurrently so raw frame extraction cannot deadlock on pipe buffers.
-- verification: `cargo test -p media_runtime process -- --nocapture`; `cargo test -p media_runtime_desktop ffmpeg_fallback_frame_fingerprint -- --nocapture`; `cargo test -p bindings_node realtime_preview -- --nocapture`; `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "预览播放按钮|native preview host|实时预览 telemetry|fallback|developer diagnostics display Rust-reported realtime cancellation counters" --reporter=line`; `git diff --check -- . ':!reference'`
-- files_changed: crates/media_runtime/src/process.rs; crates/media_runtime/tests/process.rs; crates/media_runtime_desktop/src/ffmpeg_fallback.rs; crates/media_runtime_desktop/tests/ffmpeg_fallback.rs; crates/bindings_node/src/realtime_preview_service.rs; crates/bindings_node/src/lib.rs; apps/desktop-electron/src/main/nativeBinding.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/preload/index.ts; apps/desktop-electron/src/renderer/App.tsx; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts
+- root_cause: Unresolved. The confirmed product gap is that realtime preview still lacks an end-to-end GPU-native texture to compositor to visible desktop surface path with composited output evidence.
+- fix: In progress. Product fallback evidence has been removed and the no-fallback rule is documented/guarded; next step is implementing true GPU composited presentation.
+- verification: `pnpm run test:no-product-fallback`; `cargo test -p bindings_node realtime_preview -- --nocapture`; `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "attach failure displays unavailable|does not expose artifact fallback|does not productize realtime fallback copy|do not expose artifact fallback" --reporter=line`; expected RED: `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line` fails with Expected `composited`, Received `null`; `git diff --check -- . ':!reference'`
+- files_changed: docs/no-product-fallback-policy.md; docs/runtime-boundaries.md; scripts/no-product-fallback-guards.sh; package.json; apps/desktop-electron/src/main/nativeBinding.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/workspace.spec.ts; crates/bindings_node/src/lib.rs; crates/bindings_node/src/realtime_preview_service.rs
