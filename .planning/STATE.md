@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed Phase 15.2 Plan 01; next is Plan 02 real GPU compositor visual subset
-last_updated: "2026-06-19T19:36:52Z"
-last_activity: 2026-06-20 -- Completed Phase 15.2 Plan 01 evidence taxonomy/no-fallback hardening; next is real GPU compositor visual subset
+stopped_at: Completed Phase 15.2 Plan 02; next is Plan 03 real material-frame and audio input
+last_updated: "2026-06-19T20:18:33Z"
+last_activity: 2026-06-20 -- Completed Phase 15.2 Plan 02 real WGPU compositor visual/text subset; next is real material-frame and audio input
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 119
-  completed_plans: 113
+  completed_plans: 114
   percent: 78
 ---
 
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-02
-Status: Executing — continue with real GPU compositor visual subset
-Last activity: 2026-06-20 -- Phase 15.2 Plan 01 completed; product preview success now requires renderGraphGpu and native bridge is diagnostic-only
+Plan: 15.2-03
+Status: Executing — continue with real material-frame provider and audio preview input
+Last activity: 2026-06-20 -- Phase 15.2 Plan 02 completed; real WGPU compositor now renders supported canvas/video/image/text subset
 
-Progress: Phase 15.1 complete; Phase 15.2 Plan 01 complete, 5 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-02 complete, 4 P0 compositor/user-E2E/no-fallback plans remain; Phase 15.3 UI convergence follows
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 108
+- Total plans completed: 109
 - Average duration: 9 min
 - Total execution time: 973 min
 
@@ -165,6 +165,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plan 01 complete, 5 P0 compositor/user
 | Phase 15 P04 | 975 | 2 tasks | 11 files |
 | Phase 15 P05 | 29min | 2 tasks | 12 files |
 | Phase 15 P07 | 7 min | 2 tasks | 2 files |
+| Phase 15.2 P02 | 42 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plan 01 complete, 5 P0 compositor/user
 - Phase 15.2 re-scoped as urgent P0 real render-graph GPU realtime compositor closure before UI convergence and Phase 16; native single-video playback, fallback, mock, artifacts, first-frame snapshots, CPU probes, and DOM overlays cannot satisfy product preview success. (URGENT)
 - Phase 15.2 planned as six executable gates: evidence taxonomy/no-fallback hardening, real GPU compositor visual subset, real material frame/audio input, desktop compositor presentation, mainstream product E2E matrix, and aggregate verification. (URGENT)
 - Phase 15.2 Plan 01 completed evidence taxonomy/no-fallback hardening: product preview backend is only `renderGraphGpu|none`, native video bridge is diagnostic-only, and product E2E rejects native bridge playback as compositor success. (URGENT)
+- Phase 15.2 Plan 02 completed the runtime WGPU compositor subset: supported canvas, video/image texture sampling, transform/opacity/crop/fit handling, stack-order composition, and bundled-font text overlays now render through `WgpuRenderPass`; CPU reference output remains test-only evidence. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)

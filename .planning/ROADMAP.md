@@ -660,7 +660,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15.2-02-PLAN.md - Implement the supported render-graph GPU compositor visual subset
+- [x] 15.2-02-PLAN.md - Implement the supported render-graph GPU compositor visual subset
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
