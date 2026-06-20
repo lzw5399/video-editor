@@ -1723,14 +1723,16 @@ export function App(): React.ReactElement {
       if (!seekReady) {
         return;
       }
-      const playbackReady = await playRealtimePreviewHost();
-      if (!playbackReady) {
-        return;
-      }
 
       playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
-      void handlePlayAudioPreview();
       setPlaybackRunning(true);
+      await waitForNextPaint();
+      const playbackReady = await playRealtimePreviewHost();
+      if (!playbackReady) {
+        setPlaybackRunning(false);
+        return;
+      }
+      void handlePlayAudioPreview();
     })();
   }
 
@@ -2448,6 +2450,12 @@ function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: strin
 
 function normalizePlayheadTime(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 function frameDurationUs(canvasConfig: DraftCanvasConfig): number {

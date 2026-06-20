@@ -124,6 +124,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
     await playButton.click();
+    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 5_000 });
 
     let after;
     try {
@@ -175,7 +176,6 @@ test("product user can import a repo video, add it to the timeline, and see rend
       ])
     );
     expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
-    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
   } finally {
     await app.close();
   }

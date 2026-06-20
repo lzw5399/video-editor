@@ -14,10 +14,10 @@ use realtime_preview_runtime::gpu::{
     RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
 };
 use realtime_preview_runtime::{
-    CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
-    PreviewFrameProvider, PreviewFrameProviderError, RealtimePreviewCapabilityClassifier,
-    RealtimePreviewGraphInput, RealtimePreviewGraphSupport, SoftwareVideoFrameProvider,
-    TextureHandleDescriptor, prepare_realtime_preview_graph,
+    prepare_realtime_preview_graph, CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo,
+    PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError,
+    RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
+    SoftwareVideoFrameProvider, TextureHandleDescriptor,
 };
 use render_graph::{
     OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
@@ -110,12 +110,10 @@ fn gpu_subset_unsupported_intent_does_not_submit_draws() {
 
     assert_eq!(output.support, RealtimePreviewGraphSupport::Unsupported);
     assert_eq!(output.submitted_draws, 0);
-    assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.reason.contains("unsupported test canvas"))
-    );
+    assert!(output
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.reason.contains("unsupported test canvas")));
 }
 
 #[test]
@@ -348,6 +346,25 @@ fn gpu_subset_gpu_module_does_not_import_forbidden_runtime_boundaries() {
             "GPU module must not import or execute forbidden boundary: {forbidden}"
         );
     }
+}
+
+#[test]
+fn gpu_subset_external_texture_shader_uses_current_wgpu_sampling_signature() {
+    let compositor_source = include_str!("../src/gpu/compositor.rs");
+
+    assert!(
+        compositor_source.contains("@group(0) @binding(1) var layer_sampler: sampler;"),
+        "external texture shader must bind an explicit sampler for wgpu 29"
+    );
+    assert!(
+        compositor_source
+            .contains("textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv)"),
+        "external texture shader must use the three-argument wgpu 29 sampling signature"
+    );
+    assert!(
+        !compositor_source.contains("textureSampleBaseClampToEdge(layer_texture, in.uv)"),
+        "old two-argument external texture sampling crashes the real WGPU pipeline"
+    );
 }
 
 fn render_graph_with_provider(

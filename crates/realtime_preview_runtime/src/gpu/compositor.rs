@@ -21,7 +21,7 @@ use super::{
     RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
 };
 
-use super::text::{TextRasterizationError, rasterize_text_overlay};
+use super::text::{rasterize_text_overlay, TextRasterizationError};
 
 #[derive(Debug)]
 pub struct RealtimePreviewCompositor {
@@ -668,12 +668,20 @@ impl RealtimePreviewWgpuPipelines {
                 let external_bind_group_layout =
                     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: Some("realtime-preview-external-texture-bind-group-layout"),
-                        entries: &[wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::ExternalTexture,
-                            count: None,
-                        }],
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::ExternalTexture,
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
                     });
                 let external_pipeline_layout =
                     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -1023,10 +1031,16 @@ fn push_wgpu_layer_draw(
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("realtime-preview-external-texture-bind-group"),
                 layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::ExternalTexture(&external_texture),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::ExternalTexture(&external_texture),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&resources.sampler),
+                    },
+                ],
             });
             (
                 WgpuLayerResources::ExternalTexture {
@@ -1423,10 +1437,11 @@ fn vs_main(
 }
 
 @group(0) @binding(0) var layer_texture: texture_external;
+@group(0) @binding(1) var layer_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let color = textureSampleBaseClampToEdge(layer_texture, in.uv);
+    let color = textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv);
     return vec4<f32>(color.rgb, color.a * in.opacity);
 }
 "#;
