@@ -505,14 +505,16 @@ function AudioPanel({
 }
 
 function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): React.ReactElement {
+  const title = category === "数字人" ? "能力暂未开放" : `${category}暂未开放`;
+
   return (
     <div className="feature-panel-content">
       <div className="panel-header">
         <h2>{category}</h2>
       </div>
-      <div className="empty-state">
-        <strong>{category}功能已预留</strong>
-        <span>当前阶段暂不提供{category}编辑，后续会通过剪辑核心命令接入对应能力。</span>
+      <div className="empty-state deferred-category-state" aria-label={`${category}暂不可用`}>
+        <strong>{title}</strong>
+        <span>当前版本暂不提供该类编辑，切换分类不会修改草稿内容。</span>
       </div>
     </div>
   );

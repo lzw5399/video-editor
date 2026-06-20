@@ -589,8 +589,10 @@ test("workspace panels switch categories without losing Chinese empty states", a
       await topFeatureNav.getByRole("button", { name: category }).click();
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
       await expectNoLeftSecondaryMenu(page);
-      await expect(page.getByText(`${category}功能已预留`)).toBeVisible();
-      await expect(page.getByText(`当前阶段暂不提供${category}编辑，后续会通过剪辑核心命令接入对应能力。`)).toBeVisible();
+      await expect(page.getByLabel(`${category}暂不可用`)).toContainText(
+        category === "数字人" ? "能力暂未开放" : `${category}暂未开放`
+      );
+      await expect(page.getByLabel(`${category}暂不可用`)).toContainText("当前版本暂不提供该类编辑，切换分类不会修改草稿内容。");
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }
   } finally {
