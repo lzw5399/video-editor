@@ -118,6 +118,11 @@ export type PreviewEvidence = {
   hostState: RealtimePreviewHostState | null;
 };
 
+export type ProductPlaybackSuccessEvidence = {
+  after: PreviewEvidence;
+  visibleMotion: PreviewEvidence;
+};
+
 export async function waitForCompositedPreviewEvidence(
   page: Page,
   app?: ProductJourneyAppController,
@@ -146,6 +151,79 @@ export async function waitForCompositedPreviewEvidence(
       lastEvidence?.hostState ?? null
     )}. Host calls: ${JSON.stringify(hostCalls)}. Foreground diagnostics: ${JSON.stringify(foregroundDiagnostics)}`
   );
+}
+
+export async function waitForProductPlaybackSuccess(
+  page: Page,
+  app: ProductJourneyAppController,
+  before: PreviewEvidence,
+  visibleBefore: PreviewEvidence,
+  frameRequestsBeforePlay: number,
+  timeoutMs = 12_000
+): Promise<ProductPlaybackSuccessEvidence> {
+  const visibleMotion = await waitForVisiblePreviewCenterChange(page, app, visibleBefore.visibleCenterHash, Math.min(timeoutMs, 5_000));
+  const after = await waitForCompositedPreviewEvidence(
+    page,
+    app,
+    timeoutMs,
+    before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
+  );
+  expectProductPlaybackSuccessEvidence({
+    before,
+    visibleBefore,
+    visibleMotion,
+    after,
+    frameRequestsBeforePlay,
+    frameRequestsAfterPlay: requestPreviewFrameCount(await readExecuteCommandCalls(app))
+  });
+  return { after, visibleMotion };
+}
+
+export function expectProductPlaybackSuccessEvidence({
+  before,
+  visibleBefore,
+  visibleMotion,
+  after,
+  frameRequestsBeforePlay,
+  frameRequestsAfterPlay
+}: {
+  before: PreviewEvidence;
+  visibleBefore: PreviewEvidence;
+  visibleMotion: PreviewEvidence;
+  after: PreviewEvidence;
+  frameRequestsBeforePlay: number;
+  frameRequestsAfterPlay: number;
+}): void {
+  expect(after.hostState?.ok, "product playback requires an ok realtime host state").toBe(true);
+  expect(after.hostState?.productReady, "product playback requires product-ready realtime preview").toBe(true);
+  expect(after.hostState?.fallbackActive, "product playback must not be a fallback path").toBe(false);
+  expect(after.hostState?.backend, "product playback success backend must be renderGraphGpu").toBe("renderGraphGpu");
+  expect(after.hostState?.diagnosticSource, "product playback success must not come from diagnostic sources").toBe("none");
+  expect(
+    after.hostState?.contentEvidence?.source,
+    "product playback success requires render-graph GPU composited evidence"
+  ).toBe("renderGraphGpuComposited");
+  expect(after.hostState?.contentEvidence?.digest).not.toBe(before.hostState?.contentEvidence?.digest ?? null);
+  expect(after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
+    before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
+  );
+  expect(after.hostState?.telemetry?.presentedFrameCount ?? 0).toBeGreaterThan(
+    before.hostState?.telemetry?.presentedFrameCount ?? 0
+  );
+  expect(after.timecodeUs, "product playback requires timeline time advancement").toBeGreaterThan(before.timecodeUs);
+  expect(
+    visibleMotion.visibleCenterHash,
+    "visible video pixels in the preview center must change while playback is running"
+  ).not.toBe(visibleBefore.visibleCenterHash);
+  expect(visibleMotion.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+  expect(visibleMotion.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
+    before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
+  );
+  expect(
+    frameRequestsAfterPlay,
+    "product playback must not drive a requestPreviewFrame PNG/artifact loop"
+  ).toBe(frameRequestsBeforePlay);
+  expect(after.hostState?.frameDisplay).toBeNull();
 }
 
 export async function waitForVisiblePreviewCenterChange(

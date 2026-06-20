@@ -59,8 +59,19 @@ if ! rg -q '"test:phase15-2"' package.json; then
   exit 1
 fi
 
-if ! rg -q 'waitForVisiblePreviewCenterChange' apps/desktop-electron/tests/product-user-journey.spec.ts; then
-  echo "no-product-fallback violation: product playback must assert visible preview-region motion" >&2
+if ! rg -q 'waitForProductPlaybackSuccess' apps/desktop-electron/tests/product-user-journey.spec.ts; then
+  echo "no-product-fallback violation: product playback success tests must use the shared product playback helper" >&2
+  exit 1
+fi
+
+if ! rg -q 'waitForVisiblePreviewCenterChange' apps/desktop-electron/tests/helpers/userJourney.ts; then
+  echo "no-product-fallback violation: product playback helper must assert visible preview-region motion" >&2
+  exit 1
+fi
+
+if ! rg -q 'visibleMotion\.visibleCenterHash' apps/desktop-electron/tests/helpers/userJourney.ts || \
+  ! rg -q 'visibleBefore\.visibleCenterHash' apps/desktop-electron/tests/helpers/userJourney.ts; then
+  echo "no-product-fallback violation: product playback helper must reject playhead-only motion" >&2
   exit 1
 fi
 

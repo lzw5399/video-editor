@@ -16,6 +16,7 @@ import {
   expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
   expectNoProductFallbackCalls,
   expectNoRejectedSurfaceAcquire,
+  expectProductPlaybackSuccessEvidence,
   importMaterialsThroughProductPicker,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
@@ -28,11 +29,73 @@ import {
   splitSelectedSegment,
   undoTimelineEdit,
   updateSelectedVisualThroughInspector,
-  waitForCompositedPreviewEvidence,
-  waitForVisiblePreviewCenterChange
+  waitForProductPlaybackSuccess
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
+
+test("product playback helper rejects playhead-only advancement without visible compositor motion", () => {
+  const before = {
+    regionHash: "region-before",
+    visibleCenterHash: "same-visible-center",
+    timecodeUs: 0,
+    placeholderText: "",
+    imageSrc: null,
+    hostState: {
+      ok: true,
+      productReady: true,
+      hostAttached: true,
+      fallbackActive: false,
+      statusLabel: "实时预览已接入",
+      fallbackLabel: null,
+      playbackGeneration: 1,
+      backend: "renderGraphGpu" as const,
+      diagnosticSource: "none" as const,
+      telemetry: {
+        presentedFrameCount: 1,
+        targetTimeMicroseconds: 0,
+        playbackGeneration: 1
+      },
+      frameDisplay: null,
+      contentEvidence: {
+        source: "renderGraphGpuComposited" as const,
+        digest: "digest-before",
+        width: 320,
+        height: 180,
+        targetTimeMicroseconds: 0
+      }
+    }
+  };
+  const playheadOnlyAfter = {
+    ...before,
+    regionHash: "region-after",
+    timecodeUs: 1_000_000,
+    hostState: {
+      ...before.hostState,
+      telemetry: {
+        presentedFrameCount: 2,
+        targetTimeMicroseconds: 1_000_000,
+        playbackGeneration: 1
+      },
+      contentEvidence: {
+        ...before.hostState.contentEvidence,
+        digest: "digest-after",
+        targetTimeMicroseconds: 1_000_000
+      }
+    }
+  };
+
+  expect(() =>
+    expectProductPlaybackSuccessEvidence({
+      before,
+      visibleBefore: before,
+      visibleMotion: playheadOnlyAfter,
+      after: playheadOnlyAfter,
+      frameRequestsBeforePlay: 0,
+      frameRequestsAfterPlay: 0
+    })
+  ).toThrow(/visible video pixels/);
+});
 
 test("product playback rejects missing render-graph GPU compositor evidence", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO], {
@@ -149,13 +212,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
     let after;
     let visibleMotion;
     try {
-      visibleMotion = await waitForVisiblePreviewCenterChange(page, app, visibleBefore.visibleCenterHash, 5_000);
-      after = await waitForCompositedPreviewEvidence(
-        page,
-        app,
-        12_000,
-        before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
-      );
+      ({ after, visibleMotion } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay));
     } catch (error) {
       const hostCalls = await readRealtimePreviewHostCalls(app);
       if (hostCalls.some((call) => call.kind === "surfaceAcquireOccluded")) {
@@ -163,7 +220,6 @@ test("product user can import a repo video, add it to the timeline, and see rend
       }
       throw error;
     }
-    const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const hostCallKinds = (await readRealtimePreviewHostCalls(app)).map((call) => call.kind);
     expectNoRejectedSurfaceAcquire(await readRealtimePreviewHostCalls(app));
 
@@ -188,10 +244,6 @@ test("product user can import a repo video, add it to the timeline, and see rend
     expect(visibleMotion.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
       before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
     );
-    expect(
-      frameRequestsAfterPlay,
-      "product playback must not drive a requestPreviewFrame PNG/artifact loop"
-    ).toBe(frameRequestsBeforePlay);
     expect(after.hostState?.frameDisplay).toBeNull();
     await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
     expect(hostCallKinds).toEqual(
@@ -218,13 +270,16 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
 
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
     await activateProductJourneyApp(app, page);
     await playButton.click();
 
-    const after = await waitForCompositedPreviewEvidence(page, app, 12_000);
+    const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
     const placement = after.hostState?.surfacePlacement ?? null;
     expect(placement, "product playback must expose native surface placement evidence").not.toBeNull();
     expect(
@@ -248,6 +303,9 @@ test("product playback UAT uses native audio output instead of status-only or mo
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
 
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
@@ -260,7 +318,7 @@ test("product playback UAT uses native audio output instead of status-only or mo
       page.getByLabel("输出设备状态"),
       "product playback must not report mock/status-only audio as audible output"
     ).not.toContainText(/Mock|mock|模拟|系统默认/);
-    await waitForCompositedPreviewEvidence(page, app, 12_000);
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
   }
@@ -273,6 +331,9 @@ test("product playback UAT plays embedded video audio through native output", as
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_AV_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_AV_VIDEO);
 
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
@@ -285,7 +346,7 @@ test("product playback UAT plays embedded video audio through native output", as
       page.getByLabel("输出设备状态"),
       "embedded video audio must use native output, not mock/status-only audio"
     ).not.toContainText(/Mock|mock|模拟|系统默认/);
-    await waitForCompositedPreviewEvidence(page, app, 12_000);
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
   }
@@ -298,9 +359,12 @@ test("product playback UAT keeps video presentation synchronized with timeline t
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
 
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
-    await waitForCompositedPreviewEvidence(page, app, 12_000);
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
 
     await expect.poll(async () => (await capturePreviewEvidence(page)).timecodeUs, { timeout: 6_000 }).toBeGreaterThanOrEqual(3_000_000);
     const atEnd = await capturePreviewEvidence(page);
@@ -391,20 +455,10 @@ test("product user editing matrix uses real commands and still produces visible 
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
-    const visibleMotion = await waitForVisiblePreviewCenterChange(page, app, visibleBefore.visibleCenterHash, 5_000);
-    const after = await waitForCompositedPreviewEvidence(
-      page,
-      app,
-      12_000,
-      before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
-    );
-
-    expect(after.hostState?.productReady).toBe(true);
-    expect(after.hostState?.fallbackActive).toBe(false);
-    expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
-    expect(visibleMotion.visibleCenterHash).not.toBe(visibleBefore.visibleCenterHash);
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
     await app.close();
