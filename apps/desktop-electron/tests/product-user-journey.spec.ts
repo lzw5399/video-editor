@@ -210,6 +210,89 @@ test("product user can import a repo video, add it to the timeline, and see rend
   }
 });
 
+test("product playback UAT keeps the native surface aligned with the preview monitor", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    const playButton = controls.getByRole("button", { name: "播放预览" });
+    await expect(playButton).toBeEnabled({ timeout: 20_000 });
+    await activateProductJourneyApp(app, page);
+    await playButton.click();
+
+    const after = await waitForCompositedPreviewEvidence(page, app, 12_000);
+    const placement = after.hostState?.surfacePlacement ?? null;
+    expect(placement, "product playback must expose native surface placement evidence").not.toBeNull();
+    expect(placement?.aligned, "native/WGPU surface must align with preview host").toBe(true);
+    expect(placement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback UAT uses native audio output instead of status-only or mock audio", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_MOVING_VIDEO,
+    USER_JOURNEY_TONE_AUDIO
+  ]);
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
+
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await activateProductJourneyApp(app, page);
+    await controls.getByRole("button", { name: "播放预览" }).click();
+    await waitForCompositedPreviewEvidence(page, app, 12_000);
+
+    await expect
+      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
+      .toContain("playAudioPreview");
+    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放", { timeout: 10_000 });
+    await expect(
+      page.getByLabel("输出设备状态"),
+      "product playback must not report mock/status-only audio as audible output"
+    ).not.toContainText(/Mock|mock|模拟|系统默认/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback UAT keeps video presentation synchronized with timeline through sequence end", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    await waitForCompositedPreviewEvidence(page, app, 12_000);
+
+    await expect.poll(async () => (await capturePreviewEvidence(page)).timecodeUs, { timeout: 6_000 }).toBeGreaterThanOrEqual(3_000_000);
+    const atEnd = await capturePreviewEvidence(page);
+    const presentedTime = atEnd.hostState?.contentEvidence?.targetTimeMicroseconds ?? -1;
+    expect(
+      Math.abs(atEnd.timecodeUs - presentedTime),
+      "timeline playhead and rendered video target time must stay synchronized at sequence end"
+    ).toBeLessThanOrEqual(100_000);
+    const frameCountAtEnd = atEnd.hostState?.telemetry?.presentedFrameCount ?? 0;
+
+    await page.waitForTimeout(800);
+    const afterStop = await capturePreviewEvidence(page);
+    expect(afterStop.hostState?.telemetry?.presentedFrameCount ?? 0).toBe(
+      frameCountAtEnd
+    );
+    await expect(page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" })).toBeEnabled();
+  } finally {
+    await app.close();
+  }
+});
+
 test("product user editing matrix uses real commands and still produces visible GPU playback", async () => {
   const { app, page } = await launchProductJourneyApp([
     USER_JOURNEY_MOVING_VIDEO,
@@ -294,6 +377,45 @@ test("product user editing matrix uses real commands and still produces visible 
     expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
     expect(visibleMotion.visibleCenterHash).not.toBe(visibleBefore.visibleCenterHash);
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
+test("product text and transform interaction UAT supports direct canvas drag", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addTextThroughProductPanel(page, app, "可拖拽文字", 2_000_000);
+
+    const textOverlay = page.getByLabel("预览文字");
+    await expect(textOverlay).toBeVisible({ timeout: 10_000 });
+    const beforeBox = await textOverlay.boundingBox();
+    expect(beforeBox, "text overlay must have a visible canvas box before drag").not.toBeNull();
+
+    const commandsBefore = await readExecuteCommandCalls(app);
+    const visualUpdatesBefore = commandsBefore.filter((call) => call.command === "updateSegmentVisual").length;
+    await page.mouse.move(beforeBox!.x + beforeBox!.width / 2, beforeBox!.y + beforeBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(beforeBox!.x + beforeBox!.width / 2 + 80, beforeBox!.y + beforeBox!.height / 2 + 36, {
+      steps: 8
+    });
+    await page.mouse.up();
+
+    await expect
+      .poll(
+        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "updateSegmentVisual").length,
+        { timeout: 5_000 }
+      )
+      .toBeGreaterThan(visualUpdatesBefore);
+    const afterBox = await textOverlay.boundingBox();
+    expect(afterBox, "text overlay must remain visible after direct drag").not.toBeNull();
+    expect(
+      Math.abs((afterBox?.x ?? 0) - beforeBox!.x) + Math.abs((afterBox?.y ?? 0) - beforeBox!.y),
+      "direct canvas drag must move the selected text overlay"
+    ).toBeGreaterThan(20);
   } finally {
     await app.close();
   }

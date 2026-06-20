@@ -83,6 +83,12 @@ type RealtimePreviewHostState = {
     height: number;
     targetTimeMicroseconds: number;
   } | null;
+  surfacePlacement?: {
+    hostScreenRect: { x: number; y: number; width: number; height: number };
+    nativeScreenRect: { x: number; y: number; width: number; height: number };
+    maxDeltaPx: number;
+    aligned: boolean;
+  } | null;
 };
 
 export type ProductJourneyAppController = {

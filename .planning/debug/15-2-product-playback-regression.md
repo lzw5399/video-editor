@@ -2,7 +2,7 @@
 status: investigating
 trigger: "User manual UAT reports Phase 15.2 product playback is not complete: preview surface is offset left/down during play, playback has no audio, video playback is stuttery/desynchronized from the timeline, and text/font editing plus on-canvas drag/rotate interactions are not available."
 created: "2026-06-20T05:13:58Z"
-updated: "2026-06-20T05:28:40Z"
+updated: "2026-06-20T05:49:10Z"
 ---
 
 # Debug Session: 15.2 Product Playback Regression
@@ -44,6 +44,12 @@ updated: "2026-06-20T05:28:40Z"
 - timestamp: "2026-06-20T05:27:xxZ"
   observation: "The editing matrix updates transforms through inspector form fields and command calls; it does not simulate normal on-canvas text selection, drag, resize, rotate, or crop handles."
   implication: "Visible editor interactions that a normal user expects are not covered and should not have been counted as complete."
+- timestamp: "2026-06-20T05:46:xxZ"
+  observation: "Added and ran RED product playback UAT tests. Surface placement fails because host state exposes no native placement evidence; audio fails because output status remains `系统默认`; sync fails because timeline time and presented video target time differ by 1,366,683us at sequence end."
+  implication: "The reported offset/audio/desync issues are now executable product E2E failures instead of informal observations."
+- timestamp: "2026-06-20T05:49:xxZ"
+  observation: "Added and ran RED direct text/transform UAT. Dragging visible preview text produces no `updateSegmentVisual` command and no canvas movement."
+  implication: "Visible text overlay interaction is not implemented as a normal user canvas operation."
 
 ## Eliminated
 
