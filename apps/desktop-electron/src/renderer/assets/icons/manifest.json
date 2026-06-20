@@ -1,0 +1,46 @@
+{
+  "status": "app-local-copies",
+  "sourceRoot": "icons",
+  "mappings": [
+    {
+      "name": "play",
+      "source": "icons/MaterialReplacement/play.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/play.svg"
+    },
+    {
+      "name": "pause",
+      "source": "icons/MaterialReplacement/pause.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/pause.svg"
+    },
+    {
+      "name": "undo",
+      "source": "icons/ToolBar/undo.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/undo.svg"
+    },
+    {
+      "name": "redo",
+      "source": "icons/ToolBar/redo.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/redo.svg"
+    },
+    {
+      "name": "delete",
+      "source": "icons/ToolBar/del.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/delete.svg"
+    },
+    {
+      "name": "split",
+      "source": "icons/ToolBar/cutting.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/split.svg"
+    },
+    {
+      "name": "zoomIn",
+      "source": "icons/ToolBar/btnZoomIn.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/zoom-in.svg"
+    },
+    {
+      "name": "zoomOut",
+      "source": "icons/ToolBar/btnZoomOutN.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/zoom-out.svg"
+    }
+  ]
+}

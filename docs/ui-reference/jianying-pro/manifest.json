@@ -1,0 +1,121 @@
+{
+  "reference": {
+    "product": "Jianying Pro",
+    "version": "10.8.12793",
+    "platform": "macOS",
+    "status": "provisional-layout-reference",
+    "pixelGolden": false
+  },
+  "screenshots": [
+    {
+      "file": "02-workspace-media-window.png",
+      "intendedState": "Main workspace on media/material tab",
+      "provisional": true
+    },
+    {
+      "file": "03-top-feature-tabs.png",
+      "intendedState": "Compact top feature tab row",
+      "provisional": true
+    },
+    {
+      "file": "04-left-material-library.png",
+      "intendedState": "Left material/resource library",
+      "provisional": true
+    },
+    {
+      "file": "05-center-preview-monitor.png",
+      "intendedState": "Center preview monitor",
+      "provisional": true
+    },
+    {
+      "file": "06-right-draft-parameters.png",
+      "intendedState": "Right draft parameter inspector",
+      "provisional": true
+    },
+    {
+      "file": "07-bottom-timeline.png",
+      "intendedState": "Bottom timeline and track area",
+      "provisional": true
+    },
+    {
+      "file": "08-audio-panel-window.png",
+      "intendedState": "Audio feature panel",
+      "provisional": true
+    },
+    {
+      "file": "09-text-panel-window.png",
+      "intendedState": "Text feature panel",
+      "provisional": true
+    },
+    {
+      "file": "10-sticker-panel-window.png",
+      "intendedState": "Sticker feature panel",
+      "provisional": true
+    },
+    {
+      "file": "11-effects-panel-window.png",
+      "intendedState": "Effects feature panel",
+      "provisional": true
+    },
+    {
+      "file": "12-transition-panel-window.png",
+      "intendedState": "Transition feature panel",
+      "provisional": true
+    },
+    {
+      "file": "13-captions-panel-window.png",
+      "intendedState": "Captions/subtitle feature panel",
+      "provisional": true
+    },
+    {
+      "file": "14-smart-package-panel-window.png",
+      "intendedState": "Smart package panel",
+      "provisional": true
+    },
+    {
+      "file": "15-filter-panel-window.png",
+      "intendedState": "Filter panel",
+      "provisional": true
+    },
+    {
+      "file": "16-adjustment-panel-window.png",
+      "intendedState": "Adjustment panel",
+      "provisional": true
+    },
+    {
+      "file": "17-top-tabs-overflow-window.png",
+      "intendedState": "Top tab overflow/switched set",
+      "provisional": true
+    },
+    {
+      "file": "18-template-panel-window.png",
+      "intendedState": "Template panel",
+      "provisional": true
+    },
+    {
+      "file": "28-export-modal-advanced-expanded-fullscreen.png",
+      "intendedState": "Export modal with advanced section expanded",
+      "provisional": true
+    },
+    {
+      "file": "42-export-audio-samplerate-dropdown-fullscreen.png",
+      "intendedState": "Export audio sample-rate dropdown state",
+      "provisional": true
+    }
+  ],
+  "knownMissingStates": [
+    "Export base modal without advanced settings",
+    "Export resolution, format, frame-rate, bitrate, codec dropdowns",
+    "Draft parameter edit modal",
+    "Preview monitor fit, ratio, fullscreen, and frame navigation menus",
+    "Timeline toolbar menus, track header controls, zoom, snapping, link, and more menus",
+    "Material import dropdown, view/sort/filter menus, search states, and empty states",
+    "Per-feature internal tab, filter, and dropdown states beyond first visible screen"
+  ],
+  "regressionPolicy": {
+    "assertPixels": false,
+    "assertStructure": true,
+    "assertProductionDefaultCopy": true,
+    "outputDirectory": "test-results/phase15-3"
+  }
+}

@@ -57,6 +57,15 @@ button {
   font: inherit;
 }
 
+.app-icon-mask {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: var(--app-icon-url) center / contain no-repeat;
+  -webkit-mask: var(--app-icon-url) center / contain no-repeat;
+}
+
 .project-entry {
   display: grid;
   place-items: center;
@@ -1607,7 +1616,7 @@ h2 {
   }
 
   .top-feature-bar {
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 112px minmax(0, 1fr) auto;
   }
 
   .category-nav {

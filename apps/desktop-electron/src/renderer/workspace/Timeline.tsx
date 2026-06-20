@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 import type { SegmentId, TrackKind } from "../../generated/Draft";
+import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   deriveTimelineRows,
   formatKeyframeEasing,
@@ -259,19 +260,19 @@ function TransportStrip({
       <div className="timeline-tool-group transport-buttons" role="group" aria-label="播放与历史">
         <TimelineIconButton
           label="撤销"
-          symbol="↶"
+          icon="undo"
           onClick={onUndo}
           disabled={pending || workspace.commandState.undoStack.length === 0}
         />
         <TimelineIconButton
           label="重做"
-          symbol="↷"
+          icon="redo"
           onClick={onRedo}
           disabled={pending || workspace.commandState.redoStack.length === 0}
         />
         <TimelineIconButton
           label={isPlaybackRunning ? "暂停" : "播放"}
-          symbol={isPlaybackRunning ? "⏸" : "▶"}
+          icon={isPlaybackRunning ? "pause" : "play"}
           onClick={togglePlayback}
           disabled={pending && !isPlaybackRunning}
         />
@@ -303,13 +304,13 @@ function TransportStrip({
       </div>
       <TimelineIconButton
         label="分割所选片段"
-        symbol="⧉"
+        icon="split"
         onClick={() => onSplitSelectedSegment?.(playheadUs)}
         disabled={pending || !hasSelection}
       />
       <TimelineIconButton
         label="删除所选片段"
-        symbol="⌫"
+        icon="delete"
         className="danger"
         onClick={onDeleteSelectedSegment}
         disabled={pending || !hasSelection}
@@ -317,7 +318,7 @@ function TransportStrip({
       <div className="timeline-zoom-shell" aria-label="时间线缩放">
         <TimelineIconButton
           label="缩小时间线"
-          symbol="-"
+          icon="zoomOut"
           onClick={() => onZoomPercentChange((current) => Math.max(50, current - 25))}
           disabled={zoomPercent <= 50}
         />
@@ -332,7 +333,7 @@ function TransportStrip({
         />
         <TimelineIconButton
           label="放大时间线"
-          symbol="+"
+          icon="zoomIn"
           onClick={() => onZoomPercentChange((current) => Math.min(200, current + 25))}
           disabled={zoomPercent >= 200}
         />
@@ -355,13 +356,15 @@ function TransportStrip({
 
 function TimelineIconButton({
   label,
+  icon,
   symbol,
   className = "",
   disabled = false,
   onClick
 }: {
   label: string;
-  symbol: string;
+  icon?: AppIconName;
+  symbol?: string;
   className?: string;
   disabled?: boolean;
   onClick?: () => void;
@@ -375,9 +378,21 @@ function TimelineIconButton({
       onClick={onClick}
       disabled={disabled}
     >
-      <span aria-hidden="true">{symbol}</span>
+      <IconGlyph icon={icon} symbol={symbol} />
     </button>
   );
+}
+
+function IconGlyph({ icon, symbol }: { icon?: AppIconName; symbol?: string }): React.ReactElement {
+  if (icon !== undefined) {
+    return <span className="app-icon-mask" style={iconMaskStyle(icon)} aria-hidden="true" />;
+  }
+
+  return <span aria-hidden="true">{symbol}</span>;
+}
+
+function iconMaskStyle(icon: AppIconName): CSSProperties {
+  return { "--app-icon-url": `url("${appIconUrls[icon]}")` } as CSSProperties;
 }
 
 function TimelineTrackRow({

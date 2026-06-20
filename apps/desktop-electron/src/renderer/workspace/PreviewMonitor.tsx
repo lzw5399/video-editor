@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { Draft, DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
+import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   canvasBackgroundTone,
   formatCanvasAspectRatio,
@@ -56,6 +57,7 @@ type PreviewMonitorProps = {
 
 type MonitorControl = {
   label: string;
+  icon?: AppIconName;
   symbol: string;
 };
 
@@ -166,7 +168,7 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
 };
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
-  { label: "播放", symbol: "▶" },
+  { label: "播放", icon: "play", symbol: "▶" },
   { label: "停止", symbol: "■" },
   { label: "上一帧", symbol: "‹" },
   { label: "下一帧", symbol: "›" },
@@ -538,9 +540,7 @@ export function PreviewMonitor({
                 control.label === "全屏"
               }
             >
-              <span aria-hidden="true">
-                {control.label === "画面比例" ? canvasRatio : control.label === "播放" && playbackRunning ? "⏸" : control.symbol}
-              </span>
+              <MonitorControlGlyph control={control} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
             </button>
           ))}
         </div>
@@ -668,6 +668,31 @@ function previewControlLabel(label: string, playbackRunning: boolean): string {
     return "停止预览";
   }
   return label;
+}
+
+function MonitorControlGlyph({
+  control,
+  canvasRatio,
+  playbackRunning
+}: {
+  control: MonitorControl;
+  canvasRatio: string;
+  playbackRunning: boolean;
+}): React.ReactElement {
+  if (control.label === "画面比例") {
+    return <span aria-hidden="true">{canvasRatio}</span>;
+  }
+
+  const icon = control.label === "播放" && playbackRunning ? "pause" : control.icon;
+  if (icon !== undefined) {
+    return <span className="app-icon-mask" style={iconMaskStyle(icon)} aria-hidden="true" />;
+  }
+
+  return <span aria-hidden="true">{control.symbol}</span>;
+}
+
+function iconMaskStyle(icon: AppIconName): CSSProperties {
+  return { "--app-icon-url": `url("${appIconUrls[icon]}")` } as CSSProperties;
 }
 
 function audioStatusChipText(audioPreview: AudioPreviewDisplayModel, audioParity: AudioParityDisplayModel): string {
