@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 15.3-03-PLAN.md
-last_updated: "2026-06-20T09:54:54Z"
-last_activity: 2026-06-20 -- Phase 15.3 Plan 03 productionized the left resource/function panel
+stopped_at: Completed 15.3-04-PLAN.md
+last_updated: "2026-06-20T10:22:07.827Z"
+last_activity: 2026-06-20 -- Phase 15.3 Plan 04 productionized preview transport and playback evidence
 progress:
   total_phases: 23
   completed_phases: 19
   total_plans: 141
-  completed_plans: 136
-  percent: 96
+  completed_plans: 137
+  percent: 97
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
-Plan: 15.3-04
-Status: Ready to execute Plan 15.3-04
-Last activity: 2026-06-20 -- Phase 15.3 Plan 03 productionized the left resource/function panel
+Plan: 15.3-05
+Status: Ready to execute Plan 15.3-05
+Last activity: 2026-06-20 -- Phase 15.3 Plan 04 productionized preview transport and playback evidence
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 3/8 plans complete
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 4/8 plans complete
 
 ## Performance Metrics
 
@@ -177,6 +177,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 | Phase 15.3 P01 | 80min | 3 tasks | 10 files |
 | Phase 15.3 P02 | 43min | 3 tasks | 12 files |
 | Phase 15.3 P03 | 25min | 3 tasks | 5 files |
+| Phase 15.3 P04 | 20min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -444,6 +445,9 @@ Recent decisions affecting current work:
 - [Phase 15.3]: FFmpeg progress timestamp N/A is ignored as an unavailable sample while malformed numeric progress remains an error.
 - [Phase 15.3]: Default resource task/cache maintenance controls are developer-diagnostics-only; normal media UI stays a material library with product-safe availability labels.
 - [Phase 15.3]: Text/audio left-panel duration controls display seconds, while command payloads remain integer microseconds.
+- [Phase 15.3]: Default preview transport hides numeric preview time and preview artifact generation; those controls remain developer-diagnostics-only.
+- [Phase 15.3]: Product playback success is centralized in waitForProductPlaybackSuccess and requires renderGraphGpuComposited evidence plus visible preview-center pixel motion.
+- [Phase 15.3]: Default realtime preview copy is product-safe; raw backend, cache, fallback, queue, render, and request telemetry stays behind developer diagnostics.
 
 ### Pending Todos
 
@@ -480,6 +484,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-20T09:54:54Z
-Stopped at: Completed 15.3-03-PLAN.md
+Last session: 2026-06-20T10:21:12.328Z
+Stopped at: Completed 15.3-04-PLAN.md
 Resume file: None
