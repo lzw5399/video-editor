@@ -59,7 +59,6 @@ export function Timeline({
   playbackRunning,
   onPlayheadChange,
   onTogglePlayback,
-  onStopPlayback,
   onSelectSegment,
   onSelectTrack,
   onAddSegment,
@@ -77,17 +76,23 @@ export function Timeline({
 }: TimelineProps): React.ReactElement {
   const timeline = deriveTimelineRows(workspace.draft, workspace.selection);
   const trackListRef = useRef<HTMLDivElement>(null);
+  const trackContentRef = useRef<HTMLDivElement>(null);
+  const [zoomPercent, setZoomPercent] = useState(100);
   const playheadRatio = Math.max(0, Math.min(1, Math.max(0, playheadUs) / Math.max(1, timeline.duration)));
   const playheadStyle = {
     left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
   };
+  const zoomContentStyle = {
+    width: `${zoomPercent}%`,
+    minWidth: "100%"
+  };
   const seekFromTrackClientX = useCallback(
     (clientX: number) => {
-      const trackList = trackListRef.current;
-      if (trackList === null) {
+      const trackContent = trackContentRef.current;
+      if (trackContent === null) {
         return;
       }
-      const box = trackList.getBoundingClientRect();
+      const box = trackContent.getBoundingClientRect();
       const laneLeft = box.left + TIMELINE_HEADER_WIDTH_PX;
       const laneWidth = Math.max(1, box.width - TIMELINE_HEADER_WIDTH_PX);
       onPlayheadChange(pointerTimeFromLane(clientX, laneLeft, laneWidth, timeline.duration));
@@ -141,56 +146,60 @@ export function Timeline({
         workspace={workspace}
         playheadUs={playheadUs}
         playbackRunning={playbackRunning}
-        onPlayheadChange={onPlayheadChange}
         onTogglePlayback={onTogglePlayback}
-        onStopPlayback={onStopPlayback}
         onAddSegment={onAddSegment}
         onAddTrack={onAddTrack}
-        onMoveSelectedSegment={onMoveSelectedSegment}
         onSplitSelectedSegment={onSplitSelectedSegment}
-        onTrimSelectedSegment={onTrimSelectedSegment}
         onDeleteSelectedSegment={onDeleteSelectedSegment}
         onUndo={onUndo}
         onRedo={onRedo}
+        zoomPercent={zoomPercent}
+        onZoomPercentChange={setZoomPercent}
       />
 
-      <div className="timeline-ruler" aria-label="时间线标尺">
-        <div className="timeline-header-spacer" />
-        <div className="ruler-track" onPointerDown={handleRulerPointerDown}>
-          {timeline.rulerTicks.map((tick) => (
-            <span className="ruler-tick" key={tick} style={{ left: `${(tick / timeline.duration) * 100}%` }}>
-              {formatTimelineTime(tick)}
-            </span>
-          ))}
+      <div className="timeline-ruler-shell">
+        <div className="timeline-ruler" aria-label="时间线标尺" style={zoomContentStyle}>
+          <div className="timeline-header-spacer" />
+          <div className="ruler-track" onPointerDown={handleRulerPointerDown}>
+            {timeline.rulerTicks.map((tick) => (
+              <span className="ruler-tick" key={tick} style={{ left: `${(tick / timeline.duration) * 100}%` }}>
+                {formatTimelineTime(tick)}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="track-list" aria-label="轨道列表" ref={trackListRef}>
-        <div
-          className="playhead"
-          aria-hidden="true"
-          title="播放头拖动"
-          style={playheadStyle}
-          onPointerDown={handlePlayheadPointerDown}
-          onPointerMove={handlePlayheadPointerMove}
-          onPointerUp={handlePlayheadPointerUp}
-          onPointerCancel={handlePlayheadPointerUp}
-        />
-        {timeline.rows.map((row) => (
-          <TimelineTrackRow
-            key={row.track.trackId}
-            row={row}
-            waveform={workspace.waveform}
-            timelineDuration={timeline.duration}
-            onSelectSegment={onSelectSegment}
-            onSelectTrack={onSelectTrack}
-            onRenameTrack={onRenameTrack}
-            onSetTrackLock={onSetTrackLock}
-            onSetTrackVisibility={onSetTrackVisibility}
-            onSetTrackMute={onSetTrackMute}
-            pending={workspace.pendingCommand !== null}
+        <div className="track-scroll-content" ref={trackContentRef} style={zoomContentStyle}>
+          <div
+            className="playhead"
+            aria-hidden="true"
+            title="播放头拖动"
+            style={playheadStyle}
+            onPointerDown={handlePlayheadPointerDown}
+            onPointerMove={handlePlayheadPointerMove}
+            onPointerUp={handlePlayheadPointerUp}
+            onPointerCancel={handlePlayheadPointerUp}
           />
-        ))}
+          {timeline.rows.map((row) => (
+            <TimelineTrackRow
+              key={row.track.trackId}
+              row={row}
+              waveform={workspace.waveform}
+              timelineDuration={timeline.duration}
+              onSelectSegment={onSelectSegment}
+              onSelectTrack={onSelectTrack}
+              onRenameTrack={onRenameTrack}
+              onSetTrackLock={onSetTrackLock}
+              onSetTrackVisibility={onSetTrackVisibility}
+              onSetTrackMute={onSetTrackMute}
+              onMoveSelectedSegment={onMoveSelectedSegment}
+              onTrimSelectedSegment={onTrimSelectedSegment}
+              pending={workspace.pendingCommand !== null}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -205,32 +214,28 @@ function TransportStrip({
   workspace,
   playheadUs,
   playbackRunning,
-  onPlayheadChange,
   onTogglePlayback,
-  onStopPlayback,
   onAddSegment,
   onAddTrack,
-  onMoveSelectedSegment,
   onSplitSelectedSegment,
-  onTrimSelectedSegment,
   onDeleteSelectedSegment,
   onUndo,
-  onRedo
+  onRedo,
+  zoomPercent,
+  onZoomPercentChange
 }: {
   workspace: WorkspaceState;
   playheadUs: number;
   playbackRunning: boolean;
-  onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
-  onStopPlayback: () => void;
   onAddSegment?: (materialId: string) => void;
   onAddTrack?: (trackKind: TrackKind) => void;
-  onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: (splitAt: number) => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   onDeleteSelectedSegment?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  zoomPercent: number;
+  onZoomPercentChange: (value: number | ((current: number) => number)) => void;
 }): React.ReactElement {
   const timelineMaterials = useMemo(
     () =>
@@ -242,17 +247,12 @@ function TransportStrip({
     [workspace.materials]
   );
   const [materialId, setMaterialId] = useState(timelineMaterials[0]?.materialId ?? "");
-  const [moveStepUs, setMoveStepUs] = useState(500_000);
-  const [splitAtUs, setSplitAtUs] = useState(playheadUs);
-  const [trimStepUs, setTrimStepUs] = useState(500_000);
-  const [zoomPercent, setZoomPercent] = useState(100);
   const selectedMaterialId = materialId || (timelineMaterials[0]?.materialId ?? "");
   const hasSelection = workspace.selection.segmentIds.length > 0;
   const pending = workspace.pendingCommand !== null;
   const snappingLabel = workspace.commandState.snapping.enabled ? "吸附 开" : "吸附 关";
   const isPlaybackRunning = playbackRunning;
   const togglePlayback = onTogglePlayback;
-  const stopPlayback = onStopPlayback;
 
   return (
     <div className="transport-strip" aria-label="时间线控制">
@@ -275,7 +275,6 @@ function TransportStrip({
           onClick={togglePlayback}
           disabled={pending && !isPlaybackRunning}
         />
-        <TimelineIconButton label="停止" symbol="■" onClick={stopPlayback} disabled={pending && !isPlaybackRunning} />
       </div>
       <label className="timeline-control compact-select">
         <span>素材</span>
@@ -302,80 +301,12 @@ function TransportStrip({
         <TimelineIconButton label="添加音频轨道" symbol="A+" onClick={() => onAddTrack?.("audio")} disabled={pending} />
         <TimelineIconButton label="添加文字轨道" symbol="T+" onClick={() => onAddTrack?.("text")} disabled={pending} />
       </div>
-      <label className="playhead-control">
-        <span>播放头</span>
-        <input
-          type="number"
-          min="0"
-          step="100000"
-          value={playheadUs}
-          onChange={(event) => onPlayheadChange(Math.max(0, event.currentTarget.valueAsNumber || 0))}
-        />
-      </label>
-      <label className="timeline-control">
-        <span>移动</span>
-        <input
-          type="number"
-          min="1"
-          step="100000"
-          value={moveStepUs}
-          onChange={(event) => setMoveStepUs(Math.max(1, event.currentTarget.valueAsNumber || 1))}
-        />
-      </label>
-      <div className="timeline-tool-group" role="group" aria-label="移动片段">
-        <TimelineIconButton
-          label="左移所选片段"
-          symbol="←"
-          onClick={() => onMoveSelectedSegment?.(-moveStepUs)}
-          disabled={pending || !hasSelection}
-        />
-        <TimelineIconButton
-          label="右移所选片段"
-          symbol="→"
-          onClick={() => onMoveSelectedSegment?.(moveStepUs)}
-          disabled={pending || !hasSelection}
-        />
-      </div>
-      <label className="timeline-control">
-        <span>分割</span>
-        <input
-          type="number"
-          min="0"
-          step="100000"
-          value={splitAtUs}
-          onChange={(event) => setSplitAtUs(Math.max(0, event.currentTarget.valueAsNumber || 0))}
-        />
-      </label>
       <TimelineIconButton
         label="分割所选片段"
         symbol="⧉"
-        onClick={() => onSplitSelectedSegment?.(splitAtUs)}
+        onClick={() => onSplitSelectedSegment?.(playheadUs)}
         disabled={pending || !hasSelection}
       />
-      <label className="timeline-control">
-        <span>裁剪</span>
-        <input
-          type="number"
-          min="1"
-          step="100000"
-          value={trimStepUs}
-          onChange={(event) => setTrimStepUs(Math.max(1, event.currentTarget.valueAsNumber || 1))}
-        />
-      </label>
-      <div className="timeline-tool-group" role="group" aria-label="裁剪片段">
-        <TimelineIconButton
-          label="左侧裁剪"
-          symbol="["
-          onClick={() => onTrimSelectedSegment?.("left", trimStepUs)}
-          disabled={pending || !hasSelection}
-        />
-        <TimelineIconButton
-          label="右侧裁剪"
-          symbol="]"
-          onClick={() => onTrimSelectedSegment?.("right", trimStepUs)}
-          disabled={pending || !hasSelection}
-        />
-      </div>
       <TimelineIconButton
         label="删除所选片段"
         symbol="⌫"
@@ -387,7 +318,7 @@ function TransportStrip({
         <TimelineIconButton
           label="缩小时间线"
           symbol="-"
-          onClick={() => setZoomPercent((current) => Math.max(50, current - 25))}
+          onClick={() => onZoomPercentChange((current) => Math.max(50, current - 25))}
           disabled={zoomPercent <= 50}
         />
         <input
@@ -397,19 +328,25 @@ function TransportStrip({
           max="200"
           step="25"
           value={zoomPercent}
-          onChange={(event) => setZoomPercent(event.currentTarget.valueAsNumber)}
+          onChange={(event) => onZoomPercentChange(event.currentTarget.valueAsNumber)}
         />
         <TimelineIconButton
           label="放大时间线"
           symbol="+"
-          onClick={() => setZoomPercent((current) => Math.min(200, current + 25))}
+          onClick={() => onZoomPercentChange((current) => Math.min(200, current + 25))}
           disabled={zoomPercent >= 200}
         />
         <span>{zoomPercent}%</span>
       </div>
-      <span className="snapping-status" aria-label={snappingLabel}>
+      <button
+        type="button"
+        className="snapping-status"
+        aria-label={snappingLabel}
+        aria-pressed={workspace.commandState.snapping.enabled}
+        disabled
+      >
         {snappingLabel}
-      </span>
+      </button>
       <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
       <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
     </div>
@@ -453,6 +390,8 @@ function TimelineTrackRow({
   onSetTrackLock,
   onSetTrackVisibility,
   onSetTrackMute,
+  onMoveSelectedSegment,
+  onTrimSelectedSegment,
   pending
 }: {
   row: ReturnType<typeof deriveTimelineRows>["rows"][number];
@@ -464,6 +403,8 @@ function TimelineTrackRow({
   onSetTrackLock?: (trackId: string, locked: boolean) => void;
   onSetTrackVisibility?: (trackId: string, visible: boolean) => void;
   onSetTrackMute?: (trackId: string, muted: boolean) => void;
+  onMoveSelectedSegment?: (deltaUs: number) => void;
+  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   pending: boolean;
 }): React.ReactElement {
   const [draftName, setDraftName] = useState(row.track.name);
@@ -556,6 +497,9 @@ function TimelineTrackRow({
             waveform={waveform}
             timelineDuration={timelineDuration}
             onSelectSegment={onSelectSegment}
+            onMoveSelectedSegment={onMoveSelectedSegment}
+            onTrimSelectedSegment={onTrimSelectedSegment}
+            pending={pending}
           />
         ))}
       </div>
@@ -567,26 +511,123 @@ function TimelineSegmentBlock({
   segment,
   waveform,
   timelineDuration,
-  onSelectSegment
+  onSelectSegment,
+  onMoveSelectedSegment,
+  onTrimSelectedSegment,
+  pending
 }: {
   segment: ReturnType<typeof deriveTimelineRows>["rows"][number]["segments"][number];
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (segmentId: SegmentId) => void;
+  onMoveSelectedSegment?: (deltaUs: number) => void;
+  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
+  pending: boolean;
 }): React.ReactElement {
   const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
   const showAudioWaveform = segment.visualKind === "audio";
+  const dragRef = useRef<{
+    mode: "move" | "trim-left" | "trim-right";
+    pointerId: number;
+    startClientX: number;
+    laneWidth: number;
+    moved: boolean;
+  } | null>(null);
+
+  const beginPointerIntent = useCallback(
+    (event: ReactPointerEvent<HTMLElement>, mode: "move" | "trim-left" | "trim-right") => {
+      if (event.button !== 0 || pending) {
+        return;
+      }
+      const lane = event.currentTarget.closest(".segment-lane");
+      if (!(lane instanceof HTMLElement)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectSegment?.(segment.segment.segmentId);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      dragRef.current = {
+        mode,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        laneWidth: Math.max(1, lane.getBoundingClientRect().width),
+        moved: false
+      };
+    },
+    [onSelectSegment, pending, segment.segment.segmentId]
+  );
+
+  const updatePointerIntent = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    if (Math.abs(event.clientX - drag.startClientX) >= 3) {
+      drag.moved = true;
+    }
+  }, []);
+
+  const completePointerIntent = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = dragRef.current;
+      if (drag === null || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      dragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      event.preventDefault();
+      event.stopPropagation();
+
+      const deltaUs = Math.round(((event.clientX - drag.startClientX) / drag.laneWidth) * Math.max(1, timelineDuration));
+      if (!drag.moved || deltaUs === 0) {
+        return;
+      }
+
+      if (drag.mode === "move") {
+        onMoveSelectedSegment?.(deltaUs);
+        return;
+      }
+
+      if (drag.mode === "trim-left" && deltaUs > 0) {
+        onTrimSelectedSegment?.("left", deltaUs);
+      }
+      if (drag.mode === "trim-right" && deltaUs < 0) {
+        onTrimSelectedSegment?.("right", Math.abs(deltaUs));
+      }
+    },
+    [onMoveSelectedSegment, onTrimSelectedSegment, timelineDuration]
+  );
 
   return (
     <button
       type="button"
       className={`segment-block segment-kind-${segment.visualKind}${segment.selected ? " selected" : ""}`}
       style={segmentBlockStyle(segment, timelineDuration)}
-      onClick={() => onSelectSegment?.(segment.segment.segmentId)}
+      onPointerDown={(event) => beginPointerIntent(event, "move")}
+      onPointerMove={updatePointerIntent}
+      onPointerUp={completePointerIntent}
+      onPointerCancel={completePointerIntent}
+      onClick={() => {
+        if (dragRef.current === null) {
+          onSelectSegment?.(segment.segment.segmentId);
+        }
+      }}
       aria-pressed={segment.selected}
       title={`${segment.label}，${segment.targetLabel}`}
       aria-label={`片段 ${segment.label}`}
     >
+      <span
+        className="segment-trim-handle left"
+        aria-label={`${segment.label} 左侧裁剪手柄`}
+        title="左侧裁剪"
+        onPointerDown={(event) => beginPointerIntent(event, "trim-left")}
+        onPointerMove={updatePointerIntent}
+        onPointerUp={completePointerIntent}
+        onPointerCancel={completePointerIntent}
+      />
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
       {showAudioWaveform ? <AudioWaveform waveform={waveform} materialId={segment.segment.materialId} /> : null}
@@ -607,6 +648,15 @@ function TimelineSegmentBlock({
           ))}
         </span>
       ) : null}
+      <span
+        className="segment-trim-handle right"
+        aria-label={`${segment.label} 右侧裁剪手柄`}
+        title="右侧裁剪"
+        onPointerDown={(event) => beginPointerIntent(event, "trim-right")}
+        onPointerMove={updatePointerIntent}
+        onPointerUp={completePointerIntent}
+        onPointerCancel={completePointerIntent}
+      />
     </button>
   );
 }

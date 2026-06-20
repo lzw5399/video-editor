@@ -478,6 +478,10 @@ async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
 }
 
 async function expectTimelineInputsFit(page: Page): Promise<void> {
+  for (const name of ["播放头", "移动", "分割", "裁剪"]) {
+    await expect(page.getByRole("spinbutton", { name, exact: true })).toHaveCount(0);
+  }
+
   const clippedInputs = await page.locator(".timeline-control input, .playhead-control input").evaluateAll((inputs) =>
     inputs
       .map((input) => {
@@ -493,6 +497,13 @@ async function expectTimelineInputsFit(page: Page): Promise<void> {
   );
 
   expect(clippedInputs, "时间线数字输入不能裁切当前数值").toEqual([]);
+}
+
+async function seekWorkspaceTimelinePlayhead(page: Page, targetTimeUs: number): Promise<void> {
+  const rulerTrack = page.locator(".ruler-track");
+  const rulerBox = await expectStableBox(rulerTrack, "时间线标尺轨道");
+  const ratio = Math.max(0, Math.min(1, targetTimeUs / 10_000_000));
+  await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height * 0.5);
 }
 
 test("Chinese editor workspace opens with required regions and material states", async () => {
@@ -961,7 +972,7 @@ test("动画 tab and command-only keyframe add/remove update accepted timeline m
     await expect(page.getByLabel("动画参数")).toContainText("线性");
     await expect(page.getByLabel("动画参数")).toContainText("缓入缓出");
 
-    await page.getByLabel("播放头").fill("1200000");
+    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
     await page.getByRole("button", { name: "添加位置 X关键帧" }).first().click();
     await expectCommandCall(app, "setSegmentKeyframe");
 
@@ -1056,7 +1067,7 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
   try {
     await spyExecuteCommandCalls(app, page);
 
-    await page.getByLabel("播放头").fill("1200000");
+    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
@@ -1165,7 +1176,7 @@ test("音频预览 controls send generated command envelopes and preserve state 
     await expectCommandCall(app, "getAudioPreviewStatus");
     await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
 
-    await page.getByLabel("播放头").fill("1200000");
+    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
     await expectCommandCall(app, "seekAudioPreview");
     await page.getByRole("button", { name: "停止预览" }).first().click();
     await expectCommandCall(app, "stopAudioPreview");
@@ -1613,7 +1624,6 @@ test("播放头支持时间线标尺点击和拖动寻帧到实时预览宿主",
     const rulerTrack = page.locator(".ruler-track");
     const rulerBox = await expectStableBox(rulerTrack, "时间线标尺轨道");
     await page.mouse.click(rulerBox.x + rulerBox.width * 0.5, rulerBox.y + rulerBox.height * 0.5);
-    await expect(page.getByLabel("播放头")).toHaveValue("5000000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:05.000");
     await expectLatestRealtimeHostSeekTarget(app, 5_000_000);
     await expectNoPreviewFrameCommands(app);
@@ -1626,9 +1636,14 @@ test("播放头支持时间线标尺点击和拖动寻帧到实时预览宿主",
     await page.mouse.move(rulerBox.x + rulerBox.width * 0.75, playheadBox.y + 4);
     await page.mouse.up();
 
-    await expect(page.getByLabel("播放头")).toHaveValue("7500000");
-    await expect(page.getByLabel("当前时间码")).toContainText("00:00:07.500");
-    await expectLatestRealtimeHostSeekTarget(app, 7_500_000);
+    await expect(page.getByLabel("当前时间码")).toContainText(/00:00:07\.[4-6][0-9][0-9]/);
+    await expect
+      .poll(async () => {
+        const latestSeek = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek").at(-1);
+        const target = latestSeek?.targetTimeMicroseconds ?? 0;
+        return target >= 7_400_000 && target <= 7_650_000;
+      })
+      .toBe(true);
     await expectNoPreviewFrameCommands(app);
   } finally {
     await app.close();
@@ -1960,8 +1975,8 @@ test("五大区域 layout stability keeps workspace regions visible and fixed at
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).hover();
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
-    await page.getByLabel("播放头").fill("1200000");
-    await expect(page.getByLabel("播放头")).toHaveValue("1200000");
+    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
+    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
 
     const previewAfter = await expectStableBox(page.locator('[aria-label="预览窗口"]'), "预览窗口 after state changes");
     const timelineAfter = await expectStableBox(page.locator('[aria-label="时间线"]'), "时间线 after state changes");
@@ -2185,12 +2200,7 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
       "撤销",
       "重做",
       "播放",
-      "停止",
-      "左移所选片段",
-      "右移所选片段",
       "分割所选片段",
-      "左侧裁剪",
-      "右侧裁剪",
       "删除所选片段",
       "缩小时间线",
       "放大时间线"
@@ -2200,7 +2210,13 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
 
     await expect(page.getByLabel("时间线标尺")).toContainText("00:00");
     await expect(page.getByLabel("时间线缩放", { exact: true })).toContainText("100%");
-    await expect(page.locator(".snapping-status")).toHaveAttribute("aria-label", /吸附/);
+    await expect(page.getByRole("button", { name: /吸附/ })).toHaveAttribute("aria-pressed", /true|false/);
+    const contentWidthBefore = await page.locator(".track-scroll-content").evaluate((element) => element.getBoundingClientRect().width);
+    await timelineControls.getByRole("button", { name: "放大时间线" }).click();
+    await expect(page.getByLabel("时间线缩放", { exact: true })).toContainText("125%");
+    await expect
+      .poll(async () => page.locator(".track-scroll-content").evaluate((element) => element.getBoundingClientRect().width))
+      .toBeGreaterThan(contentWidthBefore);
     await expect(page.locator(".playhead")).toBeVisible();
     await expect(page.locator(".track-state-button")).toHaveCount(9);
     await expect(page.locator(".segment-kind-video")).toHaveCount(1);

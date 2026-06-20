@@ -68,6 +68,30 @@
   background: #352020;
 }
 
+.snapping-status {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #3d3d38;
+  border-radius: 4px;
+  color: #d8d6cf;
+  background: #252522;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.snapping-status[aria-pressed="true"] {
+  border-color: #20c7d9;
+  color: #20c7d9;
+}
+
+.snapping-status:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .playhead-control,
 .timeline-control {
   grid-template-columns: auto minmax(0, 1fr);
@@ -132,11 +156,6 @@
   text-align: right;
 }
 
-.snapping-status {
-  flex: 0 0 46px;
-  color: #d8d6cf;
-}
-
 .playhead-time {
   flex: 0 0 82px;
 }
@@ -156,6 +175,29 @@
 .ruler-track {
   cursor: pointer;
   user-select: none;
+}
+
+.timeline-ruler-shell {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.timeline-ruler {
+  transition: width 120ms ease;
+}
+
+.track-list {
+  padding-top: 0;
+}
+
+.track-scroll-content {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 100%;
+  padding-top: 8px;
+  transition: width 120ms ease;
 }
 
 .timeline-surface .playhead {
@@ -319,6 +361,7 @@
   border-color: #3d5457;
   background: #243336;
   isolation: isolate;
+  touch-action: none;
 }
 
 .segment-block::before,
@@ -522,6 +565,47 @@
   outline-offset: -2px;
 }
 
+.segment-trim-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.segment-trim-handle.left {
+  left: 0;
+}
+
+.segment-trim-handle.right {
+  right: 0;
+}
+
+.segment-trim-handle::after {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(240, 238, 232, 0.38);
+  content: "";
+}
+
+.segment-trim-handle.left::after {
+  left: 3px;
+}
+
+.segment-trim-handle.right::after {
+  right: 3px;
+}
+
+.segment-block.selected .segment-trim-handle::after,
+.segment-block:hover .segment-trim-handle::after {
+  background: #20c7d9;
+}
+
 @media (max-width: 1399px) {
   .timeline-status {
     display: none;
@@ -558,7 +642,6 @@
     display: none;
   }
 
-  .snapping-status,
   .playhead-time,
   .timeline-status {
     display: none;

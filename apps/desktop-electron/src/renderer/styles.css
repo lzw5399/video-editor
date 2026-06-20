@@ -1446,7 +1446,6 @@ h2 {
 }
 
 @media (max-width: 1320px) {
-  .snapping-status,
   .playhead-time,
   .timeline-status {
     display: none;
