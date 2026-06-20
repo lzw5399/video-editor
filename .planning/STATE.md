@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Active 15.2-04C-PLAN.md: close macOS/Electron WGPU drawable lifecycle after 04B occlusion blocker
-last_updated: "2026-06-19T23:34:04.142Z"
-last_activity: 2026-06-20 -- Added Phase 15.2 Plan 04C to close the macOS/Electron native WGPU drawable lifecycle blocker before 15.2-05/06; project-entry and top-right export UI requirements remain captured for Phase 15.3
+stopped_at: "Blocked 15.2-04C-PLAN.md: WGPU native surface remains occluded during product E2E"
+last_updated: "2026-06-20T00:00:57.749Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04C added drawable lifecycle diagnostics and attempted parent-subview/raw-handle/top-level-overlay AppKit WGPU attachments, but product E2E still fails closed with `surface is occluded`; 15.2-05/06 remain blocked
 progress:
   total_phases: 23
   completed_phases: 18
@@ -171,6 +171,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04B complete/blocked honestly
 | Phase 15.2 P03B | 14 min | 3 tasks | 11 files |
 | Phase 15.2 P04A | 61 min | 3 tasks | 16 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04B | 20min | 2/3 tasks | 8 files |
+| Phase 15.2-p0-real-gpu-realtime-compositor-closure P04C | 17min | 2/3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -419,6 +420,7 @@ Recent decisions affecting current work:
 - [Phase 15.2]: Plan 04A cannot release 05/06 until Electron native WGPU surface acquisition is non-occluded and product E2E observes real visible advancement with `renderGraphGpuComposited` evidence.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Do not advance from 15.2-04B to downstream realtime preview closure plans until macOS/Electron WGPU playback emits visible renderGraphGpu/renderGraphGpuComposited evidence. — Plan 04B preserved fail-closed no-fallback behavior, but product E2E still reports WGPU surface acquire failure with 'surface is occluded'. Treating this as progress would route product success around the real GPU compositor acceptance policy.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04C is required after 04B because an executed-but-blocked summary is not release evidence. — 15.2-05/06 must remain blocked until normal Electron import-add-play acquires a non-occluded WGPU surface and emits visible renderGraphGpuComposited evidence.
+- [Phase 15.2-04C]: Do not execute 15.2-05/06 because normal product playback still cannot acquire a non-occluded macOS WGPU surface; diagnostics are investigation evidence only, not product success.
 
 ### Pending Todos
 
@@ -436,6 +438,7 @@ None yet.
 - 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
 - Plan 15.2-04 product playback E2E still fails: Rust binding/host now fail closed without nativeVideoBridge, and NV12 WGPU ExternalTexture plane sampling is implemented for WGPU plane leases, but no Rust-owned desktop compositor scheduler currently decodes timeline media into sampleable native leases and presents renderGraphGpuComposited frames to the native WGPU surface during normal play.
 - Phase 15.2 Plan 04B blocked: macOS/Electron native WGPU surface reaches acquire through Rust scheduler but still fails with 'surface is occluded' in product E2E; no fallback route accepted.
+- Phase 15.2 Plan 04C blocked: macOS/Electron native WGPU surface still returns surface is occluded; diagnostics show parent and overlay windows visible but occlusionVisible=false, no renderGraphGpuComposited evidence.
 
 ## Deferred Items
 
@@ -464,6 +467,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T23:33:12.328Z
-Stopped at: Blocked 15.2-04B-PLAN.md: WGPU native surface remains occluded during product E2E
+Last session: 2026-06-20T00:00:41.101Z
+Stopped at: Blocked 15.2-04C-PLAN.md: WGPU native surface remains occluded during product E2E
 Resume file: None
