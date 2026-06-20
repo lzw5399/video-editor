@@ -1,0 +1,4 @@
+interface:
+  display_name: "Production Architecture Review"
+  short_description: "Review architecture against production-grade chains"
+  default_prompt: "Use $production-architecture-review to design or review this direction against the Video Editor production architecture standard."
