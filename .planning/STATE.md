@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Phase 15.3 ready to execute from 15.3-01"
-last_updated: "2026-06-20T08:05:00.000Z"
-last_activity: 2026-06-20 -- Phase 15.3 production UI convergence plan set created with project entry, top-right export modal, production panels, icon/reference guards, and aggregate E2E gates
+stopped_at: Phase 15.3 ready to execute from 15.3-02
+last_updated: "2026-06-20T08:20:23Z"
+last_activity: 2026-06-20 -- Phase 15.3 Plan 01 completed production project entry before import
 progress:
   total_phases: 23
   completed_phases: 19
-  total_plans: 137
-  completed_plans: 127
-  percent: 83
+  total_plans: 141
+  completed_plans: 134
+  percent: 95
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
-Plan: 15.3-01
-Status: Ready to execute Plan 15.3-01
-Last activity: 2026-06-20 -- Phase 15.3 has 8 approved production UI convergence plans
+Plan: 15.3-02
+Status: Ready to execute Plan 15.3-02
+Last activity: 2026-06-20 -- Phase 15.3 Plan 01 completed production project entry before import
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is planned and ready to execute
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 1/8 plans complete
 
 ## Performance Metrics
 
@@ -174,6 +174,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04C | 17min | 2/3 tasks | 9 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P05 | resumed | 3 tasks | 21 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P06 | resumed | 3 tasks | 4 files |
+| Phase 15.3 P01 | 80min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,8 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 - Phase 15.2 Plan 06 historical aggregate verification passed, but manual product UAT invalidated the closeout because it did not prove preview surface placement, native audio output, timeline/video sync, or direct text/transform interactions. Phase 15.2 is reopened for 15.2-07. (URGENT)
 - Phase 15.2 Plan 07 reclosed product playback through normal Playwright/Electron user flows: surface placement, native audio for separate and embedded-video audio, timeline/video sync through completion, and direct text/transform drag are covered by packaged E2E. (URGENT)
 - Phase 15.3 is unblocked and planned as 8 waves: project entry, top-right export modal, left resource panel, preview transport, inspector/modal parameters, timeline controls, icon/reference/source guards, and aggregate verification. Icons must be selected from `/Users/zhiwen/code/video-editor/icons`. (URGENT)
+- Phase 15.3 Plan 01 completed production project entry: normal launch has no workspace fixture and stops at `新建项目`/`打开项目`; explicit test fixtures must opt into blank/demo workspace bootstrap. (URGENT)
+- Phase 15.3 Plan 01 routes project create/open UI through platform-selected bundle paths and Rust `saveProjectBundle`/`openProjectBundle` command envelopes before import controls render. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -214,6 +217,8 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 15.3]: Normal product launch has no workspace fixture and stops at project entry; explicit test fixtures must opt into blank/demo workspace bootstrap.
+- [Phase 15.3]: Project create/open UI receives only platform-selected bundle paths, then calls Rust saveProjectBundle/openProjectBundle command envelopes.
 - [Phase 14]: GC candidates are selected from SQLite artifact rows and excluded by live artifact status, dependency rows, active generation jobs/chunks, and existing tombstones before any file deletion.
 - [Phase 14]: Quota labels are Rust-owned strings for UI transport; TypeScript does not compute totals from paths or inspect SQLite/blob internals.
 - [Phase 14]: Sync manifests are local deterministic contracts only; remote/cloud provider transport, auth, URLs, upload/download, and server rendering stay out of Phase 14.
@@ -438,7 +443,7 @@ None yet.
 
 ### Blockers/Concerns
 
-Phase 15.2 is reopened. Manual product UAT reports preview playback offset, no audio, timeline/video desync, and missing text/font/on-canvas transform interactions. Existing product E2E still passes, so 15.2-07 must strengthen the gate and fix the product path before Phase 15.3 or Phase 16 work continues.
+None.
 
 ## Deferred Items
 
@@ -467,6 +472,6 @@ Phase 15.2 is reopened. Manual product UAT reports preview playback offset, no a
 
 ## Session Continuity
 
-Last session: 2026-06-20T04:52:19.000Z
-Stopped at: Phase 15.3 ready to execute from 15.3-01
+Last session: 2026-06-20T08:20:23Z
+Stopped at: Completed 15.3-01-PLAN.md
 Resume file: None

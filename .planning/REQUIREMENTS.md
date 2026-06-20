@@ -358,10 +358,10 @@
 | TEST-E2E-01 | Phase 15.2 | Planned |
 | TEST-E2E-02 | Phase 15.2 | Planned |
 | NO-FALLBACK-01 | Phase 15.2 | Complete |
-| P0-UI-01 | Phase 15.3 | Planned |
-| P0-UI-02 | Phase 15.3 | Planned |
+| P0-UI-01 | Phase 15.3 | Complete |
+| P0-UI-02 | Phase 15.3 | Complete |
 | P0-UI-03 | Phase 15.3 | Planned |
-| P0-UI-03A | Phase 15.3 | Planned |
+| P0-UI-03A | Phase 15.3 | Complete |
 | P0-UI-04 | Phase 15.3 | Planned |
 | P0-UI-05 | Phase 15.3 | Planned |
 | P0-UI-06 | Phase 15.3 | Planned |
