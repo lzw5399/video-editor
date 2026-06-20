@@ -950,6 +950,7 @@ test("动画 tab and command-only keyframe add/remove update accepted timeline m
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
     const exportDialog = await openExportDialog(page);
     await expect(exportDialog.getByLabel("导出日志")).toContainText("关键帧已更新，请重新开始导出");
+    await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     const addCalls = await readExecuteCommandCalls(app);
     const addKeyframeCall = addCalls.find((call) => call.command === "setSegmentKeyframe");
