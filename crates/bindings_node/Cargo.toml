@@ -21,6 +21,7 @@ engine_core = { path = "../engine_core" }
 ffmpeg_compiler = { path = "../ffmpeg_compiler" }
 media_runtime = { path = "../media_runtime" }
 media_runtime_desktop = { path = "../media_runtime_desktop" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 napi = { version = "3.9.2", features = ["serde-json"] }
 napi-derive = "3.5.6"
 preview_service = { path = "../preview_service" }

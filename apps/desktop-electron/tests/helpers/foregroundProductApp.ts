@@ -150,6 +150,12 @@ function testSwitchesFromEnv(env: NodeJS.ProcessEnv): string[] {
   if (env.VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR === "1") {
     switches.push("--video-editor-test-disable-render-graph-compositor=1");
   }
+  if (env.VIDEO_EDITOR_TEST_COMMAND_MOCKS !== undefined) {
+    switches.push(`--video-editor-test-command-mocks=${env.VIDEO_EDITOR_TEST_COMMAND_MOCKS}`);
+  }
+  if (env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES !== undefined) {
+    switches.push(`--video-editor-test-mock-runtime-capabilities=${env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES}`);
+  }
   return switches;
 }
 

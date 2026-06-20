@@ -16,12 +16,28 @@ import {
 
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
 export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving-testsrc.mp4");
+export const USER_JOURNEY_OVERLAY_IMAGE = join(USER_JOURNEY_MEDIA_DIR, "p0-overlay-testsrc.png");
 export const USER_JOURNEY_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-tone.wav");
 const execFileAsync = promisify(execFile);
 
 type ExecuteCommandCall = {
   command: CommandName;
   kind: string;
+  targetTime?: number | null;
+  targetTimerange?: { start: number; duration: number } | null;
+  visual?: {
+    visible: boolean;
+    fitMode: string;
+    transform: {
+      position: { x: number; y: number };
+      scale: { xMillis: number; yMillis: number };
+      rotation: { degrees: number };
+      opacity: { valueMillis: number };
+    };
+  } | null;
+  textContent?: string | null;
+  textSource?: string | null;
+  textFontRef?: string | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -217,9 +233,16 @@ export async function launchProductJourneyApp(
   env: NodeJS.ProcessEnv = {}
 ): Promise<{ app: ProductJourneyAppController; page: Page }> {
   await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
+  const productEnv = {
+    VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
+    VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
+    VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
+    VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
+    ...env
+  };
 
   if (process.platform === "darwin") {
-    const launch = await launchForegroundProductApp(openMaterialFiles, env);
+    const launch = await launchForegroundProductApp(openMaterialFiles, productEnv);
     await expectProductWorkspace(launch.page);
     return {
       app: wrapForegroundController(launch.app),
@@ -231,10 +254,8 @@ export async function launchProductJourneyApp(
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
-      VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
+      ...productEnv,
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(openMaterialFiles),
-      ...env
     }
   });
   const page = await app.firstWindow();
@@ -272,6 +293,22 @@ export async function importMaterialThroughProductPicker(
   });
 }
 
+export async function importMaterialsThroughProductPicker(
+  app: ProductJourneyAppController,
+  page: Page,
+  materialPaths: string[]
+): Promise<void> {
+  const nextCount = (await countCommand(app, "importMaterial")) + materialPaths.length;
+  await page.getByRole("button", { name: "导入素材" }).click();
+  await waitForCommandCount(app, "importMaterial", nextCount);
+  for (const materialPath of materialPaths) {
+    const materialName = basename(materialPath);
+    await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", {
+      timeout: 30_000
+    });
+  }
+}
+
 export async function addMaterialToTimeline(
   app: ProductJourneyAppController,
   page: Page,
@@ -286,6 +323,133 @@ export async function addMaterialToTimeline(
   await waitForCommandCount(app, "addSegment", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
+}
+
+export async function addVideoTrack(page: Page, app: ProductJourneyAppController): Promise<void> {
+  const nextCount = (await countCommand(app, "addTrack")) + 1;
+  await page.getByRole("button", { name: "添加视频轨道" }).click();
+  await waitForCommandCount(app, "addTrack", nextCount);
+  await expect(page.getByRole("button", { name: /选择轨道 视频轨道 2/ })).toBeVisible();
+}
+
+export async function addTextThroughProductPanel(
+  page: Page,
+  app: ProductJourneyAppController,
+  content: string,
+  durationUs = 2_000_000
+): Promise<void> {
+  const nextCount = (await countCommand(app, "addTextSegment")) + 1;
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+  const textPanel = page.getByRole("region", { name: "素材面板" });
+  await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
+  await textPanel.getByLabel("默认文字").getByLabel("时长（微秒）").fill(String(durationUs));
+  await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
+  await waitForCommandCount(app, "addTextSegment", nextCount);
+  await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
+    content
+  );
+}
+
+export async function addAudioThroughProductPanel(
+  page: Page,
+  app: ProductJourneyAppController,
+  audioPath: string,
+  durationUs = 2_000_000
+): Promise<void> {
+  const nextCount = (await countCommand(app, "addAudioSegment")) + 1;
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
+  const audioPanel = page.getByRole("region", { name: "素材面板" });
+  await audioPanel.getByLabel("BGM素材").selectOption({ label: basename(audioPath) });
+  await audioPanel.getByLabel("时长（微秒）").fill(String(durationUs));
+  await audioPanel.getByRole("button", { name: "添加音频", exact: true }).click();
+  await waitForCommandCount(app, "addAudioSegment", nextCount);
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(basename(audioPath))}`) })).toBeVisible();
+}
+
+type VisualInspectorEdit = {
+  positionX?: number;
+  positionY?: number;
+  scaleX?: number;
+  scaleY?: number;
+  rotation?: number;
+  opacity?: number;
+  fitMode?: "适应" | "填充" | "拉伸";
+};
+
+export async function updateSelectedVisualThroughInspector(
+  page: Page,
+  app: ProductJourneyAppController,
+  edit: VisualInspectorEdit = {}
+): Promise<void> {
+  const positionX = edit.positionX ?? 120;
+  const positionY = edit.positionY ?? -40;
+  const scaleX = edit.scaleX ?? 1250;
+  const scaleY = edit.scaleY ?? 1250;
+  const rotation = edit.rotation ?? 8;
+  const opacity = edit.opacity ?? 820;
+  const fitMode = edit.fitMode ?? "填充";
+  const nextCount = (await countCommand(app, "updateSegmentVisual")) + 1;
+  const visualForm = page.getByLabel("画面基础表单");
+  await visualForm.getByLabel("位置 X", { exact: true }).fill(String(positionX));
+  await visualForm.getByLabel("位置 Y", { exact: true }).fill(String(positionY));
+  await visualForm.getByLabel("缩放 X", { exact: true }).fill(String(scaleX));
+  await visualForm.getByLabel("缩放 Y", { exact: true }).fill(String(scaleY));
+  await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).fill(String(rotation));
+  await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).fill(String(opacity));
+  await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: fitMode }).click();
+  await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeEnabled();
+  await visualForm.getByRole("button", { name: "应用画面" }).click();
+  await waitForCommandCount(app, "updateSegmentVisual", nextCount);
+}
+
+export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
+  const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+  await page.getByRole("spinbutton", { name: "播放头", exact: true }).fill(String(targetTimeUs));
+  await expect(page.getByLabel("当前时间码")).toContainText(formatExpectedTimecode(targetTimeUs), { timeout: 10_000 });
+  expect(
+    requestPreviewFrameCount(await readExecuteCommandCalls(app)),
+    "product seek must not fall back to preview artifact frame requests"
+  ).toBe(frameRequestsBefore);
+}
+
+export async function splitSelectedSegment(page: Page, app: ProductJourneyAppController, splitAtUs: number): Promise<void> {
+  const nextCount = (await countCommand(app, "splitSegment")) + 1;
+  await page.getByRole("spinbutton", { name: "分割", exact: true }).fill(String(splitAtUs));
+  await page.getByRole("button", { name: "分割所选片段" }).click();
+  await waitForCommandCount(app, "splitSegment", nextCount);
+}
+
+export async function moveSelectedSegmentRight(page: Page, app: ProductJourneyAppController, deltaUs: number): Promise<void> {
+  const nextCount = (await countCommand(app, "moveSegment")) + 1;
+  await page.getByRole("spinbutton", { name: "移动", exact: true }).fill(String(deltaUs));
+  await page.getByRole("button", { name: "右移所选片段" }).click();
+  await waitForCommandCount(app, "moveSegment", nextCount);
+}
+
+export async function deleteSelectedSegment(page: Page, app: ProductJourneyAppController): Promise<void> {
+  const nextCount = (await countCommand(app, "deleteSegment")) + 1;
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "删除所选片段" }).click();
+  await waitForCommandCount(app, "deleteSegment", nextCount);
+}
+
+export async function undoTimelineEdit(page: Page, app: ProductJourneyAppController): Promise<void> {
+  const nextCount = (await countCommand(app, "undoTimelineEdit")) + 1;
+  await page.getByRole("button", { name: "撤销" }).click();
+  await waitForCommandCount(app, "undoTimelineEdit", nextCount);
+}
+
+export async function redoTimelineEdit(page: Page, app: ProductJourneyAppController): Promise<void> {
+  const nextCount = (await countCommand(app, "redoTimelineEdit")) + 1;
+  await page.getByRole("button", { name: "重做" }).click();
+  await waitForCommandCount(app, "redoTimelineEdit", nextCount);
+}
+
+export function expectNoProductFallbackCalls(calls: RealtimePreviewHostCall[]): void {
+  expectNoRejectedSurfaceAcquire(calls);
+  expect(calls.map((call) => call.kind), "product journey must not accept missing-compositor fallback").not.toContain(
+    "playRejectedMissingCompositor"
+  );
 }
 
 export async function clickPreviewPlay(page: Page): Promise<void> {
@@ -536,4 +700,17 @@ function parseTimecodeToMicroseconds(value: string): number {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function formatExpectedTimecode(targetTimeUs: number): string {
+  const milliseconds = Math.floor(targetTimeUs / 1000);
+  const hours = Math.floor(milliseconds / 3_600_000);
+  const minutes = Math.floor((milliseconds % 3_600_000) / 60_000);
+  const seconds = Math.floor((milliseconds % 60_000) / 1000);
+  const millis = milliseconds % 1000;
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}.${String(millis).padStart(3, "0")}`;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
 }

@@ -1,18 +1,32 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  USER_JOURNEY_OVERLAY_IMAGE,
   USER_JOURNEY_MOVING_VIDEO,
+  USER_JOURNEY_TONE_AUDIO,
+  addAudioThroughProductPanel,
+  addTextThroughProductPanel,
   addMaterialToTimeline,
+  addVideoTrack,
   activateProductJourneyApp,
   capturePreviewEvidence,
   captureVisiblePreviewEvidence,
+  deleteSelectedSegment,
   expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
+  expectNoProductFallbackCalls,
   expectNoRejectedSurfaceAcquire,
+  importMaterialsThroughProductPicker,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
+  moveSelectedSegmentRight,
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
   requestPreviewFrameCount,
+  redoTimelineEdit,
+  seekTimelinePlayhead,
+  splitSelectedSegment,
+  undoTimelineEdit,
+  updateSelectedVisualThroughInspector,
   waitForCompositedPreviewEvidence,
   waitForVisiblePreviewCenterChange
 } from "./helpers/userJourney";
@@ -191,6 +205,95 @@ test("product user can import a repo video, add it to the timeline, and see rend
       ])
     );
     expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
+  } finally {
+    await app.close();
+  }
+});
+
+test("product user editing matrix uses real commands and still produces visible GPU playback", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_MOVING_VIDEO,
+    USER_JOURNEY_OVERLAY_IMAGE,
+    USER_JOURNEY_TONE_AUDIO
+  ]);
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [
+      USER_JOURNEY_MOVING_VIDEO,
+      USER_JOURNEY_OVERLAY_IMAGE,
+      USER_JOURNEY_TONE_AUDIO
+    ]);
+
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addVideoTrack(page, app);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_OVERLAY_IMAGE);
+    await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: -120,
+      positionY: -70,
+      scaleX: 350,
+      scaleY: 350,
+      rotation: 0,
+      opacity: 760,
+      fitMode: "适应"
+    });
+    await addTextThroughProductPanel(page, app, "产品级端到端字幕", 1_000_000);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 2_000_000);
+
+    await page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ }).click();
+    await updateSelectedVisualThroughInspector(page, app);
+    await seekTimelinePlayhead(page, app, 500_000);
+    await splitSelectedSegment(page, app, 1_500_000);
+    await moveSelectedSegmentRight(page, app, 250_000);
+    await deleteSelectedSegment(page, app);
+    await undoTimelineEdit(page, app);
+    await redoTimelineEdit(page, app);
+    await undoTimelineEdit(page, app);
+    await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
+    await deleteSelectedSegment(page, app);
+    await seekTimelinePlayhead(page, app, 2_100_000);
+
+    const callsAfterEdits = await readExecuteCommandCalls(app);
+    expect(callsAfterEdits.map((call) => call.command)).toEqual(
+      expect.arrayContaining([
+        "importMaterial",
+        "addSegment",
+        "addTrack",
+        "addTextSegment",
+        "addAudioSegment",
+        "updateSegmentVisual",
+        "splitSegment",
+        "moveSegment",
+        "deleteSegment",
+        "undoTimelineEdit",
+        "redoTimelineEdit"
+      ])
+    );
+    expect(requestPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
+    expect(callsAfterEdits.find((call) => call.command === "addTextSegment")?.textContent).toBe("产品级端到端字幕");
+    const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSegmentVisual");
+    expect(visualCall?.visual?.fitMode).toBe("fill");
+    expect(visualCall?.visual?.transform.position.x).toBe(120);
+    expect(visualCall?.visual?.transform.rotation.degrees).toBe(8);
+    expect(visualCall?.visual?.transform.opacity.valueMillis).toBe(820);
+
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    const visibleMotion = await waitForVisiblePreviewCenterChange(page, app, visibleBefore.visibleCenterHash, 5_000);
+    const after = await waitForCompositedPreviewEvidence(
+      page,
+      app,
+      12_000,
+      before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
+    );
+
+    expect(after.hostState?.productReady).toBe(true);
+    expect(after.hostState?.fallbackActive).toBe(false);
+    expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+    expect(visibleMotion.visibleCenterHash).not.toBe(visibleBefore.visibleCenterHash);
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
     await app.close();
   }

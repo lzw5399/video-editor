@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use draft_model::{Draft, MaterialKind, Microseconds, RationalFrameRate};
+use draft_model::{Draft, MaterialId, MaterialKind, Microseconds, RationalFrameRate};
 use media_runtime::{
     NativeTextureLease, NativeTextureLeaseRegistry, RuntimeDeviceId, SelectedDecodePath, StreamId,
 };
@@ -16,9 +16,10 @@ use media_runtime_desktop::{
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{
     MediaIoFrameProvider, PlaybackGeneration, PlaybackRate, PlaybackState,
-    PreviewCancellationToken, PreviewDecodeDeviceContext, PreviewFrameStoragePreference,
-    PreviewGpuBackend, PreviewMaterialDecodeSource, PreviewRequestMode, PreviewSessionId,
-    RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
+    PreviewCancellationToken, PreviewDecodeDeviceContext, PreviewFrameInput, PreviewFrameProvider,
+    PreviewFrameProviderError, PreviewFrameStoragePreference, PreviewGpuBackend,
+    PreviewMaterialDecodeSource, PreviewRequestMode, PreviewSessionId, RealtimePlaybackScheduler,
+    RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
     RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerPresentation,
     RealtimePlaybackSchedulerPresenter, RealtimePreviewAudioSyncState, RealtimePreviewBackendUsed,
     RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor, RealtimePreviewDiagnostic,
@@ -603,7 +604,7 @@ impl RealtimePreviewBindingScheduler {
     fn build_media_provider(
         &self,
         registry: NativeTextureLeaseRegistry,
-    ) -> Result<MediaIoFrameProvider, RealtimePreviewBindingError> {
+    ) -> Result<SchedulerFrameProvider, RealtimePreviewBindingError> {
         let draft = self.draft_snapshot.as_ref().ok_or_else(|| {
             RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
                 "accepted draft snapshot is required before scheduler playback",
@@ -614,44 +615,154 @@ impl RealtimePreviewBindingScheduler {
             .with_desired_storage(PreviewFrameStoragePreference::Texture)
             .with_preview_device_context(PreviewDecodeDeviceContext::compatible(preview_device))
             .with_native_texture_registry(registry);
-        let mut registered = 0usize;
+        let mut static_images = BTreeMap::new();
+        let mut registered_video_count = 0usize;
         for material in &draft.materials {
-            if material.kind != MaterialKind::Video || !material.metadata.has_video {
-                continue;
+            match material.kind {
+                MaterialKind::Video if material.metadata.has_video => {
+                    let material_uri = resolve_scheduler_material_path(
+                        self.bundle_path.as_deref(),
+                        &material.uri,
+                    )?;
+                    provider
+                        .register_material(PreviewMaterialDecodeSource {
+                            material_id: material.material_id.clone(),
+                            material_uri,
+                            stream_id: StreamId(0),
+                            selected_path: SelectedDecodePath::NativeHardwareTexture,
+                            fallback_selection: None,
+                        })
+                        .map_err(|error| {
+                            RealtimePreviewBindingError::presenter(
+                                NativePreviewPresenterError::new(error.to_string()),
+                            )
+                        })?;
+                    registered_video_count = registered_video_count.saturating_add(1);
+                }
+                MaterialKind::Image
+                    if material.metadata.width.is_some() && material.metadata.height.is_some() =>
+                {
+                    let material_uri = resolve_scheduler_material_path(
+                        self.bundle_path.as_deref(),
+                        &material.uri,
+                    )?;
+                    static_images.insert(
+                        material.material_id.clone(),
+                        load_static_image_frame(material.material_id.clone(), &material_uri)?,
+                    );
+                }
+                _ => {}
             }
-            let material_uri =
-                resolve_scheduler_material_path(self.bundle_path.as_deref(), &material.uri)?;
-            provider
-                .register_material(PreviewMaterialDecodeSource {
-                    material_id: material.material_id.clone(),
-                    material_uri,
-                    stream_id: StreamId(0),
-                    selected_path: SelectedDecodePath::NativeHardwareTexture,
-                    fallback_selection: None,
-                })
-                .map_err(|error| {
-                    RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(
-                        error.to_string(),
-                    ))
-                })?;
-            registered = registered.saturating_add(1);
         }
-        if registered == 0 {
+        if registered_video_count == 0 && static_images.is_empty() {
             return Err(RealtimePreviewBindingError::presenter(
                 NativePreviewPresenterError::new(
-                    "no video material is registered for scheduler media IO",
+                    "no visual material is registered for scheduler media IO",
                 ),
             ));
         }
-        Ok(provider)
+        Ok(SchedulerFrameProvider::new(provider, static_images))
     }
+}
+
+struct SchedulerFrameProvider {
+    media_io: MediaIoFrameProvider,
+    static_images: BTreeMap<MaterialId, StaticImageFrame>,
+}
+
+impl SchedulerFrameProvider {
+    fn new(
+        media_io: MediaIoFrameProvider,
+        static_images: BTreeMap<MaterialId, StaticImageFrame>,
+    ) -> Self {
+        Self {
+            media_io,
+            static_images,
+        }
+    }
+}
+
+impl PreviewFrameProvider for SchedulerFrameProvider {
+    fn provider_name(&self) -> &'static str {
+        "scheduler-frame-provider"
+    }
+
+    fn frame_for(
+        &mut self,
+        material_id: &MaterialId,
+        source_position: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
+        if let Some(frame) = self.static_images.get(material_id) {
+            return PreviewFrameInput::static_image(
+                frame.material_id.clone(),
+                source_position,
+                playback_generation,
+                frame.width,
+                frame.height,
+                frame.pixels.clone(),
+            )
+            .map_err(|error| {
+                PreviewFrameProviderError::invalid_frame(
+                    self.provider_name(),
+                    Some(material_id.clone()),
+                    Some(source_position),
+                    Some(playback_generation),
+                    error,
+                )
+            });
+        }
+
+        self.media_io
+            .frame_for(material_id, source_position, playback_generation)
+    }
+}
+
+#[derive(Clone)]
+struct StaticImageFrame {
+    material_id: MaterialId,
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+}
+
+fn load_static_image_frame(
+    material_id: MaterialId,
+    path: &Path,
+) -> Result<StaticImageFrame, RealtimePreviewBindingError> {
+    let rgba = image::open(path)
+        .map_err(|error| {
+            RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(format!(
+                "failed to decode realtime preview image material {} from {}: {error}",
+                material_id.as_str(),
+                path.display()
+            )))
+        })?
+        .to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+    if width == 0 || height == 0 {
+        return Err(RealtimePreviewBindingError::presenter(
+            NativePreviewPresenterError::new(format!(
+                "realtime preview image material {} decoded to an empty frame",
+                material_id.as_str()
+            )),
+        ));
+    }
+
+    Ok(StaticImageFrame {
+        material_id,
+        width,
+        height,
+        pixels: rgba.into_raw(),
+    })
 }
 
 struct BindingSchedulerPresenter<'a> {
     gpu_device: Option<RealtimePreviewGpuDevice>,
     surface_target: Option<&'a mut RealtimePreviewGpuPresentationTarget>,
     texture_cache: RealtimePreviewTextureCache,
-    media_provider: &'a mut MediaIoFrameProvider,
+    media_provider: &'a mut SchedulerFrameProvider,
 }
 
 impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
@@ -1280,19 +1391,21 @@ mod realtime_preview_bindings {
         RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
         RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
         RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
-        RealtimePreviewSurfaceBindingKind,
+        RealtimePreviewSurfaceBindingKind, SchedulerFrameProvider, StaticImageFrame,
     };
     use crate::native_preview_presenter::{
         NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
     };
     use draft_model::{
-        AudioPreviewPlaybackStatus, Draft, Material, MaterialKind, MaterialMetadata, Microseconds,
-        RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+        AudioPreviewPlaybackStatus, Draft, Material, MaterialId, MaterialKind, MaterialMetadata,
+        Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track,
+        TrackKind,
     };
     use realtime_preview_runtime::{
-        PlaybackGeneration, PreviewRequestMode, RealtimePreviewAudioSyncState,
-        RealtimePreviewFallbackReason,
+        MediaIoFrameProvider, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
+        PreviewRequestMode, RealtimePreviewAudioSyncState, RealtimePreviewFallbackReason,
     };
+    use std::collections::BTreeMap;
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -1453,6 +1566,40 @@ mod realtime_preview_bindings {
         );
         assert!(pause.playback_generation < stop.playback_generation);
         assert!(seek.playback_generation < pause.playback_generation);
+    }
+
+    #[test]
+    fn scheduler_frame_provider_serves_static_image_inputs_without_media_io() {
+        let image_id = MaterialId::new("image-material");
+        let mut static_images = BTreeMap::new();
+        static_images.insert(
+            image_id.clone(),
+            StaticImageFrame {
+                material_id: image_id.clone(),
+                width: 2,
+                height: 1,
+                pixels: vec![255, 0, 0, 255, 0, 255, 0, 255],
+            },
+        );
+        let media_io = MediaIoFrameProvider::new(Box::new(PanicMediaReader));
+        let mut provider = SchedulerFrameProvider::new(media_io, static_images);
+
+        let input = provider
+            .frame_for(
+                &image_id,
+                Microseconds::new(123_456),
+                PlaybackGeneration::new(9),
+            )
+            .expect("static image material should produce a compositor input");
+        let PreviewFrameInput::StaticImage(frame) = input else {
+            panic!("expected static image compositor input");
+        };
+        assert_eq!(frame.material_id, image_id);
+        assert_eq!(frame.source_position, Microseconds::new(123_456));
+        assert_eq!(frame.playback_generation, PlaybackGeneration::new(9));
+        assert_eq!(frame.width, 2);
+        assert_eq!(frame.height, 1);
+        assert_eq!(frame.pixels, vec![255, 0, 0, 255, 0, 255, 0, 255]);
     }
 
     #[test]
@@ -1664,5 +1811,20 @@ mod realtime_preview_bindings {
         track.segments.push(segment);
         draft.tracks.push(track);
         draft
+    }
+
+    struct PanicMediaReader;
+
+    impl media_runtime::MediaReader for PanicMediaReader {
+        fn reader_name(&self) -> &'static str {
+            "panic-media-reader"
+        }
+
+        fn open(
+            &self,
+            _request: media_runtime::MediaOpenRequest,
+        ) -> Result<Box<dyn media_runtime::MediaSession>, media_runtime::MediaIoError> {
+            panic!("static image provider should not open media IO");
+        }
     }
 }

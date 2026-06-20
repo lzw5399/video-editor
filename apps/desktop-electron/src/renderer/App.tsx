@@ -1991,6 +1991,16 @@ export function App(): React.ReactElement {
   }
 
   function requestPreviewFrameAt(targetTime: number): void {
+    if (!showDeveloperDiagnostics) {
+      void (async () => {
+        const snapshotReady = await updateRealtimePreviewDraftSnapshot();
+        if (snapshotReady) {
+          await seekRealtimePreviewHost(targetTime);
+        }
+      })();
+      return;
+    }
+
     if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
       const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
       setWorkspace((current) => {

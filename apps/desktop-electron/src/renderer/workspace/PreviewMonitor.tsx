@@ -319,7 +319,7 @@ export function PreviewMonitor({
 
   useEffect(() => {
     const bridge = window.videoEditorRealtimePreviewHost;
-    if (bridge === undefined || !playbackRunning) {
+    if (bridge === undefined) {
       return;
     }
 
@@ -345,7 +345,7 @@ export function PreviewMonitor({
     };
 
     refresh();
-    const timer = window.setInterval(refresh, 66);
+    const timer = window.setInterval(refresh, playbackRunning ? 66 : 250);
     return () => {
       cancelled = true;
       window.clearInterval(timer);

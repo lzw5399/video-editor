@@ -71,6 +71,9 @@ const showDeveloperDiagnostics =
   process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
   process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
 const testObservationEnabled = process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1";
+const testCommandMocksEnabled =
+  process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1" &&
+  process.env.VIDEO_EDITOR_TEST_COMMAND_MOCKS !== "0";
 const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
@@ -304,6 +307,8 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES", "--video-editor-test-open-material-files=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_COMMAND_MOCKS", "--video-editor-test-command-mocks=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
 }
 
 function setEnvFromArgument(envName: string, prefix: string): void {
@@ -329,7 +334,7 @@ function decodeTestArgumentValue(value: string | undefined): string | undefined 
 }
 
 function recordTestExecuteCommand(command: CommandEnvelope): void {
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testObservationEnabled) {
     return;
   }
 
@@ -424,7 +429,7 @@ function maybeBuildTestVisualCommandResponse(command: CommandEnvelope): CommandR
     return null;
   }
 
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testCommandMocksEnabled) {
     return null;
   }
 
@@ -481,7 +486,7 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
     return null;
   }
 
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testCommandMocksEnabled) {
     return null;
   }
 
@@ -591,7 +596,7 @@ function maybeBuildTestTimelineAudioCommandResponse(command: CommandEnvelope): C
     return null;
   }
 
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testCommandMocksEnabled) {
     return null;
   }
 
@@ -687,7 +692,7 @@ function maybeBuildTestKeyframeCommandResponse(command: CommandEnvelope): Comman
     return null;
   }
 
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testCommandMocksEnabled) {
     return null;
   }
 
@@ -851,7 +856,7 @@ function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandR
     return null;
   }
 
-  if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS !== "1") {
+  if (!testCommandMocksEnabled) {
     return null;
   }
 
