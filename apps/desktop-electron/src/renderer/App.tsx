@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
@@ -123,6 +123,7 @@ import {
   type WorkspaceState
 } from "./viewModel";
 import { WorkspaceShell } from "./workspace/WorkspaceShell";
+import type { RealtimePreviewHostState } from "./workspace/PreviewMonitor";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -249,10 +250,6 @@ export function App(): React.ReactElement {
   const pendingAutoPreviewTimeRef = useRef<number | null>(null);
   const autoPreviewRetryTimerRef = useRef<number | null>(null);
   const autoPreviewRetryCountRef = useRef(0);
-  const playbackClockRef = useRef<{ lastTimestampMs: number | null; accumulatedUs: number }>({
-    lastTimestampMs: null,
-    accumulatedUs: 0
-  });
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -265,55 +262,6 @@ export function App(): React.ReactElement {
   useEffect(() => {
     flushPendingAutoPreviewFrame();
   }, [workspace.pendingCommand, workspace.runtimeDiagnostics.canPreview]);
-
-  useEffect(() => {
-    if (!playbackRunning) {
-      playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
-      return;
-    }
-
-    let animationFrame: number | null = null;
-
-    const tick = (timestampMs: number) => {
-      const clock = playbackClockRef.current;
-      if (clock.lastTimestampMs === null) {
-        clock.lastTimestampMs = timestampMs;
-      }
-
-      const elapsedUs = Math.max(0, Math.round((timestampMs - clock.lastTimestampMs) * 1000));
-      clock.lastTimestampMs = timestampMs;
-      clock.accumulatedUs += elapsedUs;
-
-      const frameStepUs = frameDurationUs(workspaceRef.current.draft.canvasConfig);
-      const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
-      if (sequenceDurationUs <= 0) {
-        setPlaybackRunning(false);
-        return;
-      }
-
-      if (clock.accumulatedUs >= frameStepUs) {
-        const elapsedFrames = Math.max(1, Math.floor(clock.accumulatedUs / frameStepUs));
-        clock.accumulatedUs %= frameStepUs;
-        const targetTime = Math.min(sequenceDurationUs, playheadRef.current + elapsedFrames * frameStepUs);
-        setPlayheadUs(targetTime);
-
-        if (targetTime >= sequenceDurationUs) {
-          void stopRealtimePreviewHost();
-          setPlaybackRunning(false);
-          return;
-        }
-      }
-
-      animationFrame = window.requestAnimationFrame(tick);
-    };
-
-    animationFrame = window.requestAnimationFrame(tick);
-    return () => {
-      if (animationFrame !== null) {
-        window.cancelAnimationFrame(animationFrame);
-      }
-    };
-  }, [playbackRunning]);
 
   useEffect(() => {
     return () => {
@@ -1810,7 +1758,6 @@ export function App(): React.ReactElement {
         return;
       }
 
-      playbackClockRef.current = { lastTimestampMs: null, accumulatedUs: 0 };
       setPlaybackRunning(true);
       await waitForNextPaint();
       const playbackReady = await playRealtimePreviewHost();
@@ -1830,6 +1777,34 @@ export function App(): React.ReactElement {
     playheadRef.current = 0;
     requestPreviewFrameAt(0);
   }
+
+  const handleRealtimePreviewHostStateChange = useCallback((hostState: RealtimePreviewHostState): void => {
+    if (!hostState.productReady || hostState.telemetry === null) {
+      return;
+    }
+
+    const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+    if (sequenceDurationUs <= 0) {
+      return;
+    }
+
+    const presentedTime = Math.min(
+      sequenceDurationUs,
+      Math.max(
+        hostState.telemetry.targetTimeMicroseconds,
+        hostState.contentEvidence?.targetTimeMicroseconds ?? 0
+      )
+    );
+    const nextPlayhead = normalizePlayheadTime(presentedTime);
+    setPlayheadUs(nextPlayhead);
+    playheadRef.current = nextPlayhead;
+
+    if (nextPlayhead >= sequenceDurationUs && playbackRunning) {
+      void handlePauseAudioPreview();
+      void pauseRealtimePreviewHost();
+      setPlaybackRunning(false);
+    }
+  }, [playbackRunning]);
 
   async function updateRealtimePreviewDraftSnapshot(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
@@ -2308,6 +2283,7 @@ export function App(): React.ReactElement {
       materialPath={materialPath}
       playheadUs={playheadUs}
       playbackRunning={playbackRunning}
+      onRealtimePreviewHostStateChange={handleRealtimePreviewHostStateChange}
       onCategoryChange={setActiveCategory}
       onBundlePathChange={setBundlePath}
       onMaterialPathChange={setMaterialPath}

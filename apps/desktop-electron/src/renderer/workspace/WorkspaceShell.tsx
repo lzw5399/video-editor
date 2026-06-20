@@ -10,7 +10,7 @@ import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, SegmentVisual } from "../../generated/Draft";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
-import { PreviewMonitor } from "./PreviewMonitor";
+import { PreviewMonitor, type RealtimePreviewHostState } from "./PreviewMonitor";
 import { Timeline } from "./Timeline";
 
 type WorkspaceShellProps = {
@@ -21,6 +21,7 @@ type WorkspaceShellProps = {
   materialPath: string;
   playheadUs: number;
   playbackRunning: boolean;
+  onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
   onCategoryChange: (category: WorkspaceCategory) => void;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
@@ -87,6 +88,7 @@ export function WorkspaceShell({
   materialPath,
   playheadUs,
   playbackRunning,
+  onRealtimePreviewHostStateChange,
   onCategoryChange,
   onBundlePathChange,
   onMaterialPathChange,
@@ -218,6 +220,7 @@ export function WorkspaceShell({
           pending={workspace.pendingCommand !== null}
           playheadUs={playheadUs}
           playbackRunning={playbackRunning}
+          onRealtimePreviewHostStateChange={onRealtimePreviewHostStateChange}
           onPlayheadChange={onPlayheadChange}
           onTogglePlayback={onTogglePlayback}
           onStopPlayback={onStopPlayback}

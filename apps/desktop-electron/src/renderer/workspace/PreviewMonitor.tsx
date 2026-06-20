@@ -49,6 +49,7 @@ type PreviewMonitorProps = {
   pending: boolean;
   playheadUs?: number;
   playbackRunning: boolean;
+  onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
@@ -92,7 +93,7 @@ type RealtimePreviewHostTelemetry = {
   playbackGeneration: number;
 };
 
-type RealtimePreviewHostState = {
+export type RealtimePreviewHostState = {
   ok: boolean;
   productReady: boolean;
   hostAttached: boolean;
@@ -189,6 +190,7 @@ export function PreviewMonitor({
   pending,
   playheadUs = 0,
   playbackRunning,
+  onRealtimePreviewHostStateChange,
   onPlayheadChange,
   onTogglePlayback,
   onStopPlayback,
@@ -264,6 +266,7 @@ export function PreviewMonitor({
         void bridge.getTelemetry().then((state) => {
           if (!cancelled) {
             setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
           }
         });
         return;
@@ -275,12 +278,14 @@ export function PreviewMonitor({
         .then((state) => {
           if (!cancelled) {
             setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
           }
           return bridge.getTelemetry();
         })
         .then((state) => {
           if (!cancelled) {
             setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
           }
         })
         .catch(() => {
@@ -315,7 +320,7 @@ export function PreviewMonitor({
         window.cancelAnimationFrame(animationFrame);
       }
     };
-  }, []);
+  }, [onRealtimePreviewHostStateChange]);
 
   useEffect(() => {
     const bridge = window.videoEditorRealtimePreviewHost;
@@ -324,11 +329,17 @@ export function PreviewMonitor({
     }
 
     let cancelled = false;
+    let inFlight = false;
     const refresh = () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       void bridge.getTelemetry().then(
         (state) => {
           if (!cancelled) {
             setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
           }
         },
         () => {
@@ -341,16 +352,18 @@ export function PreviewMonitor({
             }));
           }
         }
-      );
+      ).finally(() => {
+        inFlight = false;
+      });
     };
 
     refresh();
-    const timer = window.setInterval(refresh, playbackRunning ? 66 : 250);
+    const timer = window.setInterval(refresh, playbackRunning ? 33 : 250);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [playbackRunning]);
+  }, [onRealtimePreviewHostStateChange, playbackRunning]);
 
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>

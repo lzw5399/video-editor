@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::Instant;
 
 use draft_model::{Draft, MaterialId, MaterialKind, Microseconds, RationalFrameRate};
 use media_runtime::{
@@ -229,13 +230,16 @@ impl RealtimePreviewBindingRegistry {
             .runtime
             .play(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.scheduler_mut(session_id)?
+            .start_playback(target_time, generation);
         let evidence = match self
             .scheduler_mut(session_id)?
-            .present_next_tick(target_time, generation)
+            .present_playback_tick(generation)
         {
             Ok(evidence) => evidence,
             Err(error) => {
                 let _ = self.runtime.pause(runtime_id);
+                self.scheduler_mut(session_id)?.pause_playback();
                 return Err(error);
             }
         };
@@ -254,6 +258,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
+        self.scheduler_mut(session_id)?.pause_playback();
         let generation = self
             .runtime
             .pause(runtime_id)
@@ -266,6 +271,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
+        self.scheduler_mut(session_id)?.stop_playback();
         let generation = self
             .runtime
             .stop(runtime_id)
@@ -340,17 +346,17 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<NativePreviewPresentationState, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let (clock_state, target_time, generation) = {
+        let (clock_state, generation) = {
             let clock = self
                 .runtime
                 .clock(runtime_id)
                 .map_err(RealtimePreviewBindingError::runtime)?;
-            (clock.state(), clock.position(), clock.generation())
+            (clock.state(), clock.generation())
         };
         if clock_state == PlaybackState::Playing {
             let evidence = self
                 .scheduler_mut(session_id)?
-                .present_next_tick(target_time, generation)?;
+                .present_playback_tick(generation)?;
             self.runtime
                 .record_presented_output(
                     runtime_id,
@@ -413,8 +419,17 @@ struct RealtimePreviewBindingScheduler {
     bundle_path: Option<PathBuf>,
     last_evidence: Option<RealtimePlaybackSchedulerEvidence>,
     next_tick_time: Microseconds,
+    playback_anchor: Option<BindingPlaybackAnchor>,
     #[cfg(test)]
     test_mock_surface_attached: bool,
+}
+
+#[derive(Debug, Clone)]
+struct BindingPlaybackAnchor {
+    started_at: Instant,
+    start_time: Microseconds,
+    playback_generation: PlaybackGeneration,
+    sequence_duration: Microseconds,
 }
 
 impl RealtimePreviewBindingScheduler {
@@ -427,6 +442,7 @@ impl RealtimePreviewBindingScheduler {
             bundle_path: None,
             last_evidence: None,
             next_tick_time: Microseconds::ZERO,
+            playback_anchor: None,
             #[cfg(test)]
             test_mock_surface_attached: false,
         }
@@ -523,20 +539,46 @@ impl RealtimePreviewBindingScheduler {
         self.bundle_path = bundle_path;
         self.last_evidence = None;
         self.next_tick_time = Microseconds::ZERO;
+        self.playback_anchor = None;
     }
 
     fn seek(&mut self, target_time: Microseconds) {
         self.next_tick_time = target_time;
         self.last_evidence = None;
+        self.playback_anchor = None;
     }
 
     fn detach_surface(&mut self) {
         self.surface_target = None;
         self.last_evidence = None;
+        self.playback_anchor = None;
         #[cfg(test)]
         {
             self.test_mock_surface_attached = false;
         }
+    }
+
+    fn start_playback(
+        &mut self,
+        start_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) {
+        self.playback_anchor = Some(BindingPlaybackAnchor {
+            started_at: Instant::now(),
+            start_time,
+            playback_generation,
+            sequence_duration: self.sequence_duration(),
+        });
+        self.next_tick_time = start_time;
+    }
+
+    fn pause_playback(&mut self) {
+        self.playback_anchor = None;
+    }
+
+    fn stop_playback(&mut self) {
+        self.playback_anchor = None;
+        self.next_tick_time = Microseconds::ZERO;
     }
 
     fn evidence(&self) -> Option<&RealtimePlaybackSchedulerEvidence> {
@@ -607,6 +649,34 @@ impl RealtimePreviewBindingScheduler {
             .map_err(scheduler_error)?;
         self.last_evidence = Some(evidence.clone());
         Ok(evidence)
+    }
+
+    fn present_playback_tick(
+        &mut self,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<RealtimePlaybackSchedulerEvidence, RealtimePreviewBindingError> {
+        let target_time = self.playback_target_time(playback_generation);
+        self.present_next_tick(target_time, playback_generation)
+    }
+
+    fn playback_target_time(&self, playback_generation: PlaybackGeneration) -> Microseconds {
+        let Some(anchor) = self.playback_anchor.as_ref() else {
+            return self.next_tick_time;
+        };
+        if anchor.playback_generation != playback_generation {
+            return self.next_tick_time;
+        }
+
+        let elapsed_us = u64::try_from(anchor.started_at.elapsed().as_micros()).unwrap_or(u64::MAX);
+        let target = anchor.start_time.get().saturating_add(elapsed_us);
+        Microseconds::new(target.min(anchor.sequence_duration.get()))
+    }
+
+    fn sequence_duration(&self) -> Microseconds {
+        self.draft_snapshot
+            .as_ref()
+            .map(sequence_duration)
+            .unwrap_or(Microseconds::ZERO)
     }
 
     fn build_media_provider(
@@ -1011,6 +1081,16 @@ fn native_surface_placement_from_runtime(
             height: rect.height.round() as i32,
         },
     }
+}
+
+fn sequence_duration(draft: &Draft) -> Microseconds {
+    draft
+        .tracks
+        .iter()
+        .flat_map(|track| track.segments.iter())
+        .filter_map(|segment| segment.target_timerange.checked_end())
+        .max()
+        .unwrap_or(Microseconds::ZERO)
 }
 
 fn scheduler_error(error: RealtimePlaybackSchedulerError) -> RealtimePreviewBindingError {
