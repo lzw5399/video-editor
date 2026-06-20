@@ -79,6 +79,43 @@ fn execute_command_rejects_unknown_command_with_structured_error() {
 }
 
 #[test]
+fn execute_command_saves_and_opens_project_bundle_through_standard_envelopes() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("command-project.veproj");
+    let draft = Draft::new("draft-command-project", "Command project");
+
+    let saved = execute_command(json!({
+        "command": "saveProjectBundle",
+        "payload": {
+            "kind": "saveProjectBundle",
+            "draft": draft,
+            "bundlePath": bundle_path.display().to_string()
+        },
+        "requestId": "req-save-project"
+    }))
+    .expect("save project command should return a JSON envelope");
+    assert_eq!(saved["ok"], true, "{saved:#}");
+    assert_eq!(saved["error"], Value::Null);
+    assert_eq!(saved["data"]["bundlePath"], bundle_path.display().to_string());
+    assert!(bundle_path.join("project.json").exists());
+
+    let opened = execute_command(json!({
+        "command": "openProjectBundle",
+        "payload": {
+            "kind": "openProjectBundle",
+            "bundlePath": bundle_path.display().to_string()
+        },
+        "requestId": "req-open-project"
+    }))
+    .expect("open project command should return a JSON envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+    assert_eq!(opened["error"], Value::Null);
+    assert_eq!(opened["data"]["bundlePath"], bundle_path.display().to_string());
+    assert_eq!(opened["data"]["draft"]["draftId"], "draft-command-project");
+    assert_eq!(opened["data"]["warnings"], json!([]));
+}
+
+#[test]
 fn execute_command_imports_and_lists_materials_through_standard_envelopes() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");

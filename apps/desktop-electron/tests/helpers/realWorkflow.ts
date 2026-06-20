@@ -1,8 +1,13 @@
 import { expect, type ElectronApplication, type Page } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
+import { join } from "node:path";
+import { promisify } from "node:util";
 
 import type { CommandName } from "../../src/generated/CommandEnvelope";
 import type { Phase6MediaFixtures } from "./mediaFixtures";
+
+const execFileAsync = promisify(execFile);
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -23,18 +28,25 @@ export async function runRealImportPreviewExportWorkflow(
 ): Promise<RealWorkflowResult> {
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
   await expect(page.getByRole("button", { name: "请求预览帧" })).toBeEnabled({ timeout: 20_000 });
+  await setBundlePath(page, fixtures.bundlePath);
 
   await importMaterials(page, app, [
     { name: fixtures.videoName },
+    { name: fixtures.imageName },
     { name: fixtures.audioName }
   ]);
 
-  await addVideoSegment(page, app, fixtures.videoName);
+  await addVisualSegment(page, app, fixtures.videoName);
+  await addTextSegment(page, app, fixtures.expectedTextContent);
   await addAudioSegment(page, app, fixtures.audioName);
+  await waitForCommandCount(page, app, "saveProjectBundle", 3);
+  await page.getByLabel("预览时间").fill("0");
 
   const framePath = await requestPreviewFrame(page, app);
   const segmentPath = await requestPreviewSegment(page, app);
-  await exportDraft(page, app, fixtures.outputPath, fixtures.expectedResolutionLabel);
+  await exportDraft(page, app, fixtures);
+  await addVisualSegment(page, app, fixtures.imageName);
+  await waitForCommandCount(page, app, "saveProjectBundle", 4);
 
   const calls = await readExecuteCommandCalls(app);
   expect(calls.map((call) => call.command)).toEqual(
@@ -42,7 +54,9 @@ export async function runRealImportPreviewExportWorkflow(
       "probeRuntimeCapabilities",
       "importMaterial",
       "addSegment",
+      "addTextSegment",
       "addAudioSegment",
+      "saveProjectBundle",
       "requestPreviewFrame",
       "requestPreviewSegment",
       "startExport",
@@ -56,6 +70,23 @@ export async function runRealImportPreviewExportWorkflow(
     segmentPath,
     outputPath: fixtures.outputPath
   };
+}
+
+export async function assertReopenedProjectState(page: Page, fixtures: Phase6MediaFixtures): Promise<void> {
+  await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+  await expect(page.getByLabel("草稿包路径")).toHaveValue(fixtures.bundlePath);
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.videoName}` })).toContainText("可用", { timeout: 20_000 });
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.imageName}` })).toContainText("可用", { timeout: 20_000 });
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.audioName}` })).toContainText("可用", { timeout: 20_000 });
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.videoName)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.imageName)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.audioName)}`) })).toBeVisible();
+  const textSegment = page.getByRole("button", { name: /片段 默认文字/ });
+  await expect(textSegment).toBeVisible();
+  await textSegment.click();
+  await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
+    fixtures.expectedTextContent
+  );
 }
 
 export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
@@ -80,12 +111,31 @@ async function importMaterials(
   }
 }
 
-async function addVideoSegment(page: Page, app: ElectronApplication, videoName: string): Promise<void> {
+async function setBundlePath(page: Page, bundlePath: string): Promise<void> {
+  const input = page.getByLabel("草稿包路径");
+  await expect(input).toBeVisible();
+  await input.fill(bundlePath);
+  await expect(input).toHaveValue(bundlePath);
+}
+
+async function addVisualSegment(page: Page, app: ElectronApplication, materialName: string): Promise<void> {
   const nextCount = (await countCommand(app, "addSegment")) + 1;
-  await page.locator(".compact-select select").selectOption({ label: videoName });
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
+  await page.locator(".compact-select select").selectOption({ label: materialName });
   await page.getByRole("button", { name: "添加片段" }).click();
   await waitForCommandCount(page, app, "addSegment", nextCount);
-  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(videoName)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
+}
+
+async function addTextSegment(page: Page, app: ElectronApplication, content: string): Promise<void> {
+  const nextCount = (await countCommand(app, "addTextSegment")) + 1;
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+  await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
+  await page.getByLabel("默认文字").getByLabel("时长（微秒）").fill("3000000");
+  await page.getByRole("button", { name: "添加文字", exact: true }).click();
+  await waitForCommandCount(page, app, "addTextSegment", nextCount);
+  await expect(page.getByRole("button", { name: /片段 默认文字/ })).toBeVisible();
+  await expect(page.getByLabel("预览文字")).toContainText(content);
 }
 
 async function addAudioSegment(page: Page, app: ElectronApplication, audioName: string): Promise<void> {
@@ -123,15 +173,33 @@ async function requestPreviewSegment(page: Page, app: ElectronApplication): Prom
 async function exportDraft(
   page: Page,
   app: ElectronApplication,
-  outputPath: string,
-  expectedResolutionLabel: string
+  fixtures: Phase6MediaFixtures
 ): Promise<void> {
   const nextStartCount = (await countCommand(app, "startExport")) + 1;
+  const outputPath = fixtures.outputPath;
   await page.getByLabel("输出路径").fill(outputPath);
   await expect(page.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
   await page.getByRole("button", { name: "开始导出" }).click();
   await waitForCommandCount(page, app, "startExport", nextStartCount);
-  await expect(page.getByRole("button", { name: "查询导出状态" })).toBeEnabled({ timeout: 10_000 });
+  const statusButton = page.getByRole("button", { name: "查询导出状态" });
+  try {
+    await expect(statusButton).toBeEnabled({ timeout: 10_000 });
+  } catch (error) {
+    const calls = await readExecuteCommandCalls(app);
+    const progressText = (await page.getByLabel("导出进度").textContent()) ?? "";
+    const logText = (await page.getByLabel("导出日志").textContent()) ?? "";
+    const validationText = (await page.getByLabel("输出校验").textContent()) ?? "";
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        message,
+        `Export progress: ${progressText}`,
+        `Export log: ${logText}`,
+        `Export validation: ${validationText}`,
+        `Recorded commands: ${JSON.stringify(calls)}`
+      ].join("\n")
+    );
+  }
 
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const progressText = (await page.getByLabel("导出进度").textContent()) ?? "";
@@ -146,9 +214,10 @@ async function exportDraft(
   }
 
   await expect(page.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
-  await expect(page.getByLabel("输出校验")).toContainText(expectedResolutionLabel);
+  await expect(page.getByLabel("输出校验")).toContainText(fixtures.expectedResolutionLabel);
   await expect(page.getByLabel("输出校验")).toContainText("含音频");
   await expectFileExists(outputPath);
+  await expectExportMedia(outputPath, fixtures);
 }
 
 async function waitForCommandCount(
@@ -183,6 +252,32 @@ async function expectFileExists(path: string): Promise<void> {
     () => true,
     () => false
   )).resolves.toBe(true);
+}
+
+async function expectExportMedia(path: string, fixtures: Phase6MediaFixtures): Promise<void> {
+  const ffprobePath = process.env.VE_FFPROBE_PATH ?? "ffprobe";
+  const { stdout } = await execFileAsync(
+    ffprobePath,
+    ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", path],
+    {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024
+    }
+  );
+  const probe = JSON.parse(stdout) as {
+    format?: { duration?: string };
+    streams?: Array<{ codec_type?: string; width?: number; height?: number; avg_frame_rate?: string }>;
+  };
+  const videoStream = probe.streams?.find((stream) => stream.codec_type === "video");
+  const audioStream = probe.streams?.find((stream) => stream.codec_type === "audio");
+  expect(videoStream?.width).toBe(fixtures.expectedWidth);
+  expect(videoStream?.height).toBe(fixtures.expectedHeight);
+  expect(videoStream?.avg_frame_rate).toBe(fixtures.expectedFrameRate);
+  expect(audioStream, "export should contain an audio stream").toBeDefined();
+  const duration = Number(probe.format?.duration ?? "0");
+  expect(duration).toBeGreaterThan(fixtures.expectedDurationSeconds - 0.35);
+  expect(duration).toBeLessThan(fixtures.expectedDurationSeconds + 0.35);
+  await expectFileExists(join(fixtures.bundlePath, "project.json"));
 }
 
 function escapeRegex(value: string): string {

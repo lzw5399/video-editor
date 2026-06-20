@@ -13,8 +13,10 @@ import type {
   ImportMaterialResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
+  OpenProjectBundleResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
+  SaveProjectBundleResponse,
   TimelineCommandResponse,
   WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
@@ -56,6 +58,7 @@ import {
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSegmentCommand,
+  buildOpenProjectBundleCommand,
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
   buildPauseAudioPreviewCommand,
@@ -69,6 +72,7 @@ import {
   buildResumeArtifactGenerationCommand,
   buildRetryArtifactGenerationCommand,
   buildRunArtifactGarbageCollectionCommand,
+  buildSaveProjectBundleCommand,
   buildSelectTimelineSegmentsCommand,
   buildSeekAudioPreviewCommand,
   buildSelectAudioOutputDeviceCommand,
@@ -215,6 +219,7 @@ declare global {
   interface Window {
     videoEditorAppConfig?: {
       workspaceFixture?: WorkspaceStartupFixture;
+      openProjectBundlePath?: string;
       showDeveloperDiagnostics?: boolean;
     };
     videoEditorCore: VideoEditorCoreApi;
@@ -225,11 +230,14 @@ declare global {
 export function App(): React.ReactElement {
   const startupFixture = readWorkspaceStartupFixture();
   const showDeveloperDiagnostics = window.videoEditorAppConfig?.showDeveloperDiagnostics === true;
+  const startupOpenProjectBundlePath = window.videoEditorAppConfig?.openProjectBundlePath;
   const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
     createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture))
   );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
-  const [bundlePath, setBundlePath] = useState(startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj");
+  const [bundlePath, setBundlePath] = useState(
+    startupOpenProjectBundlePath ?? (startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj")
+  );
   const [materialPath, setMaterialPath] = useState(startupFixture === "demo" ? "/tmp/demo-material.mp4" : "");
   const [playheadUs, setPlayheadUs] = useState(0);
   const [playbackRunning, setPlaybackRunning] = useState(false);
@@ -373,21 +381,19 @@ export function App(): React.ReactElement {
     let cancelled = false;
 
     async function bootstrapWorkspace(): Promise<void> {
-      const [ping, version, materialList] = await Promise.all([
+      const [ping, version] = await Promise.all([
         window.videoEditorCore.ping(),
-        window.videoEditorCore.version(),
-        window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(workspaceRef.current.draft))
+        window.videoEditorCore.version()
       ]);
 
       if (cancelled) {
         return;
       }
 
-      if (!ping.ok || !version.ok || !materialList.ok) {
+      if (!ping.ok || !version.ok) {
         const message =
           ping.error?.message ??
           version.error?.message ??
-          materialList.error?.message ??
           "剪辑核心连接失败";
         setWorkspace((current) => ({
           ...current,
@@ -400,17 +406,70 @@ export function App(): React.ReactElement {
         return;
       }
 
-      setWorkspace((current) => ({
-        ...current,
-        materials: materialList.data?.materials ?? current.materials,
-        bindingStatus: {
-          kind: "ready",
-          label: `剪辑核心已连接 ${version.data?.coreVersion ?? "0.0.0"} / 合约 ${
-            version.data?.contractVersion ?? "0.0.0"
-          }`
-        },
-        commandError: null
-      }));
+      const openBundlePath = window.videoEditorAppConfig?.openProjectBundlePath?.trim();
+      const openedProject =
+        openBundlePath === undefined || openBundlePath.length === 0
+          ? null
+          : await window.videoEditorCore.executeCommand<OpenProjectBundleResponse>(
+              buildOpenProjectBundleCommand(openBundlePath)
+            );
+      if (cancelled) {
+        return;
+      }
+
+      if (openedProject !== null && (!openedProject.ok || openedProject.data === null)) {
+        const message = openedProject.error?.message ?? "打开草稿失败";
+        setWorkspace((current) => ({
+          ...current,
+          bindingStatus: {
+            kind: "error",
+            label: formatCommandError(message)
+          },
+          commandError: formatCommandError(message)
+        }));
+        return;
+      }
+
+      const openedDraft = openedProject?.data?.draft ?? null;
+      const materialList = await window.videoEditorCore.executeCommand<ListMaterialsResponse>(
+        buildListMaterialsCommand(openedDraft ?? workspaceRef.current.draft)
+      );
+      if (cancelled) {
+        return;
+      }
+
+      if (!materialList.ok) {
+        const message = materialList.error?.message ?? "素材列表读取失败";
+        setWorkspace((current) => ({
+          ...current,
+          bindingStatus: {
+            kind: "error",
+            label: formatCommandError(message)
+          },
+          commandError: formatCommandError(message)
+        }));
+        return;
+      }
+
+      setWorkspace((current) => {
+        const base = openedDraft === null ? current : createInitialWorkspaceState(openedDraft);
+        const next = {
+          ...base,
+          materials: materialList.data?.materials ?? base.materials,
+          bindingStatus: {
+            kind: "ready" as const,
+            label: `剪辑核心已连接 ${version.data?.coreVersion ?? "0.0.0"} / 合约 ${
+              version.data?.contractVersion ?? "0.0.0"
+            }`
+          },
+          commandError: openedProject?.data?.warnings.length ? commandErrorMessage(openedProject.data.warnings.join("；")) : null
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      if (openedProject?.data !== undefined) {
+        setBundlePath(openedProject.data.bundlePath);
+      }
 
       void handleGetArtifactStatus();
       void handleProbeRuntimeCapabilities();
@@ -572,6 +631,10 @@ export function App(): React.ReactElement {
       return next;
     });
 
+    if (executed !== null && executed.result.ok && executed.result.data !== null) {
+      await persistDraftSnapshot(executed.result.data.draft);
+    }
+
     if (
       executed !== null &&
       executed.result.ok &&
@@ -582,6 +645,24 @@ export function App(): React.ReactElement {
     }
 
     return executed;
+  }
+
+  async function persistDraftSnapshot(draft: Draft): Promise<void> {
+    const result = await window.videoEditorCore.executeCommand<SaveProjectBundleResponse>(
+      buildSaveProjectBundleCommand(draft, bundlePath)
+    );
+    if (!result.ok || result.data === null) {
+      const message = commandErrorMessage(result);
+      const next = {
+        ...workspaceRef.current,
+        commandError: message
+      };
+      workspaceRef.current = next;
+      setWorkspace(next);
+      return;
+    }
+
+    setBundlePath(result.data.bundlePath);
   }
 
   async function executePreviewCommand(
@@ -1600,31 +1681,36 @@ export function App(): React.ReactElement {
   }
 
   function handleUpdateDraftCanvasConfig(canvasConfig: DraftCanvasConfig): void {
-    void executeDraftCommand<TimelineCommandResponse>(
-      (current) => buildUpdateDraftCanvasConfigCommand(current, canvasConfig),
-      "应用草稿参数",
-      (current, result) => {
-        if (!result.ok || result.data === null) {
+    void (async () => {
+      const executed = await executeDraftCommand<TimelineCommandResponse>(
+        (current) => buildUpdateDraftCanvasConfigCommand(current, canvasConfig),
+        "应用草稿参数",
+        (current, result) => {
+          if (!result.ok || result.data === null) {
+            return {
+              ...current,
+              pendingCommand: null,
+              commandError: canvasCommandErrorMessage(result)
+            };
+          }
+
           return {
             ...current,
+            draft: result.data.draft,
+            commandState: result.data.commandState,
+            selection: result.data.selection,
+            materials: result.data.draft.materials,
+            preview: clearDerivedPreviewState(current.preview),
+            export: clearDerivedExportState(current.export),
             pendingCommand: null,
-            commandError: canvasCommandErrorMessage(result)
+            commandError: null
           };
         }
-
-        return {
-          ...current,
-          draft: result.data.draft,
-          commandState: result.data.commandState,
-          selection: result.data.selection,
-          materials: result.data.draft.materials,
-          preview: clearDerivedPreviewState(current.preview),
-          export: clearDerivedExportState(current.export),
-          pendingCommand: null,
-          commandError: null
-        };
+      );
+      if (executed !== null && executed.result.ok && executed.result.data !== null) {
+        await persistDraftSnapshot(executed.result.data.draft);
       }
-    );
+    })();
   }
 
   function handleUpdateSelectedSegmentVisual(visual: SegmentVisual): void {

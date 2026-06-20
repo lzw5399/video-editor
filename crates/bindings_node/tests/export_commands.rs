@@ -414,6 +414,18 @@ if [ "$1" = "-version" ]; then
   printf 'ffmpeg version export-test\n'
   exit 0
 fi
+for arg in "$@"; do
+  if [ "$arg" = "-encoders" ]; then
+    printf ' V..... libx264 H.264 encoder\n'
+    printf ' A..... aac AAC encoder\n'
+    exit 0
+  fi
+  if [ "$arg" = "-filters" ]; then
+    printf ' ... ass Render ASS subtitles\n'
+    printf ' ... subtitles Render text subtitles\n'
+    exit 0
+  fi
+done
 last=""
 for arg in "$@"; do
   last="$arg"
@@ -437,6 +449,18 @@ if [ "$1" = "-version" ]; then
   printf 'ffmpeg version export-test\n'
   exit 0
 fi
+for arg in "$@"; do
+  if [ "$arg" = "-encoders" ]; then
+    printf ' V..... libx264 H.264 encoder\n'
+    printf ' A..... aac AAC encoder\n'
+    exit 0
+  fi
+  if [ "$arg" = "-filters" ]; then
+    printf ' ... ass Render ASS subtitles\n'
+    printf ' ... subtitles Render text subtitles\n'
+    exit 0
+  fi
+done
 printf 'out_time_us=100000\n'
 printf 'export running\n' >&2
 sleep 5

@@ -16,6 +16,7 @@ const allowedRendererUrl = readAllowedRendererUrl();
 if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.location.href, allowedRendererUrl)) {
   contextBridge.exposeInMainWorld("videoEditorAppConfig", {
     workspaceFixture: readWorkspaceFixture(),
+    openProjectBundlePath: readOpenProjectBundlePath(),
     showDeveloperDiagnostics: process.argv.includes("--video-editor-developer-diagnostics=1")
   });
   contextBridge.exposeInMainWorld("videoEditorCore", {
@@ -54,6 +55,15 @@ function readAllowedRendererUrl(): string | undefined {
 
 function readWorkspaceFixture(): "demo" | "blank" {
   return process.argv.includes("--video-editor-workspace-fixture=demo") ? "demo" : "blank";
+}
+
+function readOpenProjectBundlePath(): string | undefined {
+  const prefix = "--video-editor-test-open-project-bundle=";
+  const raw = process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
+  if (raw === undefined || raw.trim().length === 0) {
+    return undefined;
+  }
+  return decodeURIComponent(raw);
 }
 
 function isAllowedRendererLocation(targetHref: string, allowedHref: string): boolean {

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { generatePhase6MediaFixtures } from "./helpers/mediaFixtures";
 import { launchPackagedApp } from "./helpers/packagedApp";
-import { runRealImportPreviewExportWorkflow } from "./helpers/realWorkflow";
+import { assertReopenedProjectState, runRealImportPreviewExportWorkflow } from "./helpers/realWorkflow";
 
 const REAL_RUNTIME_TEST_ENV: NodeJS.ProcessEnv = {
   VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
@@ -24,13 +24,23 @@ test("dev no-mock import-preview-export workflow", async () => {
   } finally {
     await app.close();
   }
+
+  const reopened = await launchDevApp(fixtures, {
+    VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE: fixtures.bundlePath,
+    VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([])
+  });
+  try {
+    await assertReopenedProjectState(reopened.page, fixtures);
+  } finally {
+    await reopened.app.close();
+  }
 });
 
 test("packaged no-mock import-preview-export workflow", async () => {
   const fixtures = await generatePhase6MediaFixtures();
   const { app, page } = await launchPackagedApp({
     ...REAL_RUNTIME_TEST_ENV,
-    VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.audioPath])
+    VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.imagePath, fixtures.audioPath])
   });
 
   try {
@@ -38,15 +48,30 @@ test("packaged no-mock import-preview-export workflow", async () => {
   } finally {
     await app.close();
   }
+
+  const reopened = await launchPackagedApp({
+    ...REAL_RUNTIME_TEST_ENV,
+    VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([]),
+    VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE: fixtures.bundlePath
+  });
+  try {
+    await assertReopenedProjectState(reopened.page, fixtures);
+  } finally {
+    await reopened.app.close();
+  }
 });
 
-async function launchDevApp(fixtures: Awaited<ReturnType<typeof generatePhase6MediaFixtures>>): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchDevApp(
+  fixtures: Awaited<ReturnType<typeof generatePhase6MediaFixtures>>,
+  env: NodeJS.ProcessEnv = {}
+): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
       ...REAL_RUNTIME_TEST_ENV,
-      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.audioPath])
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.imagePath, fixtures.audioPath]),
+      ...env
     }
   });
   const page = await app.firstWindow();

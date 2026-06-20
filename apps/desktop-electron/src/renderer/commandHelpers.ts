@@ -20,6 +20,7 @@ import type {
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
   MoveSegmentCommandPayload,
+  OpenProjectBundleCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
   RedoTimelineEditCommandPayload,
@@ -29,6 +30,7 @@ import type {
   RequestPreviewSegmentCommandPayload,
   RefreshArtifactStatusCommandPayload,
   SelectTimelineSegmentsCommandPayload,
+  SaveProjectBundleCommandPayload,
   SetSegmentKeyframeCommandPayload,
   SetTrackLockCommandPayload,
   SetTrackVisibilityCommandPayload,
@@ -93,6 +95,25 @@ type ImportMaterialOptions = {
   displayName?: string | null;
   materialKindHint?: MaterialKind | null;
 };
+
+export function buildOpenProjectBundleCommand(bundlePath: string): CommandEnvelope {
+  const payload = {
+    kind: "openProjectBundle",
+    bundlePath
+  } satisfies OpenProjectBundleCommandPayload & { kind: "openProjectBundle" };
+
+  return envelope("openProjectBundle", payload);
+}
+
+export function buildSaveProjectBundleCommand(draft: Draft, bundlePath: string): CommandEnvelope {
+  const payload = {
+    kind: "saveProjectBundle",
+    draft,
+    bundlePath
+  } satisfies SaveProjectBundleCommandPayload & { kind: "saveProjectBundle" };
+
+  return envelope("saveProjectBundle", payload);
+}
 
 export function buildImportMaterialCommand(options: ImportMaterialOptions): CommandEnvelope {
   const payload = {

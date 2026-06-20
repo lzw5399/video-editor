@@ -78,7 +78,8 @@ const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
   ...(testObservationEnabled ? ["--video-editor-test-observations=1"] : []),
-  ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : [])
+  ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : []),
+  ...testRendererArgument("VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE", "--video-editor-test-open-project-bundle=")
 ];
 
 ipcMain.handle("core:ping", (event) => {
@@ -305,10 +306,16 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_RECORD_COMMANDS", "--video-editor-test-record-commands=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS", "--video-editor-test-show-developer-diagnostics=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES", "--video-editor-test-open-material-files=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE", "--video-editor-test-open-project-bundle=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_COMMAND_MOCKS", "--video-editor-test-command-mocks=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
+}
+
+function testRendererArgument(envName: string, prefix: string): string[] {
+  const value = process.env[envName];
+  return value === undefined || value.trim().length === 0 ? [] : [`${prefix}${encodeURIComponent(value)}`];
 }
 
 function setEnvFromArgument(envName: string, prefix: string): void {

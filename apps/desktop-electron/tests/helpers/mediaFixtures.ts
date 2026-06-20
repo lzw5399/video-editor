@@ -1,90 +1,56 @@
-import { execFile } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE6_RESULTS_DIR = join(REPO_ROOT, "test-results", "phase6");
+const MEDIA_FIXTURE_DIR = join(process.cwd(), "tests", "fixtures", "media");
 
 export type Phase6MediaFixtures = {
   rootDir: string;
   bundlePath: string;
   videoPath: string;
+  imagePath: string;
   audioPath: string;
   outputPath: string;
   videoName: string;
+  imageName: string;
   audioName: string;
   expectedResolutionLabel: string;
+  expectedWidth: number;
+  expectedHeight: number;
+  expectedFrameRate: string;
+  expectedDurationSeconds: number;
+  expectedTextContent: string;
 };
 
 export async function generatePhase6MediaFixtures(): Promise<Phase6MediaFixtures> {
   const rootDir = join(PHASE6_RESULTS_DIR, `workflow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
-  const mediaDir = join(rootDir, "external-media");
   const exportDir = join(rootDir, "exports");
   const bundlePath = join(rootDir, "phase6-real-workflow.veproj");
-  const videoPath = join(mediaDir, "phase6-video.mp4");
-  const audioPath = join(mediaDir, "phase6-bgm.wav");
+  const videoPath = join(MEDIA_FIXTURE_DIR, "p0-moving-testsrc.mp4");
+  const imagePath = join(MEDIA_FIXTURE_DIR, "p0-overlay-testsrc.png");
+  const audioPath = join(MEDIA_FIXTURE_DIR, "p0-tone.wav");
   const outputPath = join(exportDir, "phase6-export.mp4");
 
-  await mkdir(mediaDir, { recursive: true });
   await mkdir(exportDir, { recursive: true });
   await mkdir(bundlePath, { recursive: true });
   await rm(outputPath, { force: true });
-
-  await runFfmpeg([
-    "-hide_banner",
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    "color=c=0x1f6feb:size=160x90:rate=30:duration=2",
-    "-an",
-    "-c:v",
-    "mpeg4",
-    "-q:v",
-    "4",
-    "-pix_fmt",
-    "yuv420p",
-    videoPath
-  ]);
-
-  await runFfmpeg([
-    "-hide_banner",
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    "sine=frequency=660:sample_rate=44100:duration=2",
-    "-ac",
-    "1",
-    "-c:a",
-    "pcm_s16le",
-    audioPath
-  ]);
 
   return {
     rootDir,
     bundlePath,
     videoPath,
+    imagePath,
     audioPath,
     outputPath,
     videoName: basename(videoPath),
+    imageName: basename(imagePath),
     audioName: basename(audioPath),
-    expectedResolutionLabel: "160x90"
+    expectedResolutionLabel: "320x180",
+    expectedWidth: 320,
+    expectedHeight: 180,
+    expectedFrameRate: "30/1",
+    expectedDurationSeconds: 3,
+    expectedTextContent: "真实工作流标题"
   };
-}
-
-async function runFfmpeg(args: string[]): Promise<void> {
-  const ffmpegPath = process.env.VE_FFMPEG_PATH ?? "ffmpeg";
-
-  try {
-    await execFileAsync(ffmpegPath, args, {
-      timeout: 20_000,
-      maxBuffer: 1024 * 1024
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Phase 06 media fixture generation failed with ${ffmpegPath}: ${message}`);
-  }
 }

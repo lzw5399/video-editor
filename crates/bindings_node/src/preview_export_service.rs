@@ -22,16 +22,16 @@ use draft_model::{
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{
-    CompileContext, FfmpegCompileError, FfmpegJob,
+    CompileContext, CompilerCapabilities, FfmpegCompileError, FfmpegJob, TextRenderCapability,
     OutputValidationExpectation as CompileValidation, compile_ffmpeg_job,
 };
 use media_runtime::FfmpegExecutor;
 use media_runtime::{
     CancelToken, FfmpegJobEvent, FfmpegJobResult, FfmpegJobState, FfmpegRuntimeError,
     FfmpegRuntimeJob, OutputValidationError, OutputValidationExpectation, RuntimeConfig,
-    validate_rendered_output,
+    RuntimeCapabilityReport, validate_rendered_output,
 };
-use media_runtime_desktop::DesktopFfmpegExecutor;
+use media_runtime_desktop::{DesktopFfmpegExecutor, probe_desktop_runtime_capabilities};
 use preview_service::{
     PreviewArtifact, PreviewCacheEntry, PreviewCacheKey, PreviewCacheProfile, PreviewFrameRequest,
     PreviewFrameResponse, PreviewInvalidationRequest, PreviewSegmentRequest,
@@ -795,7 +795,8 @@ fn prepare_export_job(
     let plan = RenderGraphPlan::new(graph, output_profile).map_err(|error| {
         ExportCommandError::RenderGraph(format!("export output profile failed: {error}"))
     })?;
-    let compile_context = CompileContext::new(&output_path, &sidecar_dir);
+    let compile_context = CompileContext::new(&output_path, &sidecar_dir)
+        .with_capabilities(compiler_capabilities_from_runtime(runtime));
     let ffmpeg_job =
         compile_ffmpeg_job(&plan, &compile_context).map_err(ExportCommandError::Compile)?;
     write_export_sidecars(&ffmpeg_job)?;
@@ -816,6 +817,42 @@ fn prepare_export_job(
         validation,
         dirty_facts,
     })
+}
+
+fn compiler_capabilities_from_runtime(runtime: &RuntimeConfig) -> CompilerCapabilities {
+    let executor = DesktopFfmpegExecutor::default();
+    let report = probe_desktop_runtime_capabilities(&executor, runtime).ffmpeg;
+    CompilerCapabilities {
+        supports_h264_encoder: report.h264_encoder.available,
+        supports_aac_encoder: report.aac_encoder.available,
+        text: text_capability_from_runtime(&report),
+    }
+}
+
+fn text_capability_from_runtime(report: &RuntimeCapabilityReport) -> TextRenderCapability {
+    TextRenderCapability {
+        supports_ass_filter: report.ass_filter.available,
+        supports_subtitles_filter: report.subtitles_filter.available,
+        env_text_font_path: report
+            .font_readiness
+            .env_text_font_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        available_font_paths: report
+            .font_readiness
+            .available_font_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect(),
+        bundled_font_ref: report.font_readiness.bundled_font_ref.clone(),
+        bundled_font_family: report.font_readiness.bundled_font_family.clone(),
+        bundled_font_path: report
+            .font_readiness
+            .bundled_font_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        bundled_font_license: report.font_readiness.bundled_font_license.clone(),
+    }
 }
 
 fn frame_response(response: PreviewFrameResponse) -> PreviewArtifactResponse {

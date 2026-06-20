@@ -9,15 +9,20 @@ use draft_model::{
     GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
     InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
     ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    PreviewDecodeRequest, ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, StartExportCommandPayload, VersionResponse,
+    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingResponse, PreviewDecodeRequest,
+    ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, SaveProjectBundleCommandPayload, SaveProjectBundleResponse,
+    StartExportCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
-use project_store::{ProjectStoreError, StdPlatformFileSystem};
+use project_store::{
+    ProjectStoreError, ProjectStoreWarning, StdPlatformFileSystem, open_project_bundle,
+    save_project_bundle,
+};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -71,6 +76,8 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "version"
                 | "probeMediaRuntime"
                 | "probeRuntimeCapabilities"
+                | "openProjectBundle"
+                | "saveProjectBundle"
                 | "importMaterial"
                 | "listMaterials"
                 | "listMissingMaterials"
@@ -153,6 +160,14 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         CommandName::ProbeRuntimeCapabilities => match probe_runtime_capabilities_command() {
             Ok(report) => to_js_value(ok_envelope(report)),
             Err(error) => to_js_value(runtime_capability_error_envelope(error)),
+        },
+        CommandName::OpenProjectBundle => match envelope.payload {
+            CommandPayload::OpenProjectBundle(payload) => open_project_bundle_command(payload),
+            _ => unreachable!("command/payload pair was validated during deserialization"),
+        },
+        CommandName::SaveProjectBundle => match envelope.payload {
+            CommandPayload::SaveProjectBundle(payload) => save_project_bundle_command(payload),
+            _ => unreachable!("command/payload pair was validated during deserialization"),
         },
         CommandName::ImportMaterial => match envelope.payload {
             CommandPayload::ImportMaterial(payload) => import_material_command(payload),
@@ -426,6 +441,35 @@ fn runtime_capability_error_envelope(
         runtime_capability_message(error),
         Some("probeRuntimeCapabilities".to_string()),
     )
+}
+
+fn open_project_bundle_command(payload: OpenProjectBundleCommandPayload) -> Result<serde_json::Value> {
+    let fs = StdPlatformFileSystem;
+    match open_project_bundle(&fs, PathBuf::from(payload.bundle_path)) {
+        Ok(opened) => to_js_value(ok_envelope(OpenProjectBundleResponse {
+            draft: opened.bundle.draft,
+            bundle_path: opened.bundle.bundle_path.display().to_string(),
+            project_json_path: opened.bundle.project_json_path.display().to_string(),
+            warnings: opened
+                .warnings
+                .into_iter()
+                .map(project_store_warning_message)
+                .collect(),
+        })),
+        Err(error) => to_js_value(project_store_error_envelope("openProjectBundle", error)),
+    }
+}
+
+fn save_project_bundle_command(payload: SaveProjectBundleCommandPayload) -> Result<serde_json::Value> {
+    let fs = StdPlatformFileSystem;
+    match save_project_bundle(&fs, PathBuf::from(payload.bundle_path), &payload.draft) {
+        Ok(saved) => to_js_value(ok_envelope(SaveProjectBundleResponse {
+            draft: saved.draft,
+            bundle_path: saved.bundle_path.display().to_string(),
+            project_json_path: saved.project_json_path.display().to_string(),
+        })),
+        Err(error) => to_js_value(project_store_error_envelope("saveProjectBundle", error)),
+    }
 }
 
 fn import_material_command(payload: ImportMaterialCommandPayload) -> Result<serde_json::Value> {
@@ -721,6 +765,33 @@ fn material_service_error_envelope(
     };
 
     error_envelope(kind, error.to_string(), Some(command.to_string()))
+}
+
+fn project_store_error_envelope(
+    command: &str,
+    error: ProjectStoreError,
+) -> CommandResultEnvelope<serde_json::Value> {
+    let kind = match &error {
+        ProjectStoreError::Io { .. } => CommandErrorKind::ProjectIoFailed,
+        _ => CommandErrorKind::InvalidProject,
+    };
+
+    error_envelope(kind, error.to_string(), Some(command.to_string()))
+}
+
+fn project_store_warning_message(warning: ProjectStoreWarning) -> String {
+    match warning {
+        ProjectStoreWarning::MissingMaterial {
+            material_id,
+            uri,
+            resolved_path,
+        } => {
+            let resolved = resolved_path
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "unresolved".to_owned());
+            format!("missing material {material_id}: {uri} -> {resolved}")
+        }
+    }
 }
 
 fn runtime_discovery_message(error: DiscoveryError) -> String {
