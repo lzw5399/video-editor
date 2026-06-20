@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 11/14 plans executed or blocked; 15.2-04F is active and 15.2-05/06 remain unreleased because packaged/CDP product E2E still fails closed on macOS foreground/window-server/AppKit surface occlusion
+**Plans:** 12/14 plans executed or blocked; 15.2-04F completed real packaged macOS render-graph GPU playback proof with screen-captured preview-center motion, and 15.2-05 is next for the mainstream product E2E matrix
 
 Plans:
 
@@ -700,7 +700,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 15.2-04F-PLAN.md - Gate and repair packaged macOS foreground/window-server WGPU presentation
+- [x] 15.2-04F-PLAN.md - Gate and repair packaged macOS foreground/window-server WGPU presentation
 
 **Wave 13** *(blocked on Wave 12 completion)*
 

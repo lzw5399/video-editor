@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "After importing a video, adding it to the timeline, and clicking play, the timeline advances but the visible preview video does not move."
 created: "2026-06-19"
 updated: "2026-06-20"
@@ -17,12 +17,12 @@ updated: "2026-06-20"
 
 ## Current Focus
 
-- hypothesis: Existing tests validate realtime-preview host routing and playhead clock movement, but the product UI lacks an end-to-end assertion that visible preview pixels advance during playback.
-- test: Keep the Playwright normal-user workflow on moving fixture media, but require GPU composited output evidence instead of mock frame tokens, screenshot color proxies, preview artifacts, or decoded CPU probes.
-- expecting: Product playback must fail if the realtime host only advances clocks, telemetry, mock frame tokens, PNG preview artifacts, FFmpeg artifact frames, or decoded CPU fingerprints.
-- next_action: Remove product fallback evidence first, then replace the remaining incomplete product presentation path with true GPU/native texture decode-to-compositor presentation.
-- reasoning_checkpoint: User rejected treating Phase 12 contract/platform-opaque decode work as implementation-complete; Phase 12 must be corrected because it did not connect native texture interop and visible GPU preview into the desktop product.
-- tdd_checkpoint: Product journey requires backend `gpu` and composited output evidence. Decoded/FFmpeg CPU content evidence is now classified as an invalid fallback path, not a completion criterion.
+- hypothesis: Resolved. Prior passing checks were insufficient because they could observe playhead/telemetry movement while the visible preview stayed static or was covered by non-product frame imagery.
+- test: Product Playwright now imports a repo-owned moving video through the normal picker, adds it to the timeline, clicks play, requires `renderGraphGpuComposited` evidence to advance, rejects fallback host calls, and waits for macOS system-screenshot pixels in the preview center to change.
+- expecting: A regression must fail if playback only advances clocks, telemetry, mock frame tokens, PNG preview artifacts, FFmpeg artifact frames, decoded CPU fingerprints, or a static first frame.
+- next_action: Extend the same normal-user E2E matrix in 15.2-05 for seek/scrub/split/trim/move/delete/undo-redo/text/audio/image/layer/transform flows.
+- reasoning_checkpoint: Product preview success is only accepted when the render-graph GPU compositor presents visible frames in the desktop product; CPU decode, native-video bridge, and screenshot-only evidence are diagnostics, not success paths.
+- tdd_checkpoint: The product journey includes both a negative no-compositor test and a positive visible-center motion test, so unsupported or fallback paths fail closed instead of passing via alternate evidence.
 
 ## Evidence
 
@@ -71,6 +71,21 @@ updated: "2026-06-20"
 - timestamp: "2026-06-20T00:00:00+08:00"
   observation: "Removed the product decoded/FFmpeg content-evidence N-API and Electron host calls. Product E2E now fails with Expected `composited`, Received `null`, which is the intended RED state after eliminating fallback evidence."
   source: "apps/desktop-electron/src/main/realtimePreviewHost.ts; crates/bindings_node/src/realtime_preview_service.rs; pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
+- timestamp: "2026-06-20T10:20:00+08:00"
+  observation: "The previous 04F pass was a false positive for user-visible motion: Playwright/telemetry could advance while static preview imagery or first-frame sampling kept the user-visible video from moving. The E2E now captures the actual macOS screen region for the preview center and waits for that hash to change after a normal play click."
+  source: "apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/product-user-journey.spec.ts"
+- timestamp: "2026-06-20T10:24:00+08:00"
+  observation: "macOS native decode ignored the requested source time and always returned the first AVAssetReader sample. The native decoder now sets an AVFoundation CMTimeRange at `VideoDecodeRequest.source_time_us`, with a regression proving 0us and 500000us decode to different requested positions."
+  source: "crates/media_runtime_desktop/src/platform/macos.rs; crates/media_runtime_desktop/tests/macos_media_io.rs"
+- timestamp: "2026-06-20T10:29:00+08:00"
+  observation: "The realtime GPU compositor requested video frames at `layer.source_timerange.start` for every target frame. It now maps graph target time to source time before asking the frame provider, with a regression expecting target 250000us over a source starting at 100000us to request source 350000us."
+  source: "crates/realtime_preview_runtime/src/gpu/compositor.rs; crates/realtime_preview_runtime/tests/gpu_subset.rs"
+- timestamp: "2026-06-20T10:34:00+08:00"
+  observation: "Static preview PNG imagery is hidden once the native realtime surface is product-ready, preventing a stale artifact from visually covering the GPU compositor surface."
+  source: "apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx"
+- timestamp: "2026-06-20T10:41:00+08:00"
+  observation: "macOS product E2E passes in the packaged app: normal user import/add/play path emits renderGraphGpuComposited evidence, no fallback calls, and visible preview-center screen pixels change while playback runs."
+  source: "pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line"
 
 ## Eliminated
 
@@ -84,10 +99,14 @@ updated: "2026-06-20"
   reason: "A diagnostic run showed requestRealtimePreviewContentEvidence was called for the active segment but FFmpeg timed out; the root cause was the shared process runner not draining rawvideo stdout while waiting."
 - hypothesis: "Decoded CPU content evidence is an acceptable interim P0 proof of product playback."
   reason: "User rejected fallback completion. Decoded CPU fingerprints prove only that FFmpeg can decode a frame; they do not prove the product realtime GPU compositor presented the video."
+- hypothesis: "A changing compositor evidence digest proves the user sees moving video."
+  reason: "Digest/telemetry can change even if the visible product surface is covered or stale. Product E2E now also asserts macOS screen-captured preview-center pixels change."
+- hypothesis: "The remaining playback issue is only AppKit surface occlusion."
+  reason: "After surface presentation was repaired, E2E still exposed static-visible playback risks caused by source-time decode and graph frame sampling. Both have direct regressions now."
 
 ## Resolution
 
-- root_cause: Unresolved. The confirmed product gap is that realtime preview still lacks an end-to-end GPU-native texture to compositor to visible desktop surface path with composited output evidence.
-- fix: In progress. Product fallback evidence has been removed and the no-fallback rule is documented/guarded; next step is implementing true GPU composited presentation.
-- verification: `pnpm run test:no-product-fallback`; `cargo test -p bindings_node realtime_preview -- --nocapture`; `pnpm --filter @video-editor/desktop build`; `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts -g "attach failure displays unavailable|does not expose artifact fallback|does not productize realtime fallback copy|do not expose artifact fallback" --reporter=line`; expected RED: `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line` fails with Expected `composited`, Received `null`; `git diff --check -- . ':!reference'`
-- files_changed: docs/no-product-fallback-policy.md; docs/runtime-boundaries.md; scripts/no-product-fallback-guards.sh; package.json; apps/desktop-electron/src/main/nativeBinding.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/workspace.spec.ts; crates/bindings_node/src/lib.rs; crates/bindings_node/src/realtime_preview_service.rs
+- root_cause: Multiple false-success gaps were present: macOS AVFoundation decode ignored requested source time, the GPU compositor sampled each video layer at source start instead of target-relative source time, static preview image UI could remain over the native realtime surface, and product E2E did not assert actual visible screen-pixel motion.
+- fix: Native decode now honors requested source time, compositor frame requests map target time to source time, product-ready realtime surface hides stale preview PNGs, macOS presenter activation/subview ordering is strengthened, and product E2E requires renderGraphGpuComposited advancement plus visible preview-center screen-pixel motion.
+- verification: `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line`; `VIDEO_EDITOR_TEST_NATIVE_MEDIA=1 cargo test -p media_runtime_desktop macos_native_decode_honors_requested_source_time -- --nocapture`; `cargo test -p realtime_preview_runtime gpu_subset_samples_video_frame_at_target_relative_source_time -- --nocapture`; `cargo test -p realtime_preview_runtime gpu_surface_presenter -- --nocapture`; `cargo test -p render_graph -- --nocapture`; `cargo check --workspace --locked`; `pnpm run test:no-product-fallback`; `git diff --check -- . ':!reference'`
+- files_changed: apps/desktop-electron/src/main/index.ts; apps/desktop-electron/src/preload/index.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/helpers/foregroundProductApp.ts; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/product-user-journey.spec.ts; crates/media_runtime_desktop/Cargo.toml; crates/media_runtime_desktop/src/platform/macos.rs; crates/media_runtime_desktop/tests/macos_media_io.rs; crates/realtime_preview_runtime/Cargo.toml; crates/realtime_preview_runtime/src/gpu/compositor.rs; crates/realtime_preview_runtime/src/platform/macos.rs; crates/realtime_preview_runtime/tests/gpu_subset.rs

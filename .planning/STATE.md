@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Executing 15.2-04F: package foreground/window-server gate and macOS WGPU surface presentation repair before 15.2-05/06"
-last_updated: "2026-06-20T01:36:40.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04F inserted after 04E to separate packaged-app foreground/window-server failure from native WGPU compositor failure; 15.2-05/06 remain unreleased
+stopped_at: "Ready for 15.2-05: mainstream product E2E matrix after packaged render-graph GPU playback proof with visible screen-pixel motion"
+last_updated: "2026-06-20T02:55:54.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04F completed packaged macOS real render-graph GPU playback proof with visible preview-center motion; 15.2-05 is next
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 128
-  completed_plans: 123
+  completed_plans: 124
   percent: 78
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-04F
-Status: In progress — package foreground/window-server gate and macOS WGPU surface presentation repair
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04F inserted after 04E to prove the packaged app owns a foreground, window-server-visible preview window before WGPU acquire
+Plan: 15.2-05
+Status: Ready — mainstream product E2E matrix and unsupported-control gating after real GPU playback proof with visible screen-pixel motion
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04F completed packaged macOS real render-graph GPU playback proof with visible preview-center motion
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly, 15.2-04F active, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04F complete/blocked honestly, 15.2-05 is next, 15.2-06 remains final closeout; Phase 15.3 UI convergence follows after compositor closure
 
 ## Performance Metrics
 
@@ -191,7 +191,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly
 - Phase 15.2 Plan 04A added the Rust-owned realtime playback scheduler, macOS CoreVideo/Metal to WGPU NV12 import bridge, and Electron host wiring, but remains blocked because WGPU surface acquisition reports `surface is occluded`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04D replaced the 04C top-level overlay attempt with an Electron-window child NSView/CAMetalLayer WGPU surface and added NSRunningApplication diagnostics, but product E2E still fails closed because the automated Electron/packaged app remains `appActive=false`, `runningAppActive=false`, `appOcclusionVisible=false`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
-- Phase 15.2 Plan 04F owns the remaining packaged macOS foreground/window-server gate after probes showed CDP and CGWindow onscreen entries can exist while System Events still reports `frontmost=false` and `windows=0`; downstream 15.2-05/06 remain blocked until WGPU presents real renderGraphGpuComposited frames. (URGENT)
+- Phase 15.2 Plan 04F completed the packaged macOS foreground/window-server repair: product E2E now proves real `renderGraphGpuComposited` playback with screen-captured preview-center pixel change and no fallback; 15.2-05 is unblocked for the mainstream product E2E matrix. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
@@ -421,6 +421,7 @@ Recent decisions affecting current work:
 - [Phase 15.2]: The WGPU compositor samples registered WGPU texture lease resources directly and rejects unregistered, stale, incompatible, or unsupported native resources as unavailable diagnostics.
 - [Phase 15.2]: CoreVideo/Metal lease inspection belongs at the Rust binding/platform edge, while realtime_preview_runtime::gpu consumes a generic native texture importer and does not depend on media_runtime_desktop.
 - [Phase 15.2]: Plan 04A cannot release 05/06 until Electron native WGPU surface acquisition is non-occluded and product E2E observes real visible advancement with `renderGraphGpuComposited` evidence.
+- [Phase 15.2]: Plan 04F unblocks 15.2-05 because packaged product E2E now proves non-fallback visible render-graph GPU playback with `renderGraphGpuComposited` evidence and screen-captured preview-center motion.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Do not advance from 15.2-04B to downstream realtime preview closure plans until macOS/Electron WGPU playback emits visible renderGraphGpu/renderGraphGpuComposited evidence. — Plan 04B preserved fail-closed no-fallback behavior, but product E2E still reports WGPU surface acquire failure with 'surface is occluded'. Treating this as progress would route product success around the real GPU compositor acceptance policy.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04C is required after 04B because an executed-but-blocked summary is not release evidence. — 15.2-05/06 must remain blocked until normal Electron import-add-play acquires a non-occluded WGPU surface and emits visible renderGraphGpuComposited evidence.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04D is required after 04C because the blocker is now specifically AppKit foreground/active-space visibility and product surface placement. — A top-level overlay with occlusionVisible=false is not release evidence; the next path must make the Electron app/window foreground-visible and attach the WGPU surface inside the editor window hierarchy.
