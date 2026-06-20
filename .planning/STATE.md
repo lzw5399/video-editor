@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Ready for 15.2-06: aggregate verification after mainstream product E2E save/reopen/export closure"
-last_updated: "2026-06-20T04:42:31.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 05 completed mainstream product E2E matrix, project save/reopen/export workflow, and image-layer export timing; 15.2-06 is next
+stopped_at: "Ready for Phase 15.3 planning: P0 Jianying-style production UI convergence"
+last_updated: "2026-06-20T04:52:19.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 completed aggregate verification with pnpm run test:phase15-2; Phase 15.3 UI convergence is next
 progress:
   total_phases: 23
-  completed_phases: 18
+  completed_phases: 19
   total_plans: 128
-  completed_plans: 125
-  percent: 78
+  completed_plans: 126
+  percent: 83
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 15.2 — P0 Real GPU Realtime Compositor Closure
+**Current focus:** Phase 15.3 — P0 Jianying-Style Production UI Convergence
 
 ## Current Position
 
-Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-06
-Status: Ready — aggregate verification after mainstream product E2E save/reopen/export closure
-Last activity: 2026-06-20 -- Phase 15.2 Plan 05 completed product E2E matrix, no-fallback preview gates, project save/reopen/export workflow, and image-layer export timing
+Phase: 15.3 (p0-jianying-style-production-ui-convergence) — INSERTED
+Plan: TBD
+Status: Ready — plan Phase 15.3 UI convergence after real GPU compositor closure
+Last activity: 2026-06-20 -- Phase 15.2 completed aggregate verification with `pnpm run test:phase15-2`
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-05 complete/blocked honestly, 15.2-06 remains final closeout; Phase 15.3 UI convergence follows after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is next before Phase 16 scheduler work
 
 ## Performance Metrics
 
@@ -173,6 +173,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-05 complete/blocked honestly,
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04B | 20min | 2/3 tasks | 8 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04C | 17min | 2/3 tasks | 9 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P05 | resumed | 3 tasks | 21 files |
+| Phase 15.2-p0-real-gpu-realtime-compositor-closure P06 | resumed | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-05 complete/blocked honestly,
 - Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
 - Phase 15.2 Plan 04F completed the packaged macOS foreground/window-server repair: product E2E now proves real `renderGraphGpuComposited` playback with screen-captured preview-center pixel change and no fallback; 15.2-05 is unblocked for the mainstream product E2E matrix. (URGENT)
 - Phase 15.2 Plan 05 completed mainstream product E2E coverage plus real save/reopen/export workflow: dev and packaged Playwright import repo video/image/audio, add video/text/audio/image segments, export a 6s 320x180 30fps H.264/AAC file, reopen `.veproj/project.json`, and verify persisted materials/segments/text; image still layers now export with timed `loop`/`fps`/`enable` semantics instead of single-frame or truncated output. (URGENT)
+- Phase 15.2 Plan 06 completed aggregate verification and closeout: `pnpm run test:phase15-2` now covers realtime preview runtime, desktop media capabilities, realtime bindings, parity, FFmpeg compiler, export commands, no-fallback guard, packaged app, product journey, real workflow, workspace, and cargo check. Phase 15.2 is complete. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
@@ -436,18 +438,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 15.2 Plan 04 blocked: desktop product playback now fails closed instead of routing through native video, but no Rust-owned scheduler currently decodes timeline media into sampleable leases, builds frame-provider state, presents to the WGPU surface, and records `renderGraphGpuComposited` evidence during normal play. Plan 04A is the required closure plan before 05/06 can execute.
-
-- Phase 15.2 Plan 04A blocked: the Rust-owned scheduler, macOS CoreVideo/Metal to WGPU import bridge, and Electron host wiring are implemented, but the product E2E still fails closed because `wgpu surface texture acquire failed: surface is occluded`. No `renderGraphGpuComposited` evidence is emitted, and 15.2-05/06 remain blocked.
-- Phase 15.2 Plan 04B is executed/blocked: it attempted the macOS/Electron surface repair but WGPU still reports `surface is occluded`.
-- Phase 15.2 Plan 04C is executed/blocked: it added drawable diagnostics and a top-level overlay attempt, but both parent and overlay AppKit windows remain occlusion-invisible.
-- Phase 15.2 Plan 04D is required before 05/06: it must close foreground activation/active-space visibility and use an Electron-window native WGPU surface to prove normal product playback presents real compositor frames.
-
-- Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
-- 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
-- Plan 15.2-04 product playback E2E still fails: Rust binding/host now fail closed without nativeVideoBridge, and NV12 WGPU ExternalTexture plane sampling is implemented for WGPU plane leases, but no Rust-owned desktop compositor scheduler currently decodes timeline media into sampleable native leases and presents renderGraphGpuComposited frames to the native WGPU surface during normal play.
-- Phase 15.2 Plan 04B blocked: macOS/Electron native WGPU surface reaches acquire through Rust scheduler but still fails with 'surface is occluded' in product E2E; no fallback route accepted.
-- Phase 15.2 Plan 04C blocked: macOS/Electron native WGPU surface still returns surface is occluded; diagnostics show parent and overlay windows visible but occlusionVisible=false, no renderGraphGpuComposited evidence. Plan 04D supersedes this with foreground activation plus in-window native surface work.
+None active. Historical Phase 15.2 macOS occlusion blockers are preserved in 04A-04E summaries, but 04F superseded them with packaged visible render-graph GPU playback proof and 15.2-06 aggregate verification closed the phase.
 
 ## Deferred Items
 
@@ -476,6 +467,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-20T00:00:41.101Z
-Stopped at: Blocked 15.2-04C-PLAN.md: WGPU native surface remains occluded during product E2E
+Last session: 2026-06-20T04:52:19.000Z
+Stopped at: Ready for Phase 15.3 planning: P0 Jianying-style production UI convergence
 Resume file: None

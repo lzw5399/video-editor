@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
 - [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
-- [ ] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (INSERTED)
+- [x] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (completed 2026-06-20)
 - [ ] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 12/14 plans executed or blocked; 15.2-04F completed real packaged macOS render-graph GPU playback proof with screen-captured preview-center motion, and 15.2-05 is next for the mainstream product E2E matrix
+**Plans:** 14/14 plans complete or historically blocked-and-superseded; Phase 15.2 closed with real packaged macOS render-graph GPU playback proof, mainstream product E2E coverage, save/reopen/export workflow, and aggregate verification
 
 Plans:
 
@@ -704,11 +704,11 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
+- [x] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
 
 **Wave 14** *(blocked on Waves 1-13 completion)*
 
-- [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
+- [x] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
 ### Phase 15.3: P0 Jianying-Style Production UI Convergence (INSERTED)
 
@@ -796,7 +796,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1 -> 11 -> 12 -> 13 -> 14 -> 15 -> 15.1 -> 15.2 -> 15.3 -> 16 -> 17 -> 18
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -817,6 +817,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 13. Incremental Render Graph, Dirty Ranges, And Cache Coherence | 8/8 | Complete   | 2026-06-19 |
 | 14. Asset Resource Manager And Derived Artifact Store | 7/7 | Complete    | 2026-06-19 |
 | 15. Audio Engine And DSP Timeline Pipeline | 7/7 | Complete   | 2026-06-19 |
+| 15.1 P0 Basic Editing Chain Repair | 6/6 | Complete | 2026-06-20 |
+| 15.2 P0 Real GPU Realtime Compositor Closure | 14/14 | Complete | 2026-06-20 |
+| 15.3 P0 Jianying-Style Production UI Convergence | 0/TBD | Planned | - |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
