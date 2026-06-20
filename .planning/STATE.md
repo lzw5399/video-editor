@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Ready for 15.2-05: mainstream product E2E matrix after packaged render-graph GPU playback proof with visible screen-pixel motion"
-last_updated: "2026-06-20T02:55:54.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04F completed packaged macOS real render-graph GPU playback proof with visible preview-center motion; 15.2-05 is next
+stopped_at: "Ready for 15.2-06: aggregate verification after mainstream product E2E save/reopen/export closure"
+last_updated: "2026-06-20T04:42:31.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 05 completed mainstream product E2E matrix, project save/reopen/export workflow, and image-layer export timing; 15.2-06 is next
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 128
-  completed_plans: 124
+  completed_plans: 125
   percent: 78
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-05
-Status: Ready — mainstream product E2E matrix and unsupported-control gating after real GPU playback proof with visible screen-pixel motion
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04F completed packaged macOS real render-graph GPU playback proof with visible preview-center motion
+Plan: 15.2-06
+Status: Ready — aggregate verification after mainstream product E2E save/reopen/export closure
+Last activity: 2026-06-20 -- Phase 15.2 Plan 05 completed product E2E matrix, no-fallback preview gates, project save/reopen/export workflow, and image-layer export timing
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04F complete/blocked honestly, 15.2-05 is next, 15.2-06 remains final closeout; Phase 15.3 UI convergence follows after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-05 complete/blocked honestly, 15.2-06 remains final closeout; Phase 15.3 UI convergence follows after compositor closure
 
 ## Performance Metrics
 
@@ -172,6 +172,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04F complete/blocked honestly
 | Phase 15.2 P04A | 61 min | 3 tasks | 16 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04B | 20min | 2/3 tasks | 8 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P04C | 17min | 2/3 tasks | 9 files |
+| Phase 15.2-p0-real-gpu-realtime-compositor-closure P05 | resumed | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -192,9 +193,11 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04F complete/blocked honestly
 - Phase 15.2 Plan 04D replaced the 04C top-level overlay attempt with an Electron-window child NSView/CAMetalLayer WGPU surface and added NSRunningApplication diagnostics, but product E2E still fails closed because the automated Electron/packaged app remains `appActive=false`, `runningAppActive=false`, `appOcclusionVisible=false`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
 - Phase 15.2 Plan 04F completed the packaged macOS foreground/window-server repair: product E2E now proves real `renderGraphGpuComposited` playback with screen-captured preview-center pixel change and no fallback; 15.2-05 is unblocked for the mainstream product E2E matrix. (URGENT)
+- Phase 15.2 Plan 05 completed mainstream product E2E coverage plus real save/reopen/export workflow: dev and packaged Playwright import repo video/image/audio, add video/text/audio/image segments, export a 6s 320x180 30fps H.264/AAC file, reopen `.veproj/project.json`, and verify persisted materials/segments/text; image still layers now export with timed `loop`/`fps`/`enable` semantics instead of single-frame or truncated output. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
+- Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
 - Confirmed production editor architecture decisions captured for Phase 11+: Windows/macOS desktop first; Rust `wgpu` realtime preview; native Windows Media Foundation/DXVA/D3D and macOS AVFoundation/VideoToolbox/CoreVideo/Metal media paths; FFmpeg as export/fallback; `CommandDelta` and stable render graph node IDs; SQLite artifact store under `.veproj/derived`; shared `TimelineClock + PlaybackGeneration`; scheduler-aligned jobs; ref-counted opaque handle registry; capability-first retiming/effects/transitions.
 - Production-grade architecture Phases 11-18 added after Phase 10.1 to address the external audit concerns directly: realtime GPU preview, hardware media IO, incremental render graph/cache coherence, asset/resource management, audio DSP, scheduler/telemetry, mobile/server bindings, and production retiming/effects/transitions.
