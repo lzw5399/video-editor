@@ -505,7 +505,10 @@ export function PreviewMonitor({
         </div>
       </div>
 
-      <div className="preview-transport" aria-label="预览控制">
+      <div
+        className={showDeveloperDiagnostics ? "preview-transport developer-diagnostics" : "preview-transport"}
+        aria-label="预览控制"
+      >
         <div className="preview-timecode" aria-label="当前时间码">
           {formatMicroseconds(safePlayheadUs)}
         </div>
@@ -541,40 +544,42 @@ export function PreviewMonitor({
             </button>
           ))}
         </div>
-        <label className="preview-seek-control">
-          <span>预览时间</span>
-          <input
-            aria-label="预览时间"
-            type="number"
-            min="0"
-            step="100000"
-            value={safePlayheadUs}
-            onChange={(event) => onPlayheadChange(Math.max(0, Math.round(event.currentTarget.valueAsNumber || 0)))}
-          />
-        </label>
         {showDeveloperDiagnostics ? (
-          <div className="preview-command-group" role="group" aria-label="预览生成">
-            <button
-              type="button"
-              className="preview-command-button"
-              aria-label={previewFrameLabel}
-              title={previewFrameLabel}
-              onClick={onRequestPreviewFrame}
-              disabled={pending || !runtimeDiagnostics.canPreview}
-            >
-              帧
-            </button>
-            <button
-              type="button"
-              className="preview-command-button"
-              aria-label={previewSegmentLabel}
-              title={previewSegmentLabel}
-              onClick={onRequestPreviewSegment}
-              disabled={pending || !runtimeDiagnostics.canPreview}
-            >
-              片段
-            </button>
-          </div>
+          <>
+            <label className="preview-seek-control">
+              <span>预览时间</span>
+              <input
+                aria-label="预览时间"
+                type="number"
+                min="0"
+                step="100000"
+                value={safePlayheadUs}
+                onChange={(event) => onPlayheadChange(Math.max(0, Math.round(event.currentTarget.valueAsNumber || 0)))}
+              />
+            </label>
+            <div className="preview-command-group" role="group" aria-label="预览生成">
+              <button
+                type="button"
+                className="preview-command-button"
+                aria-label={previewFrameLabel}
+                title={previewFrameLabel}
+                onClick={onRequestPreviewFrame}
+                disabled={pending || !runtimeDiagnostics.canPreview}
+              >
+                帧
+              </button>
+              <button
+                type="button"
+                className="preview-command-button"
+                aria-label={previewSegmentLabel}
+                title={previewSegmentLabel}
+                onClick={onRequestPreviewSegment}
+                disabled={pending || !runtimeDiagnostics.canPreview}
+              >
+                片段
+              </button>
+            </div>
+          </>
         ) : null}
       </div>
 

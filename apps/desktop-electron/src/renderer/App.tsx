@@ -1917,7 +1917,6 @@ export function App(): React.ReactElement {
     setPlayheadUs(targetTime);
     void seekRealtimePreviewHost(targetTime);
     void handleSeekAudioPreview(targetTime);
-    requestPreviewFrameAt(targetTime);
   }
 
   function handleTogglePlayback(): void {
@@ -1965,7 +1964,6 @@ export function App(): React.ReactElement {
     setPlaybackRunning(false);
     setPlayheadUs(0);
     playheadRef.current = 0;
-    requestPreviewFrameAt(0);
   }
 
   const handleRealtimePreviewHostStateChange = useCallback((hostState: RealtimePreviewHostState): void => {

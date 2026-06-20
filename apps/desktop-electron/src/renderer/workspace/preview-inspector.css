@@ -208,10 +208,14 @@
 
 .preview-transport {
   display: grid;
-  grid-template-columns: 82px auto minmax(104px, 142px) auto;
+  grid-template-columns: 82px auto;
   justify-content: center;
   gap: 6px;
   overflow: hidden;
+}
+
+.preview-transport.developer-diagnostics {
+  grid-template-columns: 82px auto minmax(104px, 142px) auto;
 }
 
 .preview-timecode {

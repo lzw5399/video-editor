@@ -530,7 +530,7 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByText("预览将在下一阶段接入")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "请求预览帧" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "生成预览片段" })).toHaveCount(0);
-    await expect(page.getByLabel("预览时间")).toBeVisible();
+    await expect(page.getByRole("spinbutton", { name: "预览时间" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "适应窗口" })).toBeVisible();
     await expect(page.getByRole("button", { name: "画面比例" })).toBeVisible();
     await expect(page.getByRole("button", { name: "全屏" })).toBeVisible();
@@ -1052,7 +1052,7 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
   try {
     await spyExecuteCommandCalls(app, page);
 
-    await page.getByLabel("预览时间").fill("1200000");
+    await page.getByLabel("播放头").fill("1200000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
@@ -1080,8 +1080,8 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
   }
 });
 
-test("播放头预览时间输入和逐帧按钮寻帧到实时预览宿主", async () => {
-  const { app, page } = await launchWorkspaceApp();
+test("developer diagnostics preview time input and production frame buttons seek realtime host", async () => {
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1159,8 +1159,9 @@ test("音频预览 controls send generated command envelopes and preserve state 
     await expectCommandCall(app, "createAudioPreviewSession");
     await expectCommandCall(app, "cancelAudioPreview");
     await expectCommandCall(app, "getAudioPreviewStatus");
+    await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
 
-    await page.getByLabel("预览时间").fill("1200000");
+    await page.getByLabel("播放头").fill("1200000");
     await expectCommandCall(app, "seekAudioPreview");
     await page.getByRole("button", { name: "停止预览" }).first().click();
     await expectCommandCall(app, "stopAudioPreview");
