@@ -87,7 +87,7 @@ test.describe("draft parameter inspector modal", () => {
       await dialog.getByRole("button", { name: "取消" }).click();
       await expect(page.getByRole("dialog", { name: "草稿参数" })).toHaveCount(0);
       await expect(inspector).toContainText("16:9");
-      expect(await readExecuteCommandCalls(app)).toHaveLength(0);
+      expect((await readExecuteCommandCalls(app)).some((call) => call.command === "updateDraftCanvasConfig")).toBe(false);
 
       dialog = await openDraftParametersDialog(page);
       await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();

@@ -31,4 +31,5 @@ run_desktop exec playwright test \
   tests/workspace.spec.ts \
   tests/product-user-journey.spec.ts \
   tests/real-workflow.spec.ts \
+  --workers=1 \
   --reporter=line
