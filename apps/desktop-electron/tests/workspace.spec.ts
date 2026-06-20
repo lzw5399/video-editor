@@ -1246,10 +1246,10 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
         scaleFactorMillis: 1250.6
       })
     );
-    expect(JSON.stringify(updateResult)).not.toMatch(/native|handle|hwnd|nsview|gpu|surface|commandEncoder|cacheKey/i);
+    expect(JSON.stringify(updateResult)).not.toMatch(/parentHandle|parentHandleHex|hwnd|nsview|commandEncoder|cacheKey/i);
 
     const telemetry = await page.evaluate(() => window.videoEditorRealtimePreviewHost?.getTelemetry());
-    expect(JSON.stringify(telemetry)).not.toMatch(/native|handle|hwnd|nsview|gpu|surface|commandEncoder|cacheKey/i);
+    expect(JSON.stringify(telemetry)).not.toMatch(/parentHandle|parentHandleHex|hwnd|nsview|commandEncoder|cacheKey/i);
 
     await expect
       .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "attachSurface"))
@@ -1808,7 +1808,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
   }
 });
 
-test("selection preview overlay follows accepted visible segment without blocking preview image", async () => {
+test("selection preview overlay follows accepted visible segment and allows direct canvas interaction", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
@@ -1828,7 +1828,7 @@ test("selection preview overlay follows accepted visible segment without blockin
     await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
 
     const overlayPointerEvents = await overlay.evaluate((element) => window.getComputedStyle(element).pointerEvents);
-    expect(overlayPointerEvents).toBe("none");
+    expect(overlayPointerEvents).toBe("auto");
 
     await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
     await expect(overlay).toBeVisible();

@@ -1,8 +1,8 @@
 ---
-status: fixing
+status: resolved
 trigger: "User manual UAT reports Phase 15.2 product playback is not complete: preview surface is offset left/down during play, playback has no audio, video playback is stuttery/desynchronized from the timeline, and text/font editing plus on-canvas drag/rotate interactions are not available."
 created: "2026-06-20T05:13:58Z"
-updated: "2026-06-20T07:41:43Z"
+updated: "2026-06-20T07:50:54Z"
 ---
 
 # Debug Session: 15.2 Product Playback Regression
@@ -20,7 +20,7 @@ updated: "2026-06-20T07:41:43Z"
 - hypothesis: "Phase 15.2 tests proved limited GPU compositor evidence and preview-region pixel motion, but did not assert full product playback placement, audible audio routing, timeline/video clock synchronization, or direct user-editing interactions."
 - test: "Re-run/read the normal Electron Playwright product journey, inspect the playback host/main/renderer contracts, then add failing UAT-level checks before changing implementation."
 - expecting: "Existing 15.2 E2E will pass despite missing one or more user-visible requirements, proving the gate is insufficient."
-- next_action: "Commit the embedded video-audio GREEN fix, then run the final 15.2 product playback verification bundle before resolving the debug session."
+- next_action: "Resolved; Phase 15.2 can proceed from reopened to complete after the 15.2-07 summary and verification artifacts are committed."
 - reasoning_checkpoint: "Do not continue Phase 15.3 until this debug session either identifies and fixes the 15.2 gap or formally reopens 15.2 with an executable remediation plan."
 - tdd_checkpoint: "Add or strengthen E2E/regression tests before accepting any playback fix."
 
@@ -73,7 +73,7 @@ updated: "2026-06-20T07:41:43Z"
 
 ## Resolution
 
-- root_cause:
-- fix:
-- verification:
-- files_changed:
+- root_cause: "The prior 15.2 closeout accepted partial playback evidence: short compositor telemetry and visible motion, but not native surface placement, real native audio output, sequence-end clock sync, or direct canvas interaction. Separate audio state was status-only, embedded video audio was not decoded into preview output, renderer/UI time could diverge from presented compositor time, and legacy workspace assertions still assumed the selection overlay was non-interactive."
+- fix: "Added normal-user product UAT gates, exposed safe native surface placement evidence, made realtime host telemetry the UI playback authority, connected CPAL native audio output for both separate audio materials and embedded video audio decoded through the desktop FFmpeg runtime, added a repository MP4 fixture with AAC audio, and enabled direct preview overlay drag through Rust `updateSegmentVisual` commands."
+- verification: "`pnpm run test:phase15-2` passed on 2026-06-20T07:50:54Z after the reclose fixes. Targeted RED/GREEN checks also covered native surface alignment, timeline sync, separate native audio output, embedded video audio output, and direct canvas drag against the packaged desktop app."
+- files_changed: "apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts; apps/desktop-electron/tests/fixtures/media/p0-av-tone-testsrc.mp4; apps/desktop-electron/tests/fixtures/media/README.md; apps/desktop-electron/tests/workspace.spec.ts; apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/App.tsx; apps/desktop-electron/src/renderer/viewModel.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; crates/bindings_node/src/audio_service.rs; crates/bindings_node/src/realtime_preview_service.rs; crates/bindings_node/tests/audio_service.rs; crates/audio_output_desktop/src/cpal_output.rs"
