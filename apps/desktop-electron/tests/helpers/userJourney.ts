@@ -373,9 +373,12 @@ export async function addTextThroughProductPanel(
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
-  await textPanel.getByLabel("默认文字").getByLabel("时长（微秒）").fill(String(durationUs));
+  await textPanel.getByLabel("文字时长（秒）").fill(formatSecondsInput(durationUs));
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
   await waitForCommandCount(app, "addTextSegment", nextCount);
+  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addTextSegment")?.targetTimerange?.duration).toBe(
+    durationUs
+  );
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
     content
   );
@@ -391,9 +394,12 @@ export async function addAudioThroughProductPanel(
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   const audioPanel = page.getByRole("region", { name: "素材面板" });
   await audioPanel.getByLabel("BGM素材").selectOption({ label: basename(audioPath) });
-  await audioPanel.getByLabel("时长（微秒）").fill(String(durationUs));
+  await audioPanel.getByLabel("音频时长（秒）").fill(formatSecondsInput(durationUs));
   await audioPanel.getByRole("button", { name: "添加音频", exact: true }).click();
   await waitForCommandCount(app, "addAudioSegment", nextCount);
+  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addAudioSegment")?.targetTimerange?.duration).toBe(
+    durationUs
+  );
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(basename(audioPath))}`) })).toBeVisible();
 }
 
@@ -744,4 +750,8 @@ function formatExpectedTimecode(targetTimeUs: number): string {
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+function formatSecondsInput(durationUs: number): string {
+  return String(durationUs / 1_000_000);
 }

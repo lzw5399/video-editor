@@ -569,6 +569,8 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
+    await expect(page.getByLabel("文字时长（秒）")).toBeVisible();
+    await expect(page.getByLabel("素材面板")).not.toContainText("微秒");
     await expect(page.getByLabel("默认文字").getByText("字号")).toHaveCount(0);
     await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
 
@@ -576,6 +578,8 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加音频", exact: true })).toBeVisible();
+    await expect(page.getByLabel("音频时长（秒）")).toBeVisible();
+    await expect(page.getByLabel("素材面板")).not.toContainText("微秒");
     await expect(page.getByText("音量", { exact: true })).toBeVisible();
     await expect(page.getByText("声像", { exact: true })).toBeVisible();
     await expect(page.getByText("淡入", { exact: true })).toBeVisible();
@@ -626,6 +630,7 @@ test("command-only text edit routes complete text inspector changes through exec
     await spyExecuteCommandCalls(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("开场标题");
+    await page.getByLabel("文字时长（秒）").fill("2.5");
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegment");
 
@@ -685,6 +690,7 @@ test("command-only text edit routes complete text inspector changes through exec
     expect(addTextCall?.textSource).toBe("text");
     expect(addTextCall?.textContent).toBe("开场标题");
     expect(addTextCall?.textFontRef).toBe("font://bundled/noto-sans-cjk-sc-regular");
+    expect(addTextCall?.targetTimerange?.duration).toBe(2_500_000);
     expect(editTextCall?.textContent).toBe("开场标题 已修改");
     expect(calls.filter((call) => call.command === "editTextSegment")).toHaveLength(1);
   } finally {
@@ -722,6 +728,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(1);
 
+    await page.getByLabel("音频时长（秒）").fill("2.25");
     await page.getByRole("button", { name: "添加音频", exact: true }).click();
     await expectCommandCall(app, "addAudioSegment");
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(2);
@@ -744,6 +751,8 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" })).toBeChecked();
 
     const calls = await readExecuteCommandCalls(app);
+    const addAudioCall = calls.find((call) => call.command === "addAudioSegment");
+    expect(addAudioCall?.targetTimerange?.duration).toBe(2_250_000);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining(["addAudioSegment", "updateSegmentAudio", "setTrackMute"])
     );
@@ -774,7 +783,7 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     await spyExecuteCommandCalls(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("SRT 内容").fill("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n\n2\n00:00:02,000 --> 00:00:04,000\n第二句字幕\n");
-    await page.getByLabel("字幕时间偏移").fill("1000000");
+    await page.getByLabel("字幕时间偏移").fill("1");
     await page.getByRole("button", { name: "导入字幕" }).click();
     await expectCommandCall(app, "importSubtitleSrt");
 

@@ -405,7 +405,12 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   }
 
   const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
-  const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
+  const targetTimerange =
+    command.payload.kind === "requestPreviewSegment" ||
+    command.payload.kind === "addTextSegment" ||
+    command.payload.kind === "addAudioSegment"
+      ? command.payload.targetTimerange
+      : null;
   const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
   const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
   const keyframe = command.payload.kind === "setSegmentKeyframe" ? command.payload.keyframe : null;

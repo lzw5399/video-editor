@@ -213,9 +213,9 @@ function MaterialPanel({
 
 function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
-  const [durationUs, setDurationUs] = useState(3_000_000);
+  const [durationSeconds, setDurationSeconds] = useState(3);
   const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
-  const [subtitleOffsetUs, setSubtitleOffsetUs] = useState(0);
+  const [subtitleOffsetSeconds, setSubtitleOffsetSeconds] = useState(0);
   const textTrack = findTrackByKind(workspace.draft, "text");
 
   const text: TextSegment = useMemo(
@@ -269,19 +269,20 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
           <textarea value={content} onChange={(event) => setContent(event.currentTarget.value)} />
         </label>
         <label className="field-row">
-          <span>时长（微秒）</span>
+          <span>时长</span>
           <input
+            aria-label="文字时长（秒）"
             type="number"
-            min="1"
-            step="1"
-            value={durationUs}
-            onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
+            min="0.1"
+            step="0.1"
+            value={durationSeconds}
+            onChange={(event) => setDurationSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, durationSeconds))}
           />
         </label>
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onAddTextSegment(text, durationUs)}
+          onClick={() => onAddTextSegment(text, secondsToMicroseconds(durationSeconds))}
           disabled={workspace.pendingCommand !== null || textTrack === null}
         >
           添加文字
@@ -307,17 +308,17 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
             aria-label="字幕时间偏移"
             type="number"
             min="0"
-            step="1000"
-            value={subtitleOffsetUs}
+            step="0.1"
+            value={subtitleOffsetSeconds}
             onChange={(event) =>
-              setSubtitleOffsetUs(Math.max(0, Math.round(Number.isFinite(event.currentTarget.valueAsNumber) ? event.currentTarget.valueAsNumber : 0)))
+              setSubtitleOffsetSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, subtitleOffsetSeconds, 0, 3_600))
             }
           />
         </label>
         <button
           type="button"
           className="secondary-action wide-action"
-          onClick={() => onImportSubtitleSrt(srtContent, subtitleOffsetUs, { ...text, source: "subtitle" })}
+          onClick={() => onImportSubtitleSrt(srtContent, secondsToNonNegativeMicroseconds(subtitleOffsetSeconds), { ...text, source: "subtitle" })}
           disabled={workspace.pendingCommand !== null || srtContent.trim().length === 0}
         >
           导入字幕
@@ -353,11 +354,11 @@ function AudioPanel({
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
   const firstAudioMaterial = findFirstMaterialByKind(workspace.draft, "audio");
   const [materialId, setMaterialId] = useState(firstAudioMaterial?.materialId ?? "");
-  const [durationUs, setDurationUs] = useState(4_000_000);
+  const [durationSeconds, setDurationSeconds] = useState(4);
   const [volumePercent, setVolumePercent] = useState(100);
   const [panPercent, setPanPercent] = useState(0);
-  const [fadeInUs, setFadeInUs] = useState(0);
-  const [fadeOutUs, setFadeOutUs] = useState(0);
+  const [fadeInSeconds, setFadeInSeconds] = useState(0);
+  const [fadeOutSeconds, setFadeOutSeconds] = useState(0);
   const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
   const selectedTrack = getSelectedTrackView(workspace.draft, workspace.selection);
   const audioTrack = findTrackByKind(workspace.draft, "audio");
@@ -370,7 +371,7 @@ function AudioPanel({
         <button
           type="button"
           className="primary-action"
-          onClick={() => onAddAudioSegment(selectedMaterialId, durationUs)}
+          onClick={() => onAddAudioSegment(selectedMaterialId, secondsToMicroseconds(durationSeconds))}
           disabled={workspace.pendingCommand !== null || audioTrack === null || selectedMaterialId.length === 0}
         >
           添加音频
@@ -395,13 +396,14 @@ function AudioPanel({
           </select>
         </label>
         <label className="field-row">
-          <span>时长（微秒）</span>
+          <span>时长</span>
           <input
+            aria-label="音频时长（秒）"
             type="number"
-            min="1"
-            step="1"
-            value={durationUs}
-            onChange={(event) => setDurationUs(toPositiveInteger(event.currentTarget.valueAsNumber, durationUs))}
+            min="0.1"
+            step="0.1"
+            value={durationSeconds}
+            onChange={(event) => setDurationSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, durationSeconds))}
           />
         </label>
       </div>
@@ -453,21 +455,23 @@ function AudioPanel({
         <label className="field-row">
           <span>淡入</span>
           <input
+            aria-label="淡入秒数"
             type="number"
             min="0"
-            step="10000"
-            value={fadeInUs}
-            onChange={(event) => setFadeInUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeInUs, 0, 60_000_000))}
+            step="0.1"
+            value={fadeInSeconds}
+            onChange={(event) => setFadeInSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, fadeInSeconds, 0, 60))}
           />
         </label>
         <label className="field-row">
           <span>淡出</span>
           <input
+            aria-label="淡出秒数"
             type="number"
             min="0"
-            step="10000"
-            value={fadeOutUs}
-            onChange={(event) => setFadeOutUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeOutUs, 0, 60_000_000))}
+            step="0.1"
+            value={fadeOutSeconds}
+            onChange={(event) => setFadeOutSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, fadeOutSeconds, 0, 60))}
           />
         </label>
         <div className="button-row">
@@ -478,8 +482,8 @@ function AudioPanel({
               onUpdateSelectedSegmentAudio({
                 gainMillis: volumePercent * 10,
                 panBalanceMillis: panPercent * 10,
-                fadeInDuration: fadeInUs,
-                fadeOutDuration: fadeOutUs
+                fadeInDuration: secondsToNonNegativeMicroseconds(fadeInSeconds),
+                fadeOutDuration: secondsToNonNegativeMicroseconds(fadeOutSeconds)
               })
             }
             disabled={workspace.pendingCommand !== null || selectedSegment === null}
@@ -716,7 +720,24 @@ function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
 }
 
+function toPositiveSeconds(value: number, fallback: number): number {
+  return Math.max(0.1, Number.isFinite(value) ? value : fallback);
+}
+
+function secondsToMicroseconds(value: number): number {
+  return toPositiveInteger(value * 1_000_000, 1_000_000);
+}
+
+function secondsToNonNegativeMicroseconds(value: number): number {
+  return Math.max(0, Math.round((Number.isFinite(value) ? value : 0) * 1_000_000));
+}
+
 function toBoundedNumber(value: number, fallback: number, min: number, max: number): number {
   const rounded = Math.round(Number.isFinite(value) ? value : fallback);
   return Math.max(min, Math.min(max, rounded));
+}
+
+function toBoundedSeconds(value: number, fallback: number, min: number, max: number): number {
+  const safeValue = Number.isFinite(value) ? value : fallback;
+  return Math.max(min, Math.min(max, safeValue));
 }

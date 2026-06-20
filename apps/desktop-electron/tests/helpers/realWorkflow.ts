@@ -142,7 +142,7 @@ async function addTextSegment(page: Page, app: ElectronApplication, content: str
   const nextCount = (await countCommand(app, "addTextSegment")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
-  await page.getByLabel("默认文字").getByLabel("时长（微秒）").fill("3000000");
+  await page.getByLabel("文字时长（秒）").fill("3");
   await page.getByRole("button", { name: "添加文字", exact: true }).click();
   await waitForCommandCount(page, app, "addTextSegment", nextCount);
   await expect(page.getByRole("button", { name: /片段 默认文字/ })).toBeVisible();
@@ -153,7 +153,7 @@ async function addAudioSegment(page: Page, app: ElectronApplication, audioName: 
   const nextCount = (await countCommand(app, "addAudioSegment")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   await page.getByLabel("BGM素材").selectOption({ label: audioName });
-  await page.getByLabel("时长（微秒）").fill("2000000");
+  await page.getByLabel("音频时长（秒）").fill("2");
   await page.getByRole("button", { name: "添加音频", exact: true }).click();
   await waitForCommandCount(page, app, "addAudioSegment", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(audioName)}`) })).toBeVisible();
