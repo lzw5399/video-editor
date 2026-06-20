@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: blocked
-stopped_at: "Blocked after 15.2-04E: packaged/CDP product E2E and macOS child-window native WGPU presenter still report AppKit occlusion-invisible before present"
-last_updated: "2026-06-20T01:22:11.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04E replaced ElectronApplication-only product observation with packaged-app CDP plus test-only IPC, then tried a macOS child-window WGPU presenter; real playback still fails closed because AppKit remains inactive/occlusion-invisible
+status: in_progress
+stopped_at: "Executing 15.2-04F: package foreground/window-server gate and macOS WGPU surface presentation repair before 15.2-05/06"
+last_updated: "2026-06-20T01:36:40.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04F inserted after 04E to separate packaged-app foreground/window-server failure from native WGPU compositor failure; 15.2-05/06 remain unreleased
 progress:
   total_phases: 23
   completed_phases: 18
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-04E
-Status: Blocked — packaged/CDP product E2E and child-window native WGPU presenter still fail before present because AppKit reports occlusion-invisible
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04E added the packaged-app CDP harness and child-window presenter attempt, but product playback still fails closed before `renderGraphGpuComposited`
+Plan: 15.2-04F
+Status: In progress — package foreground/window-server gate and macOS WGPU surface presentation repair
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04F inserted after 04E to prove the packaged app owns a foreground, window-server-visible preview window before WGPU acquire
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly, 15.2-04F active, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
 
 ## Performance Metrics
 
@@ -191,6 +191,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly
 - Phase 15.2 Plan 04A added the Rust-owned realtime playback scheduler, macOS CoreVideo/Metal to WGPU NV12 import bridge, and Electron host wiring, but remains blocked because WGPU surface acquisition reports `surface is occluded`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04D replaced the 04C top-level overlay attempt with an Electron-window child NSView/CAMetalLayer WGPU surface and added NSRunningApplication diagnostics, but product E2E still fails closed because the automated Electron/packaged app remains `appActive=false`, `runningAppActive=false`, `appOcclusionVisible=false`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
+- Phase 15.2 Plan 04F owns the remaining packaged macOS foreground/window-server gate after probes showed CDP and CGWindow onscreen entries can exist while System Events still reports `frontmost=false` and `windows=0`; downstream 15.2-05/06 remain blocked until WGPU presents real renderGraphGpuComposited frames. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
