@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  USER_JOURNEY_AV_VIDEO,
   USER_JOURNEY_OVERLAY_IMAGE,
   USER_JOURNEY_MOVING_VIDEO,
   USER_JOURNEY_TONE_AUDIO,
@@ -258,6 +259,31 @@ test("product playback UAT uses native audio output instead of status-only or mo
     await expect(
       page.getByLabel("输出设备状态"),
       "product playback must not report mock/status-only audio as audible output"
+    ).not.toContainText(/Mock|mock|模拟|系统默认/);
+    await waitForCompositedPreviewEvidence(page, app, 12_000);
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback UAT plays embedded video audio through native output", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_AV_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_AV_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_AV_VIDEO);
+
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await activateProductJourneyApp(app, page);
+    await controls.getByRole("button", { name: "播放预览" }).click();
+
+    await expect
+      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
+      .toContain("playAudioPreview");
+    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放", { timeout: 10_000 });
+    await expect(
+      page.getByLabel("输出设备状态"),
+      "embedded video audio must use native output, not mock/status-only audio"
     ).not.toContainText(/Mock|mock|模拟|系统默认/);
     await waitForCompositedPreviewEvidence(page, app, 12_000);
   } finally {
