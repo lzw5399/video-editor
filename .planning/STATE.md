@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 15.3 ready to execute from 15.3-02
-last_updated: "2026-06-20T08:20:23Z"
-last_activity: 2026-06-20 -- Phase 15.3 Plan 01 completed production project entry before import
+stopped_at: Completed 15.3-02-PLAN.md
+last_updated: "2026-06-20T09:30:01.409Z"
+last_activity: 2026-06-20 -- Phase 15.3 Plan 02 moved export to the top-right modal workflow
 progress:
   total_phases: 23
   completed_phases: 19
   total_plans: 141
-  completed_plans: 134
-  percent: 95
+  completed_plans: 135
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
-Plan: 15.3-02
-Status: Ready to execute Plan 15.3-02
-Last activity: 2026-06-20 -- Phase 15.3 Plan 01 completed production project entry before import
+Plan: 15.3-03
+Status: Ready to execute Plan 15.3-03
+Last activity: 2026-06-20 -- Phase 15.3 Plan 02 moved export to the top-right modal workflow
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 1/8 plans complete
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 2/8 plans complete
 
 ## Performance Metrics
 
@@ -175,6 +175,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P05 | resumed | 3 tasks | 21 files |
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P06 | resumed | 3 tasks | 4 files |
 | Phase 15.3 P01 | 80min | 3 tasks | 10 files |
+| Phase 15.3 P02 | 43min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -436,6 +437,9 @@ Recent decisions affecting current work:
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04C is required after 04B because an executed-but-blocked summary is not release evidence. — 15.2-05/06 must remain blocked until normal Electron import-add-play acquires a non-occluded WGPU surface and emits visible renderGraphGpuComposited evidence.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04D is required after 04C because the blocker is now specifically AppKit foreground/active-space visibility and product surface placement. — A top-level overlay with occlusionVisible=false is not release evidence; the next path must make the Electron app/window foreground-visible and attach the WGPU surface inside the editor window hierarchy.
 - [Phase 15.2-04C]: Do not execute 15.2-05/06 because normal product playback still cannot acquire a non-occluded macOS WGPU surface; diagnostics are investigation evidence only, not product success.
+- [Phase 15.3]: Export now lives in the top-right product action and accessible modal; PreviewMonitor no longer exposes a production export panel.
+- [Phase 15.3]: Export modal settings collect UI intent only; generated command helpers and App callbacks continue to submit export command envelopes.
+- [Phase 15.3]: FFmpeg progress timestamp N/A is ignored as an unavailable sample while malformed numeric progress remains an error.
 
 ### Pending Todos
 
@@ -472,6 +476,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-20T08:20:23Z
-Stopped at: Completed 15.3-01-PLAN.md
+Last session: 2026-06-20T09:30:01.409Z
+Stopped at: Completed 15.3-02-PLAN.md
 Resume file: None
