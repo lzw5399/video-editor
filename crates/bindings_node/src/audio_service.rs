@@ -1,11 +1,14 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::fs;
 
 use audio_engine::{
-    AudioPreviewError, AudioPreviewRuntime, AudioPreviewSessionConfig, AudioPreviewSessionId,
+    AudioOutputDevice, AudioPreviewError, AudioPreviewRuntime, AudioPreviewSessionConfig,
+    AudioPreviewSessionId,
 };
 use audio_output_desktop::{
+    CpalAudioOutputDevice, CpalAudioOutputSink, DesktopAudioOutputBackend,
     DesktopAudioOutputBackendCapabilities, DesktopAudioOutputCapabilityStatus,
     probe_desktop_audio_output_capabilities,
 };
@@ -13,21 +16,28 @@ use draft_model::{
     AudioOutputDeviceStatus, AudioOutputDeviceSummary, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
     CommandError, CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope,
-    Microseconds, RationalFrameRate, TargetTimerange, WaveformDisplayPeaksResponse,
-    WaveformDisplayStatus,
+    Draft, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TargetTimerange,
+    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
+use project_store::resolve_material_uri;
 use realtime_preview_runtime::{PlaybackRate, PlaybackState};
 use serde::{Deserialize, Serialize};
 
 const SESSION_PREFIX: &str = "audio-session-";
 const MAX_WAVEFORM_PEAK_BINS: u16 = 512;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct AudioPreviewBindingRegistry {
     runtime: AudioPreviewRuntime,
     next_binding_id: u64,
     sessions: BTreeMap<String, AudioPreviewSessionId>,
+    outputs: BTreeMap<String, NativeAudioPreviewOutput>,
     selected_device_id: Option<String>,
+}
+
+struct NativeAudioPreviewOutput {
+    sink: CpalAudioOutputSink,
+    device: AudioOutputDeviceSummary,
 }
 
 impl AudioPreviewBindingRegistry {
@@ -36,6 +46,7 @@ impl AudioPreviewBindingRegistry {
             runtime: AudioPreviewRuntime::new(),
             next_binding_id: 1,
             sessions: BTreeMap::new(),
+            outputs: BTreeMap::new(),
             selected_device_id: None,
         }
     }
@@ -57,6 +68,7 @@ impl AudioPreviewBindingRegistry {
     pub fn play(
         &mut self,
         session_id: &str,
+        draft: Option<&Draft>,
         target_time: Microseconds,
         playback_generation: u64,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
@@ -72,12 +84,20 @@ impl AudioPreviewBindingRegistry {
                 vec!["stale playback generation rejected".to_owned()],
             ));
         }
+        let draft = draft.ok_or_else(|| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::InvalidPayload,
+                "audio preview playback requires the current draft",
+            )
+        })?;
+        let output = self.open_native_output_for_draft(draft, target_time)?;
         let runtime_id = self.runtime_session_id(session_id)?;
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
             .and_then(|_| self.runtime.resume(runtime_id))
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.outputs.insert(session_id.to_owned(), output);
         Ok(command_response(
             session_id,
             generation.get(),
@@ -93,6 +113,7 @@ impl AudioPreviewBindingRegistry {
         &mut self,
         session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
+        self.outputs.remove(session_id);
         let runtime_id = self.runtime_session_id(session_id)?;
         let generation = self
             .runtime
@@ -114,6 +135,7 @@ impl AudioPreviewBindingRegistry {
         &mut self,
         session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
+        self.outputs.remove(session_id);
         let runtime_id = self.runtime_session_id(session_id)?;
         let generation = self
             .runtime
@@ -185,13 +207,24 @@ impl AudioPreviewBindingRegistry {
             .status(runtime_id)
             .map_err(AudioPreviewBindingError::runtime)?;
         let device = self
-            .selected_device_id
-            .as_deref()
-            .and_then(|selected| {
-                self.list_output_devices().ok().and_then(|devices| {
-                    devices
-                        .into_iter()
-                        .find(|device| device.selection_id == selected)
+            .outputs
+            .get(session_id)
+            .map(|output| {
+                let mut device = output.device.clone();
+                device.diagnostics.push(format!(
+                    "native queued samples: {}; underrun samples: {}",
+                    output.sink.queued_sample_count(),
+                    output.sink.underrun_sample_count()
+                ));
+                device
+            })
+            .or_else(|| {
+                self.selected_device_id.as_deref().and_then(|selected| {
+                    self.list_output_devices().ok().and_then(|devices| {
+                        devices
+                            .into_iter()
+                            .find(|device| device.selection_id == selected)
+                    })
                 })
             })
             .or_else(|| {
@@ -220,12 +253,56 @@ impl AudioPreviewBindingRegistry {
         let mut devices = capabilities
             .backends
             .iter()
+            .filter(|backend| backend.backend == DesktopAudioOutputBackend::Native)
             .flat_map(device_summaries)
             .collect::<Vec<_>>();
         if devices.is_empty() {
             devices.push(missing_device_summary());
         }
         Ok(devices)
+    }
+
+    fn open_native_output_for_draft(
+        &self,
+        draft: &Draft,
+        target_time: Microseconds,
+    ) -> Result<NativeAudioPreviewOutput, AudioPreviewBindingError> {
+        let device = CpalAudioOutputDevice::default_output().map_err(|diagnostic| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::DeviceUnavailable,
+                format!("native audio output unavailable: {}", diagnostic.message),
+            )
+        })?;
+        let capabilities = device.capabilities();
+        let mut sink = device.open_stream(&capabilities).map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::DeviceUnavailable,
+                error.to_string(),
+            )
+        })?;
+        let samples = render_draft_wav_preview(
+            draft,
+            target_time,
+            capabilities.sample_rate_hz,
+            capabilities.max_channel_count,
+        )?;
+        sink.enqueue_f32_interleaved(&samples).map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::RuntimeFailed,
+                error.to_string(),
+            )
+        })?;
+        sink.start().map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::DeviceUnavailable,
+                error.to_string(),
+            )
+        })?;
+        let summary = native_device_summary(device.summary());
+        Ok(NativeAudioPreviewOutput {
+            sink,
+            device: summary,
+        })
     }
 
     pub fn select_output_device(
@@ -430,6 +507,7 @@ fn audio_command_result(
             let session_id = required_session_id(&payload)?;
             serialize(registry.play(
                 session_id,
+                payload.draft.as_ref(),
                 payload.target_time.unwrap_or(Microseconds::ZERO),
                 payload.playback_generation.unwrap_or(0),
             )?)
@@ -612,6 +690,216 @@ fn device_summaries(
             diagnostics: backend_diagnostic_messages(backend).collect(),
         })
         .collect()
+}
+
+fn native_device_summary(device: &audio_output_desktop::DesktopAudioDeviceSummary) -> AudioOutputDeviceSummary {
+    AudioOutputDeviceSummary {
+        selection_id: device.device_id.clone(),
+        display_name: device.safe_label.clone(),
+        status: AudioOutputDeviceStatus::Ready,
+        status_label: "原生输出设备就绪".to_owned(),
+        is_default: device.default_device,
+        sample_rate_hz: device.sample_rates_hz.first().copied(),
+        channel_count: Some(device.max_channel_count),
+        diagnostics: vec!["native CPAL output stream is active".to_owned()],
+    }
+}
+
+fn render_draft_wav_preview(
+    draft: &Draft,
+    target_time: Microseconds,
+    output_sample_rate_hz: u32,
+    output_channels: u16,
+) -> Result<Vec<f32>, AudioPreviewBindingError> {
+    if output_sample_rate_hz == 0 || output_channels == 0 {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::DeviceUnavailable,
+            "native audio output reported invalid sample rate or channel count",
+        ));
+    }
+    let output_channels = usize::from(output_channels.min(2));
+    let output_frame_count = usize::try_from(output_sample_rate_hz)
+        .unwrap_or(48_000)
+        .saturating_mul(4);
+    let mut mixed = vec![0.0f32; output_frame_count.saturating_mul(output_channels)];
+    let materials = draft
+        .materials
+        .iter()
+        .map(|material| (material.material_id.clone(), material))
+        .collect::<BTreeMap<MaterialId, &Material>>();
+    let mut mixed_any = false;
+
+    for segment in draft.tracks.iter().flat_map(|track| track.segments.iter()) {
+        let Some(segment_end) = segment.target_timerange.checked_end() else {
+            continue;
+        };
+        if segment_end <= target_time || segment.target_timerange.start >= Microseconds::new(
+            target_time
+                .get()
+                .saturating_add(u64::try_from(output_frame_count).unwrap_or(0).saturating_mul(1_000_000) / u64::from(output_sample_rate_hz)),
+        ) {
+            continue;
+        }
+        let Some(material) = materials.get(&segment.material_id).copied() else {
+            continue;
+        };
+        if material.kind != MaterialKind::Audio || !material.metadata.has_audio {
+            continue;
+        }
+        let path = resolve_material_uri(".", &material.uri).map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::InvalidPayload,
+                format!("audio material path cannot be resolved: {error}"),
+            )
+        })?
+        .ok_or_else(|| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::InvalidPayload,
+                "audio material URI does not resolve to a local PCM source",
+            )
+        })?;
+        let source = read_pcm16_wav(&path)?;
+        mix_wav_segment(
+            &mut mixed,
+            output_channels,
+            output_sample_rate_hz,
+            target_time,
+            segment,
+            &source,
+        );
+        mixed_any = true;
+    }
+
+    if !mixed_any || !mixed.iter().any(|sample| sample.abs() > 0.000_01) {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            "audio preview found no non-zero PCM samples for the current timeline range",
+        ));
+    }
+    Ok(mixed)
+}
+
+fn mix_wav_segment(
+    output: &mut [f32],
+    output_channels: usize,
+    output_sample_rate_hz: u32,
+    target_time: Microseconds,
+    segment: &draft_model::Segment,
+    source: &DecodedWavPcm,
+) {
+    let output_frames = output.len() / output_channels;
+    for output_frame in 0..output_frames {
+        let timeline_time = target_time.get().saturating_add(
+            u64::try_from(output_frame).unwrap_or(0).saturating_mul(1_000_000)
+                / u64::from(output_sample_rate_hz),
+        );
+        if timeline_time < segment.target_timerange.start.get() {
+            continue;
+        }
+        let segment_offset = timeline_time - segment.target_timerange.start.get();
+        if segment_offset >= segment.target_timerange.duration.get() {
+            continue;
+        }
+        let source_time = segment.source_timerange.start.get().saturating_add(segment_offset);
+        if source_time >= segment.source_timerange.start.get().saturating_add(segment.source_timerange.duration.get()) {
+            continue;
+        }
+        let source_frame = usize::try_from(
+            source_time.saturating_mul(u64::from(source.sample_rate_hz)) / 1_000_000,
+        )
+        .unwrap_or(usize::MAX);
+        if source_frame >= source.frame_count {
+            continue;
+        }
+        for channel in 0..output_channels {
+            let source_channel = channel.min(source.channels.saturating_sub(1));
+            let source_index = source_frame
+                .saturating_mul(source.channels)
+                .saturating_add(source_channel);
+            let output_index = output_frame
+                .saturating_mul(output_channels)
+                .saturating_add(channel);
+            output[output_index] = (output[output_index] + source.samples[source_index]).clamp(-1.0, 1.0);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DecodedWavPcm {
+    sample_rate_hz: u32,
+    channels: usize,
+    frame_count: usize,
+    samples: Vec<f32>,
+}
+
+fn read_pcm16_wav(path: &std::path::Path) -> Result<DecodedWavPcm, AudioPreviewBindingError> {
+    let bytes = fs::read(path).map_err(|error| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            format!("failed to read audio material {}: {error}", path.display()),
+        )
+    })?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            "audio preview currently requires PCM WAV material",
+        ));
+    }
+
+    let mut offset = 12usize;
+    let mut format: Option<(u16, u16, u32, u16)> = None;
+    let mut data: Option<&[u8]> = None;
+    while offset.saturating_add(8) <= bytes.len() {
+        let chunk_id = &bytes[offset..offset + 4];
+        let chunk_size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        offset = offset.saturating_add(8);
+        if offset.saturating_add(chunk_size) > bytes.len() {
+            break;
+        }
+        let chunk = &bytes[offset..offset + chunk_size];
+        if chunk_id == b"fmt " && chunk.len() >= 16 {
+            format = Some((
+                u16::from_le_bytes(chunk[0..2].try_into().unwrap()),
+                u16::from_le_bytes(chunk[2..4].try_into().unwrap()),
+                u32::from_le_bytes(chunk[4..8].try_into().unwrap()),
+                u16::from_le_bytes(chunk[14..16].try_into().unwrap()),
+            ));
+        } else if chunk_id == b"data" {
+            data = Some(chunk);
+        }
+        offset = offset.saturating_add(chunk_size + (chunk_size % 2));
+    }
+
+    let (format_tag, channels, sample_rate_hz, bits_per_sample) = format.ok_or_else(|| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            "PCM WAV fmt chunk is missing",
+        )
+    })?;
+    if format_tag != 1 || bits_per_sample != 16 || channels == 0 {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            "audio preview currently supports PCM s16le WAV only",
+        ));
+    }
+    let data = data.ok_or_else(|| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            "PCM WAV data chunk is missing",
+        )
+    })?;
+    let channels = usize::from(channels);
+    let samples = data
+        .chunks_exact(2)
+        .map(|sample| f32::from(i16::from_le_bytes([sample[0], sample[1]])) / f32::from(i16::MAX))
+        .collect::<Vec<_>>();
+    let frame_count = samples.len() / channels;
+    Ok(DecodedWavPcm {
+        sample_rate_hz,
+        channels,
+        frame_count,
+        samples,
+    })
 }
 
 fn backend_diagnostic_messages(

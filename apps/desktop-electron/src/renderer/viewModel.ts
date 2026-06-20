@@ -819,7 +819,7 @@ export function audioDevicesFromSummaries(
 ): AudioDeviceDisplayModel {
   const devices = summaries.map((device) => ({
     selectionId: device.selectionId,
-    displayName: device.isDefault ? "系统默认" : device.displayName,
+    displayName: safeAudioDeviceDisplayName(device.displayName),
     status: device.status,
     statusLabel: safeAudioDeviceStatusLabel(device.statusLabel, device.status),
     isDefault: device.isDefault
@@ -835,6 +835,11 @@ export function audioDevicesFromSummaries(
     selectedDeviceId: selected,
     statusLabel: selectedDevice.statusLabel
   };
+}
+
+function safeAudioDeviceDisplayName(displayName: string): string {
+  const trimmed = displayName.trim();
+  return trimmed.length === 0 ? "输出设备" : trimmed;
 }
 
 export function waveformDisplayFromResponse(response: WaveformDisplayPeaksResponse): WaveformDisplayModel {

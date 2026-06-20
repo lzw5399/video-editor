@@ -1,7 +1,8 @@
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
+use std::collections::VecDeque;
 
 use audio_engine::{
     AudioBufferResult, AudioOutputCapabilities, AudioOutputDevice, AudioOutputError,
@@ -78,52 +79,32 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
         let sample_format = self.default_config.sample_format();
         let config: cpal::StreamConfig = self.default_config.clone().into();
         let presented_result_count = Arc::new(AtomicU64::new(0));
-        let callback_count = Arc::new(AtomicU64::new(0));
+        let queued_samples = Arc::new(Mutex::new(VecDeque::new()));
+        let underrun_sample_count = Arc::new(AtomicU64::new(0));
         let error_callback = |error| eprintln!("native audio output stream diagnostic: {error}");
 
         let stream = match sample_format {
-            cpal::SampleFormat::I8 => {
-                build_silent_stream::<i8>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::I16 => {
-                build_silent_stream::<i16>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::I24 => build_silent_stream::<cpal::I24>(
+            cpal::SampleFormat::I16 => build_queued_stream::<I16Writer>(
                 &self.device,
                 config,
-                callback_count,
+                queued_samples.clone(),
+                underrun_sample_count.clone(),
                 error_callback,
             ),
-            cpal::SampleFormat::I32 => {
-                build_silent_stream::<i32>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::I64 => {
-                build_silent_stream::<i64>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::U8 => {
-                build_silent_stream::<u8>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::U16 => {
-                build_silent_stream::<u16>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::U24 => build_silent_stream::<cpal::U24>(
+            cpal::SampleFormat::U16 => build_queued_stream::<U16Writer>(
                 &self.device,
                 config,
-                callback_count,
+                queued_samples.clone(),
+                underrun_sample_count.clone(),
                 error_callback,
             ),
-            cpal::SampleFormat::U32 => {
-                build_silent_stream::<u32>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::U64 => {
-                build_silent_stream::<u64>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::F32 => {
-                build_silent_stream::<f32>(&self.device, config, callback_count, error_callback)
-            }
-            cpal::SampleFormat::F64 => {
-                build_silent_stream::<f64>(&self.device, config, callback_count, error_callback)
-            }
+            cpal::SampleFormat::F32 => build_queued_stream::<F32Writer>(
+                &self.device,
+                config,
+                queued_samples.clone(),
+                underrun_sample_count.clone(),
+                error_callback,
+            ),
             format => {
                 return Err(AudioOutputError::InvalidCapabilities {
                     reason: format!("unsupported native output sample format: {format:?}"),
@@ -137,6 +118,8 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
         Ok(CpalAudioOutputSink {
             stream,
             presented_result_count,
+            queued_samples,
+            underrun_sample_count,
         })
     }
 }
@@ -188,17 +171,57 @@ fn validate_native_output_capabilities(
 
 pub struct CpalAudioOutputSink {
     stream: cpal::Stream,
+    queued_samples: Arc<Mutex<VecDeque<f32>>>,
     presented_result_count: Arc<AtomicU64>,
+    underrun_sample_count: Arc<AtomicU64>,
+}
+
+impl CpalAudioOutputSink {
+    pub fn enqueue_f32_interleaved(&mut self, samples: &[f32]) -> Result<(), AudioOutputError> {
+        if samples.is_empty() {
+            return Err(AudioOutputError::InvalidCapabilities {
+                reason: "native output requires non-empty PCM samples".to_owned(),
+            });
+        }
+        let mut queue = self.queued_samples.lock().map_err(|_| {
+            AudioOutputError::InvalidCapabilities {
+                reason: "native output PCM queue lock failed".to_owned(),
+            }
+        })?;
+        let max_samples = 48_000usize * 2 * 8;
+        for sample in samples {
+            if queue.len() >= max_samples {
+                let _ = queue.pop_front();
+            }
+            queue.push_back(sample.clamp(-1.0, 1.0));
+        }
+        Ok(())
+    }
+
+    pub fn start(&self) -> Result<(), AudioOutputError> {
+        self.stream
+            .play()
+            .map_err(|error| AudioOutputError::InvalidCapabilities {
+                reason: format!("failed to start native output stream: {error}"),
+            })
+    }
+
+    pub fn queued_sample_count(&self) -> usize {
+        self.queued_samples
+            .lock()
+            .map(|queue| queue.len())
+            .unwrap_or_default()
+    }
+
+    pub fn underrun_sample_count(&self) -> u64 {
+        self.underrun_sample_count.load(Ordering::Relaxed)
+    }
 }
 
 impl AudioOutputSink for CpalAudioOutputSink {
     fn present(&mut self, result: &AudioBufferResult) -> Result<(), AudioOutputError> {
         if result.presented {
-            self.stream
-                .play()
-                .map_err(|error| AudioOutputError::InvalidCapabilities {
-                    reason: format!("failed to start native output stream: {error}"),
-                })?;
+            self.start()?;
         }
         self.presented_result_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -374,22 +397,78 @@ fn native_diagnostic(message: &str, ready: bool) -> DesktopAudioOutputDiagnostic
     }
 }
 
-fn build_silent_stream<T>(
+trait QueuedSampleWriter {
+    type Sample: cpal::Sample + cpal::SizedSample;
+
+    fn equilibrium() -> Self::Sample;
+    fn from_f32(value: f32) -> Self::Sample;
+}
+
+struct F32Writer;
+struct I16Writer;
+struct U16Writer;
+
+impl QueuedSampleWriter for F32Writer {
+    type Sample = f32;
+
+    fn equilibrium() -> Self::Sample {
+        0.0
+    }
+
+    fn from_f32(value: f32) -> Self::Sample {
+        value.clamp(-1.0, 1.0)
+    }
+}
+
+impl QueuedSampleWriter for I16Writer {
+    type Sample = i16;
+
+    fn equilibrium() -> Self::Sample {
+        0
+    }
+
+    fn from_f32(value: f32) -> Self::Sample {
+        (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16
+    }
+}
+
+impl QueuedSampleWriter for U16Writer {
+    type Sample = u16;
+
+    fn equilibrium() -> Self::Sample {
+        u16::MAX / 2
+    }
+
+    fn from_f32(value: f32) -> Self::Sample {
+        (((value.clamp(-1.0, 1.0) + 1.0) * 0.5) * f32::from(u16::MAX)).round() as u16
+    }
+}
+
+fn build_queued_stream<W>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
-    callback_count: Arc<AtomicU64>,
+    queued_samples: Arc<Mutex<VecDeque<f32>>>,
+    underrun_sample_count: Arc<AtomicU64>,
     error_callback: impl FnMut(cpal::Error) + Send + 'static,
 ) -> Result<cpal::Stream, cpal::Error>
 where
-    T: cpal::Sample + cpal::SizedSample,
+    W: QueuedSampleWriter + Send + 'static,
 {
     device.build_output_stream(
         config,
-        move |data: &mut [T], _| {
+        move |data: &mut [W::Sample], _| {
+            let mut underruns = 0u64;
+            let mut queue = queued_samples.lock().ok();
             for sample in data.iter_mut() {
-                *sample = cpal::Sample::EQUILIBRIUM;
+                let value = queue.as_mut().and_then(|queue| queue.pop_front());
+                *sample = value.map(W::from_f32).unwrap_or_else(|| {
+                    underruns = underruns.saturating_add(1);
+                    W::equilibrium()
+                });
             }
-            callback_count.fetch_add(1, Ordering::Relaxed);
+            if underruns > 0 {
+                underrun_sample_count.fetch_add(underruns, Ordering::Relaxed);
+            }
         },
         error_callback,
         None,

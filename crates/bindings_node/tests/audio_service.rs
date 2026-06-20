@@ -50,32 +50,36 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
         .create_session(test_config())
         .expect("audio session should be created");
 
-    let playing = registry
+    let play_without_draft = registry
         .play(
             &created.session_id,
+            None,
             Microseconds::new(0),
             created.generation,
         )
-        .expect("audio play should be accepted");
-    assert!(playing.accepted);
-    assert_eq!(playing.status, AudioPreviewPlaybackStatus::Playing);
+        .expect_err("audio play must fail closed without draft PCM");
+    assert_eq!(
+        play_without_draft.kind(),
+        AudioPreviewBindingErrorKind::InvalidPayload
+    );
 
-    let status_after_play = registry
+    let status_after_failed_play = registry
         .status(&created.session_id)
-        .expect("playing status should be readable");
-    assert_eq!(status_after_play.target_time, Microseconds::new(0));
+        .expect("status should remain readable after failed play");
+    assert_eq!(status_after_failed_play.target_time, Microseconds::new(0));
 
     let sought = registry
         .seek(&created.session_id, Microseconds::new(500_000))
         .expect("audio seek should advance generation");
-    assert!(sought.generation > playing.generation);
+    assert!(sought.generation > created.generation);
     assert_eq!(sought.target_time, Microseconds::new(500_000));
 
     let stale = registry
         .play(
             &created.session_id,
+            None,
             Microseconds::new(600_000),
-            playing.generation,
+            created.generation,
         )
         .expect("stale audio play should return classified response");
     assert!(!stale.accepted);
@@ -90,20 +94,24 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
     let current = registry
         .status(&created.session_id)
         .expect("current generation should be readable");
-    let accepted_seek_play = registry
+    let fresh_without_draft = registry
         .play(
             &created.session_id,
+            None,
             Microseconds::new(600_000),
             current.generation,
         )
-        .expect("fresh generation play should be accepted");
-    assert!(accepted_seek_play.accepted);
-    let status_after_seek_play = registry
-        .status(&created.session_id)
-        .expect("play should update runtime target time");
+        .expect_err("fresh generation play still requires draft PCM");
     assert_eq!(
-        status_after_seek_play.target_time,
-        Microseconds::new(600_000)
+        fresh_without_draft.kind(),
+        AudioPreviewBindingErrorKind::InvalidPayload
+    );
+    let status_after_seek = registry
+        .status(&created.session_id)
+        .expect("failed play must not clear seek target time");
+    assert_eq!(
+        status_after_seek.target_time,
+        Microseconds::new(500_000)
     );
 
     let paused = registry
@@ -128,13 +136,9 @@ fn audio_service_status_can_seed_realtime_preview_sync_state() {
     let created = registry
         .create_session(test_config())
         .expect("audio session should be created");
-    let playing = registry
-        .play(
-            &created.session_id,
-            Microseconds::new(900_000),
-            created.generation,
-        )
-        .expect("audio play should be accepted");
+    let sought = registry
+        .seek(&created.session_id, Microseconds::new(900_000))
+        .expect("audio seek should be accepted");
     let status = registry
         .status(&created.session_id)
         .expect("audio status should be readable");
@@ -148,7 +152,7 @@ fn audio_service_status_can_seed_realtime_preview_sync_state() {
         diagnostics: status.diagnostics.clone(),
     };
 
-    assert!(playing.accepted);
+    assert!(sought.accepted);
     assert_eq!(sync.session_id, created.session_id);
     assert_eq!(
         sync.playback_generation,
@@ -156,7 +160,7 @@ fn audio_service_status_can_seed_realtime_preview_sync_state() {
     );
     assert_eq!(sync.target_time, Microseconds::new(900_000));
     assert_eq!(sync.buffered_until, Microseconds::new(900_000));
-    assert_eq!(sync.status, AudioPreviewPlaybackStatus::Playing);
+    assert_eq!(sync.status, AudioPreviewPlaybackStatus::Ready);
 
     let serialized = serde_json::to_string(&sync).expect("audio sync state serializes");
     for forbidden in [

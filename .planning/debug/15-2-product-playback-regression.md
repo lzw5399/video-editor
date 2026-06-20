@@ -2,7 +2,7 @@
 status: investigating
 trigger: "User manual UAT reports Phase 15.2 product playback is not complete: preview surface is offset left/down during play, playback has no audio, video playback is stuttery/desynchronized from the timeline, and text/font editing plus on-canvas drag/rotate interactions are not available."
 created: "2026-06-20T05:13:58Z"
-updated: "2026-06-20T06:38:00Z"
+updated: "2026-06-20T07:23:51Z"
 ---
 
 # Debug Session: 15.2 Product Playback Regression
@@ -20,7 +20,7 @@ updated: "2026-06-20T06:38:00Z"
 - hypothesis: "Phase 15.2 tests proved limited GPU compositor evidence and preview-region pixel motion, but did not assert full product playback placement, audible audio routing, timeline/video clock synchronization, or direct user-editing interactions."
 - test: "Re-run/read the normal Electron Playwright product journey, inspect the playback host/main/renderer contracts, then add failing UAT-level checks before changing implementation."
 - expecting: "Existing 15.2 E2E will pass despite missing one or more user-visible requirements, proving the gate is insufficient."
-- next_action: "Continue fixing the remaining RED product UAT check: native audio output."
+- next_action: "Commit the native audio and placement/sync UAT fixes, then add a product UAT for embedded video-track audio so the dashcam-video playback case cannot pass silently."
 - reasoning_checkpoint: "Do not continue Phase 15.3 until this debug session either identifies and fixes the 15.2 gap or formally reopens 15.2 with an executable remediation plan."
 - tdd_checkpoint: "Add or strengthen E2E/regression tests before accepting any playback fix."
 
@@ -59,6 +59,9 @@ updated: "2026-06-20T06:38:00Z"
 - timestamp: "2026-06-20T06:38:00Z"
   observation: "Added direct preview overlay pointer drag that commits through `updateSegmentVisual` and applies segment visual transform to text overlay display. Verified `pnpm --filter @video-editor/desktop package:dir` plus `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line -g \"direct canvas drag\"` passes."
   implication: "Visible text/segment overlays now support a normal-user canvas drag path backed by the existing timeline command model."
+- timestamp: "2026-06-20T07:23:51Z"
+  observation: "Replaced status-only audio preview with a native CPAL PCM output path for timeline audio materials, removed the renderer label masking that reported default devices as `系统默认`, and normalized native surface placement evidence across Electron/AppKit coordinate conventions. Verified `cargo check -p audio_output_desktop -p bindings_node --locked`, `cargo test -p bindings_node audio_service -- --nocapture`, `pnpm --filter @video-editor/desktop package:dir`, `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line -g \"product playback UAT|product text and transform interaction UAT\"`, and the full `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line` pass."
+  implication: "The reopened 15.2 product UAT checks for native surface placement, separate timeline-audio native output, timeline/video sync, and direct canvas drag now pass against the packaged desktop app. This still does not prove embedded audio from a video material plays, so the dashcam-video no-sound case remains open until covered by its own product UAT."
 
 ## Eliminated
 

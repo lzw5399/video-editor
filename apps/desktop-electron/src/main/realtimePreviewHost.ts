@@ -681,25 +681,21 @@ function hostScreenRectForBounds(
   nativeScreenRect: RealtimePreviewScreenRect
 ): RealtimePreviewScreenRect {
   const contentBounds = window.getContentBounds();
-  const display = screen.getDisplayMatching(window.getBounds());
-  const topLeftRect = {
+  const directRect = {
     x: contentBounds.x + bounds.x,
     y: contentBounds.y + bounds.y,
     width: bounds.width,
     height: bounds.height
   };
+  const display = screen.getDisplayMatching(window.getBounds());
+  const flippedRect = {
+    ...directRect,
+    y: display.bounds.y + display.bounds.height - directRect.y - directRect.height
+  };
 
-  // AppKit reports screen rects in a bottom-left coordinate space. Convert the
-  // Electron top-left content rect into that same display-local coordinate
-  // space before comparing placement.
-  if (process.platform === "darwin" && nativeScreenRect.y > display.bounds.y + display.bounds.height / 2) {
-    return {
-      ...topLeftRect,
-      y: display.bounds.y + display.bounds.height - topLeftRect.y - topLeftRect.height
-    };
-  }
-
-  return topLeftRect;
+  return maxRectDelta(flippedRect, nativeScreenRect) < maxRectDelta(directRect, nativeScreenRect)
+    ? flippedRect
+    : directRect;
 }
 
 function maxRectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewScreenRect): number {

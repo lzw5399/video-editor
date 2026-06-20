@@ -226,7 +226,10 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     const after = await waitForCompositedPreviewEvidence(page, app, 12_000);
     const placement = after.hostState?.surfacePlacement ?? null;
     expect(placement, "product playback must expose native surface placement evidence").not.toBeNull();
-    expect(placement?.aligned, "native/WGPU surface must align with preview host").toBe(true);
+    expect(
+      placement?.aligned,
+      `native/WGPU surface must align with preview host: ${JSON.stringify(placement)}`
+    ).toBe(true);
     expect(placement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
   } finally {
     await app.close();
@@ -247,7 +250,6 @@ test("product playback UAT uses native audio output instead of status-only or mo
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
-    await waitForCompositedPreviewEvidence(page, app, 12_000);
 
     await expect
       .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
@@ -257,6 +259,7 @@ test("product playback UAT uses native audio output instead of status-only or mo
       page.getByLabel("输出设备状态"),
       "product playback must not report mock/status-only audio as audible output"
     ).not.toContainText(/Mock|mock|模拟|系统默认/);
+    await waitForCompositedPreviewEvidence(page, app, 12_000);
   } finally {
     await app.close();
   }
