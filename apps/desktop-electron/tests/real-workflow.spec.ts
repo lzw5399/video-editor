@@ -40,6 +40,7 @@ test("packaged no-mock import-preview-export workflow", async () => {
   const fixtures = await generatePhase6MediaFixtures();
   const { app, page } = await launchPackagedApp({
     ...REAL_RUNTIME_TEST_ENV,
+    VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: fixtures.bundlePath,
     VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.imagePath, fixtures.audioPath])
   });
 
@@ -70,6 +71,7 @@ async function launchDevApp(
     env: {
       ...process.env,
       ...REAL_RUNTIME_TEST_ENV,
+      VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: fixtures.bundlePath,
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([fixtures.videoPath, fixtures.imagePath, fixtures.audioPath]),
       ...env
     }

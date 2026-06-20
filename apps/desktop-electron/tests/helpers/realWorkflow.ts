@@ -26,6 +26,7 @@ export async function runRealImportPreviewExportWorkflow(
   page: Page,
   fixtures: Phase6MediaFixtures
 ): Promise<RealWorkflowResult> {
+  await enterProjectFromProductEntryIfNeeded(page, app);
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
   await expect(page.getByRole("button", { name: "请求预览帧" })).toBeEnabled({ timeout: 20_000 });
   await setBundlePath(page, fixtures.bundlePath);
@@ -86,6 +87,17 @@ export async function assertReopenedProjectState(page: Page, fixtures: Phase6Med
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
     fixtures.expectedTextContent
   );
+}
+
+async function enterProjectFromProductEntryIfNeeded(page: Page, app: ElectronApplication): Promise<void> {
+  if ((await page.getByRole("main", { name: "项目入口" }).count()) === 0) {
+    return;
+  }
+
+  const nextCount = (await countCommand(app, "saveProjectBundle")) + 1;
+  await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
+  await page.getByRole("button", { name: "新建项目" }).click();
+  await waitForCommandCount(page, app, "saveProjectBundle", nextCount);
 }
 
 export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {

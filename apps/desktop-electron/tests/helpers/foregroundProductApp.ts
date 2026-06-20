@@ -156,6 +156,14 @@ function testSwitchesFromEnv(env: NodeJS.ProcessEnv): string[] {
   if (env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES !== undefined) {
     switches.push(`--video-editor-test-mock-runtime-capabilities=${env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES}`);
   }
+  if (env.VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE !== undefined) {
+    switches.push(`--video-editor-test-new-project-bundle=${encodeURIComponent(env.VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE)}`);
+  }
+  if (env.VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE !== undefined) {
+    switches.push(
+      `--video-editor-test-pick-open-project-bundle=${encodeURIComponent(env.VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE)}`
+    );
+  }
   return switches;
 }
 

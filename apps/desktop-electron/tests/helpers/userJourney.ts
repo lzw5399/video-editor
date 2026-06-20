@@ -240,16 +240,19 @@ export async function launchProductJourneyApp(
   env: NodeJS.ProcessEnv = {}
 ): Promise<{ app: ProductJourneyAppController; page: Page }> {
   await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
+  const projectBundlePath = env.VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE ?? createProductJourneyProjectPath();
   const productEnv = {
     VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
     VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
     VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
     VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
+    VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
     ...env
   };
 
   if (process.platform === "darwin") {
     const launch = await launchForegroundProductApp(openMaterialFiles, productEnv);
+    await createProjectFromProductEntry(wrapForegroundController(launch.app), launch.page);
     await expectProductWorkspace(launch.page);
     return {
       app: wrapForegroundController(launch.app),
@@ -268,8 +271,25 @@ export async function launchProductJourneyApp(
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
   await activateProductWindow(app, page);
+  const controller = wrapElectronApp(app);
+  await createProjectFromProductEntry(controller, page);
   await expectProductWorkspace(page);
-  return { app: wrapElectronApp(app), page };
+  return { app: controller, page };
+}
+
+export async function expectProductEntry(page: Page): Promise<void> {
+  await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建项目" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开项目" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
+  await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toHaveCount(0);
+}
+
+export async function createProjectFromProductEntry(app: ProductJourneyAppController, page: Page): Promise<void> {
+  await expectProductEntry(page);
+  const nextCount = (await countCommand(app, "saveProjectBundle")) + 1;
+  await page.getByRole("button", { name: "新建项目" }).click();
+  await waitForCommandCount(app, "saveProjectBundle", nextCount);
 }
 
 export async function expectProductWorkspace(page: Page): Promise<void> {
@@ -284,6 +304,10 @@ export async function expectProductWorkspace(page: Page): Promise<void> {
   await expect(page.getByText("草稿包路径")).toHaveCount(0);
   await expect(page.getByText("素材路径")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导入路径" })).toHaveCount(0);
+}
+
+function createProductJourneyProjectPath(): string {
+  return join(tmpdir(), `video-editor-product-${Date.now()}-${Math.random().toString(16).slice(2)}.veproj`);
 }
 
 export async function importMaterialThroughProductPicker(
