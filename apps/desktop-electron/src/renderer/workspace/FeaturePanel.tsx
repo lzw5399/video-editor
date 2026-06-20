@@ -185,24 +185,28 @@ function MaterialPanel({
         </div>
       ) : null}
 
-      <ResourceTaskStrip
-        resourcePanel={workspace.resourcePanel}
-        pending={workspace.pendingCommand !== null}
-        onRefresh={onRefreshArtifactStatus}
-        onCancel={onCancelArtifactGeneration}
-        onRetry={onRetryArtifactGeneration}
-        onResume={onResumeArtifactGeneration}
-      />
+      {showDeveloperDiagnostics ? (
+        <ResourceTaskStrip
+          resourcePanel={workspace.resourcePanel}
+          pending={workspace.pendingCommand !== null}
+          onRefresh={onRefreshArtifactStatus}
+          onCancel={onCancelArtifactGeneration}
+          onRetry={onRetryArtifactGeneration}
+          onResume={onResumeArtifactGeneration}
+        />
+      ) : null}
 
       <MaterialList materials={filteredMaterials} resourceStatuses={workspace.resourcePanel.materials} />
 
-      <ResourceMaintenance
-        resourcePanel={workspace.resourcePanel}
-        pending={workspace.pendingCommand !== null}
-        onPrepareCleanup={onPrepareArtifactCleanup}
-        onConfirmCleanup={onConfirmArtifactCleanup}
-        onDismiss={onDismissResourceNotice}
-      />
+      {showDeveloperDiagnostics ? (
+        <ResourceMaintenance
+          resourcePanel={workspace.resourcePanel}
+          pending={workspace.pendingCommand !== null}
+          onPrepareCleanup={onPrepareArtifactCleanup}
+          onConfirmCleanup={onConfirmArtifactCleanup}
+          onDismiss={onDismissResourceNotice}
+        />
+      ) : null}
     </div>
   );
 }

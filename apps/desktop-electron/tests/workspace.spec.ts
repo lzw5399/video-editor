@@ -504,12 +504,19 @@ test("Chinese editor workspace opens with required regions and material states",
     await expectNoLeftSecondaryMenu(page);
 
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
+    const materialPanel = page.locator('[aria-label="素材面板"]');
     await expect(page.getByRole("navigation", { name: "资源分类" })).toHaveCount(0);
     await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
     await expect(page.getByLabel("素材路径")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "导入路径" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "刷新" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "检查丢失" })).toHaveCount(0);
+    await expect(materialPanel.getByLabel("资源任务")).toHaveCount(0);
+    await expect(materialPanel.getByLabel("资源维护")).toHaveCount(0);
+    for (const label of ["更新状态", "清理缓存", "资源任务", "重试", "恢复"]) {
+      await expect(materialPanel.getByText(label, { exact: true })).toHaveCount(0);
+      await expect(materialPanel.getByRole("button", { name: label })).toHaveCount(0);
+    }
     await expect(page.getByPlaceholder("搜索素材")).toBeVisible();
     const materialFilters = page.getByRole("group", { name: "素材筛选" });
     for (const filter of ["全部", "视频", "图片", "音频", "丢失"]) {
@@ -2022,7 +2029,7 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
 });
 
 test("素材资源状态 uses generated artifact command envelopes", async () => {
-  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true, showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -2054,7 +2061,7 @@ test("素材资源状态 uses generated artifact command envelopes", async () =>
 });
 
 test("资源任务 and 资源维护 update from Rust shaped artifact responses", async () => {
-  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true, showDeveloperDiagnostics: true });
 
   try {
     await expect(page.getByLabel("资源任务")).toContainText("生成中");
@@ -2073,6 +2080,7 @@ test("资源任务 and 资源维护 update from Rust shaped artifact responses",
 test("资源任务 limits visible rows and 素材资源状态 keeps material row height stable", async () => {
   const { app, page } = await launchWorkspaceApp({
     mockArtifactCommands: true,
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_ARTIFACT_TASK_COUNT: "4"
     }
@@ -2095,7 +2103,7 @@ test("资源任务 limits visible rows and 素材资源状态 keeps material row
 });
 
 test("资源维护 and 素材资源状态 hide forbidden internal production copy", async () => {
-  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true });
+  const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true, showDeveloperDiagnostics: true });
 
   try {
     const resourceText = [
