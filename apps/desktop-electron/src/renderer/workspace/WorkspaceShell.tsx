@@ -1,7 +1,12 @@
+import { useState } from "react";
+
 import {
   WORKSPACE_CATEGORIES,
   WORKSPACE_CATEGORY_META,
   artifactPreviewStatusLabel,
+  formatExportPhase,
+  formatExportPreset,
+  formatExportProgress,
   getSelectedSegmentView,
   type WorkspaceCategory,
   type WorkspaceState
@@ -143,6 +148,7 @@ export function WorkspaceShell({
   onRedoTimelineEdit
 }: WorkspaceShellProps): React.ReactElement {
   const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
@@ -170,6 +176,11 @@ export function WorkspaceShell({
             );
           })}
         </nav>
+        <div className="product-action-bar" aria-label="产品操作">
+          <button type="button" className="top-export-button" aria-label="导出" onClick={() => setExportModalOpen(true)}>
+            导出
+          </button>
+        </div>
       </header>
 
       <section className="material-panel" aria-label="素材面板">
@@ -209,7 +220,6 @@ export function WorkspaceShell({
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
           resourcePreviewStatusLabel={artifactPreviewStatusLabel(workspace.resourcePanel)}
-          exportState={workspace.export}
           audioPreview={workspace.audioPreview}
           audioDevices={workspace.audioDevices}
           audioParity={workspace.audioParity}
@@ -227,11 +237,6 @@ export function WorkspaceShell({
           onRequestPreviewFrame={onRequestPreviewFrame}
           onRequestPreviewSegment={onRequestPreviewSegment}
           onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
-          onExportOutputPathChange={onExportOutputPathChange}
-          onExportPresetChange={onExportPresetChange}
-          onStartExport={onStartExport}
-          onRefreshExportStatus={onRefreshExportStatus}
-          onCancelExport={onCancelExport}
           onRetryAudioPreview={onRetryAudioPreview}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
         />
@@ -277,6 +282,232 @@ export function WorkspaceShell({
           onRedo={onRedoTimelineEdit}
         />
       </section>
+
+      {exportModalOpen ? (
+        <ExportModal
+          workspace={workspace}
+          onClose={() => setExportModalOpen(false)}
+          onExportOutputPathChange={onExportOutputPathChange}
+          onExportPresetChange={onExportPresetChange}
+          onStartExport={onStartExport}
+          onRefreshExportStatus={onRefreshExportStatus}
+          onCancelExport={onCancelExport}
+        />
+      ) : null}
     </main>
+  );
+}
+
+type ExportModalProps = {
+  workspace: WorkspaceState;
+  onClose: () => void;
+  onExportOutputPathChange: (value: string) => void;
+  onExportPresetChange: (value: ExportPreset) => void;
+  onStartExport: () => void;
+  onRefreshExportStatus: () => void;
+  onCancelExport: () => void;
+};
+
+const EXPORT_SAMPLE_RATES = ["48 kHz", "44.1 kHz", "96 kHz"] as const;
+
+function ExportModal({
+  workspace,
+  onClose,
+  onExportOutputPathChange,
+  onExportPresetChange,
+  onStartExport,
+  onRefreshExportStatus,
+  onCancelExport
+}: ExportModalProps): React.ReactElement {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [sampleRateOpen, setSampleRateOpen] = useState(false);
+  const [sampleRate, setSampleRate] = useState<(typeof EXPORT_SAMPLE_RATES)[number]>("48 kHz");
+  const [includeAudio, setIncludeAudio] = useState(true);
+  const { export: exportState, runtimeDiagnostics } = workspace;
+  const pending = workspace.pendingCommand !== null;
+  const exportCanCancel =
+    exportState.jobId !== null &&
+    (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
+  const exportCompleted = exportState.phase === "completed";
+  const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
+  const exportMessage = exportState.error ?? exportState.diagnosticLabel ?? exportState.logSummary;
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="export-modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+        <header className="export-modal-header">
+          <h2 id="export-modal-title">导出</h2>
+          <button type="button" className="modal-icon-button" aria-label="关闭" onClick={onClose}>
+            ×
+          </button>
+        </header>
+
+        <div className="export-modal-body">
+          <label className="export-modal-field wide-field">
+            <span>输出路径</span>
+            <input
+              aria-label="输出路径"
+              type="text"
+              value={exportState.outputPath}
+              onChange={(event) => onExportOutputPathChange(event.currentTarget.value)}
+              disabled={pending}
+            />
+          </label>
+
+          <div className="export-modal-grid">
+            <label className="export-modal-field">
+              <span>分辨率</span>
+              <select aria-label="分辨率" defaultValue="draft" disabled={pending}>
+                <option value="draft">跟随草稿</option>
+                <option value="1080p">1080p</option>
+                <option value="720p">720p</option>
+              </select>
+            </label>
+            <label className="export-modal-field">
+              <span>帧率</span>
+              <select aria-label="帧率" defaultValue="draft" disabled={pending}>
+                <option value="draft">跟随草稿</option>
+                <option value="30">30 fps</option>
+                <option value="60">60 fps</option>
+              </select>
+            </label>
+            <label className="export-modal-field">
+              <span>视频码率</span>
+              <select aria-label="视频码率" defaultValue="auto" disabled={pending}>
+                <option value="auto">智能推荐</option>
+                <option value="8m">8 Mbps</option>
+                <option value="16m">16 Mbps</option>
+              </select>
+            </label>
+            <label className="export-modal-field">
+              <span>导出预设</span>
+              <select
+                aria-label="导出预设"
+                value={exportState.preset}
+                onChange={(event) => onExportPresetChange(event.currentTarget.value as ExportPreset)}
+                disabled={pending}
+              >
+                <option value="h264AacBalanced">{formatExportPreset("h264AacBalanced")}</option>
+                <option value="h264AacDraft">{formatExportPreset("h264AacDraft")}</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="export-audio-toggle">
+            <input
+              type="checkbox"
+              aria-label="导出音频"
+              checked={includeAudio}
+              onChange={(event) => setIncludeAudio(event.currentTarget.checked)}
+              disabled={pending}
+            />
+            <span>导出音频</span>
+          </label>
+
+          <button
+            type="button"
+            className="export-advanced-toggle"
+            aria-expanded={advancedOpen}
+            aria-controls="export-advanced-settings"
+            onClick={() => setAdvancedOpen((current) => !current)}
+          >
+            高级设置
+          </button>
+
+          {advancedOpen ? (
+            <section id="export-advanced-settings" className="export-advanced-panel" aria-label="高级导出设置">
+              <label className="export-modal-field">
+                <span>编码格式</span>
+                <select aria-label="编码格式" defaultValue="h264" disabled={pending}>
+                  <option value="h264">H.264</option>
+                </select>
+              </label>
+              <div className="export-modal-field">
+                <span>音频采样率</span>
+                <button
+                  type="button"
+                  className="export-sample-rate-combobox"
+                  role="combobox"
+                  aria-label="音频采样率"
+                  aria-expanded={sampleRateOpen}
+                  aria-controls="export-sample-rate-options"
+                  onClick={() => setSampleRateOpen((current) => !current)}
+                  disabled={pending || !includeAudio}
+                >
+                  {sampleRate}
+                </button>
+                {sampleRateOpen ? (
+                  <div id="export-sample-rate-options" className="export-sample-rate-list" role="listbox" aria-label="音频采样率选项">
+                    {EXPORT_SAMPLE_RATES.map((rate) => (
+                      <button
+                        key={rate}
+                        type="button"
+                        role="option"
+                        aria-selected={rate === sampleRate}
+                        onClick={() => {
+                          setSampleRate(rate);
+                          setSampleRateOpen(false);
+                        }}
+                      >
+                        {rate}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="export-progress" aria-label="导出进度">
+            <span>{formatExportPhase(exportState.phase)}</span>
+            <progress max={1000} value={exportState.progressPerMille ?? 0} />
+            <strong>{formatExportProgress(exportState.progressPerMille)}</strong>
+          </div>
+          <div className="export-log" aria-label="导出日志">
+            {exportMessage}
+          </div>
+          <div className="export-validation" aria-label="输出校验">
+            {exportState.validation === null
+              ? "输出校验待完成"
+              : `${exportState.validation.width ?? "-"}x${exportState.validation.height ?? "-"} · ${
+                  exportState.validation.hasAudio ? "含音频" : "无音频"
+                }`}
+          </div>
+        </div>
+
+        <footer className="export-modal-actions" role="group" aria-label="导出操作">
+          <button type="button" className="secondary-action" aria-label="打开位置" disabled={!exportCompleted}>
+            打开位置
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
+            aria-label="查询导出状态"
+            onClick={onRefreshExportStatus}
+            disabled={pending || exportState.jobId === null}
+          >
+            查询导出状态
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
+            aria-label="取消导出"
+            onClick={onCancelExport}
+            disabled={pending || !exportCanCancel}
+          >
+            取消导出
+          </button>
+          <button
+            type="button"
+            className="primary-action"
+            aria-label={startExportLabel}
+            onClick={onStartExport}
+            disabled={pending || !runtimeDiagnostics.canExport}
+          >
+            导出
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }

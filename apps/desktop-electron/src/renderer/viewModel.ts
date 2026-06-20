@@ -648,7 +648,7 @@ export function createInitialWorkspaceState(
       warningLabel: null
     },
     export: {
-      outputPath: "/tmp/video-editor-export.mp4",
+      outputPath: "video-editor-export.mp4",
       preset: "h264AacBalanced",
       jobId: null,
       phase: null,

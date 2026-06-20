@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
-import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { Draft, DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
 import {
   canvasBackgroundTone,
   formatCanvasAspectRatio,
   formatCanvasBackgroundStatus,
   formatCanvasReadout,
-  formatExportPhase,
-  formatExportPreset,
-  formatExportProgress,
   formatMicroseconds,
   formatRealtimePreviewBackendLabel,
   formatRealtimePreviewFallbackReason,
@@ -20,7 +16,6 @@ import {
   type AudioDeviceDisplayModel,
   type AudioPreviewDisplayModel,
   type BindingStatus,
-  type ExportDisplayState,
   type PreviewDisplayState,
   type RealtimePreviewDisplayModel,
   type RealtimePreviewFallbackReason,
@@ -38,7 +33,6 @@ type PreviewMonitorProps = {
   bindingStatus: BindingStatus;
   preview: PreviewDisplayState;
   resourcePreviewStatusLabel: string | null;
-  exportState: ExportDisplayState;
   audioPreview: AudioPreviewDisplayModel;
   audioDevices: AudioDeviceDisplayModel;
   audioParity: AudioParityDisplayModel;
@@ -56,11 +50,6 @@ type PreviewMonitorProps = {
   onRequestPreviewFrame: () => void;
   onRequestPreviewSegment: () => void;
   onProbeRuntimeCapabilities: () => void;
-  onExportOutputPathChange: (value: string) => void;
-  onExportPresetChange: (value: ExportPreset) => void;
-  onStartExport: () => void;
-  onRefreshExportStatus: () => void;
-  onCancelExport: () => void;
   onRetryAudioPreview: () => void;
   onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
 };
@@ -192,7 +181,6 @@ export function PreviewMonitor({
   bindingStatus,
   preview,
   resourcePreviewStatusLabel,
-  exportState,
   audioPreview,
   audioDevices,
   audioParity,
@@ -210,11 +198,6 @@ export function PreviewMonitor({
   onRequestPreviewFrame,
   onRequestPreviewSegment,
   onProbeRuntimeCapabilities,
-  onExportOutputPathChange,
-  onExportPresetChange,
-  onStartExport,
-  onRefreshExportStatus,
-  onCancelExport,
   onRetryAudioPreview,
   onUpdateSelectedSegmentVisual
 }: PreviewMonitorProps): React.ReactElement {
@@ -232,12 +215,8 @@ export function PreviewMonitor({
     aspectRatio: `${Math.max(1, canvasConfig.width)} / ${Math.max(1, canvasConfig.height)}`,
     background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
   };
-  const exportCanCancel =
-    exportState.jobId !== null &&
-    (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
   const previewFrameLabel = runtimeDiagnostics.canPreview ? "请求预览帧" : "预览暂不可用";
   const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
-  const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
   const showRealtimeSurface = nativeHostState.productReady && !nativeHostState.fallbackActive;
@@ -614,69 +593,6 @@ export function PreviewMonitor({
           <RuntimeDiagnosticsPanel diagnostics={runtimeDiagnostics} pending={pending} onProbe={onProbeRuntimeCapabilities} />
         </>
       ) : null}
-
-      <div className="export-panel" aria-label="导出面板">
-        <label className="export-path-control">
-          <span>输出路径</span>
-          <input
-            aria-label="输出路径"
-            type="text"
-            value={exportState.outputPath}
-            onChange={(event) => onExportOutputPathChange(event.currentTarget.value)}
-            disabled={pending}
-          />
-        </label>
-        <label className="export-preset-control">
-          <span>导出预设</span>
-          <select
-            aria-label="导出预设"
-            value={exportState.preset}
-            onChange={(event) => onExportPresetChange(event.currentTarget.value as ExportPreset)}
-            disabled={pending}
-          >
-            <option value="h264AacBalanced">{formatExportPreset("h264AacBalanced")}</option>
-            <option value="h264AacDraft">{formatExportPreset("h264AacDraft")}</option>
-          </select>
-        </label>
-        <div className="export-actions" role="group" aria-label="导出操作">
-          <button type="button" aria-label={startExportLabel} title={startExportLabel} onClick={onStartExport} disabled={pending || !runtimeDiagnostics.canExport}>
-            导出
-          </button>
-          <button
-            type="button"
-            aria-label="查询导出状态"
-            title="查询导出状态"
-            onClick={onRefreshExportStatus}
-            disabled={pending || exportState.jobId === null}
-          >
-            状态
-          </button>
-          <button
-            type="button"
-            aria-label="取消导出"
-            title="取消导出"
-            onClick={onCancelExport}
-            disabled={pending || !exportCanCancel}
-          >
-            取消
-          </button>
-        </div>
-        <div className="export-progress" aria-label="导出进度">
-          <span>{formatExportPhase(exportState.phase)}</span>
-          <progress max={1000} value={exportState.progressPerMille ?? 0} />
-          <strong>{formatExportProgress(exportState.progressPerMille)}</strong>
-        </div>
-        <div className="export-log" aria-label="导出日志">
-          {exportState.error ?? exportState.diagnosticLabel ?? exportState.logSummary}
-        </div>
-        <div className="export-validation" aria-label="输出校验">
-          {exportState.validation === null
-            ? "输出校验待完成"
-            : `${exportState.validation.width ?? "-"}x${exportState.validation.height ?? "-"} · ${
-                exportState.validation.hasAudio ? "含音频" : "无音频"
-              }`}
-        </div>
-      </div>
 
       <div className="preview-status-line" aria-live="polite">
         <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
