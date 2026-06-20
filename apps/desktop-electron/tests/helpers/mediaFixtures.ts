@@ -50,7 +50,7 @@ export async function generatePhase6MediaFixtures(): Promise<Phase6MediaFixtures
     expectedWidth: 320,
     expectedHeight: 180,
     expectedFrameRate: "30/1",
-    expectedDurationSeconds: 3,
+    expectedDurationSeconds: 6,
     expectedTextContent: "真实工作流标题"
   };
 }

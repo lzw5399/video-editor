@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    MaterialId, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode, SegmentScale,
-    SegmentVisual, SourceTimerange, TargetTimerange,
+    MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop,
+    SegmentFitMode, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
 };
 use render_graph::{
     OutputDimensions, RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixDiagnostic,
@@ -42,7 +42,8 @@ struct LayerPlacement {
 struct VisualLayerFilter {
     label: String,
     placement: LayerPlacement,
-    full_canvas_identity: bool,
+    active_start: Microseconds,
+    active_end: Microseconds,
     lines: Vec<String>,
 }
 
@@ -112,8 +113,6 @@ pub fn generate_filter_script(
             duration = format_seconds(output_duration(plan))
         ));
         "vbase0".to_owned()
-    } else if visual_layers.iter().all(|layer| layer.full_canvas_identity) {
-        compose_legacy_full_canvas_layers(&mut lines, &visual_layers)
     } else {
         compose_placed_visual_layers(&mut lines, plan, dimensions, &visual_layers)
     };
@@ -307,15 +306,17 @@ fn compile_visual_layer(
     plan: &RenderGraphPlan,
 ) -> VisualLayerFilter {
     let label = format!("v{layer_index}");
+    let active_start = target_delay_from_output(&layer.target_timerange, output_timerange(plan));
+    let active_end = Microseconds::new(active_start.get().saturating_add(clip.duration.get()));
     if is_full_canvas_identity(&layer.visual) {
         return VisualLayerFilter {
             label: label.clone(),
             placement: LayerPlacement { x: 0, y: 0 },
-            full_canvas_identity: true,
+            active_start,
+            active_end,
             lines: vec![format!(
-                "[{input_index}:v]trim=start={start}:duration={duration},setpts=PTS-STARTPTS,scale={width}:{height}[{label}]",
-                start = format_seconds(clip.start),
-                duration = format_seconds(clip.duration),
+                "[{input_index}:v]{source_filters},scale={width}:{height}[{label}]",
+                source_filters = visual_source_filters(layer, clip, active_start, plan).join(","),
                 width = output_dimensions.width,
                 height = output_dimensions.height
             )],
@@ -328,14 +329,7 @@ fn compile_visual_layer(
         cropped_dimensions,
         output_dimensions,
     );
-    let mut source_filters = vec![
-        format!(
-            "trim=start={start}:duration={duration}",
-            start = format_seconds(clip.start),
-            duration = format_seconds(clip.duration)
-        ),
-        "setpts=PTS-STARTPTS".to_owned(),
-    ];
+    let mut source_filters = visual_source_filters(layer, clip, active_start, plan);
     if crop_is_active(&layer.visual.transform.crop) {
         let left = millis_of(
             source_dimensions.width,
@@ -410,30 +404,45 @@ fn compile_visual_layer(
     VisualLayerFilter {
         label,
         placement: layer_placement(&layer.visual, output_dimensions, scaled_dimensions),
-        full_canvas_identity: false,
+        active_start,
+        active_end,
         lines,
     }
 }
 
-fn compose_legacy_full_canvas_layers(
-    lines: &mut Vec<String>,
-    layers: &[VisualLayerFilter],
-) -> String {
-    if layers.len() == 1 {
-        lines.push(format!("[{}]null[vbase0]", layers[0].label));
-        return "vbase0".to_owned();
+fn visual_source_filters(
+    layer: &RenderVideoLayer,
+    clip: &SourceTimerange,
+    target_delay: Microseconds,
+    plan: &RenderGraphPlan,
+) -> Vec<String> {
+    match layer.material_kind {
+        MaterialKind::Image => vec![
+            "loop=loop=-1:size=1:start=0".to_owned(),
+            format!("fps={}", frame_rate_arg(plan)),
+            format!("trim=duration={}", format_seconds(clip.duration)),
+            visual_setpts_filter(target_delay),
+        ],
+        _ => vec![
+            format!(
+                "trim=start={start}:duration={duration}",
+                start = format_seconds(clip.start),
+                duration = format_seconds(clip.duration)
+            ),
+            visual_setpts_filter(target_delay),
+        ],
     }
+}
 
-    let mut current = layers[0].label.clone();
-    for (overlay_index, next) in layers.iter().enumerate().skip(1) {
-        let out = format!("vbase{overlay_index}");
-        lines.push(format!(
-            "[{current}][{}]overlay=x=0:y=0:shortest=1[{out}]",
-            next.label
-        ));
-        current = out;
+fn visual_setpts_filter(target_delay: Microseconds) -> String {
+    if target_delay == Microseconds::ZERO {
+        "setpts=PTS-STARTPTS".to_owned()
+    } else {
+        format!(
+            "setpts=PTS-STARTPTS+{}/TB",
+            format_seconds(target_delay)
+        )
     }
-    current
 }
 
 fn compose_placed_visual_layers(
@@ -455,10 +464,12 @@ fn compose_placed_visual_layers(
     for (overlay_index, layer) in layers.iter().enumerate() {
         let out = format!("vbase{}", overlay_index + 1);
         lines.push(format!(
-            "[{current}][{label}]overlay=x={x}:y={y}:shortest=1[{out}]",
+            "[{current}][{label}]overlay=x={x}:y={y}:enable='between(t,{start},{end})'[{out}]",
             label = layer.label,
             x = layer.placement.x,
-            y = layer.placement.y
+            y = layer.placement.y,
+            start = format_seconds(layer.active_start),
+            end = format_seconds(layer.active_end)
         ));
         current = out;
     }

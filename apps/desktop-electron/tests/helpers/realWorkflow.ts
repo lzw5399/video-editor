@@ -39,14 +39,13 @@ export async function runRealImportPreviewExportWorkflow(
   await addVisualSegment(page, app, fixtures.videoName);
   await addTextSegment(page, app, fixtures.expectedTextContent);
   await addAudioSegment(page, app, fixtures.audioName);
-  await waitForCommandCount(page, app, "saveProjectBundle", 3);
+  await addVisualSegment(page, app, fixtures.imageName);
+  await waitForCommandCount(page, app, "saveProjectBundle", 4);
   await page.getByLabel("预览时间").fill("0");
 
   const framePath = await requestPreviewFrame(page, app);
   const segmentPath = await requestPreviewSegment(page, app);
   await exportDraft(page, app, fixtures);
-  await addVisualSegment(page, app, fixtures.imageName);
-  await waitForCommandCount(page, app, "saveProjectBundle", 4);
 
   const calls = await readExecuteCommandCalls(app);
   expect(calls.map((call) => call.command)).toEqual(
