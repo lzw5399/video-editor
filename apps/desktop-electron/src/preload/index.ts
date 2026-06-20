@@ -10,6 +10,10 @@ type RealtimePreviewHostRect = {
   height: number;
   scaleFactorMillis: number;
 };
+type ProjectBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+};
 
 const allowedRendererUrl = readAllowedRendererUrl();
 
@@ -25,6 +29,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {
+    createProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:createProjectBundle"),
+    openProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:openProjectBundle"),
     openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles"),
     pathToFileUrl: (path: string) => ipcRenderer.invoke("platform:pathToFileUrl", path)
   });
@@ -53,8 +59,13 @@ function readAllowedRendererUrl(): string | undefined {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 }
 
-function readWorkspaceFixture(): "demo" | "blank" {
-  return process.argv.includes("--video-editor-workspace-fixture=demo") ? "demo" : "blank";
+function readWorkspaceFixture(): "demo" | "blank" | undefined {
+  const prefix = "--video-editor-workspace-fixture=";
+  const raw = process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
+  if (raw === "demo" || raw === "blank") {
+    return raw;
+  }
+  return undefined;
 }
 
 function readOpenProjectBundlePath(): string | undefined {

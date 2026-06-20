@@ -55,6 +55,10 @@ type TestWindowMetrics = {
   contentBounds: Rectangle;
   displayScaleFactor: number;
 };
+type ProjectBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+};
 
 declare global {
   var __videoEditorTestExecuteCommandCalls: TestExecuteCommandCall[] | undefined;
@@ -78,7 +82,7 @@ const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
   ...(testObservationEnabled ? ["--video-editor-test-observations=1"] : []),
-  ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : []),
+  ...testRendererArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-workspace-fixture="),
   ...testRendererArgument("VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE", "--video-editor-test-open-project-bundle=")
 ];
 
@@ -160,6 +164,51 @@ ipcMain.handle("platform:openMaterialFiles", async (event) => {
   return {
     canceled: result.canceled,
     filePaths: result.filePaths
+  };
+});
+ipcMain.handle("platform:createProjectBundle", async (event): Promise<ProjectBundlePickerResponse> => {
+  assertAllowedIpcSender(event);
+
+  const testPath = readTestSinglePath("VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE");
+  if (testPath !== null) {
+    return {
+      canceled: testPath.length === 0,
+      bundlePath: testPath.length === 0 ? null : testPath
+    };
+  }
+
+  const result = await dialog.showSaveDialog({
+    title: "新建项目",
+    defaultPath: "未命名项目.veproj",
+    filters: [{ name: "视频剪辑项目", extensions: ["veproj"] }],
+    properties: ["createDirectory"]
+  });
+
+  return {
+    canceled: result.canceled,
+    bundlePath: result.filePath ?? null
+  };
+});
+ipcMain.handle("platform:openProjectBundle", async (event): Promise<ProjectBundlePickerResponse> => {
+  assertAllowedIpcSender(event);
+
+  const testPath = readTestSinglePath("VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE");
+  if (testPath !== null) {
+    return {
+      canceled: testPath.length === 0,
+      bundlePath: testPath.length === 0 ? null : testPath
+    };
+  }
+
+  const result = await dialog.showOpenDialog({
+    title: "打开项目",
+    properties: ["openDirectory"],
+    filters: [{ name: "视频剪辑项目", extensions: ["veproj"] }]
+  });
+
+  return {
+    canceled: result.canceled,
+    bundlePath: result.filePaths[0] ?? null
   };
 });
 ipcMain.handle("platform:pathToFileUrl", (event, filePath: string) => {
@@ -302,11 +351,21 @@ function readTestOpenMaterialFiles(): string[] | null {
   return [];
 }
 
+function readTestSinglePath(envName: string): string | null {
+  const raw = decodeTestArgumentValue(process.env[envName]);
+  if (raw === undefined) {
+    return null;
+  }
+  return raw;
+}
+
 function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_RECORD_COMMANDS", "--video-editor-test-record-commands=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS", "--video-editor-test-show-developer-diagnostics=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES", "--video-editor-test-open-material-files=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE", "--video-editor-test-open-project-bundle=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE", "--video-editor-test-new-project-bundle=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE", "--video-editor-test-pick-open-project-bundle=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_COMMAND_MOCKS", "--video-editor-test-command-mocks=");

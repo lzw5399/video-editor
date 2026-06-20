@@ -117,6 +117,7 @@ import {
   waveformDisplayFromResponse,
   resolveWorkspaceStartupDraft,
   type ExportDisplayState,
+  type ProjectEntryState,
   type PreviewDisplayState,
   type WorkspaceStartupFixture,
   type WorkspaceCategory,
@@ -139,7 +140,13 @@ type OpenMaterialFilesResponse = {
   canceled: boolean;
   filePaths: string[];
 };
+type ProjectBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+};
 type VideoEditorPlatformApi = {
+  createProjectBundle: () => Promise<ProjectBundlePickerResponse>;
+  openProjectBundle: () => Promise<ProjectBundlePickerResponse>;
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
@@ -232,8 +239,9 @@ export function App(): React.ReactElement {
   const startupFixture = readWorkspaceStartupFixture();
   const showDeveloperDiagnostics = window.videoEditorAppConfig?.showDeveloperDiagnostics === true;
   const startupOpenProjectBundlePath = window.videoEditorAppConfig?.openProjectBundlePath;
+  const startupProjectState = createStartupProjectState(startupFixture, startupOpenProjectBundlePath);
   const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
-    createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture))
+    createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture ?? "blank"), startupProjectState)
   );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
   const [bundlePath, setBundlePath] = useState(
@@ -354,7 +362,34 @@ export function App(): React.ReactElement {
         return;
       }
 
+      const readyBindingStatus = {
+        kind: "ready" as const,
+        label: `剪辑核心已连接 ${version.data?.coreVersion ?? "0.0.0"} / 合约 ${
+          version.data?.contractVersion ?? "0.0.0"
+        }`
+      };
       const openBundlePath = window.videoEditorAppConfig?.openProjectBundlePath?.trim();
+      if ((openBundlePath === undefined || openBundlePath.length === 0) && startupFixture === undefined) {
+        setWorkspace((current) => {
+          const next = {
+            ...current,
+            bindingStatus: readyBindingStatus,
+            commandError: null,
+            projectState:
+              current.projectState.kind === "open"
+                ? current.projectState
+                : {
+                    kind: "entry" as const,
+                    statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
+                    error: null
+                  }
+          };
+          workspaceRef.current = next;
+          return next;
+        });
+        return;
+      }
+
       const openedProject =
         openBundlePath === undefined || openBundlePath.length === 0
           ? null
@@ -366,22 +401,26 @@ export function App(): React.ReactElement {
       }
 
       if (openedProject !== null && (!openedProject.ok || openedProject.data === null)) {
-        const message = openedProject.error?.message ?? "打开草稿失败";
+        const message = projectSafeErrorMessage("open");
         setWorkspace((current) => ({
           ...current,
           bindingStatus: {
             kind: "error",
-            label: formatCommandError(message)
+            label: message
           },
-          commandError: formatCommandError(message)
+          projectState: {
+            kind: "entry",
+            statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
+            error: message
+          },
+          commandError: message
         }));
         return;
       }
 
       const openedDraft = openedProject?.data?.draft ?? null;
-      const materialList = await window.videoEditorCore.executeCommand<ListMaterialsResponse>(
-        buildListMaterialsCommand(openedDraft ?? workspaceRef.current.draft)
-      );
+      const activeDraft = openedDraft ?? workspaceRef.current.draft;
+      const materialList = await window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(activeDraft));
       if (cancelled) {
         return;
       }
@@ -400,16 +439,17 @@ export function App(): React.ReactElement {
       }
 
       setWorkspace((current) => {
-        const base = openedDraft === null ? current : createInitialWorkspaceState(openedDraft);
+        const activeBundlePath = openedProject?.data?.bundlePath ?? bundlePath;
+        const base = createInitialWorkspaceState(activeDraft, {
+          kind: "open",
+          bundlePath: activeBundlePath,
+          statusLabel: "项目已打开",
+          error: null
+        });
         const next = {
           ...base,
           materials: materialList.data?.materials ?? base.materials,
-          bindingStatus: {
-            kind: "ready" as const,
-            label: `剪辑核心已连接 ${version.data?.coreVersion ?? "0.0.0"} / 合约 ${
-              version.data?.contractVersion ?? "0.0.0"
-            }`
-          },
+          bindingStatus: readyBindingStatus,
           commandError: openedProject?.data?.warnings.length ? commandErrorMessage(openedProject.data.warnings.join("；")) : null
         };
         workspaceRef.current = next;
@@ -445,8 +485,9 @@ export function App(): React.ReactElement {
     };
   }, []);
 
-  function readWorkspaceStartupFixture(): WorkspaceStartupFixture {
-    return window.videoEditorAppConfig?.workspaceFixture === "demo" ? "demo" : "blank";
+  function readWorkspaceStartupFixture(): WorkspaceStartupFixture | undefined {
+    const fixture = window.videoEditorAppConfig?.workspaceFixture;
+    return fixture === "demo" || fixture === "blank" ? fixture : undefined;
   }
 
   async function executeDraftCommand<T>(
@@ -1162,6 +1203,155 @@ export function App(): React.ReactElement {
         };
       }
     );
+  }
+
+  async function handleCreateProject(): Promise<void> {
+    if (commandInFlightRef.current) {
+      setProjectEntryError("create", "上一个操作仍在执行，请等待剪辑核心返回");
+      return;
+    }
+
+    const platform = window.videoEditorPlatform;
+    if (platform === undefined) {
+      setProjectEntryError("create", "当前环境无法打开系统项目窗口，请稍后重试。");
+      return;
+    }
+
+    try {
+      const picked = await platform.createProjectBundle();
+      const nextBundlePath = picked.bundlePath?.trim() ?? "";
+      if (picked.canceled || nextBundlePath.length === 0) {
+        return;
+      }
+
+      commandInFlightRef.current = true;
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: "新建项目",
+          commandError: null,
+          projectState: {
+            kind: "opening" as const,
+            action: "create" as const,
+            statusLabel: "正在新建项目",
+            error: null
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+
+      const result = await window.videoEditorCore.executeCommand<SaveProjectBundleResponse>(
+        buildSaveProjectBundleCommand(workspaceRef.current.draft, nextBundlePath)
+      );
+      if (!result.ok || result.data === null) {
+        setProjectEntryError("create", projectSafeErrorMessage("create"));
+        return;
+      }
+
+      openWorkspaceFromDraft(result.data.draft, result.data.bundlePath, "项目已新建");
+      void handleGetArtifactStatus();
+      void handleProbeRuntimeCapabilities();
+    } catch {
+      setProjectEntryError("create", projectSafeErrorMessage("create"));
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
+  async function handleOpenProject(): Promise<void> {
+    if (commandInFlightRef.current) {
+      setProjectEntryError("open", "上一个操作仍在执行，请等待剪辑核心返回");
+      return;
+    }
+
+    const platform = window.videoEditorPlatform;
+    if (platform === undefined) {
+      setProjectEntryError("open", "当前环境无法打开系统项目窗口，请稍后重试。");
+      return;
+    }
+
+    try {
+      const picked = await platform.openProjectBundle();
+      const nextBundlePath = picked.bundlePath?.trim() ?? "";
+      if (picked.canceled || nextBundlePath.length === 0) {
+        return;
+      }
+
+      commandInFlightRef.current = true;
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: "打开项目",
+          commandError: null,
+          projectState: {
+            kind: "opening" as const,
+            action: "open" as const,
+            statusLabel: "正在打开项目",
+            error: null
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+
+      const result = await window.videoEditorCore.executeCommand<OpenProjectBundleResponse>(
+        buildOpenProjectBundleCommand(nextBundlePath)
+      );
+      if (!result.ok || result.data === null) {
+        setProjectEntryError("open", projectSafeErrorMessage("open"));
+        return;
+      }
+
+      openWorkspaceFromDraft(result.data.draft, result.data.bundlePath, "项目已打开");
+      setWorkspace((current) => ({
+        ...current,
+        commandError: result.data?.warnings.length ? commandErrorMessage(result.data.warnings.join("；")) : null
+      }));
+      void handleGetArtifactStatus();
+      void handleProbeRuntimeCapabilities();
+      window.setTimeout(() => {
+        void refreshWaveformDisplay();
+      }, 250);
+    } catch {
+      setProjectEntryError("open", projectSafeErrorMessage("open"));
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
+  function openWorkspaceFromDraft(draft: Draft, nextBundlePath: string, statusLabel: string): void {
+    const next = {
+      ...createInitialWorkspaceState(draft, {
+        kind: "open" as const,
+        bundlePath: nextBundlePath,
+        statusLabel,
+        error: null
+      }),
+      bindingStatus: workspaceRef.current.bindingStatus,
+      pendingCommand: null,
+      commandError: null
+    };
+    workspaceRef.current = next;
+    setWorkspace(next);
+    setBundlePath(nextBundlePath);
+  }
+
+  function setProjectEntryError(_action: "create" | "open", message: string): void {
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand: null,
+        commandError: message,
+        projectState: {
+          kind: "entry" as const,
+          statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
+          error: message
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }
 
   async function handleImportMaterial(): Promise<void> {
@@ -2274,6 +2464,18 @@ export function App(): React.ReactElement {
     );
   }
 
+  if (workspace.projectState.kind !== "open") {
+    return (
+      <ProjectEntry
+        state={workspace.projectState}
+        bindingStatusLabel={workspace.bindingStatus.label}
+        pending={workspace.pendingCommand !== null}
+        onCreateProject={handleCreateProject}
+        onOpenProject={handleOpenProject}
+      />
+    );
+  }
+
   return (
         <WorkspaceShell
           workspace={workspace}
@@ -2338,6 +2540,87 @@ export function App(): React.ReactElement {
       onRedoTimelineEdit={handleRedoTimelineEdit}
     />
   );
+}
+
+type ProjectEntryProps = {
+  state: ProjectEntryState;
+  bindingStatusLabel: string;
+  pending: boolean;
+  onCreateProject: () => void;
+  onOpenProject: () => void;
+};
+
+function ProjectEntry({
+  state,
+  bindingStatusLabel,
+  pending,
+  onCreateProject,
+  onOpenProject
+}: ProjectEntryProps): React.ReactElement {
+  const busy = state.kind === "opening" || pending;
+
+  return (
+    <main className="project-entry" aria-label="项目入口">
+      <section className="project-entry-panel" aria-label="项目操作">
+        <div className="project-entry-mark">
+          <h1>视频剪辑</h1>
+          <p>{state.statusLabel}</p>
+        </div>
+        <div className="project-entry-actions">
+          <button type="button" className="primary-action project-entry-action" onClick={onCreateProject} disabled={busy}>
+            新建项目
+          </button>
+          <button type="button" className="secondary-action project-entry-action" onClick={onOpenProject} disabled={busy}>
+            打开项目
+          </button>
+        </div>
+        <p className="project-entry-empty">先新建或打开项目，再导入素材开始剪辑。</p>
+        <p className="project-entry-status" aria-label="项目入口状态">
+          {busy ? state.statusLabel : bindingStatusLabel}
+        </p>
+        {state.error !== null ? (
+          <p className="project-entry-error" role="alert">
+            {state.error}
+          </p>
+        ) : null}
+      </section>
+    </main>
+  );
+}
+
+function createStartupProjectState(
+  fixture: WorkspaceStartupFixture | undefined,
+  openProjectBundlePath: string | undefined
+): ProjectEntryState {
+  if (fixture !== undefined) {
+    return {
+      kind: "open",
+      bundlePath: fixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj",
+      statusLabel: "项目已打开",
+      error: null
+    };
+  }
+
+  if (openProjectBundlePath !== undefined && openProjectBundlePath.trim().length > 0) {
+    return {
+      kind: "opening",
+      action: "open",
+      statusLabel: "正在打开项目",
+      error: null
+    };
+  }
+
+  return {
+    kind: "entry",
+    statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
+    error: null
+  };
+}
+
+function projectSafeErrorMessage(action: "create" | "open"): string {
+  return action === "create"
+    ? "项目新建失败，请确认保存位置可用后重试。"
+    : "项目打开失败，请确认草稿包完整后重试。";
 }
 
 function applyArtifactStatusResult(

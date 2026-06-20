@@ -80,7 +80,13 @@ export type BindingStatus =
   | { kind: "ready"; label: string }
   | { kind: "error"; label: string };
 
+export type ProjectEntryState =
+  | { kind: "entry"; statusLabel: string; error: string | null }
+  | { kind: "opening"; action: "create" | "open"; statusLabel: string; error: null }
+  | { kind: "open"; bundlePath: string; statusLabel: string; error: null };
+
 export type WorkspaceState = {
+  projectState: ProjectEntryState;
   draft: Draft;
   commandState: CommandState;
   selection: TimelineSelection;
@@ -607,8 +613,16 @@ export const initialTimelineSelection: TimelineSelection = {
   trackIds: []
 };
 
-export function createInitialWorkspaceState(draft: Draft = blankWorkspaceDraft): WorkspaceState {
+export function createInitialWorkspaceState(
+  draft: Draft = blankWorkspaceDraft,
+  projectState: ProjectEntryState = {
+    kind: "entry",
+    statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
+    error: null
+  }
+): WorkspaceState {
   return {
+    projectState,
     draft,
     commandState: initialCommandState,
     selection: initialTimelineSelection,
