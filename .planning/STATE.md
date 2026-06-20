@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Active 15.2-04D-PLAN.md: close macOS foreground activation and in-window native WGPU surface presentation"
-last_updated: "2026-06-20T00:00:57.749Z"
-last_activity: 2026-06-20 -- Added Phase 15.2 Plan 04D after 04C narrowed the blocker to AppKit occlusion visibility false for both Electron parent and top-level overlay windows
+status: blocked
+stopped_at: "Blocked after 15.2-04D: macOS automated Electron/packaged app remains AppKit inactive/frontmost=false, so WGPU surface acquire still reports occluded"
+last_updated: "2026-06-20T00:47:41.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04D replaced the top-level overlay with an Electron-window child NSView/CAMetalLayer product path and narrowed the remaining blocker to AppKit foreground activation in the automated desktop environment
 progress:
   total_phases: 23
   completed_phases: 18
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
 Plan: 15.2-04D
-Status: Executing — close macOS foreground activation and in-window native WGPU surface presentation
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04C added drawable lifecycle diagnostics and a top-level overlay-window attempt, but product E2E still fails closed because AppKit reports both parent and overlay windows as occlusion-invisible; Plan 04D is now the active blocker before 15.2-05/06
+Status: Blocked — macOS automated Electron/packaged app stays AppKit inactive/frontmost=false, so WGPU surface acquire remains occluded
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04D replaced the 04C top-level overlay with an Electron-window child NSView/CAMetalLayer path, but product E2E still fails closed before present because appActive=false, runningAppActive=false, and appOcclusionVisible=false
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04C complete/blocked honestly, Plan 04D added to close foreground activation and in-window native WGPU presentation, 15.2-05/06 are not released; Phase 15.3 UI convergence follows after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04D complete/blocked honestly, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
 
 ## Performance Metrics
 
@@ -189,6 +189,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04C complete/blocked honestly
 - Phase 15.2 Plan 02 completed the runtime WGPU compositor subset: supported canvas, video/image texture sampling, transform/opacity/crop/fit handling, stack-order composition, and bundled-font text overlays now render through `WgpuRenderPass`; CPU reference output remains test-only evidence. (URGENT)
 - Phase 15.2 Plan 03 completed media IO texture handoff and audio sync state: compositor input now accepts only proven compatible native texture handles, FFmpeg/CPU/platform-opaque paths fail closed for product preview input, and stale audio sync rejects frame presentation. (URGENT)
 - Phase 15.2 Plan 04A added the Rust-owned realtime playback scheduler, macOS CoreVideo/Metal to WGPU NV12 import bridge, and Electron host wiring, but remains blocked because WGPU surface acquisition reports `surface is occluded`; 15.2-05/06 stay unreleased. (URGENT)
+- Phase 15.2 Plan 04D replaced the 04C top-level overlay attempt with an Electron-window child NSView/CAMetalLayer WGPU surface and added NSRunningApplication diagnostics, but product E2E still fails closed because the automated Electron/packaged app remains `appActive=false`, `runningAppActive=false`, `appOcclusionVisible=false`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)

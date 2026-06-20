@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 9/12 plans executed or blocked; 15.2-05/06 remain unreleased behind 04D
+**Plans:** 10/12 plans executed or blocked; 15.2-05/06 remain unreleased behind the macOS foreground/AppKit occlusion blocker
 
 Plans:
 
@@ -692,7 +692,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 15.2-04D-PLAN.md - Close macOS foreground activation and in-window native WGPU surface presentation
+- [x] 15.2-04D-PLAN.md - Close macOS foreground activation and in-window native WGPU surface presentation (blocked: automated Electron/packaged app remains AppKit inactive/frontmost=false, so WGPU surface acquire still reports occluded)
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
