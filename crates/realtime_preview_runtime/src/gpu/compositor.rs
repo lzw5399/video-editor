@@ -21,7 +21,7 @@ use super::{
     RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
 };
 
-use super::text::{rasterize_text_overlay, TextRasterizationError};
+use super::text::{TextRasterizationError, rasterize_text_overlay};
 
 #[derive(Debug)]
 pub struct RealtimePreviewCompositor {
@@ -113,7 +113,7 @@ impl RealtimePreviewCompositor {
                 continue;
             };
 
-            let source_position = layer.source_timerange.start;
+            let source_position = sampled_source_position(graph, layer);
             let frame = match frame_provider.frame_for(
                 &layer.material_id,
                 source_position,
@@ -917,7 +917,7 @@ fn push_wgpu_video_layer_draw(
     };
     let frame = match frame_provider.frame_for(
         &layer.material_id,
-        layer.source_timerange.start,
+        sampled_source_position(graph, layer),
         PlaybackGeneration::initial(),
     ) {
         Ok(input) => input,
@@ -1106,6 +1106,25 @@ fn sampled_text_for<'a>(
                 && sampled.material_id == text.material_id
         })
     })
+}
+
+fn sampled_source_position(
+    graph: &RenderGraph,
+    layer: &RenderVideoLayer,
+) -> draft_model::Microseconds {
+    let target_offset = graph
+        .target_timerange
+        .start
+        .get()
+        .saturating_sub(layer.target_timerange.start.get());
+    let clamped_offset = target_offset.min(layer.source_timerange.duration.get().saturating_sub(1));
+    draft_model::Microseconds::new(
+        layer
+            .source_timerange
+            .start
+            .get()
+            .saturating_add(clamped_offset),
+    )
 }
 
 fn upload_wgpu_rgba_texture(

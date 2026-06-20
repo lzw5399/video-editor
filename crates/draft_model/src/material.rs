@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{validate_draft, Draft, DraftValidationError, MaterialId, Microseconds};
+use crate::{Draft, DraftValidationError, MaterialId, Microseconds, validate_draft};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]

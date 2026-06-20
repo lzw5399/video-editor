@@ -223,6 +223,8 @@ export function PreviewMonitor({
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
+  const showRealtimeSurface = nativeHostState.productReady && !nativeHostState.fallbackActive;
+  const showPreviewFrameImage = preview.frameDisplayUrl !== null && !showRealtimeSurface;
   const productPreviewStatusLabel = formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const previewStatusLabel = showDeveloperDiagnostics
     ? preview.error ?? preview.frameStatusLabel
@@ -231,7 +233,7 @@ export function PreviewMonitor({
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
-    preview.frameDisplayUrl === null ? buildTextOverlayStyle(selectedSegment) : null;
+    preview.frameDisplayUrl === null || showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   useEffect(() => {
     const hostElement = nativeHostRef.current;
@@ -362,13 +364,14 @@ export function PreviewMonitor({
         aria-label="预览画面"
         style={canvasStyle}
       >
-        {preview.frameDisplayUrl === null ? (
+        {!showPreviewFrameImage && !showRealtimeSurface ? (
           <div className="preview-placeholder">
             <span>{preview.frameArtifactPath === null ? previewPlaceholderLabel : "预览帧已返回，正在准备显示"}</span>
           </div>
-        ) : (
+        ) : null}
+        {showPreviewFrameImage ? (
           <img className="preview-frame-image" src={preview.frameDisplayUrl} alt="当前预览帧" aria-label="当前预览帧" />
-        )}
+        ) : null}
         {selectedSegment !== null && selectionOverlayStyle !== null ? (
           <div
             className="preview-selection-outline"

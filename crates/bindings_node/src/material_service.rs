@@ -3,17 +3,17 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use draft_model::{
-    mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,
     Draft, DraftValidationError, Material, MaterialId, MaterialKind, MaterialMetadata,
-    MaterialStatus, Microseconds, RationalFrameRate,
+    MaterialStatus, Microseconds, RationalFrameRate, mark_material_available,
+    mark_material_missing, mark_material_probe_failed, upsert_material,
 };
 use media_runtime::{
-    probe_material_metadata, FfmpegExecutor, MaterialProbeError, MaterialProbeErrorKind,
-    MaterialProbeKind, MaterialProbeMetadata, RuntimeConfig,
+    FfmpegExecutor, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
+    MaterialProbeMetadata, RuntimeConfig, probe_material_metadata,
 };
 use project_store::{
-    classify_material_uri, material_uri_for_save, save_project_bundle, MaterialUriKind,
-    PlatformFileSystem, ProjectBundle, ProjectStoreError,
+    MaterialUriKind, PlatformFileSystem, ProjectBundle, ProjectStoreError, classify_material_uri,
+    material_uri_for_save, save_project_bundle,
 };
 use serde::{Deserialize, Serialize};
 

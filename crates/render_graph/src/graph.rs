@@ -1051,9 +1051,8 @@ fn audio_sample_rate_for_segment(segment: &NormalizedSegment) -> u32 {
 }
 
 fn timeline_time_to_samples(value: Microseconds, sample_rate_hz: u32) -> u64 {
-    let samples = u128::from(value.get())
-        .saturating_mul(u128::from(sample_rate_hz))
-        / 1_000_000_u128;
+    let samples =
+        u128::from(value.get()).saturating_mul(u128::from(sample_rate_hz)) / 1_000_000_u128;
     samples.min(u128::from(u64::MAX)) as u64
 }
 

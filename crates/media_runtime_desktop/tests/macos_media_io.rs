@@ -160,6 +160,63 @@ fn macos_native_decodes_h264_fixture_into_corevideo_frame_lease_when_enabled() {
 
 #[test]
 #[cfg(target_os = "macos")]
+fn macos_native_decode_honors_requested_source_time() {
+    if std::env::var_os("VIDEO_EDITOR_TEST_NATIVE_MEDIA").is_none() {
+        eprintln!("skipping macOS native decode seek proof; set VIDEO_EDITOR_TEST_NATIVE_MEDIA=1");
+        return;
+    }
+
+    let runtime = discover_runtime_config().expect(
+        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+    );
+    let executor = DesktopFfmpegExecutor::default();
+    let fixture = H264Fixture::generate(&executor, &runtime);
+    let reader = MacosMediaReader::new();
+
+    let session = reader
+        .open_session(MediaOpenRequest {
+            material_uri: fixture.path.clone(),
+            requested_streams: vec![StreamId(0)],
+        })
+        .expect("fixture should open through AVFoundation");
+    let mut decoder = session
+        .native_video_decoder(StreamId(0))
+        .expect("H.264 video stream should have a native decoder");
+
+    let first = decoder
+        .decode_at(VideoDecodeRequest {
+            source_time_us: 0,
+            playback_generation: Some(21),
+        })
+        .expect("first frame should decode through AVFoundation/CoreVideo");
+    let later = decoder
+        .decode_at(VideoDecodeRequest {
+            source_time_us: 500_000,
+            playback_generation: Some(21),
+        })
+        .expect("later frame should decode through AVFoundation/CoreVideo");
+
+    assert_eq!(first.source_time_us, 0);
+    assert!(
+        later.source_time_us >= 400_000,
+        "later decode must not silently return the first frame: {:?}",
+        later.source_time_us
+    );
+    assert_ne!(
+        later.frame_index, first.frame_index,
+        "later decode must advance frame index instead of reusing the first frame"
+    );
+
+    session
+        .release_frame(first.release)
+        .expect("first native frame should release");
+    session
+        .release_frame(later.release)
+        .expect("later native frame should release");
+}
+
+#[test]
+#[cfg(target_os = "macos")]
 fn macos_texture_decode_degrades_when_texture_interop_is_disabled() {
     if std::env::var_os("VIDEO_EDITOR_TEST_NATIVE_MEDIA").is_none() {
         eprintln!("skipping macOS texture fallback proof; set VIDEO_EDITOR_TEST_NATIVE_MEDIA=1");
@@ -338,6 +395,12 @@ impl H264Fixture {
             "10",
             "-c:v",
             "libx264",
+            "-g",
+            "1",
+            "-keyint_min",
+            "1",
+            "-sc_threshold",
+            "0",
             "-pix_fmt",
             "yuv420p",
             path.to_str().expect("fixture path should be UTF-8"),

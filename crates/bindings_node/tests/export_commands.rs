@@ -7,9 +7,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use bindings_node::execute_command;
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CommandErrorKind, Draft, DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase,
-    ExportPreset, Material, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, Track, TrackKind,
+    CommandErrorKind, Draft, DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase, ExportPreset,
+    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
+    TargetTimerange, Track, TrackKind,
 };
 use serde_json::{Value, json};
 

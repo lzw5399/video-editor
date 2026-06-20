@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, screen, type IpcMainInvokeEvent, type Rectangle } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -48,6 +48,12 @@ type TestExecuteCommandCall = {
   sessionId: string | null;
   deviceSelectionId: string | null;
   maxPeakBins: number | null;
+};
+
+type TestWindowMetrics = {
+  bounds: Rectangle;
+  contentBounds: Rectangle;
+  displayScaleFactor: number;
 };
 
 declare global {
@@ -164,6 +170,18 @@ if (testObservationEnabled) {
   ipcMain.handle("test:getRealtimePreviewHostCalls", (event) => {
     assertAllowedIpcSender(event);
     return globalThis.__videoEditorTestRealtimePreviewHostCalls ?? [];
+  });
+  ipcMain.handle("test:getWindowMetrics", (event): TestWindowMetrics => {
+    assertAllowedIpcSender(event);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window === null) {
+      throw new Error("No BrowserWindow is associated with the test observation sender");
+    }
+    return {
+      bounds: window.getBounds(),
+      contentBounds: window.getContentBounds(),
+      displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+    };
   });
 }
 

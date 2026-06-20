@@ -5,8 +5,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use draft_model::{
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, BUNDLED_TEXT_FONT_FAMILY,
-    BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
+    BUNDLED_TEXT_FONT_RELATIVE_PATH, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
+    SegmentId,
 };
 use render_graph::{
     ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderAudioMixDiagnostic,
@@ -15,7 +16,7 @@ use render_graph::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::ass::{generate_ass_sidecars, TextRenderCapability};
+use crate::ass::{TextRenderCapability, generate_ass_sidecars};
 use crate::filters::generate_filter_script;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

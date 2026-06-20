@@ -2,9 +2,9 @@ use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft,
     DraftCanvasConfig, Microseconds, RationalFrameRate, TargetTimerange,
 };
-use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
-    build_render_graph, RenderCanvasBackgroundMode, RenderGraph, RenderIntentSupport,
+    RenderCanvasBackgroundMode, RenderGraph, RenderIntentSupport, build_render_graph,
 };
 
 #[test]

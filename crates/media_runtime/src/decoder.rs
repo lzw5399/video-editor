@@ -51,9 +51,7 @@ pub trait VideoDecoder {
 
 pub trait AudioDecoder {
     fn decoder_name(&self) -> &'static str;
-    fn read_range(
-        &mut self,
-        request: AudioDecodeRequest,
-    ) -> Result<DecodedAudioFrame, DecodeError>;
+    fn read_range(&mut self, request: AudioDecodeRequest)
+    -> Result<DecodedAudioFrame, DecodeError>;
     fn flush(&mut self) -> Result<(), DecodeError>;
 }

@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 
 use media_runtime::{
-    media_io_fallback_ladder, select_media_io_fallback, BinaryKind, DiscoveredBinary,
-    DiscoverySource, FfmpegExecutor, MediaIoFallbackCandidate, MediaIoFallbackReason,
-    RuntimeConfig, SelectedDecodePath,
+    BinaryKind, DiscoveredBinary, DiscoverySource, FfmpegExecutor, MediaIoFallbackCandidate,
+    MediaIoFallbackReason, RuntimeConfig, SelectedDecodePath, media_io_fallback_ladder,
+    select_media_io_fallback,
 };
 use media_runtime_desktop::probe_desktop_runtime_capabilities;
 

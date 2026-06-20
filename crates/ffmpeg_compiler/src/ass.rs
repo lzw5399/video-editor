@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
-use draft_model::{resolve_bundled_font, Microseconds, TargetTimerange, TextAlignment};
+use draft_model::{Microseconds, TargetTimerange, TextAlignment, resolve_bundled_font};
 use render_graph::{RenderGraph, RenderGraphPlan, RenderOutputProfile, RenderTextOverlay};
 use serde::{Deserialize, Serialize};
 
 use crate::job::{
-    format_seconds, sanitize_id, CompileContext, FfmpegCompileError, FfmpegCompileErrorKind,
-    FfmpegSidecar, FfmpegSidecarKind,
+    CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegSidecar, FfmpegSidecarKind,
+    format_seconds, sanitize_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

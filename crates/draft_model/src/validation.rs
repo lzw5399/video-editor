@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    reduce_ratio, AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft,
-    DraftSchemaVersion, Keyframe, KeyframeProperty, KeyframeValue, MaterialId, MaterialKind,
-    Microseconds, RationalFrameRate, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode,
-    SegmentCrop, SegmentMask, SegmentVisual, SourceTimerange, TargetTimerange, TextBox,
-    TextBubbleRef, TextEffectRef, TextLayoutRegion, TextSegment, TextStyle,
-    MAX_AUDIO_FADE_DURATION_MICROSECONDS, MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS,
-    MIN_AUDIO_PAN_BALANCE_MILLIS,
+    AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
+    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentAudio,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual,
+    SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion,
+    TextSegment, TextStyle, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

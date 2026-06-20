@@ -32,7 +32,10 @@ fn video_frame_provider_returns_seeded_h264_frames_without_process_work() {
             RationalFrameRate::new(10, 1),
             2,
             vec![
-                (0, rgba_frame(&material_id, 0, playback_generation, [255, 0, 0, 255])),
+                (
+                    0,
+                    rgba_frame(&material_id, 0, playback_generation, [255, 0, 0, 255]),
+                ),
                 (
                     1,
                     rgba_frame(&material_id, 100_000, playback_generation, [0, 0, 255, 255]),
@@ -42,8 +45,8 @@ fn video_frame_provider_returns_seeded_h264_frames_without_process_work() {
         .expect("seeded H.264 frames are valid");
 
     let process_calls = Arc::new(AtomicUsize::new(0));
-    let mut provider =
-        SoftwareVideoFrameProvider::new(cache).with_process_invocation_counter(process_calls.clone());
+    let mut provider = SoftwareVideoFrameProvider::new(cache)
+        .with_process_invocation_counter(process_calls.clone());
 
     let first = provider
         .frame_for(&material_id, Microseconds::ZERO, playback_generation)
@@ -102,17 +105,30 @@ fn video_frame_provider_reports_uncached_out_of_range_and_unsupported_codec() {
     let uncached = provider
         .frame_for(&material_id, Microseconds::new(100_000), generation)
         .expect_err("missing decoded frame reports cache miss");
-    assert!(matches!(uncached, PreviewFrameProviderError::Unavailable { .. }));
-    assert_eq!(uncached.material_id().map(MaterialId::as_str), Some("h264-material"));
+    assert!(matches!(
+        uncached,
+        PreviewFrameProviderError::Unavailable { .. }
+    ));
+    assert_eq!(
+        uncached.material_id().map(MaterialId::as_str),
+        Some("h264-material")
+    );
     assert_eq!(uncached.source_position(), Some(Microseconds::new(100_000)));
 
     let out_of_range = provider
         .frame_for(&material_id, Microseconds::new(300_000), generation)
         .expect_err("request past cached duration is out of range");
-    assert!(matches!(out_of_range, PreviewFrameProviderError::OutOfRange { .. }));
+    assert!(matches!(
+        out_of_range,
+        PreviewFrameProviderError::OutOfRange { .. }
+    ));
 
     let unsupported = provider
-        .frame_for(&MaterialId::new("prores-material"), Microseconds::ZERO, generation)
+        .frame_for(
+            &MaterialId::new("prores-material"),
+            Microseconds::ZERO,
+            generation,
+        )
         .expect_err("non-H.264 cache entry is unsupported");
     assert!(matches!(
         unsupported,

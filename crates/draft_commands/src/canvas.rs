@@ -1,9 +1,9 @@
 //! Draft-level canvas command semantics.
 
 use draft_model::{
-    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CommandEvent,
-    CommandState, Draft, DraftCanvasConfig, Material, MaterialKind, TimelineCommandResponse,
-    TimelineSelection, reduce_ratio, validate_draft,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CommandEvent, CommandState,
+    Draft, DraftCanvasConfig, Material, MaterialKind, TimelineCommandResponse, TimelineSelection,
+    reduce_ratio, validate_draft,
 };
 
 use crate::{TimelineCommandError, delta::canvas_delta, history::push_undo_snapshot};

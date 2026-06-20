@@ -2,9 +2,9 @@ use std::fmt;
 
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, Draft, DraftCanvasConfig,
-    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SourceTimerange, TargetTimerange, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
-    Track, TrackId, TrackKind, validate_draft,
+    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
+    TargetTimerange, TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackId,
+    TrackKind, validate_draft,
 };
 
 pub const MAX_SEGMENTS_PER_TRACK: usize = 10_000;

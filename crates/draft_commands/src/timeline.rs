@@ -448,7 +448,9 @@ pub fn add_segment(
     validate_track_material_compatibility(&next_draft.tracks[track_index], &material)?;
 
     let auto_adapted_canvas = should_auto_adapt_canvas(&next_draft)
-        .then(|| crate::canvas::first_visual_material_canvas_config(&next_draft.canvas_config, &material))
+        .then(|| {
+            crate::canvas::first_visual_material_canvas_config(&next_draft.canvas_config, &material)
+        })
         .flatten();
     if let Some(canvas_config) = auto_adapted_canvas.clone() {
         next_draft.canvas_config = canvas_config;

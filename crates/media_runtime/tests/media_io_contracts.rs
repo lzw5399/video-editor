@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use media_runtime::{
     AudioDecodeRequest, AudioDecoder, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer,
-    DecodedAudioFrame, DecodedVideoFrame, DecodeError, DecodeErrorKind, FrameDimensions,
+    DecodeError, DecodeErrorKind, DecodedAudioFrame, DecodedVideoFrame, FrameDimensions,
     MediaIoError, MediaIoErrorKind, MediaOpenRequest, MediaReader, MediaSession, MediaSessionId,
-    MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId, StreamId,
-    TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata, VideoDecodeRequest,
-    VideoDecoder, VideoPixelFormat,
+    MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId, StreamId, TextureBackend,
+    TextureHandle, TextureHandleId, VideoColorMetadata, VideoDecodeRequest, VideoDecoder,
+    VideoPixelFormat,
 };
 
 #[test]

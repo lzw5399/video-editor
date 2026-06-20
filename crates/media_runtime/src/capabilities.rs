@@ -3,15 +3,14 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use draft_model::{
-    bundled_text_font_path, repository_root_from_manifest, validate_bundled_font_registry,
     BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
+    bundled_text_font_path, repository_root_from_manifest, validate_bundled_font_registry,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BinaryKind, DiscoveredBinary, FfmpegExecutor, MediaIoFallbackReason, RuntimeConfig,
-    RuntimeDeviceId, SelectedDecodePath, TextureBackend, VideoPixelFormat,
-    MAX_STDERR_SUMMARY_BYTES,
+    BinaryKind, DiscoveredBinary, FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, MediaIoFallbackReason,
+    RuntimeConfig, RuntimeDeviceId, SelectedDecodePath, TextureBackend, VideoPixelFormat,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

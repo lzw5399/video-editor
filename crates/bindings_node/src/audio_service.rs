@@ -6,8 +6,8 @@ use audio_engine::{
     AudioPreviewError, AudioPreviewRuntime, AudioPreviewSessionConfig, AudioPreviewSessionId,
 };
 use audio_output_desktop::{
-    probe_desktop_audio_output_capabilities, DesktopAudioOutputBackendCapabilities,
-    DesktopAudioOutputCapabilityStatus,
+    DesktopAudioOutputBackendCapabilities, DesktopAudioOutputCapabilityStatus,
+    probe_desktop_audio_output_capabilities,
 };
 use draft_model::{
     AudioOutputDeviceStatus, AudioOutputDeviceSummary, AudioPreviewCommandPayload,

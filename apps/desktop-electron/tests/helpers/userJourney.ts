@@ -1,7 +1,8 @@
 import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, readFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -9,7 +10,8 @@ import type { CommandName } from "../../src/generated/CommandEnvelope";
 import {
   launchForegroundProductApp,
   type ForegroundProductAppController,
-  type ForegroundProductAppDiagnostics
+  type ForegroundProductAppDiagnostics,
+  type ProductWindowMetrics
 } from "./foregroundProductApp";
 
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
@@ -73,6 +75,7 @@ export type ProductJourneyAppController = {
   readExecuteCommandCalls: () => Promise<ExecuteCommandCall[]>;
   readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
+  readWindowMetrics: () => Promise<ProductWindowMetrics | null>;
 };
 
 declare global {
@@ -85,6 +88,7 @@ declare global {
 
 export type PreviewEvidence = {
   regionHash: string;
+  visibleCenterHash: string;
   timecodeUs: number;
   placeholderText: string;
   imageSrc: string | null;
@@ -94,14 +98,19 @@ export type PreviewEvidence = {
 export async function waitForCompositedPreviewEvidence(
   page: Page,
   app?: ProductJourneyAppController,
-  timeoutMs = 8_000
+  timeoutMs = 8_000,
+  afterTargetTimeUs = -1
 ): Promise<PreviewEvidence> {
   const deadline = Date.now() + timeoutMs;
   let lastEvidence: PreviewEvidence | null = null;
 
   while (Date.now() < deadline) {
     lastEvidence = await capturePreviewEvidence(page);
-    if (lastEvidence.hostState?.contentEvidence?.source === "renderGraphGpuComposited") {
+    const evidence = lastEvidence.hostState?.contentEvidence;
+    if (
+      evidence?.source === "renderGraphGpuComposited" &&
+      evidence.targetTimeMicroseconds > afterTargetTimeUs
+    ) {
       return lastEvidence;
     }
     await page.waitForTimeout(250);
@@ -110,10 +119,48 @@ export async function waitForCompositedPreviewEvidence(
   const hostCalls = app === undefined ? [] : await readRealtimePreviewHostCalls(app);
   const foregroundDiagnostics = app === undefined ? null : await app.readForegroundDiagnostics();
   throw new Error(
-    `Timed out waiting for composited preview evidence. Last host state: ${JSON.stringify(
+    `Timed out waiting for composited preview evidence after ${afterTargetTimeUs}us. Last host state: ${JSON.stringify(
       lastEvidence?.hostState ?? null
     )}. Host calls: ${JSON.stringify(hostCalls)}. Foreground diagnostics: ${JSON.stringify(foregroundDiagnostics)}`
   );
+}
+
+export async function waitForVisiblePreviewCenterChange(
+  page: Page,
+  app: ProductJourneyAppController | undefined,
+  initialHash: string,
+  timeoutMs = 5_000
+): Promise<PreviewEvidence> {
+  const deadline = Date.now() + timeoutMs;
+  let lastEvidence: PreviewEvidence | null = null;
+
+  while (Date.now() < deadline) {
+    lastEvidence = await captureVisiblePreviewEvidence(page, app);
+    if (lastEvidence.visibleCenterHash !== initialHash) {
+      return lastEvidence;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for visible preview center pixels to change. Initial hash: ${initialHash}. Last evidence: ${JSON.stringify(
+      lastEvidence
+    )}`
+  );
+}
+
+export async function captureVisiblePreviewEvidence(
+  page: Page,
+  app: ProductJourneyAppController | undefined
+): Promise<PreviewEvidence> {
+  const evidence = await capturePreviewEvidence(page);
+  if (process.platform !== "darwin" || app === undefined) {
+    return evidence;
+  }
+  return {
+    ...evidence,
+    visibleCenterHash: hashBuffer(await captureVisiblePreviewCenter(page, app))
+  };
 }
 
 export function expectNoRejectedSurfaceAcquire(calls: RealtimePreviewHostCall[]): void {
@@ -249,6 +296,25 @@ export async function clickPreviewPlay(page: Page): Promise<void> {
   await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
 }
 
+export async function activateProductJourneyApp(app: ProductJourneyAppController, page: Page): Promise<void> {
+  await page.bringToFront();
+  if (process.platform !== "darwin") {
+    return;
+  }
+  const diagnostics = await app.readForegroundDiagnostics();
+  if (diagnostics?.pid === null || diagnostics?.pid === undefined) {
+    return;
+  }
+  await execFileAsync("osascript", ["-e", `tell application id "org.videoeditor.desktop" to activate`]).catch(
+    () => undefined
+  );
+  await execFileAsync("osascript", [
+    "-e",
+    `tell application "System Events" to set frontmost of (first process whose unix id is ${diagnostics.pid}) to true`
+  ]).catch(() => undefined);
+  await page.waitForTimeout(750);
+}
+
 async function activateProductWindow(app: ElectronApplication, page: Page): Promise<void> {
   await page.bringToFront();
   await app.evaluate(({ app: electronApp, BrowserWindow }) => {
@@ -281,11 +347,13 @@ export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidenc
   await expect(previewCanvas).toBeVisible();
 
   const screenshot = await previewCanvas.screenshot();
+  const visibleCenterScreenshot = await captureVisiblePreviewCenter(page);
   const placeholder = page.locator(".preview-placeholder");
   const image = page.getByRole("img", { name: "当前预览帧" });
 
   return {
     regionHash: hashBuffer(screenshot),
+    visibleCenterHash: hashBuffer(visibleCenterScreenshot),
     timecodeUs: parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""),
     placeholderText: (await placeholder.textContent({ timeout: 100 }).catch(() => "")) ?? "",
     imageSrc: await image.getAttribute("src", { timeout: 100 }).catch(() => null),
@@ -341,6 +409,18 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
           (globalThis as typeof globalThis & { __videoEditorTestRealtimePreviewHostCalls?: RealtimePreviewHostCall[] })
             .__videoEditorTestRealtimePreviewHostCalls ?? []
         );
+      }),
+    readWindowMetrics: async () =>
+      app.evaluate(({ BrowserWindow, screen }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (window === undefined) {
+          return null;
+        }
+        return {
+          bounds: window.getBounds(),
+          contentBounds: window.getContentBounds(),
+          displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+        };
       })
   };
 }
@@ -351,7 +431,8 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
     close: () => app.close(),
     readForegroundDiagnostics: () => app.readForegroundDiagnostics(),
     readExecuteCommandCalls: async () => (await app.readExecuteCommandCalls()) as ExecuteCommandCall[],
-    readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[]
+    readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[],
+    readWindowMetrics: () => app.readWindowMetrics()
   };
 }
 
@@ -364,6 +445,79 @@ async function expectFileExists(path: string): Promise<void> {
 
 function hashBuffer(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+async function captureVisiblePreviewCenter(
+  page: Page,
+  app?: ProductJourneyAppController
+): Promise<Buffer> {
+  const host = page.getByLabel("实时预览宿主", { exact: true });
+  await expect(host).toBeVisible();
+  const box = await host.boundingBox();
+  if (box === null) {
+    throw new Error("Realtime preview host has no visible bounding box");
+  }
+
+  const clip = {
+    x: Math.round(box.x + box.width * 0.28),
+    y: Math.round(box.y + box.height * 0.22),
+    width: Math.max(1, Math.round(box.width * 0.44)),
+    height: Math.max(1, Math.round(box.height * 0.42))
+  };
+
+  if (process.platform === "darwin" && app !== undefined) {
+    const metrics = await app.readWindowMetrics();
+    if (metrics !== null) {
+      return captureMacosScreenRegion(page, metrics, clip);
+    }
+  }
+
+  return page.screenshot({ clip });
+}
+
+async function captureMacosScreenRegion(
+  page: Page,
+  metrics: ProductWindowMetrics,
+  clip: { x: number; y: number; width: number; height: number }
+): Promise<Buffer> {
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }));
+  const scaleX = viewport.width > 0 ? metrics.contentBounds.width / viewport.width : 1;
+  const scaleY = viewport.height > 0 ? metrics.contentBounds.height / viewport.height : 1;
+  const screenClip = {
+    x: Math.round((metrics.contentBounds.x + clip.x * scaleX) * metrics.displayScaleFactor),
+    y: Math.round((metrics.contentBounds.y + clip.y * scaleY) * metrics.displayScaleFactor),
+    width: Math.max(1, Math.round(clip.width * scaleX * metrics.displayScaleFactor)),
+    height: Math.max(1, Math.round(clip.height * scaleY * metrics.displayScaleFactor))
+  };
+  const fullPath = join(
+    tmpdir(),
+    `video-editor-preview-full-${process.pid}-${Date.now()}-${Math.round(Math.random() * 1_000_000)}.png`
+  );
+  const cropPath = join(
+    tmpdir(),
+    `video-editor-preview-center-${process.pid}-${Date.now()}-${Math.round(Math.random() * 1_000_000)}.png`
+  );
+  try {
+    await execFileAsync("screencapture", ["-x", fullPath]);
+    await execFileAsync("sips", [
+      "-c",
+      String(screenClip.height),
+      String(screenClip.width),
+      "--cropOffset",
+      String(screenClip.y),
+      String(screenClip.x),
+      fullPath,
+      "--out",
+      cropPath
+    ]);
+    return await readFile(cropPath);
+  } finally {
+    await unlink(fullPath).catch(() => undefined);
+    await unlink(cropPath).catch(() => undefined);
+  }
 }
 
 function parseTimecodeToMicroseconds(value: string): number {

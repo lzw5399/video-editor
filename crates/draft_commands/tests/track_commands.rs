@@ -1,11 +1,11 @@
 use draft_commands::{
+    TimelineCommandErrorKind,
     audio::set_track_mute,
     history::{redo_timeline_edit, undo_timeline_edit},
     timeline::{
         add_segment, add_track, audio_track_mix_order, rename_track, set_track_lock,
         set_track_visibility, visual_track_stack_order,
     },
-    TimelineCommandErrorKind,
 };
 use draft_model::{
     CommandName, CommandState, DirtyDomain, Draft, Material, MaterialKind, Microseconds,
@@ -140,10 +140,14 @@ fn track_commands_create_rename_lock_visibility_mute_and_undo() {
     assert!(!hidden.draft.tracks[0].visible);
     assert_eq!(hidden.delta.command, CommandName::SetTrackVisibility);
     assert!(hidden.delta.changed_domains.contains(&DirtyDomain::Visual));
-    assert_eq!(visual_track_stack_order(&hidden.draft), vec!["text-title".into()]);
+    assert_eq!(
+        visual_track_stack_order(&hidden.draft),
+        vec!["text-title".into()]
+    );
 
-    let visibility_undone = undo_timeline_edit(&hidden.draft, &hidden.command_state, &hidden.selection)
-        .expect("track visibility should enter undo history");
+    let visibility_undone =
+        undo_timeline_edit(&hidden.draft, &hidden.command_state, &hidden.selection)
+            .expect("track visibility should enter undo history");
     assert!(visibility_undone.draft.tracks[0].visible);
     let visibility_redone = redo_timeline_edit(
         &visibility_undone.draft,

@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bindings_node::execute_command;
 use draft_model::CommandErrorKind;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -84,10 +84,12 @@ fi
         envelope["data"]["ffmpeg"]["version"],
         "ffmpeg version test-build"
     );
-    assert!(envelope["data"]["ffmpeg"]["configureSummary"]
-        .as_str()
-        .unwrap()
-        .contains("--enable-libx264"));
+    assert!(
+        envelope["data"]["ffmpeg"]["configureSummary"]
+            .as_str()
+            .unwrap()
+            .contains("--enable-libx264")
+    );
     assert_eq!(
         envelope["data"]["ffprobe"]["path"],
         ffprobe.display().to_string()

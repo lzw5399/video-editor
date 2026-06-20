@@ -11,11 +11,11 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use draft_model::{
-    bundled_text_font_path, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX,
-    BUNDLED_TEXT_FONT_REF,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
+    bundled_text_font_path,
 };
 use ffmpeg_compiler::{CompilerCapabilities, TextRenderCapability};
-use media_runtime::{FfmpegExecutor, RuntimeConfig, MAX_STDERR_SUMMARY_BYTES};
+use media_runtime::{FfmpegExecutor, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig};
 
 pub const PHASE5_MEAN_RGB_DELTA_MAX: f64 = 8.0;
 pub const PHASE5_P99_RGB_DELTA_MAX: u8 = 24;

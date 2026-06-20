@@ -7,13 +7,13 @@ use std::process::{ExitStatus, Output};
 use std::rc::Rc;
 
 use media_runtime::{
-    discover_runtime_config, BinaryKind, DecodeErrorKind, DiscoveredBinary, DiscoverySource,
-    FfmpegExecutor, MediaIoErrorKind, MediaOpenRequest, MediaReader, RuntimeConfig, StreamId,
-    VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat, MAX_STDERR_SUMMARY_BYTES,
+    BinaryKind, DecodeErrorKind, DiscoveredBinary, DiscoverySource, FfmpegExecutor,
+    MAX_STDERR_SUMMARY_BYTES, MediaIoErrorKind, MediaOpenRequest, MediaReader, RuntimeConfig,
+    StreamId, VideoDecodeRequest, VideoFrameStorage, VideoPixelFormat, discover_runtime_config,
 };
 use media_runtime_desktop::{
-    decode_ffmpeg_cpu_frame_fingerprint, DesktopFfmpegExecutor, FfmpegCpuFrameFingerprintRequest,
-    FfmpegFallbackMediaReader,
+    DesktopFfmpegExecutor, FfmpegCpuFrameFingerprintRequest, FfmpegFallbackMediaReader,
+    decode_ffmpeg_cpu_frame_fingerprint,
 };
 
 #[cfg(unix)]

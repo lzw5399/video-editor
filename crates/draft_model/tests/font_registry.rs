@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use draft_model::{
-    BUNDLED_TEXT_FONT_COVERAGE_SAMPLE, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF,
-    TextFont, bundled_font_registry, validate_bundled_font_registry,
+    BUNDLED_TEXT_FONT_COVERAGE_SAMPLE, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, TextFont,
+    bundled_font_registry, validate_bundled_font_registry,
 };
 
 #[test]

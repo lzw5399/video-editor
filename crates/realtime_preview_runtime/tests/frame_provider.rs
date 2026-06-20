@@ -1,7 +1,5 @@
 use draft_model::{MaterialId, Microseconds};
-use media_runtime::{
-    MediaSessionId, RuntimeDeviceId, TextureBackend, VideoColorMetadata,
-};
+use media_runtime::{MediaSessionId, RuntimeDeviceId, TextureBackend, VideoColorMetadata};
 use realtime_preview_runtime::{
     CpuVideoFrame, FrameColorInfo, FrameValidationErrorKind, PlaybackGeneration, PreviewFrameInput,
     PreviewFrameProvider, PreviewFrameProviderError, TextureHandleDescriptor,

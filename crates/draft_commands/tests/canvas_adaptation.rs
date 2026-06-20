@@ -1,6 +1,5 @@
 use draft_commands::{
-    canvas::update_draft_canvas_config,
-    timeline::add_segment as command_add_segment,
+    canvas::update_draft_canvas_config, timeline::add_segment as command_add_segment,
 };
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
@@ -41,8 +40,18 @@ fn first_portrait_video_adopts_vertical_canvas_and_frame_rate() {
     );
     assert_eq!(response.delta.command, CommandName::AddSegment);
     assert!(response.delta.invalidation.full_draft);
-    assert!(response.delta.changed_domains.contains(&DirtyDomain::Canvas));
-    assert!(response.events.iter().any(|event| event.kind == "draftCanvasAutoAdapted"));
+    assert!(
+        response
+            .delta
+            .changed_domains
+            .contains(&DirtyDomain::Canvas)
+    );
+    assert!(
+        response
+            .events
+            .iter()
+            .any(|event| event.kind == "draftCanvasAutoAdapted")
+    );
 }
 
 #[test]
@@ -131,12 +140,19 @@ fn manual_canvas_update_prevents_later_auto_adaptation() {
         response.draft.canvas_config.frame_rate,
         RationalFrameRate::new(25, 1)
     );
-    assert!(!response.events.iter().any(|event| event.kind == "draftCanvasAutoAdapted"));
+    assert!(
+        !response
+            .events
+            .iter()
+            .any(|event| event.kind == "draftCanvasAutoAdapted")
+    );
 }
 
 fn draft_with_visual_track_and_material(material: Material) -> Draft {
     let mut draft = Draft::new("canvas-adaptation-draft", "Canvas Adaptation");
-    draft.tracks.push(Track::new("video-track", TrackKind::Video, "Video"));
+    draft
+        .tracks
+        .push(Track::new("video-track", TrackKind::Video, "Video"));
     draft.materials.push(material);
     draft
 }
@@ -162,7 +178,12 @@ fn material(
     height: u32,
     frame_rate: Option<RationalFrameRate>,
 ) -> Material {
-    let mut material = Material::new(material_id, kind, format!("media/{material_id}"), material_id);
+    let mut material = Material::new(
+        material_id,
+        kind,
+        format!("media/{material_id}"),
+        material_id,
+    );
     material.metadata.duration = Some(Microseconds::new(2_000_000));
     material.metadata.width = Some(width);
     material.metadata.height = Some(height);

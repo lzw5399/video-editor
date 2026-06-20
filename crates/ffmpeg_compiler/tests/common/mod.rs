@@ -3,17 +3,17 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
-    Transition, BUNDLED_TEXT_FONT_REF,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, BUNDLED_TEXT_FONT_REF, Draft,
+    Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, Track, TrackKind, Transition,
 };
-use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, TextRenderCapability};
 use render_graph::{
-    build_render_graph, ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile,
+    ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph,
 };
 
 pub fn compile_context() -> CompileContext {

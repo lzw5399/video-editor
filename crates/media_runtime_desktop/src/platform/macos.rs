@@ -527,7 +527,7 @@ fn platform_decode_frame(
     use objc2_av_foundation::{
         AVAssetReader, AVAssetReaderOutput, AVAssetReaderTrackOutput, AVMediaTypeVideo,
     };
-    use objc2_core_media::CMSampleBuffer;
+    use objc2_core_media::{CMSampleBuffer, CMTimeRange, kCMTimePositiveInfinity};
     use objc2_core_video::{
         CVPixelBufferGetHeight, CVPixelBufferGetPixelFormatType, CVPixelBufferGetWidth,
     };
@@ -564,6 +564,12 @@ fn platform_decode_frame(
     }
     unsafe {
         reader.addOutput(output_ref);
+    }
+    unsafe {
+        reader.setTimeRange(CMTimeRange::new(
+            cm_time_from_microseconds(request.source_time_us)?,
+            kCMTimePositiveInfinity,
+        ));
     }
     if !unsafe { reader.startReading() } {
         return Err(platform_decode_error(format!(
@@ -1091,4 +1097,14 @@ fn cm_time_to_microseconds(time: objc2_core_media::CMTime) -> Option<u64> {
         return None;
     }
     Some((time.value as u64).saturating_mul(1_000_000) / time.timescale as u64)
+}
+
+#[cfg(target_os = "macos")]
+fn cm_time_from_microseconds(value: u64) -> Result<objc2_core_media::CMTime, DecodeError> {
+    let value = i64::try_from(value).map_err(|_| {
+        platform_decode_error(format!(
+            "source time {value} us does not fit CoreMedia CMTime"
+        ))
+    })?;
+    Ok(unsafe { objc2_core_media::CMTime::new(value, 1_000_000) })
 }

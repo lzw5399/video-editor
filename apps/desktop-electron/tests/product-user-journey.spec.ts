@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 import {
   USER_JOURNEY_MOVING_VIDEO,
   addMaterialToTimeline,
+  activateProductJourneyApp,
   capturePreviewEvidence,
+  captureVisiblePreviewEvidence,
   expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
   expectNoRejectedSurfaceAcquire,
   importMaterialThroughProductPicker,
@@ -11,7 +13,8 @@ import {
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
   requestPreviewFrameCount,
-  waitForCompositedPreviewEvidence
+  waitForCompositedPreviewEvidence,
+  waitForVisiblePreviewCenterChange
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
@@ -31,6 +34,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
+    await activateProductJourneyApp(app, page);
     await playButton.click();
 
     await page.waitForTimeout(800);
@@ -119,16 +123,24 @@ test("product user can import a repo video, add it to the timeline, and see rend
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
 
     const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
     const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
+    await activateProductJourneyApp(app, page);
     await playButton.click();
-    await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 5_000 });
 
     let after;
+    let visibleMotion;
     try {
-      after = await waitForCompositedPreviewEvidence(page, app, 12_000);
+      visibleMotion = await waitForVisiblePreviewCenterChange(page, app, visibleBefore.visibleCenterHash, 5_000);
+      after = await waitForCompositedPreviewEvidence(
+        page,
+        app,
+        12_000,
+        before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
+      );
     } catch (error) {
       const hostCalls = await readRealtimePreviewHostCalls(app);
       if (hostCalls.some((call) => call.kind === "surfaceAcquireOccluded")) {
@@ -155,9 +167,12 @@ test("product user can import a repo video, add it to the timeline, and see rend
     );
     expect(after.timecodeUs).toBeGreaterThan(before.timecodeUs);
     expect(
-      after.regionHash,
-      "visible preview content must advance, not only the playhead or telemetry"
-    ).not.toBe(before.regionHash);
+      visibleMotion.visibleCenterHash,
+      "visible video pixels in the preview center must change while playback is running"
+    ).not.toBe(visibleBefore.visibleCenterHash);
+    expect(visibleMotion.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
+      before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
+    );
     expect(
       frameRequestsAfterPlay,
       "product playback must not drive a requestPreviewFrame PNG/artifact loop"

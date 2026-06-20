@@ -44,12 +44,14 @@ fn ass_text_sidecar_resolves_bundled_font_ref_through_registry() {
         .find(|sidecar| sidecar.kind == FfmpegSidecarKind::AssSubtitle)
         .expect("text overlay should generate an ASS sidecar");
 
-    assert!(ass.contents.contains(&format!(
-        "Style: Default,{BUNDLED_TEXT_FONT_FAMILY},48"
-    )));
-    assert!(ass.contents.contains(&format!(
-        "FontPath: {BUNDLED_TEXT_FONT_RELATIVE_PATH}"
-    )));
+    assert!(
+        ass.contents
+            .contains(&format!("Style: Default,{BUNDLED_TEXT_FONT_FAMILY},48"))
+    );
+    assert!(
+        ass.contents
+            .contains(&format!("FontPath: {BUNDLED_TEXT_FONT_RELATIVE_PATH}"))
+    );
 }
 
 #[test]

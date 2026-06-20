@@ -24,6 +24,20 @@ export type ForegroundProductAppController = {
   readExecuteCommandCalls: () => Promise<unknown[]>;
   readRealtimePreviewHostCalls: () => Promise<unknown[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
+  readWindowMetrics: () => Promise<ProductWindowMetrics>;
+};
+
+export type ProductWindowMetrics = {
+  bounds: WindowBounds;
+  contentBounds: WindowBounds;
+  displayScaleFactor: number;
+};
+
+export type WindowBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 export type CoreGraphicsWindowSummary = {
@@ -45,6 +59,7 @@ declare global {
     videoEditorTestObservations?: {
       getExecuteCommandCalls: () => Promise<unknown[]>;
       getRealtimePreviewHostCalls: () => Promise<unknown[]>;
+      getWindowMetrics: () => Promise<ProductWindowMetrics>;
     };
   }
 }
@@ -92,6 +107,7 @@ export async function launchForegroundProductApp(
     },
     readExecuteCommandCalls: async () => readTestObservation(page, "getExecuteCommandCalls", diagnostics),
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
+    readWindowMetrics: async () => readTestWindowMetrics(page, diagnostics),
     readForegroundDiagnostics: async () =>
       readForegroundDiagnostics({
         appBundlePath,
@@ -355,4 +371,17 @@ async function readTestObservation(
     },
     { methodName: method, launchDiagnostics: diagnostics }
   );
+}
+
+async function readTestWindowMetrics(
+  page: Page,
+  diagnostics: ForegroundProductAppDiagnostics
+): Promise<ProductWindowMetrics> {
+  return page.evaluate(async (launchDiagnostics) => {
+    const bridge = window.videoEditorTestObservations;
+    if (bridge === undefined) {
+      throw new Error(`Packaged product CDP test observation bridge is unavailable: ${JSON.stringify(launchDiagnostics)}`);
+    }
+    return bridge.getWindowMetrics();
+  }, diagnostics);
 }

@@ -181,8 +181,10 @@ fn render_graph_builds_stable_visual_audio_and_text_intents_from_engine_range_st
                         "source": "text",
                         "fontFamily": "Source Han Sans SC",
                         "fontRef": "source-han-local",
-                        "fontCandidate": "VE_TEXT_FONT_PATH",
+                        "fontCandidate": "font://bundled/noto-sans-cjk-sc-regular",
                         "fallbackCandidates": [
+                            "font://bundled/noto-sans-cjk-sc-regular",
+                            "assets/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
                             "VE_TEXT_FONT_PATH",
                             "/System/Library/Fonts/PingFang.ttc",
                             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -1001,7 +1003,7 @@ fn default_visual_json() -> serde_json::Value {
             },
             "anchor": { "xMillis": 500, "yMillis": 500 }
         },
-        "fitMode": "stretch",
+        "fitMode": "fit",
         "backgroundFilling": { "kind": "none" },
         "blendMode": { "kind": "normal" },
         "mask": { "kind": "none" }

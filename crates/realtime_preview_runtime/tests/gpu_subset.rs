@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use draft_model::{
     Draft, DraftId, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
     SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange,
@@ -14,10 +17,10 @@ use realtime_preview_runtime::gpu::{
     RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
 };
 use realtime_preview_runtime::{
-    prepare_realtime_preview_graph, CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo,
-    PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider, PreviewFrameProviderError,
-    RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
-    SoftwareVideoFrameProvider, TextureHandleDescriptor,
+    CpuVideoFrame, DecodedVideoFrameCache, FrameColorInfo, PlaybackGeneration, PreviewFrameInput,
+    PreviewFrameProvider, PreviewFrameProviderError, RealtimePreviewCapabilityClassifier,
+    RealtimePreviewGraphInput, RealtimePreviewGraphSupport, SoftwareVideoFrameProvider,
+    TextureHandleDescriptor, prepare_realtime_preview_graph,
 };
 use render_graph::{
     OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
@@ -80,6 +83,22 @@ fn gpu_subset_textured_quads_use_graph_stack_order_and_provider_frames() {
 }
 
 #[test]
+fn gpu_subset_samples_video_frame_at_target_relative_source_time() {
+    let video_id = MaterialId::from("video");
+    let mut graph = single_video_graph(&video_id, 4, 4);
+    graph.target_timerange = TargetTimerange::new(500_000, 33_333);
+    graph.video_layers[0].source_timerange = SourceTimerange::new(100_000, 1_000_000);
+    graph.video_layers[0].target_timerange = TargetTimerange::new(250_000, 1_000_000);
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let provider = RecordingFrameProvider::new(video_id, requests.clone());
+
+    let output = render_graph_with_provider(graph, provider);
+
+    assert_eq!(output.submitted_draws, 1);
+    assert_eq!(*requests.borrow(), vec![Microseconds::new(350_000)]);
+}
+
+#[test]
 fn gpu_subset_opacity_affects_composited_color() {
     let image_id = MaterialId::from("image");
     let video_id = MaterialId::from("video");
@@ -110,10 +129,12 @@ fn gpu_subset_unsupported_intent_does_not_submit_draws() {
 
     assert_eq!(output.support, RealtimePreviewGraphSupport::Unsupported);
     assert_eq!(output.submitted_draws, 0);
-    assert!(output
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.reason.contains("unsupported test canvas")));
+    assert!(
+        output
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.reason.contains("unsupported test canvas"))
+    );
 }
 
 #[test]
@@ -716,6 +737,20 @@ struct TextureHandleProvider {
     descriptor: TextureHandleDescriptor,
 }
 
+struct RecordingFrameProvider {
+    material_id: MaterialId,
+    requests: Rc<RefCell<Vec<Microseconds>>>,
+}
+
+impl RecordingFrameProvider {
+    fn new(material_id: MaterialId, requests: Rc<RefCell<Vec<Microseconds>>>) -> Self {
+        Self {
+            material_id,
+            requests,
+        }
+    }
+}
+
 impl TextureHandleProvider {
     fn new(material_id: MaterialId, descriptor: TextureHandleDescriptor) -> Self {
         Self {
@@ -749,6 +784,47 @@ impl PreviewFrameProvider for TextureHandleProvider {
         descriptor.source_position = source_position;
         descriptor.playback_generation = playback_generation;
         Ok(PreviewFrameInput::TextureHandle(descriptor))
+    }
+}
+
+impl PreviewFrameProvider for RecordingFrameProvider {
+    fn provider_name(&self) -> &'static str {
+        "recording-frame-provider"
+    }
+
+    fn frame_for(
+        &mut self,
+        material_id: &MaterialId,
+        source_position: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<PreviewFrameInput, PreviewFrameProviderError> {
+        if material_id != &self.material_id {
+            return Err(PreviewFrameProviderError::unavailable(
+                self.provider_name(),
+                material_id.clone(),
+                source_position,
+                playback_generation,
+                "unexpected material id",
+            ));
+        }
+        self.requests.borrow_mut().push(source_position);
+        PreviewFrameInput::cpu_rgba(
+            material_id.clone(),
+            source_position,
+            playback_generation,
+            1,
+            1,
+            vec![0, 0, 255, 255],
+        )
+        .map_err(|error| {
+            PreviewFrameProviderError::invalid_frame(
+                self.provider_name(),
+                Some(material_id.clone()),
+                Some(source_position),
+                Some(playback_generation),
+                error,
+            )
+        })
     }
 }
 

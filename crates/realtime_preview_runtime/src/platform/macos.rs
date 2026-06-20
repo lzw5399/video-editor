@@ -1,11 +1,11 @@
 use std::ffi::c_void;
 
-use objc2::rc::Retained;
 use objc2::MainThreadMarker;
+use objc2::rc::Retained;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationOptions, NSApplicationActivationPolicy,
     NSApplicationOcclusionState, NSRunningApplication, NSView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowOcclusionState,
+    NSWindowCollectionBehavior, NSWindowOcclusionState, NSWindowOrderingMode,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSDate, NSRunLoop};
@@ -73,7 +73,7 @@ impl MacosWgpuSurfaceAttachment {
         child_view.setHidden(false);
         child_view.setAlphaValue(1.0);
         child_view.setPostsFrameChangedNotifications(true);
-        parent_view.addSubview(&child_view);
+        place_child_view_above_parent_content(&parent_view, &child_view);
         configure_metal_layer(&metal_layer, bounds);
         child_view.setNeedsDisplay(true);
         child_view.displayIfNeededIgnoringOpacity();
@@ -102,6 +102,7 @@ impl MacosWgpuSurfaceAttachment {
             .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
+        place_child_view_above_parent_content(&self.parent_view, &self.child_view);
         configure_metal_layer(&self.metal_layer, bounds);
         self.child_view.setNeedsDisplay(true);
         self.child_view.displayIfNeededIgnoringOpacity();
@@ -120,6 +121,7 @@ impl MacosWgpuSurfaceAttachment {
             .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
+        place_child_view_above_parent_content(&self.parent_view, &self.child_view);
         configure_metal_layer(&self.metal_layer, bounds);
         self.child_view.displayIfNeededIgnoringOpacity();
         self.prepare_count = self.prepare_count.saturating_add(1);
@@ -227,20 +229,47 @@ fn ensure_parent_window_visible(
 
 fn ensure_window_visible(window: &NSWindow) {
     prepare_window_for_preview(window);
+    for _ in 0..12 {
+        request_window_activation(window);
+        commit_appkit_core_animation(window);
+        if window_ready_for_surface(window) {
+            break;
+        }
+    }
+}
+
+fn request_window_activation(window: &NSWindow) {
+    if let Some(mtm) = MainThreadMarker::new() {
+        let app = NSApplication::sharedApplication(mtm);
+        app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+        app.unhideWithoutActivation();
+        app.activate();
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+    }
     activate_current_application_for_preview();
     if window.isMiniaturized() {
         window.deminiaturize(None);
     }
-    if !window.isVisible() {
-        window.orderFrontRegardless();
-    }
-    if !window
-        .occlusionState()
-        .contains(NSWindowOcclusionState::Visible)
-    {
-        window.makeKeyAndOrderFront(None);
-        window.orderFrontRegardless();
-    }
+    window.makeKeyAndOrderFront(None);
+    window.makeKeyWindow();
+    window.makeMainWindow();
+    window.orderFrontRegardless();
+}
+
+fn window_ready_for_surface(window: &NSWindow) -> bool {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    app.isActive()
+        && !app.isHidden()
+        && window.isVisible()
+        && window.isOnActiveSpace()
+        && window.isKeyWindow()
+        && window
+            .occlusionState()
+            .contains(NSWindowOcclusionState::Visible)
 }
 
 fn prepare_window_for_preview(window: &NSWindow) {
@@ -314,6 +343,10 @@ fn configure_metal_layer(metal_layer: &CAMetalLayer, bounds: PreviewSurfaceBound
     metal_layer.setZPosition(1.0);
     metal_layer.setNeedsDisplayOnBoundsChange(true);
     metal_layer.setNeedsDisplay();
+}
+
+fn place_child_view_above_parent_content(parent_view: &NSView, child_view: &NSView) {
+    parent_view.addSubview_positioned_relativeTo(child_view, NSWindowOrderingMode::Above, None);
 }
 
 fn commit_appkit_core_animation(parent_window: &NSWindow) {

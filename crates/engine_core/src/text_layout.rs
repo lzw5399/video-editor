@@ -1,7 +1,7 @@
 use draft_model::{
-    Microseconds, SegmentId, TargetTimerange, TextAlignment, TextBackground, TextBubbleRef,
-    TextEffectRef, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextWrapping, TrackId,
-    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH, Microseconds,
+    SegmentId, TargetTimerange, TextAlignment, TextBackground, TextBubbleRef, TextEffectRef,
+    TextSegment, TextSegmentSource, TextShadow, TextStroke, TextWrapping, TrackId,
 };
 use serde::{Deserialize, Serialize};
 

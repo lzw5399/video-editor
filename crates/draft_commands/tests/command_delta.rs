@@ -14,12 +14,12 @@ use draft_commands::visual::update_segment_visual;
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
     ChangedEntity, CommandDelta, CommandName, CommandState, DirtyDomain, DirtyRange,
-    DirtyRangeSource, Draft, DraftCanvasConfig, ImportSubtitleSrtCommandPayload,
-    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
-    KeyframeValue, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SegmentOpacity, SegmentPosition, SegmentVisual, SegmentVolume, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
-    TextStyle, TextWrapping, TimelineSelection, Track, TrackKind, TrimSegmentDirection,
+    DirtyRangeSource, Draft, DraftCanvasConfig, ImportSubtitleSrtCommandPayload, InvalidationScope,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity,
+    SegmentPosition, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment,
+    TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
+    TimelineSelection, Track, TrackKind, TrimSegmentDirection,
 };
 
 #[test]
