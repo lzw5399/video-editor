@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::ffi::OsString;
 use std::fmt;
 use std::fs;
+use std::path::Path;
+use std::time::Duration;
 
 use audio_engine::{
     AudioOutputDevice, AudioPreviewError, AudioPreviewRuntime, AudioPreviewSessionConfig,
@@ -15,10 +18,12 @@ use audio_output_desktop::{
 use draft_model::{
     AudioOutputDeviceStatus, AudioOutputDeviceSummary, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
-    CommandError, CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope,
-    Draft, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TargetTimerange,
+    CommandError, CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope, Draft,
+    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, TargetTimerange,
     WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
+use media_runtime::{FfmpegExecutor, discover_runtime_config};
+use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{PlaybackRate, PlaybackState};
 use serde::{Deserialize, Serialize};
@@ -280,7 +285,7 @@ impl AudioPreviewBindingRegistry {
                 error.to_string(),
             )
         })?;
-        let samples = render_draft_wav_preview(
+        let samples = render_draft_audio_preview(
             draft,
             target_time,
             capabilities.sample_rate_hz,
@@ -692,7 +697,9 @@ fn device_summaries(
         .collect()
 }
 
-fn native_device_summary(device: &audio_output_desktop::DesktopAudioDeviceSummary) -> AudioOutputDeviceSummary {
+fn native_device_summary(
+    device: &audio_output_desktop::DesktopAudioDeviceSummary,
+) -> AudioOutputDeviceSummary {
     AudioOutputDeviceSummary {
         selection_id: device.device_id.clone(),
         display_name: device.safe_label.clone(),
@@ -705,7 +712,7 @@ fn native_device_summary(device: &audio_output_desktop::DesktopAudioDeviceSummar
     }
 }
 
-fn render_draft_wav_preview(
+fn render_draft_audio_preview(
     draft: &Draft,
     target_time: Microseconds,
     output_sample_rate_hz: u32,
@@ -733,40 +740,59 @@ fn render_draft_wav_preview(
         let Some(segment_end) = segment.target_timerange.checked_end() else {
             continue;
         };
-        if segment_end <= target_time || segment.target_timerange.start >= Microseconds::new(
-            target_time
-                .get()
-                .saturating_add(u64::try_from(output_frame_count).unwrap_or(0).saturating_mul(1_000_000) / u64::from(output_sample_rate_hz)),
-        ) {
+        if segment_end <= target_time
+            || segment.target_timerange.start
+                >= Microseconds::new(
+                    target_time.get().saturating_add(
+                        u64::try_from(output_frame_count)
+                            .unwrap_or(0)
+                            .saturating_mul(1_000_000)
+                            / u64::from(output_sample_rate_hz),
+                    ),
+                )
+        {
             continue;
         }
         let Some(material) = materials.get(&segment.material_id).copied() else {
             continue;
         };
-        if material.kind != MaterialKind::Audio || !material.metadata.has_audio {
+        if !matches!(material.kind, MaterialKind::Audio | MaterialKind::Video)
+            || !material.metadata.has_audio
+        {
             continue;
         }
-        let path = resolve_material_uri(".", &material.uri).map_err(|error| {
-            AudioPreviewBindingError::new(
-                AudioPreviewBindingErrorKind::InvalidPayload,
-                format!("audio material path cannot be resolved: {error}"),
-            )
-        })?
-        .ok_or_else(|| {
-            AudioPreviewBindingError::new(
-                AudioPreviewBindingErrorKind::InvalidPayload,
-                "audio material URI does not resolve to a local PCM source",
-            )
-        })?;
-        let source = read_pcm16_wav(&path)?;
-        mix_wav_segment(
-            &mut mixed,
-            output_channels,
-            output_sample_rate_hz,
-            target_time,
-            segment,
-            &source,
-        );
+        let path = resolve_material_uri(".", &material.uri)
+            .map_err(|error| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::InvalidPayload,
+                    format!("audio material path cannot be resolved: {error}"),
+                )
+            })?
+            .ok_or_else(|| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::InvalidPayload,
+                    "audio material URI does not resolve to a local audio source",
+                )
+            })?;
+        if let Ok(source) = read_pcm16_wav(&path) {
+            mix_wav_segment(
+                &mut mixed,
+                output_channels,
+                output_sample_rate_hz,
+                target_time,
+                segment,
+                &source,
+            );
+        } else {
+            mix_ffmpeg_audio_segment(
+                &mut mixed,
+                output_channels,
+                output_sample_rate_hz,
+                target_time,
+                segment,
+                &path,
+            )?;
+        }
         mixed_any = true;
     }
 
@@ -777,6 +803,176 @@ fn render_draft_wav_preview(
         ));
     }
     Ok(mixed)
+}
+
+fn mix_ffmpeg_audio_segment(
+    output: &mut [f32],
+    output_channels: usize,
+    output_sample_rate_hz: u32,
+    target_time: Microseconds,
+    segment: &draft_model::Segment,
+    path: &Path,
+) -> Result<(), AudioPreviewBindingError> {
+    let output_frames = output.len() / output_channels;
+    let output_duration_us = u64::try_from(output_frames)
+        .unwrap_or(0)
+        .saturating_mul(1_000_000)
+        / u64::from(output_sample_rate_hz.max(1));
+    let preview_start = target_time.get();
+    let preview_end = preview_start.saturating_add(output_duration_us);
+    let segment_start = segment.target_timerange.start.get();
+    let Some(segment_end) = segment.target_timerange.checked_end() else {
+        return Ok(());
+    };
+    let overlap_start = preview_start.max(segment_start);
+    let overlap_end = preview_end.min(segment_end.get());
+    if overlap_start >= overlap_end {
+        return Ok(());
+    }
+
+    let source_start = Microseconds::new(
+        segment
+            .source_timerange
+            .start
+            .get()
+            .saturating_add(overlap_start.saturating_sub(segment_start)),
+    );
+    let duration = Microseconds::new(overlap_end.saturating_sub(overlap_start));
+    let decoded = decode_audio_window_with_ffmpeg(
+        path,
+        source_start,
+        duration,
+        output_sample_rate_hz,
+        u16::try_from(output_channels).unwrap_or(2),
+    )?;
+    let output_offset_frame = usize::try_from(
+        overlap_start
+            .saturating_sub(preview_start)
+            .saturating_mul(u64::from(output_sample_rate_hz))
+            / 1_000_000,
+    )
+    .unwrap_or(usize::MAX);
+    mix_decoded_audio_window(output, output_channels, output_offset_frame, &decoded);
+    Ok(())
+}
+
+fn mix_decoded_audio_window(
+    output: &mut [f32],
+    output_channels: usize,
+    output_offset_frame: usize,
+    source: &DecodedWavPcm,
+) {
+    let output_frames = output.len() / output_channels;
+    if output_offset_frame >= output_frames {
+        return;
+    }
+    let frames_to_mix = source
+        .frame_count
+        .min(output_frames.saturating_sub(output_offset_frame));
+    for source_frame in 0..frames_to_mix {
+        let output_frame = output_offset_frame.saturating_add(source_frame);
+        for channel in 0..output_channels {
+            let source_channel = channel.min(source.channels.saturating_sub(1));
+            let source_index = source_frame
+                .saturating_mul(source.channels)
+                .saturating_add(source_channel);
+            let output_index = output_frame
+                .saturating_mul(output_channels)
+                .saturating_add(channel);
+            output[output_index] =
+                (output[output_index] + source.samples[source_index]).clamp(-1.0, 1.0);
+        }
+    }
+}
+
+fn decode_audio_window_with_ffmpeg(
+    path: &Path,
+    source_start: Microseconds,
+    duration: Microseconds,
+    output_sample_rate_hz: u32,
+    output_channels: u16,
+) -> Result<DecodedWavPcm, AudioPreviewBindingError> {
+    if duration.get() == 0 {
+        return Ok(DecodedWavPcm {
+            sample_rate_hz: output_sample_rate_hz,
+            channels: usize::from(output_channels.max(1)),
+            frame_count: 0,
+            samples: Vec::new(),
+        });
+    }
+    let runtime = discover_runtime_config().map_err(|error| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::DeviceUnavailable,
+            format!("audio preview requires FFmpeg to decode embedded media audio: {error}"),
+        )
+    })?;
+    let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_secs(10));
+    if !executor.can_execute(&runtime.ffmpeg.path) {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::DeviceUnavailable,
+            format!(
+                "audio preview cannot execute FFmpeg at {}",
+                runtime.ffmpeg.path.display()
+            ),
+        ));
+    }
+
+    let output_channels = output_channels.max(1).min(2);
+    let args = vec![
+        OsString::from("-hide_banner"),
+        OsString::from("-nostdin"),
+        OsString::from("-ss"),
+        OsString::from(seconds_arg(source_start)),
+        OsString::from("-t"),
+        OsString::from(seconds_arg(duration)),
+        OsString::from("-i"),
+        path.as_os_str().to_os_string(),
+        OsString::from("-vn"),
+        OsString::from("-ac"),
+        OsString::from(output_channels.to_string()),
+        OsString::from("-ar"),
+        OsString::from(output_sample_rate_hz.to_string()),
+        OsString::from("-f"),
+        OsString::from("s16le"),
+        OsString::from("-acodec"),
+        OsString::from("pcm_s16le"),
+        OsString::from("pipe:1"),
+    ];
+    let output = executor.run(&runtime.ffmpeg.path, &args).map_err(|error| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            format!("failed to launch FFmpeg audio decode: {error}"),
+        )
+    })?;
+    if !output.status.success() {
+        return Err(AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::RuntimeFailed,
+            format!(
+                "FFmpeg audio decode failed for {}: {}",
+                path.display(),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+    let channels = usize::from(output_channels);
+    let samples = output
+        .stdout
+        .chunks_exact(2)
+        .map(|sample| f32::from(i16::from_le_bytes([sample[0], sample[1]])) / f32::from(i16::MAX))
+        .collect::<Vec<_>>();
+    let frame_count = samples.len() / channels;
+    Ok(DecodedWavPcm {
+        sample_rate_hz: output_sample_rate_hz,
+        channels,
+        frame_count,
+        samples,
+    })
+}
+
+fn seconds_arg(value: Microseconds) -> String {
+    let seconds = value.get() / 1_000_000;
+    let micros = value.get() % 1_000_000;
+    format!("{seconds}.{micros:06}")
 }
 
 fn mix_wav_segment(
@@ -790,7 +986,9 @@ fn mix_wav_segment(
     let output_frames = output.len() / output_channels;
     for output_frame in 0..output_frames {
         let timeline_time = target_time.get().saturating_add(
-            u64::try_from(output_frame).unwrap_or(0).saturating_mul(1_000_000)
+            u64::try_from(output_frame)
+                .unwrap_or(0)
+                .saturating_mul(1_000_000)
                 / u64::from(output_sample_rate_hz),
         );
         if timeline_time < segment.target_timerange.start.get() {
@@ -800,8 +998,18 @@ fn mix_wav_segment(
         if segment_offset >= segment.target_timerange.duration.get() {
             continue;
         }
-        let source_time = segment.source_timerange.start.get().saturating_add(segment_offset);
-        if source_time >= segment.source_timerange.start.get().saturating_add(segment.source_timerange.duration.get()) {
+        let source_time = segment
+            .source_timerange
+            .start
+            .get()
+            .saturating_add(segment_offset);
+        if source_time
+            >= segment
+                .source_timerange
+                .start
+                .get()
+                .saturating_add(segment.source_timerange.duration.get())
+        {
             continue;
         }
         let source_frame = usize::try_from(
@@ -819,7 +1027,8 @@ fn mix_wav_segment(
             let output_index = output_frame
                 .saturating_mul(output_channels)
                 .saturating_add(channel);
-            output[output_index] = (output[output_index] + source.samples[source_index]).clamp(-1.0, 1.0);
+            output[output_index] =
+                (output[output_index] + source.samples[source_index]).clamp(-1.0, 1.0);
         }
     }
 }
@@ -851,7 +1060,8 @@ fn read_pcm16_wav(path: &std::path::Path) -> Result<DecodedWavPcm, AudioPreviewB
     let mut data: Option<&[u8]> = None;
     while offset.saturating_add(8) <= bytes.len() {
         let chunk_id = &bytes[offset..offset + 4];
-        let chunk_size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        let chunk_size =
+            u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
         offset = offset.saturating_add(8);
         if offset.saturating_add(chunk_size) > bytes.len() {
             break;
