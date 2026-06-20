@@ -87,20 +87,27 @@ pub enum CommandName {
     ListMaterials,
     ListMissingMaterials,
     AddSegment,
+    AddTimelineSegmentIntent,
     SelectTimelineSegments,
     MoveSegment,
+    MoveSelectedSegmentIntent,
     SplitSegment,
+    SplitSelectedSegmentIntent,
     TrimSegment,
+    TrimSelectedSegmentIntent,
     DeleteSegment,
     UndoTimelineEdit,
     RedoTimelineEdit,
     AddTextSegment,
+    AddTextSegmentIntent,
     EditTextSegment,
     ImportSubtitleSrt,
     AddAudioSegment,
+    AddAudioSegmentIntent,
     SetSegmentVolume,
     UpdateSegmentAudio,
     AddTrack,
+    AddTrackIntent,
     RenameTrack,
     SetTrackLock,
     SetTrackVisibility,
@@ -151,20 +158,27 @@ pub enum CommandPayload {
     ListMaterials(ListMaterialsCommandPayload),
     ListMissingMaterials(ListMissingMaterialsCommandPayload),
     AddSegment(AddSegmentCommandPayload),
+    AddTimelineSegmentIntent(AddTimelineSegmentIntentCommandPayload),
     SelectTimelineSegments(SelectTimelineSegmentsCommandPayload),
     MoveSegment(MoveSegmentCommandPayload),
+    MoveSelectedSegmentIntent(MoveSelectedSegmentIntentCommandPayload),
     SplitSegment(SplitSegmentCommandPayload),
+    SplitSelectedSegmentIntent(SplitSelectedSegmentIntentCommandPayload),
     TrimSegment(TrimSegmentCommandPayload),
+    TrimSelectedSegmentIntent(TrimSelectedSegmentIntentCommandPayload),
     DeleteSegment(DeleteSegmentCommandPayload),
     UndoTimelineEdit(UndoTimelineEditCommandPayload),
     RedoTimelineEdit(RedoTimelineEditCommandPayload),
     AddTextSegment(AddTextSegmentCommandPayload),
+    AddTextSegmentIntent(AddTextSegmentIntentCommandPayload),
     EditTextSegment(EditTextSegmentCommandPayload),
     ImportSubtitleSrt(ImportSubtitleSrtCommandPayload),
     AddAudioSegment(AddAudioSegmentCommandPayload),
+    AddAudioSegmentIntent(AddAudioSegmentIntentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
     UpdateSegmentAudio(UpdateSegmentAudioCommandPayload),
     AddTrack(AddTrackCommandPayload),
+    AddTrackIntent(AddTrackIntentCommandPayload),
     RenameTrack(RenameTrackCommandPayload),
     SetTrackLock(SetTrackLockCommandPayload),
     SetTrackVisibility(SetTrackVisibilityCommandPayload),
@@ -215,20 +229,27 @@ impl CommandPayload {
             Self::ListMaterials(_) => CommandName::ListMaterials,
             Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
             Self::AddSegment(_) => CommandName::AddSegment,
+            Self::AddTimelineSegmentIntent(_) => CommandName::AddTimelineSegmentIntent,
             Self::SelectTimelineSegments(_) => CommandName::SelectTimelineSegments,
             Self::MoveSegment(_) => CommandName::MoveSegment,
+            Self::MoveSelectedSegmentIntent(_) => CommandName::MoveSelectedSegmentIntent,
             Self::SplitSegment(_) => CommandName::SplitSegment,
+            Self::SplitSelectedSegmentIntent(_) => CommandName::SplitSelectedSegmentIntent,
             Self::TrimSegment(_) => CommandName::TrimSegment,
+            Self::TrimSelectedSegmentIntent(_) => CommandName::TrimSelectedSegmentIntent,
             Self::DeleteSegment(_) => CommandName::DeleteSegment,
             Self::UndoTimelineEdit(_) => CommandName::UndoTimelineEdit,
             Self::RedoTimelineEdit(_) => CommandName::RedoTimelineEdit,
             Self::AddTextSegment(_) => CommandName::AddTextSegment,
+            Self::AddTextSegmentIntent(_) => CommandName::AddTextSegmentIntent,
             Self::EditTextSegment(_) => CommandName::EditTextSegment,
             Self::ImportSubtitleSrt(_) => CommandName::ImportSubtitleSrt,
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
+            Self::AddAudioSegmentIntent(_) => CommandName::AddAudioSegmentIntent,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
             Self::UpdateSegmentAudio(_) => CommandName::UpdateSegmentAudio,
             Self::AddTrack(_) => CommandName::AddTrack,
+            Self::AddTrackIntent(_) => CommandName::AddTrackIntent,
             Self::RenameTrack(_) => CommandName::RenameTrack,
             Self::SetTrackLock(_) => CommandName::SetTrackLock,
             Self::SetTrackVisibility(_) => CommandName::SetTrackVisibility,
@@ -378,6 +399,16 @@ pub struct AddSegmentCommandPayload {
     pub target_timerange: TargetTimerange,
 }
 
+/// Intent-level command for adding a material at the current timeline context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTimelineSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub material_id: MaterialId,
+}
+
 /// Payload accepted by the Phase 3 timeline selection command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -401,6 +432,16 @@ pub struct MoveSegmentCommandPayload {
     pub target_start: Microseconds,
 }
 
+/// Intent-level command for moving the selected segment by a timeline delta.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MoveSelectedSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub delta: Microseconds,
+}
+
 /// Payload accepted by the Phase 3 timeline split command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -410,6 +451,16 @@ pub struct SplitSegmentCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub right_segment_id: SegmentId,
+    pub split_at: Microseconds,
+}
+
+/// Intent-level command for splitting the selected segment at a timeline time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SplitSelectedSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
     pub split_at: Microseconds,
 }
 
@@ -431,6 +482,17 @@ pub struct TrimSegmentCommandPayload {
     pub segment_id: SegmentId,
     pub direction: TrimSegmentDirection,
     pub target_timerange: TargetTimerange,
+}
+
+/// Intent-level command for trimming the selected segment edge by a delta.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TrimSelectedSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub direction: TrimSegmentDirection,
+    pub delta: Microseconds,
 }
 
 /// Payload accepted by the Phase 3 timeline delete command.
@@ -476,6 +538,17 @@ pub struct AddTextSegmentCommandPayload {
     pub text: TextSegment,
 }
 
+/// Intent-level command for adding text at the current timeline context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTextSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub text: TextSegment,
+    pub duration: Microseconds,
+}
+
 /// Payload accepted by the Phase 3 text segment edit command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -518,6 +591,21 @@ pub struct AddAudioSegmentCommandPayload {
     pub material_id: MaterialId,
     pub source_timerange: SourceTimerange,
     pub target_timerange: TargetTimerange,
+}
+
+/// Intent-level command for adding an audio material at the current timeline context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddAudioSegmentIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub material_id: Option<MaterialId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub duration: Option<Microseconds>,
 }
 
 /// Payload accepted by the Phase 3 segment volume command.
@@ -566,6 +654,16 @@ pub struct AddTrackCommandPayload {
     pub track_id: TrackId,
     pub track_kind: TrackKind,
     pub name: String,
+}
+
+/// Intent-level command for adding a track of a requested kind.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTrackIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub track_kind: TrackKind,
 }
 
 /// Payload accepted by the Phase 15.1 track rename command.

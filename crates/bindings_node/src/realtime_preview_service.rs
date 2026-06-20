@@ -53,6 +53,7 @@ use crate::native_preview_presenter::{
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 const PLAYBACK_FRAME_DURATION_US: u64 = 33_333;
+const PLAYBACK_WORKER_IDLE_SLEEP: Duration = Duration::from_millis(4);
 const MAX_IN_FLIGHT_SURFACE_PRESENTATIONS: usize = 4;
 const SURFACE_PRESENT_BACKPRESSURE_TIMEOUT: Duration = Duration::from_millis(250);
 static NEXT_SCHEDULER_MEDIA_PIPELINE_ID: AtomicU64 = AtomicU64::new(1);
@@ -535,20 +536,28 @@ fn run_binding_playback_loop(
     playback_generation: PlaybackGeneration,
     stop: Arc<AtomicBool>,
 ) {
-    const FRAME_DURATION: Duration = Duration::from_micros(PLAYBACK_FRAME_DURATION_US);
-
     while !stop.load(Ordering::Acquire) {
-        let frame_started = Instant::now();
         let frame = {
             let mut scheduler = match scheduler.lock() {
                 Ok(scheduler) => scheduler,
                 Err(_) => break,
             };
-            match scheduler.present_playback_tick(playback_generation) {
-                Ok(evidence) => {
-                    let reached_end =
-                        evidence.target_time_microseconds >= scheduler.sequence_duration().get();
-                    Ok(Some((evidence, reached_end)))
+            let Some(due_tick) = scheduler.playback_due_tick(playback_generation) else {
+                drop(scheduler);
+                thread::sleep(PLAYBACK_WORKER_IDLE_SLEEP);
+                continue;
+            };
+
+            let frame_started = Instant::now();
+            match scheduler.present_playback_tick(playback_generation, due_tick) {
+                Ok(frame) => {
+                    let reached_end = frame.evidence.target_time_microseconds
+                        >= scheduler.sequence_duration().get();
+                    Ok(Some((
+                        frame,
+                        reached_end,
+                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    )))
                 }
                 Err(error) => {
                     let transient = is_transient_playback_presentation_error(&error);
@@ -566,15 +575,19 @@ fn run_binding_playback_loop(
         };
 
         match frame {
-            Ok(Some((evidence, reached_end))) => {
-                if let Ok(mut runtime) = runtime.lock() {
-                    let _ = runtime.record_presented_output(
-                        runtime_id,
-                        Microseconds::new(evidence.target_time_microseconds),
-                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
-                    );
-                    if reached_end {
-                        let _ = runtime.pause(runtime_id);
+            Ok(Some((frame, reached_end, render_duration_ms))) => {
+                if frame.evidence.presented_frames > 0 {
+                    if let Ok(mut runtime) = runtime.lock() {
+                        let _ = runtime.record_presented_output(
+                            runtime_id,
+                            playback_generation,
+                            Microseconds::new(frame.evidence.target_time_microseconds),
+                            render_duration_ms,
+                            frame.dropped_frames,
+                        );
+                        if reached_end {
+                            let _ = runtime.pause(runtime_id);
+                        }
                     }
                 }
                 if reached_end {
@@ -591,11 +604,6 @@ fn run_binding_playback_loop(
                 }
                 break;
             }
-        }
-
-        let elapsed = frame_started.elapsed();
-        if elapsed < FRAME_DURATION {
-            thread::sleep(FRAME_DURATION - elapsed);
         }
     }
 }
@@ -661,6 +669,18 @@ struct BindingPlaybackAnchor {
     start_time: Microseconds,
     playback_generation: PlaybackGeneration,
     sequence_duration: Microseconds,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BindingPlaybackDueTick {
+    target_time: Microseconds,
+    dropped_frames: u64,
+}
+
+#[derive(Debug, Clone)]
+struct BindingPlaybackFrame {
+    evidence: RealtimePlaybackSchedulerEvidence,
+    dropped_frames: u64,
 }
 
 impl RealtimePreviewBindingScheduler {
@@ -917,16 +937,7 @@ impl RealtimePreviewBindingScheduler {
                 ),
             ));
         }
-        let tick_time = if target_time.get() > self.next_tick_time.get() {
-            target_time
-        } else {
-            Microseconds::new(
-                self.next_tick_time
-                    .get()
-                    .saturating_add(PLAYBACK_FRAME_DURATION_US),
-            )
-        };
-        self.next_tick_time = tick_time;
+        let tick_time = target_time;
         #[cfg(test)]
         if self.test_mock_surface_attached {
             let mut presenter = BindingSchedulerTestPresenter;
@@ -969,27 +980,67 @@ impl RealtimePreviewBindingScheduler {
     fn present_playback_tick(
         &mut self,
         playback_generation: PlaybackGeneration,
-    ) -> Result<RealtimePlaybackSchedulerEvidence, RealtimePreviewBindingError> {
-        let target_time = self.playback_target_time(playback_generation);
-        self.present_next_tick(target_time, playback_generation)
+        due_tick: BindingPlaybackDueTick,
+    ) -> Result<BindingPlaybackFrame, RealtimePreviewBindingError> {
+        let evidence = self.present_next_tick(due_tick.target_time, playback_generation)?;
+        self.advance_next_playback_tick(due_tick.target_time);
+        Ok(BindingPlaybackFrame {
+            evidence,
+            dropped_frames: due_tick.dropped_frames,
+        })
     }
 
-    fn playback_target_time(&self, playback_generation: PlaybackGeneration) -> Microseconds {
+    fn playback_due_tick(
+        &self,
+        playback_generation: PlaybackGeneration,
+    ) -> Option<BindingPlaybackDueTick> {
         let Some(anchor) = self.playback_anchor.as_ref() else {
-            return self.next_tick_time;
+            return None;
         };
         if anchor.playback_generation != playback_generation {
-            return self.next_tick_time;
+            return None;
         }
 
         let elapsed_us = u64::try_from(anchor.started_at.elapsed().as_micros()).unwrap_or(u64::MAX);
-        let wall_target = anchor.start_time.get().saturating_add(elapsed_us);
-        let frame_capped_target = self
+        let wall_media_time = anchor
+            .start_time
+            .get()
+            .saturating_add(elapsed_us)
+            .min(anchor.sequence_duration.get());
+        if wall_media_time < self.next_tick_time.get()
+            && self.next_tick_time.get() < anchor.sequence_duration.get()
+        {
+            return None;
+        }
+
+        let elapsed_frames =
+            wall_media_time.saturating_sub(anchor.start_time.get()) / PLAYBACK_FRAME_DURATION_US;
+        let wall_aligned_target = anchor
+            .start_time
+            .get()
+            .saturating_add(elapsed_frames.saturating_mul(PLAYBACK_FRAME_DURATION_US))
+            .min(anchor.sequence_duration.get());
+        let target_time = self
             .next_tick_time
             .get()
-            .saturating_add(PLAYBACK_FRAME_DURATION_US);
-        let target = wall_target.min(frame_capped_target);
-        Microseconds::new(target.min(anchor.sequence_duration.get()))
+            .max(wall_aligned_target)
+            .min(anchor.sequence_duration.get());
+        let dropped_frames =
+            target_time.saturating_sub(self.next_tick_time.get()) / PLAYBACK_FRAME_DURATION_US;
+        Some(BindingPlaybackDueTick {
+            target_time: Microseconds::new(target_time),
+            dropped_frames,
+        })
+    }
+
+    fn advance_next_playback_tick(&mut self, presented_time: Microseconds) {
+        let sequence_duration = self.sequence_duration().get();
+        self.next_tick_time = Microseconds::new(
+            presented_time
+                .get()
+                .saturating_add(PLAYBACK_FRAME_DURATION_US)
+                .min(sequence_duration),
+        );
     }
 
     fn sequence_duration(&self) -> Microseconds {
@@ -1024,7 +1075,9 @@ impl RealtimePreviewBindingScheduler {
         let registry = NativeTextureLeaseRegistry::new();
         Ok(SchedulerMediaPipeline {
             provider: self.build_media_provider(registry.clone())?,
-            registry,
+            texture_cache: RealtimePreviewTextureCache::new()
+                .with_native_texture_registry(registry.clone())
+                .with_native_texture_importer(Box::new(import_native_nv12_external_texture)),
             compositor: None,
             in_flight_presentations: VecDeque::new(),
         })
@@ -1096,7 +1149,7 @@ impl RealtimePreviewBindingScheduler {
 
 struct SchedulerMediaPipeline {
     provider: SchedulerFrameProvider,
-    registry: NativeTextureLeaseRegistry,
+    texture_cache: RealtimePreviewTextureCache,
     compositor: Option<RealtimePreviewCompositor>,
     in_flight_presentations: VecDeque<InFlightSurfacePresentation>,
 }
@@ -1126,8 +1179,7 @@ impl SchedulerMediaPipeline {
                 .in_flight_presentations
                 .pop_front()
                 .expect("front presentation was checked");
-            self.provider
-                .release_presented_frame_batch(presentation.frame_releases)?;
+            self.release_presented_frame_batch(presentation.frame_releases)?;
         }
         Ok(())
     }
@@ -1169,28 +1221,44 @@ impl SchedulerMediaPipeline {
                     });
                 Ok(())
             }
-            None => self.provider.release_presented_frame_batch(frame_releases),
+            None => self.release_presented_frame_batch(frame_releases),
         }
     }
 
     fn release_all_presentations(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
-        let Some(compositor) = self.compositor.as_ref() else {
+        if self.compositor.is_none() {
             while let Some(presentation) = self.in_flight_presentations.pop_front() {
-                self.provider
-                    .release_presented_frame_batch(presentation.frame_releases)?;
+                self.release_presented_frame_batch(presentation.frame_releases)?;
             }
             return Ok(());
-        };
+        }
         while let Some(presentation) = self.in_flight_presentations.pop_front() {
-            compositor
-                .wait_for_surface_submission(&presentation.fence, Duration::from_secs(5))
-                .map_err(|source| MediaIoHandoffReleaseError {
-                    source: source.to_string(),
-                })?;
-            self.provider
-                .release_presented_frame_batch(presentation.frame_releases)?;
+            {
+                let compositor = self
+                    .compositor
+                    .as_ref()
+                    .expect("compositor was checked before draining presentations");
+                compositor
+                    .wait_for_surface_submission(&presentation.fence, Duration::from_secs(5))
+                    .map_err(|source| MediaIoHandoffReleaseError {
+                        source: source.to_string(),
+                    })?;
+            }
+            self.release_presented_frame_batch(presentation.frame_releases)?;
         }
         Ok(())
+    }
+
+    fn release_presented_frame_batch(
+        &mut self,
+        frame_releases: Vec<PendingPreviewFrameRelease>,
+    ) -> Result<(), MediaIoHandoffReleaseError> {
+        for release in &frame_releases {
+            if let Some(handle_id) = release.texture_handle_id() {
+                self.texture_cache.evict_native_texture(handle_id);
+            }
+        }
+        self.provider.release_presented_frame_batch(frame_releases)
     }
 }
 
@@ -1366,9 +1434,6 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                 .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
                     reason: error.to_string(),
                 })?;
-            let mut texture_cache = RealtimePreviewTextureCache::new()
-                .with_native_texture_registry(pipeline.registry.clone())
-                .with_native_texture_importer(Box::new(import_native_nv12_external_texture));
             let compositor = pipeline.compositor.get_or_insert_with(|| {
                 RealtimePreviewCompositor::new(
                     gpu_device,
@@ -1384,7 +1449,7 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                 graph,
                 target,
                 &mut pipeline.provider,
-                &mut texture_cache,
+                &mut pipeline.texture_cache,
                 playback_generation,
             );
             let frame_releases = pipeline.provider.take_presented_frame_releases();
@@ -2039,12 +2104,12 @@ fn generation_response(
 #[cfg(test)]
 mod realtime_preview_bindings {
     use super::{
-        BindingPlaybackSnapshot, RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
-        RealtimePreviewBindingRegistry, RealtimePreviewBindingScheduler,
-        RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
-        RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
-        SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider, SchedulerMediaPipeline,
-        StaticImageFrame,
+        BindingPlaybackSnapshot, PLAYBACK_FRAME_DURATION_US, RealtimePreviewBackendUsed,
+        RealtimePreviewBindingErrorKind, RealtimePreviewBindingRegistry,
+        RealtimePreviewBindingScheduler, RealtimePreviewFrameBindingRequest,
+        RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
+        RealtimePreviewSurfaceBindingKind, RealtimePreviewTextureCache, SCHEDULER_MEDIA_PIPELINES,
+        SchedulerFrameProvider, SchedulerMediaPipeline, StaticImageFrame,
     };
     use crate::native_preview_presenter::{
         NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
@@ -2062,6 +2127,7 @@ mod realtime_preview_bindings {
     use render_graph::OutputDimensions;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -2278,7 +2344,7 @@ mod realtime_preview_bindings {
                         MediaIoFrameProvider::new(Box::new(PanicMediaReader)),
                         BTreeMap::new(),
                     ),
-                    registry: media_runtime::NativeTextureLeaseRegistry::new(),
+                    texture_cache: RealtimePreviewTextureCache::new(),
                     compositor: None,
                     in_flight_presentations: std::collections::VecDeque::new(),
                 },
@@ -2295,6 +2361,47 @@ mod realtime_preview_bindings {
             SCHEDULER_MEDIA_PIPELINES
                 .with(|pipelines| !pipelines.borrow().contains_key(&previous_pipeline_id)),
             "draft changes must remove the previous thread-local media pipeline"
+        );
+    }
+
+    #[test]
+    fn scheduler_playback_due_logic_skips_late_frames_without_slow_playing() {
+        let mut scheduler = RealtimePreviewBindingScheduler::new(
+            RealtimePlaybackSchedulerConfig {
+                preview_dimensions: OutputDimensions {
+                    width: 640,
+                    height: 360,
+                },
+            },
+            Arc::new(Mutex::new(BindingPlaybackSnapshot::default())),
+        );
+        let generation = PlaybackGeneration::new(7);
+        let start_time = Microseconds::new(100_000);
+        scheduler.update_draft_snapshot(scheduler_video_draft(), None);
+        scheduler.start_playback(start_time, generation);
+        scheduler
+            .playback_anchor
+            .as_mut()
+            .expect("playback anchor should be initialized")
+            .started_at = Instant::now()
+            .checked_sub(Duration::from_millis(500))
+            .expect("500ms before now is representable");
+
+        let due_tick = scheduler
+            .playback_due_tick(generation)
+            .expect("late playback worker should immediately present the wall-clock frame");
+        let expected_target_time = start_time
+            .get()
+            .saturating_add(15 * PLAYBACK_FRAME_DURATION_US);
+
+        assert_eq!(
+            due_tick.target_time.get(),
+            expected_target_time,
+            "late playback should skip to the wall-clock-aligned media frame"
+        );
+        assert_eq!(
+            due_tick.dropped_frames, 15,
+            "late playback should report skipped historical frames instead of rendering them"
         );
     }
 

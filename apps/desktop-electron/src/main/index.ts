@@ -29,6 +29,7 @@ type TestExecuteCommandCall = {
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
+  duration: number | null;
   canvasConfig: {
     width: number;
     height: number;
@@ -413,6 +414,10 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     command.payload.kind === "addAudioSegment"
       ? command.payload.targetTimerange
       : null;
+  const duration =
+    command.payload.kind === "addTextSegmentIntent" || command.payload.kind === "addAudioSegmentIntent"
+      ? command.payload.duration ?? null
+      : targetTimerange?.duration ?? null;
   const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
   const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
   const keyframe = command.payload.kind === "setSegmentKeyframe" ? command.payload.keyframe : null;
@@ -429,7 +434,11 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
         ? command.payload.at
         : null;
   const text =
-    command.payload.kind === "addTextSegment" || command.payload.kind === "editTextSegment" ? command.payload.text : null;
+    command.payload.kind === "addTextSegment" ||
+    command.payload.kind === "addTextSegmentIntent" ||
+    command.payload.kind === "editTextSegment"
+      ? command.payload.text
+      : null;
   const srtContent = command.payload.kind === "importSubtitleSrt" ? command.payload.srtContent : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
@@ -452,6 +461,7 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     requestId: command.requestId ?? null,
     targetTime,
     targetTimerange,
+    duration,
     canvasConfig,
     visual,
     keyframe,

@@ -71,9 +71,9 @@ export async function runRealImportPreviewExportWorkflow(
     expect.arrayContaining([
       "probeRuntimeCapabilities",
       "importMaterial",
-      "addSegment",
-      "addTextSegment",
-      "addAudioSegment",
+      "addTimelineSegmentIntent",
+      "addTextSegmentIntent",
+      "addAudioSegmentIntent",
       "saveProjectBundle",
       "startExport",
       "getExportJobStatus"
@@ -97,7 +97,7 @@ export async function assertReopenedProjectState(page: Page, fixtures: Phase6Med
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.videoName)}`) })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.imageName)}`) })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.audioName)}`) })).toBeVisible();
-  const textSegment = page.getByRole("button", { name: /片段 默认文字/ });
+  const textSegment = page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.expectedTextContent)}`) });
   await expect(textSegment).toBeVisible();
   await textSegment.click();
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
@@ -160,33 +160,33 @@ async function importMaterials(
 }
 
 async function addVisualSegment(page: Page, app: ElectronApplication, materialName: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addSegment")) + 1;
+  const nextCount = (await countCommand(app, "addTimelineSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toContainText("可用", { timeout: 20_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
-  await waitForCommandCount(page, app, "addSegment", nextCount);
+  await waitForCommandCount(page, app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
 }
 
 async function addTextSegment(page: Page, app: ElectronApplication, content: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addTextSegment")) + 1;
+  const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await page.getByLabel("文字时长（秒）").fill("3");
   await page.getByRole("button", { name: "添加文字", exact: true }).click();
-  await waitForCommandCount(page, app, "addTextSegment", nextCount);
-  await expect(page.getByRole("button", { name: /片段 默认文字/ })).toBeVisible();
+  await waitForCommandCount(page, app, "addTextSegmentIntent", nextCount);
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(content)}`) })).toBeVisible();
   await expect(page.getByLabel("预览文字")).toContainText(content);
 }
 
 async function addAudioSegment(page: Page, app: ElectronApplication, audioName: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addAudioSegment")) + 1;
+  const nextCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   await page.getByLabel("BGM素材").selectOption({ label: audioName });
   await page.getByLabel("音频时长（秒）").fill("2");
   await page.getByRole("button", { name: "添加音频", exact: true }).click();
-  await waitForCommandCount(page, app, "addAudioSegment", nextCount);
+  await waitForCommandCount(page, app, "addAudioSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(audioName)}`) })).toBeVisible();
 }
 

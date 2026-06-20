@@ -3,8 +3,8 @@
 use draft_model::{
     CommandDelta, CommandEvent, CommandName, CommandPayload, CommandState, Draft, Material,
     MaterialId, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange,
-    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection,
-    validate_draft,
+    TextSegment, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    TrimSegmentDirection, validate_draft,
 };
 
 use crate::{
@@ -21,6 +21,8 @@ use crate::{
     text::{add_text_segment, edit_text_segment, import_subtitle_srt},
     visual::update_segment_visual,
 };
+
+const DEFAULT_INTENT_SEGMENT_DURATION_US: u64 = 3_000_000;
 
 pub fn checked_source_end(
     timerange: &SourceTimerange,
@@ -155,6 +157,12 @@ pub fn execute_timeline_edit(
             payload.source_timerange,
             payload.target_timerange,
         ),
+        CommandPayload::AddTimelineSegmentIntent(payload) => add_timeline_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.material_id,
+        ),
         CommandPayload::SelectTimelineSegments(payload) => select_timeline_segments(
             &payload.draft,
             &payload.command_state,
@@ -170,12 +178,24 @@ pub fn execute_timeline_edit(
             payload.target_track_id,
             payload.target_start,
         ),
+        CommandPayload::MoveSelectedSegmentIntent(payload) => move_selected_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.delta,
+        ),
         CommandPayload::SplitSegment(payload) => split_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
             payload.right_segment_id,
+            payload.split_at,
+        ),
+        CommandPayload::SplitSelectedSegmentIntent(payload) => split_selected_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
             payload.split_at,
         ),
         CommandPayload::TrimSegment(payload) => trim_segment(
@@ -185,6 +205,13 @@ pub fn execute_timeline_edit(
             payload.segment_id,
             payload.direction,
             payload.target_timerange,
+        ),
+        CommandPayload::TrimSelectedSegmentIntent(payload) => trim_selected_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.direction,
+            payload.delta,
         ),
         CommandPayload::DeleteSegment(payload) => delete_segment(
             &payload.draft,
@@ -209,6 +236,13 @@ pub fn execute_timeline_edit(
             payload.target_timerange,
             payload.text,
         ),
+        CommandPayload::AddTextSegmentIntent(payload) => add_text_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.text,
+            payload.duration,
+        ),
         CommandPayload::EditTextSegment(payload) => edit_text_segment(
             &payload.draft,
             &payload.command_state,
@@ -226,6 +260,13 @@ pub fn execute_timeline_edit(
             payload.material_id,
             payload.source_timerange,
             payload.target_timerange,
+        ),
+        CommandPayload::AddAudioSegmentIntent(payload) => add_audio_segment_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.material_id,
+            payload.duration,
         ),
         CommandPayload::SetSegmentVolume(payload) => set_segment_volume(
             &payload.draft,
@@ -258,6 +299,12 @@ pub fn execute_timeline_edit(
             payload.track_id,
             payload.track_kind,
             payload.name,
+        ),
+        CommandPayload::AddTrackIntent(payload) => add_track_intent(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.track_kind,
         ),
         CommandPayload::RenameTrack(payload) => rename_track(
             &payload.draft,
@@ -347,6 +394,27 @@ pub fn add_track(
         "trackAdded",
         track_delta(CommandName::AddTrack, &track_id, "track added"),
     ))
+}
+
+pub fn add_track_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    track_kind: TrackKind,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let same_kind_count = draft
+        .tracks
+        .iter()
+        .filter(|track| track.kind == track_kind)
+        .count();
+    add_track(
+        draft,
+        command_state,
+        selection,
+        next_track_id(draft, track_kind),
+        track_kind,
+        default_track_name(track_kind, same_kind_count.saturating_add(1)),
+    )
 }
 
 pub fn rename_track(
@@ -506,6 +574,125 @@ pub fn add_segment(
     ))
 }
 
+pub fn add_timeline_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    material_id: MaterialId,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let material = find_material(draft, &material_id)?.clone();
+    let track_id = choose_compatible_track(draft, selection, &material)?;
+    let track_index = find_track_index(draft, &track_id)?;
+    let duration = material
+        .metadata
+        .duration
+        .unwrap_or_else(|| Microseconds::new(DEFAULT_INTENT_SEGMENT_DURATION_US));
+    let target_start = track_end(&draft.tracks[track_index])?;
+    let segment_id = next_segment_id(draft, "segment");
+
+    add_segment(
+        draft,
+        command_state,
+        selection,
+        track_id,
+        segment_id,
+        material_id,
+        SourceTimerange {
+            start: Microseconds::ZERO,
+            duration,
+        },
+        TargetTimerange {
+            start: target_start,
+            duration,
+        },
+    )
+}
+
+pub fn add_text_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    text: TextSegment,
+    duration: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let track_id = choose_track_by_kind(draft, selection, TrackKind::Text)?;
+    let track_index = find_track_index(draft, &track_id)?;
+    let duration = positive_duration(duration);
+    add_text_segment(
+        draft,
+        command_state,
+        selection,
+        track_id,
+        next_segment_id(draft, "text-segment"),
+        next_material_id(draft, "text-material"),
+        SourceTimerange {
+            start: Microseconds::ZERO,
+            duration,
+        },
+        TargetTimerange {
+            start: track_end(&draft.tracks[track_index])?,
+            duration,
+        },
+        text,
+    )
+}
+
+pub fn add_audio_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    material_id: Option<MaterialId>,
+    duration: Option<Microseconds>,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let material = match material_id {
+        Some(material_id) => find_material(draft, &material_id)?,
+        None => draft
+            .materials
+            .iter()
+            .find(|material| material.kind == MaterialKind::Audio)
+            .ok_or_else(|| {
+                TimelineCommandError::new(TimelineCommandErrorKind::InvalidTrackOperation {
+                    track_id: TrackId::from(""),
+                    reason: "no audio material for add audio intent".to_owned(),
+                })
+            })?,
+    };
+    if material.kind != MaterialKind::Audio {
+        return Err(TimelineCommandError::new(
+            TimelineCommandErrorKind::IncompatibleTrackMaterialKind {
+                track_id: TrackId::from(""),
+                track_kind: TrackKind::Audio,
+                material_id: material.material_id.clone(),
+                material_kind: material.kind,
+            },
+        ));
+    }
+
+    let track_id = choose_track_by_kind(draft, selection, TrackKind::Audio)?;
+    let track_index = find_track_index(draft, &track_id)?;
+    let duration = positive_duration(
+        duration
+            .or(material.metadata.duration)
+            .unwrap_or_else(|| Microseconds::new(DEFAULT_INTENT_SEGMENT_DURATION_US)),
+    );
+    add_audio_segment(
+        draft,
+        command_state,
+        selection,
+        track_id,
+        next_segment_id(draft, "audio-segment"),
+        material.material_id.clone(),
+        SourceTimerange {
+            start: Microseconds::ZERO,
+            duration,
+        },
+        TargetTimerange {
+            start: track_end(&draft.tracks[track_index])?,
+            duration,
+        },
+    )
+}
+
 pub fn select_timeline_segments(
     draft: &Draft,
     command_state: &CommandState,
@@ -607,6 +794,33 @@ pub fn move_segment(
     .with_selection_fallback(selection))
 }
 
+pub fn move_selected_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    delta: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let segment_id = selected_segment_id(selection)?;
+    let (track_index, segment_index) = find_segment_location(draft, &segment_id)?;
+    let segment = &draft.tracks[track_index].segments[segment_index];
+    let target_start = Microseconds::new(
+        segment
+            .target_timerange
+            .start
+            .get()
+            .saturating_add(delta.get()),
+    );
+
+    move_segment(
+        draft,
+        command_state,
+        selection,
+        segment_id,
+        draft.tracks[track_index].track_id.clone(),
+        target_start,
+    )
+}
+
 pub fn split_segment(
     draft: &Draft,
     command_state: &CommandState,
@@ -687,6 +901,24 @@ pub fn split_segment(
         "segmentSplit",
         delta,
     ))
+}
+
+pub fn split_selected_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    split_at: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let segment_id = selected_segment_id(selection)?;
+    let right_segment_id = next_segment_id(draft, "segment-right");
+    split_segment(
+        draft,
+        command_state,
+        selection,
+        segment_id,
+        right_segment_id,
+        split_at,
+    )
 }
 
 pub fn trim_segment(
@@ -800,6 +1032,46 @@ pub fn trim_segment(
         extra_events,
         delta,
     ))
+}
+
+pub fn trim_selected_segment_intent(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    direction: TrimSegmentDirection,
+    delta: Microseconds,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let segment_id = selected_segment_id(selection)?;
+    let (track_index, segment_index) = find_segment_location(draft, &segment_id)?;
+    let segment = &draft.tracks[track_index].segments[segment_index];
+    let current = &segment.target_timerange;
+    let max_delta = current.duration.get().saturating_sub(1);
+    let applied_delta = delta.get().min(max_delta);
+    let target_timerange = match direction {
+        TrimSegmentDirection::Left => {
+            let old_end = checked_target_end(current)?;
+            let new_start = Microseconds::new(current.start.get().saturating_add(applied_delta));
+            TargetTimerange {
+                start: new_start,
+                duration: Microseconds::new(old_end.get().saturating_sub(new_start.get()).max(1)),
+            }
+        }
+        TrimSegmentDirection::Right => TargetTimerange {
+            start: current.start,
+            duration: Microseconds::new(
+                current.duration.get().saturating_sub(applied_delta).max(1),
+            ),
+        },
+    };
+
+    trim_segment(
+        draft,
+        command_state,
+        selection,
+        segment_id,
+        direction,
+        target_timerange,
+    )
 }
 
 pub fn delete_segment(
@@ -1038,6 +1310,164 @@ fn find_track_index(draft: &Draft, track_id: &TrackId) -> Result<usize, Timeline
                 track_id: track_id.clone(),
             })
         })
+}
+
+fn selected_segment_id(selection: &TimelineSelection) -> Result<SegmentId, TimelineCommandError> {
+    selection.segment_ids.first().cloned().ok_or_else(|| {
+        TimelineCommandError::new(TimelineCommandErrorKind::InvalidTrackOperation {
+            track_id: TrackId::from(""),
+            reason: "no selected segment for timeline intent".to_owned(),
+        })
+    })
+}
+
+fn choose_compatible_track(
+    draft: &Draft,
+    selection: &TimelineSelection,
+    material: &Material,
+) -> Result<TrackId, TimelineCommandError> {
+    if let Some(track_id) = selection
+        .track_ids
+        .iter()
+        .filter_map(|track_id| {
+            draft.tracks.iter().find(|track| {
+                &track.track_id == track_id && track_accepts_material(track.kind, material.kind)
+            })
+        })
+        .map(|track| track.track_id.clone())
+        .next()
+    {
+        return Ok(track_id);
+    }
+
+    draft
+        .tracks
+        .iter()
+        .find(|track| track_accepts_material(track.kind, material.kind))
+        .map(|track| track.track_id.clone())
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::InvalidTrackOperation {
+                track_id: TrackId::from(""),
+                reason: format!(
+                    "no compatible track for material {} ({:?})",
+                    material.material_id.as_str(),
+                    material.kind
+                ),
+            })
+        })
+}
+
+fn choose_track_by_kind(
+    draft: &Draft,
+    selection: &TimelineSelection,
+    track_kind: TrackKind,
+) -> Result<TrackId, TimelineCommandError> {
+    if let Some(track_id) = selection
+        .track_ids
+        .iter()
+        .filter_map(|track_id| {
+            draft
+                .tracks
+                .iter()
+                .find(|track| &track.track_id == track_id && track.kind == track_kind)
+        })
+        .map(|track| track.track_id.clone())
+        .next()
+    {
+        return Ok(track_id);
+    }
+
+    draft
+        .tracks
+        .iter()
+        .find(|track| track.kind == track_kind)
+        .map(|track| track.track_id.clone())
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::InvalidTrackOperation {
+                track_id: TrackId::from(""),
+                reason: format!("no {:?} track for timeline intent", track_kind),
+            })
+        })
+}
+
+fn track_end(track: &Track) -> Result<Microseconds, TimelineCommandError> {
+    track
+        .segments
+        .iter()
+        .try_fold(Microseconds::ZERO, |end, segment| {
+            checked_target_end(&segment.target_timerange)
+                .map(|segment_end| Microseconds::new(end.get().max(segment_end.get())))
+        })
+}
+
+fn next_segment_id(draft: &Draft, prefix: &str) -> SegmentId {
+    let mut ordinal = draft
+        .tracks
+        .iter()
+        .map(|track| track.segments.len())
+        .sum::<usize>()
+        .saturating_add(1);
+    loop {
+        let candidate = SegmentId::from(format!("{prefix}-{ordinal}"));
+        let exists = draft.tracks.iter().any(|track| {
+            track
+                .segments
+                .iter()
+                .any(|segment| segment.segment_id == candidate)
+        });
+        if !exists {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
+    }
+}
+
+fn next_material_id(draft: &Draft, prefix: &str) -> MaterialId {
+    let mut ordinal = draft.materials.len().saturating_add(1);
+    loop {
+        let candidate = MaterialId::from(format!("{prefix}-{ordinal}"));
+        if !draft
+            .materials
+            .iter()
+            .any(|material| material.material_id == candidate)
+        {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
+    }
+}
+
+fn next_track_id(draft: &Draft, track_kind: TrackKind) -> TrackId {
+    let prefix = match track_kind {
+        TrackKind::Video => "track-video",
+        TrackKind::Audio => "track-audio",
+        TrackKind::Text => "track-text",
+        TrackKind::Sticker => "track-sticker",
+        TrackKind::Filter => "track-filter",
+    };
+    let mut ordinal = draft.tracks.len().saturating_add(1);
+    loop {
+        let candidate = TrackId::from(format!("{prefix}-{ordinal}"));
+        if !draft.tracks.iter().any(|track| track.track_id == candidate) {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
+    }
+}
+
+fn default_track_name(kind: TrackKind, index: usize) -> String {
+    let label = match kind {
+        TrackKind::Video => "视频轨道",
+        TrackKind::Audio => "音频轨道",
+        TrackKind::Text => "文字轨道",
+        TrackKind::Sticker => "贴纸轨道",
+        TrackKind::Filter => "滤镜轨道",
+    };
+    format!("{label} {index}")
+}
+
+fn positive_duration(duration: Microseconds) -> Microseconds {
+    Microseconds::new(duration.get().max(1))
 }
 
 pub(crate) fn find_segment_location(

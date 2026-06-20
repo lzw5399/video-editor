@@ -221,14 +221,21 @@ impl RealtimePreviewRuntime {
     pub fn record_presented_output(
         &mut self,
         session_id: PreviewSessionId,
+        playback_generation: PlaybackGeneration,
         target_time: Microseconds,
         render_duration_ms: u64,
+        dropped_frame_count: u64,
     ) -> Result<(), RealtimePreviewError> {
         let session = self.session_mut(session_id)?;
+        if session.clock.generation() != playback_generation {
+            return Ok(());
+        }
+        session.clock.record_playback_position(target_time);
         session.telemetry.record_presented_output(
             target_time,
-            session.clock.generation(),
+            playback_generation,
             render_duration_ms,
+            dropped_frame_count,
         );
         Ok(())
     }

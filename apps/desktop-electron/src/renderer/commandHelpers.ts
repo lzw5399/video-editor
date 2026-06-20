@@ -1,8 +1,12 @@
 import type {
+  AddTimelineSegmentIntentCommandPayload,
+  AddAudioSegmentIntentCommandPayload,
   AddSegmentCommandPayload,
   AddAudioSegmentCommandPayload,
   AddTextSegmentCommandPayload,
+  AddTextSegmentIntentCommandPayload,
   AddTrackCommandPayload,
+  AddTrackIntentCommandPayload,
   AudioPreviewCommandPayload,
   CancelExportCommandPayload,
   CommandEnvelope,
@@ -20,6 +24,7 @@ import type {
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
   MoveSegmentCommandPayload,
+  MoveSelectedSegmentIntentCommandPayload,
   OpenProjectBundleCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
@@ -35,10 +40,12 @@ import type {
   SetTrackLockCommandPayload,
   SetTrackVisibilityCommandPayload,
   SplitSegmentCommandPayload,
+  SplitSelectedSegmentIntentCommandPayload,
   StartExportCommandPayload,
   RunArtifactGarbageCollectionCommandPayload,
   TimelineSelection,
   TrimSegmentCommandPayload,
+  TrimSelectedSegmentIntentCommandPayload,
   UndoTimelineEditCommandPayload,
   UpdateDraftCanvasConfigCommandPayload,
   UpdateSegmentAudioCommandPayload,
@@ -179,6 +186,18 @@ export function buildAddSegmentCommand(options: AddSegmentOptions): CommandEnvel
   return envelope("addSegment", payload);
 }
 
+export function buildAddTimelineSegmentIntentCommand(context: CommandContext, materialId: MaterialId): CommandEnvelope {
+  const payload = {
+    kind: "addTimelineSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    materialId
+  } satisfies AddTimelineSegmentIntentCommandPayload & { kind: "addTimelineSegmentIntent" };
+
+  return envelope("addTimelineSegmentIntent", payload);
+}
+
 export function buildSelectTimelineSegmentsCommand(
   context: CommandContext,
   segmentIds: SegmentId[],
@@ -215,6 +234,18 @@ export function buildMoveSegmentCommand(
   return envelope("moveSegment", payload);
 }
 
+export function buildMoveSelectedSegmentIntentCommand(context: CommandContext, delta: Microseconds): CommandEnvelope {
+  const payload = {
+    kind: "moveSelectedSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    delta
+  } satisfies MoveSelectedSegmentIntentCommandPayload & { kind: "moveSelectedSegmentIntent" };
+
+  return envelope("moveSelectedSegmentIntent", payload);
+}
+
 export function buildSplitSegmentCommand(
   context: CommandContext,
   segmentId: SegmentId,
@@ -234,6 +265,18 @@ export function buildSplitSegmentCommand(
   return envelope("splitSegment", payload);
 }
 
+export function buildSplitSelectedSegmentIntentCommand(context: CommandContext, splitAt: Microseconds): CommandEnvelope {
+  const payload = {
+    kind: "splitSelectedSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    splitAt
+  } satisfies SplitSelectedSegmentIntentCommandPayload & { kind: "splitSelectedSegmentIntent" };
+
+  return envelope("splitSelectedSegmentIntent", payload);
+}
+
 export function buildTrimSegmentCommand(
   context: CommandContext,
   segmentId: SegmentId,
@@ -251,6 +294,23 @@ export function buildTrimSegmentCommand(
   } satisfies TrimSegmentCommandPayload & { kind: "trimSegment" };
 
   return envelope("trimSegment", payload);
+}
+
+export function buildTrimSelectedSegmentIntentCommand(
+  context: CommandContext,
+  direction: "left" | "right",
+  delta: Microseconds
+): CommandEnvelope {
+  const payload = {
+    kind: "trimSelectedSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    direction,
+    delta
+  } satisfies TrimSelectedSegmentIntentCommandPayload & { kind: "trimSelectedSegmentIntent" };
+
+  return envelope("trimSelectedSegmentIntent", payload);
 }
 
 export function buildDeleteSegmentCommand(context: CommandContext, segmentId: SegmentId): CommandEnvelope {
@@ -312,6 +372,23 @@ export function buildAddTextSegmentCommand(options: TextCommandOptions): Command
   } satisfies AddTextSegmentCommandPayload & { kind: "addTextSegment" };
 
   return envelope("addTextSegment", payload);
+}
+
+export function buildAddTextSegmentIntentCommand(
+  context: CommandContext,
+  text: TextSegment,
+  duration: Microseconds
+): CommandEnvelope {
+  const payload = {
+    kind: "addTextSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    text,
+    duration
+  } satisfies AddTextSegmentIntentCommandPayload & { kind: "addTextSegmentIntent" };
+
+  return envelope("addTextSegmentIntent", payload);
 }
 
 export function buildEditTextSegmentCommand(
@@ -391,6 +468,23 @@ export function buildAddAudioSegmentCommand(options: AudioCommandOptions): Comma
   return envelope("addAudioSegment", payload);
 }
 
+export function buildAddAudioSegmentIntentCommand(
+  context: CommandContext,
+  materialId: MaterialId | null,
+  duration: Microseconds | null
+): CommandEnvelope {
+  const payload = {
+    kind: "addAudioSegmentIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    materialId,
+    duration
+  } satisfies AddAudioSegmentIntentCommandPayload & { kind: "addAudioSegmentIntent" };
+
+  return envelope("addAudioSegmentIntent", payload);
+}
+
 export function buildSetSegmentVolumeCommand(
   context: CommandContext,
   segmentId: SegmentId,
@@ -434,6 +528,18 @@ export function buildAddTrackCommand(
   } satisfies AddTrackCommandPayload & { kind: "addTrack" };
 
   return envelope("addTrack", payload);
+}
+
+export function buildAddTrackIntentCommand(context: CommandContext, trackKind: TrackKind): CommandEnvelope {
+  const payload = {
+    kind: "addTrackIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    trackKind
+  } satisfies AddTrackIntentCommandPayload & { kind: "addTrackIntent" };
+
+  return envelope("addTrackIntent", payload);
 }
 
 export function buildRenameTrackCommand(context: CommandContext, trackId: TrackId, name: string): CommandEnvelope {

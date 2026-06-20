@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   USER_JOURNEY_AV_VIDEO,
@@ -24,6 +24,7 @@ import {
   moveSelectedSegmentRight,
   readExecuteCommandCalls,
   readRealtimePreviewHostCalls,
+  readTimelineSegments,
   requestPreviewFrameCount,
   redoTimelineEdit,
   seekTimelinePlayhead,
@@ -36,6 +37,11 @@ import {
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
+
+const USER_JOURNEY_SEQUENCE_DURATION_US = 3_000_000;
+const THIRTY_FPS_FRAME_DURATION_US = 33_333;
+const SEQUENCE_END_FRAME_ALIGNED_MIN_US =
+  USER_JOURNEY_SEQUENCE_DURATION_US - THIRTY_FPS_FRAME_DURATION_US - 7_000;
 
 test("product playback helper rejects playhead-only advancement without visible compositor motion", () => {
   const before = {
@@ -367,9 +373,15 @@ test("product playback UAT keeps video presentation synchronized with timeline t
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
 
-    await expect.poll(async () => (await capturePreviewEvidence(page)).timecodeUs, { timeout: 6_000 }).toBeGreaterThanOrEqual(3_000_000);
+    await expect
+      .poll(async () => (await capturePreviewEvidence(page)).timecodeUs, { timeout: 6_000 })
+      .toBeGreaterThanOrEqual(SEQUENCE_END_FRAME_ALIGNED_MIN_US);
     const atEnd = await capturePreviewEvidence(page);
     const presentedTime = atEnd.hostState?.contentEvidence?.targetTimeMicroseconds ?? -1;
+    expect(
+      presentedTime,
+      "rendered video target time should reach the frame-aligned sequence end"
+    ).toBeGreaterThanOrEqual(SEQUENCE_END_FRAME_ALIGNED_MIN_US);
     expect(
       Math.abs(atEnd.timecodeUs - presentedTime),
       "timeline playhead and rendered video target time must stay synchronized at sequence end"
@@ -402,8 +414,12 @@ test("product user editing matrix uses real commands and still produces visible 
     ]);
 
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    let movingSegments = await expectTimelineMaterialSegments(page, /p0-moving-testsrc\.mp4/, 1);
+    expectTimelineSegmentRange(movingSegments[0], 0, 3_000_000);
     await addVideoTrack(page, app);
     await addMaterialToTimeline(app, page, USER_JOURNEY_OVERLAY_IMAGE);
+    let overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
+    expectTimelineSegmentRange(overlaySegments[0], 0, 3_000_000);
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
     const inspector = page.getByRole("complementary", { name: "属性检查器" });
     await expect(page.getByLabel("画面基础表单")).toBeVisible();
@@ -438,35 +454,47 @@ test("product user editing matrix uses real commands and still produces visible 
     await expectTimelineSnappingStatusVisible(page);
     await zoomTimelineIn(page);
     await splitSelectedSegment(page, app, 1_500_000);
-    await moveSelectedSegmentRight(page, app, 250_000);
-    await trimSelectedSegmentLeftEdgeRight(page, app, 100_000);
-    await deleteSelectedSegment(page, app);
-    await undoTimelineEdit(page, app);
-    await redoTimelineEdit(page, app);
-    await undoTimelineEdit(page, app);
+    movingSegments = sortTimelineSegments(await expectTimelineMaterialSegments(page, /p0-moving-testsrc\.mp4/, 2));
+    expectTimelineSegmentRange(movingSegments[0], 0, 1_500_000);
+    expectTimelineSegmentRange(movingSegments[1], 1_500_000, 1_500_000);
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
+    await moveSelectedSegmentRight(page, app, 250_000);
+    overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
+    expectTimelineSegmentRange(overlaySegments[0], 250_000, 3_000_000);
+    await trimSelectedSegmentLeftEdgeRight(page, app, 100_000);
+    overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
+    expectTimelineSegmentRange(overlaySegments[0], 350_000, 2_900_000);
     await deleteSelectedSegment(page, app);
+    await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 0);
+    await undoTimelineEdit(page, app);
+    overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
+    expectTimelineSegmentRange(overlaySegments[0], 350_000, 2_900_000);
+    await redoTimelineEdit(page, app);
+    await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 0);
+    await undoTimelineEdit(page, app);
+    overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
+    expectTimelineSegmentRange(overlaySegments[0], 350_000, 2_900_000);
     await seekTimelinePlayhead(page, app, 2_100_000);
 
     const callsAfterEdits = await readExecuteCommandCalls(app);
     expect(callsAfterEdits.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "importMaterial",
-        "addSegment",
-        "addTrack",
-        "addTextSegment",
-        "addAudioSegment",
+        "addTimelineSegmentIntent",
+        "addTrackIntent",
+        "addTextSegmentIntent",
+        "addAudioSegmentIntent",
         "updateSegmentVisual",
-        "splitSegment",
-        "moveSegment",
-        "trimSegment",
+        "splitSelectedSegmentIntent",
+        "moveSelectedSegmentIntent",
+        "trimSelectedSegmentIntent",
         "deleteSegment",
         "undoTimelineEdit",
         "redoTimelineEdit"
       ])
     );
     expect(requestPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
-    expect(callsAfterEdits.find((call) => call.command === "addTextSegment")?.textContent).toBe("产品级端到端字幕");
+    expect(callsAfterEdits.find((call) => call.command === "addTextSegmentIntent")?.textContent).toBe("产品级端到端字幕");
     const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSegmentVisual");
     expect(visualCall?.visual?.fitMode).toBe("fill");
     expect(visualCall?.visual?.transform.position.x).toBe(120);
@@ -484,6 +512,33 @@ test("product user editing matrix uses real commands and still produces visible 
     await app.close();
   }
 });
+
+async function expectTimelineMaterialSegments(page: Page, label: RegExp, count: number) {
+  await expect
+    .poll(async () => (await readTimelineSegments(page, label)).length, { timeout: 10_000 })
+    .toBe(count);
+  return readTimelineSegments(page, label);
+}
+
+function sortTimelineSegments<T extends { targetStartUs: number }>(segments: T[]): T[] {
+  return [...segments].sort((first, second) => first.targetStartUs - second.targetStartUs);
+}
+
+function expectTimelineSegmentRange(
+  segment: { targetStartUs: number; targetDurationUs: number } | undefined,
+  startUs: number,
+  durationUs: number,
+  toleranceUs = 10_000
+): void {
+  expect(segment, "expected timeline segment to be visible").toBeDefined();
+  expect(Math.abs((segment?.targetStartUs ?? -1) - startUs), "timeline segment target start changed").toBeLessThanOrEqual(
+    toleranceUs
+  );
+  expect(
+    Math.abs((segment?.targetDurationUs ?? -1) - durationUs),
+    "timeline segment target duration changed"
+  ).toBeLessThanOrEqual(toleranceUs);
+}
 
 test("product text and transform interaction UAT supports direct canvas drag", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);

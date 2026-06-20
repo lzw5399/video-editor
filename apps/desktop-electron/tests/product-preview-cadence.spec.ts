@@ -20,6 +20,7 @@ type HostState = {
   backend: "renderGraphGpu" | "none";
   telemetry: {
     presentedFrameCount: number;
+    droppedFrameCount: number;
     targetTimeMicroseconds: number;
     playbackGeneration: number;
   } | null;
@@ -64,6 +65,8 @@ test("product preview cadence presents sustained GPU frames without artifact fal
 
     const presentedBefore = before?.telemetry?.presentedFrameCount ?? 0;
     const presentedAfter = after?.telemetry?.presentedFrameCount ?? 0;
+    const droppedBefore = before?.telemetry?.droppedFrameCount ?? 0;
+    const droppedAfter = after?.telemetry?.droppedFrameCount ?? 0;
     const targetBefore = before?.contentEvidence?.targetTimeMicroseconds ?? 0;
     const targetAfter = after?.contentEvidence?.targetTimeMicroseconds ?? 0;
     const renderGraphActive =
@@ -84,6 +87,8 @@ test("product preview cadence presents sustained GPU frames without artifact fal
         .filter((call) => call.kind === "getPresentationState" && typeof call.unsupportedReason === "string")
         .at(-1)?.unsupportedReason,
       presentedDelta: presentedAfter - presentedBefore,
+      droppedDelta: droppedAfter - droppedBefore,
+      accountedFrameDelta: presentedAfter - presentedBefore + droppedAfter - droppedBefore,
       targetDeltaMicroseconds: targetAfter - targetBefore,
       evidenceDigestChanged,
       visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
@@ -108,12 +113,17 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       metrics.frameRequestsBefore
     );
     expect(metrics.renderGraphActive, "cadence playback must finish on the renderGraphGpu product path").toBe(true);
-    expect(metrics.targetDeltaMicroseconds, "3s playback should advance near the media duration").toBeGreaterThanOrEqual(
-      2_000_000
+    expect(metrics.targetDeltaMicroseconds, "3s playback should advance near the full 3s media window").toBeGreaterThanOrEqual(
+      2_900_000
     );
-    expect(metrics.presentedDelta, "3s playback should present production-grade sustained GPU frames").toBeGreaterThanOrEqual(
-      75
+    expect(metrics.accountedFrameDelta, "3s playback should account for all 90 frames via present or dropped-frame policy").toBeGreaterThanOrEqual(
+      90
     );
+    if (metrics.droppedDelta === 0) {
+      expect(metrics.presentedDelta, "3s playback without drops should present all 90 frames for 30fps media").toBeGreaterThanOrEqual(
+        90
+      );
+    }
     expect(metrics.presentationDurationMs.count, "UI status polling should remain near the playback cadence").toBeGreaterThanOrEqual(
       70
     );

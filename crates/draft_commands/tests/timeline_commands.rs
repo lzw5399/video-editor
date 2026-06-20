@@ -1,15 +1,18 @@
 use draft_commands::{
     TimelineCommandErrorKind,
     timeline::{
-        add_segment as command_add_segment, delete_segment as command_delete_segment,
-        move_segment as command_move_segment,
+        add_audio_segment_intent, add_segment as command_add_segment, add_text_segment_intent,
+        add_timeline_segment_intent, add_track_intent, delete_segment as command_delete_segment,
+        move_segment as command_move_segment, move_selected_segment_intent,
         select_timeline_segments as command_select_timeline_segments,
-        split_segment as command_split_segment, trim_segment as command_trim_segment,
+        split_segment as command_split_segment, split_selected_segment_intent,
+        trim_segment as command_trim_segment, trim_selected_segment_intent,
     },
 };
 use draft_model::{
     CommandState, Draft, Material, MaterialKind, Microseconds, Segment, SourceTimerange,
-    TargetTimerange, TimelineSelection, Track, TrackKind, TrimSegmentDirection,
+    TargetTimerange, TextSegment, TextSegmentSource, TimelineSelection, Track, TrackKind,
+    TrimSegmentDirection,
 };
 
 #[test]
@@ -154,6 +157,158 @@ fn timeline_edits() {
     assert!(deleted.draft.tracks[0].segments.is_empty());
     assert!(deleted.selection.segment_ids.is_empty());
     assert_eq!(deleted.events[0].kind, "segmentDeleted");
+}
+
+#[test]
+fn intent_timeline_edits_are_rust_owned() {
+    let mut draft = draft_with_tracks_and_materials();
+    draft
+        .tracks
+        .push(Track::new("video-overlay", TrackKind::Video, "Overlay"));
+    let state = CommandState::empty();
+    let selected_overlay = TimelineSelection {
+        segment_ids: Vec::new(),
+        track_ids: vec!["video-overlay".into()],
+    };
+
+    let added =
+        add_timeline_segment_intent(&draft, &state, &selected_overlay, "video-material".into())
+            .expect("add intent should resolve selected compatible track and allocate segment ID");
+    assert_eq!(added.selection.track_ids, vec!["video-overlay".into()]);
+    assert_eq!(added.selection.segment_ids, vec!["segment-1".into()]);
+    let added_segment = &added.draft.tracks[2].segments[0];
+    assert_eq!(added_segment.segment_id.as_str(), "segment-1");
+    assert_eq!(added_segment.material_id.as_str(), "video-material");
+    assert_eq!(
+        added_segment.source_timerange,
+        SourceTimerange::new(0, 1_000_000)
+    );
+    assert_eq!(
+        added_segment.target_timerange,
+        TargetTimerange::new(0, 1_000_000)
+    );
+
+    let moved = move_selected_segment_intent(
+        &added.draft,
+        &added.command_state,
+        &added.selection,
+        Microseconds::new(250_000),
+    )
+    .expect("move intent should derive the selected segment and target start");
+    assert_eq!(
+        moved.draft.tracks[2].segments[0].target_timerange,
+        TargetTimerange::new(250_000, 1_000_000)
+    );
+
+    let split = split_selected_segment_intent(
+        &moved.draft,
+        &moved.command_state,
+        &moved.selection,
+        Microseconds::new(750_000),
+    )
+    .expect("split intent should derive selected segment and allocate right segment ID");
+    assert_eq!(
+        split.selection.segment_ids,
+        vec!["segment-1".into(), "segment-right-2".into()]
+    );
+    assert_eq!(
+        split.draft.tracks[2].segments[0].target_timerange,
+        TargetTimerange::new(250_000, 500_000)
+    );
+    assert_eq!(
+        split.draft.tracks[2].segments[1].target_timerange,
+        TargetTimerange::new(750_000, 500_000)
+    );
+
+    let left_selected = TimelineSelection {
+        segment_ids: vec!["segment-1".into()],
+        track_ids: vec!["video-overlay".into()],
+    };
+    let trimmed = trim_selected_segment_intent(
+        &split.draft,
+        &split.command_state,
+        &left_selected,
+        TrimSegmentDirection::Left,
+        Microseconds::new(900_000),
+    )
+    .expect("trim intent should clamp oversized deltas to a valid one-frame-equivalent range");
+    assert_eq!(
+        trimmed.draft.tracks[2].segments[0].target_timerange,
+        TargetTimerange::new(749_999, 1)
+    );
+    assert_eq!(
+        trimmed.draft.tracks[2].segments[0].source_timerange,
+        SourceTimerange::new(499_999, 1)
+    );
+
+    let track_added = add_track_intent(
+        &trimmed.draft,
+        &trimmed.command_state,
+        &trimmed.selection,
+        TrackKind::Text,
+    )
+    .expect("track intent should allocate track ID and name in Rust");
+    let text_track = track_added
+        .draft
+        .tracks
+        .last()
+        .expect("track intent should add a track");
+    assert_eq!(text_track.track_id.as_str(), "track-text-4");
+    assert_eq!(text_track.name, "文字轨道 1");
+
+    let text_added = add_text_segment_intent(
+        &track_added.draft,
+        &track_added.command_state,
+        &TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec![text_track.track_id.clone()],
+        },
+        text_segment("Rust owned text"),
+        Microseconds::ZERO,
+    )
+    .expect("text intent should allocate text material and clamp duration");
+    let text_segment = text_added
+        .draft
+        .tracks
+        .last()
+        .and_then(|track| track.segments.first())
+        .expect("text intent should append a segment");
+    assert_eq!(text_segment.segment_id.as_str(), "text-segment-3");
+    assert_eq!(text_segment.material_id.as_str(), "text-material-3");
+    let text_material = text_added
+        .draft
+        .materials
+        .iter()
+        .find(|material| material.material_id == text_segment.material_id)
+        .expect("text intent should create a text material");
+    assert_eq!(text_material.display_name, "Rust owned text");
+    assert_eq!(text_segment.target_timerange, TargetTimerange::new(0, 1));
+    assert_eq!(
+        text_segment.text.as_ref().map(|text| text.content.as_str()),
+        Some("Rust owned text")
+    );
+
+    let audio_added = add_audio_segment_intent(
+        &text_added.draft,
+        &text_added.command_state,
+        &TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec!["audio-track".into()],
+        },
+        None,
+        None,
+    )
+    .expect("audio intent should choose the selected audio track and first audio material");
+    let audio_segment = audio_added.draft.tracks[1]
+        .segments
+        .first()
+        .expect("audio intent should append a segment");
+    assert_eq!(audio_segment.segment_id.as_str(), "audio-segment-4");
+    assert_eq!(audio_segment.material_id.as_str(), "audio-material");
+    assert_eq!(
+        audio_segment.target_timerange,
+        TargetTimerange::new(0, 2_000_000)
+    );
 }
 
 #[test]
@@ -336,4 +491,17 @@ fn segment(
         SourceTimerange::new(source_start, source_duration),
         TargetTimerange::new(target_start, target_duration),
     )
+}
+
+fn text_segment(content: &str) -> TextSegment {
+    TextSegment {
+        content: content.to_owned(),
+        source: TextSegmentSource::Text,
+        style: Default::default(),
+        text_box: Default::default(),
+        layout_region: Default::default(),
+        wrapping: Default::default(),
+        bubble: None,
+        effect: None,
+    }
 }

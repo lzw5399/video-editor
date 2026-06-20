@@ -27,6 +27,7 @@ type ExecuteCommandCall = {
   kind: string;
   targetTime?: number | null;
   targetTimerange?: { start: number; duration: number } | null;
+  duration?: number | null;
   visual?: {
     visible: boolean;
     fitMode: string;
@@ -128,6 +129,14 @@ export type PreviewEvidence = {
 export type ProductPlaybackSuccessEvidence = {
   after: PreviewEvidence;
   visibleMotion: PreviewEvidence;
+};
+
+export type TimelineSegmentSnapshot = {
+  label: string;
+  targetLabel: string;
+  targetStartUs: number;
+  targetDurationUs: number;
+  selected: boolean;
 };
 
 export async function waitForCompositedPreviewEvidence(
@@ -326,12 +335,20 @@ export async function launchProductJourneyApp(
 ): Promise<{ app: ProductJourneyAppController; page: Page }> {
   await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
   const projectBundlePath = env.VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE ?? createProductJourneyProjectPath();
+  const runtimeEnv =
+    process.platform === "darwin"
+      ? {
+          VE_FFMPEG_PATH: process.env.VE_FFMPEG_PATH ?? "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+          VE_FFPROBE_PATH: process.env.VE_FFPROBE_PATH ?? "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe"
+        }
+      : {};
   const productEnv = {
     VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
     VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
     VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
     VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
+    ...runtimeEnv,
     ...env
   };
 
@@ -431,19 +448,19 @@ export async function addMaterialToTimeline(
   materialPath: string
 ): Promise<void> {
   const materialName = basename(materialPath);
-  const nextCount = (await countCommand(app, "addSegment")) + 1;
+  const nextCount = (await countCommand(app, "addTimelineSegmentIntent")) + 1;
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toContainText("可用", { timeout: 10_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
-  await waitForCommandCount(app, "addSegment", nextCount);
+  await waitForCommandCount(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
 }
 
 export async function addVideoTrack(page: Page, app: ProductJourneyAppController): Promise<void> {
-  const nextCount = (await countCommand(app, "addTrack")) + 1;
+  const nextCount = (await countCommand(app, "addTrackIntent")) + 1;
   await page.getByRole("button", { name: "添加视频轨道" }).click();
-  await waitForCommandCount(app, "addTrack", nextCount);
+  await waitForCommandCount(app, "addTrackIntent", nextCount);
   await expect(page.getByRole("button", { name: /选择轨道 视频轨道 2/ })).toBeVisible();
 }
 
@@ -453,14 +470,14 @@ export async function addTextThroughProductPanel(
   content: string,
   durationUs = 2_000_000
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "addTextSegment")) + 1;
+  const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await textPanel.getByLabel("文字时长（秒）").fill(formatSecondsInput(durationUs));
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
-  await waitForCommandCount(app, "addTextSegment", nextCount);
-  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addTextSegment")?.targetTimerange?.duration).toBe(
+  await waitForCommandCount(app, "addTextSegmentIntent", nextCount);
+  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addTextSegmentIntent")?.duration).toBe(
     durationUs
   );
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
@@ -474,14 +491,14 @@ export async function addAudioThroughProductPanel(
   audioPath: string,
   durationUs = 2_000_000
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "addAudioSegment")) + 1;
+  const nextCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   const audioPanel = page.getByRole("region", { name: "素材面板" });
   await audioPanel.getByLabel("BGM素材").selectOption({ label: basename(audioPath) });
   await audioPanel.getByLabel("音频时长（秒）").fill(formatSecondsInput(durationUs));
   await audioPanel.getByRole("button", { name: "添加音频", exact: true }).click();
-  await waitForCommandCount(app, "addAudioSegment", nextCount);
-  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addAudioSegment")?.targetTimerange?.duration).toBe(
+  await waitForCommandCount(app, "addAudioSegmentIntent", nextCount);
+  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addAudioSegmentIntent")?.duration).toBe(
     durationUs
   );
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(basename(audioPath))}`) })).toBeVisible();
@@ -547,16 +564,16 @@ export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppCon
 }
 
 export async function splitSelectedSegment(page: Page, app: ProductJourneyAppController, splitAtUs: number): Promise<void> {
-  const nextCount = (await countCommand(app, "splitSegment")) + 1;
+  const nextCount = (await countCommand(app, "splitSelectedSegmentIntent")) + 1;
   await seekTimelinePlayhead(page, app, splitAtUs);
   await page.getByRole("button", { name: "分割所选片段" }).click();
-  await waitForCommandCount(app, "splitSegment", nextCount);
+  await waitForCommandCount(app, "splitSelectedSegmentIntent", nextCount);
 }
 
 export async function moveSelectedSegmentRight(page: Page, app: ProductJourneyAppController, deltaUs: number): Promise<void> {
-  const nextCount = (await countCommand(app, "moveSegment")) + 1;
+  const nextCount = (await countCommand(app, "moveSelectedSegmentIntent")) + 1;
   await dragSelectedSegmentBy(page, deltaUs);
-  await waitForCommandCount(app, "moveSegment", nextCount);
+  await waitForCommandCount(app, "moveSelectedSegmentIntent", nextCount);
 }
 
 export async function trimSelectedSegmentLeftEdgeRight(
@@ -564,7 +581,7 @@ export async function trimSelectedSegmentLeftEdgeRight(
   app: ProductJourneyAppController,
   deltaUs: number
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "trimSegment")) + 1;
+  const nextCount = (await countCommand(app, "trimSelectedSegmentIntent")) + 1;
   const handle = page.locator(".segment-block.selected .segment-trim-handle.left").first();
   const handleBox = await handle.boundingBox();
   const rulerBox = await page.locator(".ruler-track").boundingBox();
@@ -579,7 +596,7 @@ export async function trimSelectedSegmentLeftEdgeRight(
   await page.mouse.down();
   await page.mouse.move(startX + deltaPx, startY, { steps: 4 });
   await page.mouse.up();
-  await waitForCommandCount(app, "trimSegment", nextCount);
+  await waitForCommandCount(app, "trimSelectedSegmentIntent", nextCount);
 }
 
 export async function deleteSelectedSegment(page: Page, app: ProductJourneyAppController): Promise<void> {
@@ -734,6 +751,38 @@ export async function readRealtimePreviewHostCalls(app: ProductJourneyAppControl
 
 export function requestPreviewFrameCount(calls: ExecuteCommandCall[]): number {
   return calls.filter((call) => call.command === "requestPreviewFrame").length;
+}
+
+export async function readTimelineSegments(
+  page: Page,
+  labelFilter?: string | RegExp
+): Promise<TimelineSegmentSnapshot[]> {
+  const segments = await page.locator(".segment-block").evaluateAll((elements) =>
+    elements.map((element) => {
+      const block = element as HTMLElement;
+      return {
+        label: block.querySelector("strong")?.textContent?.trim() ?? "",
+        targetLabel: block.querySelector(".segment-time-label")?.textContent?.trim() ?? "",
+        selected: block.classList.contains("selected") || block.getAttribute("aria-pressed") === "true"
+      };
+    })
+  );
+
+  return segments
+    .map((segment) => {
+      const target = parseTimelineTargetLabel(segment.targetLabel);
+      return {
+        ...segment,
+        targetStartUs: target?.startUs ?? 0,
+        targetDurationUs: target?.durationUs ?? 0
+      };
+    })
+    .filter((segment) => {
+      if (labelFilter === undefined) {
+        return true;
+      }
+      return typeof labelFilter === "string" ? segment.label.includes(labelFilter) : labelFilter.test(segment.label);
+    });
 }
 
 async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreviewHostState | null> {
@@ -895,6 +944,17 @@ function parseTimecodeToMicroseconds(value: string): number {
     Number(seconds) * 1_000_000 +
     Number(millis) * 1_000
   );
+}
+
+function parseTimelineTargetLabel(value: string): { startUs: number; durationUs: number } | null {
+  const match = value.trim().match(/^目标\s+(\d{2}:\d{2}:\d{2}\.\d{3})\s+\/\s+(\d{2}:\d{2}:\d{2}\.\d{3})$/);
+  if (match === null) {
+    return null;
+  }
+  return {
+    startUs: parseTimecodeToMicroseconds(match[1] ?? ""),
+    durationUs: parseTimecodeToMicroseconds(match[2] ?? "")
+  };
 }
 
 function escapeRegex(value: string): string {

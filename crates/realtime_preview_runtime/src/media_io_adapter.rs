@@ -440,6 +440,10 @@ pub struct PendingPreviewFrameRelease {
 }
 
 impl PendingPreviewFrameRelease {
+    pub fn texture_handle_id(&self) -> Option<&TextureHandleId> {
+        self.texture_handle_id.as_ref()
+    }
+
     fn from_output(output: &PreviewMaterialDecodeOutput) -> Self {
         Self {
             material_id: output.material_id.clone(),

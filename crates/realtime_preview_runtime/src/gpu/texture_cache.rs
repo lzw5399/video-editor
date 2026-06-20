@@ -4,7 +4,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use draft_model::{MaterialId, Microseconds};
-use media_runtime::{NativeTextureLease, NativeTextureLeaseRegistry};
+use media_runtime::{NativeTextureLease, NativeTextureLeaseRegistry, TextureHandleId};
 
 use crate::{
     CpuVideoFrame, FrameValidationError, PlaybackGeneration, PreviewFrameInput,
@@ -123,6 +123,7 @@ pub enum RealtimePreviewTextureStorage {
 pub struct RealtimePreviewTextureCache {
     next_texture_id: u64,
     textures: BTreeMap<RealtimePreviewTextureId, RealtimePreviewTexture>,
+    imported_native_nv12: BTreeMap<String, Rc<RealtimePreviewExternalTexturePlanes>>,
     native_texture_registry: Option<NativeTextureLeaseRegistry>,
     native_texture_importer: Option<Box<NativeTextureImporter>>,
 }
@@ -133,6 +134,10 @@ impl fmt::Debug for RealtimePreviewTextureCache {
             .debug_struct("RealtimePreviewTextureCache")
             .field("next_texture_id", &self.next_texture_id)
             .field("textures", &self.textures)
+            .field(
+                "imported_native_nv12_count",
+                &self.imported_native_nv12.len(),
+            )
             .field("native_texture_registry", &self.native_texture_registry)
             .field(
                 "native_texture_importer_attached",
@@ -147,6 +152,7 @@ impl RealtimePreviewTextureCache {
         Self {
             next_texture_id: 1,
             textures: BTreeMap::new(),
+            imported_native_nv12: BTreeMap::new(),
             native_texture_registry: None,
             native_texture_importer: None,
         }
@@ -239,17 +245,29 @@ impl RealtimePreviewTextureCache {
     }
 
     pub fn import_native_nv12_external_texture(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         descriptor: &TextureHandleDescriptor,
         lease: &NativeTextureLease,
     ) -> Result<Option<Rc<RealtimePreviewExternalTexturePlanes>>, RealtimePreviewTextureCacheError>
     {
+        if let Some(planes) = self.imported_native_nv12.get(&descriptor.handle_id) {
+            return Ok(Some(Rc::clone(planes)));
+        }
         let Some(importer) = self.native_texture_importer.as_ref() else {
             return Ok(None);
         };
-        importer(device, descriptor, lease)
-            .map_err(|reason| RealtimePreviewTextureCacheError::Unavailable { reason })
+        let imported = importer(device, descriptor, lease)
+            .map_err(|reason| RealtimePreviewTextureCacheError::Unavailable { reason })?;
+        if let Some(planes) = imported.as_ref() {
+            self.imported_native_nv12
+                .insert(descriptor.handle_id.clone(), Rc::clone(planes));
+        }
+        Ok(imported)
+    }
+
+    pub fn evict_native_texture(&mut self, handle_id: &TextureHandleId) {
+        self.imported_native_nv12.remove(&handle_id.0);
     }
 
     fn next_id(&mut self) -> RealtimePreviewTextureId {

@@ -30,7 +30,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
 
   try {
     expect(executablePath).not.toContain(["dist", "main", "index.cjs"].join("/"));
-    await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
 
     const location = await page.evaluate(() => window.location.href);
     expect(location).toMatch(/^file:/);
@@ -77,7 +77,7 @@ test("packaged app reports classified runtime discovery failures without crashin
   });
 
   try {
-    await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
 
     const result = await page.evaluate((command) => {
       return window.videoEditorCore?.executeCommand(command);

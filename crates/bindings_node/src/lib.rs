@@ -83,20 +83,27 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "listMaterials"
                 | "listMissingMaterials"
                 | "addSegment"
+                | "addTimelineSegmentIntent"
                 | "selectTimelineSegments"
                 | "moveSegment"
+                | "moveSelectedSegmentIntent"
                 | "splitSegment"
+                | "splitSelectedSegmentIntent"
                 | "trimSegment"
+                | "trimSelectedSegmentIntent"
                 | "deleteSegment"
                 | "undoTimelineEdit"
                 | "redoTimelineEdit"
                 | "addTextSegment"
+                | "addTextSegmentIntent"
                 | "editTextSegment"
                 | "importSubtitleSrt"
                 | "addAudioSegment"
+                | "addAudioSegmentIntent"
                 | "setSegmentVolume"
                 | "updateSegmentAudio"
                 | "addTrack"
+                | "addTrackIntent"
                 | "renameTrack"
                 | "setTrackLock"
                 | "setTrackVisibility"
@@ -246,20 +253,27 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
         CommandName::AddSegment
+        | CommandName::AddTimelineSegmentIntent
         | CommandName::SelectTimelineSegments
         | CommandName::MoveSegment
+        | CommandName::MoveSelectedSegmentIntent
         | CommandName::SplitSegment
+        | CommandName::SplitSelectedSegmentIntent
         | CommandName::TrimSegment
+        | CommandName::TrimSelectedSegmentIntent
         | CommandName::DeleteSegment
         | CommandName::UndoTimelineEdit
         | CommandName::RedoTimelineEdit
         | CommandName::AddTextSegment
+        | CommandName::AddTextSegmentIntent
         | CommandName::EditTextSegment
         | CommandName::ImportSubtitleSrt
         | CommandName::AddAudioSegment
+        | CommandName::AddAudioSegmentIntent
         | CommandName::SetSegmentVolume
         | CommandName::UpdateSegmentAudio
         | CommandName::AddTrack
+        | CommandName::AddTrackIntent
         | CommandName::RenameTrack
         | CommandName::SetTrackLock
         | CommandName::SetTrackVisibility

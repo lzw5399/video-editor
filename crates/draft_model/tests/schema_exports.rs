@@ -7,8 +7,10 @@ use std::{
 };
 
 use draft_model::{
-    AddAudioSegmentCommandPayload, AddSegmentCommandPayload, AddTextSegmentCommandPayload,
-    AddTrackCommandPayload, ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
+    AddAudioSegmentCommandPayload, AddAudioSegmentIntentCommandPayload, AddSegmentCommandPayload,
+    AddTextSegmentCommandPayload, AddTextSegmentIntentCommandPayload,
+    AddTimelineSegmentIntentCommandPayload, AddTrackCommandPayload, AddTrackIntentCommandPayload,
+    ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceStatus,
     AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
@@ -30,19 +32,19 @@ use draft_model::{
     MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId,
     MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
     MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload,
-    OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingCommandPayload,
-    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
-    PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewFrameReleaseResponse, PreviewFrameStorageKind, PreviewFrameStoragePreference,
-    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
-    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
-    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
-    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RunArtifactGarbageCollectionCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
-    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
-    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
-    RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
+    MoveSelectedSegmentIntentCommandPayload, OpenProjectBundleCommandPayload,
+    OpenProjectBundleResponse, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
+    PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
+    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
+    RedoTimelineEditCommandPayload, RefreshArtifactStatusCommandPayload,
+    ReleasePreviewFrameCommandPayload, RemoveSegmentKeyframeCommandPayload,
+    RenameTrackCommandPayload, RequestPreviewFrameCommandPayload,
+    RequestPreviewSegmentCommandPayload, RunArtifactGarbageCollectionCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
+    RuntimeColorRange, RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
     RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
     RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
     RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
@@ -55,13 +57,15 @@ use draft_model::{
     SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
     SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload, SetTrackMuteCommandPayload,
     SetTrackVisibilityCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, StartExportCommandPayload, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
-    TimelineSelection, Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
-    UndoTimelineEditCommandPayload, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentAudioCommandPayload, UpdateSegmentVisualCommandPayload, VersionCommandPayload,
-    WaveformDisplayPeak, WaveformDisplayPeaksResponse, WaveformDisplayStatus,
+    SplitSegmentCommandPayload, SplitSelectedSegmentIntentCommandPayload,
+    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextBox,
+    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection,
+    Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
+    TrimSelectedSegmentIntentCommandPayload, UndoTimelineEditCommandPayload,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    UpdateSegmentVisualCommandPayload, VersionCommandPayload, WaveformDisplayPeak,
+    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -112,20 +116,27 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
             export_decl::<AddSegmentCommandPayload>(),
+            export_decl::<AddTimelineSegmentIntentCommandPayload>(),
             export_decl::<SelectTimelineSegmentsCommandPayload>(),
             export_decl::<MoveSegmentCommandPayload>(),
+            export_decl::<MoveSelectedSegmentIntentCommandPayload>(),
             export_decl::<SplitSegmentCommandPayload>(),
+            export_decl::<SplitSelectedSegmentIntentCommandPayload>(),
             export_decl::<TrimSegmentCommandPayload>(),
+            export_decl::<TrimSelectedSegmentIntentCommandPayload>(),
             export_decl::<DeleteSegmentCommandPayload>(),
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<AddTrackCommandPayload>(),
+            export_decl::<AddTrackIntentCommandPayload>(),
             export_decl::<RenameTrackCommandPayload>(),
             export_decl::<SetTrackLockCommandPayload>(),
             export_decl::<SetTrackVisibilityCommandPayload>(),
@@ -367,12 +378,15 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<AddTrackCommandPayload>(),
+            export_decl::<AddTrackIntentCommandPayload>(),
             export_decl::<RenameTrackCommandPayload>(),
             export_decl::<SetTrackLockCommandPayload>(),
             export_decl::<SetTrackVisibilityCommandPayload>(),
@@ -933,6 +947,7 @@ fn schema_exports_include_text_command_contracts() {
         "TextStyle",
         "TextAlignment",
         "AddTextSegmentCommandPayload",
+        "AddTextSegmentIntentCommandPayload",
         "EditTextSegmentCommandPayload",
         "ImportSubtitleSrtCommandPayload",
     ] {
@@ -943,6 +958,7 @@ fn schema_exports_include_text_command_contracts() {
     }
     for expected_contract in [
         "AddTextSegmentCommandPayload",
+        "AddTextSegmentIntentCommandPayload",
         "EditTextSegmentCommandPayload",
         "ImportSubtitleSrtCommandPayload",
     ] {
@@ -962,6 +978,7 @@ fn schema_exports_include_audio_command_contracts() {
     for expected_contract in [
         "SegmentVolume",
         "AddAudioSegmentCommandPayload",
+        "AddAudioSegmentIntentCommandPayload",
         "SetSegmentVolumeCommandPayload",
         "SetTrackMuteCommandPayload",
     ] {
@@ -972,6 +989,7 @@ fn schema_exports_include_audio_command_contracts() {
     }
     for expected_contract in [
         "AddAudioSegmentCommandPayload",
+        "AddAudioSegmentIntentCommandPayload",
         "SetSegmentVolumeCommandPayload",
         "SetTrackMuteCommandPayload",
     ] {
@@ -1529,12 +1547,15 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<UndoTimelineEditCommandPayload>(),
             export_decl::<RedoTimelineEditCommandPayload>(),
             export_decl::<AddTextSegmentCommandPayload>(),
+            export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
+            export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
             export_decl::<UpdateSegmentAudioCommandPayload>(),
             export_decl::<AddTrackCommandPayload>(),
+            export_decl::<AddTrackIntentCommandPayload>(),
             export_decl::<RenameTrackCommandPayload>(),
             export_decl::<SetTrackLockCommandPayload>(),
             export_decl::<SetTrackVisibilityCommandPayload>(),
@@ -1894,6 +1915,10 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "AddTextSegmentCommandPayload",
     );
+    include_command_contract_schema::<AddTextSegmentIntentCommandPayload>(
+        &mut schema_value,
+        "AddTextSegmentIntentCommandPayload",
+    );
     include_command_contract_schema::<EditTextSegmentCommandPayload>(
         &mut schema_value,
         "EditTextSegmentCommandPayload",
@@ -1906,6 +1931,10 @@ fn command_schema_json() -> String {
         &mut schema_value,
         "AddAudioSegmentCommandPayload",
     );
+    include_command_contract_schema::<AddAudioSegmentIntentCommandPayload>(
+        &mut schema_value,
+        "AddAudioSegmentIntentCommandPayload",
+    );
     include_command_contract_schema::<SetSegmentVolumeCommandPayload>(
         &mut schema_value,
         "SetSegmentVolumeCommandPayload",
@@ -1917,6 +1946,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<AddTrackCommandPayload>(
         &mut schema_value,
         "AddTrackCommandPayload",
+    );
+    include_command_contract_schema::<AddTrackIntentCommandPayload>(
+        &mut schema_value,
+        "AddTrackIntentCommandPayload",
     );
     include_command_contract_schema::<RenameTrackCommandPayload>(
         &mut schema_value,
@@ -3053,6 +3086,28 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "openProjectBundle" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "openProjectBundle" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "saveProjectBundle" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "saveProjectBundle" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "importMaterial" },
                 "payload": {
                     "properties": {
@@ -3097,6 +3152,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "addTimelineSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addTimelineSegmentIntent" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "selectTimelineSegments" },
                 "payload": {
                     "properties": {
@@ -3119,6 +3185,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "moveSelectedSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "moveSelectedSegmentIntent" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "splitSegment" },
                 "payload": {
                     "properties": {
@@ -3130,10 +3207,32 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "splitSelectedSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "splitSelectedSegmentIntent" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "trimSegment" },
                 "payload": {
                     "properties": {
                         "kind": { "const": "trimSegment" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "trimSelectedSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "trimSelectedSegmentIntent" }
                     },
                     "required": ["kind"]
                 }
@@ -3185,6 +3284,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "addTextSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addTextSegmentIntent" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "editTextSegment" },
                 "payload": {
                     "properties": {
@@ -3218,6 +3328,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         },
         {
             "properties": {
+                "command": { "const": "addAudioSegmentIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addAudioSegmentIntent" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
                 "command": { "const": "setSegmentVolume" },
                 "payload": {
                     "properties": {
@@ -3244,6 +3365,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "addTrack" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "addTrackIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "addTrackIntent" }
                     },
                     "required": ["kind"]
                 }

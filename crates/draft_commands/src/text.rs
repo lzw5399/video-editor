@@ -29,7 +29,11 @@ pub fn add_text_segment(
     let track_index = find_track_index(&next_draft, &track_id)?;
     validate_track_unlocked(&next_draft.tracks[track_index])?;
 
-    ensure_text_material(&mut next_draft, &material_id);
+    ensure_text_material(
+        &mut next_draft,
+        &material_id,
+        text_material_display_name(&text.content),
+    );
 
     let mut segment = Segment::new(
         segment_id.clone(),
@@ -176,7 +180,11 @@ pub fn import_subtitle_srt(
                 })
             })?;
 
-        ensure_text_material(&mut next_draft, &material_id);
+        ensure_text_material(
+            &mut next_draft,
+            &material_id,
+            text_material_display_name(&cue.content),
+        );
 
         let mut text = TextSegment {
             content: cue.content,
@@ -226,7 +234,7 @@ pub fn import_subtitle_srt(
     ))
 }
 
-fn ensure_text_material(draft: &mut Draft, material_id: &MaterialId) {
+fn ensure_text_material(draft: &mut Draft, material_id: &MaterialId, display_name: String) {
     if draft
         .materials
         .iter()
@@ -239,8 +247,17 @@ fn ensure_text_material(draft: &mut Draft, material_id: &MaterialId) {
         material_id.clone(),
         MaterialKind::Text,
         format!("text://{}", material_id.as_str()),
-        material_id.as_str(),
+        display_name,
     ));
+}
+
+fn text_material_display_name(content: &str) -> String {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        "默认文字".to_owned()
+    } else {
+        trimmed.chars().take(32).collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

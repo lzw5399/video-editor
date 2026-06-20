@@ -24,8 +24,6 @@ import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
   Draft,
   DraftCanvasConfig,
-  Material,
-  MaterialKind,
   Keyframe,
   KeyframeEasing,
   KeyframeInterpolation,
@@ -38,10 +36,10 @@ import type {
 } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
-  buildAddTrackCommand,
-  buildAddSegmentCommand,
-  buildAddAudioSegmentCommand,
-  buildAddTextSegmentCommand,
+  buildAddTimelineSegmentIntentCommand,
+  buildAddAudioSegmentIntentCommand,
+  buildAddTextSegmentIntentCommand,
+  buildAddTrackIntentCommand,
   buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
   buildDeleteSegmentCommand,
@@ -57,7 +55,7 @@ import {
   buildImportSubtitleSrtCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
-  buildMoveSegmentCommand,
+  buildMoveSelectedSegmentIntentCommand,
   buildOpenProjectBundleCommand,
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
@@ -82,10 +80,10 @@ import {
   buildSetTrackLockCommand,
   buildSetTrackMuteCommand,
   buildSetTrackVisibilityCommand,
-  buildSplitSegmentCommand,
+  buildSplitSelectedSegmentIntentCommand,
   buildStopAudioPreviewCommand,
   buildStartExportCommand,
-  buildTrimSegmentCommand,
+  buildTrimSelectedSegmentIntentCommand,
   buildUndoTimelineEditCommand,
   buildUpdateDraftCanvasConfigCommand,
   buildUpdateSegmentAudioCommand,
@@ -101,15 +99,12 @@ import {
   audioPreviewFromCommandResponse,
   audioPreviewFromStatusResponse,
   artifactPreviewStatusLabel,
-  findFirstMaterialByKind,
-  findTrackByKind,
   formatExportDiagnostic,
   formatCommandError,
   formatMicroseconds,
   formatPreviewStatus,
   getSelectedSegmentView,
   getSelectedTrackView,
-  nextTrackStart,
   resourcePanelFromArtifactStatus,
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
@@ -130,6 +125,7 @@ type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
 
 const PREVIEW_SEGMENT_DURATION_US = 2_000_000;
+const SEQUENCE_END_EPSILON_US = 7_000;
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
@@ -150,14 +146,6 @@ type VideoEditorPlatformApi = {
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
-type RealtimePreviewHostState = {
-  ok: boolean;
-  statusLabel: string;
-  fallbackLabel: string | null;
-  unsupportedReason?: string | null;
-  playbackGeneration: number | null;
-};
-
 type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
 type DraftCommandResultApplier<T> = (
   current: WorkspaceState,
@@ -259,6 +247,9 @@ export function App(): React.ReactElement {
   const pendingAutoPreviewTimeRef = useRef<number | null>(null);
   const autoPreviewRetryTimerRef = useRef<number | null>(null);
   const autoPreviewRetryCountRef = useRef(0);
+  const realtimePreviewSnapshotDraftRef = useRef<Draft | null>(null);
+  const realtimePreviewSnapshotBundlePathRef = useRef<string | null>(null);
+  const realtimePreviewLastSeekTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -609,7 +600,8 @@ export function App(): React.ReactElement {
         (command.payload.kind === "setSegmentVolume" ||
           command.payload.kind === "updateSegmentAudio" ||
           command.payload.kind === "setTrackMute" ||
-          command.payload.kind === "addAudioSegment")
+          command.payload.kind === "addAudioSegment" ||
+          command.payload.kind === "addAudioSegmentIntent")
       ) {
         return {
           ...next,
@@ -629,9 +621,15 @@ export function App(): React.ReactElement {
       executed !== null &&
       executed.result.ok &&
       executed.result.data !== null &&
-      executed.command.payload.kind === "addSegment"
+      (executed.command.payload.kind === "addSegment" ||
+        executed.command.payload.kind === "addTimelineSegmentIntent" ||
+        executed.command.payload.kind === "addTextSegmentIntent" ||
+        executed.command.payload.kind === "addAudioSegmentIntent")
     ) {
-      queueAutoPreviewFrame(executed.command.payload.targetTimerange.start);
+      const previewTarget = selectedSegmentStart(executed.result.data);
+      if (previewTarget !== null) {
+        queueAutoPreviewFrame(previewTarget);
+      }
     }
 
     return executed;
@@ -1464,26 +1462,9 @@ export function App(): React.ReactElement {
 
   function handleAddTextSegment(text: TextSegment, durationUs: number): void {
     const safeDurationUs = toPositiveMicroseconds(durationUs);
-    const segmentId = `text-segment-${Date.now().toString(36)}`;
-    const materialId = `text-material-${Date.now().toString(36)}`;
 
     void executeTimelineCommand(
-      (current) => {
-        const textTrack = findTrackByKind(current.draft, "text");
-        if (textTrack === null) {
-          throw new Error("当前草稿没有文字轨道");
-        }
-
-        return buildAddTextSegmentCommand({
-          context: current,
-          trackId: textTrack.trackId,
-          segmentId,
-          materialId,
-          sourceTimerange: { start: 0, duration: safeDurationUs },
-          targetTimerange: { start: nextTrackStart(textTrack), duration: safeDurationUs },
-          text
-        });
-      },
+      (current) => buildAddTextSegmentIntentCommand(current, text, safeDurationUs),
       "添加文字"
     );
   }
@@ -1512,25 +1493,8 @@ export function App(): React.ReactElement {
 
   function handleAddAudioSegment(materialId: string, durationUs: number): void {
     const safeDurationUs = toPositiveMicroseconds(durationUs);
-    const segmentId = `audio-segment-${Date.now().toString(36)}`;
     void executeTimelineCommand(
-      (current) => {
-        const audioTrack = findTrackByKind(current.draft, "audio");
-        const audioMaterial = materialId.length > 0 ? { materialId } : findFirstMaterialByKind(current.draft, "audio");
-
-        if (audioTrack === null || audioMaterial === null) {
-          throw new Error("当前草稿没有可用音频轨道或音频素材");
-        }
-
-        return buildAddAudioSegmentCommand({
-          context: current,
-          trackId: audioTrack.trackId,
-          segmentId,
-          materialId: audioMaterial.materialId,
-          sourceTimerange: { start: 0, duration: safeDurationUs },
-          targetTimerange: { start: nextTrackStart(audioTrack), duration: safeDurationUs }
-        });
-      },
+      (current) => buildAddAudioSegmentIntentCommand(current, materialId.length > 0 ? materialId : null, safeDurationUs),
       "添加音频"
     );
   }
@@ -1590,11 +1554,7 @@ export function App(): React.ReactElement {
   }
 
   function handleAddTimelineTrack(trackKind: TrackKind): void {
-    const trackId = `track-${trackKind}-${Date.now().toString(36)}`;
-    void executeTimelineCommand((current) => {
-      const sameKindCount = current.draft.tracks.filter((track) => track.kind === trackKind).length;
-      return buildAddTrackCommand(current, trackId, trackKind, defaultTrackName(trackKind, sameKindCount + 1));
-    }, "添加轨道");
+    void executeTimelineCommand((current) => buildAddTrackIntentCommand(current, trackKind), "添加轨道");
   }
 
   function handleRenameTimelineTrack(trackId: string, name: string): void {
@@ -1681,42 +1641,9 @@ export function App(): React.ReactElement {
   }
 
   function handleAddTimelineSegment(materialId: string): void {
-    const segmentId = `segment-${Date.now().toString(36)}`;
     void executeTimelineCommand(
       (current) => {
-        const material = resolveTimelineMaterial(current.draft, materialId);
-        const requiredTrackKind = material === null ? null : compatibleTrackKind(material.kind);
-        const selectedTrack =
-          requiredTrackKind === null
-            ? null
-            : current.selection.trackIds
-                .map((trackId) => current.draft.tracks.find((track) => track.trackId === trackId) ?? null)
-                .find((track) => track?.kind === requiredTrackKind) ?? null;
-        const track =
-          material === null || requiredTrackKind === null
-            ? null
-            : selectedTrack ?? findTrackByKind(current.draft, requiredTrackKind);
-
-        if (material === null || track === null) {
-          throw new Error("没有可添加到时间线的兼容素材或轨道");
-        }
-
-        const duration = toPositiveMicroseconds(material.metadata.duration ?? 3_000_000);
-        const insertedTargetStart = nextTrackStart(track);
-        return buildAddSegmentCommand({
-          context: current,
-          trackId: track.trackId,
-          segmentId,
-          materialId: material.materialId,
-          sourceTimerange: {
-            start: 0,
-            duration
-          },
-          targetTimerange: {
-            start: insertedTargetStart,
-            duration
-          }
-        });
+        return buildAddTimelineSegmentIntentCommand(current, materialId);
       },
       "添加片段"
     );
@@ -1725,32 +1652,16 @@ export function App(): React.ReactElement {
   function handleMoveSelectedSegment(deltaUs: number): void {
     void executeTimelineCommand(
       (current) => {
-        const selected = getSelectedSegmentView(current.draft, current.selection);
-        if (selected === null) {
-          throw new Error("请先选择一个片段");
-        }
-
-        return buildMoveSegmentCommand(
-          current,
-          selected.segment.segmentId,
-          selected.track.trackId,
-          Math.max(0, selected.segment.targetTimerange.start + Math.round(deltaUs))
-        );
+        return buildMoveSelectedSegmentIntentCommand(current, Math.max(0, Math.round(deltaUs)));
       },
       "移动片段"
     );
   }
 
   function handleSplitSelectedSegment(splitAt: number): void {
-    const rightSegmentId = `segment-right-${Date.now().toString(36)}`;
     void executeTimelineCommand(
       (current) => {
-        const selected = getSelectedSegmentView(current.draft, current.selection);
-        if (selected === null) {
-          throw new Error("请先选择一个片段");
-        }
-
-        return buildSplitSegmentCommand(current, selected.segment.segmentId, rightSegmentId, Math.max(0, Math.round(splitAt)));
+        return buildSplitSelectedSegmentIntentCommand(current, Math.max(0, Math.round(splitAt)));
       },
       "分割片段"
     );
@@ -1761,24 +1672,7 @@ export function App(): React.ReactElement {
 
     void executeTimelineCommand(
       (current) => {
-        const selected = getSelectedSegmentView(current.draft, current.selection);
-        if (selected === null) {
-          throw new Error("请先选择一个片段");
-        }
-
-        const currentRange = selected.segment.targetTimerange;
-        const targetTimerange =
-          direction === "left"
-            ? {
-                start: currentRange.start + safeDelta,
-                duration: Math.max(1, currentRange.duration - safeDelta)
-              }
-            : {
-                start: currentRange.start,
-                duration: Math.max(1, currentRange.duration - safeDelta)
-              };
-
-        return buildTrimSegmentCommand(current, selected.segment.segmentId, direction, targetTimerange);
+        return buildTrimSelectedSegmentIntentCommand(current, direction, safeDelta);
       },
       direction === "left" ? "左侧裁剪" : "右侧裁剪"
     );
@@ -1948,13 +1842,12 @@ export function App(): React.ReactElement {
         return;
       }
 
-      setPlaybackRunning(true);
-      await waitForNextPaint();
       const playbackReady = await playRealtimePreviewHost();
       if (!playbackReady) {
         setPlaybackRunning(false);
         return;
       }
+      setPlaybackRunning(true);
       void handlePlayAudioPreview();
     })();
   }
@@ -1977,18 +1870,23 @@ export function App(): React.ReactElement {
       return;
     }
 
-    const presentedTime = Math.min(
+    const rawPresentedTime = Math.min(
       sequenceDurationUs,
       Math.max(
         hostState.telemetry.targetTimeMicroseconds,
         hostState.contentEvidence?.targetTimeMicroseconds ?? 0
       )
     );
-    const nextPlayhead = normalizePlayheadTime(presentedTime);
+    const frameAlignedAtEnd = isFrameAlignedSequenceEnd(
+      workspaceRef.current,
+      rawPresentedTime,
+      sequenceDurationUs
+    );
+    const nextPlayhead = frameAlignedAtEnd ? sequenceDurationUs : normalizePlayheadTime(rawPresentedTime);
     setPlayheadUs(nextPlayhead);
     playheadRef.current = nextPlayhead;
 
-    if (nextPlayhead >= sequenceDurationUs && playbackRunning) {
+    if (frameAlignedAtEnd && playbackRunning) {
       void handlePauseAudioPreview();
       void pauseRealtimePreviewHost();
       setPlaybackRunning(false);
@@ -2001,8 +1899,21 @@ export function App(): React.ReactElement {
       return applyRealtimePreviewHostError("实时预览宿主不可用");
     }
 
+    if (
+      realtimePreviewSnapshotDraftRef.current === workspaceRef.current.draft &&
+      realtimePreviewSnapshotBundlePathRef.current === bundlePath
+    ) {
+      return true;
+    }
+
     try {
-      return applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft, bundlePath));
+      const ok = applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft, bundlePath));
+      if (ok) {
+        realtimePreviewSnapshotDraftRef.current = workspaceRef.current.draft;
+        realtimePreviewSnapshotBundlePathRef.current = bundlePath;
+        realtimePreviewLastSeekTargetRef.current = null;
+      }
+      return ok;
     } catch (error: unknown) {
       return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
     }
@@ -2014,8 +1925,21 @@ export function App(): React.ReactElement {
       return applyRealtimePreviewHostError("实时预览宿主不可用");
     }
 
+    const sanitizedTargetTime = Math.max(0, Math.round(targetTime));
+    if (
+      realtimePreviewSnapshotDraftRef.current === workspaceRef.current.draft &&
+      realtimePreviewSnapshotBundlePathRef.current === bundlePath &&
+      realtimePreviewLastSeekTargetRef.current === sanitizedTargetTime
+    ) {
+      return true;
+    }
+
     try {
-      return applyRealtimePreviewHostState(await bridge.seek(Math.max(0, Math.round(targetTime))));
+      const ok = applyRealtimePreviewHostState(await bridge.seek(sanitizedTargetTime));
+      if (ok) {
+        realtimePreviewLastSeekTargetRef.current = sanitizedTargetTime;
+      }
+      return ok;
     } catch (error: unknown) {
       return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
     }
@@ -2054,7 +1978,11 @@ export function App(): React.ReactElement {
     }
 
     try {
-      return applyRealtimePreviewHostState(await bridge.stop());
+      const ok = applyRealtimePreviewHostState(await bridge.stop());
+      if (ok) {
+        realtimePreviewLastSeekTargetRef.current = 0;
+      }
+      return ok;
     } catch (error: unknown) {
       return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
     }
@@ -2334,7 +2262,7 @@ export function App(): React.ReactElement {
       return;
     }
 
-    const targetTimerange = {
+    const previewRange = {
       start: Math.max(0, Math.round(playheadUs)),
       duration: PREVIEW_SEGMENT_DURATION_US
     };
@@ -2344,12 +2272,12 @@ export function App(): React.ReactElement {
         buildRequestPreviewSegmentCommand({
           draft: current.draft,
           bundlePath,
-          targetTimerange
+          targetTimerange: previewRange
         }),
       "生成预览片段",
       (current, result) => {
-        const rangeLabel = `${formatMicroseconds(targetTimerange.start)} - ${formatMicroseconds(
-          targetTimerange.start + targetTimerange.duration
+        const rangeLabel = `${formatMicroseconds(previewRange.start)} - ${formatMicroseconds(
+          previewRange.start + previewRange.duration
         )}`;
 
         if (!result.ok || result.data === null) {
@@ -2362,7 +2290,7 @@ export function App(): React.ReactElement {
               ...current.preview,
               segmentStatusLabel: "预览片段失败",
               error: message,
-              lastRequestedPlayhead: targetTimerange.start,
+              lastRequestedPlayhead: previewRange.start,
               lastRequestedRangeLabel: rangeLabel
             }
           };
@@ -2378,7 +2306,7 @@ export function App(): React.ReactElement {
             segmentStatusLabel: `预览片段${formatPreviewStatus(result.data.status)}`,
             segmentMetadataLabel: `${result.data.mimeType} · ${rangeLabel}`,
             error: null,
-            lastRequestedPlayhead: targetTimerange.start,
+            lastRequestedPlayhead: previewRange.start,
             lastRequestedRangeLabel: rangeLabel
           }
         };
@@ -2814,12 +2742,6 @@ function normalizePlayheadTime(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(() => resolve());
-  });
-}
-
 function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
   const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
   const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
@@ -2835,50 +2757,24 @@ function getSequenceDurationUs(workspace: WorkspaceState): number {
   }, 0);
 }
 
+function selectedSegmentStart(response: TimelineCommandResponse): number | null {
+  return getSelectedSegmentView(response.draft, response.selection)?.segment.targetTimerange.start ?? null;
+}
+
+function isFrameAlignedSequenceEnd(
+  workspace: WorkspaceState,
+  presentedTimeUs: number,
+  sequenceDurationUs: number
+): boolean {
+  if (sequenceDurationUs <= 0) {
+    return false;
+  }
+  const endToleranceUs = frameDurationUs(workspace.draft.canvasConfig) + SEQUENCE_END_EPSILON_US;
+  return normalizePlayheadTime(presentedTimeUs) >= Math.max(0, sequenceDurationUs - endToleranceUs);
+}
+
 function firstAudioMaterialId(workspace: WorkspaceState): string | null {
   return workspace.materials.find((material) => material.kind === "audio" && material.status === "available")?.materialId ?? null;
-}
-
-function resolveTimelineMaterial(draft: Draft, materialId: string): Material | null {
-  if (materialId.length > 0) {
-    return draft.materials.find((material) => material.materialId === materialId && material.status === "available") ?? null;
-  }
-
-  return (
-    draft.materials.find(
-      (material) =>
-        material.status === "available" &&
-        (material.kind === "video" || material.kind === "image" || material.kind === "audio")
-    ) ?? null
-  );
-}
-
-function compatibleTrackKind(materialKind: MaterialKind): TrackKind {
-  if (materialKind === "audio") {
-    return "audio";
-  }
-
-  if (materialKind === "text") {
-    return "text";
-  }
-
-  if (materialKind === "sticker") {
-    return "sticker";
-  }
-
-  return "video";
-}
-
-function defaultTrackName(kind: TrackKind, index: number): string {
-  const labels: Record<TrackKind, string> = {
-    video: "视频轨道",
-    audio: "音频轨道",
-    text: "文字轨道",
-    sticker: "贴纸轨道",
-    filter: "滤镜轨道"
-  };
-
-  return `${labels[kind]} ${index}`;
 }
 
 function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {

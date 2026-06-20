@@ -160,6 +160,10 @@ impl TimelineClock {
         self.advance_generation();
     }
 
+    pub fn record_playback_position(&mut self, target_time: Microseconds) {
+        self.position = target_time;
+    }
+
     pub fn pause(&mut self) {
         self.state = PlaybackState::Paused;
         self.advance_generation();

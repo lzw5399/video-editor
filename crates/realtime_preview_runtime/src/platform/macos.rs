@@ -159,9 +159,8 @@ impl MacosWgpuSurfaceAttachment {
         let child_view_frame = self.child_view.frame();
         let child_view_bounds = self.child_view.bounds();
         let parent_window_frame = self.parent_window.frame();
-        let child_view_screen_frame = self
-            .parent_window
-            .convertRectToScreen(self.child_view.frame());
+        let child_view_screen_frame =
+            screen_rect_for_child_view(&self.parent_window, &self.child_view);
         let layer_bounds = self.metal_layer.bounds();
         let drawable_size = self.metal_layer.drawableSize();
         format!(
@@ -188,8 +187,8 @@ impl MacosWgpuSurfaceAttachment {
             self.metal_layer.isHidden(),
             format_rect(parent_window_frame),
             format_rect(parent_view_bounds),
-            format_rect(child_view_screen_frame),
-            format_rect(child_view_screen_frame),
+            format_screen_rect(child_view_screen_frame),
+            format_screen_rect(child_view_screen_frame),
             format_rect(child_view_frame),
             format_rect(child_view_bounds),
             format_rect(layer_bounds),
@@ -402,7 +401,8 @@ fn screen_rect_for_child_view(
     parent_window: &NSWindow,
     child_view: &NSView,
 ) -> PreviewSurfaceScreenRect {
-    let child_view_screen_frame = parent_window.convertRectToScreen(child_view.frame());
+    let window_rect = child_view.convertRect_toView(child_view.bounds(), None);
+    let child_view_screen_frame = parent_window.convertRectToScreen(window_rect);
     PreviewSurfaceScreenRect {
         x: child_view_screen_frame.origin.x,
         y: child_view_screen_frame.origin.y,

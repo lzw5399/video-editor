@@ -42,6 +42,48 @@
       "title": "AddAudioSegmentCommandPayload",
       "type": "object"
     },
+    "AddAudioSegmentIntentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Intent-level command for adding an audio material at the current timeline context.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Microseconds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "materialId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection"
+      ],
+      "title": "AddAudioSegmentIntentCommandPayload",
+      "type": "object"
+    },
     "AddSegmentCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 3 timeline add command.",
@@ -130,6 +172,36 @@
       "title": "AddTextSegmentCommandPayload",
       "type": "object"
     },
+    "AddTextSegmentIntentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Intent-level command for adding text at the current timeline context.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "text": {
+          "$ref": "#/$defs/TextSegment"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "text",
+        "duration"
+      ],
+      "title": "AddTextSegmentIntentCommandPayload",
+      "type": "object"
+    },
     "AddTrackCommandPayload": {
       "additionalProperties": false,
       "description": "Payload accepted by the Phase 15.1 track creation command.",
@@ -162,6 +234,32 @@
         "name"
       ],
       "title": "AddTrackCommandPayload",
+      "type": "object"
+    },
+    "AddTrackIntentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Intent-level command for adding a track of a requested kind.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "trackKind": {
+          "$ref": "#/$defs/TrackKind"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "trackKind"
+      ],
+      "title": "AddTrackIntentCommandPayload",
       "type": "object"
     },
     "AudioEffectSlot": {
@@ -845,20 +943,27 @@
         "listMaterials",
         "listMissingMaterials",
         "addSegment",
+        "addTimelineSegmentIntent",
         "selectTimelineSegments",
         "moveSegment",
+        "moveSelectedSegmentIntent",
         "splitSegment",
+        "splitSelectedSegmentIntent",
         "trimSegment",
+        "trimSelectedSegmentIntent",
         "deleteSegment",
         "undoTimelineEdit",
         "redoTimelineEdit",
         "addTextSegment",
+        "addTextSegmentIntent",
         "editTextSegment",
         "importSubtitleSrt",
         "addAudioSegment",
+        "addAudioSegmentIntent",
         "setSegmentVolume",
         "updateSegmentAudio",
         "addTrack",
+        "addTrackIntent",
         "renameTrack",
         "setTrackLock",
         "setTrackVisibility",
@@ -1135,6 +1240,36 @@
         },
         {
           "additionalProperties": false,
+          "description": "Intent-level command for adding a material at the current timeline context.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addTimelineSegmentIntent",
+              "type": "string"
+            },
+            "materialId": {
+              "$ref": "#/$defs/MaterialId"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "materialId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Payload accepted by the Phase 3 timeline selection command.",
           "properties": {
             "commandState": {
@@ -1213,6 +1348,36 @@
         },
         {
           "additionalProperties": false,
+          "description": "Intent-level command for moving the selected segment by a timeline delta.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "delta": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "moveSelectedSegmentIntent",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "delta"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Payload accepted by the Phase 3 timeline split command.",
           "properties": {
             "commandState": {
@@ -1245,6 +1410,36 @@
             "selection",
             "segmentId",
             "rightSegmentId",
+            "splitAt"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Intent-level command for splitting the selected segment at a timeline time.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "splitSelectedSegmentIntent",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "splitAt": {
+              "$ref": "#/$defs/Microseconds"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
             "splitAt"
           ],
           "type": "object"
@@ -1284,6 +1479,40 @@
             "segmentId",
             "direction",
             "targetTimerange"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Intent-level command for trimming the selected segment edge by a delta.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "delta": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "direction": {
+              "$ref": "#/$defs/TrimSegmentDirection"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "trimSelectedSegmentIntent",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "direction",
+            "delta"
           ],
           "type": "object"
         },
@@ -1416,6 +1645,40 @@
             "sourceTimerange",
             "targetTimerange",
             "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Intent-level command for adding text at the current timeline context.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "duration": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "kind": {
+              "const": "addTextSegmentIntent",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "text": {
+              "$ref": "#/$defs/TextSegment"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "text",
+            "duration"
           ],
           "type": "object"
         },
@@ -1567,6 +1830,52 @@
         },
         {
           "additionalProperties": false,
+          "description": "Intent-level command for adding an audio material at the current timeline context.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "duration": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Microseconds"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "addAudioSegmentIntent",
+              "type": "string"
+            },
+            "materialId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MaterialId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Payload accepted by the Phase 3 segment volume command.",
           "properties": {
             "commandState": {
@@ -1711,6 +2020,36 @@
             "trackId",
             "trackKind",
             "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Intent-level command for adding a track of a requested kind.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "addTrackIntent",
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "trackKind": {
+              "$ref": "#/$defs/TrackKind"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "trackKind"
           ],
           "type": "object"
         },
@@ -27490,6 +27829,40 @@
     {
       "properties": {
         "command": {
+          "const": "openProjectBundle"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "openProjectBundle"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "saveProjectBundle"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "saveProjectBundle"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "importMaterial"
         },
         "payload": {
@@ -27558,6 +27931,23 @@
     {
       "properties": {
         "command": {
+          "const": "addTimelineSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addTimelineSegmentIntent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "selectTimelineSegments"
         },
         "payload": {
@@ -27592,6 +27982,23 @@
     {
       "properties": {
         "command": {
+          "const": "moveSelectedSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "moveSelectedSegmentIntent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "splitSegment"
         },
         "payload": {
@@ -27609,12 +28016,46 @@
     {
       "properties": {
         "command": {
+          "const": "splitSelectedSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "splitSelectedSegmentIntent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "trimSegment"
         },
         "payload": {
           "properties": {
             "kind": {
               "const": "trimSegment"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "trimSelectedSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "trimSelectedSegmentIntent"
             }
           },
           "required": [
@@ -27694,6 +28135,23 @@
     {
       "properties": {
         "command": {
+          "const": "addTextSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addTextSegmentIntent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "editTextSegment"
         },
         "payload": {
@@ -27745,6 +28203,23 @@
     {
       "properties": {
         "command": {
+          "const": "addAudioSegmentIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addAudioSegmentIntent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
           "const": "setSegmentVolume"
         },
         "payload": {
@@ -27785,6 +28260,23 @@
           "properties": {
             "kind": {
               "const": "addTrack"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "addTrackIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "addTrackIntent"
             }
           },
           "required": [
