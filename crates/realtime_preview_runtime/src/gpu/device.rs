@@ -509,11 +509,8 @@ fn create_native_surface(
     #[cfg(target_os = "macos")]
     {
         let attachment = crate::platform::macos::MacosWgpuSurfaceAttachment::new(handle, bounds)?;
-        let raw_handle = attachment.raw_window_handle()?;
-        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: Some(raw_window_handle::AppKitDisplayHandle::new().into()),
-            raw_window_handle: raw_handle.into(),
-        };
+        let target =
+            wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(attachment.core_animation_layer());
         let surface = unsafe { instance.create_surface_unsafe(target) }
             .map_err(|error| surface_error(error.to_string()))?;
         return Ok(NativeSurfaceCreation {
