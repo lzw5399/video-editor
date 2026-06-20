@@ -853,7 +853,8 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await page.getByRole("tab", { name: "动画" }).click();
     await expect(page.getByLabel("动画参数")).toContainText("还没有关键帧");
     await expect(page.getByLabel("属性关键帧")).toContainText("画面");
-    await expect(page.getByLabel("属性关键帧")).toContainText("特效");
+    await expect(page.getByLabel("属性关键帧")).toContainText("音频");
+    await expect(page.getByLabel("属性关键帧")).not.toContainText("特效");
     await page.getByRole("tab", { name: "画面" }).click();
     await expect(page.getByLabel("画面变换")).toContainText("位置");
 

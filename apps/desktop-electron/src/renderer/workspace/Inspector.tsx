@@ -189,17 +189,9 @@ const TEXT_KEYFRAME_PROPERTIES: readonly KeyframeProperty[] = [
   "textLayoutWidth",
   "textLayoutHeight"
 ];
-const DEFERRED_KEYFRAME_PROPERTIES: readonly KeyframeProperty[] = [
-  "stickerPositionX",
-  "stickerPositionY",
-  "stickerScaleX",
-  "stickerScaleY",
-  "filterParameterUnsupported"
-];
 const KEYFRAME_PROPERTY_GROUPS: readonly {
   name: string;
   properties: readonly KeyframeProperty[];
-  deferred?: boolean;
 }[] = [
   {
     name: "画面",
@@ -212,11 +204,6 @@ const KEYFRAME_PROPERTY_GROUPS: readonly {
   {
     name: "音频",
     properties: ["volume"]
-  },
-  {
-    name: "特效",
-    properties: DEFERRED_KEYFRAME_PROPERTIES,
-    deferred: true
   }
 ];
 
@@ -433,7 +420,6 @@ export function Inspector({
               <section className="inspector-section" aria-label="片段信息">
                 <div className="inspector-section-title">
                   <h3>片段参数</h3>
-                  <KeyframeButton deferredLabel="片段参数关键帧暂不支持" />
                 </div>
                 <dl className="inspector-list compact">
                   {showDeveloperDiagnostics ? <InspectorDatum label="片段ID" value={selected.segment.segmentId} /> : null}
@@ -527,7 +513,6 @@ export function Inspector({
                   <section className="inspector-section" aria-label="样式">
                     <div className="inspector-section-title">
                       <h3>样式</h3>
-                      <KeyframeButton deferredLabel="样式关键帧暂不支持" />
                     </div>
                     <label className="toggle-row compact-toggle">
                       <input
@@ -1163,8 +1148,11 @@ function AnimationInspectorTab({
     );
   }
 
-  const supportedFocused = isSupportedPropertyForSegment(selected, focusedProperty);
-  const focusedKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === focusedProperty);
+  const visibleGroups = keyframeGroupsForSelection(selected);
+  const visibleProperties = visibleGroups.flatMap((group) => [...group.properties]);
+  const activeFocusedProperty = visibleProperties.includes(focusedProperty) ? focusedProperty : visibleProperties[0];
+  const supportedFocused = isSupportedPropertyForSegment(selected, activeFocusedProperty);
+  const focusedKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === activeFocusedProperty);
   const segmentName = selected.material?.displayName ?? "未关联素材";
 
   return (
@@ -1177,7 +1165,7 @@ function AnimationInspectorTab({
         <strong>{segmentName}</strong>
         <span>{selected.segment.keyframes.length} 个关键帧</span>
         <span>播放头 {formatMicroseconds(playheadAt)}</span>
-        <em>当前 {formatKeyframeProperty(focusedProperty)}</em>
+        <em>当前 {formatKeyframeProperty(activeFocusedProperty)}</em>
       </div>
 
       {pending ? <p className="keyframe-pending">关键帧命令处理中</p> : null}
@@ -1190,11 +1178,10 @@ function AnimationInspectorTab({
       ) : null}
 
       <div className="animation-property-groups" aria-label="属性关键帧">
-        {KEYFRAME_PROPERTY_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <div className="animation-property-group" key={group.name} aria-label={`${group.name}关键帧`}>
             <div className="animation-group-title">
               <strong>{group.name}</strong>
-              {group.deferred ? <span>暂未接入</span> : null}
             </div>
             {group.properties.map((property) => {
               const count = selected.segment.keyframes.filter((keyframe) => keyframe.property === property).length;
@@ -1203,7 +1190,7 @@ function AnimationInspectorTab({
                 <button
                   key={property}
                   type="button"
-                  className={focusedProperty === property ? "animation-property-row active" : "animation-property-row"}
+                  className={activeFocusedProperty === property ? "animation-property-row active" : "animation-property-row"}
                   aria-label={`${formatKeyframeProperty(property)}关键帧`}
                   onClick={() => onFocusProperty(property)}
                 >
@@ -1216,26 +1203,21 @@ function AnimationInspectorTab({
         ))}
       </div>
 
-      <div className="animation-detail" aria-label={`${formatKeyframeProperty(focusedProperty)}关键帧`}>
+      <div className="animation-detail" aria-label={`${formatKeyframeProperty(activeFocusedProperty)}关键帧`}>
         <div className="animation-detail-title">
-          <strong>{formatKeyframeProperty(focusedProperty)}关键帧</strong>
+          <strong>{formatKeyframeProperty(activeFocusedProperty)}关键帧</strong>
           <KeyframeButton
-            property={focusedProperty}
-            propertyLabel={formatKeyframeProperty(focusedProperty)}
+            property={activeFocusedProperty}
+            propertyLabel={formatKeyframeProperty(activeFocusedProperty)}
             selected={selected}
             playheadAt={playheadAt}
             pending={pending}
-            onSet={() => onSetKeyframe(focusedProperty)}
-            onRemove={(at) => onRemoveKeyframe(focusedProperty, at)}
-            onFocusProperty={() => onFocusProperty(focusedProperty)}
+            onSet={() => onSetKeyframe(activeFocusedProperty)}
+            onRemove={(at) => onRemoveKeyframe(activeFocusedProperty, at)}
+            onFocusProperty={() => onFocusProperty(activeFocusedProperty)}
           />
         </div>
-        {!supportedFocused ? (
-          <div className="empty-state compact-empty deferred-animation">
-            <strong>特效动画暂未接入</strong>
-            <span>当前阶段仅显示特效动画能力边界，不会创建关键帧。</span>
-          </div>
-        ) : focusedKeyframes.length === 0 ? (
+        {focusedKeyframes.length === 0 ? (
           <p className="inspector-note">当前属性还没有关键帧。</p>
         ) : (
           <div className="keyframe-row-list" aria-label="关键帧列表">
@@ -1258,7 +1240,7 @@ function AnimationInspectorTab({
               <button
                 key={interpolation}
                 type="button"
-                onClick={() => onSetKeyframe(focusedProperty, interpolation)}
+                onClick={() => onSetKeyframe(activeFocusedProperty, interpolation)}
                 disabled={pending || !supportedFocused}
               >
                 {formatKeyframeInterpolation(interpolation)}
@@ -1271,7 +1253,7 @@ function AnimationInspectorTab({
               <button
                 key={easing}
                 type="button"
-                onClick={() => onSetKeyframe(focusedProperty, "linear", easing)}
+                onClick={() => onSetKeyframe(activeFocusedProperty, "linear", easing)}
                 disabled={pending || !supportedFocused}
               >
                 {formatKeyframeEasing(easing)}
@@ -1281,13 +1263,6 @@ function AnimationInspectorTab({
         </div>
       </div>
 
-      <div className="animation-presets" aria-label="动画预设">
-        {["入场", "出场", "循环"].map((label) => (
-          <button key={label} type="button" disabled>
-            {label}<span>未接入</span>
-          </button>
-        ))}
-      </div>
     </section>
   );
 }
@@ -1458,10 +1433,6 @@ function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: n
 }
 
 function isSupportedPropertyForSegment(selected: SelectedSegmentView, property: KeyframeProperty): boolean {
-  if (DEFERRED_KEYFRAME_PROPERTIES.includes(property)) {
-    return false;
-  }
-
   if (TEXT_KEYFRAME_PROPERTIES.includes(property)) {
     return selected.segment.text !== null && selected.segment.text !== undefined;
   }
@@ -1474,6 +1445,44 @@ function inspectorTabsForSelection(selected: SelectedSegmentView | null): Inspec
     return [];
   }
 
+  const context = selectedSegmentContext(selected);
+
+  if (context.hasAudioSemantics && !context.hasText && context.materialKind !== "video") {
+    return ["音频", "动画"];
+  }
+
+  if (context.hasText) {
+    return ["画面", "动画"];
+  }
+
+  if (context.hasAudioSemantics) {
+    return ["画面", "音频", "动画"];
+  }
+
+  return ["画面", "动画"];
+}
+
+function keyframeGroupsForSelection(selected: SelectedSegmentView): typeof KEYFRAME_PROPERTY_GROUPS {
+  const context = selectedSegmentContext(selected);
+
+  return KEYFRAME_PROPERTY_GROUPS.filter((group) => {
+    if (group.name === "文本") {
+      return context.hasText;
+    }
+
+    if (group.name === "音频") {
+      return context.hasAudioSemantics;
+    }
+
+    return true;
+  });
+}
+
+function selectedSegmentContext(selected: SelectedSegmentView): {
+  materialKind: string | undefined;
+  hasText: boolean;
+  hasAudioSemantics: boolean;
+} {
   const materialKind = selected.material?.kind;
   const hasText = selected.segment.text !== null && selected.segment.text !== undefined;
   const hasAudioSemantics =
@@ -1481,19 +1490,7 @@ function inspectorTabsForSelection(selected: SelectedSegmentView | null): Inspec
     materialKind === "audio" ||
     (materialKind === "video" && selected.material?.metadata.hasAudio === true);
 
-  if (hasAudioSemantics && !hasText && materialKind !== "video") {
-    return ["音频", "动画"];
-  }
-
-  if (hasText) {
-    return ["画面", "动画"];
-  }
-
-  if (hasAudioSemantics) {
-    return ["画面", "音频", "动画"];
-  }
-
-  return ["画面", "动画"];
+  return { materialKind, hasText, hasAudioSemantics };
 }
 
 function validateTextForm(state: TextFormState): string | null {
