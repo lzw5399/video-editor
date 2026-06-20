@@ -738,7 +738,8 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expectCommandCall(app, "addAudioSegment");
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(2);
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ }).last()).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByLabel("片段信息")).toContainText("音频轨道 1 / 音频");
+    await expect(page.getByLabel("音频参数")).toBeVisible();
+    await expect(page.getByLabel("画面基础表单")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "音频" }).click();
     await page.getByLabel("音频参数").getByRole("slider", { name: "音量" }).fill("135");
@@ -949,12 +950,11 @@ test("动画 tab and command-only keyframe add/remove update accepted timeline m
   try {
     await spyExecuteCommandCalls(app, page);
 
-    await page.getByRole("tab", { name: "动画" }).click();
-    await expect(page.getByLabel("动画参数")).toContainText("未选择片段");
-    await expect(page.getByLabel("动画参数")).toContainText("选择时间线片段后，可查看动画参数和关键帧。");
+    await expect(page.getByRole("tab", { name: "动画" })).toHaveCount(0);
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
     await expectCommandCall(app, "selectTimelineSegments");
+    await page.getByRole("tab", { name: "动画" }).click();
     await expect(page.getByLabel("动画参数")).toContainText("还没有关键帧");
     await expect(page.getByLabel("动画参数")).toContainText("位置 X");
     await expect(page.getByLabel("动画参数")).toContainText("线性");

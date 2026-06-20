@@ -504,6 +504,10 @@ export async function updateSelectedVisualThroughInspector(
   const opacity = edit.opacity ?? 820;
   const fitMode = edit.fitMode ?? "填充";
   const nextCount = (await countCommand(app, "updateSegmentVisual")) + 1;
+  const visualTab = page.getByRole("tab", { name: "画面" });
+  if ((await visualTab.count()) > 0) {
+    await visualTab.click();
+  }
   const visualForm = page.getByLabel("画面基础表单");
   await visualForm.getByLabel("位置 X", { exact: true }).fill(String(positionX));
   await visualForm.getByLabel("位置 Y", { exact: true }).fill(String(positionY));

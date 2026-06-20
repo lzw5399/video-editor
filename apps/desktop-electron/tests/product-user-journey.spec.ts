@@ -404,6 +404,10 @@ test("product user editing matrix uses real commands and still produces visible 
     await addVideoTrack(page, app);
     await addMaterialToTimeline(app, page, USER_JOURNEY_OVERLAY_IMAGE);
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
+    const inspector = page.getByRole("complementary", { name: "属性检查器" });
+    await expect(page.getByLabel("画面基础表单")).toBeVisible();
+    await expect(page.getByLabel("音频参数")).toHaveCount(0);
+    await expect(inspector).not.toContainText(/segmentId|trackId|material-workspace|media\/|\/tmp|cache|artifact|diagnostic|诊断/i);
     await updateSelectedVisualThroughInspector(page, app, {
       positionX: -120,
       positionY: -70,
@@ -414,9 +418,21 @@ test("product user editing matrix uses real commands and still produces visible 
       fitMode: "适应"
     });
     await addTextThroughProductPanel(page, app, "产品级端到端字幕", 1_000_000);
+    await expect(inspector.getByRole("textbox", { name: "文字内容" })).toHaveValue("产品级端到端字幕");
+    await expect(page.getByLabel("音频参数")).toHaveCount(0);
+    await expect(inspector).not.toContainText(/segmentId|trackId|material-workspace|media\/|\/tmp|cache|artifact|diagnostic|诊断/i);
     await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 2_000_000);
+    await page.getByRole("button", { name: /片段 p0-tone\.wav/ }).click();
+    await page.getByRole("tab", { name: "音频" }).click();
+    await expect(page.getByLabel("音频参数")).toBeVisible();
+    await expect(page.getByLabel("音频参数").getByRole("button", { name: "应用音频" })).toBeVisible();
+    await expect(page.getByLabel("画面基础表单")).toHaveCount(0);
+    await expect(inspector).not.toContainText(/segmentId|trackId|material-workspace|media\/|\/tmp|cache|artifact|diagnostic|诊断/i);
 
     await page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ }).click();
+    await page.getByRole("tab", { name: "画面" }).click();
+    await expect(page.getByLabel("画面基础表单")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "音频" })).toBeVisible();
     await updateSelectedVisualThroughInspector(page, app);
     await seekTimelinePlayhead(page, app, 500_000);
     await splitSelectedSegment(page, app, 1_500_000);

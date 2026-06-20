@@ -1479,7 +1479,7 @@ function inspectorTabsForSelection(selected: SelectedSegmentView | null): Inspec
   const hasAudioSemantics =
     selected.track.kindLabel === "音频" ||
     materialKind === "audio" ||
-    selected.material?.metadata.hasAudio === true;
+    (materialKind === "video" && selected.material?.metadata.hasAudio === true);
 
   if (hasAudioSemantics && !hasText && materialKind !== "video") {
     return ["音频", "动画"];
