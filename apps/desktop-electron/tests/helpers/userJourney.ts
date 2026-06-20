@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
 import type { CommandName } from "../../src/generated/CommandEnvelope";
+import { launchForegroundProductApp, type ForegroundProductAppController } from "./foregroundProductApp";
 
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
 export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving-testsrc.mp4");
@@ -62,6 +63,13 @@ type RealtimePreviewHostState = {
   } | null;
 };
 
+export type ProductJourneyAppController = {
+  readonly kind: "electron-launch" | "foreground-cdp";
+  close: () => Promise<void>;
+  readExecuteCommandCalls: () => Promise<ExecuteCommandCall[]>;
+  readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
+};
+
 declare global {
   interface Window {
     videoEditorRealtimePreviewHost?: {
@@ -80,7 +88,7 @@ export type PreviewEvidence = {
 
 export async function waitForCompositedPreviewEvidence(
   page: Page,
-  app?: ElectronApplication,
+  app?: ProductJourneyAppController,
   timeoutMs = 8_000
 ): Promise<PreviewEvidence> {
   const deadline = Date.now() + timeoutMs;
@@ -154,8 +162,17 @@ export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
 export async function launchProductJourneyApp(
   openMaterialFiles: string[],
   env: NodeJS.ProcessEnv = {}
-): Promise<{ app: ElectronApplication; page: Page }> {
+): Promise<{ app: ProductJourneyAppController; page: Page }> {
   await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
+
+  if (process.platform === "darwin") {
+    const launch = await launchForegroundProductApp(openMaterialFiles, env);
+    await expectProductWorkspace(launch.page);
+    return {
+      app: wrapForegroundController(launch.app),
+      page: launch.page
+    };
+  }
 
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
@@ -171,7 +188,7 @@ export async function launchProductJourneyApp(
   await page.waitForLoadState("domcontentloaded");
   await activateProductWindow(app, page);
   await expectProductWorkspace(page);
-  return { app, page };
+  return { app: wrapElectronApp(app), page };
 }
 
 export async function expectProductWorkspace(page: Page): Promise<void> {
@@ -189,7 +206,7 @@ export async function expectProductWorkspace(page: Page): Promise<void> {
 }
 
 export async function importMaterialThroughProductPicker(
-  app: ElectronApplication,
+  app: ProductJourneyAppController,
   page: Page,
   materialPath: string
 ): Promise<void> {
@@ -203,7 +220,7 @@ export async function importMaterialThroughProductPicker(
 }
 
 export async function addMaterialToTimeline(
-  app: ElectronApplication,
+  app: ProductJourneyAppController,
   page: Page,
   materialPath: string
 ): Promise<void> {
@@ -270,22 +287,12 @@ export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidenc
   };
 }
 
-export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
-    );
-  });
+export async function readExecuteCommandCalls(app: ProductJourneyAppController): Promise<ExecuteCommandCall[]> {
+  return app.readExecuteCommandCalls();
 }
 
-export async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<RealtimePreviewHostCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestRealtimePreviewHostCalls?: RealtimePreviewHostCall[] })
-        .__videoEditorTestRealtimePreviewHostCalls ?? []
-    );
-  });
+export async function readRealtimePreviewHostCalls(app: ProductJourneyAppController): Promise<RealtimePreviewHostCall[]> {
+  return app.readRealtimePreviewHostCalls();
 }
 
 export function requestPreviewFrameCount(calls: ExecuteCommandCall[]): number {
@@ -302,12 +309,42 @@ async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreview
   });
 }
 
-async function waitForCommandCount(app: ElectronApplication, command: CommandName, expectedCount: number): Promise<void> {
+async function waitForCommandCount(app: ProductJourneyAppController, command: CommandName, expectedCount: number): Promise<void> {
   await expect.poll(async () => countCommand(app, command), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
 }
 
-async function countCommand(app: ElectronApplication, command: CommandName): Promise<number> {
+async function countCommand(app: ProductJourneyAppController, command: CommandName): Promise<number> {
   return (await readExecuteCommandCalls(app)).filter((call) => call.command === command).length;
+}
+
+function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController {
+  return {
+    kind: "electron-launch",
+    close: () => app.close(),
+    readExecuteCommandCalls: () =>
+      app.evaluate(() => {
+        return (
+          (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+            .__videoEditorTestExecuteCommandCalls ?? []
+        );
+      }),
+    readRealtimePreviewHostCalls: () =>
+      app.evaluate(() => {
+        return (
+          (globalThis as typeof globalThis & { __videoEditorTestRealtimePreviewHostCalls?: RealtimePreviewHostCall[] })
+            .__videoEditorTestRealtimePreviewHostCalls ?? []
+        );
+      })
+  };
+}
+
+function wrapForegroundController(app: ForegroundProductAppController): ProductJourneyAppController {
+  return {
+    kind: app.kind,
+    close: () => app.close(),
+    readExecuteCommandCalls: async () => (await app.readExecuteCommandCalls()) as ExecuteCommandCall[],
+    readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[]
+  };
 }
 
 async function expectFileExists(path: string): Promise<void> {
