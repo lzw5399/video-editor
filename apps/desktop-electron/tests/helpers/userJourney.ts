@@ -6,7 +6,11 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
 import type { CommandName } from "../../src/generated/CommandEnvelope";
-import { launchForegroundProductApp, type ForegroundProductAppController } from "./foregroundProductApp";
+import {
+  launchForegroundProductApp,
+  type ForegroundProductAppController,
+  type ForegroundProductAppDiagnostics
+} from "./foregroundProductApp";
 
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
 export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving-testsrc.mp4");
@@ -68,6 +72,7 @@ export type ProductJourneyAppController = {
   close: () => Promise<void>;
   readExecuteCommandCalls: () => Promise<ExecuteCommandCall[]>;
   readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
+  readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
 };
 
 declare global {
@@ -103,10 +108,11 @@ export async function waitForCompositedPreviewEvidence(
   }
 
   const hostCalls = app === undefined ? [] : await readRealtimePreviewHostCalls(app);
+  const foregroundDiagnostics = app === undefined ? null : await app.readForegroundDiagnostics();
   throw new Error(
     `Timed out waiting for composited preview evidence. Last host state: ${JSON.stringify(
       lastEvidence?.hostState ?? null
-    )}. Host calls: ${JSON.stringify(hostCalls)}`
+    )}. Host calls: ${JSON.stringify(hostCalls)}. Foreground diagnostics: ${JSON.stringify(foregroundDiagnostics)}`
   );
 }
 
@@ -321,6 +327,7 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
   return {
     kind: "electron-launch",
     close: () => app.close(),
+    readForegroundDiagnostics: async () => null,
     readExecuteCommandCalls: () =>
       app.evaluate(() => {
         return (
@@ -342,6 +349,7 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
   return {
     kind: app.kind,
     close: () => app.close(),
+    readForegroundDiagnostics: () => app.readForegroundDiagnostics(),
     readExecuteCommandCalls: async () => (await app.readExecuteCommandCalls()) as ExecuteCommandCall[],
     readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[]
   };

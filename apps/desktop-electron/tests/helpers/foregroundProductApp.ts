@@ -12,6 +12,9 @@ export type ForegroundProductAppDiagnostics = {
   remoteDebuggingPort: number;
   pid: number | null;
   processState: string | null;
+  frontmostApplications: string[];
+  coreGraphicsWindows: CoreGraphicsWindowSummary[];
+  probeErrors: string[];
 };
 
 export type ForegroundProductAppController = {
@@ -20,6 +23,21 @@ export type ForegroundProductAppController = {
   close: () => Promise<void>;
   readExecuteCommandCalls: () => Promise<unknown[]>;
   readRealtimePreviewHostCalls: () => Promise<unknown[]>;
+  readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
+};
+
+export type CoreGraphicsWindowSummary = {
+  windowNumber: number;
+  layer: number;
+  alpha: number;
+  onscreen: boolean;
+  name: string;
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 };
 
 declare global {
@@ -56,12 +74,14 @@ export async function launchForegroundProductApp(
   const page = await waitForFirstPage(browser);
   await page.waitForLoadState("domcontentloaded");
   const pid = await findProcessIdForRemoteDebuggingPort(remoteDebuggingPort);
-  const diagnostics = {
+  if (pid !== null) {
+    await activateMacProductApp(pid);
+  }
+  const diagnostics = await readForegroundDiagnostics({
     appBundlePath,
     remoteDebuggingPort,
-    pid,
-    processState: pid === null ? null : await readMacProcessState(pid)
-  };
+    pid
+  });
 
   const controller: ForegroundProductAppController = {
     kind: "foreground-cdp",
@@ -71,7 +91,13 @@ export async function launchForegroundProductApp(
       await terminateMainProcess(remoteDebuggingPort, pid);
     },
     readExecuteCommandCalls: async () => readTestObservation(page, "getExecuteCommandCalls", diagnostics),
-    readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics)
+    readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
+    readForegroundDiagnostics: async () =>
+      readForegroundDiagnostics({
+        appBundlePath,
+        remoteDebuggingPort,
+        pid: (await findProcessIdForRemoteDebuggingPort(remoteDebuggingPort)) ?? pid
+      })
   };
 
   return { app: controller, page };
@@ -215,6 +241,103 @@ async function readMacProcessState(pid: number): Promise<string | null> {
   ].join("\n");
   const result = await execFileAsync("osascript", ["-e", script]).catch(() => null);
   return result?.stdout.trim() ?? null;
+}
+
+async function activateMacProductApp(pid: number): Promise<void> {
+  await execFileAsync("osascript", ["-e", `tell application id "org.videoeditor.desktop" to activate`]).catch(
+    () => undefined
+  );
+  await execFileAsync("osascript", [
+    "-e",
+    `tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true`
+  ]).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 750));
+}
+
+async function readForegroundDiagnostics(input: {
+  appBundlePath: string;
+  remoteDebuggingPort: number;
+  pid: number | null;
+}): Promise<ForegroundProductAppDiagnostics> {
+  const probeErrors: string[] = [];
+  let processState: string | null = null;
+  let frontmostApplications: string[] = [];
+  let coreGraphicsWindows: CoreGraphicsWindowSummary[] = [];
+
+  if (input.pid !== null) {
+    processState = await readMacProcessState(input.pid).catch((error) => {
+      probeErrors.push(`system-events-process-state: ${errorMessage(error)}`);
+      return null;
+    });
+    frontmostApplications = await readFrontmostApplications().catch((error) => {
+      probeErrors.push(`system-events-frontmost: ${errorMessage(error)}`);
+      return [];
+    });
+    coreGraphicsWindows = await readCoreGraphicsWindows(input.pid).catch((error) => {
+      probeErrors.push(`core-graphics-windows: ${errorMessage(error)}`);
+      return [];
+    });
+  }
+
+  return {
+    appBundlePath: input.appBundlePath,
+    remoteDebuggingPort: input.remoteDebuggingPort,
+    pid: input.pid,
+    processState,
+    frontmostApplications,
+    coreGraphicsWindows,
+    probeErrors
+  };
+}
+
+async function readFrontmostApplications(): Promise<string[]> {
+  const script = `tell application "System Events" to get (name of every process whose frontmost is true)`;
+  const result = await execFileAsync("osascript", ["-e", script]);
+  return result.stdout
+    .trim()
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+async function readCoreGraphicsWindows(pid: number): Promise<CoreGraphicsWindowSummary[]> {
+  const swiftSource = `
+import CoreGraphics
+import Foundation
+
+let targetPid = Int(CommandLine.arguments[1])!
+let info = CGWindowListCopyWindowInfo(CGWindowListOption(arrayLiteral: .optionAll), kCGNullWindowID) as? [[String: Any]] ?? []
+let windows: [[String: Any]] = info.compactMap { window in
+  guard let ownerPid = window[kCGWindowOwnerPID as String] as? Int, ownerPid == targetPid else {
+    return nil
+  }
+  let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+  return [
+    "windowNumber": window[kCGWindowNumber as String] as? Int ?? 0,
+    "layer": window[kCGWindowLayer as String] as? Int ?? 0,
+    "alpha": window[kCGWindowAlpha as String] as? Double ?? 0.0,
+    "onscreen": window[kCGWindowIsOnscreen as String] as? Bool ?? false,
+    "name": window[kCGWindowName as String] as? String ?? "",
+    "bounds": [
+      "x": bounds["X"] as? Double ?? 0.0,
+      "y": bounds["Y"] as? Double ?? 0.0,
+      "width": bounds["Width"] as? Double ?? 0.0,
+      "height": bounds["Height"] as? Double ?? 0.0
+    ]
+  ]
+}
+let data = try JSONSerialization.data(withJSONObject: windows, options: [])
+print(String(data: data, encoding: .utf8)!)
+`;
+  const result = await execFileAsync("/usr/bin/swift", ["-e", swiftSource, String(pid)], {
+    maxBuffer: 1024 * 1024
+  });
+  const parsed = JSON.parse(result.stdout) as CoreGraphicsWindowSummary[];
+  return parsed.filter((window) => window.windowNumber > 0);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readTestObservation(
