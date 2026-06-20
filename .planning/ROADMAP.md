@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
 - [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
 - [x] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (completed 2026-06-20 after 15.2-07 product playback UAT reclose)
-- [ ] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED, unblocked after 15.2-07)
+- [x] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (completed 2026-06-20)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -732,9 +732,9 @@ Plans:
   9. Regression tests compare against `docs/ui-reference/jianying-pro/screenshots/` for layout/information hierarchy and assert 1280x800 and 1120x720 stability with no debug copy in default mode.
   10. New production UI icons are selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets before use unless no suitable icon exists.
 
-Phase 15.2 dependency is satisfied; Phase 15.3 is ready to execute.
+Phase 15.3 is complete. Phase 16 is ready to plan.
 
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans executed
 
 Plans:
 
@@ -745,7 +745,7 @@ Plans:
 - [x] 15.3-05-PLAN.md - Focus the right inspector and draft parameter modal
 - [x] 15.3-06-PLAN.md - Convert timeline toolbar/interactions from debug inputs to editor controls
 - [x] 15.3-07-PLAN.md - Add icon discipline, reference manifest, source guards, and layout regression
-- [ ] 15.3-08-PLAN.md - Add aggregate Phase 15.3 verification and closeout
+- [x] 15.3-08-PLAN.md - Add aggregate Phase 15.3 verification and closeout
 
 ### Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry
 
@@ -832,7 +832,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15. Audio Engine And DSP Timeline Pipeline | 7/7 | Complete   | 2026-06-19 |
 | 15.1 P0 Basic Editing Chain Repair | 6/6 | Complete | 2026-06-20 |
 | 15.2 P0 Real GPU Realtime Compositor Closure | 15/15 | Complete | 2026-06-20 |
-| 15.3 P0 Jianying-Style Production UI Convergence | 7/8 | In Progress|  |
+| 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

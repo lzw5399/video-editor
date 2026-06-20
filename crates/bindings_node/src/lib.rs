@@ -12,10 +12,10 @@ use draft_model::{
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingResponse, PreviewDecodeRequest,
     ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, SaveProjectBundleCommandPayload, SaveProjectBundleResponse,
-    StartExportCommandPayload, VersionResponse,
+    RequestPreviewSegmentCommandPayload, SaveProjectBundleCommandPayload,
+    SaveProjectBundleResponse, StartExportCommandPayload, VersionResponse,
 };
-use media_runtime::{DiscoveryError, discover_runtime_config};
+use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
@@ -34,9 +34,10 @@ use crate::material_service::{
     list_missing_materials,
 };
 use crate::preview_export_service::{
-    ExportCommandError, PreviewCommandError, export_error_diagnostic, global_export_registry,
-    global_preview_frame_handle_registry, invalidate_preview_cache_command,
-    request_preview_frame_with_executor, request_preview_segment_with_executor,
+    ExportCommandError, PreviewCommandError, compiler_capabilities_from_runtime,
+    export_error_diagnostic, global_export_registry, global_preview_frame_handle_registry,
+    invalidate_preview_cache_command, request_preview_frame_with_executor,
+    request_preview_segment_with_executor,
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
@@ -443,7 +444,9 @@ fn runtime_capability_error_envelope(
     )
 }
 
-fn open_project_bundle_command(payload: OpenProjectBundleCommandPayload) -> Result<serde_json::Value> {
+fn open_project_bundle_command(
+    payload: OpenProjectBundleCommandPayload,
+) -> Result<serde_json::Value> {
     let fs = StdPlatformFileSystem;
     match open_project_bundle(&fs, PathBuf::from(payload.bundle_path)) {
         Ok(opened) => to_js_value(ok_envelope(OpenProjectBundleResponse {
@@ -460,7 +463,9 @@ fn open_project_bundle_command(payload: OpenProjectBundleCommandPayload) -> Resu
     }
 }
 
-fn save_project_bundle_command(payload: SaveProjectBundleCommandPayload) -> Result<serde_json::Value> {
+fn save_project_bundle_command(
+    payload: SaveProjectBundleCommandPayload,
+) -> Result<serde_json::Value> {
     let fs = StdPlatformFileSystem;
     match save_project_bundle(&fs, PathBuf::from(payload.bundle_path), &payload.draft) {
         Ok(saved) => to_js_value(ok_envelope(SaveProjectBundleResponse {
@@ -570,7 +575,7 @@ fn request_preview_frame_command(
     let config = preview_service_config_from_preview_payload(
         payload.cache_root.as_deref(),
         payload.bundle_path.as_deref(),
-        runtime.ffmpeg.path,
+        &runtime,
     );
     match request_preview_frame_with_executor(&executor, &config, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
@@ -595,7 +600,7 @@ fn request_preview_segment_command(
     let config = preview_service_config_from_preview_payload(
         payload.cache_root.as_deref(),
         payload.bundle_path.as_deref(),
-        runtime.ffmpeg.path,
+        &runtime,
     );
     match request_preview_segment_with_executor(&executor, &config, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
@@ -621,10 +626,14 @@ fn audio_service_command(
 fn preview_service_config_from_preview_payload(
     cache_root: Option<&str>,
     bundle_path: Option<&str>,
-    ffmpeg_path: PathBuf,
+    runtime: &RuntimeConfig,
 ) -> preview_service::PreviewServiceConfig {
     let fallback_cache_root = cache_root.unwrap_or(".video-editor-preview-cache");
-    let config = preview_service::PreviewServiceConfig::new(fallback_cache_root, ffmpeg_path);
+    let config = preview_service::PreviewServiceConfig::new(
+        fallback_cache_root,
+        runtime.ffmpeg.path.clone(),
+    )
+    .with_compiler_capabilities(compiler_capabilities_from_runtime(runtime));
     if let Some(bundle_path) = bundle_path {
         config.with_project_artifact_root(bundle_path)
     } else {

@@ -22,14 +22,14 @@ use draft_model::{
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{
-    CompileContext, CompilerCapabilities, FfmpegCompileError, FfmpegJob, TextRenderCapability,
-    OutputValidationExpectation as CompileValidation, compile_ffmpeg_job,
+    CompileContext, CompilerCapabilities, FfmpegCompileError, FfmpegJob,
+    OutputValidationExpectation as CompileValidation, TextRenderCapability, compile_ffmpeg_job,
 };
 use media_runtime::FfmpegExecutor;
 use media_runtime::{
     CancelToken, FfmpegJobEvent, FfmpegJobResult, FfmpegJobState, FfmpegRuntimeError,
-    FfmpegRuntimeJob, OutputValidationError, OutputValidationExpectation, RuntimeConfig,
-    RuntimeCapabilityReport, validate_rendered_output,
+    FfmpegRuntimeJob, OutputValidationError, OutputValidationExpectation, RuntimeCapabilityReport,
+    RuntimeConfig, validate_rendered_output,
 };
 use media_runtime_desktop::{DesktopFfmpegExecutor, probe_desktop_runtime_capabilities};
 use preview_service::{
@@ -819,7 +819,7 @@ fn prepare_export_job(
     })
 }
 
-fn compiler_capabilities_from_runtime(runtime: &RuntimeConfig) -> CompilerCapabilities {
+pub(crate) fn compiler_capabilities_from_runtime(runtime: &RuntimeConfig) -> CompilerCapabilities {
     let executor = DesktopFfmpegExecutor::default();
     let report = probe_desktop_runtime_capabilities(&executor, runtime).ffmpeg;
     CompilerCapabilities {

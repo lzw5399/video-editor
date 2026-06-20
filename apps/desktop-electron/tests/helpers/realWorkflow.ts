@@ -163,7 +163,22 @@ async function requestPreviewFrame(page: Page, app: ElectronApplication): Promis
   const nextCount = (await countCommand(app, "requestPreviewFrame")) + 1;
   await page.getByRole("button", { name: "请求预览帧" }).click();
   await waitForCommandCount(page, app, "requestPreviewFrame", nextCount);
-  await expect(page.getByLabel("预览产物")).toContainText(/预览帧(已生成|命中缓存)/, { timeout: 30_000 });
+  try {
+    await expect(page.getByLabel("预览产物")).toContainText(/预览帧(已生成|命中缓存)/, { timeout: 30_000 });
+  } catch (error) {
+    const calls = await readExecuteCommandCalls(app);
+    const previewArtifactsText = (await page.getByLabel("预览产物").textContent()) ?? "";
+    const previewStatusText = (await page.getByLabel("预览状态", { exact: true }).textContent()) ?? "";
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        message,
+        `Preview artifacts: ${previewArtifactsText}`,
+        `Preview status: ${previewStatusText}`,
+        `Recorded commands: ${JSON.stringify(calls)}`
+      ].join("\n")
+    );
+  }
   const path = await page.locator(".preview-artifact-line").filter({ hasText: "预览帧" }).locator("code").textContent();
   expect(path, "预览帧产物路径").not.toBeNull();
   await expectFileExists(path!);

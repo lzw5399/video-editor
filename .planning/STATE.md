@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 15.3-07-PLAN.md
-last_updated: "2026-06-20T12:35:57Z"
-last_activity: 2026-06-20 -- Phase 15.3 Plan 07 icon/reference/source guards/layout regression
+status: planning
+stopped_at: Completed Phase 15.3 Plan 08 aggregate verification and closeout
+last_updated: "2026-06-20T13:40:02Z"
+last_activity: 2026-06-20 -- Phase 15.3 complete; ready to plan Phase 16 scheduler/job isolation
 progress:
   total_phases: 23
-  completed_phases: 19
+  completed_phases: 20
   total_plans: 141
-  completed_plans: 140
-  percent: 83
+  completed_plans: 141
+  percent: 87
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 15.3 — P0 Jianying-Style Production UI Convergence
+**Current focus:** Phase 16 — Task Scheduler, Job Isolation, And Performance Telemetry
 
 ## Current Position
 
-Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
-Plan: 15.3-08
-Status: Ready to execute Plan 15.3-08
-Last activity: 2026-06-20 -- Phase 15.3 Plan 07 icon/reference/source guards/layout regression
+Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
+Plan: TBD
+Status: Phase 15.3 complete; ready to plan Phase 16
+Last activity: 2026-06-20 -- Phase 15.3 Plan 08 aggregate verification and closeout
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 7/8 plans complete
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
 ## Performance Metrics
 
@@ -181,6 +181,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 | Phase 15.3 P05 | 46min | 3 tasks | 6 files |
 | Phase 15.3 P06 | 2h | 3 tasks | 7 files |
 | Phase 15.3 P07 | resumed | 3 tasks | 20 files |
+| Phase 15.3 P08 | resumed | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -209,6 +210,8 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 - Phase 15.3 Plan 01 routes project create/open UI through platform-selected bundle paths and Rust `saveProjectBundle`/`openProjectBundle` command envelopes before import controls render. (URGENT)
 - Phase 15.3 Plan 03 completed the left resource/function panel convergence: default media keeps import/search/filter/material cards while resource task/cache controls are diagnostics-only; text/audio panels use product-facing second controls with integer microsecond command payloads; deferred categories use compact unavailable copy. (URGENT)
 - Phase 15.3 Plan 07 completed app-local icon discipline, provisional Jianying reference manifests, screenshot-backed layout regression, default-mode source guards, and the 1120px top-right export layout fix. (URGENT)
+- Phase 15.3 Plan 08 completed aggregate UI convergence verification: source guards, no-product-fallback guards, Electron package/build, 71/71 desktop Playwright E2E, real no-mock dev/packaged preview/export workflow, and `cargo check --workspace --locked` passed; Phase 15.3 is complete and Phase 16 is ready to plan. (URGENT)
+- The local Mac test environment now uses Homebrew `ffmpeg-full 8.1.2` via PATH and `VE_FFMPEG_PATH`/`VE_FFPROBE_PATH`; the old minimal Homebrew `ffmpeg` was removed because it lacked `ass`, `subtitles`, and `drawtext` filters needed for real text preview/export. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -231,6 +234,8 @@ Recent decisions affecting current work:
 - [Phase 15.3]: Jianying Pro screenshots under `docs/ui-reference` are provisional structure references with `pixelGolden=false`; tests assert app hierarchy/regions rather than proprietary pixels.
 - [Phase 15.3]: Phase 15.3 source guards block default debug/fallback copy, root icon runtime references, backend/mock selectors, and product E2E shortcuts.
 - [Phase 15.3]: The top-right export action remains pinned at 1120px by keeping the product action grid column in the responsive top bar.
+- [Phase 15.3]: Phase closeout requires the aggregate `test:phase15-3` gate: source guards, no-product-fallback guards, desktop build/package, user-level Playwright matrix, real no-mock workflow, and Rust workspace check.
+- [Phase 15.3]: Preview compilation uses runtime-derived compiler capabilities, matching export; missing FFmpeg text filters must be classified from runtime capability rather than assumed available.
 - [Phase 14]: GC candidates are selected from SQLite artifact rows and excluded by live artifact status, dependency rows, active generation jobs/chunks, and existing tombstones before any file deletion.
 - [Phase 14]: Quota labels are Rust-owned strings for UI transport; TypeScript does not compute totals from paths or inspect SQLite/blob internals.
 - [Phase 14]: Sync manifests are local deterministic contracts only; remote/cloud provider transport, auth, URLs, upload/download, and server rendering stay out of Phase 14.
