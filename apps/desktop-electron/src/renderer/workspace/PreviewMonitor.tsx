@@ -690,10 +690,16 @@ function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDev
   }
 
   if (showDeveloperDiagnostics && !state.productReady) {
+    const requestState = state.currentRequestCanceled ? ["当前请求已取消"] : [];
+    const fallback =
+      state.fallbackReason === null ? [] : [`原因 ${formatRealtimePreviewFallbackReason(state.fallbackReason)}`];
     return [
       formatRealtimePreviewDiagnosticSource(state.diagnosticSource),
       `运行时帧 ${telemetry.presentedFrameCount}`,
-      `目标 ${formatMicroseconds(telemetry.targetTimeMicroseconds)}`
+      `目标 ${formatMicroseconds(telemetry.targetTimeMicroseconds)}`,
+      `取消 ${telemetry.canceledRequestCount}`,
+      ...requestState,
+      ...fallback
     ].join(" · ");
   }
 

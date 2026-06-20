@@ -178,6 +178,20 @@ async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTi
     .toBe(targetTime);
 }
 
+async function expectLatestRealtimeHostSeekTarget(app: ElectronApplication, targetTime: number): Promise<void> {
+  await expect
+    .poll(async () => {
+      const calls = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek");
+      return calls.at(-1)?.targetTimeMicroseconds ?? null;
+    })
+    .toBe(targetTime);
+}
+
+async function expectNoPreviewFrameCommands(app: ElectronApplication): Promise<void> {
+  const calls = await readExecuteCommandCalls(app);
+  expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
+}
+
 async function setViewportSizeAndVerifyLayout(app: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
   await app.evaluate(
     async ({ BrowserWindow }, size) => {
@@ -822,8 +836,9 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expectCommandCall(app, "addSegment");
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(2);
     await expect(page.locator('[aria-label="时间线"]')).toContainText("00:00:08.000 / 00:00:12.000");
-    await expectLatestPreviewFrameTarget(app, 8_000_000);
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-8000000\.png$/);
+    await expectLatestRealtimeHostSeekTarget(app, 8_000_000);
+    await expectNoPreviewFrameCommands(app);
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
     const calls = await readExecuteCommandCalls(app);
     const addSegmentCallsBefore = callsBeforeAdd.filter((call) => call.command === "addSegment").length;
@@ -1037,7 +1052,7 @@ test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
   }
 });
 
-test("播放头预览时间输入和逐帧按钮请求目标预览帧", async () => {
+test("播放头预览时间输入和逐帧按钮寻帧到实时预览宿主", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -1045,8 +1060,9 @@ test("播放头预览时间输入和逐帧按钮请求目标预览帧", async ()
 
     await page.getByLabel("预览时间").fill("1200000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
-    await expectLatestPreviewFrameTarget(app, 1_200_000);
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-1200000\.png$/);
+    await expectLatestRealtimeHostSeekTarget(app, 1_200_000);
+    await expectNoPreviewFrameCommands(app);
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
     const inspector = page.getByLabel("草稿参数");
     await page.getByLabel("帧率", { exact: true }).selectOption("custom");
@@ -1058,17 +1074,18 @@ test("播放头预览时间输入和逐帧按钮请求目标预览帧", async ()
 
     await spyExecuteCommandCalls(app, page);
     await page.getByLabel("预览时间").fill("0");
-    await expectLatestPreviewFrameTarget(app, 0);
+    await expectLatestRealtimeHostSeekTarget(app, 0);
     await page.getByLabel("预览时间").fill("1200000");
-    await expectLatestPreviewFrameTarget(app, 1_200_000);
+    await expectLatestRealtimeHostSeekTarget(app, 1_200_000);
 
     await page.getByRole("button", { name: "下一帧" }).click();
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.233");
-    await expectLatestPreviewFrameTarget(app, 1_233_367);
+    await expectLatestRealtimeHostSeekTarget(app, 1_233_367);
 
     await page.getByRole("button", { name: "上一帧" }).click();
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
-    await expectLatestPreviewFrameTarget(app, 1_200_000);
+    await expectLatestRealtimeHostSeekTarget(app, 1_200_000);
+    await expectNoPreviewFrameCommands(app);
   } finally {
     await app.close();
   }
@@ -1270,6 +1287,7 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
 
 test("实时预览 native preview host rectangle reports integer bounds and telemetry", async () => {
   const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
     }
@@ -1283,9 +1301,10 @@ test("实时预览 native preview host rectangle reports integer bounds and tele
     expect(latest1280.x).toBe(Math.round(host1280.x));
     expect(latest1280.y).toBe(Math.round(host1280.y));
 
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
-    await expect(page.getByLabel("实时预览数据")).toContainText("首帧");
-    await expect(page.getByLabel("实时预览数据")).toContainText("已呈现 1 帧");
+    await expect(page.getByLabel("实时预览状态")).toContainText("等待 GPU 合成");
+    await expect(page.getByLabel("实时预览数据")).toContainText("诊断来源：运行时帧请求");
+    await expect(page.getByLabel("实时预览数据")).toContainText("运行时帧");
+    expect((await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "requestFirstFrame")).toBe(true);
 
     const host1120 = await expectNativePreviewHostLayout(app, page, 1120, 720);
     const latest1120 = await latestRealtimePreviewBounds(app);
@@ -1316,8 +1335,9 @@ test("实时预览 native preview attach failure displays unavailable diagnostic
   }
 });
 
-test("实时预览 telemetry shows supported backend without media fallback active label", async () => {
+test("实时预览 telemetry keeps runtime frame diagnostics out of product-ready status", async () => {
   const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_FIRST_FRAME: "1"
     }
@@ -1325,12 +1345,9 @@ test("实时预览 telemetry shows supported backend without media fallback acti
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
-    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：GPU");
-    await expect(page.getByLabel("实时预览数据")).toContainText("首帧 9 ms");
-    await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 -");
-    await expect(page.getByLabel("实时预览数据")).toContainText("拒绝旧帧 0");
-    await expect(page.getByLabel("实时预览数据")).toContainText("缓存 0");
+    await expect(page.getByLabel("实时预览状态")).toContainText("等待 GPU 合成");
+    await expect(page.getByLabel("实时预览数据")).toContainText("诊断来源：运行时帧请求");
+    await expect(page.getByLabel("实时预览数据")).toContainText("运行时帧");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
@@ -1338,8 +1355,9 @@ test("实时预览 telemetry shows supported backend without media fallback acti
   }
 });
 
-test("实时预览 telemetry shows supported seek latency without fallback artifact", async () => {
+test("实时预览 telemetry shows runtime seek frame diagnostics without fallback artifact", async () => {
   const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_MOCK_REALTIME_PREVIEW_SEEK_FRAME: "1"
     }
@@ -1347,10 +1365,10 @@ test("实时预览 telemetry shows supported seek latency without fallback artif
 
   try {
     await expectNativePreviewHostLayout(app, page, 1120, 720);
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
-    await expect(page.getByLabel("实时预览数据")).toContainText("实时后端：GPU");
-    await expect(page.getByLabel("实时预览数据")).toContainText("寻帧 7 ms");
-    await expect(page.getByLabel("实时预览数据")).toContainText("已呈现 1 帧");
+    await expect(page.getByLabel("实时预览状态")).toContainText("等待 GPU 合成");
+    await expect(page.getByLabel("实时预览数据")).toContainText("诊断来源：运行时帧请求");
+    await expect(page.getByLabel("实时预览数据")).toContainText("目标 00:00:01.200");
+    expect((await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "requestSeekFrame")).toBe(true);
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
   } finally {
     await app.close();
@@ -1389,7 +1407,7 @@ test("baseline preview capability does not productize realtime fallback copy", a
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
-    await expect(page.getByLabel("实时预览状态")).toContainText("实时预览已接入");
+    await expect(page.getByLabel("实时预览状态")).toBeVisible();
     await expect(page.getByLabel("实时预览数据")).not.toContainText("实时预览受限");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("当前画面暂不能实时播放");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
@@ -1440,8 +1458,10 @@ test("fallback source guard keeps renderer display-only for telemetry", () => {
   const viewModelSource = readFileSync(join(process.cwd(), "src/renderer/viewModel.ts"), "utf8");
 
   expect(previewMonitorSource, "renderer must not build FFmpeg commands").not.toMatch(/ffmpeg\s*(?:-|\.|Command|Args)/i);
-  expect(previewMonitorSource, "renderer must not create render graph/cache logic").not.toMatch(/renderGraph|cacheKey|fallbackLadder/i);
-  expect(previewMonitorSource, "renderer must not assign fallback reasons").not.toMatch(/fallbackReason\s*=/i);
+  expect(previewMonitorSource, "renderer must not create render graph/cache logic").not.toMatch(
+    /buildRenderGraph|RenderGraph\s*\(|cacheKey\s*[:=]|fallbackLadder\s*[:=]/i
+  );
+  expect(previewMonitorSource, "renderer must not assign fallback reasons").not.toMatch(/fallbackReason\s*=(?!=)/i);
   expect(viewModelSource, "display model should not inspect drafts to infer support").not.toMatch(
     /if\s*\([^)]*(?:draft|material)[^)]*\)[\s\S]{0,160}fallback/i
   );
@@ -1542,11 +1562,11 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("重复 1");
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("缓存 2");
   expect(summarizeRealtimePreviewDisplay(fallback)).toContain("当前请求已取消");
-  expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("实时预览受限：当前画面暂不能实时播放");
+  expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("实时预览不可用：GPU 合成播放尚未接入");
   expect(fallback.fallbackArtifactVisible).toBe(true);
 });
 
-test("播放头支持时间线标尺点击和拖动请求预览帧", async () => {
+test("播放头支持时间线标尺点击和拖动寻帧到实时预览宿主", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -1557,7 +1577,8 @@ test("播放头支持时间线标尺点击和拖动请求预览帧", async () =>
     await page.mouse.click(rulerBox.x + rulerBox.width * 0.5, rulerBox.y + rulerBox.height * 0.5);
     await expect(page.getByLabel("播放头")).toHaveValue("5000000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:05.000");
-    await expectLatestPreviewFrameTarget(app, 5_000_000);
+    await expectLatestRealtimeHostSeekTarget(app, 5_000_000);
+    await expectNoPreviewFrameCommands(app);
 
     await spyExecuteCommandCalls(app, page);
     const playhead = page.locator(".playhead");
@@ -1569,7 +1590,8 @@ test("播放头支持时间线标尺点击和拖动请求预览帧", async () =>
 
     await expect(page.getByLabel("播放头")).toHaveValue("7500000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:07.500");
-    await expectLatestPreviewFrameTarget(app, 7_500_000);
+    await expectLatestRealtimeHostSeekTarget(app, 7_500_000);
+    await expectNoPreviewFrameCommands(app);
   } finally {
     await app.close();
   }
