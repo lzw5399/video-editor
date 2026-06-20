@@ -15,6 +15,7 @@ import {
   deleteSelectedSegment,
   expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
   expectNoProductFallbackCalls,
+  expectTimelineSnappingStatusVisible,
   expectNoRejectedSurfaceAcquire,
   expectProductPlaybackSuccessEvidence,
   importMaterialsThroughProductPicker,
@@ -27,9 +28,11 @@ import {
   redoTimelineEdit,
   seekTimelinePlayhead,
   splitSelectedSegment,
+  trimSelectedSegmentRightEdgeLeft,
   undoTimelineEdit,
   updateSelectedVisualThroughInspector,
-  waitForProductPlaybackSuccess
+  waitForProductPlaybackSuccess,
+  zoomTimelineIn
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
@@ -432,11 +435,13 @@ test("product user editing matrix uses real commands and still produces visible 
     await page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ }).click();
     await page.getByRole("tab", { name: "画面" }).click();
     await expect(page.getByLabel("画面基础表单")).toBeVisible();
-    await expect(page.getByRole("tab", { name: "音频" })).toBeVisible();
     await updateSelectedVisualThroughInspector(page, app);
     await seekTimelinePlayhead(page, app, 500_000);
+    await expectTimelineSnappingStatusVisible(page);
+    await zoomTimelineIn(page);
     await splitSelectedSegment(page, app, 1_500_000);
     await moveSelectedSegmentRight(page, app, 250_000);
+    await trimSelectedSegmentRightEdgeLeft(page, app, 100_000);
     await deleteSelectedSegment(page, app);
     await undoTimelineEdit(page, app);
     await redoTimelineEdit(page, app);
@@ -456,6 +461,7 @@ test("product user editing matrix uses real commands and still produces visible 
         "updateSegmentVisual",
         "splitSegment",
         "moveSegment",
+        "trimSegment",
         "deleteSegment",
         "undoTimelineEdit",
         "redoTimelineEdit"

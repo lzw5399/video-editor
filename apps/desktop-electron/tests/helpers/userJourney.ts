@@ -523,7 +523,7 @@ export async function updateSelectedVisualThroughInspector(
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
   const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
-  await page.getByRole("spinbutton", { name: "播放头", exact: true }).fill(String(targetTimeUs));
+  await clickTimelineRulerAt(page, targetTimeUs);
   await expect(page.getByLabel("当前时间码")).toContainText(formatExpectedTimecode(targetTimeUs), { timeout: 10_000 });
   expect(
     requestPreviewFrameCount(await readExecuteCommandCalls(app)),
@@ -533,16 +533,38 @@ export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppCon
 
 export async function splitSelectedSegment(page: Page, app: ProductJourneyAppController, splitAtUs: number): Promise<void> {
   const nextCount = (await countCommand(app, "splitSegment")) + 1;
-  await page.getByRole("spinbutton", { name: "分割", exact: true }).fill(String(splitAtUs));
+  await seekTimelinePlayhead(page, app, splitAtUs);
   await page.getByRole("button", { name: "分割所选片段" }).click();
   await waitForCommandCount(app, "splitSegment", nextCount);
 }
 
 export async function moveSelectedSegmentRight(page: Page, app: ProductJourneyAppController, deltaUs: number): Promise<void> {
   const nextCount = (await countCommand(app, "moveSegment")) + 1;
-  await page.getByRole("spinbutton", { name: "移动", exact: true }).fill(String(deltaUs));
-  await page.getByRole("button", { name: "右移所选片段" }).click();
+  await dragSelectedSegmentBy(page, deltaUs);
   await waitForCommandCount(app, "moveSegment", nextCount);
+}
+
+export async function trimSelectedSegmentRightEdgeLeft(
+  page: Page,
+  app: ProductJourneyAppController,
+  deltaUs: number
+): Promise<void> {
+  const nextCount = (await countCommand(app, "trimSegment")) + 1;
+  const handle = page.locator(".segment-block.selected .segment-trim-handle.right").first();
+  const handleBox = await handle.boundingBox();
+  const rulerBox = await page.locator(".ruler-track").boundingBox();
+  if (handleBox === null || rulerBox === null) {
+    throw new Error("Selected segment trim handle or timeline ruler is not visible for trim interaction");
+  }
+
+  const deltaPx = Math.max(6, (Math.abs(deltaUs) / 10_000_000) * rulerBox.width);
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - deltaPx, startY, { steps: 4 });
+  await page.mouse.up();
+  await waitForCommandCount(app, "trimSegment", nextCount);
 }
 
 export async function deleteSelectedSegment(page: Page, app: ProductJourneyAppController): Promise<void> {
@@ -562,6 +584,49 @@ export async function redoTimelineEdit(page: Page, app: ProductJourneyAppControl
   const nextCount = (await countCommand(app, "redoTimelineEdit")) + 1;
   await page.getByRole("button", { name: "重做" }).click();
   await waitForCommandCount(app, "redoTimelineEdit", nextCount);
+}
+
+export async function zoomTimelineIn(page: Page): Promise<void> {
+  const content = page.locator(".track-scroll-content");
+  const widthBefore = await content.evaluate((element) => element.getBoundingClientRect().width);
+  await page.getByRole("button", { name: "放大时间线" }).click();
+  await expect(page.getByLabel("时间线缩放", { exact: true })).toContainText("125%");
+  await expect
+    .poll(async () => content.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(widthBefore);
+}
+
+export async function expectTimelineSnappingStatusVisible(page: Page): Promise<void> {
+  const snapping = page.locator(".snapping-status");
+  await expect(snapping).toHaveAttribute("aria-label", /吸附/);
+  await expect(snapping).toHaveAttribute("aria-pressed", /true|false/);
+}
+
+async function clickTimelineRulerAt(page: Page, targetTimeUs: number): Promise<void> {
+  const ruler = page.locator(".ruler-track");
+  const rulerBox = await ruler.boundingBox();
+  if (rulerBox === null) {
+    throw new Error("Timeline ruler is not visible for seek interaction");
+  }
+  const ratio = Math.max(0, Math.min(1, targetTimeUs / 10_000_000));
+  await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height / 2);
+}
+
+async function dragSelectedSegmentBy(page: Page, deltaUs: number): Promise<void> {
+  const segment = page.locator(".segment-block.selected").first();
+  const segmentBox = await segment.boundingBox();
+  const rulerBox = await page.locator(".ruler-track").boundingBox();
+  if (segmentBox === null || rulerBox === null) {
+    throw new Error("Selected segment or timeline ruler is not visible for move interaction");
+  }
+
+  const deltaPx = (deltaUs / 10_000_000) * rulerBox.width;
+  const startX = segmentBox.x + Math.max(12, Math.min(segmentBox.width - 12, segmentBox.width / 2));
+  const startY = segmentBox.y + segmentBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaPx, startY, { steps: 4 });
+  await page.mouse.up();
 }
 
 export function expectNoProductFallbackCalls(calls: RealtimePreviewHostCall[]): void {
