@@ -533,6 +533,7 @@ function TimelineSegmentBlock({
     laneWidth: number;
     moved: boolean;
   } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const beginPointerIntent = useCallback(
     (event: ReactPointerEvent<HTMLElement>, mode: "move" | "trim-left" | "trim-right") => {
@@ -585,6 +586,7 @@ function TimelineSegmentBlock({
       if (!drag.moved || deltaUs === 0) {
         return;
       }
+      suppressClickRef.current = true;
 
       if (drag.mode === "move") {
         onMoveSelectedSegment?.(deltaUs);
@@ -611,6 +613,10 @@ function TimelineSegmentBlock({
       onPointerUp={completePointerIntent}
       onPointerCancel={completePointerIntent}
       onClick={() => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
         if (dragRef.current === null) {
           onSelectSegment?.(segment.segment.segmentId);
         }
