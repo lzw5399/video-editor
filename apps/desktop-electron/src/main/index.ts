@@ -370,6 +370,8 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_COMMAND_MOCKS", "--video-editor-test-command-mocks=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
+  setEnvFromArgument("VE_FFMPEG_PATH", "--video-editor-test-ve-ffmpeg-path=");
+  setEnvFromArgument("VE_FFPROBE_PATH", "--video-editor-test-ve-ffprobe-path=");
 }
 
 function testRendererArgument(envName: string, prefix: string): string[] {

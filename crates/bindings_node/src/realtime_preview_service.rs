@@ -807,7 +807,31 @@ impl SchedulerFrameProvider {
             static_images,
         }
     }
+
+    fn release_presented_frames(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
+        self.media_io
+            .release_presented_frames()
+            .map(|_| ())
+            .map_err(|source| MediaIoHandoffReleaseError { source })
+    }
 }
+
+#[derive(Debug)]
+struct MediaIoHandoffReleaseError {
+    source: realtime_preview_runtime::MediaIoHandoffError,
+}
+
+impl fmt::Display for MediaIoHandoffReleaseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "failed to release scheduler media IO frame leases: {}",
+            self.source
+        )
+    }
+}
+
+impl Error for MediaIoHandoffReleaseError {}
 
 impl PreviewFrameProvider for SchedulerFrameProvider {
     fn provider_name(&self) -> &'static str {
@@ -927,11 +951,23 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                     bundled_text_font_registry_available: true,
                 },
             );
-            compositor
-                .present_to_surface(graph, target, &mut pipeline.provider, &mut texture_cache)
-                .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+            let presentation = compositor.present_to_surface_with_generation(
+                graph,
+                target,
+                &mut pipeline.provider,
+                &mut texture_cache,
+                playback_generation,
+            );
+            let release = pipeline.provider.release_presented_frames();
+            match (presentation, release) {
+                (Ok(output), Ok(())) => Ok(output),
+                (Err(error), _) => Err(RealtimePlaybackSchedulerError::Presentation {
                     reason: error.to_string(),
-                })
+                }),
+                (Ok(_), Err(error)) => Err(RealtimePlaybackSchedulerError::Presentation {
+                    reason: error.to_string(),
+                }),
+            }
         })?;
         if output.presented_frames == 0 {
             let details = output

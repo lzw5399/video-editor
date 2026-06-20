@@ -204,6 +204,7 @@ impl WindowsMediaSession {
         }
 
         Ok(WindowsVideoDecoder {
+            session_id: self.session_id.clone(),
             material_uri: self.material_uri.clone(),
             stream: stream.clone(),
             frame_state: Rc::clone(&self.frame_state),
@@ -262,6 +263,7 @@ impl MediaSession for WindowsMediaSession {
 
 #[derive(Debug)]
 pub struct WindowsVideoDecoder {
+    session_id: MediaSessionId,
     material_uri: PathBuf,
     stream: MediaStreamInfo,
     frame_state: Rc<RefCell<WindowsFrameState>>,
@@ -292,6 +294,16 @@ impl VideoDecoder for WindowsVideoDecoder {
 
     fn decode_at(&mut self, request: VideoDecodeRequest) -> Result<DecodedVideoFrame, DecodeError> {
         self.decode_native_frame(request)
+    }
+
+    fn release_frame(
+        &mut self,
+        lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError> {
+        self.frame_state
+            .borrow_mut()
+            .release_frame(&self.session_id, lease_id)
+            .map_err(decode_error_from_frame_pool)
     }
 
     fn flush(&mut self) -> Result<(), DecodeError> {

@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use media_runtime::{
     AudioDecodeRequest, AudioDecoder, ColorMatrix, ColorPrimaries, ColorRange, ColorTransfer,
     DecodeError, DecodeErrorKind, DecodedAudioFrame, DecodedVideoFrame, FrameDimensions,
-    MediaIoError, MediaIoErrorKind, MediaOpenRequest, MediaReader, MediaSession, MediaSessionId,
-    MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeDeviceId, StreamId, TextureBackend,
-    TextureHandle, TextureHandleId, VideoColorMetadata, VideoDecodeRequest, VideoDecoder,
-    VideoPixelFormat,
+    FrameLeaseId, FrameReleaseDiagnostic, MediaIoError, MediaIoErrorKind, MediaOpenRequest,
+    MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind, RationalFrameRate,
+    RuntimeDeviceId, StreamId, TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata,
+    VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
 };
 
 #[test]
@@ -191,6 +191,16 @@ impl VideoDecoder for FakeVideoDecoder {
         Err(DecodeError::new(
             DecodeErrorKind::Unsupported,
             "fake decoder does not decode frames",
+        ))
+    }
+
+    fn release_frame(
+        &mut self,
+        _lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError> {
+        Err(DecodeError::new(
+            DecodeErrorKind::Unsupported,
+            "fake decoder does not hold frame leases",
         ))
     }
 

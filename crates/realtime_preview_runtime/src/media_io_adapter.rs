@@ -3,9 +3,10 @@ use std::path::PathBuf;
 
 use draft_model::{MaterialId, Microseconds};
 use media_runtime::{
-    DecodeError, DecodedVideoFrame, MediaIoError, MediaIoFallbackReason, MediaIoFallbackSelection,
-    MediaOpenRequest, MediaReader, MediaSession, NativeTextureLeaseRegistry, RuntimeDeviceId,
-    SelectedDecodePath, StreamId, VideoDecodeRequest, VideoDecoder, VideoFrameStorage,
+    DecodeError, DecodedVideoFrame, FrameLeaseId, FrameReleaseDiagnostic, MediaIoError,
+    MediaIoFallbackReason, MediaIoFallbackSelection, MediaOpenRequest, MediaReader, MediaSession,
+    NativeTextureLeaseRegistry, RuntimeDeviceId, SelectedDecodePath, StreamId, TextureHandleId,
+    VideoDecodeRequest, VideoDecoder, VideoFrameStorage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -141,6 +142,7 @@ pub struct MediaIoFrameProvider {
     desired_storage: PreviewFrameStoragePreference,
     device: PreviewDecodeDeviceContext,
     native_texture_registry: Option<NativeTextureLeaseRegistry>,
+    pending_frame_releases: Vec<PendingPreviewFrameRelease>,
 }
 
 impl MediaIoFrameProvider {
@@ -154,6 +156,7 @@ impl MediaIoFrameProvider {
                 "preview GPU device context has not been attached to media IO",
             ),
             native_texture_registry: None,
+            pending_frame_releases: Vec::new(),
         }
     }
 
@@ -298,6 +301,62 @@ impl MediaIoFrameProvider {
     pub fn telemetry(&self) -> &PreviewMediaIoTelemetry {
         &self.telemetry
     }
+
+    pub fn release_presented_frames(
+        &mut self,
+    ) -> Result<Vec<FrameReleaseDiagnostic>, MediaIoHandoffError> {
+        let pending = std::mem::take(&mut self.pending_frame_releases);
+        let mut diagnostics = Vec::with_capacity(pending.len());
+        let mut failed = Vec::new();
+        let mut first_error = None;
+        for frame in pending {
+            match self.release_pending_frame(frame.clone()) {
+                Ok(diagnostic) => diagnostics.push(diagnostic),
+                Err(error) => {
+                    failed.push(frame);
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
+        }
+        self.pending_frame_releases = failed;
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        Ok(diagnostics)
+    }
+
+    fn release_pending_frame(
+        &mut self,
+        pending: PendingPreviewFrameRelease,
+    ) -> Result<FrameReleaseDiagnostic, MediaIoHandoffError> {
+        let material = self
+            .materials
+            .get_mut(&pending.material_id)
+            .ok_or_else(|| MediaIoHandoffError::MaterialNotRegistered {
+                material_id: pending.material_id.clone(),
+            })?;
+        let diagnostic = material
+            .decoder
+            .release_frame(pending.lease_id)
+            .map_err(|source| MediaIoHandoffError::Release {
+                material_id: pending.material_id.clone(),
+                source,
+            })?;
+        if let Some(texture_handle_id) = pending.texture_handle_id.as_ref() {
+            if let Some(registry) = self.native_texture_registry.as_ref() {
+                registry.unregister(texture_handle_id);
+            }
+        }
+        Ok(diagnostic)
+    }
+}
+
+impl Drop for MediaIoFrameProvider {
+    fn drop(&mut self) {
+        let _ = self.release_presented_frames();
+    }
 }
 
 impl PreviewFrameProvider for MediaIoFrameProvider {
@@ -332,14 +391,53 @@ impl PreviewFrameProvider for MediaIoFrameProvider {
                 )
             })?;
 
+        let pending_release = PendingPreviewFrameRelease::from_output(&output);
+        let material_id = output.material_id.clone();
+        let source_position = output.source_position;
+        let playback_generation = output.playback_generation;
         let input = preview_input_from_media_io_output(
             self.provider_name(),
             output,
             self.native_texture_registry.as_ref(),
-        )?;
+        )
+        .map_err(|error| {
+            if let Err(release_error) = self.release_pending_frame(pending_release.clone()) {
+                return PreviewFrameProviderError::unavailable(
+                    self.provider_name(),
+                    material_id,
+                    source_position,
+                    playback_generation,
+                    format!(
+                        "{error}; additionally failed to release rejected decoded frame: {release_error}"
+                    ),
+                );
+            }
+            error
+        })?;
+        self.pending_frame_releases.push(pending_release);
         self.telemetry.presentable_frame_count =
             self.telemetry.presentable_frame_count.saturating_add(1);
         Ok(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingPreviewFrameRelease {
+    material_id: MaterialId,
+    lease_id: FrameLeaseId,
+    texture_handle_id: Option<TextureHandleId>,
+}
+
+impl PendingPreviewFrameRelease {
+    fn from_output(output: &PreviewMaterialDecodeOutput) -> Self {
+        Self {
+            material_id: output.material_id.clone(),
+            lease_id: output.decoded_frame.release.clone(),
+            texture_handle_id: match &output.decoded_frame.storage {
+                VideoFrameStorage::Texture(texture) => Some(texture.handle_id.clone()),
+                VideoFrameStorage::Cpu(_) | VideoFrameStorage::PlatformOpaque(_) => None,
+            },
+        }
     }
 }
 
@@ -363,6 +461,10 @@ pub enum MediaIoHandoffError {
         source: MediaIoError,
     },
     Decode {
+        material_id: MaterialId,
+        source: DecodeError,
+    },
+    Release {
         material_id: MaterialId,
         source: DecodeError,
     },
@@ -405,6 +507,16 @@ impl std::fmt::Display for MediaIoHandoffError {
                 write!(
                     formatter,
                     "failed to decode media IO frame for {}: {source}",
+                    material_id.as_str()
+                )
+            }
+            Self::Release {
+                material_id,
+                source,
+            } => {
+                write!(
+                    formatter,
+                    "failed to release media IO frame for {}: {source}",
                     material_id.as_str()
                 )
             }

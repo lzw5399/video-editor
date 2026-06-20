@@ -383,6 +383,16 @@ impl VideoDecoder for MacosVideoDecoder {
         self.decode_native_frame(request)
     }
 
+    fn release_frame(
+        &mut self,
+        lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError> {
+        self.frame_state
+            .borrow_mut()
+            .release_frame(&self.session_id, lease_id)
+            .map_err(decode_error_from_frame_pool)
+    }
+
     fn flush(&mut self) -> Result<(), DecodeError> {
         self.release_resources();
         Ok(())

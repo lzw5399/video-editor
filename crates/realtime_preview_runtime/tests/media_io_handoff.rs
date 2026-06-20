@@ -4,13 +4,13 @@ use std::rc::Rc;
 
 use draft_model::{MaterialId, Microseconds};
 use media_runtime::{
-    AudioDecoder, DecodeError, DecodedVideoFrame, FrameDimensions, FrameLeaseRequest, FramePool,
-    FramePoolLimits, FrameStorageRequest, MediaIoError, MediaIoFallbackCandidate,
-    MediaIoFallbackReason, MediaIoFallbackSelection, MediaOpenRequest, MediaReader, MediaSession,
-    MediaSessionId, MediaStreamInfo, MediaStreamKind, NativeTextureLeaseRegistry,
-    NativeTextureLeaseResourceKind, RationalFrameRate, RuntimeDeviceId, SelectedDecodePath,
-    StreamId, TextureBackend, TextureHandle, TextureHandleId, VideoColorMetadata,
-    VideoDecodeRequest, VideoDecoder, VideoFrameStorage, VideoPixelFormat,
+    AudioDecoder, DecodeError, DecodeErrorKind, DecodedVideoFrame, FrameDimensions, FrameLeaseId,
+    FrameLeaseRequest, FramePool, FramePoolLimits, FrameReleaseDiagnostic, FrameStorageRequest,
+    MediaIoError, MediaIoFallbackCandidate, MediaIoFallbackReason, MediaIoFallbackSelection,
+    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
+    NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RationalFrameRate, RuntimeDeviceId,
+    SelectedDecodePath, StreamId, TextureBackend, TextureHandle, TextureHandleId,
+    VideoColorMetadata, VideoDecodeRequest, VideoDecoder, VideoFrameStorage, VideoPixelFormat,
     select_media_io_fallback,
 };
 use realtime_preview_runtime::{
@@ -147,7 +147,7 @@ fn media_io_handoff_preserves_texture_handles_only_for_proven_device_compatibili
     .expect("texture frame should produce a descriptor");
     assert_eq!(descriptor.material_id, output.material_id);
     assert_eq!(descriptor.source_position, output.source_position);
-    assert_eq!(descriptor.handle_id, "texture-1");
+    assert_eq!(descriptor.handle_id, "texture-0");
     assert_eq!(descriptor.playback_generation, PlaybackGeneration::new(5));
     assert_eq!(descriptor.backend, "d3d11Texture2D");
     assert_eq!(descriptor.pixel_format, "nv12");
@@ -200,7 +200,7 @@ fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_
     assert_eq!(handle.material_id, material_id);
     assert_eq!(handle.source_position, Microseconds::new(999_990));
     assert_eq!(handle.playback_generation, PlaybackGeneration::new(9));
-    assert_eq!(handle.handle_id, "texture-1");
+    assert_eq!(handle.handle_id, "texture-999990");
     assert_eq!(handle.backend, "d3d11Texture2D");
     assert_eq!(
         recorded_requests.borrow().as_slice(),
@@ -209,6 +209,53 @@ fn media_io_handoff_frame_provider_supplies_compatible_native_texture_input_for_
             playback_generation: Some(9),
         }]
     );
+}
+
+#[test]
+fn media_io_handoff_releases_presented_texture_frames_to_sustain_long_preview_cadence() {
+    let material_id = MaterialId::new("released-texture-provider-material");
+    let registry = NativeTextureLeaseRegistry::new();
+    let device = RuntimeDeviceId {
+        backend: TextureBackend::D3d11Texture2D,
+        adapter_id: "adapter-1".to_owned(),
+        device_id: "device-1".to_owned(),
+    };
+    let reader = MockMediaReader::new(
+        Rc::new(RefCell::new(Vec::new())),
+        MockStorage::Texture {
+            device: device.clone(),
+            registry: Some(registry.clone()),
+        },
+        None,
+    );
+    let mut provider = MediaIoFrameProvider::new(Box::new(reader))
+        .with_desired_storage(PreviewFrameStoragePreference::Texture)
+        .with_preview_device_context(PreviewDecodeDeviceContext::compatible(device))
+        .with_native_texture_registry(registry.clone());
+    provider
+        .register_material(PreviewMaterialDecodeSource {
+            material_id: material_id.clone(),
+            material_uri: repo_media_fixture("p0-moving-testsrc.mp4"),
+            stream_id: StreamId(0),
+            selected_path: SelectedDecodePath::NativeHardwareTexture,
+            fallback_selection: None,
+        })
+        .expect("repo-owned material registers through media IO");
+
+    for frame_index in 0..16 {
+        let source_position = Microseconds::new(frame_index * 33_333);
+        let input = provider
+            .frame_for(&material_id, source_position, PlaybackGeneration::new(13))
+            .expect("compatible native texture is compositor-ready");
+        assert!(matches!(input, PreviewFrameInput::TextureHandle(_)));
+        let diagnostics = provider
+            .release_presented_frames()
+            .expect("presented native texture frame releases");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(registry.len(), 0);
+    }
+
+    assert_eq!(provider.telemetry().presentable_frame_count, 16);
 }
 
 #[test]
@@ -570,7 +617,7 @@ impl VideoDecoder for MockVideoDecoder {
             },
             MockStorage::Texture { device, registry } => {
                 let handle = TextureHandle {
-                    handle_id: TextureHandleId("texture-1".to_owned()),
+                    handle_id: TextureHandleId(format!("texture-{}", request.source_time_us)),
                     owner_session: self.owner_session.clone(),
                     generation: request.playback_generation.unwrap_or_default(),
                     backend: device.backend,
@@ -618,6 +665,18 @@ impl VideoDecoder for MockVideoDecoder {
                     format!("mock frame pool failed: {error}"),
                 )
             })
+    }
+
+    fn release_frame(
+        &mut self,
+        lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError> {
+        self.pool.release(lease_id).map_err(|error| {
+            DecodeError::new(
+                DecodeErrorKind::RuntimeFailure,
+                format!("mock frame release failed: {error}"),
+            )
+        })
     }
 
     fn flush(&mut self) -> Result<(), DecodeError> {

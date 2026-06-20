@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
@@ -23,11 +24,23 @@ use super::{
 
 use super::text::{TextRasterizationError, rasterize_text_overlay};
 
-#[derive(Debug)]
 pub struct RealtimePreviewCompositor {
     device: RealtimePreviewGpuDevice,
     classifier: RealtimePreviewCapabilityClassifier,
     pipelines: RealtimePreviewPipelineSet,
+    wgpu_pipelines: BTreeMap<super::RealtimePreviewTargetFormat, RealtimePreviewWgpuPipelines>,
+}
+
+impl fmt::Debug for RealtimePreviewCompositor {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RealtimePreviewCompositor")
+            .field("device", &self.device)
+            .field("classifier", &self.classifier)
+            .field("pipelines", &self.pipelines)
+            .field("cached_wgpu_pipeline_count", &self.wgpu_pipelines.len())
+            .finish()
+    }
 }
 
 impl RealtimePreviewCompositor {
@@ -39,6 +52,7 @@ impl RealtimePreviewCompositor {
             device,
             classifier,
             pipelines: RealtimePreviewPipelineSet::phase11_subset(),
+            wgpu_pipelines: BTreeMap::new(),
         }
     }
 
@@ -58,15 +72,22 @@ impl RealtimePreviewCompositor {
         let mut support = summarize_support(capability.support, &diagnostics);
         if let Some(texture) = target.texture() {
             if support != RealtimePreviewGraphSupport::Unsupported {
+                let gpu_device = self.device.clone();
+                let device_ref = gpu_device
+                    .device()
+                    .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
+                let pipeline_resources =
+                    self.wgpu_pipeline_resources_for_graph(device_ref, graph, target.format());
                 let (pixels, submitted_draws) = render_wgpu_graph(
                     graph,
                     target,
-                    &self.device,
+                    &gpu_device,
                     texture,
                     frame_provider,
                     texture_cache,
                     &mut diagnostics,
                     &mut support,
+                    pipeline_resources,
                 )?;
                 return Ok(RealtimePreviewCompositorOutput {
                     width: target.width(),
@@ -155,6 +176,22 @@ impl RealtimePreviewCompositor {
         &self.pipelines
     }
 
+    fn wgpu_pipeline_resources_for_graph(
+        &mut self,
+        device: &wgpu::Device,
+        graph: &RenderGraph,
+        format: super::RealtimePreviewTargetFormat,
+    ) -> Option<&RealtimePreviewWgpuPipelines> {
+        if graph.video_layers.is_empty() && graph.text_overlays.is_empty() {
+            return None;
+        }
+        Some(
+            self.wgpu_pipelines
+                .entry(format)
+                .or_insert_with(|| RealtimePreviewWgpuPipelines::new(device, format)),
+        )
+    }
+
     pub fn present_to_surface(
         &mut self,
         graph: &RenderGraph,
@@ -162,12 +199,28 @@ impl RealtimePreviewCompositor {
         frame_provider: &mut impl PreviewFrameProvider,
         texture_cache: &mut RealtimePreviewTextureCache,
     ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
-        let device_ref = self
-            .device
+        self.present_to_surface_with_generation(
+            graph,
+            target,
+            frame_provider,
+            texture_cache,
+            PlaybackGeneration::initial(),
+        )
+    }
+
+    pub fn present_to_surface_with_generation(
+        &mut self,
+        graph: &RenderGraph,
+        target: &mut RealtimePreviewGpuPresentationTarget,
+        frame_provider: &mut impl PreviewFrameProvider,
+        texture_cache: &mut RealtimePreviewTextureCache,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
+        let gpu_device = self.device.clone();
+        let device_ref = gpu_device
             .device()
             .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
-        let queue = self
-            .device
+        let queue = gpu_device
             .queue()
             .ok_or(RealtimePreviewCompositorError::WgpuQueueUnavailable)?;
         let mut diagnostics = Vec::new();
@@ -195,6 +248,8 @@ impl RealtimePreviewCompositor {
         let view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let pipeline_resources =
+            self.wgpu_pipeline_resources_for_graph(device_ref, graph, target.format());
         let (encoder, submitted_draws) = encode_wgpu_graph_to_view(
             graph,
             target,
@@ -205,6 +260,8 @@ impl RealtimePreviewCompositor {
             texture_cache,
             &mut diagnostics,
             &mut support,
+            playback_generation,
+            pipeline_resources,
         )?;
         if support == RealtimePreviewGraphSupport::Unsupported {
             drop(view);
@@ -378,6 +435,7 @@ fn render_wgpu_graph(
     texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
+    pipeline_resources: Option<&RealtimePreviewWgpuPipelines>,
 ) -> Result<(Vec<u8>, u32), RealtimePreviewCompositorError> {
     let device_ref = device
         .device()
@@ -396,6 +454,8 @@ fn render_wgpu_graph(
         texture_cache,
         diagnostics,
         support,
+        PlaybackGeneration::initial(),
+        pipeline_resources,
     )?;
 
     let unpadded_bytes_per_row = target.width() as usize * target.format().bytes_per_pixel();
@@ -467,7 +527,6 @@ fn render_wgpu_graph(
 trait WgpuRenderTargetInfo {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
-    fn format(&self) -> super::RealtimePreviewTargetFormat;
 }
 
 impl WgpuRenderTargetInfo for RealtimePreviewGpuTarget {
@@ -478,10 +537,6 @@ impl WgpuRenderTargetInfo for RealtimePreviewGpuTarget {
     fn height(&self) -> u32 {
         self.height()
     }
-
-    fn format(&self) -> super::RealtimePreviewTargetFormat {
-        self.format()
-    }
 }
 
 impl WgpuRenderTargetInfo for RealtimePreviewGpuPresentationTarget {
@@ -491,10 +546,6 @@ impl WgpuRenderTargetInfo for RealtimePreviewGpuPresentationTarget {
 
     fn height(&self) -> u32 {
         self.height()
-    }
-
-    fn format(&self) -> super::RealtimePreviewTargetFormat {
-        self.format()
     }
 }
 
@@ -509,14 +560,11 @@ fn encode_wgpu_graph_to_view(
     texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
+    playback_generation: PlaybackGeneration,
+    pipeline_resources: Option<&RealtimePreviewWgpuPipelines>,
 ) -> Result<(wgpu::CommandEncoder, u32), RealtimePreviewCompositorError> {
     let clear_color = canvas_clear_color(graph)?;
-    let pipeline_resources = if graph.video_layers.is_empty() && graph.text_overlays.is_empty() {
-        None
-    } else {
-        Some(RealtimePreviewWgpuPipelines::new(device, target.format()))
-    };
-    let layer_draws = if let Some(resources) = pipeline_resources.as_ref() {
+    let layer_draws = if let Some(resources) = pipeline_resources {
         prepare_wgpu_layer_draws(
             graph,
             target,
@@ -527,6 +575,7 @@ fn encode_wgpu_graph_to_view(
             texture_cache,
             diagnostics,
             support,
+            playback_generation,
         )?
     } else {
         Vec::new()
@@ -804,6 +853,7 @@ fn prepare_wgpu_layer_draws(
     texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
+    playback_generation: PlaybackGeneration,
 ) -> Result<Vec<WgpuLayerDraw>, RealtimePreviewCompositorError> {
     let mut draws = Vec::new();
     let mut layers = graph_draw_layers(graph);
@@ -830,6 +880,7 @@ fn prepare_wgpu_layer_draws(
                     support,
                     &mut draws,
                     layer,
+                    playback_generation,
                 )?;
             }
             GraphDrawLayer::Text(text) => {
@@ -906,6 +957,7 @@ fn push_wgpu_video_layer_draw(
     support: &mut RealtimePreviewGraphSupport,
     draws: &mut Vec<WgpuLayerDraw>,
     layer: &RenderVideoLayer,
+    playback_generation: PlaybackGeneration,
 ) -> Result<(), RealtimePreviewCompositorError> {
     let Some(material) = material_for(graph, &layer.material_id) else {
         diagnostics.push(layer_diagnostic(
@@ -918,7 +970,7 @@ fn push_wgpu_video_layer_draw(
     let frame = match frame_provider.frame_for(
         &layer.material_id,
         sampled_source_position(graph, layer),
-        PlaybackGeneration::initial(),
+        playback_generation,
     ) {
         Ok(input) => input,
         Err(error) => {

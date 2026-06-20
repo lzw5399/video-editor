@@ -295,7 +295,7 @@ impl fmt::Display for PreviewSurfaceError {
 
 impl Error for PreviewSurfaceError {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RealtimePreviewTargetFormat {
     Rgba8UnormSrgb,
     Bgra8UnormSrgb,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{DecodedAudioFrame, DecodedVideoFrame};
+use crate::{DecodedAudioFrame, DecodedVideoFrame, FrameLeaseId, FrameReleaseDiagnostic};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +46,10 @@ pub struct AudioDecodeRequest {
 pub trait VideoDecoder {
     fn decoder_name(&self) -> &'static str;
     fn decode_at(&mut self, request: VideoDecodeRequest) -> Result<DecodedVideoFrame, DecodeError>;
+    fn release_frame(
+        &mut self,
+        lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError>;
     fn flush(&mut self) -> Result<(), DecodeError>;
 }
 

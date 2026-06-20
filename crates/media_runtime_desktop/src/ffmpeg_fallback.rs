@@ -6,11 +6,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use media_runtime::{
     AudioDecoder, DecodeError, DecodeErrorKind, DecodedVideoFrame, FfmpegExecutor, FrameDimensions,
-    FrameLeaseRequest, FramePool, FramePoolError, FramePoolLimits, FrameStorageRequest,
-    MAX_STDERR_SUMMARY_BYTES, MediaIoError, MediaIoErrorKind, MediaIoFallbackReason,
-    MediaOpenRequest, MediaReader, MediaSession, MediaSessionId, MediaStreamInfo, MediaStreamKind,
-    RationalFrameRate, RuntimeConfig, SelectedDecodePath, StreamId, VideoColorMetadata,
-    VideoDecodeRequest, VideoDecoder, VideoPixelFormat,
+    FrameLeaseId, FrameLeaseRequest, FramePool, FramePoolError, FramePoolLimits,
+    FrameReleaseDiagnostic, FrameStorageRequest, MAX_STDERR_SUMMARY_BYTES, MediaIoError,
+    MediaIoErrorKind, MediaIoFallbackReason, MediaOpenRequest, MediaReader, MediaSession,
+    MediaSessionId, MediaStreamInfo, MediaStreamKind, RationalFrameRate, RuntimeConfig,
+    SelectedDecodePath, StreamId, VideoColorMetadata, VideoDecodeRequest, VideoDecoder,
+    VideoPixelFormat,
 };
 use serde::{Deserialize, Serialize};
 
@@ -356,6 +357,15 @@ where
 
     fn decode_at(&mut self, request: VideoDecodeRequest) -> Result<DecodedVideoFrame, DecodeError> {
         self.decode_cpu_frame(request)
+    }
+
+    fn release_frame(
+        &mut self,
+        lease_id: FrameLeaseId,
+    ) -> Result<FrameReleaseDiagnostic, DecodeError> {
+        self.frame_pool
+            .release(lease_id)
+            .map_err(decode_error_from_frame_pool)
     }
 
     fn flush(&mut self) -> Result<(), DecodeError> {
