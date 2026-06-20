@@ -424,8 +424,11 @@ fn parse_progress_line(
 
     match key {
         "out_time_us" | "out_time_ms" => {
+            let value = value.trim();
+            if is_unavailable_progress_timestamp(value) {
+                return Ok(None);
+            }
             let micros = value
-                .trim()
                 .parse::<u64>()
                 .map_err(|error| format!("malformed FFmpeg progress `{line}`: {error}"))?;
             Ok(Some(FfmpegProgress::new(
@@ -434,7 +437,11 @@ fn parse_progress_line(
             )))
         }
         "out_time" => {
-            let micros = parse_hhmmss_microseconds(value.trim())
+            let value = value.trim();
+            if is_unavailable_progress_timestamp(value) {
+                return Ok(None);
+            }
+            let micros = parse_hhmmss_microseconds(value)
                 .map_err(|message| format!("malformed FFmpeg progress `{line}`: {message}"))?;
             Ok(Some(FfmpegProgress::new(
                 micros,
@@ -443,6 +450,10 @@ fn parse_progress_line(
         }
         _ => Ok(None),
     }
+}
+
+fn is_unavailable_progress_timestamp(value: &str) -> bool {
+    value.eq_ignore_ascii_case("N/A")
 }
 
 fn parse_hhmmss_microseconds(value: &str) -> Result<u64, String> {

@@ -188,18 +188,22 @@ async function exportDraft(
 ): Promise<void> {
   const nextStartCount = (await countCommand(app, "startExport")) + 1;
   const outputPath = fixtures.outputPath;
-  await page.getByLabel("输出路径").fill(outputPath);
-  await expect(page.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
-  await page.getByRole("button", { name: "开始导出" }).click();
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByLabel("预览窗口").getByLabel("导出面板")).toHaveCount(0);
+  await dialog.getByLabel("输出路径").fill(outputPath);
+  await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
+  await dialog.getByRole("button", { name: "开始导出" }).click();
   await waitForCommandCount(page, app, "startExport", nextStartCount);
-  const statusButton = page.getByRole("button", { name: "查询导出状态" });
+  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
   try {
     await expect(statusButton).toBeEnabled({ timeout: 10_000 });
   } catch (error) {
     const calls = await readExecuteCommandCalls(app);
-    const progressText = (await page.getByLabel("导出进度").textContent()) ?? "";
-    const logText = (await page.getByLabel("导出日志").textContent()) ?? "";
-    const validationText = (await page.getByLabel("输出校验").textContent()) ?? "";
+    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+    const logText = (await dialog.getByLabel("导出日志").textContent()) ?? "";
+    const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       [
@@ -213,20 +217,35 @@ async function exportDraft(
   }
 
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const progressText = (await page.getByLabel("导出进度").textContent()) ?? "";
+    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
     if (progressText.includes("已完成")) {
       break;
     }
 
     const nextStatusCount = (await countCommand(app, "getExportJobStatus")) + 1;
-    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await dialog.getByRole("button", { name: "查询导出状态" }).click();
     await waitForCommandCount(page, app, "getExportJobStatus", nextStatusCount);
     await page.waitForTimeout(500);
   }
 
-  await expect(page.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
-  await expect(page.getByLabel("输出校验")).toContainText(fixtures.expectedResolutionLabel);
-  await expect(page.getByLabel("输出校验")).toContainText("含音频");
+  const finalProgressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+  if (!finalProgressText.includes("已完成")) {
+    const calls = await readExecuteCommandCalls(app);
+    const logText = (await dialog.getByLabel("导出日志").textContent()) ?? "";
+    const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+    throw new Error(
+      [
+        `Export did not complete: ${finalProgressText}`,
+        `Export log: ${logText}`,
+        `Export validation: ${validationText}`,
+        `Recorded commands: ${JSON.stringify(calls)}`
+      ].join("\n")
+    );
+  }
+
+  await expect(dialog.getByLabel("导出进度")).toContainText("已完成", { timeout: 5_000 });
+  await expect(dialog.getByLabel("输出校验")).toContainText(fixtures.expectedResolutionLabel);
+  await expect(dialog.getByLabel("输出校验")).toContainText("含音频");
   await expectFileExists(outputPath);
   await expectExportMedia(outputPath, fixtures);
 }

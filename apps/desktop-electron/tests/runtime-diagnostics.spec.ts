@@ -120,7 +120,7 @@ async function expectPreviewDiagnosticsInsideShell(page: Page, label: string): P
     const shellBox = shell.getBoundingClientRect();
     return Array.from(
       shell.querySelectorAll(
-        ".preview-canvas, .preview-transport, .preview-artifact-panel, .runtime-diagnostics-panel, .export-panel, .preview-status-line, button, input, select, progress"
+        ".preview-canvas, .preview-transport, .preview-artifact-panel, .runtime-diagnostics-panel, .preview-status-line, button, input, select, progress"
       )
     )
       .map((element) => {

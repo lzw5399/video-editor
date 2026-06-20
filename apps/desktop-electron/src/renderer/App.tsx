@@ -2388,23 +2388,31 @@ export function App(): React.ReactElement {
   }
 
   function handleExportOutputPathChange(value: string): void {
-    setWorkspace((current) => ({
-      ...current,
-      export: {
-        ...current.export,
-        outputPath: value
-      }
-    }));
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        export: {
+          ...current.export,
+          outputPath: value
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }
 
   function handleExportPresetChange(value: ExportPreset): void {
-    setWorkspace((current) => ({
-      ...current,
-      export: {
-        ...current.export,
-        preset: value
-      }
-    }));
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        export: {
+          ...current.export,
+          preset: value
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
   }
 
   function handleStartExport(): void {

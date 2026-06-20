@@ -169,6 +169,13 @@ async function expectCommandCall(app: ElectronApplication, command: CommandName)
     .toBe(true);
 }
 
+async function openExportDialog(page: Page): Promise<Locator> {
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
   await expect
     .poll(async () => {
@@ -341,7 +348,7 @@ async function expectPreviewControlsFit(page: Page, label: string): Promise<void
     const shellBox = shell.getBoundingClientRect();
     return Array.from(
       shell.querySelectorAll(
-        ".preview-canvas, .preview-transport, .preview-status-line, .preview-artifact-panel, .export-panel, .export-progress, .export-log, .export-validation, button, input, select, progress"
+        ".preview-canvas, .preview-transport, .preview-status-line, .preview-artifact-panel, button, input, select, progress"
       )
     )
       .map((element) => {
@@ -662,7 +669,8 @@ test("command-only text edit routes complete text inspector changes through exec
     await expect(previewText).toHaveCSS("letter-spacing", "0.12px");
     await expect(previewText).toHaveCSS("background-color", "rgb(32, 32, 32)");
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
-    await expect(page.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
+    const exportDialog = await openExportDialog(page);
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
 
     const calls = await readExecuteCommandCalls(app);
     const addTextCall = calls.find((call) => call.command === "addTextSegment");
@@ -940,7 +948,8 @@ test("动画 tab and command-only keyframe add/remove update accepted timeline m
     await expect(page.getByLabel("关键帧列表")).toContainText("00:00:01.200");
     await expect(page.getByLabel("关键帧列表")).toContainText("线性");
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
-    await expect(page.getByLabel("导出日志")).toContainText("关键帧已更新，请重新开始导出");
+    const exportDialog = await openExportDialog(page);
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("关键帧已更新，请重新开始导出");
 
     const addCalls = await readExecuteCommandCalls(app);
     const addKeyframeCall = addCalls.find((call) => call.command === "setSegmentKeyframe");
@@ -1692,12 +1701,14 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await expectCommandCall(app, "requestPreviewSegment");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
 
-    await page.getByRole("button", { name: "开始导出" }).click();
+    let exportDialog = await openExportDialog(page);
+    await exportDialog.getByRole("button", { name: "开始导出" }).click();
     await expectCommandCall(app, "startExport");
-    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await exportDialog.getByRole("button", { name: "查询导出状态" }).click();
     await expectCommandCall(app, "getExportJobStatus");
-    await expect(page.getByLabel("输出校验")).toContainText("1920x1080");
-    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeEnabled();
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("1920x1080");
+    await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeEnabled();
+    await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     const inspector = page.getByLabel("草稿参数");
     await inspector.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "1:1" }).click();
@@ -1708,10 +1719,11 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新请求预览帧");
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新生成预览片段");
-    await expect(page.getByLabel("导出日志")).toContainText("草稿已更新，请重新开始导出");
-    await expect(page.getByLabel("输出校验")).toContainText("输出校验待完成");
-    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "取消导出" })).toBeDisabled();
+    exportDialog = await openExportDialog(page);
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("草稿已更新，请重新开始导出");
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
+    await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
+    await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
   } finally {
     await app.close();
   }
@@ -1733,11 +1745,13 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expectCommandCall(app, "requestPreviewSegment");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
 
-    await page.getByRole("button", { name: "开始导出" }).click();
+    let exportDialog = await openExportDialog(page);
+    await exportDialog.getByRole("button", { name: "开始导出" }).click();
     await expectCommandCall(app, "startExport");
-    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await exportDialog.getByRole("button", { name: "查询导出状态" }).click();
     await expectCommandCall(app, "getExportJobStatus");
-    await expect(page.getByLabel("输出校验")).toContainText("1920x1080");
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("1920x1080");
+    await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
     await expectCommandCall(app, "selectTimelineSegments");
@@ -1778,10 +1792,12 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
     await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
     await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
-    await expect(page.getByLabel("导出日志")).toContainText("画面变换已更新，请重新开始导出");
-    await expect(page.getByLabel("输出校验")).toContainText("输出校验待完成");
-    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "取消导出" })).toBeDisabled();
+    exportDialog = await openExportDialog(page);
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("画面变换已更新，请重新开始导出");
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
+    await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
+    await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
+    await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     const visualCall = (await readExecuteCommandCalls(app)).find((call) => call.command === "updateSegmentVisual");
     expect(visualCall?.kind).toBe("updateSegmentVisual");
@@ -1953,34 +1969,35 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
   try {
     await spyExecuteCommandCalls(app, page);
 
-    await expect(page.getByLabel("导出面板")).toBeVisible();
-    await expect(page.getByLabel("输出路径")).toHaveValue("/tmp/video-editor-export.mp4");
-    await expect(page.getByLabel("导出预设")).toHaveValue("h264AacBalanced");
-    await expect(page.getByRole("button", { name: "开始导出" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "取消导出" })).toBeDisabled();
+    const exportDialog = await openExportDialog(page);
+    await expect(page.getByLabel("预览窗口").getByLabel("导出面板")).toHaveCount(0);
+    await expect(exportDialog.getByLabel("输出路径")).toHaveValue("video-editor-export.mp4");
+    await expect(exportDialog.getByLabel("导出预设")).toHaveValue("h264AacBalanced");
+    await expect(exportDialog.getByRole("button", { name: "开始导出" })).toBeVisible();
+    await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
+    await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
 
-    await page.getByLabel("输出路径").fill("/tmp/video-editor-export.mp4");
-    await page.getByRole("button", { name: "开始导出" }).click();
+    await exportDialog.getByLabel("输出路径").fill("/tmp/video-editor-export.mp4");
+    await exportDialog.getByRole("button", { name: "开始导出" }).click();
     await expectCommandCall(app, "startExport");
-    await expect(page.getByLabel("导出进度")).toContainText("导出中");
-    await expect(page.getByLabel("导出进度")).toContainText("12%");
-    await expect(page.getByLabel("导出日志")).toContainText("导出任务已启动");
-    await expect(page.getByRole("button", { name: "取消导出" })).toBeEnabled();
+    await expect(exportDialog.getByLabel("导出进度")).toContainText("导出中");
+    await expect(exportDialog.getByLabel("导出进度")).toContainText("12%");
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出任务已启动");
+    await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeEnabled();
 
-    await page.getByRole("button", { name: "取消导出" }).click();
+    await exportDialog.getByRole("button", { name: "取消导出" }).click();
     await expectCommandCall(app, "cancelExport");
-    await expect(page.getByLabel("导出进度")).toContainText("已取消");
-    await expect(page.getByLabel("导出日志")).toContainText("导出已取消");
+    await expect(exportDialog.getByLabel("导出进度")).toContainText("已取消");
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出已取消");
 
-    await page.getByRole("button", { name: "开始导出" }).click();
-    await page.getByRole("button", { name: "查询导出状态" }).click();
+    await exportDialog.getByRole("button", { name: "开始导出" }).click();
+    await exportDialog.getByRole("button", { name: "查询导出状态" }).click();
     await expectCommandCall(app, "getExportJobStatus");
-    await expect(page.getByLabel("导出进度")).toContainText("已完成");
-    await expect(page.getByLabel("导出进度")).toContainText("100%");
-    await expect(page.getByLabel("导出日志")).toContainText("导出完成，输出校验通过");
-    await expect(page.getByLabel("输出校验")).toContainText("1920x1080");
-    await expect(page.getByLabel("输出校验")).toContainText("含音频");
+    await expect(exportDialog.getByLabel("导出进度")).toContainText("已完成");
+    await expect(exportDialog.getByLabel("导出进度")).toContainText("100%");
+    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出完成，输出校验通过");
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("1920x1080");
+    await expect(exportDialog.getByLabel("输出校验")).toContainText("含音频");
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toEqual(
@@ -1989,6 +2006,7 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
     const startCall = calls.find((call) => call.command === "startExport");
     expect(startCall?.outputPath).toBe("/tmp/video-editor-export.mp4");
     expect(startCall?.preset).toBe("h264AacBalanced");
+    await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     await expectProfessionalWorkspaceAtViewport(page, app, 1280, 800);
     await expectCompactScrollbarBaseline();

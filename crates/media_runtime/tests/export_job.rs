@@ -12,7 +12,7 @@ use media_runtime::{
 #[test]
 fn export_job_parses_progress_events() {
     let progress = parse_progress_lines(
-        "frame=1\nout_time_us=250000\nprogress=continue\nout_time=00:00:00.750000\nprogress=end\n",
+        "frame=1\nout_time_us=N/A\nout_time_us=250000\nprogress=continue\nout_time=N/A\nout_time=00:00:00.750000\nprogress=end\n",
         Some(1_000_000),
     )
     .expect("progress should parse");
