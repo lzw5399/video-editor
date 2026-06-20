@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 10/12 plans executed or blocked; 15.2-05/06 remain unreleased behind the macOS foreground/AppKit occlusion blocker
+**Plans:** 10/13 plans executed or blocked; 15.2-04E is the active repair for the macOS foreground/AppKit occlusion blocker, and 15.2-05/06 remain unreleased behind it
 
 Plans:
 
@@ -696,9 +696,13 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
+- [ ] 15.2-04E-PLAN.md - Launch foreground packaged product E2E through CDP and prove real visible GPU playback without fallback
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
 
-**Wave 12** *(blocked on Waves 1-11 completion)*
+**Wave 13** *(blocked on Waves 1-12 completion)*
 
 - [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
