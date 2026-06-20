@@ -134,6 +134,8 @@ export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
     "childHasParent=",
     "appActive=",
     "appHidden=",
+    "runningAppActive=",
+    "runningAppHidden=",
     "appActivationPolicy=",
     "appOcclusionVisible=",
     "childViewHidden=",
