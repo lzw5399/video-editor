@@ -40,6 +40,8 @@ pub struct NativePreviewPresentationState {
     pub unsupported_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<NativePreviewContentEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_placement: Option<NativePreviewSurfacePlacementEvidence>,
 }
 
 impl NativePreviewPresentationState {
@@ -49,6 +51,7 @@ impl NativePreviewPresentationState {
             backend: NativePreviewPresentationBackend::None,
             unsupported_reason: Some(reason.into()),
             evidence: None,
+            surface_placement: None,
         }
     }
 
@@ -61,6 +64,7 @@ impl NativePreviewPresentationState {
                     .to_owned(),
             ),
             evidence,
+            surface_placement: None,
         }
     }
 
@@ -70,7 +74,16 @@ impl NativePreviewPresentationState {
             backend: NativePreviewPresentationBackend::RenderGraphGpu,
             unsupported_reason: None,
             evidence,
+            surface_placement: None,
         }
+    }
+
+    pub fn with_surface_placement(
+        mut self,
+        surface_placement: Option<NativePreviewSurfacePlacementEvidence>,
+    ) -> Self {
+        self.surface_placement = surface_placement;
+        self
     }
 }
 
@@ -98,6 +111,21 @@ pub struct NativePreviewContentEvidence {
 pub enum NativePreviewContentEvidenceSource {
     NativeVideoBridge,
     RenderGraphGpuComposited,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePreviewSurfacePlacementEvidence {
+    pub native_screen_rect: NativePreviewScreenRect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePreviewScreenRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

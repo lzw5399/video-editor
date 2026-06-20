@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent } from "electron";
 
 import type { Draft } from "../generated/Draft";
 import {
@@ -20,6 +20,7 @@ import {
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
   type RealtimePreviewPresentationStateResponse,
+  type RealtimePreviewScreenRect,
   type RealtimePreviewSurfaceBounds,
   type RealtimePreviewSurfaceDescriptor,
   type RealtimePreviewTelemetryResponse
@@ -49,6 +50,7 @@ export type RealtimePreviewHostDisplayState = {
   telemetry: RealtimePreviewTelemetryResponse | null;
   frameDisplay: RealtimePreviewHostFrameDisplay | null;
   contentEvidence: RealtimePreviewHostContentEvidence | null;
+  surfacePlacement: RealtimePreviewHostSurfacePlacement | null;
 };
 
 export type RealtimePreviewHostProductBackend = "renderGraphGpu" | "none";
@@ -70,6 +72,13 @@ export type RealtimePreviewHostContentEvidence = {
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
+};
+
+export type RealtimePreviewHostSurfacePlacement = {
+  hostScreenRect: RealtimePreviewScreenRect;
+  nativeScreenRect: RealtimePreviewScreenRect;
+  maxDeltaPx: number;
+  aligned: boolean;
 };
 
 type RealtimePreviewHostRecord = {
@@ -607,7 +616,24 @@ export class RealtimePreviewHost {
       fallbackArtifactVisible: this.lastFrame?.backend === "previewArtifact" || this.lastFrame?.backend === "ffmpegArtifact",
       telemetry: this.telemetry,
       frameDisplay: null,
-      contentEvidence: this.lastContentEvidence
+      contentEvidence: this.lastContentEvidence,
+      surfacePlacement: this.surfacePlacement()
+    };
+  }
+
+  private surfacePlacement(): RealtimePreviewHostSurfacePlacement | null {
+    const nativeScreenRect = this.presentationState?.surfacePlacement?.nativeScreenRect ?? null;
+    if (nativeScreenRect === null || this.lastBounds === null || this.window.isDestroyed()) {
+      return null;
+    }
+
+    const hostScreenRect = hostScreenRectForBounds(this.window, this.lastBounds, nativeScreenRect);
+    const maxDeltaPx = maxRectDelta(hostScreenRect, nativeScreenRect);
+    return {
+      hostScreenRect,
+      nativeScreenRect,
+      maxDeltaPx,
+      aligned: maxDeltaPx <= 2
     };
   }
 }
@@ -646,6 +672,42 @@ function sameBounds(first: RealtimePreviewSurfaceBounds | null, second: Realtime
     first.width === second.width &&
     first.height === second.height &&
     first.scaleFactorMillis === second.scaleFactorMillis
+  );
+}
+
+function hostScreenRectForBounds(
+  window: BrowserWindow,
+  bounds: RealtimePreviewSurfaceBounds,
+  nativeScreenRect: RealtimePreviewScreenRect
+): RealtimePreviewScreenRect {
+  const contentBounds = window.getContentBounds();
+  const display = screen.getDisplayMatching(window.getBounds());
+  const topLeftRect = {
+    x: contentBounds.x + bounds.x,
+    y: contentBounds.y + bounds.y,
+    width: bounds.width,
+    height: bounds.height
+  };
+
+  // AppKit reports screen rects in a bottom-left coordinate space. Convert the
+  // Electron top-left content rect into that same display-local coordinate
+  // space before comparing placement.
+  if (process.platform === "darwin" && nativeScreenRect.y > display.bounds.y + display.bounds.height / 2) {
+    return {
+      ...topLeftRect,
+      y: display.bounds.y + display.bounds.height - topLeftRect.y - topLeftRect.height
+    };
+  }
+
+  return topLeftRect;
+}
+
+function maxRectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewScreenRect): number {
+  return Math.max(
+    Math.abs(first.x - second.x),
+    Math.abs(first.y - second.y),
+    Math.abs(first.width - second.width),
+    Math.abs(first.height - second.height)
   );
 }
 

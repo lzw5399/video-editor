@@ -27,6 +27,7 @@ use realtime_preview_runtime::{
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
     TextureHandleDescriptor,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
+    gpu::PreviewSurfaceScreenRect,
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
         RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuPresentationTarget,
@@ -39,6 +40,7 @@ use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
 use crate::native_preview_presenter::{
     NativePreviewContentEvidence, NativePreviewContentEvidenceSource,
     NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
+    NativePreviewScreenRect, NativePreviewSurfacePlacementEvidence,
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
@@ -357,15 +359,14 @@ impl RealtimePreviewBindingRegistry {
                 )
                 .map_err(RealtimePreviewBindingError::runtime)?;
         }
-        let evidence = self
-            .scheduler_mut(session_id)?
-            .evidence()
-            .cloned()
-            .map(native_evidence_from_scheduler);
+        let scheduler = self.scheduler_mut(session_id)?;
+        let evidence = scheduler.evidence().cloned().map(native_evidence_from_scheduler);
+        let surface_placement = scheduler.surface_placement();
         match evidence {
             Some(evidence) => Ok(NativePreviewPresentationState::render_graph_gpu_available(
                 Some(evidence),
-            )),
+            )
+            .with_surface_placement(surface_placement)),
             None => Ok(NativePreviewPresentationState::unavailable(
                 "render graph GPU compositor scheduler has not presented product content",
             )),
@@ -542,6 +543,13 @@ impl RealtimePreviewBindingScheduler {
         self.last_evidence
             .as_ref()
             .or_else(|| self.scheduler.last_evidence())
+    }
+
+    fn surface_placement(&self) -> Option<NativePreviewSurfacePlacementEvidence> {
+        self.surface_target
+            .as_ref()
+            .and_then(|target| target.screen_rect())
+            .map(native_surface_placement_from_runtime)
     }
 
     fn present_next_tick(
@@ -989,6 +997,19 @@ fn native_evidence_from_scheduler(
         height: evidence.height,
         byte_count: evidence.byte_count,
         target_time_microseconds: evidence.target_time_microseconds,
+    }
+}
+
+fn native_surface_placement_from_runtime(
+    rect: PreviewSurfaceScreenRect,
+) -> NativePreviewSurfacePlacementEvidence {
+    NativePreviewSurfacePlacementEvidence {
+        native_screen_rect: NativePreviewScreenRect {
+            x: rect.x.round() as i32,
+            y: rect.y.round() as i32,
+            width: rect.width.round() as i32,
+            height: rect.height.round() as i32,
+        },
     }
 }
 

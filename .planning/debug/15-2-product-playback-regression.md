@@ -2,7 +2,7 @@
 status: investigating
 trigger: "User manual UAT reports Phase 15.2 product playback is not complete: preview surface is offset left/down during play, playback has no audio, video playback is stuttery/desynchronized from the timeline, and text/font editing plus on-canvas drag/rotate interactions are not available."
 created: "2026-06-20T05:13:58Z"
-updated: "2026-06-20T05:49:10Z"
+updated: "2026-06-20T05:52:00Z"
 ---
 
 # Debug Session: 15.2 Product Playback Regression
@@ -20,7 +20,7 @@ updated: "2026-06-20T05:49:10Z"
 - hypothesis: "Phase 15.2 tests proved limited GPU compositor evidence and preview-region pixel motion, but did not assert full product playback placement, audible audio routing, timeline/video clock synchronization, or direct user-editing interactions."
 - test: "Re-run/read the normal Electron Playwright product journey, inspect the playback host/main/renderer contracts, then add failing UAT-level checks before changing implementation."
 - expecting: "Existing 15.2 E2E will pass despite missing one or more user-visible requirements, proving the gate is insufficient."
-- next_action: "Inspect 15.2 verification artifacts and product E2E coverage, then reproduce with the app under Playwright."
+- next_action: "Continue fixing the remaining RED product UAT checks: native audio output, timeline/video clock sync, and direct canvas text/transform interaction."
 - reasoning_checkpoint: "Do not continue Phase 15.3 until this debug session either identifies and fixes the 15.2 gap or formally reopens 15.2 with an executable remediation plan."
 - tdd_checkpoint: "Add or strengthen E2E/regression tests before accepting any playback fix."
 
@@ -50,6 +50,9 @@ updated: "2026-06-20T05:49:10Z"
 - timestamp: "2026-06-20T05:49:xxZ"
   observation: "Added and ran RED direct text/transform UAT. Dragging visible preview text produces no `updateSegmentVisual` command and no canvas movement."
   implication: "Visible text overlay interaction is not implemented as a normal user canvas operation."
+- timestamp: "2026-06-20T05:52:00Z"
+  observation: "Added native/WGPU surface placement evidence and verified `pnpm --filter @video-editor/desktop package:dir` plus `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line -g \"native surface aligned\"` passes against the packaged app."
+  implication: "The preview host can now prove native surface placement aligns with the preview monitor; remaining 15.2-07 failures are audio output, playback clock sync, and direct canvas editing."
 
 ## Eliminated
 

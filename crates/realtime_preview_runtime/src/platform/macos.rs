@@ -13,7 +13,7 @@ use objc2_quartz_core::{CAMetalLayer, CATransaction};
 
 use crate::gpu::surface::{
     NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDiagnosticKind,
-    PreviewSurfaceError,
+    PreviewSurfaceError, PreviewSurfaceScreenRect,
 };
 
 pub fn parent_ns_view(value: u64) -> Result<NativeParentWindowHandle, PreviewSurfaceError> {
@@ -181,6 +181,18 @@ impl MacosWgpuSurfaceAttachment {
             format_rect(layer_bounds),
             format_size(drawable_size),
         )
+    }
+
+    pub fn screen_rect(&self) -> PreviewSurfaceScreenRect {
+        let child_view_screen_frame = self
+            .parent_window
+            .convertRectToScreen(self.child_view.frame());
+        PreviewSurfaceScreenRect {
+            x: child_view_screen_frame.origin.x,
+            y: child_view_screen_frame.origin.y,
+            width: child_view_screen_frame.size.width,
+            height: child_view_screen_frame.size.height,
+        }
     }
 
     pub fn detach(&mut self) {

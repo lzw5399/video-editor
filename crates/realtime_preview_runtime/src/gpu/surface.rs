@@ -344,6 +344,14 @@ pub struct RealtimePreviewGpuPresentationTarget {
     macos_attachment: Option<crate::platform::macos::MacosWgpuSurfaceAttachment>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PreviewSurfaceScreenRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
 impl RealtimePreviewGpuPresentationTarget {
     pub(crate) fn new(
         descriptor: PreviewSurfaceDescriptor,
@@ -415,6 +423,20 @@ impl RealtimePreviewGpuPresentationTarget {
                 .macos_attachment
                 .as_ref()
                 .map(|attachment| attachment.drawable_lifecycle_diagnostic());
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            None
+        }
+    }
+
+    pub fn screen_rect(&self) -> Option<PreviewSurfaceScreenRect> {
+        #[cfg(target_os = "macos")]
+        {
+            return self
+                .macos_attachment
+                .as_ref()
+                .map(|attachment| attachment.screen_rect());
         }
         #[cfg(not(target_os = "macos"))]
         {

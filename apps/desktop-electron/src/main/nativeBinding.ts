@@ -185,6 +185,7 @@ export type RealtimePreviewPresentationStateResponse = {
   backend: "nativeVideoBridge" | "renderGraphGpu" | "none";
   unsupportedReason?: string | null;
   evidence?: RealtimePreviewPresentationEvidence | null;
+  surfacePlacement?: RealtimePreviewSurfacePlacementEvidence | null;
 };
 
 export type RealtimePreviewPresentationEvidence = {
@@ -194,6 +195,17 @@ export type RealtimePreviewPresentationEvidence = {
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
+};
+
+export type RealtimePreviewScreenRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type RealtimePreviewSurfacePlacementEvidence = {
+  nativeScreenRect: RealtimePreviewScreenRect;
 };
 
 const requireNative = createRequire(__filename);
