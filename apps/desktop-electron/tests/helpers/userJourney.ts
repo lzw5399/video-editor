@@ -544,13 +544,13 @@ export async function moveSelectedSegmentRight(page: Page, app: ProductJourneyAp
   await waitForCommandCount(app, "moveSegment", nextCount);
 }
 
-export async function trimSelectedSegmentRightEdgeLeft(
+export async function trimSelectedSegmentLeftEdgeRight(
   page: Page,
   app: ProductJourneyAppController,
   deltaUs: number
 ): Promise<void> {
   const nextCount = (await countCommand(app, "trimSegment")) + 1;
-  const handle = page.locator(".segment-block.selected .segment-trim-handle.right").first();
+  const handle = page.locator(".segment-block.selected .segment-trim-handle.left").first();
   const handleBox = await handle.boundingBox();
   const rulerBox = await page.locator(".ruler-track").boundingBox();
   if (handleBox === null || rulerBox === null) {
@@ -562,7 +562,7 @@ export async function trimSelectedSegmentRightEdgeLeft(
   const startY = handleBox.y + handleBox.height / 2;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX - deltaPx, startY, { steps: 4 });
+  await page.mouse.move(startX + deltaPx, startY, { steps: 4 });
   await page.mouse.up();
   await waitForCommandCount(app, "trimSegment", nextCount);
 }

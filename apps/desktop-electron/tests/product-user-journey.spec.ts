@@ -28,7 +28,7 @@ import {
   redoTimelineEdit,
   seekTimelinePlayhead,
   splitSelectedSegment,
-  trimSelectedSegmentRightEdgeLeft,
+  trimSelectedSegmentLeftEdgeRight,
   undoTimelineEdit,
   updateSelectedVisualThroughInspector,
   waitForProductPlaybackSuccess,
@@ -441,7 +441,7 @@ test("product user editing matrix uses real commands and still produces visible 
     await zoomTimelineIn(page);
     await splitSelectedSegment(page, app, 1_500_000);
     await moveSelectedSegmentRight(page, app, 250_000);
-    await trimSelectedSegmentRightEdgeLeft(page, app, 100_000);
+    await trimSelectedSegmentLeftEdgeRight(page, app, 100_000);
     await deleteSelectedSegment(page, app);
     await undoTimelineEdit(page, app);
     await redoTimelineEdit(page, app);
