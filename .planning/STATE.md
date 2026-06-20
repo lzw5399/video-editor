@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: "Executing 15.2-04E: foreground packaged product E2E harness and real GPU playback proof"
-last_updated: "2026-06-20T01:02:52.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04E added a foreground packaged-app CDP repair plan before 15.2-05/06 so real GPU playback is proven without fallback before the mainstream product matrix runs
+status: blocked
+stopped_at: "Blocked after 15.2-04E: packaged/CDP product E2E and macOS child-window native WGPU presenter still report AppKit occlusion-invisible before present"
+last_updated: "2026-06-20T01:22:11.000Z"
+last_activity: 2026-06-20 -- Phase 15.2 Plan 04E replaced ElectronApplication-only product observation with packaged-app CDP plus test-only IPC, then tried a macOS child-window WGPU presenter; real playback still fails closed because AppKit remains inactive/occlusion-invisible
 progress:
   total_phases: 23
   completed_phases: 18
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
 Plan: 15.2-04E
-Status: In progress — foreground packaged product E2E harness and real GPU playback proof
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04E is active to replace the inactive automated Electron launch path with a foreground packaged-app CDP journey and keep 15.2-05/06 blocked until real visible GPU playback is proven
+Status: Blocked — packaged/CDP product E2E and child-window native WGPU presenter still fail before present because AppKit reports occlusion-invisible
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04E added the packaged-app CDP harness and child-window presenter attempt, but product playback still fails closed before `renderGraphGpuComposited`
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04D complete/blocked honestly, 15.2-04E active, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04E complete/blocked honestly, 15.2-05/06 are not released; Phase 15.3 UI convergence follows only after compositor closure
 
 ## Performance Metrics
 
@@ -190,7 +190,7 @@ Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04D complete/blocked honestly
 - Phase 15.2 Plan 03 completed media IO texture handoff and audio sync state: compositor input now accepts only proven compatible native texture handles, FFmpeg/CPU/platform-opaque paths fail closed for product preview input, and stale audio sync rejects frame presentation. (URGENT)
 - Phase 15.2 Plan 04A added the Rust-owned realtime playback scheduler, macOS CoreVideo/Metal to WGPU NV12 import bridge, and Electron host wiring, but remains blocked because WGPU surface acquisition reports `surface is occluded`; 15.2-05/06 stay unreleased. (URGENT)
 - Phase 15.2 Plan 04D replaced the 04C top-level overlay attempt with an Electron-window child NSView/CAMetalLayer WGPU surface and added NSRunningApplication diagnostics, but product E2E still fails closed because the automated Electron/packaged app remains `appActive=false`, `runningAppActive=false`, `appOcclusionVisible=false`; 15.2-05/06 stay unreleased. (URGENT)
-- Phase 15.2 Plan 04E is active to repair the product E2E launch path with a foreground packaged-app CDP harness, test-only observation bridge, and real visible GPU playback proof before 15.2-05/06 can run. (URGENT)
+- Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
 - Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
 - Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
