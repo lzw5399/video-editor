@@ -54,4 +54,19 @@ if ! rg -q 'backend: "renderGraphGpu" \| "none"' apps/desktop-electron/tests/hel
   exit 1
 fi
 
+if ! rg -q '"test:phase15-2"' package.json; then
+  echo "no-product-fallback violation: Phase 15.2 aggregate gate must stay wired in package.json" >&2
+  exit 1
+fi
+
+if ! rg -q 'waitForVisiblePreviewCenterChange' apps/desktop-electron/tests/product-user-journey.spec.ts; then
+  echo "no-product-fallback violation: product playback must assert visible preview-region motion" >&2
+  exit 1
+fi
+
+if ! rg -q 'renderGraphGpuComposited' apps/desktop-electron/tests/product-user-journey.spec.ts apps/desktop-electron/tests/helpers/userJourney.ts; then
+  echo "no-product-fallback violation: product playback must require renderGraphGpuComposited evidence" >&2
+  exit 1
+fi
+
 echo "no-product-fallback guards passed"
