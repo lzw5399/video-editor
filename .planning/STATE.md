@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Ready for Phase 15.3 planning: P0 Jianying-style production UI convergence"
-last_updated: "2026-06-20T04:52:19.000Z"
-last_activity: 2026-06-20 -- Phase 15.2 completed aggregate verification with pnpm run test:phase15-2; Phase 15.3 UI convergence is next
+stopped_at: "Phase 15.2 reopened: product playback UAT invalidated prior closeout"
+last_updated: "2026-06-20T05:28:40.000Z"
+last_activity: 2026-06-20 -- Manual product UAT invalidated Phase 15.2 closeout; 15.2-07 product playback UAT reclose is required before Phase 15.3
 progress:
   total_phases: 23
-  completed_phases: 19
-  total_plans: 128
+  completed_phases: 18
+  total_plans: 129
   completed_plans: 126
-  percent: 83
+  percent: 82
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 15.3 — P0 Jianying-Style Production UI Convergence
+**Current focus:** Phase 15.2 — P0 Real GPU Realtime Compositor Closure, Plan 07 product playback UAT reclose
 
 ## Current Position
 
-Phase: 15.3 (p0-jianying-style-production-ui-convergence) — INSERTED
-Plan: TBD
-Status: Ready — plan Phase 15.3 UI convergence after real GPU compositor closure
-Last activity: 2026-06-20 -- Phase 15.2 completed aggregate verification with `pnpm run test:phase15-2`
+Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — REOPENED
+Plan: 15.2-07
+Status: Investigating / planning fix — manual product UAT invalidated the prior closeout
+Last activity: 2026-06-20 -- `tests/product-user-journey.spec.ts` still passed, proving the previous gate missed preview placement, audio output, playback sync, and direct text/transform interactions
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is next before Phase 16 scheduler work
+Progress: Phase 15.1 complete; Phase 15.2 reopened; Phase 15.3 UI convergence is blocked until 15.2-07 passes
 
 ## Performance Metrics
 
@@ -195,9 +195,9 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 - Phase 15.2 Plan 04E added a foreground packaged-app CDP product E2E harness, test-only observation bridge, local CDP proxy bypass, and a macOS child-window WGPU presenter attempt; product playback still fails closed because AppKit reports both parent and child windows as occlusion-invisible, so 15.2-05/06 remain unreleased. (URGENT)
 - Phase 15.2 Plan 04F completed the packaged macOS foreground/window-server repair: product E2E now proves real `renderGraphGpuComposited` playback with screen-captured preview-center pixel change and no fallback; 15.2-05 is unblocked for the mainstream product E2E matrix. (URGENT)
 - Phase 15.2 Plan 05 completed mainstream product E2E coverage plus real save/reopen/export workflow: dev and packaged Playwright import repo video/image/audio, add video/text/audio/image segments, export a 6s 320x180 30fps H.264/AAC file, reopen `.veproj/project.json`, and verify persisted materials/segments/text; image still layers now export with timed `loop`/`fps`/`enable` semantics instead of single-frame or truncated output. (URGENT)
-- Phase 15.2 Plan 06 completed aggregate verification and closeout: `pnpm run test:phase15-2` now covers realtime preview runtime, desktop media capabilities, realtime bindings, parity, FFmpeg compiler, export commands, no-fallback guard, packaged app, product journey, real workflow, workspace, and cargo check. Phase 15.2 is complete. (URGENT)
-- Phase 15.3 now owns P0 Jianying-Style Production UI Convergence after the compositor closure; new production UI icons should be selected from `/Users/zhiwen/code/video-editor/icons` and copied into app assets. (URGENT)
-- Phase 15.3 UI convergence must include a project entry state for creating/opening a project before importing materials and a top-right export modal entry. (URGENT)
+- Phase 15.2 Plan 06 historical aggregate verification passed, but manual product UAT invalidated the closeout because it did not prove preview surface placement, native audio output, timeline/video sync, or direct text/transform interactions. Phase 15.2 is reopened for 15.2-07. (URGENT)
+- Phase 15.2 Plan 07 must reclose product playback through normal Playwright/Electron user flows: surface placement, native audio, timeline/video sync through completion, and visible text/transform interactions must work or be gated. (URGENT)
+- Phase 15.3 remains blocked until 15.2-07 passes; when unblocked, UI convergence must include project entry, top-right export modal, and icons selected from `/Users/zhiwen/code/video-editor/icons`. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -438,7 +438,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None active. Historical Phase 15.2 macOS occlusion blockers are preserved in 04A-04E summaries, but 04F superseded them with packaged visible render-graph GPU playback proof and 15.2-06 aggregate verification closed the phase.
+Phase 15.2 is reopened. Manual product UAT reports preview playback offset, no audio, timeline/video desync, and missing text/font/on-canvas transform interactions. Existing product E2E still passes, so 15.2-07 must strengthen the gate and fix the product path before Phase 15.3 or Phase 16 work continues.
 
 ## Deferred Items
 
@@ -468,5 +468,5 @@ None active. Historical Phase 15.2 macOS occlusion blockers are preserved in 04A
 ## Session Continuity
 
 Last session: 2026-06-20T04:52:19.000Z
-Stopped at: Ready for Phase 15.3 planning: P0 Jianying-style production UI convergence
+Stopped at: Phase 15.2 reopened for product playback UAT reclose
 Resume file: None

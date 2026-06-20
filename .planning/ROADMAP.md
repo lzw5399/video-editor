@@ -33,8 +33,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 14: Asset Resource Manager And Derived Artifact Store** - Material/resource index, proxy/thumbnail/waveform pipelines, artifact manifests, versioning, replacement invalidation, and cache GC (completed 2026-06-19)
 - [x] **Phase 15: Audio Engine And DSP Timeline Pipeline** - Low-latency audio graph, DSP timeline semantics, preview playback sync, waveform integration, and export parity (completed 2026-06-19)
 - [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
-- [x] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (completed 2026-06-20)
-- [ ] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED)
+- [ ] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (REOPENED 2026-06-20: product playback UAT invalidated prior closeout)
+- [ ] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (INSERTED, blocked on 15.2-07)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
 - [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 14/14 plans complete or historically blocked-and-superseded; Phase 15.2 closed with real packaged macOS render-graph GPU playback proof, mainstream product E2E coverage, save/reopen/export workflow, and aggregate verification
+**Plans:** 14/15 plans complete or historically blocked-and-superseded; Phase 15.2 is reopened because manual product UAT found the prior aggregate gate did not prove preview surface placement, native audio output, timeline/video sync, or direct text/transform interactions.
 
 Plans:
 
@@ -710,10 +710,14 @@ Plans:
 
 - [x] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
+**Wave 15** *(reopened after manual product UAT invalidated 15.2-06)*
+
+- [ ] 15.2-07-PLAN.md - Reclose product playback UAT: surface placement, native audio, timeline/video sync, and direct text/transform interactions
+
 ### Phase 15.3: P0 Jianying-Style Production UI Convergence (INSERTED)
 
 **Goal**: Converge the desktop workspace from an engineering/debug console into a Jianying-style production editor UI while keeping the product feature set smaller: default flow starts from creating/opening a project, default UI shows editing controls only, export is a top-right modal flow, and diagnostics stay behind developer mode.
-**Depends on**: Phase 15.2
+**Depends on**: Phase 15.2, including 15.2-07 product playback UAT reclose
 **Requirements**: P0-UI-01, P0-UI-02, P0-UI-03, P0-UI-03A, P0-UI-04, P0-UI-05, P0-UI-06
 **Success Criteria** (what must be TRUE):
 
@@ -818,8 +822,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 14. Asset Resource Manager And Derived Artifact Store | 7/7 | Complete    | 2026-06-19 |
 | 15. Audio Engine And DSP Timeline Pipeline | 7/7 | Complete   | 2026-06-19 |
 | 15.1 P0 Basic Editing Chain Repair | 6/6 | Complete | 2026-06-20 |
-| 15.2 P0 Real GPU Realtime Compositor Closure | 14/14 | Complete | 2026-06-20 |
-| 15.3 P0 Jianying-Style Production UI Convergence | 0/TBD | Planned | - |
+| 15.2 P0 Real GPU Realtime Compositor Closure | 14/15 | Reopened | - |
+| 15.3 P0 Jianying-Style Production UI Convergence | 0/TBD | Blocked | - |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
 | 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

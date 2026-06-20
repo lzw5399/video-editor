@@ -10,6 +10,12 @@ Code-level contracts are not enough. A product-facing editing feature is not
 complete until a Playwright/Electron test performs the same action a normal user
 would perform and verifies the visible or exported result.
 
+If manual normal-user UAT finds that a claimed feature does not behave correctly,
+the feature or phase is not complete even when existing automated tests pass. The
+next work must first add or strengthen an executable product E2E case that would
+have failed for the observed behavior, then fix the implementation until that
+case passes without fallback.
+
 The test must start from the UI whenever possible:
 
 1. Create a new project or open an existing project first when the product
