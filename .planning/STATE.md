@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: "Phase 15.2 complete after 15.2-07 product playback UAT reclose"
-last_updated: "2026-06-20T07:50:54.000Z"
-last_activity: 2026-06-20 -- Phase 15.2-07 reclosed product playback with normal-user packaged E2E gates for native surface placement, native audio including embedded video audio, timeline sync, and direct canvas drag
+stopped_at: "Phase 15.3 ready to execute from 15.3-01"
+last_updated: "2026-06-20T08:05:00.000Z"
+last_activity: 2026-06-20 -- Phase 15.3 production UI convergence plan set created with project entry, top-right export modal, production panels, icon/reference guards, and aggregate E2E gates
 progress:
   total_phases: 23
   completed_phases: 19
-  total_plans: 129
+  total_plans: 137
   completed_plans: 127
   percent: 83
 ---
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
 Plan: 15.3-01
-Status: Ready to execute after Phase 15.2 reclose
-Last activity: 2026-06-20 -- `pnpm run test:phase15-2` passed after 15.2-07 product playback UAT reclose
+Status: Ready to execute Plan 15.3-01
+Last activity: 2026-06-20 -- Phase 15.3 has 8 approved production UI convergence plans
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is unblocked
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is planned and ready to execute
 
 ## Performance Metrics
 
@@ -197,7 +197,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 - Phase 15.2 Plan 05 completed mainstream product E2E coverage plus real save/reopen/export workflow: dev and packaged Playwright import repo video/image/audio, add video/text/audio/image segments, export a 6s 320x180 30fps H.264/AAC file, reopen `.veproj/project.json`, and verify persisted materials/segments/text; image still layers now export with timed `loop`/`fps`/`enable` semantics instead of single-frame or truncated output. (URGENT)
 - Phase 15.2 Plan 06 historical aggregate verification passed, but manual product UAT invalidated the closeout because it did not prove preview surface placement, native audio output, timeline/video sync, or direct text/transform interactions. Phase 15.2 is reopened for 15.2-07. (URGENT)
 - Phase 15.2 Plan 07 reclosed product playback through normal Playwright/Electron user flows: surface placement, native audio for separate and embedded-video audio, timeline/video sync through completion, and direct text/transform drag are covered by packaged E2E. (URGENT)
-- Phase 15.3 is unblocked; UI convergence must include project entry, top-right export modal, and icons selected from `/Users/zhiwen/code/video-editor/icons`. (URGENT)
+- Phase 15.3 is unblocked and planned as 8 waves: project entry, top-right export modal, left resource panel, preview transport, inspector/modal parameters, timeline controls, icon/reference/source guards, and aggregate verification. Icons must be selected from `/Users/zhiwen/code/video-editor/icons`. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -468,5 +468,5 @@ Phase 15.2 is reopened. Manual product UAT reports preview playback offset, no a
 ## Session Continuity
 
 Last session: 2026-06-20T04:52:19.000Z
-Stopped at: Phase 15.3 ready after Phase 15.2 product playback UAT reclose
+Stopped at: Phase 15.3 ready to execute from 15.3-01
 Resume file: None
