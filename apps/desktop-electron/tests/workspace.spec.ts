@@ -1436,11 +1436,15 @@ test("baseline preview capability does not productize realtime fallback copy", a
 
   try {
     await expectNativePreviewHostLayout(app, page, 1280, 800);
+    const previewWindowText = (await page.getByLabel("预览窗口").textContent()) ?? "";
     await expect(page.getByLabel("实时预览状态")).toBeVisible();
     await expect(page.getByLabel("实时预览数据")).not.toContainText("实时预览受限");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("当前画面暂不能实时播放");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("FFmpeg");
     await expect(page.getByLabel("实时预览数据")).not.toContainText("已生成媒体备用产物");
+    expect(previewWindowText).not.toMatch(
+      /Mock|backend|fallback|cache|artifact|nativeVideoBridge|renderGraphGpu|requestPreviewFrame|备用产物|缓存|降级|排队|渲染|运行时帧/
+    );
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
     await expect(page.getByLabel("实时预览受限")).toHaveCount(0);
   } finally {
@@ -1591,6 +1595,7 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("重复 1");
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("缓存 2");
   expect(summarizeRealtimePreviewDisplay(fallback)).toContain("当前请求已取消");
+  expect(summarizeRealtimePreviewProductDisplay({ ...supported, backend: "renderGraphGpu" })).toBe("实时预览已接入");
   expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("实时预览不可用：GPU 合成播放尚未接入");
   expect(fallback.fallbackArtifactVisible).toBe(true);
 });

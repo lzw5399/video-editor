@@ -1133,9 +1133,9 @@ export function formatRealtimePreviewProductFallbackReason(reason: RealtimePrevi
     unsupportedGraphIntent: "实时预览受限：当前画面超出实时支持范围",
     frameProviderUnavailable: "实时预览受限：素材帧暂不可用",
     textParityUnsupported: "实时预览受限：文字实时一致性未通过",
-    nativeChildWindowFailed: "实时预览受限：原生预览窗口接入失败",
-    offscreenReadbackRequired: "实时预览受限：需要离屏回读",
-    previewArtifactCacheHit: "实时预览受限：当前使用缓存画面",
+    nativeChildWindowFailed: "实时预览受限：预览窗口暂不可用",
+    offscreenReadbackRequired: "实时预览受限：当前画面暂不能实时播放",
+    previewArtifactCacheHit: "实时预览受限：当前画面需要重新准备",
     ffmpegArtifactGenerated: "实时预览受限：当前画面暂不能实时播放",
     canceled: "实时预览受限：当前请求已取消",
     staleGeneration: "实时预览受限：旧画面请求已拒绝"
@@ -1187,10 +1187,10 @@ export function summarizeRealtimePreviewProductDisplay(model: RealtimePreviewDis
   }
 
   if (model.fallbackArtifactVisible || model.backend === "previewArtifact" || model.backend === "ffmpegArtifact") {
-    return "实时预览受限：正在使用降级画面";
+    return "实时预览受限：当前画面暂不能实时播放";
   }
 
-  return summarizeRealtimePreviewDisplay(model);
+  return "实时预览已接入";
 }
 
 export function formatMaterialKind(kind: MaterialKind): string {

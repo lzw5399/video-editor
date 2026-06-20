@@ -491,7 +491,7 @@ export function PreviewMonitor({
           </div>
           {nativeHostState.fallbackLabel !== null ? (
             <div className="preview-native-host-fallback" aria-label="实时预览不可用">
-              {nativeHostState.fallbackLabel}
+              {formatRealtimePreviewUnavailableLabel(nativeHostState, showDeveloperDiagnostics)}
             </div>
           ) : null}
           {nativeHostState.fallbackArtifactVisible && nativeHostState.fallbackReason !== null ? (
@@ -703,7 +703,9 @@ function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
 
 function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): string {
   if (state.fallbackActive) {
-    return state.statusLabel;
+    return state.statusLabel === "实时预览不可用" || state.statusLabel === "正在准备预览画面"
+      ? state.statusLabel
+      : "实时预览不可用";
   }
   if (!state.productReady) {
     return state.hostAttached ? "等待 GPU 合成" : "实时预览等待接入";
@@ -712,6 +714,16 @@ function formatRealtimePreviewHostStatus(state: RealtimePreviewHostState): strin
     return "实时预览受限";
   }
   return "实时预览已接入";
+}
+
+function formatRealtimePreviewUnavailableLabel(
+  state: RealtimePreviewHostState,
+  showDeveloperDiagnostics: boolean
+): string {
+  if (showDeveloperDiagnostics) {
+    return state.fallbackLabel ?? state.statusLabel;
+  }
+  return formatRealtimePreviewTelemetry(state, false);
 }
 
 function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDeveloperDiagnostics: boolean): string {
