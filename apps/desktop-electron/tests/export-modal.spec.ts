@@ -118,7 +118,10 @@ test("advanced export settings expand, audio dropdown opens, and default modal c
     const dialog = page.getByRole("dialog", { name: "导出" });
     await expect(dialog.getByText(/FFmpeg|ffprobe|artifact|cache|\/tmp\//)).toHaveCount(0);
 
-    await dialog.getByRole("button", { name: "高级设置" }).click();
+    const advancedToggle = dialog.getByRole("button", { name: "高级设置" });
+    await expect(advancedToggle).toHaveAttribute("aria-expanded", "false");
+    await advancedToggle.click();
+    await expect(advancedToggle).toHaveAttribute("aria-expanded", "true");
     await expect(dialog.getByLabel("高级导出设置")).toBeVisible();
     await expect(dialog.getByLabel("编码格式")).toBeVisible();
 
@@ -128,12 +131,16 @@ test("advanced export settings expand, audio dropdown opens, and default modal c
     expect(actionBox, "export action box").not.toBeNull();
     expect(advancedBox!.y + advancedBox!.height).toBeLessThanOrEqual(actionBox!.y);
 
-    await dialog.getByRole("combobox", { name: "音频采样率" }).click();
+    const sampleRate = dialog.getByRole("combobox", { name: "音频采样率" });
+    await expect(sampleRate).toHaveAttribute("aria-expanded", "false");
+    await sampleRate.click();
+    await expect(sampleRate).toHaveAttribute("aria-expanded", "true");
     const listbox = dialog.getByRole("listbox", { name: "音频采样率选项" });
     await expect(listbox).toBeVisible();
     await expect(listbox.getByRole("option", { name: "48 kHz" })).toBeVisible();
     await listbox.getByRole("option", { name: "44.1 kHz" }).click();
-    await expect(dialog.getByRole("combobox", { name: "音频采样率" })).toContainText("44.1 kHz");
+    await expect(sampleRate).toHaveAttribute("aria-expanded", "false");
+    await expect(sampleRate).toContainText("44.1 kHz");
   } finally {
     await app.close();
   }
