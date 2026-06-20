@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Blocked 15.2-04C-PLAN.md: WGPU native surface remains occluded during product E2E"
+stopped_at: "Active 15.2-04D-PLAN.md: close macOS foreground activation and in-window native WGPU surface presentation"
 last_updated: "2026-06-20T00:00:57.749Z"
-last_activity: 2026-06-20 -- Phase 15.2 Plan 04C added drawable lifecycle diagnostics and attempted parent-subview/raw-handle/top-level-overlay AppKit WGPU attachments, but product E2E still fails closed with `surface is occluded`; 15.2-05/06 remain blocked
+last_activity: 2026-06-20 -- Added Phase 15.2 Plan 04D after 04C narrowed the blocker to AppKit occlusion visibility false for both Electron parent and top-level overlay windows
 progress:
   total_phases: 23
   completed_phases: 18
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.2 (p0-real-gpu-realtime-compositor-closure) — INSERTED
-Plan: 15.2-04C
-Status: Executing — close macOS/Electron native WGPU drawable lifecycle and prove compositor playback
-Last activity: 2026-06-20 -- Phase 15.2 Plan 04B added occluded-surface RED coverage and attempted an AppKit child-window/CAMetalLayer attachment, but product E2E still fails closed with `surface is occluded`; Plan 04C is now the active blocker before 15.2-05/06
+Plan: 15.2-04D
+Status: Executing — close macOS foreground activation and in-window native WGPU surface presentation
+Last activity: 2026-06-20 -- Phase 15.2 Plan 04C added drawable lifecycle diagnostics and a top-level overlay-window attempt, but product E2E still fails closed because AppKit reports both parent and overlay windows as occlusion-invisible; Plan 04D is now the active blocker before 15.2-05/06
 
-Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04B complete/blocked honestly, Plan 04C added to close native WGPU drawable lifecycle, 15.2-05/06 are not released; Phase 15.3 UI convergence follows after compositor closure
+Progress: Phase 15.1 complete; Phase 15.2 Plans 01-04C complete/blocked honestly, Plan 04D added to close foreground activation and in-window native WGPU presentation, 15.2-05/06 are not released; Phase 15.3 UI convergence follows after compositor closure
 
 ## Performance Metrics
 
@@ -420,6 +420,7 @@ Recent decisions affecting current work:
 - [Phase 15.2]: Plan 04A cannot release 05/06 until Electron native WGPU surface acquisition is non-occluded and product E2E observes real visible advancement with `renderGraphGpuComposited` evidence.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Do not advance from 15.2-04B to downstream realtime preview closure plans until macOS/Electron WGPU playback emits visible renderGraphGpu/renderGraphGpuComposited evidence. — Plan 04B preserved fail-closed no-fallback behavior, but product E2E still reports WGPU surface acquire failure with 'surface is occluded'. Treating this as progress would route product success around the real GPU compositor acceptance policy.
 - [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04C is required after 04B because an executed-but-blocked summary is not release evidence. — 15.2-05/06 must remain blocked until normal Electron import-add-play acquires a non-occluded WGPU surface and emits visible renderGraphGpuComposited evidence.
+- [Phase 15.2-p0-real-gpu-realtime-compositor-closure]: Plan 04D is required after 04C because the blocker is now specifically AppKit foreground/active-space visibility and product surface placement. — A top-level overlay with occlusionVisible=false is not release evidence; the next path must make the Electron app/window foreground-visible and attach the WGPU surface inside the editor window hierarchy.
 - [Phase 15.2-04C]: Do not execute 15.2-05/06 because normal product playback still cannot acquire a non-occluded macOS WGPU surface; diagnostics are investigation evidence only, not product success.
 
 ### Pending Todos
@@ -432,13 +433,14 @@ None yet.
 
 - Phase 15.2 Plan 04A blocked: the Rust-owned scheduler, macOS CoreVideo/Metal to WGPU import bridge, and Electron host wiring are implemented, but the product E2E still fails closed because `wgpu surface texture acquire failed: surface is occluded`. No `renderGraphGpuComposited` evidence is emitted, and 15.2-05/06 remain blocked.
 - Phase 15.2 Plan 04B is executed/blocked: it attempted the macOS/Electron surface repair but WGPU still reports `surface is occluded`.
-- Phase 15.2 Plan 04C is required before 05/06: it must close the native drawable lifecycle blocker and prove normal product playback presents real compositor frames.
+- Phase 15.2 Plan 04C is executed/blocked: it added drawable diagnostics and a top-level overlay attempt, but both parent and overlay AppKit windows remain occlusion-invisible.
+- Phase 15.2 Plan 04D is required before 05/06: it must close foreground activation/active-space visibility and use an Electron-window native WGPU surface to prove normal product playback presents real compositor frames.
 
 - Phase 15.2 Plan 04 RED E2E exposed missing prerequisites: imported-video render-graph GPU desktop presentation requires both a native WGPU surface presentation path and a native decoded texture import path into the WGPU compositor. Current media IO only exposes opaque texture handles, and the compositor rejects those handles; CPU/FFmpeg/native-video/offscreen/readback paths cannot count as product success. The work is now split into Plans 03A, 03B, then 04.
 - 15.2-04 Task 02 blocked: desktop macOS decode produces registered CoreVideo/Metal NV12 leases, but realtime_preview_runtime compositor only samples registered wgpu::Texture leases with rgba8/bgra8. Completing product playback requires a new native texture import/compositor architecture (WGPU ExternalTexture or platform-specific NV12 plane sampling) rather than an Electron bridge.
 - Plan 15.2-04 product playback E2E still fails: Rust binding/host now fail closed without nativeVideoBridge, and NV12 WGPU ExternalTexture plane sampling is implemented for WGPU plane leases, but no Rust-owned desktop compositor scheduler currently decodes timeline media into sampleable native leases and presents renderGraphGpuComposited frames to the native WGPU surface during normal play.
 - Phase 15.2 Plan 04B blocked: macOS/Electron native WGPU surface reaches acquire through Rust scheduler but still fails with 'surface is occluded' in product E2E; no fallback route accepted.
-- Phase 15.2 Plan 04C blocked: macOS/Electron native WGPU surface still returns surface is occluded; diagnostics show parent and overlay windows visible but occlusionVisible=false, no renderGraphGpuComposited evidence.
+- Phase 15.2 Plan 04C blocked: macOS/Electron native WGPU surface still returns surface is occluded; diagnostics show parent and overlay windows visible but occlusionVisible=false, no renderGraphGpuComposited evidence. Plan 04D supersedes this with foreground activation plus in-window native surface work.
 
 ## Deferred Items
 

@@ -650,7 +650,7 @@ Plans:
   7. Fallback paths fail closed with productized unavailable states. They may exist only as diagnostics or tests and cannot continue playback, mark preview success, or satisfy regression gates.
   8. A reusable E2E matrix and source guards are added so later phases must extend user-level cases when adding visible editing features.
 
-**Plans:** 8/11 plans executed or blocked; 15.2-05/06 remain unreleased behind 04C
+**Plans:** 9/12 plans executed or blocked; 15.2-05/06 remain unreleased behind 04D
 
 Plans:
 
@@ -688,13 +688,17 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 15.2-04C-PLAN.md - Close macOS/Electron native WGPU drawable lifecycle and prove compositor playback
+- [x] 15.2-04C-PLAN.md - Attempt macOS/Electron native WGPU drawable lifecycle repair (blocked: AppKit occlusion visible remains false)
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
+- [ ] 15.2-04D-PLAN.md - Close macOS foreground activation and in-window native WGPU surface presentation
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 15.2-05-PLAN.md - Add mainstream product E2E matrix and gate unsupported visible controls
 
-**Wave 11** *(blocked on Waves 1-10 completion)*
+**Wave 12** *(blocked on Waves 1-11 completion)*
 
 - [ ] 15.2-06-PLAN.md - Add aggregate guards, verification, and Phase 15.2 closeout
 
