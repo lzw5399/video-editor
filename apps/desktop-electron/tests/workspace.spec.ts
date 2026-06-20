@@ -1974,6 +1974,36 @@ test("五大区域 layout stability keeps workspace regions visible and fixed at
   }
 });
 
+test("right inspector hides production-forbidden diagnostics and fits required viewports", async () => {
+  const { app, page } = await launchWorkspaceApp();
+
+  try {
+    const inspector = page.getByLabel("属性检查器");
+    const forbidden = /segmentId|trackId|material-workspace|media\/|\/tmp|cache|artifact|diagnostic|backend|debug|诊断|路径|缓存/i;
+
+    for (const [width, height] of [
+      [1280, 800],
+      [1120, 720]
+    ] as const) {
+      await setViewportSizeAndVerifyLayout(app, page, width, height);
+      await expect(inspector).not.toContainText(forbidden);
+      await expect(inspector.getByLabel("草稿参数")).toContainText("草稿参数");
+
+      const overflow = await inspector.evaluate((element) => ({
+        horizontal: element.scrollWidth > element.clientWidth + 1,
+        vertical: element.scrollHeight >= element.clientHeight
+      }));
+      expect(overflow.horizontal, `inspector must not widen at ${width}x${height}`).toBe(false);
+    }
+
+    await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
+    await expect(page.getByLabel("画面基础表单")).toBeVisible();
+    await expect(inspector).not.toContainText(forbidden);
+  } finally {
+    await app.close();
+  }
+});
+
 test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async () => {
   const { app, page } = await launchWorkspaceApp();
 
