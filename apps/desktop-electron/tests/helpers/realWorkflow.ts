@@ -14,10 +14,32 @@ type ExecuteCommandCall = {
   kind: string;
 };
 
+type RealtimePreviewHostCall = {
+  kind: string;
+  playbackGeneration?: number;
+};
+
+type RealtimePreviewHostState = {
+  ok: boolean;
+  productReady: boolean;
+  fallbackActive: boolean;
+  backend: "renderGraphGpu" | "none";
+  diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
+  telemetry: {
+    presentedFrameCount: number;
+    targetTimeMicroseconds: number;
+    playbackGeneration: number;
+  } | null;
+  contentEvidence: {
+    source: "nativeVideoBridge" | "renderGraphGpuComposited";
+    digest: string;
+    targetTimeMicroseconds: number;
+  } | null;
+};
+
 export type RealWorkflowResult = {
   calls: ExecuteCommandCall[];
-  framePath: string;
-  segmentPath: string;
+  realtimePreviewHostCalls: RealtimePreviewHostCall[];
   outputPath: string;
 };
 
@@ -28,8 +50,6 @@ export async function runRealImportPreviewExportWorkflow(
 ): Promise<RealWorkflowResult> {
   await enterProjectFromProductEntryIfNeeded(page, app);
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "请求预览帧" })).toBeEnabled({ timeout: 20_000 });
-  await setBundlePath(page, fixtures.bundlePath);
 
   await importMaterials(page, app, [
     { name: fixtures.videoName },
@@ -42,10 +62,8 @@ export async function runRealImportPreviewExportWorkflow(
   await addAudioSegment(page, app, fixtures.audioName);
   await addVisualSegment(page, app, fixtures.imageName);
   await waitForCommandCount(page, app, "saveProjectBundle", 4);
-  await page.getByLabel("预览时间").fill("0");
 
-  const framePath = await requestPreviewFrame(page, app);
-  const segmentPath = await requestPreviewSegment(page, app);
+  await verifyRealtimePreviewPlayback(page, app);
   await exportDraft(page, app, fixtures);
 
   const calls = await readExecuteCommandCalls(app);
@@ -57,24 +75,22 @@ export async function runRealImportPreviewExportWorkflow(
       "addTextSegment",
       "addAudioSegment",
       "saveProjectBundle",
-      "requestPreviewFrame",
-      "requestPreviewSegment",
       "startExport",
       "getExportJobStatus"
     ])
   );
+  expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
+  expect(calls.filter((call) => call.command === "requestPreviewSegment")).toHaveLength(0);
 
   return {
     calls,
-    framePath,
-    segmentPath,
+    realtimePreviewHostCalls: await readRealtimePreviewHostCalls(app),
     outputPath: fixtures.outputPath
   };
 }
 
 export async function assertReopenedProjectState(page: Page, fixtures: Phase6MediaFixtures): Promise<void> {
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
-  await expect(page.getByLabel("草稿包路径")).toHaveValue(fixtures.bundlePath);
   await expect(page.getByRole("article", { name: `素材 ${fixtures.videoName}` })).toContainText("可用", { timeout: 20_000 });
   await expect(page.getByRole("article", { name: `素材 ${fixtures.imageName}` })).toContainText("可用", { timeout: 20_000 });
   await expect(page.getByRole("article", { name: `素材 ${fixtures.audioName}` })).toContainText("可用", { timeout: 20_000 });
@@ -109,6 +125,27 @@ export async function readExecuteCommandCalls(app: ElectronApplication): Promise
   });
 }
 
+async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<RealtimePreviewHostCall[]> {
+  return app.evaluate(() => {
+    return (
+      (globalThis as typeof globalThis & { __videoEditorTestRealtimePreviewHostCalls?: RealtimePreviewHostCall[] })
+        .__videoEditorTestRealtimePreviewHostCalls ?? []
+    );
+  });
+}
+
+async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreviewHostState | null> {
+  return page.evaluate(async () => {
+    const bridge = (window as typeof window & {
+      videoEditorRealtimePreviewHost?: { getTelemetry: () => Promise<RealtimePreviewHostState> };
+    }).videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return null;
+    }
+    return bridge.getTelemetry();
+  });
+}
+
 async function importMaterials(
   page: Page,
   app: ElectronApplication,
@@ -122,18 +159,12 @@ async function importMaterials(
   }
 }
 
-async function setBundlePath(page: Page, bundlePath: string): Promise<void> {
-  const input = page.getByLabel("草稿包路径");
-  await expect(input).toBeVisible();
-  await input.fill(bundlePath);
-  await expect(input).toHaveValue(bundlePath);
-}
-
 async function addVisualSegment(page: Page, app: ElectronApplication, materialName: string): Promise<void> {
   const nextCount = (await countCommand(app, "addSegment")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
-  await page.locator(".compact-select select").selectOption({ label: materialName });
-  await page.getByRole("button", { name: "添加片段" }).click();
+  const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
+  await expect(materialRow).toContainText("可用", { timeout: 20_000 });
+  await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForCommandCount(page, app, "addSegment", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
 }
@@ -159,41 +190,45 @@ async function addAudioSegment(page: Page, app: ElectronApplication, audioName: 
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(audioName)}`) })).toBeVisible();
 }
 
-async function requestPreviewFrame(page: Page, app: ElectronApplication): Promise<string> {
-  const nextCount = (await countCommand(app, "requestPreviewFrame")) + 1;
-  await page.getByRole("button", { name: "请求预览帧" }).click();
-  await waitForCommandCount(page, app, "requestPreviewFrame", nextCount);
-  try {
-    await expect(page.getByLabel("预览产物")).toContainText(/预览帧(已生成|命中缓存)/, { timeout: 30_000 });
-  } catch (error) {
-    const calls = await readExecuteCommandCalls(app);
-    const previewArtifactsText = (await page.getByLabel("预览产物").textContent()) ?? "";
-    const previewStatusText = (await page.getByLabel("预览状态", { exact: true }).textContent()) ?? "";
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      [
-        message,
-        `Preview artifacts: ${previewArtifactsText}`,
-        `Preview status: ${previewStatusText}`,
-        `Recorded commands: ${JSON.stringify(calls)}`
-      ].join("\n")
-    );
-  }
-  const path = await page.locator(".preview-artifact-line").filter({ hasText: "预览帧" }).locator("code").textContent();
-  expect(path, "预览帧产物路径").not.toBeNull();
-  await expectFileExists(path!);
-  return path!;
-}
+async function verifyRealtimePreviewPlayback(page: Page, app: ElectronApplication): Promise<void> {
+  const previewMonitor = page.getByLabel("预览窗口");
+  await expect(previewMonitor.getByLabel("实时预览宿主")).toBeVisible({ timeout: 20_000 });
+  const frameRequestsBefore = await countCommand(app, "requestPreviewFrame");
+  const segmentRequestsBefore = await countCommand(app, "requestPreviewSegment");
+  const playCallsBefore = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "play").length;
+  const stateBefore = await readRealtimePreviewHostState(page);
+  const presentedBefore = stateBefore?.telemetry?.presentedFrameCount ?? 0;
+  const targetBefore = stateBefore?.contentEvidence?.targetTimeMicroseconds ?? -1;
 
-async function requestPreviewSegment(page: Page, app: ElectronApplication): Promise<string> {
-  const nextCount = (await countCommand(app, "requestPreviewSegment")) + 1;
-  await page.getByRole("button", { name: "生成预览片段" }).click();
-  await waitForCommandCount(page, app, "requestPreviewSegment", nextCount);
-  await expect(page.getByLabel("预览产物")).toContainText(/预览片段(已生成|命中缓存)/, { timeout: 30_000 });
-  const path = await page.locator(".preview-artifact-line").filter({ hasText: "预览片段" }).locator("code").textContent();
-  expect(path, "预览片段产物路径").not.toBeNull();
-  await expectFileExists(path!);
-  return path!;
+  await previewMonitor.getByRole("button", { name: "播放" }).click();
+  await expect
+    .poll(async () => (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "play").length, {
+      timeout: 10_000
+    })
+    .toBeGreaterThan(playCallsBefore);
+
+  await expect
+    .poll(
+      async () => {
+        const state = await readRealtimePreviewHostState(page);
+        return (
+          state?.ok === true &&
+          state.productReady === true &&
+          state.fallbackActive === false &&
+          state.backend === "renderGraphGpu" &&
+          state.diagnosticSource === "none" &&
+          state.contentEvidence?.source === "renderGraphGpuComposited" &&
+          (state.telemetry?.presentedFrameCount ?? 0) > presentedBefore &&
+          (state.contentEvidence?.targetTimeMicroseconds ?? -1) > targetBefore
+        );
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(true);
+
+  await previewMonitor.getByRole("button", { name: "暂停" }).click();
+  expect(await countCommand(app, "requestPreviewFrame")).toBe(frameRequestsBefore);
+  expect(await countCommand(app, "requestPreviewSegment")).toBe(segmentRequestsBefore);
 }
 
 async function exportDraft(

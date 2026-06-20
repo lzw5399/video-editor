@@ -1062,7 +1062,7 @@ h2 {
 
 .material-row {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 64px;
@@ -1071,6 +1071,10 @@ h2 {
   border-radius: 6px;
   color: #cbc8c1;
   background: #252522;
+}
+
+.material-row-action {
+  justify-self: end;
 }
 
 .material-thumb {

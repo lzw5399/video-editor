@@ -19,6 +19,7 @@ export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving
 export const USER_JOURNEY_AV_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-av-tone-testsrc.mp4");
 export const USER_JOURNEY_OVERLAY_IMAGE = join(USER_JOURNEY_MEDIA_DIR, "p0-overlay-testsrc.png");
 export const USER_JOURNEY_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-tone.wav");
+const TIMELINE_RULER_CLICK_TOLERANCE_US = 10_000;
 const execFileAsync = promisify(execFile);
 
 type ExecuteCommandCall = {
@@ -425,10 +426,9 @@ export async function addMaterialToTimeline(
 ): Promise<void> {
   const materialName = basename(materialPath);
   const nextCount = (await countCommand(app, "addSegment")) + 1;
-  const timelineMaterialSelect = page.locator(".compact-select select");
-  await expect(timelineMaterialSelect).toBeEnabled({ timeout: 10_000 });
-  await timelineMaterialSelect.selectOption({ label: materialName });
-  await page.getByRole("button", { name: "添加片段" }).click();
+  const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
+  await expect(materialRow).toContainText("可用", { timeout: 10_000 });
+  await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForCommandCount(app, "addSegment", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
@@ -524,7 +524,16 @@ export async function updateSelectedVisualThroughInspector(
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
   const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
   await clickTimelineRulerAt(page, targetTimeUs);
-  await expect(page.getByLabel("当前时间码")).toContainText(formatExpectedTimecode(targetTimeUs), { timeout: 10_000 });
+  await expect
+    .poll(async () => parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""), {
+      timeout: 10_000
+    })
+    .toBeGreaterThanOrEqual(targetTimeUs - TIMELINE_RULER_CLICK_TOLERANCE_US);
+  await expect
+    .poll(async () => parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""), {
+      timeout: 10_000
+    })
+    .toBeLessThanOrEqual(targetTimeUs + TIMELINE_RULER_CLICK_TOLERANCE_US);
   expect(
     requestPreviewFrameCount(await readExecuteCommandCalls(app)),
     "product seek must not fall back to preview artifact frame requests"
@@ -886,18 +895,6 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function formatExpectedTimecode(targetTimeUs: number): string {
-  const milliseconds = Math.floor(targetTimeUs / 1000);
-  const hours = Math.floor(milliseconds / 3_600_000);
-  const minutes = Math.floor((milliseconds % 3_600_000) / 60_000);
-  const seconds = Math.floor((milliseconds % 60_000) / 1000);
-  const millis = milliseconds % 1000;
-  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}.${String(millis).padStart(3, "0")}`;
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
 
 function formatSecondsInput(durationUs: number): string {
   return String(durationUs / 1_000_000);

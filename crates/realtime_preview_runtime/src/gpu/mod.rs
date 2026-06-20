@@ -23,8 +23,7 @@ pub use surface::{
     NativeParentWindowHandle, PreviewSurfaceAttachment, PreviewSurfaceBounds,
     PreviewSurfaceDescriptor, PreviewSurfaceDiagnosticKind, PreviewSurfaceError,
     PreviewSurfaceHost, PreviewSurfaceScreenRect, PreviewSurfaceStatus,
-    RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget,
-    RealtimePreviewTargetFormat,
+    RealtimePreviewGpuPresentationTarget, RealtimePreviewGpuTarget, RealtimePreviewTargetFormat,
 };
 pub use text::{TEXT_PARITY_UNPROVEN_REASON, TextPreviewOutcome, classify_text_preview_outcome};
 pub use texture_cache::{

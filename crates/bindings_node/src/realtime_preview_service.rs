@@ -1,8 +1,10 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use draft_model::{Draft, MaterialId, MaterialKind, Microseconds, RationalFrameRate};
@@ -27,8 +29,8 @@ use realtime_preview_runtime::{
     RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
     RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
     TextureHandleDescriptor,
-    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::PreviewSurfaceScreenRect,
+    gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
         RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuPresentationTarget,
@@ -45,6 +47,12 @@ use crate::native_preview_presenter::{
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
+static NEXT_SCHEDULER_MEDIA_PIPELINE_ID: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    static SCHEDULER_MEDIA_PIPELINES: RefCell<BTreeMap<u64, SchedulerMediaPipeline>> =
+        RefCell::new(BTreeMap::new());
+}
 
 #[derive(Default)]
 pub struct RealtimePreviewBindingRegistry {
@@ -366,13 +374,16 @@ impl RealtimePreviewBindingRegistry {
                 .map_err(RealtimePreviewBindingError::runtime)?;
         }
         let scheduler = self.scheduler_mut(session_id)?;
-        let evidence = scheduler.evidence().cloned().map(native_evidence_from_scheduler);
+        let evidence = scheduler
+            .evidence()
+            .cloned()
+            .map(native_evidence_from_scheduler);
         let surface_placement = scheduler.surface_placement();
         match evidence {
-            Some(evidence) => Ok(NativePreviewPresentationState::render_graph_gpu_available(
-                Some(evidence),
-            )
-            .with_surface_placement(surface_placement)),
+            Some(evidence) => Ok(
+                NativePreviewPresentationState::render_graph_gpu_available(Some(evidence))
+                    .with_surface_placement(surface_placement),
+            ),
             None => Ok(NativePreviewPresentationState::unavailable(
                 "render graph GPU compositor scheduler has not presented product content",
             )),
@@ -417,6 +428,7 @@ struct RealtimePreviewBindingScheduler {
     surface_target: Option<RealtimePreviewGpuPresentationTarget>,
     draft_snapshot: Option<Draft>,
     bundle_path: Option<PathBuf>,
+    media_pipeline_id: u64,
     last_evidence: Option<RealtimePlaybackSchedulerEvidence>,
     next_tick_time: Microseconds,
     playback_anchor: Option<BindingPlaybackAnchor>,
@@ -440,6 +452,7 @@ impl RealtimePreviewBindingScheduler {
             surface_target: None,
             draft_snapshot: None,
             bundle_path: None,
+            media_pipeline_id: next_scheduler_media_pipeline_id(),
             last_evidence: None,
             next_tick_time: Microseconds::ZERO,
             playback_anchor: None,
@@ -467,6 +480,7 @@ impl RealtimePreviewBindingScheduler {
         ) {
             self.surface_target = None;
             self.gpu_device = None;
+            self.reset_media_pipeline();
             self.test_mock_surface_attached = true;
             return Ok(());
         }
@@ -477,6 +491,7 @@ impl RealtimePreviewBindingScheduler {
         {
             self.surface_target = None;
             self.gpu_device = None;
+            self.reset_media_pipeline();
             #[cfg(test)]
             {
                 self.test_mock_surface_attached = false;
@@ -503,6 +518,7 @@ impl RealtimePreviewBindingScheduler {
             })?;
         self.gpu_device = Some(device);
         self.surface_target = Some(target);
+        self.reset_media_pipeline();
         #[cfg(test)]
         {
             self.test_mock_surface_attached = false;
@@ -537,6 +553,7 @@ impl RealtimePreviewBindingScheduler {
         self.scheduler.update_draft_snapshot(draft.clone());
         self.draft_snapshot = Some(draft);
         self.bundle_path = bundle_path;
+        self.reset_media_pipeline();
         self.last_evidence = None;
         self.next_tick_time = Microseconds::ZERO;
         self.playback_anchor = None;
@@ -550,6 +567,7 @@ impl RealtimePreviewBindingScheduler {
 
     fn detach_surface(&mut self) {
         self.surface_target = None;
+        self.reset_media_pipeline();
         self.last_evidence = None;
         self.playback_anchor = None;
         #[cfg(test)]
@@ -633,15 +651,12 @@ impl RealtimePreviewBindingScheduler {
             self.last_evidence = Some(evidence.clone());
             return Ok(evidence);
         }
-        let registry = NativeTextureLeaseRegistry::new();
-        let mut media_provider = self.build_media_provider(registry.clone())?;
+        self.ensure_media_provider()?;
+        let media_pipeline_id = self.media_pipeline_id;
         let mut presenter = BindingSchedulerPresenter {
             gpu_device: self.gpu_device.clone(),
             surface_target: self.surface_target.as_mut(),
-            texture_cache: RealtimePreviewTextureCache::new()
-                .with_native_texture_registry(registry)
-                .with_native_texture_importer(Box::new(import_native_nv12_external_texture)),
-            media_provider: &mut media_provider,
+            media_pipeline_id,
         };
         let evidence = self
             .scheduler
@@ -677,6 +692,35 @@ impl RealtimePreviewBindingScheduler {
             .as_ref()
             .map(sequence_duration)
             .unwrap_or(Microseconds::ZERO)
+    }
+
+    fn ensure_media_provider(&mut self) -> Result<(), RealtimePreviewBindingError> {
+        let media_pipeline_id = self.media_pipeline_id;
+        let exists = SCHEDULER_MEDIA_PIPELINES
+            .with(|pipelines| pipelines.borrow().contains_key(&media_pipeline_id));
+        if !exists {
+            let pipeline = self.build_media_pipeline()?;
+            SCHEDULER_MEDIA_PIPELINES.with(|pipelines| {
+                pipelines.borrow_mut().insert(media_pipeline_id, pipeline);
+            });
+        }
+        Ok(())
+    }
+
+    fn reset_media_pipeline(&mut self) {
+        let previous_id = self.media_pipeline_id;
+        SCHEDULER_MEDIA_PIPELINES.with(|pipelines| {
+            pipelines.borrow_mut().remove(&previous_id);
+        });
+        self.media_pipeline_id = next_scheduler_media_pipeline_id();
+    }
+
+    fn build_media_pipeline(&self) -> Result<SchedulerMediaPipeline, RealtimePreviewBindingError> {
+        let registry = NativeTextureLeaseRegistry::new();
+        Ok(SchedulerMediaPipeline {
+            provider: self.build_media_provider(registry.clone())?,
+            registry,
+        })
     }
 
     fn build_media_provider(
@@ -741,6 +785,11 @@ impl RealtimePreviewBindingScheduler {
         }
         Ok(SchedulerFrameProvider::new(provider, static_images))
     }
+}
+
+struct SchedulerMediaPipeline {
+    provider: SchedulerFrameProvider,
+    registry: NativeTextureLeaseRegistry,
 }
 
 struct SchedulerFrameProvider {
@@ -839,8 +888,7 @@ fn load_static_image_frame(
 struct BindingSchedulerPresenter<'a> {
     gpu_device: Option<RealtimePreviewGpuDevice>,
     surface_target: Option<&'a mut RealtimePreviewGpuPresentationTarget>,
-    texture_cache: RealtimePreviewTextureCache,
-    media_provider: &'a mut SchedulerFrameProvider,
+    media_pipeline_id: u64,
 }
 
 impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
@@ -860,20 +908,31 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                 reason: "render graph GPU presentation surface is not attached".to_owned(),
             }
         })?;
-        let mut compositor = RealtimePreviewCompositor::new(
-            gpu_device,
-            RealtimePreviewCapabilityClassifier {
-                runtime_backend_available: true,
-                surface_available: true,
-                gpu_text_parity: false,
-                bundled_text_font_registry_available: true,
-            },
-        );
-        let output = compositor
-            .present_to_surface(graph, target, self.media_provider, &mut self.texture_cache)
-            .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
-                reason: error.to_string(),
+        let output = SCHEDULER_MEDIA_PIPELINES.with(|pipelines| {
+            let mut pipelines = pipelines.borrow_mut();
+            let pipeline = pipelines.get_mut(&self.media_pipeline_id).ok_or_else(|| {
+                RealtimePlaybackSchedulerError::MissingPrerequisite {
+                    reason: "scheduler media pipeline is not initialized".to_owned(),
+                }
             })?;
+            let mut texture_cache = RealtimePreviewTextureCache::new()
+                .with_native_texture_registry(pipeline.registry.clone())
+                .with_native_texture_importer(Box::new(import_native_nv12_external_texture));
+            let mut compositor = RealtimePreviewCompositor::new(
+                gpu_device,
+                RealtimePreviewCapabilityClassifier {
+                    runtime_backend_available: true,
+                    surface_available: true,
+                    gpu_text_parity: false,
+                    bundled_text_font_registry_available: true,
+                },
+            );
+            compositor
+                .present_to_surface(graph, target, &mut pipeline.provider, &mut texture_cache)
+                .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                    reason: error.to_string(),
+                })
+        })?;
         if output.presented_frames == 0 {
             let details = output
                 .diagnostics
@@ -929,6 +988,10 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerTestPresenter {
             ),
         })
     }
+}
+
+fn next_scheduler_media_pipeline_id() -> u64 {
+    NEXT_SCHEDULER_MEDIA_PIPELINE_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 fn preview_runtime_device_id() -> Result<RuntimeDeviceId, RealtimePreviewBindingError> {
@@ -1490,9 +1553,11 @@ fn generation_response(
 mod realtime_preview_bindings {
     use super::{
         RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
-        RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
-        RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
-        RealtimePreviewSurfaceBindingKind, SchedulerFrameProvider, StaticImageFrame,
+        RealtimePreviewBindingRegistry, RealtimePreviewBindingScheduler,
+        RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
+        RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
+        SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider, SchedulerMediaPipeline,
+        StaticImageFrame,
     };
     use crate::native_preview_presenter::{
         NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
@@ -1504,8 +1569,10 @@ mod realtime_preview_bindings {
     };
     use realtime_preview_runtime::{
         MediaIoFrameProvider, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
-        PreviewRequestMode, RealtimePreviewAudioSyncState, RealtimePreviewFallbackReason,
+        PreviewRequestMode, RealtimePlaybackSchedulerConfig, RealtimePreviewAudioSyncState,
+        RealtimePreviewFallbackReason,
     };
+    use render_graph::OutputDimensions;
     use std::collections::BTreeMap;
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
@@ -1701,6 +1768,41 @@ mod realtime_preview_bindings {
         assert_eq!(frame.width, 2);
         assert_eq!(frame.height, 1);
         assert_eq!(frame.pixels, vec![255, 0, 0, 255, 0, 255, 0, 255]);
+    }
+
+    #[test]
+    fn scheduler_draft_update_invalidates_cached_media_pipeline() {
+        let mut scheduler = RealtimePreviewBindingScheduler::new(RealtimePlaybackSchedulerConfig {
+            preview_dimensions: OutputDimensions {
+                width: 640,
+                height: 360,
+            },
+        });
+        let previous_pipeline_id = scheduler.media_pipeline_id;
+        SCHEDULER_MEDIA_PIPELINES.with(|pipelines| {
+            pipelines.borrow_mut().insert(
+                previous_pipeline_id,
+                SchedulerMediaPipeline {
+                    provider: SchedulerFrameProvider::new(
+                        MediaIoFrameProvider::new(Box::new(PanicMediaReader)),
+                        BTreeMap::new(),
+                    ),
+                    registry: media_runtime::NativeTextureLeaseRegistry::new(),
+                },
+            );
+        });
+
+        scheduler.update_draft_snapshot(scheduler_video_draft(), None);
+
+        assert_ne!(
+            scheduler.media_pipeline_id, previous_pipeline_id,
+            "draft changes must allocate a fresh media pipeline id"
+        );
+        assert!(
+            SCHEDULER_MEDIA_PIPELINES
+                .with(|pipelines| !pipelines.borrow().contains_key(&previous_pipeline_id)),
+            "draft changes must remove the previous thread-local media pipeline"
+        );
     }
 
     #[test]

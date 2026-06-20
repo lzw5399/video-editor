@@ -1,8 +1,8 @@
+use std::collections::VecDeque;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
-use std::collections::VecDeque;
 
 use audio_engine::{
     AudioBufferResult, AudioOutputCapabilities, AudioOutputDevice, AudioOutputError,
@@ -183,11 +183,12 @@ impl CpalAudioOutputSink {
                 reason: "native output requires non-empty PCM samples".to_owned(),
             });
         }
-        let mut queue = self.queued_samples.lock().map_err(|_| {
-            AudioOutputError::InvalidCapabilities {
-                reason: "native output PCM queue lock failed".to_owned(),
-            }
-        })?;
+        let mut queue =
+            self.queued_samples
+                .lock()
+                .map_err(|_| AudioOutputError::InvalidCapabilities {
+                    reason: "native output PCM queue lock failed".to_owned(),
+                })?;
         let max_samples = 48_000usize * 2 * 8;
         for sample in samples {
             if queue.len() >= max_samples {

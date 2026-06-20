@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use draft_model::{
-    MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop,
-    SegmentFitMode, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode,
+    SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
 };
 use render_graph::{
     OutputDimensions, RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixDiagnostic,
@@ -438,10 +438,7 @@ fn visual_setpts_filter(target_delay: Microseconds) -> String {
     if target_delay == Microseconds::ZERO {
         "setpts=PTS-STARTPTS".to_owned()
     } else {
-        format!(
-            "setpts=PTS-STARTPTS+{}/TB",
-            format_seconds(target_delay)
-        )
+        format!("setpts=PTS-STARTPTS+{}/TB", format_seconds(target_delay))
     }
 }
 

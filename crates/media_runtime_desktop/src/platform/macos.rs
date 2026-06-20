@@ -20,6 +20,9 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TEXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 const DEFAULT_MAX_OUTSTANDING_LEASES: usize = 8;
+const SEQUENTIAL_READER_TIME_TOLERANCE_US: u64 = 5_000;
+const SEQUENTIAL_READER_REUSE_THRESHOLD_US: u64 = 2_000_000;
+const SEQUENTIAL_READER_MAX_SKIP_FRAMES: usize = 30;
 
 pub fn probe_macos_media_io_capabilities() -> MacosMediaIoCapabilities {
     platform_macos_capabilities()
@@ -224,6 +227,8 @@ impl MacosMediaSession {
             texture_policy: self.texture_policy.clone(),
             native_texture_registry: self.native_texture_registry.clone(),
             last_fallback_selection: Rc::clone(&self.last_fallback_selection),
+            #[cfg(target_os = "macos")]
+            sequential_reader: None,
         })
     }
 
@@ -284,6 +289,16 @@ pub struct MacosVideoDecoder {
     texture_policy: MacosTextureInteropPolicy,
     native_texture_registry: Option<NativeTextureLeaseRegistry>,
     last_fallback_selection: Rc<RefCell<Option<MediaIoFallbackSelection>>>,
+    #[cfg(target_os = "macos")]
+    sequential_reader: Option<MacosSequentialVideoReader>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct MacosSequentialVideoReader {
+    reader: objc2::rc::Retained<objc2_av_foundation::AVAssetReader>,
+    output: objc2::rc::Retained<objc2_av_foundation::AVAssetReaderTrackOutput>,
+    last_source_time_us: Option<u64>,
 }
 
 impl MacosVideoDecoder {
@@ -300,6 +315,63 @@ impl MacosVideoDecoder {
     ) -> Result<DecodedVideoFrame, DecodeError> {
         platform_decode_frame(self, request)
     }
+
+    #[cfg(target_os = "macos")]
+    fn next_sample_buffer_at(
+        &mut self,
+        source_time_us: u64,
+    ) -> Result<objc2::rc::Retained<objc2_core_media::CMSampleBuffer>, DecodeError> {
+        let reuse_reader = self
+            .sequential_reader
+            .as_ref()
+            .and_then(|reader| reader.last_source_time_us)
+            .map(|last_source_time_us| {
+                source_time_us.saturating_add(SEQUENTIAL_READER_TIME_TOLERANCE_US)
+                    >= last_source_time_us
+                    && source_time_us.saturating_sub(last_source_time_us)
+                        <= SEQUENTIAL_READER_REUSE_THRESHOLD_US
+            })
+            .unwrap_or(false);
+        if !reuse_reader {
+            self.sequential_reader = Some(create_sequential_video_reader(self, source_time_us)?);
+        }
+
+        let frame_duration = self
+            .stream
+            .frame_rate
+            .and_then(frame_duration_us)
+            .unwrap_or(33_333);
+        let early_tolerance = frame_duration / 2;
+        let mut skipped_frames = 0usize;
+        loop {
+            if skipped_frames > SEQUENTIAL_READER_MAX_SKIP_FRAMES {
+                return Err(platform_decode_error(format!(
+                    "AVAssetReader skipped more than {SEQUENTIAL_READER_MAX_SKIP_FRAMES} frames while seeking to {source_time_us} us"
+                )));
+            }
+
+            let reader = self
+                .sequential_reader
+                .as_mut()
+                .ok_or_else(|| platform_decode_error("AVAssetReader state was not initialized"))?;
+            let sample_buffer = copy_next_video_sample(reader)?;
+            let sample_time =
+                cm_time_to_microseconds(unsafe { sample_buffer.presentation_time_stamp() })
+                    .unwrap_or(source_time_us);
+            reader.last_source_time_us = Some(sample_time);
+            if sample_time.saturating_add(early_tolerance) >= source_time_us {
+                return Ok(sample_buffer);
+            }
+            skipped_frames = skipped_frames.saturating_add(1);
+        }
+    }
+
+    pub fn release_resources(&mut self) {
+        #[cfg(target_os = "macos")]
+        {
+            self.sequential_reader = None;
+        }
+    }
 }
 
 impl VideoDecoder for MacosVideoDecoder {
@@ -312,6 +384,7 @@ impl VideoDecoder for MacosVideoDecoder {
     }
 
     fn flush(&mut self) -> Result<(), DecodeError> {
+        self.release_resources();
         Ok(())
     }
 }
@@ -522,67 +595,11 @@ fn platform_decode_frame(
     decoder: &mut MacosVideoDecoder,
     request: VideoDecodeRequest,
 ) -> Result<DecodedVideoFrame, DecodeError> {
-    use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2_av_foundation::{
-        AVAssetReader, AVAssetReaderOutput, AVAssetReaderTrackOutput, AVMediaTypeVideo,
-    };
-    use objc2_core_media::{CMSampleBuffer, CMTimeRange, kCMTimePositiveInfinity};
     use objc2_core_video::{
         CVPixelBufferGetHeight, CVPixelBufferGetPixelFormatType, CVPixelBufferGetWidth,
     };
-    use objc2_foundation::{NSDictionary, NSNumber, NSString};
 
-    let asset = asset_from_path(&decoder.material_uri).map_err(decode_error_from_media)?;
-    let video_media_type = unsafe { AVMediaTypeVideo }
-        .ok_or_else(|| platform_decode_error("AVMediaTypeVideo is unavailable"))?;
-    let tracks = unsafe { asset.tracksWithMediaType(video_media_type) };
-    let track = tracks
-        .firstObject()
-        .ok_or_else(|| platform_decode_error("AVFoundation reported no video track"))?;
-    let reader = unsafe { AVAssetReader::assetReaderWithAsset_error(&asset) }
-        .map_err(|error| platform_decode_error(format!("AVAssetReader failed: {error:?}")))?;
-    let output_settings = output_settings_nv12();
-    let output_settings_ref: &NSDictionary<NSString, AnyObject> = unsafe {
-        &*((&*output_settings as *const NSDictionary<NSString, NSNumber>)
-            as *const NSDictionary<NSString, AnyObject>)
-    };
-    let output = unsafe {
-        AVAssetReaderTrackOutput::assetReaderTrackOutputWithTrack_outputSettings(
-            &track,
-            Some(output_settings_ref),
-        )
-    };
-    unsafe {
-        output.setAlwaysCopiesSampleData(false);
-    }
-    let output_ref: &AVAssetReaderOutput = output.as_ref();
-    if !unsafe { reader.canAddOutput(output_ref) } {
-        return Err(platform_decode_error(
-            "AVAssetReader cannot add the CoreVideo track output",
-        ));
-    }
-    unsafe {
-        reader.addOutput(output_ref);
-    }
-    unsafe {
-        reader.setTimeRange(CMTimeRange::new(
-            cm_time_from_microseconds(request.source_time_us)?,
-            kCMTimePositiveInfinity,
-        ));
-    }
-    if !unsafe { reader.startReading() } {
-        return Err(platform_decode_error(format!(
-            "AVAssetReader startReading failed: status={:?} error={:?}",
-            unsafe { reader.status() },
-            unsafe { reader.error() }
-        )));
-    }
-
-    let raw_sample_buffer: *mut CMSampleBuffer =
-        unsafe { objc2::msg_send![output_ref, copyNextSampleBuffer] };
-    let sample_buffer = unsafe { Retained::from_raw(raw_sample_buffer) }
-        .ok_or_else(|| platform_decode_error("AVAssetReader produced no sample buffer"))?;
+    let sample_buffer = decoder.next_sample_buffer_at(request.source_time_us)?;
     let image_buffer = unsafe { sample_buffer.image_buffer() }
         .ok_or_else(|| platform_decode_error("CMSampleBuffer did not contain a CVImageBuffer"))?;
     let pixel_buffer = image_buffer.as_ref();
@@ -708,6 +725,97 @@ fn platform_decode_frame(
             native_lease,
         )
         .map_err(decode_error_from_frame_pool)
+}
+
+#[cfg(target_os = "macos")]
+fn create_sequential_video_reader(
+    decoder: &MacosVideoDecoder,
+    start_time_us: u64,
+) -> Result<MacosSequentialVideoReader, DecodeError> {
+    use objc2::runtime::AnyObject;
+    use objc2_av_foundation::{
+        AVAssetReader, AVAssetReaderOutput, AVAssetReaderTrackOutput, AVMediaTypeVideo,
+    };
+    use objc2_core_media::{CMTimeRange, kCMTimePositiveInfinity};
+    use objc2_foundation::{NSDictionary, NSNumber, NSString};
+
+    let asset = asset_from_path(&decoder.material_uri).map_err(decode_error_from_media)?;
+    let video_media_type = unsafe { AVMediaTypeVideo }
+        .ok_or_else(|| platform_decode_error("AVMediaTypeVideo is unavailable"))?;
+    let tracks = unsafe { asset.tracksWithMediaType(video_media_type) };
+    let track = tracks
+        .firstObject()
+        .ok_or_else(|| platform_decode_error("AVFoundation reported no video track"))?;
+    let reader = unsafe { AVAssetReader::assetReaderWithAsset_error(&asset) }
+        .map_err(|error| platform_decode_error(format!("AVAssetReader failed: {error:?}")))?;
+    let output_settings = output_settings_nv12();
+    let output_settings_ref: &NSDictionary<NSString, AnyObject> = unsafe {
+        &*((&*output_settings as *const NSDictionary<NSString, NSNumber>)
+            as *const NSDictionary<NSString, AnyObject>)
+    };
+    let output = unsafe {
+        AVAssetReaderTrackOutput::assetReaderTrackOutputWithTrack_outputSettings(
+            &track,
+            Some(output_settings_ref),
+        )
+    };
+    unsafe {
+        output.setAlwaysCopiesSampleData(false);
+    }
+    let output_ref: &AVAssetReaderOutput = output.as_ref();
+    if !unsafe { reader.canAddOutput(output_ref) } {
+        return Err(platform_decode_error(
+            "AVAssetReader cannot add the CoreVideo track output",
+        ));
+    }
+    unsafe {
+        reader.addOutput(output_ref);
+        reader.setTimeRange(CMTimeRange::new(
+            cm_time_from_microseconds(start_time_us)?,
+            kCMTimePositiveInfinity,
+        ));
+    }
+    if !unsafe { reader.startReading() } {
+        return Err(platform_decode_error(format!(
+            "AVAssetReader startReading failed: status={:?} error={:?}",
+            unsafe { reader.status() },
+            unsafe { reader.error() }
+        )));
+    }
+
+    Ok(MacosSequentialVideoReader {
+        reader,
+        output,
+        last_source_time_us: None,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn copy_next_video_sample(
+    reader: &MacosSequentialVideoReader,
+) -> Result<objc2::rc::Retained<objc2_core_media::CMSampleBuffer>, DecodeError> {
+    use objc2::rc::Retained;
+    use objc2_av_foundation::{AVAssetReaderOutput, AVAssetReaderStatus};
+    use objc2_core_media::CMSampleBuffer;
+
+    let output_ref: &AVAssetReaderOutput = reader.output.as_ref();
+    let raw_sample_buffer: *mut CMSampleBuffer =
+        unsafe { objc2::msg_send![output_ref, copyNextSampleBuffer] };
+    unsafe { Retained::from_raw(raw_sample_buffer) }.ok_or_else(|| {
+        let status = unsafe { reader.reader.status() };
+        if status.0 == AVAssetReaderStatus::Completed.0 {
+            DecodeError::new(
+                DecodeErrorKind::EndOfStream,
+                "AVAssetReader reached end of stream before producing a video sample",
+            )
+        } else {
+            platform_decode_error(format!(
+                "AVAssetReader produced no sample buffer: status={:?} error={:?}",
+                status,
+                unsafe { reader.reader.error() }
+            ))
+        }
+    })
 }
 
 #[cfg(target_os = "macos")]

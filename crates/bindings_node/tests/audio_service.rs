@@ -109,10 +109,7 @@ fn audio_service_maps_play_pause_stop_seek_cancel_and_stale_generation() {
     let status_after_seek = registry
         .status(&created.session_id)
         .expect("failed play must not clear seek target time");
-    assert_eq!(
-        status_after_seek.target_time,
-        Microseconds::new(500_000)
-    );
+    assert_eq!(status_after_seek.target_time, Microseconds::new(500_000));
 
     let paused = registry
         .pause(&created.session_id)

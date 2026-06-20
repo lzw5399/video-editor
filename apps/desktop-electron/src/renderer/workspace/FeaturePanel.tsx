@@ -39,6 +39,7 @@ type FeaturePanelProps = {
   onConfirmArtifactCleanup: () => void;
   onDismissResourceNotice: () => void;
   onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
+  onAddTimelineSegment: (materialId: string) => void;
   onAddTextSegment: (text: TextSegment, durationUs: number) => void;
   onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
   onAddAudioSegment: (materialId: string, durationUs: number) => void;
@@ -93,7 +94,8 @@ function MaterialPanel({
   onResumeArtifactGeneration,
   onPrepareArtifactCleanup,
   onConfirmArtifactCleanup,
-  onDismissResourceNotice
+  onDismissResourceNotice,
+  onAddTimelineSegment
 }: FeaturePanelProps): React.ReactElement {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("全部");
@@ -196,8 +198,6 @@ function MaterialPanel({
         />
       ) : null}
 
-      <MaterialList materials={filteredMaterials} resourceStatuses={workspace.resourcePanel.materials} />
-
       {showDeveloperDiagnostics ? (
         <ResourceMaintenance
           resourcePanel={workspace.resourcePanel}
@@ -207,6 +207,13 @@ function MaterialPanel({
           onDismiss={onDismissResourceNotice}
         />
       ) : null}
+
+      <MaterialList
+        materials={filteredMaterials}
+        resourceStatuses={workspace.resourcePanel.materials}
+        pending={workspace.pendingCommand !== null}
+        onAddTimelineSegment={onAddTimelineSegment}
+      />
     </div>
   );
 }
@@ -522,10 +529,14 @@ function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): R
 
 function MaterialList({
   materials,
-  resourceStatuses
+  resourceStatuses,
+  pending,
+  onAddTimelineSegment
 }: {
   materials: Material[];
   resourceStatuses: MaterialResourceStatusView[];
+  pending: boolean;
+  onAddTimelineSegment: (materialId: string) => void;
 }): React.ReactElement {
   if (materials.length === 0) {
     return (
@@ -557,6 +568,15 @@ function MaterialList({
               <MaterialResourceStatusLine status={resourceStatus} />
               {statusMessage === null ? null : <p className="material-warning">{statusMessage}</p>}
             </div>
+            <button
+              type="button"
+              className="secondary-action compact-action material-row-action"
+              aria-label={`添加 ${material.displayName} 到时间线`}
+              onClick={() => onAddTimelineSegment(material.materialId)}
+              disabled={pending || material.status !== "available"}
+            >
+              添加到时间线
+            </button>
           </article>
         );
       })}

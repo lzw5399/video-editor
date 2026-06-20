@@ -204,6 +204,7 @@ export function WorkspaceShell({
           onConfirmArtifactCleanup={onConfirmArtifactCleanup}
           onDismissResourceNotice={onDismissResourceNotice}
           onSelectAudioOutputDevice={onSelectAudioOutputDevice}
+          onAddTimelineSegment={onAddTimelineSegment}
           onAddTextSegment={onAddTextSegment}
           onImportSubtitleSrt={onImportSubtitleSrt}
           onAddAudioSegment={onAddAudioSegment}

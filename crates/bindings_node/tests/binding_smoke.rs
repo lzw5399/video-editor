@@ -96,7 +96,10 @@ fn execute_command_saves_and_opens_project_bundle_through_standard_envelopes() {
     .expect("save project command should return a JSON envelope");
     assert_eq!(saved["ok"], true, "{saved:#}");
     assert_eq!(saved["error"], Value::Null);
-    assert_eq!(saved["data"]["bundlePath"], bundle_path.display().to_string());
+    assert_eq!(
+        saved["data"]["bundlePath"],
+        bundle_path.display().to_string()
+    );
     assert!(bundle_path.join("project.json").exists());
 
     let opened = execute_command(json!({
@@ -110,7 +113,10 @@ fn execute_command_saves_and_opens_project_bundle_through_standard_envelopes() {
     .expect("open project command should return a JSON envelope");
     assert_eq!(opened["ok"], true, "{opened:#}");
     assert_eq!(opened["error"], Value::Null);
-    assert_eq!(opened["data"]["bundlePath"], bundle_path.display().to_string());
+    assert_eq!(
+        opened["data"]["bundlePath"],
+        bundle_path.display().to_string()
+    );
     assert_eq!(opened["data"]["draft"]["draftId"], "draft-command-project");
     assert_eq!(opened["data"]["warnings"], json!([]));
 }
