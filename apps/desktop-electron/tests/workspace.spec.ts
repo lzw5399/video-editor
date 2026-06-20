@@ -176,6 +176,13 @@ async function openExportDialog(page: Page): Promise<Locator> {
   return dialog;
 }
 
+async function openDraftParametersDialog(page: Page): Promise<Locator> {
+  await page.getByLabel("草稿参数").getByRole("button", { name: "修改" }).click();
+  const dialog = page.getByRole("dialog", { name: "草稿参数" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
   await expect
     .poll(async () => {
@@ -537,13 +544,9 @@ test("Chinese editor workspace opens with required regions and material states",
     await expectPreviewCanvasAspectRatio(page);
 
     await expect(page.getByText("未选择片段")).toBeVisible();
-    await expect(page.getByRole("tab", { name: "画面" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "音频" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "变速" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "动画" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "调节" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "AI效果" })).toBeVisible();
     await expect(page.getByLabel("草稿参数")).toContainText("草稿参数");
+    await expect(page.getByLabel("草稿参数").getByRole("button", { name: "修改" })).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(0);
 
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toContainText("音频");
@@ -639,7 +642,7 @@ test("command-only text edit routes complete text inspector changes through exec
     await expect(page.getByRole("button", { name: /片段 默认文字/ })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByLabel("预览文字")).toContainText("开场标题");
 
-    for (const section of ["文本", "样式", "文本框", "布局", "花字 / 气泡"]) {
+    for (const section of ["文本", "样式", "文本框", "布局"]) {
       await expect(page.getByRole("heading", { name: section, exact: true })).toBeVisible();
     }
     const textSection = page.locator('section[aria-label="文本"]');
@@ -840,7 +843,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByRole("button", { name: "添加位置 X关键帧" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "添加缩放 X关键帧" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "添加不透明度关键帧" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "文本关键帧需要文字片段" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "文本关键帧需要文字片段" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "音频" }).click();
     await expect(page.getByLabel("音频参数")).toContainText("应用音频");
@@ -1092,11 +1095,11 @@ test("developer diagnostics preview time input and production frame buttons seek
     await expectNoPreviewFrameCommands(app);
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
-    const inspector = page.getByLabel("草稿参数");
-    await page.getByLabel("帧率", { exact: true }).selectOption("custom");
-    await page.getByLabel("帧率分子").fill("30000");
-    await page.getByLabel("帧率分母").fill("1001");
-    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    const dialog = await openDraftParametersDialog(page);
+    await dialog.getByLabel("帧率", { exact: true }).selectOption("custom");
+    await dialog.getByLabel("帧率分子").fill("30000");
+    await dialog.getByLabel("帧率分母").fill("1001");
+    await dialog.getByRole("button", { name: "应用草稿参数" }).click();
     await expectCommandCall(app, "updateDraftCanvasConfig");
     await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
 
@@ -1640,19 +1643,21 @@ test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截�
 
     const inspector = page.getByLabel("草稿参数");
     await expect(inspector).toContainText("草稿参数");
-    for (const label of ["画布比例", "画布尺寸", "帧率", "画布背景", "黑色", "纯色", "模糊填充", "图片背景", "未接入"]) {
+    for (const label of ["画布比例", "画布尺寸", "帧率", "画布背景"]) {
       await expect(inspector).toContainText(label);
     }
-    await expect(inspector.getByRole("button", { name: "应用草稿参数" })).toBeDisabled();
-    await expect(page.getByText("坐标以画布中心为原点")).toBeVisible();
-    await expect(page.getByRole("button", { name: "图片背景未接入" })).toBeDisabled();
+    await expect(inspector.getByRole("button", { name: "修改" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "应用草稿参数" })).toHaveCount(0);
+    await expect(page.getByText("坐标以画布中心为原点")).toHaveCount(0);
+    await expect(page.getByText("图片背景")).toHaveCount(0);
 
-    await inspector.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
-    await expect(page.getByLabel("画布宽度")).toHaveValue("1080");
-    await expect(page.getByLabel("画布高度")).toHaveValue("1920");
-    await inspector.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "模糊填充" }).click();
-    await expect(inspector).toContainText("模糊填充 · 降级");
-    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    const dialog = await openDraftParametersDialog(page);
+    await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
+    await expect(dialog.getByLabel("画布宽度")).toHaveValue("1080");
+    await expect(dialog.getByLabel("画布高度")).toHaveValue("1920");
+    await dialog.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "模糊填充" }).click();
+    await expect(dialog).toContainText("模糊填充 · 降级");
+    await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expectCommandCall(app, "updateDraftCanvasConfig");
     await expect(
@@ -1688,17 +1693,18 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
   try {
     await spyExecuteCommandCalls(app, page);
 
-    const inspector = page.getByLabel("草稿参数");
-    await page.getByLabel("帧率", { exact: true }).selectOption("custom");
-    await page.getByLabel("帧率分子").fill("30000");
-    await page.getByLabel("帧率分母").fill("1001");
-    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    let dialog = await openDraftParametersDialog(page);
+    await dialog.getByLabel("帧率", { exact: true }).selectOption("custom");
+    await dialog.getByLabel("帧率分子").fill("30000");
+    await dialog.getByLabel("帧率分母").fill("1001");
+    await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expectCommandCall(app, "updateDraftCanvasConfig");
     await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
 
-    await inspector.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "纯色" }).click();
-    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    dialog = await openDraftParametersDialog(page);
+    await dialog.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "纯色" }).click();
+    await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expect
       .poll(async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "updateDraftCanvasConfig").length)
@@ -1735,9 +1741,9 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeEnabled();
     await exportDialog.getByRole("button", { name: "关闭" }).click();
 
-    const inspector = page.getByLabel("草稿参数");
-    await inspector.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "1:1" }).click();
-    await inspector.getByRole("button", { name: "应用草稿参数" }).click();
+    const dialog = await openDraftParametersDialog(page);
+    await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "1:1" }).click();
+    await dialog.getByRole("button", { name: "应用草稿参数" }).click();
     await expectCommandCall(app, "updateDraftCanvasConfig");
 
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
@@ -1786,8 +1792,8 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     for (const label of ["显示画面", "位置", "缩放", "旋转", "不透明度", "适应方式", "裁剪", "背景填充"]) {
       await expect(visualForm).toContainText(label);
     }
-    await expect(visualForm).toContainText("混合模式");
-    await expect(visualForm).toContainText("蒙版");
+    await expect(visualForm).not.toContainText("混合模式");
+    await expect(visualForm).not.toContainText("蒙版");
     await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeDisabled();
 
     await visualForm.getByLabel("位置 X", { exact: true }).fill("160");

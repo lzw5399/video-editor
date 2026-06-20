@@ -143,7 +143,6 @@ const DEFAULT_TEXT_STATE: TextFormState = {
   source: "text"
 };
 
-const INSPECTOR_TABS: readonly InspectorTab[] = ["画面", "音频", "变速", "动画", "调节", "AI效果"];
 const CANVAS_PRESETS: readonly CanvasPresetChoice[] = [
   "ratio16x9",
   "ratio9x16",
@@ -163,8 +162,7 @@ const CANVAS_FRAME_RATES = [24, 25, 30, 50, 60] as const;
 const CANVAS_BACKGROUNDS: readonly { kind: CanvasBackground["kind"]; label: string }[] = [
   { kind: "black", label: "黑色" },
   { kind: "solidColor", label: "纯色" },
-  { kind: "blurFill", label: "模糊填充" },
-  { kind: "image", label: "图片背景" }
+  { kind: "blurFill", label: "模糊填充" }
 ];
 const FIT_MODE_LABELS: Record<SegmentFitMode, string> = {
   fit: "适应",
@@ -250,6 +248,9 @@ export function Inspector({
       ? 0
       : resolveSegmentRelativePlayhead(selected.segment.targetTimerange.start, selected.segment.targetTimerange.duration, playheadUs);
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
+  const visibleTabs = useMemo(() => inspectorTabsForSelection(selected), [selected]);
+  const effectiveActiveTab =
+    selected === null || visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0];
   const renderKeyframeButton = (property: KeyframeProperty, label: string): React.ReactElement => (
     <KeyframeButton
       property={property}
@@ -344,6 +345,17 @@ export function Inspector({
     selected?.segment.text?.source
   ]);
 
+  useEffect(() => {
+    if (selected === null) {
+      return;
+    }
+
+    const nextTabs = inspectorTabsForSelection(selected);
+    if (!nextTabs.includes(activeTab)) {
+      setActiveTab(nextTabs[0]);
+    }
+  }, [activeTab, selected]);
+
   const text = useMemo<TextSegment>(
     () => ({
       content: textState.content,
@@ -388,47 +400,35 @@ export function Inspector({
         <h2>属性检查器</h2>
       </div>
 
-      <div className="inspector-tabs" role="tablist" aria-label="检查器分类">
-        {INSPECTOR_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            className={activeTab === tab ? "active" : ""}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      {selected === null ? null : (
+        <div className="inspector-tabs" role="tablist" aria-label="检查器分类">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={effectiveActiveTab === tab}
+              className={effectiveActiveTab === tab ? "active" : ""}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      )}
 
       {selected === null ? (
         <>
-          {activeTab === "画面" ? (
-            <CanvasDraftSettings
-              workspace={workspace}
-              sequenceDuration={sequenceDuration}
-              onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
-            />
-          ) : activeTab === "动画" ? (
-            <AnimationInspectorTab
-              selected={null}
-              playheadAt={0}
-              focusedProperty={focusedKeyframeProperty}
-              pending={pendingKeyframe}
-              onFocusProperty={setFocusedKeyframeProperty}
-              onSetKeyframe={onSetSelectedSegmentKeyframe}
-              onRemoveKeyframe={onRemoveSelectedSegmentKeyframe}
-            />
-          ) : (
-            <DeferredInspectorTab tab={activeTab} selected={false} />
-          )}
+          <CanvasDraftSettings
+            workspace={workspace}
+            sequenceDuration={sequenceDuration}
+            onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
+          />
           {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
         </>
       ) : (
         <>
-          {activeTab === "画面" ? (
+          {effectiveActiveTab === "画面" ? (
             <div className="inspector-tab-panel" role="tabpanel" aria-label="画面参数">
               <section className="inspector-section" aria-label="片段信息">
                 <div className="inspector-section-title">
@@ -437,7 +437,7 @@ export function Inspector({
                 </div>
                 <dl className="inspector-list compact">
                   {showDeveloperDiagnostics ? <InspectorDatum label="片段ID" value={selected.segment.segmentId} /> : null}
-                  <InspectorDatum label="素材" value={selected.material?.displayName ?? selected.segment.materialId} />
+                  <InspectorDatum label="素材" value={selected.material?.displayName ?? "未关联素材"} />
                   <InspectorDatum label="轨道" value={`${selected.track.name} / ${selected.track.kindLabel}`} />
                   <InspectorDatum
                     label="源时间"
@@ -738,38 +738,14 @@ export function Inspector({
                     </button>
                   </section>
 
-                  <section className="inspector-section" aria-label="花字气泡">
-                    <div className="inspector-section-title">
-                      <h3>花字 / 气泡</h3>
-                      <KeyframeButton deferredLabel="花字气泡关键帧暂不支持" />
-                    </div>
-                    <div className="visual-deferred-grid">
-                      <div className="visual-deferred-row">
-                        <span>花字</span>
-                        <strong>{selected.segment.text?.effect?.name ?? "无"}</strong>
-                        <em>暂未接入</em>
-                      </div>
-                      <div className="visual-deferred-row">
-                        <span>气泡</span>
-                        <strong>{selected.segment.text?.bubble?.name ?? "无"}</strong>
-                        <em>暂未接入</em>
-                      </div>
-                    </div>
-                  </section>
                 </>
               ) : (
-                <section className="inspector-section" aria-label="文字参数">
-                  <div className="inspector-section-title">
-                    <h3>文本</h3>
-                    <KeyframeButton deferredLabel="文本关键帧需要文字片段" />
-                  </div>
-                  <p className="inspector-note">当前片段没有文字语义。</p>
-                </section>
+                null
               )}
             </div>
           ) : null}
 
-          {activeTab === "音频" ? (
+          {effectiveActiveTab === "音频" ? (
             <section className="inspector-section" aria-label="音频参数" role="tabpanel">
               <div className="inspector-section-title">
                 <h3>音频</h3>
@@ -851,7 +827,7 @@ export function Inspector({
             </section>
           ) : null}
 
-          {activeTab === "动画" ? (
+          {effectiveActiveTab === "动画" ? (
             <AnimationInspectorTab
               selected={selected}
               playheadAt={relativePlayheadUs}
@@ -861,10 +837,6 @@ export function Inspector({
               onSetKeyframe={onSetSelectedSegmentKeyframe}
               onRemoveKeyframe={onRemoveSelectedSegmentKeyframe}
             />
-          ) : null}
-
-          {activeTab !== "画面" && activeTab !== "音频" && activeTab !== "动画" ? (
-            <DeferredInspectorTab tab={activeTab} selected />
           ) : null}
 
           {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
@@ -886,6 +858,7 @@ function CanvasDraftSettings({
   const acceptedConfig = workspace.draft.canvasConfig;
   const acceptedConfigKey = useMemo(() => JSON.stringify(acceptedConfig), [acceptedConfig]);
   const [canvasState, setCanvasState] = useState<CanvasFormState>(() => canvasFormFromConfig(acceptedConfig));
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     setCanvasState(canvasFormFromConfig(acceptedConfig));
@@ -933,197 +906,34 @@ function CanvasDraftSettings({
     setCanvasState((current) => ({ ...current, color: value }));
   }
 
+  function openModal(): void {
+    setCanvasState(canvasFormFromConfig(acceptedConfig));
+    setModalOpen(true);
+  }
+
+  function closeModal(): void {
+    setCanvasState(canvasFormFromConfig(acceptedConfig));
+    setModalOpen(false);
+  }
+
+  function applyCanvasConfig(): void {
+    if (candidate !== null && validationMessage === null) {
+      onUpdateDraftCanvasConfig(candidate);
+      setModalOpen(false);
+    }
+  }
+
   return (
     <section className="inspector-section canvas-settings-section" aria-label="草稿参数" role="tabpanel">
       <div className="inspector-section-title">
         <h3>草稿参数</h3>
+        <button type="button" className="secondary-action compact-action" onClick={openModal}>
+          修改
+        </button>
       </div>
       <div className="empty-state compact-empty">
         <strong>未选择片段</strong>
         <span>这里显示草稿级画布参数。选择时间线片段后，可调整片段画面、音频、文字和关键帧参数。</span>
-      </div>
-
-      <div className="canvas-form" aria-label="画布参数表单">
-        <div className="canvas-control-row">
-          <span>画布比例</span>
-          <div className="canvas-segmented" role="group" aria-label="画布比例">
-            {CANVAS_PRESETS.map((preset) => {
-              const label = preset === "custom" ? "自定义" : canvasPresetLabel(preset);
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  className={canvasState.preset === preset ? "active" : ""}
-                  aria-pressed={canvasState.preset === preset}
-                  onClick={() => selectPreset(preset)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="canvas-control-row">
-          <span>画布尺寸</span>
-          <div className="canvas-size-fields">
-            <label>
-              <span>宽</span>
-              <input
-                aria-label="画布宽度"
-                inputMode="numeric"
-                type="number"
-                min="1"
-                step="1"
-                value={canvasState.width}
-                onChange={(event) => updateDimension("width", event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              <span>高</span>
-              <input
-                aria-label="画布高度"
-                inputMode="numeric"
-                type="number"
-                min="1"
-                step="1"
-                value={canvasState.height}
-                onChange={(event) => updateDimension("height", event.currentTarget.value)}
-              />
-            </label>
-          </div>
-        </div>
-
-        <label className="canvas-control-row">
-          <span>帧率</span>
-          <span className="canvas-frame-rate-controls">
-            <select
-              aria-label="帧率"
-              value={canvasState.frameRatePreset}
-              onChange={(event) => {
-                const nextFrameRate = event.currentTarget.value;
-                setCanvasState((current) => {
-                  if (nextFrameRate === "custom") {
-                    return { ...current, frameRatePreset: "custom" };
-                  }
-
-                  return {
-                    ...current,
-                    frameRatePreset: nextFrameRate,
-                    frameRateNumerator: nextFrameRate,
-                    frameRateDenominator: "1"
-                  };
-                });
-              }}
-            >
-              {CANVAS_FRAME_RATES.map((frameRate) => (
-                <option key={frameRate} value={String(frameRate)}>
-                  {frameRate} fps
-                </option>
-              ))}
-              <option value="custom">
-                {canvasState.frameRatePreset === "custom"
-                  ? `当前 ${canvasState.frameRateNumerator}/${canvasState.frameRateDenominator} fps`
-                  : "自定义"}
-              </option>
-            </select>
-            {canvasState.frameRatePreset === "custom" ? (
-              <span className="canvas-rate-fields">
-                <input
-                  aria-label="帧率分子"
-                  inputMode="numeric"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={canvasState.frameRateNumerator}
-                  onChange={(event) => updateFrameRatePart("frameRateNumerator", event.currentTarget.value)}
-                />
-                <span aria-hidden="true">/</span>
-                <input
-                  aria-label="帧率分母"
-                  inputMode="numeric"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={canvasState.frameRateDenominator}
-                  onChange={(event) => updateFrameRatePart("frameRateDenominator", event.currentTarget.value)}
-                />
-              </span>
-            ) : null}
-          </span>
-        </label>
-
-        <div className="canvas-control-row">
-          <span>画布背景</span>
-          <div className="canvas-segmented background-modes" role="group" aria-label="画布背景">
-            {CANVAS_BACKGROUNDS.map((background) => (
-              <button
-                key={background.kind}
-                type="button"
-                className={canvasState.backgroundKind === background.kind ? "active" : ""}
-                aria-pressed={canvasState.backgroundKind === background.kind}
-                onClick={() => setCanvasState((current) => ({ ...current, backgroundKind: background.kind }))}
-              >
-                {background.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {canvasState.backgroundKind === "solidColor" ? (
-          <label className="canvas-control-row canvas-color-row">
-            <span>背景颜色</span>
-            <span className="canvas-color-controls">
-              <input
-                aria-label="画布背景颜色"
-                type="color"
-                value={isHexColor(canvasState.color) ? canvasState.color : "#000000"}
-                onChange={(event) => updateCanvasColor(event.currentTarget.value)}
-              />
-              <input
-                aria-label="画布背景色值"
-                type="text"
-                value={canvasState.color}
-                onChange={(event) => updateCanvasColor(event.currentTarget.value)}
-              />
-            </span>
-          </label>
-        ) : null}
-
-        <div className={`canvas-background-status ${canvasBackgroundToneClass(displayConfig.background.kind)}`}>
-          <span>{backgroundStatus}</span>
-          {displayConfig.background.kind === "blurFill" ? <em>降级</em> : null}
-          {displayConfig.background.kind === "image" ? <em>未接入</em> : null}
-        </div>
-
-        <button
-          type="button"
-          className="canvas-image-button"
-          aria-label="图片背景未接入"
-          title="图片背景未接入"
-          disabled
-        >
-          图片背景 <span>未接入</span>
-        </button>
-
-        <p className="canvas-coordinate-help">坐标以画布中心为原点，X 向右，Y 向上</p>
-        <p className="canvas-readout" aria-label="画布读数">
-          {formatCanvasReadout(displayConfig)}
-        </p>
-        {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
-
-        <button
-          type="button"
-          className="primary-action wide-action"
-          disabled={!canApply}
-          onClick={() => {
-            if (candidate !== null && validationMessage === null) {
-              onUpdateDraftCanvasConfig(candidate);
-            }
-          }}
-        >
-          应用草稿参数
-        </button>
       </div>
 
       <dl className="inspector-list compact">
@@ -1136,22 +946,188 @@ function CanvasDraftSettings({
         <InspectorDatum label="轨道数量" value={`${workspace.draft.tracks.length} 条`} />
         <InspectorDatum label="素材数量" value={`${workspace.draft.materials.length} 个`} />
         <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
-        <InspectorDatum label="核心状态" value={workspace.bindingStatus.label} />
       </dl>
-    </section>
-  );
-}
 
-function DeferredInspectorTab({ tab, selected }: { tab: InspectorTab; selected: boolean }): React.ReactElement {
-  return (
-    <section className="inspector-section" aria-label={`${tab}参数`} role="tabpanel">
-      <div className="inspector-section-title">
-        <h3>{tab}</h3>
-      </div>
-      <div className="empty-state compact-empty">
-        <strong>{tab}功能待接入</strong>
-        <span>{selected ? `当前阶段暂不提供${tab}参数编辑。` : "选择时间线片段后，可查看对应参数。"}</span>
-      </div>
+      {modalOpen ? (
+        <div className="canvas-modal-backdrop">
+          <div className="canvas-modal" role="dialog" aria-modal="true" aria-labelledby="canvas-modal-title">
+            <div className="canvas-modal-header">
+              <h3 id="canvas-modal-title">草稿参数</h3>
+              <button type="button" className="canvas-modal-close" aria-label="关闭草稿参数" onClick={closeModal}>
+                ×
+              </button>
+            </div>
+
+            <div className="canvas-form" aria-label="画布参数表单">
+              <div className="canvas-control-row">
+                <span>画布比例</span>
+                <div className="canvas-segmented" role="group" aria-label="画布比例">
+                  {CANVAS_PRESETS.map((preset) => {
+                    const label = preset === "custom" ? "自定义" : canvasPresetLabel(preset);
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        className={canvasState.preset === preset ? "active" : ""}
+                        aria-pressed={canvasState.preset === preset}
+                        onClick={() => selectPreset(preset)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="canvas-control-row">
+                <span>画布尺寸</span>
+                <div className="canvas-size-fields">
+                  <label>
+                    <span>宽</span>
+                    <input
+                      aria-label="画布宽度"
+                      inputMode="numeric"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={canvasState.width}
+                      onChange={(event) => updateDimension("width", event.currentTarget.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>高</span>
+                    <input
+                      aria-label="画布高度"
+                      inputMode="numeric"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={canvasState.height}
+                      onChange={(event) => updateDimension("height", event.currentTarget.value)}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <label className="canvas-control-row">
+                <span>帧率</span>
+                <span className="canvas-frame-rate-controls">
+                  <select
+                    aria-label="帧率"
+                    value={canvasState.frameRatePreset}
+                    onChange={(event) => {
+                      const nextFrameRate = event.currentTarget.value;
+                      setCanvasState((current) => {
+                        if (nextFrameRate === "custom") {
+                          return { ...current, frameRatePreset: "custom" };
+                        }
+
+                        return {
+                          ...current,
+                          frameRatePreset: nextFrameRate,
+                          frameRateNumerator: nextFrameRate,
+                          frameRateDenominator: "1"
+                        };
+                      });
+                    }}
+                  >
+                    {CANVAS_FRAME_RATES.map((frameRate) => (
+                      <option key={frameRate} value={String(frameRate)}>
+                        {frameRate} fps
+                      </option>
+                    ))}
+                    <option value="custom">
+                      {canvasState.frameRatePreset === "custom"
+                        ? `当前 ${canvasState.frameRateNumerator}/${canvasState.frameRateDenominator} fps`
+                        : "自定义"}
+                    </option>
+                  </select>
+                  {canvasState.frameRatePreset === "custom" ? (
+                    <span className="canvas-rate-fields">
+                      <input
+                        aria-label="帧率分子"
+                        inputMode="numeric"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={canvasState.frameRateNumerator}
+                        onChange={(event) => updateFrameRatePart("frameRateNumerator", event.currentTarget.value)}
+                      />
+                      <span aria-hidden="true">/</span>
+                      <input
+                        aria-label="帧率分母"
+                        inputMode="numeric"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={canvasState.frameRateDenominator}
+                        onChange={(event) => updateFrameRatePart("frameRateDenominator", event.currentTarget.value)}
+                      />
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+
+              <div className="canvas-control-row">
+                <span>画布背景</span>
+                <div className="canvas-segmented background-modes" role="group" aria-label="画布背景">
+                  {CANVAS_BACKGROUNDS.map((background) => (
+                    <button
+                      key={background.kind}
+                      type="button"
+                      className={canvasState.backgroundKind === background.kind ? "active" : ""}
+                      aria-pressed={canvasState.backgroundKind === background.kind}
+                      onClick={() => setCanvasState((current) => ({ ...current, backgroundKind: background.kind }))}
+                    >
+                      {background.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {canvasState.backgroundKind === "solidColor" ? (
+                <label className="canvas-control-row canvas-color-row">
+                  <span>背景颜色</span>
+                  <span className="canvas-color-controls">
+                    <input
+                      aria-label="画布背景颜色"
+                      type="color"
+                      value={isHexColor(canvasState.color) ? canvasState.color : "#000000"}
+                      onChange={(event) => updateCanvasColor(event.currentTarget.value)}
+                    />
+                    <input
+                      aria-label="画布背景色值"
+                      type="text"
+                      value={canvasState.color}
+                      onChange={(event) => updateCanvasColor(event.currentTarget.value)}
+                    />
+                  </span>
+                </label>
+              ) : null}
+
+              <div className={`canvas-background-status ${canvasBackgroundToneClass(displayConfig.background.kind)}`}>
+                <span>{backgroundStatus}</span>
+                {displayConfig.background.kind === "blurFill" ? <em>降级</em> : null}
+              </div>
+
+              <p className="canvas-coordinate-help">坐标以画布中心为原点，X 向右，Y 向上</p>
+              <p className="canvas-readout" aria-label="画布读数">
+                {formatCanvasReadout(displayConfig)}
+              </p>
+              {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
+            </div>
+
+            <div className="canvas-modal-actions">
+              <button type="button" className="secondary-action" onClick={closeModal}>
+                取消
+              </button>
+              <button type="button" className="primary-action" disabled={!canApply} onClick={applyCanvasConfig}>
+                应用草稿参数
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1189,7 +1165,7 @@ function AnimationInspectorTab({
 
   const supportedFocused = isSupportedPropertyForSegment(selected, focusedProperty);
   const focusedKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === focusedProperty);
-  const segmentName = selected.material?.displayName ?? selected.segment.segmentId;
+  const segmentName = selected.material?.displayName ?? "未关联素材";
 
   return (
     <section className="inspector-section animation-panel" aria-label="动画参数" role="tabpanel">
@@ -1493,6 +1469,33 @@ function isSupportedPropertyForSegment(selected: SelectedSegmentView, property: 
   return true;
 }
 
+function inspectorTabsForSelection(selected: SelectedSegmentView | null): InspectorTab[] {
+  if (selected === null) {
+    return [];
+  }
+
+  const materialKind = selected.material?.kind;
+  const hasText = selected.segment.text !== null && selected.segment.text !== undefined;
+  const hasAudioSemantics =
+    selected.track.kindLabel === "音频" ||
+    materialKind === "audio" ||
+    selected.material?.metadata.hasAudio === true;
+
+  if (hasAudioSemantics && !hasText && materialKind !== "video") {
+    return ["音频", "动画"];
+  }
+
+  if (hasText) {
+    return ["画面", "动画"];
+  }
+
+  if (hasAudioSemantics) {
+    return ["画面", "音频", "动画"];
+  }
+
+  return ["画面", "动画"];
+}
+
 function validateTextForm(state: TextFormState): string | null {
   if (state.content.trim().length === 0) {
     return "文字内容不能为空。";
@@ -1738,19 +1741,6 @@ function SegmentVisualControls({
           </span>
         </label>
       ) : null}
-
-      <div className="visual-deferred-grid">
-        <div className="visual-deferred-row">
-          <span>混合模式</span>
-          <strong>正常</strong>
-          <em>未接入</em>
-        </div>
-        <div className="visual-deferred-row">
-          <span>蒙版</span>
-          <strong>无</strong>
-          <em>未接入</em>
-        </div>
-      </div>
 
       {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
 
