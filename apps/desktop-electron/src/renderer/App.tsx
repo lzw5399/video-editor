@@ -154,6 +154,7 @@ type RealtimePreviewHostState = {
   ok: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
+  unsupportedReason?: string | null;
   playbackGeneration: number | null;
 };
 

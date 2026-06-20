@@ -38,9 +38,10 @@ pub use graph_prepare::{
     RealtimePreviewGraphPrepareErrorKind, prepare_realtime_preview_graph,
 };
 pub use media_io_adapter::{
-    MediaIoFrameProvider, MediaIoHandoffError, PreviewDecodeDeviceContext, PreviewDecodeDiagnostic,
-    PreviewFrameStorageKind, PreviewFrameStoragePreference, PreviewMaterialDecodeOutput,
-    PreviewMaterialDecodeRequest, PreviewMaterialDecodeSource, PreviewMediaIoTelemetry,
+    MediaIoFrameProvider, MediaIoHandoffError, PendingPreviewFrameRelease,
+    PreviewDecodeDeviceContext, PreviewDecodeDiagnostic, PreviewFrameStorageKind,
+    PreviewFrameStoragePreference, PreviewMaterialDecodeOutput, PreviewMaterialDecodeRequest,
+    PreviewMaterialDecodeSource, PreviewMediaIoTelemetry,
 };
 pub use parity::{RealtimePreviewParityDiagnostic, realtime_preview_parity_diagnostics};
 pub use request::{

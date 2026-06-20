@@ -305,7 +305,18 @@ impl MediaIoFrameProvider {
     pub fn release_presented_frames(
         &mut self,
     ) -> Result<Vec<FrameReleaseDiagnostic>, MediaIoHandoffError> {
-        let pending = std::mem::take(&mut self.pending_frame_releases);
+        let pending = self.take_presented_frame_releases();
+        self.release_presented_frame_batch(pending)
+    }
+
+    pub fn take_presented_frame_releases(&mut self) -> Vec<PendingPreviewFrameRelease> {
+        std::mem::take(&mut self.pending_frame_releases)
+    }
+
+    pub fn release_presented_frame_batch(
+        &mut self,
+        pending: Vec<PendingPreviewFrameRelease>,
+    ) -> Result<Vec<FrameReleaseDiagnostic>, MediaIoHandoffError> {
         let mut diagnostics = Vec::with_capacity(pending.len());
         let mut failed = Vec::new();
         let mut first_error = None;
@@ -422,7 +433,7 @@ impl PreviewFrameProvider for MediaIoFrameProvider {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PendingPreviewFrameRelease {
+pub struct PendingPreviewFrameRelease {
     material_id: MaterialId,
     lease_id: FrameLeaseId,
     texture_handle_id: Option<TextureHandleId>,

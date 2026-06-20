@@ -13,6 +13,7 @@ pub mod texture_cache;
 pub use compositor::{
     RealtimePreviewCompositor, RealtimePreviewCompositorBackend, RealtimePreviewCompositorError,
     RealtimePreviewCompositorOutput, RealtimePreviewSurfacePresentationOutput,
+    RealtimePreviewSurfaceSubmissionFence,
 };
 pub use device::{
     RealtimePreviewGpuBackend, RealtimePreviewGpuDevice, RealtimePreviewGpuDeviceDescriptor,

@@ -1,11 +1,15 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::sync::{
+    Arc, Mutex, MutexGuard,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use draft_model::{Draft, MaterialId, MaterialKind, Microseconds, RationalFrameRate};
 use media_runtime::{
@@ -18,7 +22,7 @@ use media_runtime_desktop::{
 };
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{
-    MediaIoFrameProvider, PlaybackGeneration, PlaybackRate, PlaybackState,
+    MediaIoFrameProvider, PendingPreviewFrameRelease, PlaybackGeneration, PlaybackRate,
     PreviewCancellationToken, PreviewDecodeDeviceContext, PreviewFrameInput, PreviewFrameProvider,
     PreviewFrameProviderError, PreviewFrameStoragePreference, PreviewGpuBackend,
     PreviewMaterialDecodeSource, PreviewRequestMode, PreviewSessionId, RealtimePlaybackScheduler,
@@ -34,7 +38,8 @@ use realtime_preview_runtime::{
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
         RealtimePreviewGpuDeviceDescriptor, RealtimePreviewGpuPresentationTarget,
-        RealtimePreviewTargetFormat, RealtimePreviewTextureCache,
+        RealtimePreviewSurfaceSubmissionFence, RealtimePreviewTargetFormat,
+        RealtimePreviewTextureCache,
     },
 };
 use render_graph::{OutputDimensions, RenderGraph};
@@ -47,6 +52,9 @@ use crate::native_preview_presenter::{
 };
 
 const SESSION_PREFIX: &str = "rtprev-session-";
+const PLAYBACK_FRAME_DURATION_US: u64 = 33_333;
+const MAX_IN_FLIGHT_SURFACE_PRESENTATIONS: usize = 4;
+const SURFACE_PRESENT_BACKPRESSURE_TIMEOUT: Duration = Duration::from_millis(250);
 static NEXT_SCHEDULER_MEDIA_PIPELINE_ID: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
@@ -54,23 +62,24 @@ thread_local! {
         RefCell::new(BTreeMap::new());
 }
 
-#[derive(Default)]
 pub struct RealtimePreviewBindingRegistry {
-    runtime: RealtimePreviewRuntime,
+    runtime: Arc<Mutex<RealtimePreviewRuntime>>,
     next_binding_id: u64,
     sessions: BTreeMap<String, PreviewSessionId>,
     presenters: BTreeMap<String, NativePreviewPresenter>,
-    schedulers: BTreeMap<String, RealtimePreviewBindingScheduler>,
+    schedulers: BTreeMap<String, RealtimePreviewSchedulerSession>,
+    playback_workers: BTreeMap<String, BindingPlaybackWorker>,
 }
 
 impl RealtimePreviewBindingRegistry {
     pub fn new() -> Self {
         Self {
-            runtime: RealtimePreviewRuntime::new(),
+            runtime: Arc::new(Mutex::new(RealtimePreviewRuntime::new())),
             next_binding_id: 1,
             sessions: BTreeMap::new(),
             presenters: BTreeMap::new(),
             schedulers: BTreeMap::new(),
+            playback_workers: BTreeMap::new(),
         }
     }
 
@@ -91,7 +100,7 @@ impl RealtimePreviewBindingRegistry {
             )
         })?;
         let runtime_id = self
-            .runtime
+            .runtime_lock()?
             .create_session(RealtimePreviewSessionConfig {
                 session_label: config.session_label,
                 preferred_backend: PreviewGpuBackend::Auto,
@@ -106,7 +115,7 @@ impl RealtimePreviewBindingRegistry {
             .insert(binding_id.clone(), NativePreviewPresenter::detached());
         self.schedulers.insert(
             binding_id.clone(),
-            RealtimePreviewBindingScheduler::new(RealtimePlaybackSchedulerConfig {
+            RealtimePreviewSchedulerSession::new(RealtimePlaybackSchedulerConfig {
                 preview_dimensions: OutputDimensions {
                     width: 1280,
                     height: 720,
@@ -114,7 +123,7 @@ impl RealtimePreviewBindingRegistry {
             }),
         );
         let generation = self
-            .runtime
+            .runtime_lock()?
             .clock(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?
             .generation()
@@ -135,11 +144,12 @@ impl RealtimePreviewBindingRegistry {
             .sessions
             .remove(session_id)
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))?;
+        self.stop_playback_worker(session_id);
         if let Some(mut presenter) = self.presenters.remove(session_id) {
             presenter.detach();
         }
         self.schedulers.remove(session_id);
-        let closed = self.runtime.close_session(runtime_id);
+        let closed = self.runtime_lock()?.close_session(runtime_id);
         Ok(RealtimePreviewClosedBindingResponse {
             session_id: session_id.to_owned(),
             closed,
@@ -153,11 +163,15 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let descriptor = descriptor.to_runtime_descriptor()?;
-        self.scheduler_mut(session_id)?.attach_surface(descriptor)?;
-        let generation = match self.runtime.attach_surface(runtime_id, descriptor) {
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| scheduler.attach_surface(descriptor))?;
+        let generation = match self.runtime_lock()?.attach_surface(runtime_id, descriptor) {
             Ok(generation) => generation,
             Err(error) => {
-                self.scheduler_mut(session_id)?.detach_surface();
+                self.with_scheduler_mut(session_id, |scheduler| {
+                    scheduler.detach_surface();
+                    Ok(())
+                })?;
                 return Err(RealtimePreviewBindingError::runtime(error));
             }
         };
@@ -170,12 +184,14 @@ impl RealtimePreviewBindingRegistry {
         bounds: RealtimePreviewSurfaceBoundsBindingRequest,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
+        self.stop_playback_worker(session_id);
         let generation = self
-            .runtime
+            .runtime_lock()?
             .update_surface_bounds(runtime_id, bounds.to_runtime_bounds())
             .map_err(RealtimePreviewBindingError::runtime)?;
-        self.scheduler_mut(session_id)?
-            .update_surface_bounds(bounds.to_runtime_bounds())?;
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.update_surface_bounds(bounds.to_runtime_bounds())
+        })?;
         Ok(generation_response(generation))
     }
 
@@ -184,12 +200,16 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
+        self.stop_playback_worker(session_id);
         let generation = self
-            .runtime
+            .runtime_lock()?
             .detach_surface(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
         self.presenter_mut(session_id)?.detach();
-        self.scheduler_mut(session_id)?.detach_surface();
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.detach_surface();
+            Ok(())
+        })?;
         Ok(generation_response(generation))
     }
 
@@ -200,10 +220,13 @@ impl RealtimePreviewBindingRegistry {
         bundle_path: Option<PathBuf>,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.scheduler_mut(session_id)?
-            .update_draft_snapshot(draft.clone(), bundle_path.clone());
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.update_draft_snapshot(draft.clone(), bundle_path.clone());
+            Ok(())
+        })?;
         let generation = self
-            .runtime
+            .runtime_lock()?
             .update_draft_snapshot(runtime_id, draft)
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(generation_response(generation))
@@ -216,9 +239,13 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let target_time = Microseconds::new(target_time_microseconds);
-        self.scheduler_mut(session_id)?.seek(target_time);
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.seek(target_time);
+            Ok(())
+        })?;
         let generation = self
-            .runtime
+            .runtime_lock()?
             .seek(runtime_id, target_time)
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(generation_response(generation))
@@ -230,34 +257,21 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let target_time = self
-            .runtime
+            .runtime_lock()?
             .clock(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?
             .position();
         let generation = self
-            .runtime
+            .runtime_lock()?
             .play(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
-        self.scheduler_mut(session_id)?
-            .start_playback(target_time, generation);
-        let evidence = match self
-            .scheduler_mut(session_id)?
-            .present_playback_tick(generation)
-        {
-            Ok(evidence) => evidence,
-            Err(error) => {
-                let _ = self.runtime.pause(runtime_id);
-                self.scheduler_mut(session_id)?.pause_playback();
-                return Err(error);
-            }
-        };
-        self.runtime
-            .record_presented_output(
-                runtime_id,
-                Microseconds::new(evidence.target_time_microseconds),
-                u64::from(evidence.presented_frames),
-            )
-            .map_err(RealtimePreviewBindingError::runtime)?;
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.validate_playback_ready()?;
+            scheduler.start_playback(target_time, generation);
+            Ok(())
+        })?;
+        self.start_playback_worker(session_id, runtime_id, generation)?;
         Ok(generation_response(generation))
     }
 
@@ -266,9 +280,13 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.scheduler_mut(session_id)?.pause_playback();
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.pause_playback();
+            Ok(())
+        })?;
         let generation = self
-            .runtime
+            .runtime_lock()?
             .pause(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(generation_response(generation))
@@ -279,9 +297,13 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.scheduler_mut(session_id)?.stop_playback();
+        self.stop_playback_worker(session_id);
+        self.with_scheduler_mut(session_id, |scheduler| {
+            scheduler.stop_playback();
+            Ok(())
+        })?;
         let generation = self
-            .runtime
+            .runtime_lock()?
             .stop(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(generation_response(generation))
@@ -294,7 +316,7 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewFrameBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let result = self
-            .runtime
+            .runtime_lock()?
             .request_frame(runtime_id, request.to_runtime_request())
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(RealtimePreviewFrameBindingResponse {
@@ -317,7 +339,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<PreviewCancellationToken, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.runtime
+        self.runtime_lock()?
             .next_cancellation_token(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)
     }
@@ -328,7 +350,7 @@ impl RealtimePreviewBindingRegistry {
         cancellation_token: PreviewCancellationToken,
     ) -> Result<RealtimePreviewCanceledBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.runtime
+        self.runtime_lock()?
             .cancel_request(runtime_id, cancellation_token)
             .map_err(RealtimePreviewBindingError::runtime)?;
         Ok(RealtimePreviewCanceledBindingResponse {
@@ -343,7 +365,7 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewTelemetryBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         Ok(RealtimePreviewTelemetryBindingResponse::from_runtime(
-            self.runtime
+            self.runtime_lock()?
                 .telemetry(runtime_id)
                 .map_err(RealtimePreviewBindingError::runtime)?,
         ))
@@ -353,39 +375,19 @@ impl RealtimePreviewBindingRegistry {
         &mut self,
         session_id: &str,
     ) -> Result<NativePreviewPresentationState, RealtimePreviewBindingError> {
-        let runtime_id = self.runtime_session_id(session_id)?;
-        let (clock_state, generation) = {
-            let clock = self
-                .runtime
-                .clock(runtime_id)
-                .map_err(RealtimePreviewBindingError::runtime)?;
-            (clock.state(), clock.generation())
-        };
-        if clock_state == PlaybackState::Playing {
-            let evidence = self
-                .scheduler_mut(session_id)?
-                .present_playback_tick(generation)?;
-            self.runtime
-                .record_presented_output(
-                    runtime_id,
-                    Microseconds::new(evidence.target_time_microseconds),
-                    u64::from(evidence.presented_frames),
-                )
-                .map_err(RealtimePreviewBindingError::runtime)?;
-        }
-        let scheduler = self.scheduler_mut(session_id)?;
-        let evidence = scheduler
-            .evidence()
-            .cloned()
-            .map(native_evidence_from_scheduler);
-        let surface_placement = scheduler.surface_placement();
+        let snapshot = self.playback_snapshot(session_id)?;
+        let evidence = snapshot.evidence.map(native_evidence_from_scheduler);
+        let surface_placement = snapshot.surface_placement;
         match evidence {
             Some(evidence) => Ok(
                 NativePreviewPresentationState::render_graph_gpu_available(Some(evidence))
                     .with_surface_placement(surface_placement),
             ),
             None => Ok(NativePreviewPresentationState::unavailable(
-                "render graph GPU compositor scheduler has not presented product content",
+                snapshot.unsupported_reason.unwrap_or_else(|| {
+                    "render graph GPU compositor scheduler has not presented product content"
+                        .to_owned()
+                }),
             )),
         }
     }
@@ -401,6 +403,17 @@ impl RealtimePreviewBindingRegistry {
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))
     }
 
+    fn runtime_lock(
+        &self,
+    ) -> Result<MutexGuard<'_, RealtimePreviewRuntime>, RealtimePreviewBindingError> {
+        self.runtime.lock().map_err(|_| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                "realtime preview runtime lock poisoned",
+            )
+        })
+    }
+
     fn presenter_mut(
         &mut self,
         session_id: &str,
@@ -411,21 +424,227 @@ impl RealtimePreviewBindingRegistry {
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))
     }
 
-    fn scheduler_mut(
-        &mut self,
+    fn scheduler_session(
+        &self,
         session_id: &str,
-    ) -> Result<&mut RealtimePreviewBindingScheduler, RealtimePreviewBindingError> {
+    ) -> Result<&RealtimePreviewSchedulerSession, RealtimePreviewBindingError> {
         validate_binding_session_id(session_id)?;
         self.schedulers
-            .get_mut(session_id)
+            .get(session_id)
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))
+    }
+
+    fn scheduler_handle(
+        &self,
+        session_id: &str,
+    ) -> Result<Arc<Mutex<RealtimePreviewBindingScheduler>>, RealtimePreviewBindingError> {
+        Ok(Arc::clone(&self.scheduler_session(session_id)?.scheduler))
+    }
+
+    fn with_scheduler_mut<T>(
+        &self,
+        session_id: &str,
+        action: impl FnOnce(
+            &mut RealtimePreviewBindingScheduler,
+        ) -> Result<T, RealtimePreviewBindingError>,
+    ) -> Result<T, RealtimePreviewBindingError> {
+        let scheduler = self.scheduler_handle(session_id)?;
+        let mut scheduler = scheduler.lock().map_err(|_| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                "realtime preview scheduler lock poisoned",
+            )
+        })?;
+        action(&mut scheduler)
+    }
+
+    fn playback_snapshot(
+        &self,
+        session_id: &str,
+    ) -> Result<BindingPlaybackSnapshot, RealtimePreviewBindingError> {
+        self.scheduler_session(session_id)?
+            .snapshot
+            .lock()
+            .map(|snapshot| snapshot.clone())
+            .map_err(|_| {
+                RealtimePreviewBindingError::new(
+                    RealtimePreviewBindingErrorKind::Runtime,
+                    "realtime preview snapshot lock poisoned",
+                )
+            })
+    }
+
+    fn stop_playback_worker(&mut self, session_id: &str) {
+        if let Some(worker) = self.playback_workers.remove(session_id) {
+            worker.stop();
+        }
+    }
+
+    fn start_playback_worker(
+        &mut self,
+        session_id: &str,
+        runtime_id: PreviewSessionId,
+        playback_generation: PlaybackGeneration,
+    ) -> Result<(), RealtimePreviewBindingError> {
+        let scheduler = self.scheduler_handle(session_id)?;
+        let runtime = Arc::clone(&self.runtime);
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = Arc::clone(&stop);
+        let label = format!("rt-preview-playback-{session_id}");
+        let handle = thread::Builder::new()
+            .name(label)
+            .spawn(move || {
+                run_binding_playback_loop(
+                    runtime,
+                    runtime_id,
+                    scheduler,
+                    playback_generation,
+                    worker_stop,
+                );
+            })
+            .map_err(|error| {
+                RealtimePreviewBindingError::new(
+                    RealtimePreviewBindingErrorKind::Runtime,
+                    format!("failed to start realtime preview playback worker: {error}"),
+                )
+            })?;
+        self.playback_workers.insert(
+            session_id.to_owned(),
+            BindingPlaybackWorker {
+                stop,
+                handle: Some(handle),
+            },
+        );
+        Ok(())
+    }
+}
+
+impl Drop for RealtimePreviewBindingRegistry {
+    fn drop(&mut self) {
+        let workers = std::mem::take(&mut self.playback_workers);
+        for (_, worker) in workers {
+            worker.stop();
+        }
+    }
+}
+
+fn run_binding_playback_loop(
+    runtime: Arc<Mutex<RealtimePreviewRuntime>>,
+    runtime_id: PreviewSessionId,
+    scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
+    playback_generation: PlaybackGeneration,
+    stop: Arc<AtomicBool>,
+) {
+    const FRAME_DURATION: Duration = Duration::from_micros(PLAYBACK_FRAME_DURATION_US);
+
+    while !stop.load(Ordering::Acquire) {
+        let frame_started = Instant::now();
+        let frame = {
+            let mut scheduler = match scheduler.lock() {
+                Ok(scheduler) => scheduler,
+                Err(_) => break,
+            };
+            match scheduler.present_playback_tick(playback_generation) {
+                Ok(evidence) => {
+                    let reached_end =
+                        evidence.target_time_microseconds >= scheduler.sequence_duration().get();
+                    Ok(Some((evidence, reached_end)))
+                }
+                Err(error) => {
+                    let transient = is_transient_playback_presentation_error(&error);
+                    if !transient {
+                        scheduler.pause_playback();
+                    }
+                    scheduler.publish_snapshot(
+                        scheduler.evidence().cloned(),
+                        scheduler.surface_placement(),
+                        Some(error.to_string()),
+                    );
+                    if transient { Ok(None) } else { Err(error) }
+                }
+            }
+        };
+
+        match frame {
+            Ok(Some((evidence, reached_end))) => {
+                if let Ok(mut runtime) = runtime.lock() {
+                    let _ = runtime.record_presented_output(
+                        runtime_id,
+                        Microseconds::new(evidence.target_time_microseconds),
+                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    );
+                    if reached_end {
+                        let _ = runtime.pause(runtime_id);
+                    }
+                }
+                if reached_end {
+                    if let Ok(mut scheduler) = scheduler.lock() {
+                        scheduler.pause_playback();
+                    }
+                    break;
+                }
+            }
+            Ok(None) => {}
+            Err(_) => {
+                if let Ok(mut runtime) = runtime.lock() {
+                    let _ = runtime.pause(runtime_id);
+                }
+                break;
+            }
+        }
+
+        let elapsed = frame_started.elapsed();
+        if elapsed < FRAME_DURATION {
+            thread::sleep(FRAME_DURATION - elapsed);
+        }
+    }
+}
+
+struct RealtimePreviewSchedulerSession {
+    scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
+    snapshot: Arc<Mutex<BindingPlaybackSnapshot>>,
+}
+
+impl RealtimePreviewSchedulerSession {
+    fn new(config: RealtimePlaybackSchedulerConfig) -> Self {
+        let snapshot = Arc::new(Mutex::new(BindingPlaybackSnapshot::default()));
+        Self {
+            scheduler: Arc::new(Mutex::new(RealtimePreviewBindingScheduler::new(
+                config,
+                Arc::clone(&snapshot),
+            ))),
+            snapshot,
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+struct BindingPlaybackSnapshot {
+    evidence: Option<RealtimePlaybackSchedulerEvidence>,
+    surface_placement: Option<NativePreviewSurfacePlacementEvidence>,
+    unsupported_reason: Option<String>,
+}
+
+struct BindingPlaybackWorker {
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl BindingPlaybackWorker {
+    fn stop(mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
 struct RealtimePreviewBindingScheduler {
     scheduler: RealtimePlaybackScheduler,
+    snapshot: Arc<Mutex<BindingPlaybackSnapshot>>,
     gpu_device: Option<RealtimePreviewGpuDevice>,
     surface_target: Option<RealtimePreviewGpuPresentationTarget>,
+    surface_placement: Option<NativePreviewSurfacePlacementEvidence>,
     draft_snapshot: Option<Draft>,
     bundle_path: Option<PathBuf>,
     media_pipeline_id: u64,
@@ -445,11 +664,16 @@ struct BindingPlaybackAnchor {
 }
 
 impl RealtimePreviewBindingScheduler {
-    fn new(config: RealtimePlaybackSchedulerConfig) -> Self {
+    fn new(
+        config: RealtimePlaybackSchedulerConfig,
+        snapshot: Arc<Mutex<BindingPlaybackSnapshot>>,
+    ) -> Self {
         Self {
             scheduler: RealtimePlaybackScheduler::new(config),
+            snapshot,
             gpu_device: None,
             surface_target: None,
+            surface_placement: None,
             draft_snapshot: None,
             bundle_path: None,
             media_pipeline_id: next_scheduler_media_pipeline_id(),
@@ -480,8 +704,10 @@ impl RealtimePreviewBindingScheduler {
         ) {
             self.surface_target = None;
             self.gpu_device = None;
+            self.surface_placement = None;
             self.reset_media_pipeline();
             self.test_mock_surface_attached = true;
+            self.publish_snapshot(None, self.surface_placement(), None);
             return Ok(());
         }
         if std::env::var("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR")
@@ -491,11 +717,13 @@ impl RealtimePreviewBindingScheduler {
         {
             self.surface_target = None;
             self.gpu_device = None;
+            self.surface_placement = None;
             self.reset_media_pipeline();
             #[cfg(test)]
             {
                 self.test_mock_surface_attached = false;
             }
+            self.publish_snapshot(None, self.surface_placement(), None);
             return Ok(());
         }
         let device = RealtimePreviewGpuDevice::bootstrap(RealtimePreviewGpuDeviceDescriptor {
@@ -516,6 +744,9 @@ impl RealtimePreviewBindingScheduler {
                     format!("render graph GPU presentation target unavailable: {error}"),
                 )
             })?;
+        self.surface_placement = target
+            .screen_rect()
+            .map(native_surface_placement_from_runtime);
         self.gpu_device = Some(device);
         self.surface_target = Some(target);
         self.reset_media_pipeline();
@@ -523,6 +754,7 @@ impl RealtimePreviewBindingScheduler {
         {
             self.test_mock_surface_attached = false;
         }
+        self.publish_snapshot(None, self.surface_placement(), None);
         Ok(())
     }
 
@@ -545,7 +777,14 @@ impl RealtimePreviewBindingScheduler {
                         format!("render graph GPU presentation target resize failed: {error}"),
                     )
                 })?;
+            self.surface_placement = target
+                .screen_rect()
+                .map(native_surface_placement_from_runtime);
+        } else {
+            self.surface_placement = None;
         }
+        let evidence = self.last_evidence.clone();
+        self.publish_snapshot(evidence, self.surface_placement(), None);
         Ok(())
     }
 
@@ -557,19 +796,23 @@ impl RealtimePreviewBindingScheduler {
         self.last_evidence = None;
         self.next_tick_time = Microseconds::ZERO;
         self.playback_anchor = None;
+        self.publish_snapshot(None, self.surface_placement(), None);
     }
 
     fn seek(&mut self, target_time: Microseconds) {
         self.next_tick_time = target_time;
         self.last_evidence = None;
         self.playback_anchor = None;
+        self.publish_snapshot(None, self.surface_placement(), None);
     }
 
     fn detach_surface(&mut self) {
         self.surface_target = None;
+        self.surface_placement = None;
         self.reset_media_pipeline();
         self.last_evidence = None;
         self.playback_anchor = None;
+        self.publish_snapshot(None, None, None);
         #[cfg(test)]
         {
             self.test_mock_surface_attached = false;
@@ -606,10 +849,49 @@ impl RealtimePreviewBindingScheduler {
     }
 
     fn surface_placement(&self) -> Option<NativePreviewSurfacePlacementEvidence> {
-        self.surface_target
-            .as_ref()
-            .and_then(|target| target.screen_rect())
-            .map(native_surface_placement_from_runtime)
+        self.surface_placement.clone()
+    }
+
+    fn validate_playback_ready(&self) -> Result<(), RealtimePreviewBindingError> {
+        #[cfg(not(test))]
+        if self.gpu_device.is_none() || self.surface_target.is_none() {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "render graph GPU compositor scheduler presentation surface is not attached",
+                ),
+            ));
+        }
+        #[cfg(test)]
+        if !self.test_mock_surface_attached
+            && (self.gpu_device.is_none() || self.surface_target.is_none())
+        {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "render graph GPU compositor scheduler presentation surface is not attached",
+                ),
+            ));
+        }
+        if self.draft_snapshot.is_none() {
+            return Err(RealtimePreviewBindingError::presenter(
+                NativePreviewPresenterError::new(
+                    "accepted draft snapshot is required before scheduler playback",
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    fn publish_snapshot(
+        &self,
+        evidence: Option<RealtimePlaybackSchedulerEvidence>,
+        surface_placement: Option<NativePreviewSurfacePlacementEvidence>,
+        unsupported_reason: Option<String>,
+    ) {
+        if let Ok(mut snapshot) = self.snapshot.lock() {
+            snapshot.evidence = evidence;
+            snapshot.surface_placement = surface_placement;
+            snapshot.unsupported_reason = unsupported_reason;
+        }
     }
 
     fn present_next_tick(
@@ -638,7 +920,11 @@ impl RealtimePreviewBindingScheduler {
         let tick_time = if target_time.get() > self.next_tick_time.get() {
             target_time
         } else {
-            Microseconds::new(self.next_tick_time.get().saturating_add(33_333))
+            Microseconds::new(
+                self.next_tick_time
+                    .get()
+                    .saturating_add(PLAYBACK_FRAME_DURATION_US),
+            )
         };
         self.next_tick_time = tick_time;
         #[cfg(test)]
@@ -649,6 +935,7 @@ impl RealtimePreviewBindingScheduler {
                 .present_tick(tick_time, playback_generation, &mut presenter)
                 .map_err(scheduler_error)?;
             self.last_evidence = Some(evidence.clone());
+            self.publish_snapshot(Some(evidence.clone()), self.surface_placement(), None);
             return Ok(evidence);
         }
         self.ensure_media_provider()?;
@@ -658,11 +945,24 @@ impl RealtimePreviewBindingScheduler {
             surface_target: self.surface_target.as_mut(),
             media_pipeline_id,
         };
-        let evidence = self
-            .scheduler
-            .present_tick(tick_time, playback_generation, &mut presenter)
-            .map_err(scheduler_error)?;
+        let evidence =
+            match self
+                .scheduler
+                .present_tick(tick_time, playback_generation, &mut presenter)
+            {
+                Ok(evidence) => evidence,
+                Err(error) => {
+                    let error = scheduler_error(error);
+                    self.publish_snapshot(
+                        self.last_evidence.clone(),
+                        self.surface_placement(),
+                        Some(error.to_string()),
+                    );
+                    return Err(error);
+                }
+            };
         self.last_evidence = Some(evidence.clone());
+        self.publish_snapshot(Some(evidence.clone()), self.surface_placement(), None);
         Ok(evidence)
     }
 
@@ -683,7 +983,12 @@ impl RealtimePreviewBindingScheduler {
         }
 
         let elapsed_us = u64::try_from(anchor.started_at.elapsed().as_micros()).unwrap_or(u64::MAX);
-        let target = anchor.start_time.get().saturating_add(elapsed_us);
+        let wall_target = anchor.start_time.get().saturating_add(elapsed_us);
+        let frame_capped_target = self
+            .next_tick_time
+            .get()
+            .saturating_add(PLAYBACK_FRAME_DURATION_US);
+        let target = wall_target.min(frame_capped_target);
         Microseconds::new(target.min(anchor.sequence_duration.get()))
     }
 
@@ -720,6 +1025,8 @@ impl RealtimePreviewBindingScheduler {
         Ok(SchedulerMediaPipeline {
             provider: self.build_media_provider(registry.clone())?,
             registry,
+            compositor: None,
+            in_flight_presentations: VecDeque::new(),
         })
     }
 
@@ -790,6 +1097,107 @@ impl RealtimePreviewBindingScheduler {
 struct SchedulerMediaPipeline {
     provider: SchedulerFrameProvider,
     registry: NativeTextureLeaseRegistry,
+    compositor: Option<RealtimePreviewCompositor>,
+    in_flight_presentations: VecDeque<InFlightSurfacePresentation>,
+}
+
+struct InFlightSurfacePresentation {
+    fence: RealtimePreviewSurfaceSubmissionFence,
+    frame_releases: Vec<PendingPreviewFrameRelease>,
+}
+
+impl SchedulerMediaPipeline {
+    fn release_completed_presentations(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
+        let Some(compositor) = self.compositor.as_ref() else {
+            return Ok(());
+        };
+        compositor
+            .poll_surface_submissions()
+            .map_err(|source| MediaIoHandoffReleaseError {
+                source: source.to_string(),
+            })?;
+        while self
+            .in_flight_presentations
+            .front()
+            .map(|presentation| presentation.fence.is_complete())
+            .unwrap_or(false)
+        {
+            let presentation = self
+                .in_flight_presentations
+                .pop_front()
+                .expect("front presentation was checked");
+            self.provider
+                .release_presented_frame_batch(presentation.frame_releases)?;
+        }
+        Ok(())
+    }
+
+    fn apply_presentation_backpressure(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
+        if self.in_flight_presentations.len() < MAX_IN_FLIGHT_SURFACE_PRESENTATIONS {
+            return Ok(());
+        }
+        let Some(compositor) = self.compositor.as_ref() else {
+            return Ok(());
+        };
+        if let Some(presentation) = self.in_flight_presentations.front() {
+            compositor
+                .wait_for_surface_submission(
+                    &presentation.fence,
+                    SURFACE_PRESENT_BACKPRESSURE_TIMEOUT,
+                )
+                .map_err(|source| MediaIoHandoffReleaseError {
+                    source: source.to_string(),
+                })?;
+        }
+        self.release_completed_presentations()
+    }
+
+    fn track_presented_frame_releases(
+        &mut self,
+        fence: Option<RealtimePreviewSurfaceSubmissionFence>,
+        frame_releases: Vec<PendingPreviewFrameRelease>,
+    ) -> Result<(), MediaIoHandoffReleaseError> {
+        if frame_releases.is_empty() {
+            return Ok(());
+        }
+        match fence {
+            Some(fence) => {
+                self.in_flight_presentations
+                    .push_back(InFlightSurfacePresentation {
+                        fence,
+                        frame_releases,
+                    });
+                Ok(())
+            }
+            None => self.provider.release_presented_frame_batch(frame_releases),
+        }
+    }
+
+    fn release_all_presentations(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
+        let Some(compositor) = self.compositor.as_ref() else {
+            while let Some(presentation) = self.in_flight_presentations.pop_front() {
+                self.provider
+                    .release_presented_frame_batch(presentation.frame_releases)?;
+            }
+            return Ok(());
+        };
+        while let Some(presentation) = self.in_flight_presentations.pop_front() {
+            compositor
+                .wait_for_surface_submission(&presentation.fence, Duration::from_secs(5))
+                .map_err(|source| MediaIoHandoffReleaseError {
+                    source: source.to_string(),
+                })?;
+            self.provider
+                .release_presented_frame_batch(presentation.frame_releases)?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for SchedulerMediaPipeline {
+    fn drop(&mut self) {
+        let _ = self.release_all_presentations();
+    }
 }
 
 struct SchedulerFrameProvider {
@@ -808,17 +1216,26 @@ impl SchedulerFrameProvider {
         }
     }
 
-    fn release_presented_frames(&mut self) -> Result<(), MediaIoHandoffReleaseError> {
+    fn take_presented_frame_releases(&mut self) -> Vec<PendingPreviewFrameRelease> {
+        self.media_io.take_presented_frame_releases()
+    }
+
+    fn release_presented_frame_batch(
+        &mut self,
+        frame_releases: Vec<PendingPreviewFrameRelease>,
+    ) -> Result<(), MediaIoHandoffReleaseError> {
         self.media_io
-            .release_presented_frames()
+            .release_presented_frame_batch(frame_releases)
             .map(|_| ())
-            .map_err(|source| MediaIoHandoffReleaseError { source })
+            .map_err(|source| MediaIoHandoffReleaseError {
+                source: source.to_string(),
+            })
     }
 }
 
 #[derive(Debug)]
 struct MediaIoHandoffReleaseError {
-    source: realtime_preview_runtime::MediaIoHandoffError,
+    source: String,
 }
 
 impl fmt::Display for MediaIoHandoffReleaseError {
@@ -939,35 +1356,63 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                     reason: "scheduler media pipeline is not initialized".to_owned(),
                 }
             })?;
+            pipeline
+                .release_completed_presentations()
+                .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                    reason: error.to_string(),
+                })?;
+            pipeline
+                .apply_presentation_backpressure()
+                .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                    reason: error.to_string(),
+                })?;
             let mut texture_cache = RealtimePreviewTextureCache::new()
                 .with_native_texture_registry(pipeline.registry.clone())
                 .with_native_texture_importer(Box::new(import_native_nv12_external_texture));
-            let mut compositor = RealtimePreviewCompositor::new(
-                gpu_device,
-                RealtimePreviewCapabilityClassifier {
-                    runtime_backend_available: true,
-                    surface_available: true,
-                    gpu_text_parity: false,
-                    bundled_text_font_registry_available: true,
-                },
-            );
-            let presentation = compositor.present_to_surface_with_generation(
+            let compositor = pipeline.compositor.get_or_insert_with(|| {
+                RealtimePreviewCompositor::new(
+                    gpu_device,
+                    RealtimePreviewCapabilityClassifier {
+                        runtime_backend_available: true,
+                        surface_available: true,
+                        gpu_text_parity: false,
+                        bundled_text_font_registry_available: true,
+                    },
+                )
+            });
+            let mut presentation = compositor.present_to_surface_with_generation(
                 graph,
                 target,
                 &mut pipeline.provider,
                 &mut texture_cache,
                 playback_generation,
             );
-            let release = pipeline.provider.release_presented_frames();
-            match (presentation, release) {
-                (Ok(output), Ok(())) => Ok(output),
-                (Err(error), _) => Err(RealtimePlaybackSchedulerError::Presentation {
-                    reason: error.to_string(),
-                }),
-                (Ok(_), Err(error)) => Err(RealtimePlaybackSchedulerError::Presentation {
-                    reason: error.to_string(),
-                }),
+            let frame_releases = pipeline.provider.take_presented_frame_releases();
+            match presentation.as_mut() {
+                Ok(output) => {
+                    let fence = if output.presented_frames > 0 {
+                        output.submission_fence.take()
+                    } else {
+                        None
+                    };
+                    pipeline
+                        .track_presented_frame_releases(fence, frame_releases)
+                        .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                            reason: error.to_string(),
+                        })?;
+                }
+                Err(_) => {
+                    pipeline
+                        .provider
+                        .release_presented_frame_batch(frame_releases)
+                        .map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                            reason: error.to_string(),
+                        })?;
+                }
             }
+            presentation.map_err(|error| RealtimePlaybackSchedulerError::Presentation {
+                reason: error.to_string(),
+            })
         })?;
         if output.presented_frames == 0 {
             let details = output
@@ -1196,6 +1641,12 @@ fn scheduler_error(error: RealtimePlaybackSchedulerError) -> RealtimePreviewBind
     RealtimePreviewBindingError::presenter(NativePreviewPresenterError::new(format!(
         "render graph GPU scheduler failed: {error}"
     )))
+}
+
+fn is_transient_playback_presentation_error(error: &RealtimePreviewBindingError) -> bool {
+    let message = error.message();
+    message.contains("wgpu surface texture acquire failed: surface is occluded")
+        || message.contains("wgpu surface texture acquire failed: surface acquire timed out")
 }
 
 fn compositor_digest(
@@ -1588,7 +2039,7 @@ fn generation_response(
 #[cfg(test)]
 mod realtime_preview_bindings {
     use super::{
-        RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
+        BindingPlaybackSnapshot, RealtimePreviewBackendUsed, RealtimePreviewBindingErrorKind,
         RealtimePreviewBindingRegistry, RealtimePreviewBindingScheduler,
         RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
         RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
@@ -1610,6 +2061,7 @@ mod realtime_preview_bindings {
     };
     use render_graph::OutputDimensions;
     use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -1808,12 +2260,15 @@ mod realtime_preview_bindings {
 
     #[test]
     fn scheduler_draft_update_invalidates_cached_media_pipeline() {
-        let mut scheduler = RealtimePreviewBindingScheduler::new(RealtimePlaybackSchedulerConfig {
-            preview_dimensions: OutputDimensions {
-                width: 640,
-                height: 360,
+        let mut scheduler = RealtimePreviewBindingScheduler::new(
+            RealtimePlaybackSchedulerConfig {
+                preview_dimensions: OutputDimensions {
+                    width: 640,
+                    height: 360,
+                },
             },
-        });
+            Arc::new(Mutex::new(BindingPlaybackSnapshot::default())),
+        );
         let previous_pipeline_id = scheduler.media_pipeline_id;
         SCHEDULER_MEDIA_PIPELINES.with(|pipelines| {
             pipelines.borrow_mut().insert(
@@ -1824,6 +2279,8 @@ mod realtime_preview_bindings {
                         BTreeMap::new(),
                     ),
                     registry: media_runtime::NativeTextureLeaseRegistry::new(),
+                    compositor: None,
+                    in_flight_presentations: std::collections::VecDeque::new(),
                 },
             );
         });
@@ -1868,13 +2325,32 @@ mod realtime_preview_bindings {
 
         let play = registry
             .play(&session_id)
-            .expect("scheduler play decodes, builds render graph, and presents");
-        let presentation = registry
+            .expect("scheduler play starts the background playback pump");
+        let mut presentation = registry
             .presentation_state(&session_id)
-            .expect("scheduler presentation evidence is queryable");
-        let telemetry = registry
+            .expect("scheduler presentation snapshot is queryable");
+        let mut telemetry = registry
             .telemetry(&session_id)
-            .expect("scheduler presentation updates telemetry");
+            .expect("scheduler telemetry snapshot is queryable");
+        for _ in 0..20 {
+            if presentation.available && telemetry.presented_frame_count > 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            presentation = registry
+                .presentation_state(&session_id)
+                .expect("background playback evidence is queryable");
+            telemetry = registry
+                .telemetry(&session_id)
+                .expect("background playback telemetry is queryable");
+        }
+        let presented_before_snapshot_query = telemetry.presented_frame_count;
+        let _ = registry
+            .presentation_state(&session_id)
+            .expect("presentation state query must remain lightweight");
+        let telemetry_after_snapshot_query = registry
+            .telemetry(&session_id)
+            .expect("telemetry remains queryable after snapshot query");
 
         assert!(
             play.playback_generation > 0,
@@ -1896,6 +2372,10 @@ mod realtime_preview_bindings {
         assert!(evidence.target_time_microseconds >= 500_000);
         assert!(telemetry.presented_frame_count > 0);
         assert!(telemetry.target_time_microseconds >= 500_000);
+        assert_eq!(
+            telemetry_after_snapshot_query.presented_frame_count, presented_before_snapshot_query,
+            "presentation_state must not synchronously present an extra frame"
+        );
     }
 
     #[test]

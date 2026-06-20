@@ -8,6 +8,7 @@ import {
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   readExecuteCommandCalls,
+  readRealtimePreviewHostCalls,
   requestPreviewFrameCount
 } from "./helpers/userJourney";
 
@@ -15,6 +16,7 @@ type HostState = {
   ok: boolean;
   productReady: boolean;
   fallbackActive: boolean;
+  unsupportedReason: string | null;
   backend: "renderGraphGpu" | "none";
   telemetry: {
     presentedFrameCount: number;
@@ -42,6 +44,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
 
     const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const hostCallCountBefore = (await readRealtimePreviewHostCalls(app)).length;
     const before = await readHostState(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
 
@@ -50,6 +53,14 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     await page.waitForTimeout(3_000);
     const after = await readHostState(page);
     const visibleAfter = await captureVisiblePreviewEvidence(page, app);
+    const presentationDurations = (await readRealtimePreviewHostCalls(app))
+      .slice(hostCallCountBefore)
+      .filter((call) => call.kind === "getPresentationState" && typeof call.durationMs === "number")
+      .map((call) => call.durationMs as number)
+      .sort((first, second) => first - second);
+    const durationPercentile = (percentile: number) =>
+      presentationDurations[Math.min(presentationDurations.length - 1, Math.floor(presentationDurations.length * percentile))] ??
+      null;
 
     const presentedBefore = before?.telemetry?.presentedFrameCount ?? 0;
     const presentedAfter = after?.telemetry?.presentedFrameCount ?? 0;
@@ -68,10 +79,21 @@ test("product preview cadence presents sustained GPU frames without artifact fal
         before.contentEvidence.digest !== after.contentEvidence.digest);
     const metrics = {
       renderGraphActive,
+      unsupportedReason: after?.unsupportedReason ?? null,
+      lastPresentationFailure: (await readRealtimePreviewHostCalls(app))
+        .filter((call) => call.kind === "getPresentationState" && typeof call.unsupportedReason === "string")
+        .at(-1)?.unsupportedReason,
       presentedDelta: presentedAfter - presentedBefore,
       targetDeltaMicroseconds: targetAfter - targetBefore,
       evidenceDigestChanged,
       visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
+      presentationDurationMs: {
+        count: presentationDurations.length,
+        min: presentationDurations[0] ?? null,
+        p50: durationPercentile(0.5),
+        p95: durationPercentile(0.95),
+        max: presentationDurations.at(-1) ?? null
+      },
       frameRequestsBefore,
       frameRequestsAfter: requestPreviewFrameCount(await readExecuteCommandCalls(app))
     };
@@ -89,7 +111,20 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     expect(metrics.targetDeltaMicroseconds, "3s playback should advance near the media duration").toBeGreaterThanOrEqual(
       2_000_000
     );
-    expect(metrics.presentedDelta, "3s playback should present sustained GPU frames").toBeGreaterThanOrEqual(20);
+    expect(metrics.presentedDelta, "3s playback should present production-grade sustained GPU frames").toBeGreaterThanOrEqual(
+      75
+    );
+    expect(metrics.presentationDurationMs.count, "UI status polling should remain near the playback cadence").toBeGreaterThanOrEqual(
+      70
+    );
+    expect(metrics.presentationDurationMs.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
+    expect(metrics.presentationDurationMs.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
+      16
+    );
+    expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").not.toBeNull();
+    expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
+      50
+    );
     expect(metrics.evidenceDigestChanged, "rendered content evidence should change during playback").toBe(true);
     expect(metrics.visibleChanged, "visible preview pixels should change during playback").toBe(true);
   } finally {

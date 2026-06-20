@@ -41,6 +41,7 @@ export type RealtimePreviewHostDisplayState = {
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
+  unsupportedReason: string | null;
   playbackGeneration: number | null;
   backend: RealtimePreviewHostProductBackend;
   diagnosticSource: RealtimePreviewHostDiagnosticSource;
@@ -91,7 +92,12 @@ type RealtimePreviewHostRecord = {
   appFocused?: boolean;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  durationMs?: number;
+  presentedFrameCount?: number;
   errorMessage?: string;
+  presentationAvailable?: boolean;
+  presentationBackend?: string;
+  unsupportedReason?: string | null;
 };
 
 declare global {
@@ -321,30 +327,17 @@ export class RealtimePreviewHost {
       this.ensureNativeWindowVisible();
       const response = playRealtimePreview({ sessionId: this.sessionId });
       this.playbackGeneration = response.playbackGeneration;
-      recordRealtimePreviewHostCall({ kind: "schedulerDecodeCurrentFrame" });
-      recordRealtimePreviewHostCall({ kind: "schedulerBuildRenderGraph" });
-      recordRealtimePreviewHostCall({ kind: "schedulerPresentSurface" });
+      recordRealtimePreviewHostCall({ kind: "schedulerPlaybackWorkerStart" });
       recordRealtimePreviewHostCall({ kind: "play", playbackGeneration: response.playbackGeneration });
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: true });
-      if (this.hasProductionCompositedPresenter()) {
-        this.startPlaybackTimer();
-        recordRealtimePreviewHostCall({
-          kind: "schedulerCompositedEvidence",
-          targetTimeMicroseconds: this.lastContentEvidence?.targetTimeMicroseconds,
-          playbackGeneration: response.playbackGeneration
-        });
-        return this.state("实时预览播放中");
-      }
-      this.playbackRunning = false;
-      this.fallbackLabel = `实时预览不可用：${
-        this.presentationState?.unsupportedReason?.slice(0, 120) ?? "GPU 合成播放尚未接入"
-      }`;
+      this.refreshTelemetry({ presentPlaybackTick: false });
+      this.startPlaybackTimer();
       recordRealtimePreviewHostCall({
-        kind: "playRejectedMissingCompositor",
-        errorMessage: this.fallbackLabel
+        kind: "schedulerCompositedEvidence",
+        targetTimeMicroseconds: this.lastContentEvidence?.targetTimeMicroseconds,
+        playbackGeneration: response.playbackGeneration
       });
-      return this.state("实时预览不可用");
+      return this.state("实时预览播放中");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.fallbackLabel = attachFailureLabel(error);
@@ -511,9 +504,19 @@ export class RealtimePreviewHost {
       return;
     }
 
+    const startedAt = performance.now();
     this.presentationState = getRealtimePreviewPresentationState({ sessionId: this.sessionId });
+    const durationMs = Math.round(performance.now() - startedAt);
     this.lastContentEvidence = this.presentationState.evidence ?? null;
-    recordRealtimePreviewHostCall({ kind: "getPresentationState" });
+    recordRealtimePreviewHostCall({
+      kind: "getPresentationState",
+      durationMs,
+      targetTimeMicroseconds: this.presentationState.evidence?.targetTimeMicroseconds,
+      playbackGeneration: this.playbackGeneration,
+      presentationAvailable: this.presentationState.available,
+      presentationBackend: this.presentationState.backend,
+      unsupportedReason: this.presentationState.unsupportedReason ?? null
+    });
   }
 
   private applySessionPlaybackCommand(
@@ -691,6 +694,7 @@ export class RealtimePreviewHost {
       fallbackActive: this.fallbackLabel !== null,
       statusLabel,
       fallbackLabel: this.fallbackLabel,
+      unsupportedReason: this.presentationState?.unsupportedReason ?? null,
       playbackGeneration: this.playbackGeneration,
       backend,
       diagnosticSource,

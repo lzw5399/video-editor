@@ -54,7 +54,12 @@ type RealtimePreviewHostCall = {
   };
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  durationMs?: number;
+  presentedFrameCount?: number;
   errorMessage?: string;
+  presentationAvailable?: boolean;
+  presentationBackend?: string;
+  unsupportedReason?: string | null;
 };
 
 type RealtimePreviewHostState = {
@@ -64,6 +69,7 @@ type RealtimePreviewHostState = {
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
+  unsupportedReason: string | null;
   playbackGeneration: number | null;
   backend: "renderGraphGpu" | "none";
   diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";

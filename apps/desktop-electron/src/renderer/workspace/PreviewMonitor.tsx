@@ -92,6 +92,7 @@ export type RealtimePreviewHostState = {
   fallbackActive: boolean;
   statusLabel: string;
   fallbackLabel: string | null;
+  unsupportedReason: string | null;
   playbackGeneration: number | null;
   backend: "renderGraphGpu" | "none";
   diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
@@ -156,6 +157,7 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   fallbackActive: false,
   statusLabel: "实时预览等待接入",
   fallbackLabel: null,
+  unsupportedReason: null,
   playbackGeneration: null,
   backend: "none",
   diagnosticSource: "none",

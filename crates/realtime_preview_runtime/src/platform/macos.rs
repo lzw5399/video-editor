@@ -32,11 +32,12 @@ pub struct MacosWgpuSurfaceAttachment {
     parent_window: Retained<NSWindow>,
     child_view: Retained<NSView>,
     metal_layer: Retained<CAMetalLayer>,
+    screen_rect: PreviewSurfaceScreenRect,
     prepare_count: u64,
 }
 
-// The binding registry is shared behind a Mutex. AppKit operations are still
-// guarded at each call site with MainThreadMarker.
+// The binding registry is shared behind a Mutex. AppKit mutations are guarded
+// with MainThreadMarker; background presentation uses cached placement only.
 unsafe impl Send for MacosWgpuSurfaceAttachment {}
 
 impl MacosWgpuSurfaceAttachment {
@@ -79,11 +80,13 @@ impl MacosWgpuSurfaceAttachment {
         child_view.displayIfNeededIgnoringOpacity();
         parent_view.layoutSubtreeIfNeeded();
         commit_appkit_core_animation(&parent_window);
+        let screen_rect = screen_rect_for_child_view(&parent_window, &child_view);
         Ok(Self {
             parent_view,
             parent_window,
             child_view,
             metal_layer,
+            screen_rect,
             prepare_count: 1,
         })
     }
@@ -108,6 +111,7 @@ impl MacosWgpuSurfaceAttachment {
         self.child_view.displayIfNeededIgnoringOpacity();
         self.parent_view.layoutSubtreeIfNeeded();
         commit_appkit_core_animation(&self.parent_window);
+        self.screen_rect = screen_rect_for_child_view(&self.parent_window, &self.child_view);
         Ok(())
     }
 
@@ -115,7 +119,9 @@ impl MacosWgpuSurfaceAttachment {
         &mut self,
         bounds: PreviewSurfaceBounds,
     ) -> Result<(), PreviewSurfaceError> {
-        let _mtm = require_main_thread()?;
+        if MainThreadMarker::new().is_none() {
+            return Ok(());
+        }
         ensure_window_visible(&self.parent_window);
         self.child_view
             .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
@@ -127,10 +133,18 @@ impl MacosWgpuSurfaceAttachment {
         self.prepare_count = self.prepare_count.saturating_add(1);
         self.parent_view.layoutSubtreeIfNeeded();
         commit_appkit_core_animation(&self.parent_window);
+        self.screen_rect = screen_rect_for_child_view(&self.parent_window, &self.child_view);
         Ok(())
     }
 
     pub fn drawable_lifecycle_diagnostic(&self) -> String {
+        if MainThreadMarker::new().is_none() {
+            return format!(
+                "drawableLifecycle{{mainThread=false, attachmentStrategy=parentSubview, prepareCount={}, cachedScreenRect={} }}",
+                self.prepare_count,
+                format_screen_rect(self.screen_rect),
+            );
+        }
         let app = app_lifecycle_diagnostic();
         let parent_window_visible = self.parent_window.isVisible();
         let parent_window_occlusion_visible = self
@@ -184,15 +198,7 @@ impl MacosWgpuSurfaceAttachment {
     }
 
     pub fn screen_rect(&self) -> PreviewSurfaceScreenRect {
-        let child_view_screen_frame = self
-            .parent_window
-            .convertRectToScreen(self.child_view.frame());
-        PreviewSurfaceScreenRect {
-            x: child_view_screen_frame.origin.x,
-            y: child_view_screen_frame.origin.y,
-            width: child_view_screen_frame.size.width,
-            height: child_view_screen_frame.size.height,
-        }
+        self.screen_rect
     }
 
     pub fn detach(&mut self) {
@@ -383,6 +389,26 @@ fn format_rect(rect: CGRect) -> String {
 
 fn format_size(size: CGSize) -> String {
     format!("{{w={:.2},h={:.2}}}", size.width, size.height)
+}
+
+fn format_screen_rect(rect: PreviewSurfaceScreenRect) -> String {
+    format!(
+        "{{x={:.2},y={:.2},w={:.2},h={:.2}}}",
+        rect.x, rect.y, rect.width, rect.height
+    )
+}
+
+fn screen_rect_for_child_view(
+    parent_window: &NSWindow,
+    child_view: &NSView,
+) -> PreviewSurfaceScreenRect {
+    let child_view_screen_frame = parent_window.convertRectToScreen(child_view.frame());
+    PreviewSurfaceScreenRect {
+        x: child_view_screen_frame.origin.x,
+        y: child_view_screen_frame.origin.y,
+        width: child_view_screen_frame.size.width,
+        height: child_view_screen_frame.size.height,
+    }
 }
 
 fn ns_rect_for_bounds(parent_view: &NSView, bounds: PreviewSurfaceBounds) -> CGRect {

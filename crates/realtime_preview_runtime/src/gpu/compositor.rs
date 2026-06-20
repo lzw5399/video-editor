@@ -2,7 +2,11 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
 use std::time::Duration;
 
 use draft_model::{MaterialId, SegmentFitMode, SegmentVisual};
@@ -176,6 +180,31 @@ impl RealtimePreviewCompositor {
         &self.pipelines
     }
 
+    pub fn poll_surface_submissions(&self) -> Result<(), RealtimePreviewCompositorError> {
+        let gpu_device = self.device.clone();
+        let device_ref = gpu_device
+            .device()
+            .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
+        poll_wgpu_nonblocking(device_ref)
+    }
+
+    pub fn wait_for_surface_submission(
+        &self,
+        fence: &RealtimePreviewSurfaceSubmissionFence,
+        timeout: Duration,
+    ) -> Result<(), RealtimePreviewCompositorError> {
+        if fence.is_complete() {
+            return Ok(());
+        }
+        let gpu_device = self.device.clone();
+        let device_ref = gpu_device
+            .device()
+            .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
+        poll_wgpu_wait(device_ref, Some(fence.submission_index.clone()), timeout)?;
+        fence.mark_complete();
+        Ok(())
+    }
+
     fn wgpu_pipeline_resources_for_graph(
         &mut self,
         device: &wgpu::Device,
@@ -235,6 +264,7 @@ impl RealtimePreviewCompositor {
                 pixels: None,
                 submitted_draws: 0,
                 presented_frames: 0,
+                submission_fence: None,
                 render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
                 support,
                 diagnostics,
@@ -272,6 +302,7 @@ impl RealtimePreviewCompositor {
                 pixels: None,
                 submitted_draws: 0,
                 presented_frames: 0,
+                submission_fence: None,
                 render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
                 support,
                 diagnostics,
@@ -279,7 +310,7 @@ impl RealtimePreviewCompositor {
         }
 
         let submission = queue.submit([encoder.finish()]);
-        poll_wgpu(device_ref, Some(submission))?;
+        let submission_fence = RealtimePreviewSurfaceSubmissionFence::submitted(queue, submission);
         surface_texture.present();
 
         Ok(RealtimePreviewSurfacePresentationOutput {
@@ -288,6 +319,7 @@ impl RealtimePreviewCompositor {
             pixels: None,
             submitted_draws,
             presented_frames: 1,
+            submission_fence: Some(submission_fence),
             render_backend: RealtimePreviewCompositorBackend::WgpuSurfacePresent,
             support,
             diagnostics,
@@ -306,16 +338,55 @@ pub struct RealtimePreviewCompositorOutput {
     pub diagnostics: Vec<RealtimePreviewDiagnostic>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RealtimePreviewSurfacePresentationOutput {
     pub width: u32,
     pub height: u32,
     pub pixels: Option<Vec<u8>>,
     pub submitted_draws: u32,
     pub presented_frames: u32,
+    pub submission_fence: Option<RealtimePreviewSurfaceSubmissionFence>,
     pub render_backend: RealtimePreviewCompositorBackend,
     pub support: RealtimePreviewGraphSupport,
     pub diagnostics: Vec<RealtimePreviewDiagnostic>,
+}
+
+#[derive(Clone)]
+pub struct RealtimePreviewSurfaceSubmissionFence {
+    submission_index: wgpu::SubmissionIndex,
+    completed: Arc<AtomicBool>,
+}
+
+impl fmt::Debug for RealtimePreviewSurfaceSubmissionFence {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RealtimePreviewSurfaceSubmissionFence")
+            .field("submission_index", &self.submission_index)
+            .field("completed", &self.is_complete())
+            .finish()
+    }
+}
+
+impl RealtimePreviewSurfaceSubmissionFence {
+    fn submitted(queue: &wgpu::Queue, submission_index: wgpu::SubmissionIndex) -> Self {
+        let completed = Arc::new(AtomicBool::new(false));
+        let callback_completed = Arc::clone(&completed);
+        queue.on_submitted_work_done(move || {
+            callback_completed.store(true, Ordering::Release);
+        });
+        Self {
+            submission_index,
+            completed,
+        }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.completed.load(Ordering::Acquire)
+    }
+
+    fn mark_complete(&self) {
+        self.completed.store(true, Ordering::Release);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1565,11 +1636,26 @@ fn poll_wgpu(
     device: &wgpu::Device,
     submission_index: Option<wgpu::SubmissionIndex>,
 ) -> Result<(), RealtimePreviewCompositorError> {
+    poll_wgpu_wait(device, submission_index, Duration::from_secs(5))
+}
+
+fn poll_wgpu_wait(
+    device: &wgpu::Device,
+    submission_index: Option<wgpu::SubmissionIndex>,
+    timeout: Duration,
+) -> Result<(), RealtimePreviewCompositorError> {
     device
         .poll(wgpu::PollType::Wait {
             submission_index,
-            timeout: Some(Duration::from_secs(5)),
+            timeout: Some(timeout),
         })
+        .map(|_| ())
+        .map_err(|error| RealtimePreviewCompositorError::WgpuPoll(error.to_string()))
+}
+
+fn poll_wgpu_nonblocking(device: &wgpu::Device) -> Result<(), RealtimePreviewCompositorError> {
+    device
+        .poll(wgpu::PollType::Poll)
         .map(|_| ())
         .map_err(|error| RealtimePreviewCompositorError::WgpuPoll(error.to_string()))
 }
