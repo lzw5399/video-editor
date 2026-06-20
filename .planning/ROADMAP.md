@@ -734,13 +734,13 @@ Plans:
 
 Phase 15.2 dependency is satisfied; Phase 15.3 is ready to execute.
 
-**Plans:** 2/8 plans executed
+**Plans:** 3/8 plans executed
 
 Plans:
 
 - [x] 15.3-01-PLAN.md - Add project entry before material import
 - [x] 15.3-02-PLAN.md - Move export to a top-right modal flow
-- [ ] 15.3-03-PLAN.md - Productionize the left resource/function panel
+- [x] 15.3-03-PLAN.md - Productionize the left resource/function panel
 - [ ] 15.3-04-PLAN.md - Productionize preview monitor and transport controls
 - [ ] 15.3-05-PLAN.md - Focus the right inspector and draft parameter modal
 - [ ] 15.3-06-PLAN.md - Convert timeline toolbar/interactions from debug inputs to editor controls

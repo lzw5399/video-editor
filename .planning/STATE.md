@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 15.3-02-PLAN.md
-last_updated: "2026-06-20T09:30:01.409Z"
-last_activity: 2026-06-20 -- Phase 15.3 Plan 02 moved export to the top-right modal workflow
+stopped_at: Completed 15.3-03-PLAN.md
+last_updated: "2026-06-20T09:54:54Z"
+last_activity: 2026-06-20 -- Phase 15.3 Plan 03 productionized the left resource/function panel
 progress:
   total_phases: 23
   completed_phases: 19
   total_plans: 141
-  completed_plans: 135
+  completed_plans: 136
   percent: 96
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 15.3 (p0-jianying-style-production-ui-convergence) — UNBLOCKED
-Plan: 15.3-03
-Status: Ready to execute Plan 15.3-03
-Last activity: 2026-06-20 -- Phase 15.3 Plan 02 moved export to the top-right modal workflow
+Plan: 15.3-04
+Status: Ready to execute Plan 15.3-04
+Last activity: 2026-06-20 -- Phase 15.3 Plan 03 productionized the left resource/function panel
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 2/8 plans complete
+Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is in progress with 3/8 plans complete
 
 ## Performance Metrics
 
@@ -176,6 +176,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 | Phase 15.2-p0-real-gpu-realtime-compositor-closure P06 | resumed | 3 tasks | 4 files |
 | Phase 15.3 P01 | 80min | 3 tasks | 10 files |
 | Phase 15.3 P02 | 43min | 3 tasks | 12 files |
+| Phase 15.3 P03 | 25min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 UI convergence is
 - Phase 15.3 is unblocked and planned as 8 waves: project entry, top-right export modal, left resource panel, preview transport, inspector/modal parameters, timeline controls, icon/reference/source guards, and aggregate verification. Icons must be selected from `/Users/zhiwen/code/video-editor/icons`. (URGENT)
 - Phase 15.3 Plan 01 completed production project entry: normal launch has no workspace fixture and stops at `新建项目`/`打开项目`; explicit test fixtures must opt into blank/demo workspace bootstrap. (URGENT)
 - Phase 15.3 Plan 01 routes project create/open UI through platform-selected bundle paths and Rust `saveProjectBundle`/`openProjectBundle` command envelopes before import controls render. (URGENT)
+- Phase 15.3 Plan 03 completed the left resource/function panel convergence: default media keeps import/search/filter/material cards while resource task/cache controls are diagnostics-only; text/audio panels use product-facing second controls with integer microsecond command payloads; deferred categories use compact unavailable copy. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -440,6 +442,8 @@ Recent decisions affecting current work:
 - [Phase 15.3]: Export now lives in the top-right product action and accessible modal; PreviewMonitor no longer exposes a production export panel.
 - [Phase 15.3]: Export modal settings collect UI intent only; generated command helpers and App callbacks continue to submit export command envelopes.
 - [Phase 15.3]: FFmpeg progress timestamp N/A is ignored as an unavailable sample while malformed numeric progress remains an error.
+- [Phase 15.3]: Default resource task/cache maintenance controls are developer-diagnostics-only; normal media UI stays a material library with product-safe availability labels.
+- [Phase 15.3]: Text/audio left-panel duration controls display seconds, while command payloads remain integer microseconds.
 
 ### Pending Todos
 
@@ -476,6 +480,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-20T09:30:01.409Z
-Stopped at: Completed 15.3-02-PLAN.md
+Last session: 2026-06-20T09:54:54Z
+Stopped at: Completed 15.3-03-PLAN.md
 Resume file: None
