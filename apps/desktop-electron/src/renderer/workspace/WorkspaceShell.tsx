@@ -233,6 +233,7 @@ export function WorkspaceShell({
           onRefreshExportStatus={onRefreshExportStatus}
           onCancelExport={onCancelExport}
           onRetryAudioPreview={onRetryAudioPreview}
+          onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
         />
       </section>
 

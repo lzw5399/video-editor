@@ -2,7 +2,7 @@
 status: investigating
 trigger: "User manual UAT reports Phase 15.2 product playback is not complete: preview surface is offset left/down during play, playback has no audio, video playback is stuttery/desynchronized from the timeline, and text/font editing plus on-canvas drag/rotate interactions are not available."
 created: "2026-06-20T05:13:58Z"
-updated: "2026-06-20T06:25:00Z"
+updated: "2026-06-20T06:38:00Z"
 ---
 
 # Debug Session: 15.2 Product Playback Regression
@@ -20,7 +20,7 @@ updated: "2026-06-20T06:25:00Z"
 - hypothesis: "Phase 15.2 tests proved limited GPU compositor evidence and preview-region pixel motion, but did not assert full product playback placement, audible audio routing, timeline/video clock synchronization, or direct user-editing interactions."
 - test: "Re-run/read the normal Electron Playwright product journey, inspect the playback host/main/renderer contracts, then add failing UAT-level checks before changing implementation."
 - expecting: "Existing 15.2 E2E will pass despite missing one or more user-visible requirements, proving the gate is insufficient."
-- next_action: "Continue fixing the remaining RED product UAT checks: native audio output and direct canvas text/transform interaction."
+- next_action: "Continue fixing the remaining RED product UAT check: native audio output."
 - reasoning_checkpoint: "Do not continue Phase 15.3 until this debug session either identifies and fixes the 15.2 gap or formally reopens 15.2 with an executable remediation plan."
 - tdd_checkpoint: "Add or strengthen E2E/regression tests before accepting any playback fix."
 
@@ -56,6 +56,9 @@ updated: "2026-06-20T06:25:00Z"
 - timestamp: "2026-06-20T06:25:00Z"
   observation: "Replaced renderer-owned playback head advancement with realtime host telemetry and added a binding scheduler wall-clock playback anchor that presents the current target time instead of one frame per poll. Verified `pnpm --filter @video-editor/desktop package:dir` plus `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line -g \"synchronized with timeline\"` passes."
   implication: "The timeline no longer falsely runs ahead of presented video; the compositor may drop/skip to the current playback target rather than playing late frames after the UI has finished."
+- timestamp: "2026-06-20T06:38:00Z"
+  observation: "Added direct preview overlay pointer drag that commits through `updateSegmentVisual` and applies segment visual transform to text overlay display. Verified `pnpm --filter @video-editor/desktop package:dir` plus `pnpm --filter @video-editor/desktop exec playwright test tests/product-user-journey.spec.ts --reporter=line -g \"direct canvas drag\"` passes."
+  implication: "Visible text/segment overlays now support a normal-user canvas drag path backed by the existing timeline command model."
 
 ## Eliminated
 

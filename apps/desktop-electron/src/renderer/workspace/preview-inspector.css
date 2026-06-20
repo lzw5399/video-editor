@@ -166,7 +166,8 @@
   min-height: 18px;
   border: 2px solid #f5c542;
   border-radius: 3px;
-  pointer-events: none;
+  cursor: move;
+  pointer-events: auto;
   box-shadow:
     0 0 0 1px rgba(5, 5, 5, 0.72),
     0 0 0 4px rgba(245, 197, 66, 0.16);
@@ -200,7 +201,8 @@
   display: block;
   max-width: 100%;
   padding: 4px 8px;
-  pointer-events: none;
+  cursor: move;
+  pointer-events: auto;
   overflow-wrap: break-word;
 }
 

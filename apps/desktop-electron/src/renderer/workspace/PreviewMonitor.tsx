@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { Draft, DraftCanvasConfig } from "../../generated/Draft";
+import type { Draft, DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
 import {
   canvasBackgroundTone,
   formatCanvasAspectRatio,
@@ -62,6 +62,7 @@ type PreviewMonitorProps = {
   onRefreshExportStatus: () => void;
   onCancelExport: () => void;
   onRetryAudioPreview: () => void;
+  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
 };
 
 type MonitorControl = {
@@ -138,6 +139,18 @@ type RealtimePreviewHostApi = {
   stop: () => Promise<RealtimePreviewHostState>;
 };
 
+type PreviewDragState = {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  lastClientX: number;
+  lastClientY: number;
+  startVisual: SegmentVisual;
+  canvasWidth: number;
+  canvasHeight: number;
+  moved: boolean;
+};
+
 declare global {
   interface Window {
     videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
@@ -202,10 +215,12 @@ export function PreviewMonitor({
   onStartExport,
   onRefreshExportStatus,
   onCancelExport,
-  onRetryAudioPreview
+  onRetryAudioPreview,
+  onUpdateSelectedSegmentVisual
 }: PreviewMonitorProps): React.ReactElement {
   const nativeHostRef = useRef<HTMLDivElement>(null);
   const lastSentHostRectRef = useRef<string | null>(null);
+  const previewDragRef = useRef<PreviewDragState | null>(null);
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const frameStepUs = frameDurationUs(canvasConfig);
@@ -236,6 +251,83 @@ export function PreviewMonitor({
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
     preview.frameDisplayUrl === null || showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
+
+  function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (selectedSegment === null || !selectedSegment.segment.visual.visible) {
+      return;
+    }
+
+    const canvas = event.currentTarget.closest(".preview-canvas");
+    if (!(canvas instanceof HTMLElement)) {
+      return;
+    }
+    const canvasRect = canvas.getBoundingClientRect();
+    if (canvasRect.width <= 0 || canvasRect.height <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    previewDragRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      startVisual: selectedSegment.segment.visual,
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      moved: false
+    };
+  }
+
+  function handlePreviewDragPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+    const drag = previewDragRef.current;
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    drag.lastClientX = event.clientX;
+    drag.lastClientY = event.clientY;
+    drag.moved =
+      drag.moved ||
+      Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) > 2;
+  }
+
+  function handlePreviewDragPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+    const drag = previewDragRef.current;
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    previewDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!drag.moved) {
+      return;
+    }
+
+    const deltaX = Math.round(((drag.lastClientX - drag.startClientX) * 2000) / drag.canvasWidth);
+    const deltaY = Math.round(((drag.lastClientY - drag.startClientY) * 2000) / drag.canvasHeight);
+    onUpdateSelectedSegmentVisual({
+      ...drag.startVisual,
+      transform: {
+        ...drag.startVisual.transform,
+        position: {
+          x: clampCanvasPosition(drag.startVisual.transform.position.x + deltaX),
+          y: clampCanvasPosition(drag.startVisual.transform.position.y - deltaY)
+        }
+      }
+    });
+  }
+
+  function handlePreviewDragPointerCancel(event: ReactPointerEvent<HTMLDivElement>): void {
+    const drag = previewDragRef.current;
+    if (drag !== null && drag.pointerId === event.pointerId) {
+      previewDragRef.current = null;
+    }
+  }
 
   useEffect(() => {
     const hostElement = nativeHostRef.current;
@@ -392,6 +484,10 @@ export function PreviewMonitor({
             data-segment-id={selectedSegment.segment.segmentId}
             data-fit-mode={selectedSegment.segment.visual.fitMode}
             style={selectionOverlayStyle}
+            onPointerDown={handlePreviewDragPointerDown}
+            onPointerMove={handlePreviewDragPointerMove}
+            onPointerUp={handlePreviewDragPointerUp}
+            onPointerCancel={handlePreviewDragPointerCancel}
           />
         ) : null}
         {selectedSegment !== null && selectedSegment.segment.text !== null && textOverlayStyle !== null ? (
@@ -401,6 +497,10 @@ export function PreviewMonitor({
             data-segment-id={selectedSegment.segment.segmentId}
             data-text-source={selectedSegment.segment.text.source}
             style={textOverlayStyle}
+            onPointerDown={handlePreviewDragPointerDown}
+            onPointerMove={handlePreviewDragPointerMove}
+            onPointerUp={handlePreviewDragPointerUp}
+            onPointerCancel={handlePreviewDragPointerCancel}
           >
             {selectedSegment.segment.text.content}
           </div>
@@ -793,6 +893,10 @@ function clampOverlayOffsetPercent(value: number): number {
   return Math.max(-48, Math.min(48, value));
 }
 
+function clampCanvasPosition(value: number): number {
+  return Math.max(-960, Math.min(960, Math.round(value)));
+}
+
 function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
   if (
     selectedSegment === null ||
@@ -805,6 +909,7 @@ function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSS
   }
 
   const text = selectedSegment.segment.text;
+  const visual = selectedSegment.segment.visual;
   const region = text.layoutRegion;
   const style = text.style;
   const textBoxWidth = clampMillis(text.textBox.widthMillis);
@@ -813,14 +918,18 @@ function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSS
   const heightMillis = Math.min(clampMillis(region.heightMillis), textBoxHeight);
   const leftMillis = clampMillis(region.xMillis);
   const topMillis = clampMillis(region.yMillis);
+  const xPercent = clampOverlayOffsetPercent(visual.transform.position.x / 20);
+  const yPercent = clampOverlayOffsetPercent(visual.transform.position.y / 20);
   const shadow = style.shadow;
   const stroke = style.stroke;
 
   return {
-    left: `${leftMillis / 10}%`,
-    top: `${topMillis / 10}%`,
+    left: `calc(${leftMillis / 10}% + ${xPercent}%)`,
+    top: `calc(${topMillis / 10}% - ${yPercent}%)`,
     width: `${widthMillis / 10}%`,
     minHeight: `${Math.max(20, heightMillis / 10)}%`,
+    opacity: Math.max(0.28, Math.min(1, visual.transform.opacity.valueMillis / 1000)),
+    transform: `rotate(${visual.transform.rotation.degrees}deg)`,
     color: style.color,
     backgroundColor: style.background?.color ?? "transparent",
     fontFamily: quoteFontFamily(style.font.family),
