@@ -186,7 +186,10 @@ async function createWindow(): Promise<void> {
   await window.loadFile(packagedRendererFile);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  prepareMacosForegroundApp();
+  await createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -214,6 +217,14 @@ function isLoopbackUrl(value: string | undefined): value is string {
   } catch {
     return false;
   }
+}
+
+function prepareMacosForegroundApp(): void {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  app.setActivationPolicy("regular");
 }
 
 function assertAllowedIpcSender(event: IpcMainInvokeEvent): void {

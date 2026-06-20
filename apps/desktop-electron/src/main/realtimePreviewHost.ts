@@ -77,6 +77,9 @@ type RealtimePreviewHostRecord = {
   parentHandleByteLength?: number;
   surfaceKind?: string;
   bounds?: RealtimePreviewSurfaceBounds;
+  windowVisible?: boolean;
+  windowFocused?: boolean;
+  appFocused?: boolean;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
   errorMessage?: string;
@@ -455,12 +458,20 @@ export class RealtimePreviewHost {
     if (!this.window.isVisible()) {
       this.window.show();
     }
+    app.show();
+    this.window.setFocusable(true);
     if (process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1") {
       this.window.setAlwaysOnTop(true, "screen-saver");
     }
     this.window.focus();
     this.window.moveTop();
     app.focus({ steal: true });
+    recordRealtimePreviewHostCall({
+      kind: "prepareNativeWindowVisible",
+      windowVisible: this.window.isVisible(),
+      windowFocused: this.window.isFocused(),
+      appFocused: BrowserWindow.getFocusedWindow()?.id === this.window.id
+    });
   }
 
   private refreshTelemetry(): void {

@@ -4,8 +4,9 @@ use std::ptr::NonNull;
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::{
-    NSApplication, NSBackingStoreType, NSScreenSaverWindowLevel, NSView, NSWindow,
-    NSWindowOcclusionState, NSWindowStyleMask,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationOcclusionState, NSBackingStoreType,
+    NSScreenSaverWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState,
+    NSWindowStyleMask,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSDate, NSRunLoop};
@@ -108,6 +109,7 @@ impl MacosWgpuSurfaceAttachment {
         child_window.setOpaque(true);
         child_window.setHasShadow(false);
         child_window.setIgnoresMouseEvents(true);
+        prepare_window_for_preview(&child_window);
         child_window.setLevel(NSScreenSaverWindowLevel);
         child_window.orderFrontRegardless();
         let child_ptr = (&*child_view) as *const NSView as *mut c_void;
@@ -156,6 +158,7 @@ impl MacosWgpuSurfaceAttachment {
         self.child_window
             .setFrame_display(screen_rect_for_bounds(&self.parent_view, bounds), true);
         self.child_window.setLevel(NSScreenSaverWindowLevel);
+        prepare_window_for_preview(&self.child_window);
         self.child_window.orderFrontRegardless();
         self.child_view.setFrame(content_rect_for_bounds(bounds));
         self.child_view.setHidden(false);
@@ -176,6 +179,7 @@ impl MacosWgpuSurfaceAttachment {
         self.child_window
             .setFrame_display(screen_rect_for_bounds(&self.parent_view, bounds), true);
         self.child_window.setLevel(NSScreenSaverWindowLevel);
+        prepare_window_for_preview(&self.child_window);
         self.child_window.orderFrontRegardless();
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
@@ -188,16 +192,19 @@ impl MacosWgpuSurfaceAttachment {
     }
 
     pub fn drawable_lifecycle_diagnostic(&self) -> String {
+        let app = app_lifecycle_diagnostic();
         let parent_window_visible = self.parent_window.isVisible();
         let parent_window_occlusion_visible = self
             .parent_window
             .occlusionState()
             .contains(NSWindowOcclusionState::Visible);
+        let parent_window_on_active_space = self.parent_window.isOnActiveSpace();
         let child_window_visible = self.child_window.isVisible();
         let child_window_occlusion_visible = self
             .child_window
             .occlusionState()
             .contains(NSWindowOcclusionState::Visible);
+        let child_window_on_active_space = self.child_window.isOnActiveSpace();
         let child_has_parent = self.child_window.parentWindow().is_some();
         let parent_view_bounds = self.parent_view.bounds();
         let child_view_frame = self.child_view.frame();
@@ -207,12 +214,15 @@ impl MacosWgpuSurfaceAttachment {
         let layer_bounds = self.metal_layer.bounds();
         let drawable_size = self.metal_layer.drawableSize();
         format!(
-            "drawableLifecycle{{attachmentStrategy=topLevelOverlayWindow, prepareCount={}, parentWindowVisible={}, parentWindowOcclusionVisible={}, childWindowVisible={}, childWindowOcclusionVisible={}, childHasParent={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
+            "drawableLifecycle{{attachmentStrategy=topLevelOverlayWindow, prepareCount={}, {}, parentWindowVisible={}, parentWindowOcclusionVisible={}, parentWindowOnActiveSpace={}, childWindowVisible={}, childWindowOcclusionVisible={}, childWindowOnActiveSpace={}, childHasParent={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
             self.prepare_count,
+            app,
             parent_window_visible,
             parent_window_occlusion_visible,
+            parent_window_on_active_space,
             child_window_visible,
             child_window_occlusion_visible,
+            child_window_on_active_space,
             child_has_parent,
             self.parent_view.isHidden(),
             self.parent_view.isHiddenOrHasHiddenAncestor(),
@@ -259,6 +269,7 @@ fn ensure_parent_window_visible(
 ) -> Result<Retained<NSWindow>, PreviewSurfaceError> {
     let mtm = require_main_thread()?;
     let app = NSApplication::sharedApplication(mtm);
+    app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
     app.unhideWithoutActivation();
     #[allow(deprecated)]
     app.activateIgnoringOtherApps(true);
@@ -268,11 +279,16 @@ fn ensure_parent_window_visible(
             "macOS WGPU parent NSView is not attached to an NSWindow",
         )
     })?;
+    prepare_window_for_preview(&window);
     ensure_window_visible(&window);
     Ok(window)
 }
 
 fn ensure_window_visible(window: &NSWindow) {
+    prepare_window_for_preview(window);
+    if window.isMiniaturized() {
+        window.deminiaturize(None);
+    }
     if !window.isVisible() {
         window.orderFrontRegardless();
     }
@@ -282,6 +298,45 @@ fn ensure_window_visible(window: &NSWindow) {
     {
         window.makeKeyAndOrderFront(None);
         window.orderFrontRegardless();
+    }
+}
+
+fn prepare_window_for_preview(window: &NSWindow) {
+    window.setCanHide(false);
+    window.setHidesOnDeactivate(false);
+    window.setCollectionBehavior(
+        NSWindowCollectionBehavior::MoveToActiveSpace
+            | NSWindowCollectionBehavior::FullScreenAuxiliary
+            | NSWindowCollectionBehavior::Transient,
+    );
+}
+
+fn app_lifecycle_diagnostic() -> String {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return "appActive=unknown, appHidden=unknown, appActivationPolicy=unknown, appOcclusionVisible=unknown".to_owned();
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    let app_occlusion_visible = app
+        .occlusionState()
+        .contains(NSApplicationOcclusionState::Visible);
+    format!(
+        "appActive={}, appHidden={}, appActivationPolicy={}, appOcclusionVisible={}",
+        app.isActive(),
+        app.isHidden(),
+        format_activation_policy(app.activationPolicy()),
+        app_occlusion_visible,
+    )
+}
+
+fn format_activation_policy(policy: NSApplicationActivationPolicy) -> &'static str {
+    if policy == NSApplicationActivationPolicy::Regular {
+        "regular"
+    } else if policy == NSApplicationActivationPolicy::Accessory {
+        "accessory"
+    } else if policy == NSApplicationActivationPolicy::Prohibited {
+        "prohibited"
+    } else {
+        "unknown"
     }
 }
 

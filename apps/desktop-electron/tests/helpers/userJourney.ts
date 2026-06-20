@@ -1,13 +1,16 @@
 import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { promisify } from "node:util";
 
 import type { CommandName } from "../../src/generated/CommandEnvelope";
 
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
 export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving-testsrc.mp4");
 export const USER_JOURNEY_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-tone.wav");
+const execFileAsync = promisify(execFile);
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -124,9 +127,15 @@ export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
   for (const field of [
     "parentWindowVisible=",
     "parentWindowOcclusionVisible=",
+    "parentWindowOnActiveSpace=",
     "childWindowVisible=",
     "childWindowOcclusionVisible=",
+    "childWindowOnActiveSpace=",
     "childHasParent=",
+    "appActive=",
+    "appHidden=",
+    "appActivationPolicy=",
+    "appOcclusionVisible=",
     "childViewHidden=",
     "childViewHiddenOrAncestor=",
     "layerHidden=",
@@ -158,6 +167,7 @@ export async function launchProductJourneyApp(
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
+  await activateProductWindow(app, page);
   await expectProductWorkspace(page);
   return { app, page };
 }
@@ -212,6 +222,33 @@ export async function clickPreviewPlay(page: Page): Promise<void> {
   await expect(playButton).toBeEnabled({ timeout: 20_000 });
   await playButton.click();
   await expect(controls.getByRole("button", { name: "暂停预览" })).toBeEnabled({ timeout: 10_000 });
+}
+
+async function activateProductWindow(app: ElectronApplication, page: Page): Promise<void> {
+  await page.bringToFront();
+  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+    if (process.platform === "darwin") {
+      electronApp.setActivationPolicy("regular");
+    }
+    const window = BrowserWindow.getAllWindows()[0];
+    window?.show();
+    window?.setFocusable(true);
+    window?.focus();
+    window?.moveTop();
+    electronApp.show();
+    electronApp.focus({ steal: true });
+  });
+
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const pid = await app.evaluate(() => process.pid);
+  await execFileAsync("osascript", [
+    "-e",
+    `tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true`
+  ]).catch(() => undefined);
+  await page.waitForTimeout(250);
 }
 
 export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidence> {
