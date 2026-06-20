@@ -35,6 +35,7 @@ export async function launchForegroundProductApp(
   openMaterialFiles: string[],
   env: NodeJS.ProcessEnv = {}
 ): Promise<{ app: ForegroundProductAppController; page: Page }> {
+  ensureLocalhostBypassesProxy();
   const executablePath = await findPackagedExecutable();
   const appBundlePath = macAppBundlePathForExecutable(executablePath);
   const remoteDebuggingPort = await allocatePort();
@@ -67,9 +68,7 @@ export async function launchForegroundProductApp(
     diagnostics,
     close: async () => {
       await browser.close().catch(() => undefined);
-      if (pid !== null) {
-        process.kill(pid, "SIGTERM");
-      }
+      await terminateMainProcess(remoteDebuggingPort, pid);
     },
     readExecuteCommandCalls: async () => readTestObservation(page, "getExecuteCommandCalls", diagnostics),
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics)
@@ -145,14 +144,66 @@ async function waitForFirstPage(browser: Browser): Promise<Page> {
 }
 
 async function findProcessIdForRemoteDebuggingPort(port: number): Promise<number | null> {
-  const result = await execFileAsync("pgrep", ["-f", `--remote-debugging-port=${port}`]).catch(() => null);
-  const pid = result?.stdout
-    .trim()
-    .split(/\s+/)
-    .map((value) => Number.parseInt(value, 10))
-    .filter((value) => Number.isInteger(value))
-    .at(-1);
-  return pid ?? null;
+  const result = await execFileAsync("/bin/ps", ["-axo", "pid=,command="]).catch(() => null);
+  const mainProcessLine = result?.stdout
+    .split("\n")
+    .find((line) =>
+      line.includes(`remote-debugging-port=${port}`) &&
+      line.includes(".app/Contents/MacOS/Video Editor") &&
+      !line.includes("Helper")
+    );
+  if (mainProcessLine === undefined) {
+    return null;
+  }
+  const pid = Number.parseInt(mainProcessLine.trim().split(/\s+/)[0] ?? "", 10);
+  return Number.isInteger(pid) ? pid : null;
+}
+
+async function terminateMainProcess(port: number, preferredPid: number | null): Promise<void> {
+  const pids = new Set<number>();
+  if (preferredPid !== null) {
+    pids.add(preferredPid);
+  }
+  const livePid = await findProcessIdForRemoteDebuggingPort(port);
+  if (livePid !== null) {
+    pids.add(livePid);
+  }
+
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Process already exited.
+    }
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const remainingPid = await findProcessIdForRemoteDebuggingPort(port);
+  if (remainingPid !== null) {
+    try {
+      process.kill(remainingPid, "SIGKILL");
+    } catch {
+      // Process already exited.
+    }
+  }
+  await execFileAsync("/usr/bin/pkill", ["-f", `[r]emote-debugging-port=${port}`]).catch(() => undefined);
+}
+
+function ensureLocalhostBypassesProxy(): void {
+  const bypass = "127.0.0.1,localhost,::1";
+  process.env.NO_PROXY = appendNoProxyValue(process.env.NO_PROXY, bypass);
+  process.env.no_proxy = appendNoProxyValue(process.env.no_proxy, bypass);
+}
+
+function appendNoProxyValue(current: string | undefined, value: string): string {
+  if (current === undefined || current.trim().length === 0) {
+    return value;
+  }
+  const entries = new Set(current.split(",").map((entry) => entry.trim()).filter((entry) => entry.length > 0));
+  for (const entry of value.split(",")) {
+    entries.add(entry);
+  }
+  return Array.from(entries).join(",");
 }
 
 async function readMacProcessState(pid: number): Promise<string | null> {

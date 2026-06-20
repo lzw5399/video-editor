@@ -38,6 +38,12 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     pause: () => ipcRenderer.invoke("realtimePreviewHost:pause"),
     stop: () => ipcRenderer.invoke("realtimePreviewHost:stop")
   });
+  if (process.argv.includes("--video-editor-test-observations=1")) {
+    contextBridge.exposeInMainWorld("videoEditorTestObservations", {
+      getExecuteCommandCalls: () => ipcRenderer.invoke("test:getExecuteCommandCalls"),
+      getRealtimePreviewHostCalls: () => ipcRenderer.invoke("test:getRealtimePreviewHostCalls")
+    });
+  }
 }
 
 function readAllowedRendererUrl(): string | undefined {

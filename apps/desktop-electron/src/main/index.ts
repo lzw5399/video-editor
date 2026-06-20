@@ -60,12 +60,15 @@ const packagedRendererFile = join(__dirname, "../renderer/index.html");
 const packagedRendererUrl = pathToFileURL(packagedRendererFile).toString();
 const allowedRendererUrl = isDevelopment && devServerUrl !== undefined ? devServerUrl : packagedRendererUrl;
 const allowedRendererUrlArgument = `--video-editor-allowed-renderer-url=${allowedRendererUrl}`;
+hydrateTestEnvironmentFromArguments();
 const showDeveloperDiagnostics =
   process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
   process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
+const testObservationEnabled = process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1";
 const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
+  ...(testObservationEnabled ? ["--video-editor-test-observations=1"] : []),
   ...(process.env.VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE === "demo" ? ["--video-editor-workspace-fixture=demo"] : [])
 ];
 
@@ -153,6 +156,16 @@ ipcMain.handle("platform:pathToFileUrl", (event, filePath: string) => {
   assertAllowedIpcSender(event);
   return pathToFileURL(filePath).toString();
 });
+if (testObservationEnabled) {
+  ipcMain.handle("test:getExecuteCommandCalls", (event) => {
+    assertAllowedIpcSender(event);
+    return globalThis.__videoEditorTestExecuteCommandCalls ?? [];
+  });
+  ipcMain.handle("test:getRealtimePreviewHostCalls", (event) => {
+    assertAllowedIpcSender(event);
+    return globalThis.__videoEditorTestRealtimePreviewHostCalls ?? [];
+  });
+}
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
@@ -250,7 +263,7 @@ function isAllowedRendererUrl(targetUrl: string): boolean {
 }
 
 function readTestOpenMaterialFiles(): string[] | null {
-  const raw = process.env.VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES;
+  const raw = decodeTestArgumentValue(process.env.VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES);
   if (raw === undefined) {
     return null;
   }
@@ -265,6 +278,36 @@ function readTestOpenMaterialFiles(): string[] | null {
   }
 
   return [];
+}
+
+function hydrateTestEnvironmentFromArguments(): void {
+  setEnvFromArgument("VIDEO_EDITOR_TEST_RECORD_COMMANDS", "--video-editor-test-record-commands=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS", "--video-editor-test-show-developer-diagnostics=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES", "--video-editor-test-open-material-files=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
+}
+
+function setEnvFromArgument(envName: string, prefix: string): void {
+  if (process.env[envName] !== undefined) {
+    return;
+  }
+  const argument = process.argv.find((value) => value.startsWith(prefix));
+  if (argument === undefined) {
+    return;
+  }
+  process.env[envName] = decodeTestArgumentValue(argument.slice(prefix.length));
+}
+
+function decodeTestArgumentValue(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function recordTestExecuteCommand(command: CommandEnvelope): void {
