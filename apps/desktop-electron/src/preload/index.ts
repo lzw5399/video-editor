@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   CreateProjectSessionRequest,
+  ExportJobRequest,
   ExecuteProjectIntentRequest,
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
@@ -56,6 +57,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("core:listProjectSessionMissingMaterials", request),
     startProjectSessionExport: (request: StartProjectSessionExportRequest) =>
       ipcRenderer.invoke("core:startProjectSessionExport", request),
+    getExportJobStatus: (request: ExportJobRequest) => ipcRenderer.invoke("core:getExportJobStatus", request),
+    cancelExport: (request: ExportJobRequest) => ipcRenderer.invoke("core:cancelExport", request),
     requestProjectSessionPreviewFrame: (request: RequestProjectSessionPreviewFrameRequest) =>
       ipcRenderer.invoke("core:requestProjectSessionPreviewFrame", request),
     requestProjectSessionPreviewSegment: (request: RequestProjectSessionPreviewSegmentRequest) =>

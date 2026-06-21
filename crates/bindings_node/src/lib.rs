@@ -280,6 +280,36 @@ pub fn start_project_session_export(request: serde_json::Value) -> Result<serde_
     start_project_session_export_command(request)
 }
 
+#[napi(js_name = "getExportJobStatus")]
+pub fn get_export_job_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<GetExportJobStatusCommandPayload>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid getExportJobStatus payload: {error}"),
+                Some("getExportJobStatus".to_string()),
+            ));
+        }
+    };
+    get_export_job_status_command(request)
+}
+
+#[napi(js_name = "cancelExport")]
+pub fn cancel_export(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<CancelExportCommandPayload>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid cancelExport payload: {error}"),
+                Some("cancelExport".to_string()),
+            ));
+        }
+    };
+    cancel_export_command(request)
+}
+
 #[napi(js_name = "requestProjectSessionPreviewFrame")]
 pub fn request_project_session_preview_frame(
     request: serde_json::Value,

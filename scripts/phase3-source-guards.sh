@@ -23,6 +23,7 @@ MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN='on(?:AddTextSegment|AddAudioSegment|Im
 TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent"(?s:.{0,220})\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent"(?s:.{0,420})\b(?:style|textBox|layoutRegion|wrapping|fontRef)[[:space:]]*:'
 TEXT_ADD_NATIVE_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent";[^\n|]*\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent";(?s:.{0,260})\b(?:style|textBox|layoutRegion|wrapping)[[:space:]]*:'
 TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN='\bcreateDefaultTextSegment\b|on(?:AddTextSegment|ImportSubtitleSrt)[^;\n]*\b(?:TextSegment|textTemplate)\b|function[[:space:]]+handle(?:AddTextSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:TextSegment|textTemplate)\b'
+EXPORT_CONTROL_LEGACY_COMMAND_PATTERN='\b(?:buildGetExportJobStatusCommand|buildCancelExportCommand|executeExportCommand)\b'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -443,6 +444,11 @@ fail_if_matches \
   "$TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN" \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx
 
+fail_if_matches \
+  "renderer must not construct export status/cancel command envelopes; use explicit export APIs" \
+  "$EXPORT_CONTROL_LEGACY_COMMAND_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts
+
 fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
@@ -664,6 +670,11 @@ assert_pattern_rejects \
   'function createDefaultTextSegment(content: string, source: TextSegment["source"]): TextSegment {
     return {} as TextSegment;
   }'
+
+assert_pattern_rejects \
+  "legacy export control command builder" \
+  "$EXPORT_CONTROL_LEGACY_COMMAND_PATTERN" \
+  'return buildGetExportJobStatusCommand(current.export.jobId);'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

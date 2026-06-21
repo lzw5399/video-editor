@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   CreateProjectSessionRequest,
+  ExportJobRequest,
   ExecuteProjectIntentRequest,
   OpenProjectSessionRequest,
   ProjectSessionImportMaterialResponse,
@@ -45,12 +46,10 @@ import type {
 import {
   buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
-  buildCancelExportCommand,
   buildCreateAudioPreviewSessionCommand,
   buildGetAudioPreviewStatusCommand,
   buildGetArtifactQuotaStatusCommand,
   buildGetArtifactStatusCommand,
-  buildGetExportJobStatusCommand,
   buildGetWaveformDisplayPeaksCommand,
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
@@ -116,6 +115,8 @@ type VideoEditorCoreApi = {
   startProjectSessionExport: (
     request: StartProjectSessionExportRequest
   ) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
+  getExportJobStatus: (request: ExportJobRequest) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
+  cancelExport: (request: ExportJobRequest) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
@@ -904,8 +905,8 @@ export function App(): React.ReactElement {
     }
   }
 
-  async function executeExportCommand(
-    buildCommand: CoreCommandBuilder,
+  async function executeExportJobControl(
+    runCommand: (jobId: string) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>,
     pendingCommand: string,
     applyResult: ExportCommandResultApplier
   ): Promise<void> {
@@ -948,8 +949,11 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<ExportJobStatusResponse>(command);
+      const jobId = workspaceRef.current.export.jobId;
+      if (jobId === null) {
+        throw new Error("请先开始导出");
+      }
+      const result = await runCommand(jobId);
       setWorkspace((current) => {
         const next = applyResult(current, result);
         workspaceRef.current = next;
@@ -2740,26 +2744,16 @@ export function App(): React.ReactElement {
   }
 
   function handleRefreshExportStatus(): void {
-    void executeExportCommand(
-      (current) => {
-        if (current.export.jobId === null) {
-          throw new Error("请先开始导出");
-        }
-        return buildGetExportJobStatusCommand(current.export.jobId);
-      },
+    void executeExportJobControl(
+      (jobId) => window.videoEditorCore.getExportJobStatus({ jobId }),
       "查询导出状态",
       (current, result) => applyExportCommandResult(current, result, "查询导出状态")
     );
   }
 
   function handleCancelExport(): void {
-    void executeExportCommand(
-      (current) => {
-        if (current.export.jobId === null) {
-          throw new Error("请先开始导出");
-        }
-        return buildCancelExportCommand(current.export.jobId);
-      },
+    void executeExportJobControl(
+      (jobId) => window.videoEditorCore.cancelExport({ jobId }),
       "取消导出",
       (current, result) => applyExportCommandResult(current, result, "取消导出")
     );

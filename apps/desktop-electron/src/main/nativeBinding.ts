@@ -52,6 +52,8 @@ type NativeBinding = {
     request: ProjectSessionReadRequest
   ) => CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>;
   startProjectSessionExport: (request: StartProjectSessionExportRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
+  getExportJobStatus: (request: ExportJobRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
+  cancelExport: (request: ExportJobRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => CommandResultEnvelope<PreviewArtifactResponse>;
@@ -110,6 +112,10 @@ export type StartProjectSessionExportRequest = {
   expectedRevision: number;
   outputPath: string;
   preset: ExportPreset;
+};
+
+export type ExportJobRequest = {
+  jobId: string;
 };
 
 export type RequestProjectSessionPreviewFrameRequest = {
@@ -651,6 +657,22 @@ export function startProjectSessionExport(
   return binding.startProjectSessionExport(request);
 }
 
+export function getExportJobStatus(request: ExportJobRequest): CommandResultEnvelope<ExportJobStatusResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getExportJobStatus");
+  }
+  return binding.getExportJobStatus(request);
+}
+
+export function cancelExport(request: ExportJobRequest): CommandResultEnvelope<ExportJobStatusResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("cancelExport");
+  }
+  return binding.cancelExport(request);
+}
+
 export function requestProjectSessionPreviewFrame(
   request: RequestProjectSessionPreviewFrameRequest
 ): CommandResultEnvelope<PreviewArtifactResponse> {
@@ -767,6 +789,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.listProjectSessionMaterials !== "function" ||
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
       typeof loaded.startProjectSessionExport !== "function" ||
+      typeof loaded.getExportJobStatus !== "function" ||
+      typeof loaded.cancelExport !== "function" ||
       typeof loaded.requestProjectSessionPreviewFrame !== "function" ||
       typeof loaded.requestProjectSessionPreviewSegment !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
@@ -802,6 +826,8 @@ function loadNativeBinding(): NativeBinding | null {
       listProjectSessionMaterials: loaded.listProjectSessionMaterials,
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
       startProjectSessionExport: loaded.startProjectSessionExport,
+      getExportJobStatus: loaded.getExportJobStatus,
+      cancelExport: loaded.cancelExport,
       requestProjectSessionPreviewFrame: loaded.requestProjectSessionPreviewFrame,
       requestProjectSessionPreviewSegment: loaded.requestProjectSessionPreviewSegment,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,

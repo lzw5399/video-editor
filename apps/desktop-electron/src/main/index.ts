@@ -23,8 +23,10 @@ import {
   closeProjectSession,
   configureBundledRuntimeDirectory,
   createProjectSession,
+  cancelExport,
   executeCommand,
   executeProjectIntent,
+  getExportJobStatus,
   listProjectSessionMaterials,
   listProjectSessionMissingMaterials,
   openProjectSession,
@@ -34,6 +36,7 @@ import {
   startProjectSessionExport,
   version,
   type CreateProjectSessionRequest,
+  type ExportJobRequest,
   type ExecuteProjectIntentRequest,
   type OpenProjectSessionRequest,
   type ProjectSessionReadRequest,
@@ -208,6 +211,24 @@ ipcMain.handle("core:startProjectSessionExport", (event, request: StartProjectSe
     return testExportResponse;
   }
   return startProjectSessionExport(request);
+});
+ipcMain.handle("core:getExportJobStatus", (event, request: ExportJobRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitExportControlCall("getExportJobStatus", request);
+  const testExportResponse = maybeBuildTestExplicitExportControlResponse("getExportJobStatus", request);
+  if (testExportResponse !== null) {
+    return testExportResponse;
+  }
+  return getExportJobStatus(request);
+});
+ipcMain.handle("core:cancelExport", (event, request: ExportJobRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitExportControlCall("cancelExport", request);
+  const testExportResponse = maybeBuildTestExplicitExportControlResponse("cancelExport", request);
+  if (testExportResponse !== null) {
+    return testExportResponse;
+  }
+  return cancelExport(request);
 });
 ipcMain.handle("core:requestProjectSessionPreviewFrame", (event, request: RequestProjectSessionPreviewFrameRequest) => {
   assertAllowedIpcSender(event);
@@ -560,6 +581,17 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   });
 }
 
+function recordTestExplicitExportControlCall(command: "getExportJobStatus" | "cancelExport", request: ExportJobRequest): void {
+  recordTestExecuteCommand({
+    command,
+    payload: {
+      kind: command,
+      jobId: request.jobId
+    },
+    requestId: `explicit-${command}`
+  });
+}
+
 function recordTestProjectSessionCall(
   command: TestProjectSessionCall["command"],
   request:
@@ -870,6 +902,20 @@ function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEn
   }
 
   return null;
+}
+
+function maybeBuildTestExplicitExportControlResponse(
+  command: "getExportJobStatus" | "cancelExport",
+  request: ExportJobRequest
+): CommandResultEnvelope<ExportJobStatusResponse> | null {
+  return maybeBuildTestExportResponse({
+    command,
+    payload: {
+      kind: command,
+      jobId: request.jobId
+    },
+    requestId: `explicit-${command}`
+  });
 }
 
 function maybeBuildTestProjectSessionExportResponse(

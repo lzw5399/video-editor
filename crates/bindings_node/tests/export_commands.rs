@@ -4,7 +4,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use bindings_node::execute_command;
+use bindings_node::{cancel_export, execute_command, get_export_job_status};
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
     CommandErrorKind, Draft, DraftCanvasConfig, ExportDiagnosticKind, ExportJobPhase, ExportPreset,
@@ -208,6 +208,41 @@ fn export_commands_cancel_running_job_and_report_classified_status() {
             .unwrap()
             .contains("取消")
     );
+}
+
+#[test]
+fn explicit_export_control_apis_query_and_cancel_jobs_without_command_envelopes() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("export-explicit-control");
+    let _ffmpeg = sandbox.ffmpeg_slow();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let output = sandbox.root.join("explicit-control.mp4");
+
+    let started = execute_command(json!({
+        "command": "startExport",
+        "payload": {
+            "kind": "startExport",
+            "draft": export_draft("draft-export-explicit-control"),
+            "outputPath": output,
+            "preset": ExportPreset::H264AacBalanced
+        },
+        "requestId": "req-export-explicit-control-start"
+    }))
+    .expect("start export should return envelope");
+    assert_eq!(started["ok"], true, "{started:#}");
+    let job_id = started["data"]["jobId"].as_str().unwrap().to_owned();
+
+    let status = get_export_job_status(json!({ "jobId": job_id }))
+        .expect("explicit export status API should return envelope");
+    assert_eq!(status["ok"], true, "{status:#}");
+    assert_eq!(status["data"]["jobId"], job_id);
+
+    let cancelled = cancel_export(json!({ "jobId": job_id }))
+        .expect("explicit export cancel API should return envelope");
+    assert_eq!(cancelled["ok"], true, "{cancelled:#}");
+    assert_eq!(cancelled["data"]["phase"], "cancelled");
+    assert_eq!(cancelled["data"]["diagnostic"]["kind"], "cancelled");
 }
 
 #[test]

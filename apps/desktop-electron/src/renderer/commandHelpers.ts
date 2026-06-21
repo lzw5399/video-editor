@@ -1,13 +1,11 @@
 import type {
   AudioPreviewCommandPayload,
-  CancelExportCommandPayload,
   CommandEnvelope,
   DirtyRange,
   ExportPreset,
   ArtifactGenerationActionCommandPayload,
   GetArtifactQuotaStatusCommandPayload,
   GetArtifactStatusCommandPayload,
-  GetExportJobStatusCommandPayload,
   InvalidatePreviewCacheCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
@@ -242,24 +240,6 @@ export function buildRunArtifactGarbageCollectionCommand(
   } satisfies RunArtifactGarbageCollectionCommandPayload & { kind: "runArtifactGarbageCollection" };
 
   return envelope("runArtifactGarbageCollection", payload);
-}
-
-export function buildGetExportJobStatusCommand(jobId: string): CommandEnvelope {
-  const payload = {
-    kind: "getExportJobStatus",
-    jobId
-  } satisfies GetExportJobStatusCommandPayload & { kind: "getExportJobStatus" };
-
-  return envelope("getExportJobStatus", payload);
-}
-
-export function buildCancelExportCommand(jobId: string): CommandEnvelope {
-  const payload = {
-    kind: "cancelExport",
-    jobId
-  } satisfies CancelExportCommandPayload & { kind: "cancelExport" };
-
-  return envelope("cancelExport", payload);
 }
 
 export function commandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string): string {
