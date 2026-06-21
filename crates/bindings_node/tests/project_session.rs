@@ -38,6 +38,21 @@ fn project_session_creates_project_without_renderer_draft() {
         created["data"]["draft"]["metadata"]["name"],
         "Session Created Project"
     );
+    assert_eq!(
+        created["data"]["viewModel"]["timeline"]["rows"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert_eq!(
+        created["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
+        "timeline-track:track-main-video"
+    );
+    assert_eq!(
+        created["data"]["viewModel"]["timeline"]["rows"][0]["kindLabel"],
+        "视频"
+    );
 
     let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("created session should save canonical project.json");
@@ -78,6 +93,10 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     assert_eq!(opened["ok"], true, "{opened:#}");
     assert_eq!(opened["data"]["sessionId"], "test-session-add");
     assert_eq!(opened["data"]["revision"], 0);
+    assert_eq!(
+        opened["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
+        "timeline-track:video-track"
+    );
 
     let added = execute_project_intent(json!({
         "sessionId": "test-session-add",
@@ -93,6 +112,18 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
     assert_eq!(
         added["data"]["draft"]["tracks"][0]["segments"][0]["segmentId"],
+        "segment-1"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["selectionHandle"],
+        "timeline-segment:video-track:segment-1"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["targetLabel"],
+        "目标 00:00:00.000 / 00:00:01.000"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
         "segment-1"
     );
 
@@ -569,6 +600,14 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
     assert_eq!(selected["ok"], true, "{selected:#}");
     assert_eq!(selected["data"]["revision"], 1);
     assert_eq!(selected["data"]["selection"]["segmentIds"][0], "segment-1");
+    assert_eq!(
+        selected["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
+        "segment-1"
+    );
+    assert_eq!(
+        selected["data"]["viewModel"]["selectedSegment"]["track"]["selectionHandle"],
+        "timeline-track:video-track"
+    );
 
     let follow_up = execute_project_intent(json!({
         "sessionId": "test-session-selection",
@@ -685,6 +724,62 @@ fn project_session_rejects_legacy_and_invalid_selection_intents() {
     assert_eq!(valid["data"]["selection"]["segmentIds"][0], "segment-1");
 
     close_project_session(json!({ "sessionId": "test-session-selection-rejections" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_view_model_encodes_timeline_item_handles() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-encoded-handles.veproj");
+    let mut draft_json = timeline_draft_json();
+    draft_json["tracks"][0]["trackId"] = json!("video:track");
+    draft_json["tracks"][0]["segments"] = json!([{
+        "segmentId": "segment:1",
+        "materialId": "video-material",
+        "sourceTimerange": { "start": 0, "duration": 1_000_000 },
+        "targetTimerange": { "start": 0, "duration": 1_000_000 },
+        "mainTrackMagnet": { "enabled": false },
+        "keyframes": [],
+        "filters": [],
+        "transition": null
+    }]);
+    let draft: Draft =
+        serde_json::from_value(draft_json).expect("encoded handle draft should parse");
+    save_project_bundle(&StdPlatformFileSystem, &bundle_path, &draft)
+        .expect("encoded handle draft should be saved");
+
+    let opened = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-encoded-handles"
+    }))
+    .expect("openProjectSession should return an envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+    assert_eq!(
+        opened["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
+        "timeline-track:video%3Atrack"
+    );
+    assert_eq!(
+        opened["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["selectionHandle"],
+        "timeline-segment:video%3Atrack:segment%3A1"
+    );
+
+    let selected = execute_project_intent(json!({
+        "sessionId": "test-session-encoded-handles",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": opened["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["selectionHandle"]
+        }
+    }))
+    .expect("encoded handle selection should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    assert_eq!(
+        selected["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
+        "segment:1"
+    );
+    assert_eq!(selected["data"]["revision"], 0);
+
+    close_project_session(json!({ "sessionId": "test-session-encoded-handles" }))
         .expect("closeProjectSession should return an envelope");
 }
 

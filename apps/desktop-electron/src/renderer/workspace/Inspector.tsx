@@ -27,7 +27,6 @@ import {
   formatKeyframeProperty,
   formatKeyframeValue,
   formatMicroseconds,
-  getSelectedSegmentView,
   type SelectedSegmentView,
   type WorkspaceState
 } from "../viewModel";
@@ -220,7 +219,7 @@ export function Inspector({
   onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute
 }: InspectorProps): React.ReactElement {
-  const selected = getSelectedSegmentView(workspace.draft, workspace.selection);
+  const selected = workspace.viewModel.selectedSegment;
   const [activeTab, setActiveTab] = useState<InspectorTab>("画面");
   const [focusedKeyframeProperty, setFocusedKeyframeProperty] = useState<KeyframeProperty>("visualPositionX");
   const [textState, setTextState] = useState<TextFormState>(DEFAULT_TEXT_STATE);

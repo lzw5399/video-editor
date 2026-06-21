@@ -3,14 +3,11 @@ import { useMemo, useState } from "react";
 import type { Material, TextSegment } from "../../generated/Draft";
 import {
   findFirstMaterialByKind,
-  findTrackByKind,
   formatMaterialDetail,
   formatMaterialDiagnostic,
   formatMaterialKind,
   formatMaterialStatus,
   formatMicroseconds,
-  getSelectedSegmentView,
-  getSelectedTrackView,
   materialStatusMessage,
   type MaterialResourceStatusView,
   type ResourcePanelState,
@@ -223,7 +220,7 @@ function MaterialPanel({
 function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
   const [textDurationInputSeconds, setTextDurationInputSeconds] = useState(3);
-  const textTrack = findTrackByKind(workspace.draft, "text");
+  const hasTextTrack = workspace.viewModel.timeline.rows.some((row) => row.track.kind === "text");
 
   const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
 
@@ -259,7 +256,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
           type="button"
           className="primary-action wide-action"
           onClick={() => onAddTextSegment(text, secondsToMicroseconds(textDurationInputSeconds))}
-          disabled={workspace.pendingCommand !== null || textTrack === null}
+          disabled={workspace.pendingCommand !== null || !hasTextTrack}
         >
           添加文字
         </button>
@@ -383,9 +380,9 @@ function AudioPanel({
   const [panPercent, setPanPercent] = useState(0);
   const [fadeInSeconds, setFadeInSeconds] = useState(0);
   const [fadeOutSeconds, setFadeOutSeconds] = useState(0);
-  const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
-  const selectedTrack = getSelectedTrackView(workspace.draft, workspace.selection);
-  const audioTrack = findTrackByKind(workspace.draft, "audio");
+  const selectedSegment = workspace.viewModel.selectedSegment;
+  const selectedTrack = workspace.viewModel.selectedTrack;
+  const hasAudioTrack = workspace.viewModel.timeline.rows.some((row) => row.track.kind === "audio");
   const selectedMaterialId = materialId || (audioMaterials[0]?.materialId ?? "");
 
   return (
@@ -396,7 +393,7 @@ function AudioPanel({
           type="button"
           className="primary-action"
           onClick={() => onAddAudioSegment(selectedMaterialId, secondsToMicroseconds(audioDurationInputSeconds))}
-          disabled={workspace.pendingCommand !== null || audioTrack === null || selectedMaterialId.length === 0}
+          disabled={workspace.pendingCommand !== null || !hasAudioTrack || selectedMaterialId.length === 0}
         >
           添加音频
         </button>

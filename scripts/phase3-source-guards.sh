@@ -13,6 +13,8 @@ LOW_LEVEL_EDIT_OBJECT_PATTERN='kind:[[:space:]]*"(?:addSegment|moveSegment|split
 MUTATING_TRACK_ID_INTENT_PATTERN='kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"(?s:.{0,400})\btrackId[[:space:]]*(?::|,)'
 LEGACY_SELECTION_INTENT_PATTERN='\bselectTimelineSegments\b|kind:[[:space:]]*"selectTimelineSegments"'
 SELECTION_INTENT_LEGACY_FIELD_PATTERN='kind:[[:space:]]*"selectTimelineItemIntent"(?s:.{0,500})\b(?:segmentIds|trackIds)[[:space:]]*:'
+RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSegmentView|getSelectedTrackView|timelineTrackSelectionHandle|timelineSegmentSelectionHandle)\b'
+RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 
 fail_if_matches() {
   local description="$1"
@@ -217,6 +219,29 @@ require_matches \
   apps/desktop-electron/src/main/nativeBinding.ts
 
 fail_if_matches \
+  "renderer must not derive timeline rows, selected timeline views, or timeline selection handles from Draft" \
+  "$RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN" \
+  apps/desktop-electron/src/renderer
+
+fail_if_matches \
+  "renderer must not encode track/segment IDs into timeline selection handles; consume Rust session handles" \
+  "$RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN" \
+  apps/desktop-electron/src/renderer apps/desktop-electron/src/preload
+
+require_matches \
+  "renderer timeline consumes Rust session timeline view model" \
+  '\bworkspace\.viewModel\.timeline\b' \
+  apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+require_matches \
+  "renderer selection display consumes Rust session selected-segment view model" \
+  '\bworkspace\.viewModel\.selectedSegment\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx \
+  apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx \
+  apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
+fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
@@ -308,6 +333,18 @@ assert_pattern_rejects \
     segmentIds: [segmentId],
     trackIds: [trackId]
   }, "select");'
+
+assert_pattern_rejects \
+  "renderer-owned timeline view projection helper" \
+  "$RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN" \
+  'export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): TimelineTrackRow[] {
+    return draft.tracks.map((track) => ({ track, segments: track.segments }));
+  }'
+
+assert_pattern_rejects \
+  "renderer-owned timeline selection handle encoding" \
+  "$RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN" \
+  'const handle = `segment:${encodeURIComponent(trackId)}:${encodeURIComponent(segmentId)}`;'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

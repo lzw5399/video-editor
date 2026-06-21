@@ -81,7 +81,6 @@ import {
   formatCommandError,
   formatMicroseconds,
   formatPreviewStatus,
-  getSelectedSegmentView,
   resourcePanelFromArtifactStatus,
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
@@ -424,6 +423,7 @@ export function App(): React.ReactElement {
         });
         const next = {
           ...base,
+          viewModel: openedProject?.data?.viewModel ?? base.viewModel,
           materials,
           bindingStatus: readyBindingStatus,
           commandError: openedProject?.data?.warnings.length ? commandErrorMessage(openedProject.data.warnings.join("；")) : null
@@ -681,6 +681,7 @@ export function App(): React.ReactElement {
       draft: applied.state.draft,
       commandState: applied.state.commandState,
       selection: applied.state.selection,
+      viewModel: result.ok && result.data !== null ? result.data.viewModel : current.viewModel,
       materials: applied.state.draft.materials,
       pendingCommand: null,
       commandError: applied.errorMessage
@@ -1456,7 +1457,7 @@ export function App(): React.ReactElement {
         return;
       }
 
-      openWorkspaceFromDraft(result.data.draft, result.data.bundlePath, "项目已新建");
+      openWorkspaceFromDraft(result.data.draft, result.data.viewModel, result.data.bundlePath, "项目已新建");
       void handleGetArtifactStatus();
       void handleProbeRuntimeCapabilities();
     } catch {
@@ -1508,7 +1509,7 @@ export function App(): React.ReactElement {
         return;
       }
 
-      openWorkspaceFromDraft(result.data.draft, result.data.bundlePath, "项目已打开");
+      openWorkspaceFromDraft(result.data.draft, result.data.viewModel, result.data.bundlePath, "项目已打开");
       setWorkspace((current) => ({
         ...current,
         commandError: result.data?.warnings.length ? commandErrorMessage(result.data.warnings.join("；")) : null
@@ -1525,7 +1526,12 @@ export function App(): React.ReactElement {
     }
   }
 
-  function openWorkspaceFromDraft(draft: Draft, nextBundlePath: string, statusLabel: string): void {
+  function openWorkspaceFromDraft(
+    draft: Draft,
+    viewModel: ProjectSessionOpenResponse["viewModel"],
+    nextBundlePath: string,
+    statusLabel: string
+  ): void {
     const next = {
       ...createInitialWorkspaceState(draft, {
         kind: "open" as const,
@@ -1533,6 +1539,7 @@ export function App(): React.ReactElement {
         statusLabel,
         error: null
       }),
+      viewModel,
       bindingStatus: workspaceRef.current.bindingStatus,
       pendingCommand: null,
       commandError: null
@@ -1911,7 +1918,7 @@ export function App(): React.ReactElement {
   }
 
   function handleDeleteSelectedSegment(): void {
-    const selected = getSelectedSegmentView(workspaceRef.current.draft, workspaceRef.current.selection);
+    const selected = workspaceRef.current.viewModel.selectedSegment;
 
     if (selected === null) {
       setWorkspace((current) => ({
@@ -2984,7 +2991,7 @@ function getSequenceDurationUs(workspace: WorkspaceState): number {
 }
 
 function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
-  return getSelectedSegmentView(response.draft, response.selection)?.segment.targetTimerange.start ?? null;
+  return response.viewModel.selectedSegment?.segment.targetTimerange.start ?? null;
 }
 
 function isFrameAlignedSequenceEnd(

@@ -7,7 +7,6 @@ import {
   formatExportPhase,
   formatExportPreset,
   formatExportProgress,
-  getSelectedSegmentView,
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
@@ -147,7 +146,7 @@ export function WorkspaceShell({
   onUndoTimelineEdit,
   onRedoTimelineEdit
 }: WorkspaceShellProps): React.ReactElement {
-  const selectedSegment = getSelectedSegmentView(workspace.draft, workspace.selection);
+  const selectedSegment = workspace.viewModel.selectedSegment;
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
   return (

@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg11 import material no draft response
-last_updated: "2026-06-21T17:18:55Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg11: import material no draft response
+stopped_at: Completed quick task 260622-sg13 rust timeline view model
+last_updated: "2026-06-21T18:07:51Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg13: rust timeline view model
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg11: import material no draft response
+Last activity: 2026-06-22 -- Completed quick task 260622-sg13: rust timeline view model
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -218,6 +218,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview telemetry fanout is now driven by Rust native playback/control events instead of Electron main-process interval polling; packaged product cadence proves native `framePresented=90`, 90/90 presented frames, and only 13 presentation snapshot reads over each 3s playback window. (URGENT)
+- Timeline display projection is now emitted by Rust project sessions as `viewModel`: renderer timeline rows, selected track/segment views, item handles, labels, visual kind, and ruler ticks are session-owned, and source guards block renderer projection/handle construction from returning. (URGENT)
 - Product audio preview commands now use Rust project session identity (`projectSessionId` + `expectedRevision`) and no renderer-owned draft payload; Rust audio preview reads canonical project session snapshots internally, with source guards and product/workspace gates preventing draft reintroduction. (URGENT)
 - Product import-material session responses no longer return full `Draft` payloads; renderer updates its material panel from the returned material record while Rust project session remains the canonical draft/persistence owner, and phase3 guards reject reintroducing import response draft payloads. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
@@ -496,6 +497,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg13-rust-timeline-view-model | Moved timeline rows, selection handles, selected track/segment views, labels, visual kind, and ruler ticks into Rust project session `viewModel`; renderer now consumes `workspace.viewModel`, and source guards reject renderer-owned timeline projection/handle encoding. |
 | 2026-06-22 | 260622-sg12-selection-handle-intent | Replaced renderer-facing `selectTimelineSegments` payloads with session-resolved `selectTimelineItemIntent` handles, added stale/malformed/legacy rejection tests, updated Playwright selection observations, and guarded against reintroducing renderer-owned selection ID arrays. |
 | 2026-06-21 | 260621-sg7-bundled-only-ffmpeg-runtime | Simplified Electron FFmpeg runtime selection to app-local bundled resources only, removed external runtime override/test switch paths, tightened Phase 6 release guards, updated docs/remediation, and revalidated packaged smoke/runtime discovery gates. |
 | 2026-06-21 | 260621-sg6-preview-session-snapshot-boundary | Removed renderer-owned realtime preview draft snapshot sync, replaced it with project-session revision sync, added stale/unknown/payload rejection tests, and revalidated product cadence at 90 accounted frames for both single-video and combined video/audio/text/SRT playback. |

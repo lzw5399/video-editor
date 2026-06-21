@@ -4,11 +4,12 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { TrackKind } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
-  deriveTimelineRows,
   formatKeyframeEasing,
   formatKeyframeProperty,
   formatTimelineTime,
   segmentBlockStyle,
+  type TimelineSegmentView,
+  type TimelineTrackRow as TimelineTrackRowView,
   type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
@@ -75,7 +76,7 @@ export function Timeline({
   onUndo,
   onRedo
 }: TimelineProps): React.ReactElement {
-  const timeline = deriveTimelineRows(workspace.draft, workspace.selection);
+  const timeline = workspace.viewModel.timeline;
   const trackListRef = useRef<HTMLDivElement>(null);
   const trackContentRef = useRef<HTMLDivElement>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
@@ -409,7 +410,7 @@ function TimelineTrackRow({
   onTrimSelectedSegment,
   pending
 }: {
-  row: ReturnType<typeof deriveTimelineRows>["rows"][number];
+  row: TimelineTrackRowView;
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;
@@ -531,7 +532,7 @@ function TimelineSegmentBlock({
   onTrimSelectedSegment,
   pending
 }: {
-  segment: ReturnType<typeof deriveTimelineRows>["rows"][number]["segments"][number];
+  segment: TimelineSegmentView;
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;

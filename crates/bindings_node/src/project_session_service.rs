@@ -64,6 +64,8 @@ struct ProjectSessionOpenResponse {
     session_id: String,
     revision: u64,
     draft: Draft,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
     bundle_path: String,
     project_json_path: String,
     warnings: Vec<String>,
@@ -215,6 +217,8 @@ struct ProjectSessionIntentResponse {
     draft: Draft,
     command_state: CommandState,
     selection: TimelineSelection,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
     events: Vec<draft_model::CommandEvent>,
     delta: draft_model::CommandDelta,
     bundle_path: String,
@@ -251,6 +255,83 @@ struct ProjectSessionMissingMaterialsResponse {
     bundle_path: String,
     project_json_path: String,
     diagnostics: Vec<MissingMaterialCommandDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectSessionViewModel {
+    timeline: TimelineViewModel,
+    selected_track: Option<SelectedTrackViewModel>,
+    selected_segment: Option<SelectedSegmentViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectedTrackViewModel {
+    track_id: TrackId,
+    selection_handle: String,
+    name: String,
+    kind_label: String,
+    muted: bool,
+    locked: bool,
+    visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectedSegmentViewModel {
+    segment: Segment,
+    track: SelectedTrackViewModel,
+    material: Option<Material>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineViewModel {
+    rows: Vec<TimelineTrackRowViewModel>,
+    duration: Microseconds,
+    ruler_ticks: Vec<Microseconds>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineTrackRowViewModel {
+    track: Track,
+    selection_handle: String,
+    symbol: String,
+    kind_label: String,
+    status_label: String,
+    lock_label: String,
+    visibility_label: String,
+    mute_label: String,
+    row_class_name: String,
+    segments: Vec<TimelineSegmentViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineSegmentViewModel {
+    segment: Segment,
+    selection_handle: String,
+    material: Option<Material>,
+    label: String,
+    source_label: String,
+    target_label: String,
+    visual_kind: TimelineSegmentVisualKind,
+    start: Microseconds,
+    duration: Microseconds,
+    selected: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum TimelineSegmentVisualKind {
+    Video,
+    Image,
+    Audio,
+    Text,
+    Sticker,
+    Filter,
 }
 
 #[derive(Debug, Default)]
@@ -460,6 +541,7 @@ impl ProjectSessionRegistry {
         crate::to_js_value(crate::ok_envelope(ProjectSessionOpenResponse {
             session_id,
             revision: 0,
+            view_model: project_session_view_model(&bundle.draft, &TimelineSelection::empty()),
             draft: bundle.draft,
             bundle_path: bundle_path.display().to_string(),
             project_json_path: project_json_path.display().to_string(),
@@ -501,6 +583,10 @@ impl ProjectSessionRegistry {
         crate::to_js_value(crate::ok_envelope(ProjectSessionOpenResponse {
             session_id,
             revision: 0,
+            view_model: project_session_view_model(
+                &opened.bundle.draft,
+                &TimelineSelection::empty(),
+            ),
             draft: opened.bundle.draft,
             bundle_path: bundle_path.display().to_string(),
             project_json_path: project_json_path.display().to_string(),
@@ -1129,6 +1215,7 @@ impl ProjectSession {
                 draft: self.draft.clone(),
                 command_state: self.command_state.clone(),
                 selection: self.selection.clone(),
+                view_model: project_session_view_model(&self.draft, &self.selection),
                 events: response.events,
                 delta: response.delta,
                 bundle_path: self.bundle_path.display().to_string(),
@@ -1156,12 +1243,310 @@ impl ProjectSession {
             draft: self.draft.clone(),
             command_state: self.command_state.clone(),
             selection: self.selection.clone(),
+            view_model: project_session_view_model(&self.draft, &self.selection),
             events: response.events,
             delta: response.delta,
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
         }))
     }
+}
+
+fn project_session_view_model(
+    draft: &Draft,
+    selection: &TimelineSelection,
+) -> ProjectSessionViewModel {
+    let timeline = timeline_view_model(draft, selection);
+    let selected_track = selected_track_view_model(draft, selection);
+    let selected_segment = selected_segment_view_model(draft, selection);
+
+    ProjectSessionViewModel {
+        timeline,
+        selected_track,
+        selected_segment,
+    }
+}
+
+fn selected_track_view_model(
+    draft: &Draft,
+    selection: &TimelineSelection,
+) -> Option<SelectedTrackViewModel> {
+    let selected_track_id = selection.track_ids.first();
+    let selected_segment_id = selection.segment_ids.first();
+    let track = draft
+        .tracks
+        .iter()
+        .find(|track| Some(&track.track_id) == selected_track_id)
+        .or_else(|| {
+            draft.tracks.iter().find(|track| {
+                track
+                    .segments
+                    .iter()
+                    .any(|segment| Some(&segment.segment_id) == selected_segment_id)
+            })
+        })?;
+
+    Some(selected_track_view_model_from_track(track))
+}
+
+fn selected_segment_view_model(
+    draft: &Draft,
+    selection: &TimelineSelection,
+) -> Option<SelectedSegmentViewModel> {
+    let selected_segment_id = selection.segment_ids.first()?;
+
+    for track in &draft.tracks {
+        if let Some(segment) = track
+            .segments
+            .iter()
+            .find(|candidate| &candidate.segment_id == selected_segment_id)
+        {
+            let material = draft
+                .materials
+                .iter()
+                .find(|candidate| candidate.material_id == segment.material_id)
+                .cloned();
+            return Some(SelectedSegmentViewModel {
+                segment: segment.clone(),
+                track: selected_track_view_model_from_track(track),
+                material,
+            });
+        }
+    }
+
+    None
+}
+
+fn selected_track_view_model_from_track(track: &Track) -> SelectedTrackViewModel {
+    SelectedTrackViewModel {
+        track_id: track.track_id.clone(),
+        selection_handle: timeline_track_selection_handle(&track.track_id),
+        name: track.name.clone(),
+        kind_label: format_track_kind(track.kind).to_owned(),
+        muted: track.muted,
+        locked: track.locked,
+        visible: track.visible,
+    }
+}
+
+fn timeline_view_model(draft: &Draft, selection: &TimelineSelection) -> TimelineViewModel {
+    let duration = timeline_duration(draft);
+    let rows = draft
+        .tracks
+        .iter()
+        .map(|track| timeline_track_row_view_model(draft, selection, track))
+        .collect();
+
+    TimelineViewModel {
+        rows,
+        duration: Microseconds::new(duration),
+        ruler_ticks: build_ruler_ticks(duration)
+            .into_iter()
+            .map(Microseconds::new)
+            .collect(),
+    }
+}
+
+fn timeline_track_row_view_model(
+    draft: &Draft,
+    selection: &TimelineSelection,
+    track: &Track,
+) -> TimelineTrackRowViewModel {
+    let kind_label = format_track_kind(track.kind);
+    let segments = track
+        .segments
+        .iter()
+        .map(|segment| timeline_segment_view_model(draft, selection, track, segment))
+        .collect();
+
+    TimelineTrackRowViewModel {
+        track: track.clone(),
+        selection_handle: timeline_track_selection_handle(&track.track_id),
+        symbol: timeline_track_symbol(track.kind).to_owned(),
+        kind_label: kind_label.to_owned(),
+        status_label: format!("{kind_label} · {} 片段", track.segments.len()),
+        lock_label: if track.locked {
+            "已锁定"
+        } else {
+            "未锁定"
+        }
+        .to_owned(),
+        visibility_label: if track.kind == TrackKind::Audio {
+            "听觉开启".to_owned()
+        } else if track.visible {
+            "画面可见".to_owned()
+        } else {
+            "画面隐藏".to_owned()
+        },
+        mute_label: if track.muted {
+            "已静音"
+        } else {
+            "未静音"
+        }
+        .to_owned(),
+        row_class_name: timeline_track_row_class_name(track, selection),
+        segments,
+    }
+}
+
+fn timeline_segment_view_model(
+    draft: &Draft,
+    selection: &TimelineSelection,
+    track: &Track,
+    segment: &Segment,
+) -> TimelineSegmentViewModel {
+    let material = draft
+        .materials
+        .iter()
+        .find(|candidate| candidate.material_id == segment.material_id)
+        .cloned();
+    let selected = selection.segment_ids.contains(&segment.segment_id);
+    let source_start = format_timeline_time(segment.source_timerange.start.get());
+    let source_duration = format_timeline_time(segment.source_timerange.duration.get());
+    let target_start = format_timeline_time(segment.target_timerange.start.get());
+    let target_duration = format_timeline_time(segment.target_timerange.duration.get());
+
+    TimelineSegmentViewModel {
+        segment: segment.clone(),
+        selection_handle: timeline_segment_selection_handle(&track.track_id, &segment.segment_id),
+        label: material
+            .as_ref()
+            .map(|material| material.display_name.clone())
+            .unwrap_or_else(|| format!("片段 {}", segment.segment_id.as_str())),
+        source_label: format!("源 {source_start} / {source_duration}"),
+        target_label: format!("目标 {target_start} / {target_duration}"),
+        visual_kind: timeline_segment_visual_kind(track.kind, material.as_ref()),
+        start: segment.target_timerange.start,
+        duration: segment.target_timerange.duration,
+        selected,
+        material,
+    }
+}
+
+fn timeline_duration(draft: &Draft) -> u64 {
+    draft
+        .tracks
+        .iter()
+        .flat_map(|track| track.segments.iter())
+        .fold(10_000_000, |duration, segment| {
+            duration.max(
+                segment
+                    .target_timerange
+                    .start
+                    .get()
+                    .saturating_add(segment.target_timerange.duration.get()),
+            )
+        })
+}
+
+fn build_ruler_ticks(duration: u64) -> Vec<u64> {
+    let tick_count = 6;
+    let interval = (duration / tick_count).max(1);
+    (0..=tick_count)
+        .map(|index| (index as u64).saturating_mul(interval).min(duration))
+        .collect()
+}
+
+fn timeline_track_row_class_name(track: &Track, selection: &TimelineSelection) -> String {
+    let mut classes = vec![
+        "track-row".to_owned(),
+        track_kind_class(track.kind).to_owned(),
+    ];
+    if !track.visible {
+        classes.push("hidden".to_owned());
+    }
+    if selection.track_ids.contains(&track.track_id) {
+        classes.push("selected-track".to_owned());
+    }
+    classes.join(" ")
+}
+
+fn timeline_segment_visual_kind(
+    track_kind: TrackKind,
+    material: Option<&Material>,
+) -> TimelineSegmentVisualKind {
+    match material.map(|material| material.kind) {
+        Some(MaterialKind::Video) => TimelineSegmentVisualKind::Video,
+        Some(MaterialKind::Image) => TimelineSegmentVisualKind::Image,
+        Some(MaterialKind::Audio) => TimelineSegmentVisualKind::Audio,
+        Some(MaterialKind::Text) => TimelineSegmentVisualKind::Text,
+        _ => match track_kind {
+            TrackKind::Video => TimelineSegmentVisualKind::Video,
+            TrackKind::Audio => TimelineSegmentVisualKind::Audio,
+            TrackKind::Text => TimelineSegmentVisualKind::Text,
+            TrackKind::Sticker => TimelineSegmentVisualKind::Sticker,
+            TrackKind::Filter => TimelineSegmentVisualKind::Filter,
+        },
+    }
+}
+
+fn format_track_kind(kind: TrackKind) -> &'static str {
+    match kind {
+        TrackKind::Video => "视频",
+        TrackKind::Audio => "音频",
+        TrackKind::Text => "文字",
+        TrackKind::Sticker => "贴纸",
+        TrackKind::Filter => "滤镜",
+    }
+}
+
+fn timeline_track_symbol(kind: TrackKind) -> &'static str {
+    match kind {
+        TrackKind::Video => "▣",
+        TrackKind::Audio => "♪",
+        TrackKind::Text => "T",
+        TrackKind::Sticker => "◇",
+        TrackKind::Filter => "◐",
+    }
+}
+
+fn track_kind_class(kind: TrackKind) -> &'static str {
+    match kind {
+        TrackKind::Video => "video",
+        TrackKind::Audio => "audio",
+        TrackKind::Text => "text",
+        TrackKind::Sticker => "sticker",
+        TrackKind::Filter => "filter",
+    }
+}
+
+fn format_timeline_time(time_us: u64) -> String {
+    let total_millis = time_us / 1_000;
+    let millis = total_millis % 1_000;
+    let total_seconds = total_millis / 1_000;
+    let seconds = total_seconds % 60;
+    let total_minutes = total_seconds / 60;
+    let minutes = total_minutes % 60;
+    let hours = total_minutes / 60;
+    format!("{hours:02}:{minutes:02}:{seconds:02}.{millis:03}")
+}
+
+fn timeline_track_selection_handle(track_id: &TrackId) -> String {
+    format!(
+        "timeline-track:{}",
+        percent_encode_timeline_handle_component(track_id.as_str())
+    )
+}
+
+fn timeline_segment_selection_handle(track_id: &TrackId, segment_id: &SegmentId) -> String {
+    format!(
+        "timeline-segment:{}:{}",
+        percent_encode_timeline_handle_component(track_id.as_str()),
+        percent_encode_timeline_handle_component(segment_id.as_str())
+    )
+}
+
+fn percent_encode_timeline_handle_component(raw: &str) -> String {
+    let mut encoded = String::with_capacity(raw.len());
+    for byte in raw.as_bytes() {
+        match *byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(*byte as char)
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
 }
 
 fn relative_keyframe_time(segment: &Segment, timeline_at: Microseconds) -> Microseconds {

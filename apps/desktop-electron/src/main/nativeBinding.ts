@@ -25,6 +25,7 @@ import type {
   MaterialId,
   MaterialKind,
   Microseconds,
+  Segment,
   SegmentVisual,
   SegmentVolume,
   TextBox,
@@ -32,6 +33,7 @@ import type {
   TextSegment,
   TextStyle,
   TextWrapping,
+  Track,
   TrackKind
 } from "../generated/Draft";
 
@@ -168,6 +170,7 @@ export type ProjectSessionOpenResponse = {
   sessionId: string;
   revision: number;
   draft: Draft;
+  viewModel: ProjectSessionViewModel;
   bundlePath: string;
   projectJsonPath: string;
   warnings: string[];
@@ -198,6 +201,7 @@ export type ProjectSessionTimelineIntentResponse = {
   draft: Draft;
   commandState: CommandState;
   selection: TimelineSelection;
+  viewModel: ProjectSessionViewModel;
   events: CommandEvent[];
   delta: CommandDelta;
   bundlePath: string;
@@ -214,6 +218,62 @@ export type ProjectSessionImportMaterialResponse = {
 };
 
 export type ProjectSessionIntentResponse = ProjectSessionTimelineIntentResponse | ProjectSessionImportMaterialResponse;
+
+export type ProjectSessionViewModel = {
+  timeline: TimelineViewModel;
+  selectedTrack: SelectedTrackViewModel | null;
+  selectedSegment: SelectedSegmentViewModel | null;
+};
+
+export type SelectedTrackViewModel = {
+  trackId: string;
+  selectionHandle: string;
+  name: string;
+  kindLabel: string;
+  muted: boolean;
+  locked: boolean;
+  visible: boolean;
+};
+
+export type SelectedSegmentViewModel = {
+  segment: Segment;
+  track: SelectedTrackViewModel;
+  material: Material | null;
+};
+
+export type TimelineViewModel = {
+  rows: TimelineTrackRowViewModel[];
+  duration: Microseconds;
+  rulerTicks: Microseconds[];
+};
+
+export type TimelineTrackRowViewModel = {
+  track: Track;
+  selectionHandle: string;
+  symbol: string;
+  kindLabel: string;
+  statusLabel: string;
+  lockLabel: string;
+  visibilityLabel: string;
+  muteLabel: string;
+  rowClassName: string;
+  segments: TimelineSegmentViewModel[];
+};
+
+export type TimelineSegmentViewModel = {
+  segment: Segment;
+  selectionHandle: string;
+  material: Material | null;
+  label: string;
+  sourceLabel: string;
+  targetLabel: string;
+  visualKind: TimelineSegmentVisualKind;
+  start: Microseconds;
+  duration: Microseconds;
+  selected: boolean;
+};
+
+export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";
 
 export type RealtimePreviewSessionConfig = {
   sessionLabel: string;

@@ -2,6 +2,14 @@ import type { CSSProperties } from "react";
 
 import type { CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
+  ProjectSessionViewModel,
+  SelectedSegmentViewModel,
+  SelectedTrackViewModel,
+  TimelineSegmentViewModel,
+  TimelineTrackRowViewModel,
+  TimelineViewModel
+} from "../main/nativeBinding";
+import type {
   AudioOutputDeviceStatus,
   AudioOutputDeviceSummary,
   AudioPreviewCommandResponse,
@@ -36,8 +44,6 @@ import type {
   Microseconds,
   Segment,
   SegmentVisual,
-  Track,
-  TrackKind
 } from "../generated/Draft";
 
 export type WorkspaceCategory = "媒体" | "音频" | "文字" | "贴纸" | "特效" | "转场" | "字幕" | "滤镜" | "调节" | "模板" | "数字人";
@@ -90,6 +96,7 @@ export type WorkspaceState = {
   draft: Draft;
   commandState: CommandState;
   selection: TimelineSelection;
+  viewModel: ProjectSessionViewModel;
   materials: Material[];
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
   resourcePanel: ResourcePanelState;
@@ -287,55 +294,12 @@ export type RuntimeDiagnosticsDisplayState = {
   checkedAtLabel: string;
 };
 
-export type SelectedTrackView = {
-  trackId: string;
-  selectionHandle: string;
-  name: string;
-  kindLabel: string;
-  muted: boolean;
-  locked: boolean;
-  visible: boolean;
-};
-
-export type SelectedSegmentView = {
-  segment: Segment;
-  track: SelectedTrackView;
-  material: Material | null;
-};
-
-export type TimelineSegmentView = {
-  segment: Segment;
-  selectionHandle: string;
-  material: Material | null;
-  label: string;
-  sourceLabel: string;
-  targetLabel: string;
-  visualKind: TimelineSegmentVisualKind;
-  start: Microseconds;
-  duration: Microseconds;
-  selected: boolean;
-};
-
-export type TimelineTrackRow = {
-  track: Track;
-  selectionHandle: string;
-  symbol: string;
-  kindLabel: string;
-  statusLabel: string;
-  lockLabel: string;
-  visibilityLabel: string;
-  muteLabel: string;
-  rowClassName: string;
-  segments: TimelineSegmentView[];
-};
-
-export type TimelineView = {
-  rows: TimelineTrackRow[];
-  duration: Microseconds;
-  rulerTicks: Microseconds[];
-};
-
-export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";
+export type SelectedTrackView = SelectedTrackViewModel;
+export type SelectedSegmentView = SelectedSegmentViewModel;
+export type TimelineSegmentView = TimelineSegmentViewModel;
+export type TimelineTrackRow = TimelineTrackRowViewModel;
+export type TimelineView = TimelineViewModel;
+export type TimelineSegmentVisualKind = TimelineSegmentView["visualKind"];
 export type WorkspaceStartupFixture = "blank" | "demo";
 
 function defaultSegmentVisual(): SegmentVisual {
@@ -629,6 +593,7 @@ export function createInitialWorkspaceState(
     draft,
     commandState: initialCommandState,
     selection: initialTimelineSelection,
+    viewModel: createEmptyProjectSessionViewModel(),
     materials: draft.materials,
     materialDiagnostics: [],
     resourcePanel: createInitialResourcePanelState(),
@@ -670,6 +635,18 @@ export function createInitialWorkspaceState(
     pendingCommand: null,
     pendingAudioCommand: null,
     commandError: null
+  };
+}
+
+export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
+  return {
+    timeline: {
+      rows: [],
+      duration: 10_000_000,
+      rulerTicks: buildRulerTicks(10_000_000)
+    },
+    selectedTrack: null,
+    selectedSegment: null
   };
 }
 
@@ -1218,18 +1195,6 @@ export function formatMaterialStatus(status: MaterialStatus): string {
   return labels[status];
 }
 
-export function formatTrackKind(kind: TrackKind): string {
-  const labels: Record<TrackKind, string> = {
-    video: "视频",
-    audio: "音频",
-    text: "文字",
-    sticker: "贴纸",
-    filter: "滤镜"
-  };
-
-  return labels[kind];
-}
-
 export function formatKeyframeProperty(property: KeyframeProperty): string {
   const labels: Record<KeyframeProperty, string> = {
     visualPositionX: "位置 X",
@@ -1460,161 +1425,12 @@ export function formatMaterialDiagnostic(diagnostic: MissingMaterialCommandDiagn
   return `${diagnostic.materialId}：${diagnostic.message}`;
 }
 
-export function getSelectedTrackView(draft: Draft, selection: TimelineSelection): SelectedTrackView | null {
-  const selectedTrackId = selection.trackIds[0];
-  const selectedSegmentId = selection.segmentIds[0];
-  const track =
-    draft.tracks.find((candidate) => candidate.trackId === selectedTrackId) ??
-    draft.tracks.find((candidate) =>
-      candidate.segments.some((segment) => segment.segmentId === selectedSegmentId)
-    ) ??
-    null;
-
-  if (track === null) {
-    return null;
-  }
-
-  return {
-    trackId: track.trackId,
-    selectionHandle: timelineTrackSelectionHandle(track.trackId),
-    name: track.name,
-    kindLabel: formatTrackKind(track.kind),
-    muted: track.muted,
-    locked: track.locked,
-    visible: track.visible
-  };
-}
-
-export function getSelectedSegmentView(draft: Draft, selection: TimelineSelection): SelectedSegmentView | null {
-  const selectedSegmentId = selection.segmentIds[0];
-
-  if (selectedSegmentId === undefined) {
-    return null;
-  }
-
-  for (const track of draft.tracks) {
-    const segment = track.segments.find((candidate) => candidate.segmentId === selectedSegmentId);
-
-    if (segment !== undefined) {
-      const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
-      return {
-        segment,
-        track: {
-          trackId: track.trackId,
-          selectionHandle: timelineTrackSelectionHandle(track.trackId),
-          name: track.name,
-          kindLabel: formatTrackKind(track.kind),
-          muted: track.muted,
-          locked: track.locked,
-          visible: track.visible
-        },
-        material
-      };
-    }
-  }
-
-  return null;
-}
-
-export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): TimelineView {
-  const duration = Math.max(
-    10_000_000,
-    ...draft.tracks.flatMap((track) =>
-      track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
-    )
-  );
-  const rows = draft.tracks.map((track) => {
-    const kindLabel = formatTrackKind(track.kind);
-
-    return {
-      track,
-      selectionHandle: timelineTrackSelectionHandle(track.trackId),
-      symbol: timelineTrackSymbol(track.kind),
-      kindLabel,
-      statusLabel: `${kindLabel} · ${track.segments.length} 片段`,
-      lockLabel: track.locked ? "已锁定" : "未锁定",
-      visibilityLabel: track.kind === "audio" ? "听觉开启" : track.visible ? "画面可见" : "画面隐藏",
-      muteLabel: track.muted ? "已静音" : "未静音",
-      rowClassName: [
-        "track-row",
-        track.kind,
-        track.visible ? "" : "hidden",
-        selection.trackIds.includes(track.trackId) ? "selected-track" : ""
-      ]
-        .filter(Boolean)
-        .join(" "),
-      segments: track.segments.map((segment) => {
-        const material = draft.materials.find((candidate) => candidate.materialId === segment.materialId) ?? null;
-        const selected = selection.segmentIds.includes(segment.segmentId);
-        return {
-          segment,
-          selectionHandle: timelineSegmentSelectionHandle(track.trackId, segment.segmentId),
-          material,
-          label: material?.displayName ?? `片段 ${segment.segmentId}`,
-          sourceLabel: `源 ${formatTimelineTime(segment.sourceTimerange.start)} / ${formatTimelineTime(
-            segment.sourceTimerange.duration
-          )}`,
-          targetLabel: `目标 ${formatTimelineTime(segment.targetTimerange.start)} / ${formatTimelineTime(
-            segment.targetTimerange.duration
-          )}`,
-          visualKind: timelineSegmentVisualKind(track.kind, material),
-          start: segment.targetTimerange.start,
-          duration: segment.targetTimerange.duration,
-          selected
-        };
-      })
-    };
-  });
-
-  return {
-    rows,
-    duration,
-    rulerTicks: buildRulerTicks(duration)
-  };
-}
-
-export function timelineTrackSelectionHandle(trackId: string): string {
-  return `timeline-track:${encodeURIComponent(trackId)}`;
-}
-
-export function timelineSegmentSelectionHandle(trackId: string, segmentId: string): string {
-  return `timeline-segment:${encodeURIComponent(trackId)}:${encodeURIComponent(segmentId)}`;
-}
-
-function timelineTrackSymbol(kind: TrackKind): string {
-  const symbols: Record<TrackKind, string> = {
-    video: "▣",
-    audio: "♪",
-    text: "T",
-    sticker: "◇",
-    filter: "◐"
-  };
-
-  return symbols[kind];
-}
-
-function timelineSegmentVisualKind(trackKind: TrackKind, material: Material | null): TimelineSegmentVisualKind {
-  if (material?.kind === "video" || material?.kind === "image" || material?.kind === "audio" || material?.kind === "text") {
-    return material.kind;
-  }
-
-  if (trackKind === "video" || trackKind === "audio" || trackKind === "text" || trackKind === "sticker" || trackKind === "filter") {
-    return trackKind;
-  }
-
-  return "video";
-}
-
 export function segmentBlockStyle(segment: TimelineSegmentView, timelineDuration: Microseconds): CSSProperties {
   const safeDuration = Math.max(1, timelineDuration);
   return {
     left: `${(Math.max(0, segment.start) / safeDuration) * 100}%`,
     width: `${(Math.max(1, segment.duration) / safeDuration) * 100}%`
   };
-}
-
-export function findTrackByKind(draft: Draft, kind: TrackKind) {
-  return draft.tracks.find((track) => track.kind === kind) ?? null;
 }
 
 export function findFirstMaterialByKind(draft: Draft, kind: MaterialKind) {
