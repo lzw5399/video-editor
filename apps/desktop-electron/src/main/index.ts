@@ -41,6 +41,7 @@ import {
   pauseAudioPreview,
   ping,
   playAudioPreview,
+  probeMediaRuntime,
   probeRuntimeCapabilities,
   requestProjectSessionPreviewFrame,
   requestProjectSessionPreviewSegment,
@@ -196,6 +197,10 @@ ipcMain.handle("core:ping", (event) => {
 ipcMain.handle("core:version", (event) => {
   assertAllowedIpcSender(event);
   return version();
+});
+ipcMain.handle("core:probeMediaRuntime", (event) => {
+  assertAllowedIpcSender(event);
+  return probeMediaRuntime();
 });
 ipcMain.handle("core:probeRuntimeCapabilities", (event) => {
   assertAllowedIpcSender(event);

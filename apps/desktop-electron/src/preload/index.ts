@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   AudioPreviewRequest,
   ArtifactGarbageCollectionRequest,
@@ -52,8 +51,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorCore", {
     ping: () => ipcRenderer.invoke("core:ping"),
     version: () => ipcRenderer.invoke("core:version"),
+    probeMediaRuntime: () => ipcRenderer.invoke("core:probeMediaRuntime"),
     probeRuntimeCapabilities: () => ipcRenderer.invoke("core:probeRuntimeCapabilities"),
-    executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command),
     createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
     openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
     executeProjectIntent: (request: ExecuteProjectIntentRequest) => ipcRenderer.invoke("core:executeProjectIntent", request),

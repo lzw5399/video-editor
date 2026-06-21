@@ -45,11 +45,23 @@ import type {
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
+export type RuntimeDiscoverySource = { kind: "bundled"; directory: string };
+export type RuntimeDiscoveredBinary = {
+  kind: "ffmpeg" | "ffprobe";
+  path: string;
+  source: RuntimeDiscoverySource;
+  version: string;
+};
+export type RuntimeConfigResponse = {
+  ffmpeg: RuntimeDiscoveredBinary;
+  ffprobe: RuntimeDiscoveredBinary;
+};
 
 type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
   configureBundledRuntimeDirectory: (directory: string) => void;
+  probeMediaRuntime: () => CommandResultEnvelope<RuntimeConfigResponse>;
   probeRuntimeCapabilities: () => CommandResultEnvelope<RuntimeCapabilityReport>;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
   createProjectSession: (request: CreateProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
@@ -649,6 +661,14 @@ export function configureBundledRuntimeDirectory(directory: string): void {
   requireLoadedBinding().configureBundledRuntimeDirectory(directory);
 }
 
+export function probeMediaRuntime(): CommandResultEnvelope<RuntimeConfigResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("probeMediaRuntime");
+  }
+  return binding.probeMediaRuntime();
+}
+
 export function probeRuntimeCapabilities(): CommandResultEnvelope<RuntimeCapabilityReport> {
   const binding = loadNativeBinding();
   if (binding === null) {
@@ -1005,6 +1025,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.ping !== "function" ||
       typeof loaded.version !== "function" ||
       typeof loaded.configureBundledRuntimeDirectory !== "function" ||
+      typeof loaded.probeMediaRuntime !== "function" ||
       typeof loaded.probeRuntimeCapabilities !== "function" ||
       typeof loaded.executeCommand !== "function" ||
       typeof loaded.createProjectSession !== "function" ||
@@ -1061,6 +1082,7 @@ function loadNativeBinding(): NativeBinding | null {
       ping: loaded.ping,
       version: loaded.version,
       configureBundledRuntimeDirectory: loaded.configureBundledRuntimeDirectory,
+      probeMediaRuntime: loaded.probeMediaRuntime,
       probeRuntimeCapabilities: loaded.probeRuntimeCapabilities,
       executeCommand: loaded.executeCommand,
       createProjectSession: loaded.createProjectSession,

@@ -20,8 +20,8 @@ type ProjectSessionCall = {
 
 declare global {
   interface Window {
-    videoEditorCore?: {
-      executeCommand: (command: unknown) => Promise<unknown>;
+    videoEditorTestObservations?: {
+      getExecuteCommandCalls: () => Promise<unknown[]>;
     };
   }
 }
@@ -47,9 +47,9 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
 }
 
 async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Promise<void> {
-  const hasBridge = await page.evaluate(() => typeof window.videoEditorCore?.executeCommand === "function");
+  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getExecuteCommandCalls === "function");
   if (!hasBridge) {
-    throw new Error("inspector modal test setup error: native videoEditorCore.executeCommand is unavailable");
+    throw new Error("inspector modal test setup error: native test observation bridge is unavailable");
   }
 
   await app.evaluate(() => {

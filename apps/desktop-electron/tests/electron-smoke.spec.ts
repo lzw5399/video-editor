@@ -3,14 +3,14 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
-import type { CommandEnvelope } from "../src/generated/CommandEnvelope";
 import type { CommandResultEnvelope, RuntimeCapabilityReport } from "../src/generated/CommandResultEnvelope";
+import type { RuntimeConfigResponse } from "../src/main/nativeBinding";
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<{ pong: boolean }>>;
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
+  probeMediaRuntime: () => Promise<CommandResultEnvelope<RuntimeConfigResponse>>;
   probeRuntimeCapabilities: () => Promise<CommandResultEnvelope<RuntimeCapabilityReport>>;
-  executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
 };
 type VideoEditorPlatformApi = {
   createProjectBundle: () => Promise<{ canceled: boolean; bundlePath: string | null }>;
@@ -119,8 +119,9 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     const apiShape = await page.evaluate(() => ({
       ping: typeof window.videoEditorCore?.ping,
       version: typeof window.videoEditorCore?.version,
+      probeMediaRuntime: typeof window.videoEditorCore?.probeMediaRuntime,
       probeRuntimeCapabilities: typeof window.videoEditorCore?.probeRuntimeCapabilities,
-      executeCommand: typeof window.videoEditorCore?.executeCommand,
+      hasExecuteCommand: Object.prototype.hasOwnProperty.call(window.videoEditorCore ?? {}, "executeCommand"),
       keys: Object.keys(window.videoEditorCore ?? {}),
       platformKeys: Object.keys(window.videoEditorPlatform ?? {}),
       openMaterialFiles: typeof window.videoEditorPlatform?.openMaterialFiles,
@@ -129,13 +130,14 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     expect(apiShape).toEqual({
       ping: "function",
       version: "function",
+      probeMediaRuntime: "function",
       probeRuntimeCapabilities: "function",
-      executeCommand: "function",
-      keys: [
+      hasExecuteCommand: false,
+      keys: expect.arrayContaining([
         "ping",
         "version",
+        "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "executeCommand",
         "createProjectSession",
         "openProjectSession",
         "executeProjectIntent",
@@ -143,7 +145,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
         "listProjectSessionMissingMaterials",
         "startProjectSessionExport",
         "closeProjectSession"
-      ],
+      ]),
       platformKeys: ["createProjectBundle", "openProjectBundle", "openMaterialFiles", "pathToFileUrl"],
       openMaterialFiles: "function",
       pathToFileUrl: "function"
@@ -164,21 +166,6 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     expect(version?.error).toBeNull();
     expect(version?.events).toEqual([]);
 
-    const command: CommandEnvelope = {
-      command: "ping",
-      payload: { kind: "ping" },
-      requestId: "electron-smoke-ping"
-    };
-    const result = await page.evaluate((commandEnvelope) => {
-      return window.videoEditorCore?.executeCommand(commandEnvelope);
-    }, command);
-    expect(result).toEqual({
-      ok: true,
-      data: { pong: true },
-      error: null,
-      events: []
-    });
-
     await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
     await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
     await expect(page.getByLabel("素材路径")).toHaveCount(0);
@@ -197,8 +184,8 @@ test("test fixture opt-in loads demo workspace materials", async () => {
 
   try {
     await expectVisibleWorkspaceRegions(page);
-    await expect(page.getByLabel("草稿包路径")).toHaveValue("/tmp/phase-04-demo.veproj");
-    await expect(page.getByLabel("素材路径")).toHaveValue("/tmp/demo-material.mp4");
+    await expect(page.getByLabel("草稿包路径")).toHaveValue(/^\/(?:private\/)?tmp\/phase-04-demo\.veproj$/);
+    await expect(page.getByLabel("素材路径")).toHaveValue(/^\/(?:private\/)?tmp\/demo-material\.mp4$/);
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("可用");
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toContainText("音频");

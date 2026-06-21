@@ -93,7 +93,6 @@ export async function runRealImportPreviewExportWorkflow(
   ];
   expect(calls.map((call) => call.command)).toEqual(
     expect.arrayContaining([
-      "probeRuntimeCapabilities",
       "startExport",
       "getExportJobStatus"
     ])
@@ -516,18 +515,14 @@ async function readBundledFfprobePath(page: Page): Promise<string> {
   const runtime = await page.evaluate(() => {
     const api = (window as unknown as {
       videoEditorCore?: {
-        executeCommand: (command: unknown) => Promise<{
+        probeMediaRuntime: () => Promise<{
           ok: boolean;
           data: null | { ffprobe?: { path?: string; source?: string | { kind?: string } } };
           error: null | { message?: string };
         }>;
       };
     }).videoEditorCore;
-    return api?.executeCommand({
-      command: "probeMediaRuntime",
-      payload: { kind: "probeMediaRuntime" },
-      requestId: "real-workflow-export-validation-runtime"
-    });
+    return api?.probeMediaRuntime();
   });
 
   if (runtime?.ok !== true || runtime.data?.ffprobe?.path === undefined) {

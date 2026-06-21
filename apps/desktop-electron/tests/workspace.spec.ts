@@ -90,13 +90,11 @@ const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const MEDIA_FIXTURE_DIR = join(REPO_ROOT, "apps/desktop-electron/tests/fixtures/media");
 const PORTRAIT_VIDEO_FIXTURE = join(MEDIA_FIXTURE_DIR, "p0-portrait-testsrc.mp4");
 
-type VideoEditorCoreApi = {
-  executeCommand: (command: unknown) => Promise<unknown>;
-};
-
 declare global {
   interface Window {
-    videoEditorCore?: VideoEditorCoreApi;
+    videoEditorTestObservations?: {
+      getExecuteCommandCalls: () => Promise<unknown[]>;
+    };
     videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
   }
 }
@@ -174,9 +172,9 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
 }
 
 async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Promise<void> {
-  const hasBridge = await page.evaluate(() => typeof window.videoEditorCore?.executeCommand === "function");
+  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getExecuteCommandCalls === "function");
   if (!hasBridge) {
-    throw new Error("workspace test setup error: native videoEditorCore.executeCommand is unavailable");
+    throw new Error("workspace test setup error: native test observation bridge is unavailable");
   }
 
   await app.evaluate(() => {

@@ -77,6 +77,14 @@ pub fn configure_bundled_runtime_directory(directory: String) {
     media_runtime::configure_bundled_runtime_directory(PathBuf::from(directory));
 }
 
+#[napi(js_name = "probeMediaRuntime")]
+pub fn probe_media_runtime() -> Result<serde_json::Value> {
+    match discover_runtime_config() {
+        Ok(config) => to_js_value(ok_envelope(config)),
+        Err(error) => to_js_value(runtime_discovery_error_envelope(error)),
+    }
+}
+
 #[napi(js_name = "probeRuntimeCapabilities")]
 pub fn probe_runtime_capabilities() -> Result<serde_json::Value> {
     match probe_runtime_capabilities_command() {

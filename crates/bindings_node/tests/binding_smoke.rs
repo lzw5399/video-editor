@@ -1,4 +1,4 @@
-use bindings_node::{execute_command, ping, version};
+use bindings_node::{execute_command, ping, probe_media_runtime, version};
 use draft_model::{CommandErrorKind, Draft};
 use media_runtime::discover_runtime_config;
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -375,6 +375,27 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
         envelope["data"]["ffprobe"]["version"],
         "ffprobe version binding-test"
     );
+}
+
+#[test]
+fn probe_media_runtime_explicit_api_returns_standard_ok_envelope() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("binding-explicit-probe-ok");
+    let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version binding-test\n", "", 0);
+    let ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+
+    let envelope = probe_media_runtime().expect("runtime probe returns a JSON envelope");
+
+    assert_eq!(envelope["ok"], true);
+    assert_eq!(envelope["error"], Value::Null);
+    assert_eq!(envelope["events"], json!([]));
+    assert_eq!(envelope["data"]["ffmpeg"]["kind"], "ffmpeg");
+    assert_eq!(envelope["data"]["ffmpeg"]["path"], json!(ffmpeg));
+    assert_eq!(envelope["data"]["ffmpeg"]["source"]["kind"], "bundled");
+    assert_eq!(envelope["data"]["ffprobe"]["kind"], "ffprobe");
+    assert_eq!(envelope["data"]["ffprobe"]["path"], json!(ffprobe));
+    assert_eq!(envelope["data"]["ffprobe"]["source"]["kind"], "bundled");
 }
 
 #[test]

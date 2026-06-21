@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import type { CommandEnvelope } from "../src/generated/CommandEnvelope";
 import type { CommandResultEnvelope, RuntimeCapabilityReport } from "../src/generated/CommandResultEnvelope";
+import type { RuntimeConfigResponse } from "../src/main/nativeBinding";
 import { launchPackagedApp } from "./helpers/packagedApp";
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<{ pong: boolean }>>;
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
+  probeMediaRuntime: () => Promise<CommandResultEnvelope<RuntimeConfigResponse>>;
   probeRuntimeCapabilities: () => Promise<CommandResultEnvelope<RuntimeCapabilityReport>>;
-  executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
   startProjectSessionExport?: (request: unknown) => Promise<CommandResultEnvelope<unknown>>;
 };
 
@@ -17,14 +17,6 @@ declare global {
     videoEditorCore?: VideoEditorCoreApi;
     ipcRenderer?: unknown;
   }
-}
-
-function probeMediaRuntimeCommand(requestId: string): CommandEnvelope {
-  return {
-    command: "probeMediaRuntime",
-    payload: { kind: "probeMediaRuntime" },
-    requestId
-  };
 }
 
 test("packaged app loads file renderer, preload bridge, native binding, and runtime probe", async () => {
@@ -40,16 +32,18 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     const bridgeShape = await page.evaluate(() => ({
       coreType: typeof window.videoEditorCore,
       ipcRendererType: typeof window.ipcRenderer,
+      hasExecuteCommand: Object.prototype.hasOwnProperty.call(window.videoEditorCore ?? {}, "executeCommand"),
       keys: Object.keys(window.videoEditorCore ?? {})
     }));
     expect(bridgeShape).toEqual({
       coreType: "object",
       ipcRendererType: "undefined",
-      keys: [
+      hasExecuteCommand: false,
+      keys: expect.arrayContaining([
         "ping",
         "version",
+        "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "executeCommand",
         "createProjectSession",
         "openProjectSession",
         "executeProjectIntent",
@@ -59,7 +53,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
         "requestProjectSessionPreviewFrame",
         "requestProjectSessionPreviewSegment",
         "closeProjectSession"
-      ]
+      ])
     });
 
     const ping = await page.evaluate(() => window.videoEditorCore?.ping());
@@ -76,9 +70,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     expect(version?.data?.contractVersion).toMatch(/^\d+\.\d+\.\d+/);
     expect(version?.error).toBeNull();
 
-    const runtime = await page.evaluate((command) => {
-      return window.videoEditorCore?.executeCommand(command);
-    }, probeMediaRuntimeCommand("packaged-runtime-probe"));
+    const runtime = await page.evaluate(() => window.videoEditorCore?.probeMediaRuntime());
     expect(runtime?.ok).toBe(true);
     expect(runtime?.error).toBeNull();
     const resourcesPath = await app.evaluate(() => process.resourcesPath);
@@ -121,9 +113,7 @@ test("packaged app ignores external bundled runtime overrides", async () => {
     await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
 
     const resourcesPath = await app.evaluate(() => process.resourcesPath);
-    const result = await page.evaluate((command) => {
-      return window.videoEditorCore?.executeCommand(command);
-    }, probeMediaRuntimeCommand("packaged-runtime-probe-ignores-external-env"));
+    const result = await page.evaluate(() => window.videoEditorCore?.probeMediaRuntime());
 
     const runtime = result?.data as {
       ffmpeg?: { path?: string; source?: { directory?: string } };

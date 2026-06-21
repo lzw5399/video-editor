@@ -32,6 +32,7 @@ ARTIFACT_CONTROL_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeComman
 ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:getArtifactStatus|refreshArtifactStatus|retryArtifactGeneration|resumeArtifactGeneration|cancelArtifactGeneration|getArtifactQuotaStatus|runArtifactGarbageCollection)"'
 RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN='\b(?:buildProbeRuntimeCapabilitiesCommand|ProbeRuntimeCapabilitiesCommandPayload)\b|command:[[:space:]]*"probeRuntimeCapabilities"|kind:[[:space:]]*"probeRuntimeCapabilities"'
 RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*RuntimeCapabilityReport|executeCommand<RuntimeCapabilityReport>'
+PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*\([^)]*CommandEnvelope|core:executeCommand'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -489,6 +490,17 @@ require_matches \
   apps/desktop-electron/src/preload/index.ts \
   apps/desktop-electron/src/main/nativeBinding.ts
 
+fail_if_matches \
+  "preload must not expose generic executeCommand to the product renderer bridge" \
+  "$PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN" \
+  apps/desktop-electron/src/preload/index.ts
+
+require_matches \
+  "preload/native binding expose explicit runtime discovery API" \
+  '\bprobeMediaRuntime\b' \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
 fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
@@ -745,6 +757,11 @@ assert_pattern_rejects \
   "legacy runtime capability generic executeCommand" \
   "$RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN|$RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN" \
   'window.videoEditorCore.executeCommand<RuntimeCapabilityReport>(buildProbeRuntimeCapabilitiesCommand())'
+
+assert_pattern_rejects \
+  "preload generic executeCommand exposure" \
+  "$PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN" \
+  'executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command)'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \
