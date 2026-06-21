@@ -289,6 +289,7 @@ export type RuntimeDiagnosticsDisplayState = {
 
 export type SelectedTrackView = {
   trackId: string;
+  selectionHandle: string;
   name: string;
   kindLabel: string;
   muted: boolean;
@@ -304,6 +305,7 @@ export type SelectedSegmentView = {
 
 export type TimelineSegmentView = {
   segment: Segment;
+  selectionHandle: string;
   material: Material | null;
   label: string;
   sourceLabel: string;
@@ -316,6 +318,7 @@ export type TimelineSegmentView = {
 
 export type TimelineTrackRow = {
   track: Track;
+  selectionHandle: string;
   symbol: string;
   kindLabel: string;
   statusLabel: string;
@@ -1473,6 +1476,7 @@ export function getSelectedTrackView(draft: Draft, selection: TimelineSelection)
 
   return {
     trackId: track.trackId,
+    selectionHandle: timelineTrackSelectionHandle(track.trackId),
     name: track.name,
     kindLabel: formatTrackKind(track.kind),
     muted: track.muted,
@@ -1497,6 +1501,7 @@ export function getSelectedSegmentView(draft: Draft, selection: TimelineSelectio
         segment,
         track: {
           trackId: track.trackId,
+          selectionHandle: timelineTrackSelectionHandle(track.trackId),
           name: track.name,
           kindLabel: formatTrackKind(track.kind),
           muted: track.muted,
@@ -1523,6 +1528,7 @@ export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): 
 
     return {
       track,
+      selectionHandle: timelineTrackSelectionHandle(track.trackId),
       symbol: timelineTrackSymbol(track.kind),
       kindLabel,
       statusLabel: `${kindLabel} · ${track.segments.length} 片段`,
@@ -1542,6 +1548,7 @@ export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): 
         const selected = selection.segmentIds.includes(segment.segmentId);
         return {
           segment,
+          selectionHandle: timelineSegmentSelectionHandle(track.trackId, segment.segmentId),
           material,
           label: material?.displayName ?? `片段 ${segment.segmentId}`,
           sourceLabel: `源 ${formatTimelineTime(segment.sourceTimerange.start)} / ${formatTimelineTime(
@@ -1564,6 +1571,14 @@ export function deriveTimelineRows(draft: Draft, selection: TimelineSelection): 
     duration,
     rulerTicks: buildRulerTicks(duration)
   };
+}
+
+export function timelineTrackSelectionHandle(trackId: string): string {
+  return `timeline-track:${encodeURIComponent(trackId)}`;
+}
+
+export function timelineSegmentSelectionHandle(trackId: string, segmentId: string): string {
+  return `timeline-segment:${encodeURIComponent(trackId)}:${encodeURIComponent(segmentId)}`;
 }
 
 function timelineTrackSymbol(kind: TrackKind): string {

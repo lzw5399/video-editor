@@ -107,11 +107,9 @@ enum ProjectIntent {
         #[serde(rename = "materialId")]
         material_id: MaterialId,
     },
-    SelectTimelineSegments {
-        #[serde(default, rename = "segmentIds")]
-        segment_ids: Vec<SegmentId>,
-        #[serde(default, rename = "trackIds")]
-        track_ids: Vec<TrackId>,
+    SelectTimelineItemIntent {
+        #[serde(rename = "itemHandle")]
+        item_handle: String,
     },
     MoveSelectedSegmentIntent {
         delta: Microseconds,
@@ -691,18 +689,18 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::SelectTimelineSegments {
-                segment_ids,
-                track_ids,
-            } => Ok(TimelineEditPayload::SelectTimelineSegments(
-                SelectTimelineSegmentsCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    segment_ids,
-                    track_ids,
-                },
-            )),
+            ProjectIntent::SelectTimelineItemIntent { item_handle } => {
+                let selection = self.selection_from_timeline_item_handle(&item_handle)?;
+                Ok(TimelineEditPayload::SelectTimelineSegments(
+                    SelectTimelineSegmentsCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_ids: selection.segment_ids,
+                        track_ids: selection.track_ids,
+                    },
+                ))
+            }
             ProjectIntent::MoveSelectedSegmentIntent { delta } => {
                 Ok(TimelineEditPayload::MoveSelectedSegmentIntent(
                     MoveSelectedSegmentIntentCommandPayload {
@@ -949,6 +947,64 @@ impl ProjectSession {
         }
     }
 
+    fn selection_from_timeline_item_handle(
+        &self,
+        item_handle: &str,
+    ) -> std::result::Result<TimelineSelection, String> {
+        if let Some(encoded_track_id) = item_handle.strip_prefix("timeline-track:") {
+            let raw_track_id = percent_decode_timeline_handle_component(encoded_track_id)
+                .map_err(|_| "Invalid timeline track selection handle".to_owned())?;
+            if raw_track_id.trim().is_empty() {
+                return Err("Invalid timeline track selection handle".to_owned());
+            }
+            let track_id = TrackId::new(raw_track_id);
+            self.draft
+                .tracks
+                .iter()
+                .find(|track| track.track_id == track_id)
+                .ok_or_else(|| "Timeline track selection handle no longer resolves".to_owned())?;
+            return Ok(TimelineSelection {
+                segment_ids: Vec::new(),
+                track_ids: vec![track_id],
+            });
+        }
+
+        if let Some(raw) = item_handle.strip_prefix("timeline-segment:") {
+            let Some((encoded_track_id, encoded_segment_id)) = raw.split_once(':') else {
+                return Err("Invalid timeline segment selection handle".to_owned());
+            };
+            if encoded_segment_id.contains(':') {
+                return Err("Invalid timeline segment selection handle".to_owned());
+            }
+            let raw_track_id = percent_decode_timeline_handle_component(encoded_track_id)
+                .map_err(|_| "Invalid timeline segment selection handle".to_owned())?;
+            let raw_segment_id = percent_decode_timeline_handle_component(encoded_segment_id)
+                .map_err(|_| "Invalid timeline segment selection handle".to_owned())?;
+            if raw_track_id.trim().is_empty() || raw_segment_id.trim().is_empty() {
+                return Err("Invalid timeline segment selection handle".to_owned());
+            }
+            let track_id = TrackId::new(raw_track_id);
+            let segment_id = SegmentId::new(raw_segment_id);
+            let track = self
+                .draft
+                .tracks
+                .iter()
+                .find(|track| track.track_id == track_id)
+                .ok_or_else(|| "Timeline segment selection track no longer resolves".to_owned())?;
+            track
+                .segments
+                .iter()
+                .find(|segment| segment.segment_id == segment_id)
+                .ok_or_else(|| "Timeline segment selection handle no longer resolves".to_owned())?;
+            return Ok(TimelineSelection {
+                segment_ids: vec![segment_id],
+                track_ids: vec![track_id],
+            });
+        }
+
+        Err("Unknown timeline item selection handle".to_owned())
+    }
+
     fn selected_track_id(&self, action: &str) -> std::result::Result<TrackId, String> {
         let Some(track_id) = self.selection.track_ids.first() else {
             return Err(format!("{action}失败：请先选择一个轨道"));
@@ -1113,6 +1169,40 @@ fn relative_keyframe_time(segment: &Segment, timeline_at: Microseconds) -> Micro
     let segment_duration = segment.target_timerange.duration.get();
     let relative = timeline_at.get().saturating_sub(segment_start);
     Microseconds::new(relative.min(segment_duration))
+}
+
+fn percent_decode_timeline_handle_component(encoded: &str) -> std::result::Result<String, ()> {
+    let bytes = encoded.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            decoded.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+
+        if index + 2 >= bytes.len() {
+            return Err(());
+        }
+
+        let high = percent_hex_nibble(bytes[index + 1]).ok_or(())?;
+        let low = percent_hex_nibble(bytes[index + 2]).ok_or(())?;
+        decoded.push((high << 4) | low);
+        index += 3;
+    }
+
+    String::from_utf8(decoded).map_err(|_| ())
+}
+
+fn percent_hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn keyframe_value_for_segment(

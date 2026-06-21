@@ -3,7 +3,6 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { CommandName } from "../src/generated/CommandEnvelope";
 import type { Keyframe, SegmentVisual } from "../src/generated/Draft";
 import {
   formatRealtimePreviewBackendLabel,
@@ -15,7 +14,7 @@ import {
 import type { RealtimePreviewHostApi } from "../src/renderer/workspace/PreviewMonitor";
 
 type ExecuteCommandCall = {
-  command: CommandName;
+  command: string;
   kind: string;
   requestId: string | null;
   targetTime: number | null;
@@ -206,9 +205,10 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     ...projectCalls
       .filter((call) => call.command === "startProjectSessionExport" || call.intentKind !== null)
       .map((call) => {
-        const command = call.command === "startProjectSessionExport" ? "startExport" : call.intentKind ?? "executeProjectIntent";
+        const command =
+          call.command === "startProjectSessionExport" ? "startExport" : commandNameForProjectIntent(call.intentKind);
         return {
-          command: command as CommandName,
+          command,
           kind: command,
           requestId: null,
           targetTime: null,
@@ -230,6 +230,45 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
   ];
 }
 
+function commandNameForProjectIntent(intentKind: string | null): string {
+  switch (intentKind) {
+    case "addTimelineSegmentIntent":
+      return "addSegment";
+    case "addTextSegmentIntent":
+      return "addTextSegment";
+    case "editSelectedText":
+      return "editTextSegment";
+    case "importSubtitleSrtIntent":
+      return "importSubtitleSrtIntent";
+    case "addAudioSegmentIntent":
+      return "addAudioSegment";
+    case "addTrackIntent":
+      return "addTrack";
+    case "renameSelectedTrack":
+      return "renameTrack";
+    case "setSelectedTrackLock":
+      return "setTrackLock";
+    case "setSelectedTrackVisibility":
+      return "setTrackVisibility";
+    case "setSelectedTrackMute":
+      return "setTrackMute";
+    case "setSelectedSegmentVolume":
+      return "setSegmentVolume";
+    case "updateSelectedSegmentAudio":
+      return "updateSegmentAudio";
+    case "updateSelectedSegmentVisual":
+      return "updateSegmentVisual";
+    case "setSelectedSegmentKeyframe":
+      return "setSegmentKeyframe";
+    case "removeSelectedSegmentKeyframe":
+      return "removeSegmentKeyframe";
+    case "deleteSelectedSegment":
+      return "deleteSegment";
+    default:
+      return intentKind ?? "executeProjectIntent";
+  }
+}
+
 async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<RealtimePreviewHostCall[]> {
   return app.evaluate(() => {
     return (
@@ -239,7 +278,7 @@ async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<R
   });
 }
 
-async function expectCommandCall(app: ElectronApplication, command: CommandName): Promise<void> {
+async function expectCommandCall(app: ElectronApplication, command: string): Promise<void> {
   await expect
     .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === command))
     .toBe(true);
@@ -934,7 +973,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
 
     const videoSegment = page.getByRole("button", { name: /片段 城市街景\.mp4/ });
     await videoSegment.click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expectCommandCall(app, "selectTimelineItemIntent");
     await expect(page.getByLabel("片段信息")).toContainText("片段参数");
     await expect(page.getByLabel("片段信息")).toContainText("城市街景.mp4");
     await expect(page.getByText("片段ID")).toHaveCount(0);
@@ -973,7 +1012,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     const addSegmentCallsBefore = callsBeforeAdd.filter((call) => call.command === "addSegment").length;
     const addSegmentCallsAfter = calls.filter((call) => call.command === "addSegment").length;
     expect(addSegmentCallsAfter - addSegmentCallsBefore).toBe(1);
-    expect(calls.map((call) => call.kind)).toEqual(expect.arrayContaining(["selectTimelineSegments", "addSegment"]));
+    expect(calls.map((call) => call.kind)).toEqual(expect.arrayContaining(["selectTimelineItemIntent", "addSegment"]));
   } finally {
     await app.close();
   }
@@ -995,7 +1034,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
     await expect(page.getByRole("button", { name: "选择轨道 视频轨道 2" })).toBeVisible();
 
     await page.getByRole("button", { name: "选择轨道 视频轨道 2" }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expectCommandCall(app, "selectTimelineItemIntent");
     await expect(page.getByRole("button", { name: "选择轨道 视频轨道 2" })).toHaveAttribute("aria-pressed", "true");
 
     await page.getByRole("button", { name: "添加片段" }).click();
@@ -1029,7 +1068,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "addTrack",
-        "selectTimelineSegments",
+        "selectTimelineItemIntent",
         "addSegment",
         "renameTrack",
         "setTrackLock",
@@ -1891,7 +1930,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await exportDialog.getByRole("button", { name: "关闭" }).click();
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expectCommandCall(app, "selectTimelineItemIntent");
 
     const visualForm = page.getByLabel("画面基础表单");
     await expect(page.getByLabel("画面变换")).toContainText("基础");
@@ -1973,7 +2012,7 @@ test("selection preview overlay follows accepted visible segment and allows dire
     await expect(page.getByLabel("预览选中框")).toHaveCount(0);
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expectCommandCall(app, "selectTimelineItemIntent");
 
     const overlay = page.getByLabel("预览选中框");
     await expect(overlay).toBeVisible();

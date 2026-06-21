@@ -279,6 +279,7 @@ fn execute_command_rejects_public_timeline_edit_commands() {
         "addSegment",
         "addTimelineSegmentIntent",
         "selectTimelineSegments",
+        "selectTimelineItemIntent",
         "moveSegment",
         "moveSelectedSegmentIntent",
         "splitSegment",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
-import type { SegmentId, TrackKind } from "../../generated/Draft";
+import type { TrackKind } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   deriveTimelineRows,
@@ -38,18 +38,18 @@ type TimelineProps = {
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
-  onSelectSegment?: (segmentId: SegmentId) => void;
-  onSelectTrack?: (trackId: string) => void;
+  onSelectSegment?: (itemHandle: string) => void;
+  onSelectTrack?: (itemHandle: string) => void;
   onAddSegment?: (materialId: string) => void;
   onAddTrack?: (trackKind: TrackKind) => void;
-  onRenameTrack?: (trackId: string, name: string) => void;
-  onSetTrackLock?: (trackId: string, locked: boolean) => void;
-  onSetTrackVisibility?: (trackId: string, visible: boolean) => void;
+  onRenameTrack?: (itemHandle: string, name: string) => void;
+  onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
+  onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: (splitAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   onDeleteSelectedSegment?: () => void;
-  onSetTrackMute?: (trackId: string, muted: boolean) => void;
+  onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
   onUndo?: () => void;
   onRedo?: () => void;
 };
@@ -412,12 +412,12 @@ function TimelineTrackRow({
   row: ReturnType<typeof deriveTimelineRows>["rows"][number];
   waveform: WaveformDisplayModel;
   timelineDuration: number;
-  onSelectSegment?: (segmentId: SegmentId) => void;
-  onSelectTrack?: (trackId: string) => void;
-  onRenameTrack?: (trackId: string, name: string) => void;
-  onSetTrackLock?: (trackId: string, locked: boolean) => void;
-  onSetTrackVisibility?: (trackId: string, visible: boolean) => void;
-  onSetTrackMute?: (trackId: string, muted: boolean) => void;
+  onSelectSegment?: (itemHandle: string) => void;
+  onSelectTrack?: (itemHandle: string) => void;
+  onRenameTrack?: (itemHandle: string, name: string) => void;
+  onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
+  onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
+  onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   pending: boolean;
@@ -437,9 +437,9 @@ function TimelineTrackRow({
       return;
     }
     if (trimmed !== row.track.name) {
-      onRenameTrack?.(row.track.trackId, trimmed);
+      onRenameTrack?.(row.selectionHandle, trimmed);
     }
-  }, [onRenameTrack, row.track.name, row.track.trackId]);
+  }, [onRenameTrack, row.selectionHandle, row.track.name]);
 
   return (
     <div className={row.rowClassName}>
@@ -451,7 +451,7 @@ function TimelineTrackRow({
             aria-label={`选择轨道 ${row.track.name}`}
             aria-pressed={selected}
             title={`选择轨道 ${row.track.name}`}
-            onClick={() => onSelectTrack?.(row.track.trackId)}
+            onClick={() => onSelectTrack?.(row.selectionHandle)}
             disabled={pending || onSelectTrack === undefined}
           >
             <span className="track-kind-symbol" aria-hidden="true">
@@ -483,21 +483,21 @@ function TimelineTrackRow({
             symbol="锁"
             active={row.track.locked}
             disabled={pending || onSetTrackLock === undefined}
-            onClick={() => onSetTrackLock?.(row.track.trackId, !row.track.locked)}
+            onClick={() => onSetTrackLock?.(row.selectionHandle, !row.track.locked)}
           />
           <TrackStateButton
             label={`${row.track.name} 可见状态：${row.visibilityLabel}`}
             symbol={row.track.kind === "audio" ? "听" : "眼"}
             active={row.track.kind === "audio" ? !row.track.muted : row.track.visible}
             disabled={pending || !canToggleVisibility}
-            onClick={() => onSetTrackVisibility?.(row.track.trackId, !row.track.visible)}
+            onClick={() => onSetTrackVisibility?.(row.selectionHandle, !row.track.visible)}
           />
           <TrackStateButton
             label={`${row.track.name} 静音状态：${row.muteLabel}`}
             symbol="静"
             active={row.track.muted}
             disabled={pending || row.track.kind !== "audio" || onSetTrackMute === undefined}
-            onClick={() => onSetTrackMute?.(row.track.trackId, !row.track.muted)}
+            onClick={() => onSetTrackMute?.(row.selectionHandle, !row.track.muted)}
           />
         </div>
         <span className="track-status-line">
@@ -534,7 +534,7 @@ function TimelineSegmentBlock({
   segment: ReturnType<typeof deriveTimelineRows>["rows"][number]["segments"][number];
   waveform: WaveformDisplayModel;
   timelineDuration: number;
-  onSelectSegment?: (segmentId: SegmentId) => void;
+  onSelectSegment?: (itemHandle: string) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   pending: boolean;
@@ -561,7 +561,7 @@ function TimelineSegmentBlock({
       }
       event.preventDefault();
       event.stopPropagation();
-      onSelectSegment?.(segment.segment.segmentId);
+      onSelectSegment?.(segment.selectionHandle);
       event.currentTarget.setPointerCapture(event.pointerId);
       dragRef.current = {
         mode,
@@ -571,7 +571,7 @@ function TimelineSegmentBlock({
         moved: false
       };
     },
-    [onSelectSegment, pending, segment.segment.segmentId]
+    [onSelectSegment, pending, segment.selectionHandle]
   );
 
   const updatePointerIntent = useCallback((event: ReactPointerEvent<HTMLElement>) => {
@@ -633,7 +633,7 @@ function TimelineSegmentBlock({
           return;
         }
         if (dragRef.current === null) {
-          onSelectSegment?.(segment.segment.segmentId);
+          onSelectSegment?.(segment.selectionHandle);
         }
       }}
       aria-pressed={segment.selected}

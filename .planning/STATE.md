@@ -496,6 +496,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg12-selection-handle-intent | Replaced renderer-facing `selectTimelineSegments` payloads with session-resolved `selectTimelineItemIntent` handles, added stale/malformed/legacy rejection tests, updated Playwright selection observations, and guarded against reintroducing renderer-owned selection ID arrays. |
 | 2026-06-21 | 260621-sg7-bundled-only-ffmpeg-runtime | Simplified Electron FFmpeg runtime selection to app-local bundled resources only, removed external runtime override/test switch paths, tightened Phase 6 release guards, updated docs/remediation, and revalidated packaged smoke/runtime discovery gates. |
 | 2026-06-21 | 260621-sg6-preview-session-snapshot-boundary | Removed renderer-owned realtime preview draft snapshot sync, replaced it with project-session revision sync, added stale/unknown/payload rejection tests, and revalidated product cadence at 90 accounted frames for both single-video and combined video/audio/text/SRT playback. |
 | 2026-06-21 | 260621-sg5-preview-telemetry-subscription-boundary | Removed renderer-visible realtime preview telemetry polling, replaced it with main-process subscription fanout, guarded against `getTelemetry` re-exposure, and revalidated packaged cadence at 90 accounted frames for both single-video and combined video/audio/text/SRT playback. |

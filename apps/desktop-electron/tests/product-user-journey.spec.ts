@@ -640,11 +640,11 @@ test("product user editing matrix uses real commands and still produces visible 
     expectTimelineSegmentRange(movingSegments[0], 0, 1_500_000);
     expectTimelineSegmentRange(movingSegments[1], 1_500_000, 1_500_000);
     const nextOverlaySelectionCount =
-      (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineSegments").length + 1;
+      (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineItemIntent").length + 1;
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
     await expect
       .poll(
-        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineSegments").length,
+        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineItemIntent").length,
         { timeout: 30_000 }
       )
       .toBeGreaterThanOrEqual(nextOverlaySelectionCount);

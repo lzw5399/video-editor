@@ -11,6 +11,8 @@ failed=0
 LOW_LEVEL_TIMELINE_EDIT_PATTERN='\b(?:AddSegmentCommandPayload|MoveSegmentCommandPayload|SplitSegmentCommandPayload|TrimSegmentCommandPayload|DeleteSegmentCommandPayload|AddTextSegmentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|AddAudioSegmentCommandPayload|AddTrackCommandPayload|build(?:AddSegment|AddAudioSegment|AddTextSegment|MoveSegment|SplitSegment|TrimSegment|ImportSubtitleSrt)Command|AddSegmentOptions|TextCommandOptions|ImportSubtitleSrtOptions|AudioCommandOptions|segmentIdPrefix|materialIdPrefix)\b|"\s*(?:addSegment|moveSegment|splitSegment|trimSegment|deleteSegment|addTextSegment|editTextSegment|importSubtitleSrt|addAudioSegment|addTrack)"'
 LOW_LEVEL_EDIT_OBJECT_PATTERN='kind:[[:space:]]*"(?:addSegment|moveSegment|splitSegment|trimSegment|deleteSegment|addTextSegment|editTextSegment|importSubtitleSrt|addAudioSegment|addTrack)"(?s:.{0,800})\b(?:segmentId|rightSegmentId|trackId|targetTrackId|sourceTimerange|targetTimerange|mainTrackMagnet)[[:space:]]*:'
 MUTATING_TRACK_ID_INTENT_PATTERN='kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"(?s:.{0,400})\btrackId[[:space:]]*(?::|,)'
+LEGACY_SELECTION_INTENT_PATTERN='\bselectTimelineSegments\b|kind:[[:space:]]*"selectTimelineSegments"'
+SELECTION_INTENT_LEGACY_FIELD_PATTERN='kind:[[:space:]]*"selectTimelineItemIntent"(?s:.{0,500})\b(?:segmentIds|trackIds)[[:space:]]*:'
 
 fail_if_matches() {
   local description="$1"
@@ -36,6 +38,19 @@ fail_if_matches_multiline() {
   if [ -n "$output" ]; then
     echo "phase3-source-guards: ${description}" >&2
     echo "$output" >&2
+    failed=1
+  fi
+}
+
+require_matches() {
+  local description="$1"
+  local pattern="$2"
+  shift 2
+
+  local output
+  output="$(rg -n --pcre2 "$pattern" "$@" 2>/dev/null || true)"
+  if [ -z "$output" ]; then
+    echo "phase3-source-guards: missing required pattern: ${description}" >&2
     failed=1
   fi
 }
@@ -172,6 +187,36 @@ fail_if_matches \
   apps/desktop-electron/src/main/nativeBinding.ts
 
 fail_if_matches \
+  "renderer/main/preload/native binding must not expose legacy selectTimelineSegments project intent; use selectTimelineItemIntent item handles" \
+  "$LEGACY_SELECTION_INTENT_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/preload \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  apps/desktop-electron/src/main/index.ts
+
+fail_if_matches_multiline \
+  "renderer/main/preload/native binding must not attach renderer-owned segmentIds/trackIds to selectTimelineItemIntent" \
+  "$SELECTION_INTENT_LEGACY_FIELD_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/preload \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  apps/desktop-electron/src/main/index.ts
+
+require_matches \
+  "project session selection intent uses Rust-resolved item handles" \
+  '\bselectTimelineItemIntent\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches \
+  "project session selection intent carries itemHandle" \
+  '\bitemHandle\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
@@ -244,6 +289,25 @@ assert_pattern_rejects \
     trackId,
     visible: false
   }, "hide track");'
+
+assert_pattern_rejects \
+  "legacy renderer selection intent" \
+  "$LEGACY_SELECTION_INTENT_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "selectTimelineSegments",
+    segmentIds: [segmentId],
+    trackIds: [trackId]
+  }, "select");'
+
+assert_pattern_rejects \
+  "new selection intent with legacy renderer-owned selection arrays" \
+  "$SELECTION_INTENT_LEGACY_FIELD_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "selectTimelineItemIntent",
+    itemHandle,
+    segmentIds: [segmentId],
+    trackIds: [trackId]
+  }, "select");'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

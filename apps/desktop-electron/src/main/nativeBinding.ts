@@ -25,7 +25,6 @@ import type {
   MaterialId,
   MaterialKind,
   Microseconds,
-  SegmentId,
   SegmentVisual,
   SegmentVolume,
   TextBox,
@@ -33,7 +32,6 @@ import type {
   TextSegment,
   TextStyle,
   TextWrapping,
-  TrackId,
   TrackKind
 } from "../generated/Draft";
 
@@ -116,7 +114,7 @@ export type ProjectIntent =
       materialKindHint?: MaterialKind | null;
     }
   | { kind: "addTimelineSegmentIntent"; materialId: MaterialId }
-  | { kind: "selectTimelineSegments"; segmentIds?: SegmentId[]; trackIds?: TrackId[] }
+  | { kind: "selectTimelineItemIntent"; itemHandle: string }
   | { kind: "moveSelectedSegmentIntent"; delta: Microseconds }
   | { kind: "splitSelectedSegmentIntent"; splitAt: Microseconds }
   | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; delta: Microseconds }

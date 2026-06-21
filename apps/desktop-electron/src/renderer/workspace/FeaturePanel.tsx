@@ -50,7 +50,7 @@ type FeaturePanelProps = {
     fadeInDuration: number;
     fadeOutDuration: number;
   }) => void;
-  onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
+  onSetSelectedTrackMute: (itemHandle: string, muted: boolean) => void;
 };
 
 type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
@@ -519,7 +519,7 @@ function AudioPanel({
           <button
             type="button"
             className="secondary-action"
-            onClick={() => selectedTrack && onSetSelectedTrackMute(selectedTrack.trackId, !selectedTrack.muted)}
+            onClick={() => selectedTrack && onSetSelectedTrackMute(selectedTrack.selectionHandle, !selectedTrack.muted)}
             disabled={workspace.pendingCommand !== null || selectedTrack === null}
           >
             {selectedTrack?.muted ? "取消轨道静音" : "轨道静音"}

@@ -1736,26 +1736,25 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSelectTimelineTrack(trackId: string): void {
+  function handleSelectTimelineTrack(itemHandle: string): void {
     void executeProjectTimelineIntent(
       {
-        kind: "selectTimelineSegments",
-        segmentIds: [],
-        trackIds: [trackId]
+        kind: "selectTimelineItemIntent",
+        itemHandle
       },
       "选择轨道"
     );
   }
 
   async function selectTrackThenExecuteSelectedTrackIntent(
-    trackId: string,
+    itemHandle: string,
     intent: Extract<
       ExecuteProjectIntentRequest["intent"],
       { kind: "renameSelectedTrack" | "setSelectedTrackLock" | "setSelectedTrackVisibility" | "setSelectedTrackMute" }
     >,
     pendingCommand: string
   ): Promise<void> {
-    if (trackId.length === 0) {
+    if (itemHandle.length === 0) {
       setWorkspace((current) => ({
         ...current,
         commandError: commandErrorMessage("请先选择一个轨道")
@@ -1765,9 +1764,8 @@ export function App(): React.ReactElement {
 
     const selected = await executeProjectTimelineIntent(
       {
-        kind: "selectTimelineSegments",
-        segmentIds: [],
-        trackIds: [trackId]
+        kind: "selectTimelineItemIntent",
+        itemHandle
       },
       "选择轨道"
     );
@@ -1778,9 +1776,9 @@ export function App(): React.ReactElement {
     await executeProjectTimelineIntent(intent, pendingCommand);
   }
 
-  function handleSetSelectedTrackMute(trackId: string, muted: boolean): void {
+  function handleSetSelectedTrackMute(itemHandle: string, muted: boolean): void {
     void selectTrackThenExecuteSelectedTrackIntent(
-      trackId,
+      itemHandle,
       {
         kind: "setSelectedTrackMute",
         muted
@@ -1799,7 +1797,7 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleRenameTimelineTrack(trackId: string, name: string): void {
+  function handleRenameTimelineTrack(itemHandle: string, name: string): void {
     const trimmedName = name.trim();
     if (trimmedName.length === 0) {
       setWorkspace((current) => ({
@@ -1809,7 +1807,7 @@ export function App(): React.ReactElement {
       return;
     }
     void selectTrackThenExecuteSelectedTrackIntent(
-      trackId,
+      itemHandle,
       {
         kind: "renameSelectedTrack",
         name: trimmedName
@@ -1818,9 +1816,9 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSetTimelineTrackLock(trackId: string, locked: boolean): void {
+  function handleSetTimelineTrackLock(itemHandle: string, locked: boolean): void {
     void selectTrackThenExecuteSelectedTrackIntent(
-      trackId,
+      itemHandle,
       {
         kind: "setSelectedTrackLock",
         locked
@@ -1829,9 +1827,9 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSetTimelineTrackVisibility(trackId: string, visible: boolean): void {
+  function handleSetTimelineTrackVisibility(itemHandle: string, visible: boolean): void {
     void selectTrackThenExecuteSelectedTrackIntent(
-      trackId,
+      itemHandle,
       {
         kind: "setSelectedTrackVisibility",
         visible
@@ -1859,24 +1857,11 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSelectTimelineSegment(segmentId: string): void {
-    const selected = getSelectedSegmentView(workspaceRef.current.draft, {
-      segmentIds: [segmentId],
-      trackIds: []
-    });
-    if (selected === null) {
-      setWorkspace((current) => ({
-        ...current,
-        commandError: commandErrorMessage("找不到要选择的片段")
-      }));
-      return;
-    }
-
+  function handleSelectTimelineSegment(itemHandle: string): void {
     void executeProjectTimelineIntent(
       {
-        kind: "selectTimelineSegments",
-        segmentIds: [segmentId],
-        trackIds: [selected.track.trackId]
+        kind: "selectTimelineItemIntent",
+        itemHandle
       },
       "选择片段"
     );

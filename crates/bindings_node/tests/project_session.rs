@@ -561,9 +561,8 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
         "sessionId": "test-session-selection",
         "expectedRevision": 1,
         "intent": {
-            "kind": "selectTimelineSegments",
-            "segmentIds": ["segment-1"],
-            "trackIds": ["video-track"]
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-segment:video-track:segment-1"
         }
     }))
     .expect("selection intent should return an envelope");
@@ -588,6 +587,108 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
 }
 
 #[test]
+fn project_session_rejects_legacy_and_invalid_selection_intents() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-selection-rejections.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-selection-rejections"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-selection-rejections",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["revision"], 1);
+
+    for (label, intent) in [
+        (
+            "legacy selectTimelineSegments payload",
+            json!({
+                "kind": "selectTimelineSegments",
+                "segmentIds": ["segment-1"],
+                "trackIds": ["video-track"]
+            }),
+        ),
+        (
+            "extra legacy fields on item handle selection",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-track:video-track",
+                "trackIds": ["video-track"]
+            }),
+        ),
+        (
+            "unknown handle prefix",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-clip:video-track:segment-1"
+            }),
+        ),
+        (
+            "bad percent encoding",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-track:%ZZ"
+            }),
+        ),
+        (
+            "unknown track handle",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-track:missing-track"
+            }),
+        ),
+        (
+            "unknown segment handle",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-segment:video-track:missing-segment"
+            }),
+        ),
+        (
+            "malformed segment handle",
+            json!({
+                "kind": "selectTimelineItemIntent",
+                "itemHandle": "timeline-segment:video-track:segment-1:extra"
+            }),
+        ),
+    ] {
+        let rejected = execute_project_intent(json!({
+            "sessionId": "test-session-selection-rejections",
+            "expectedRevision": 1,
+            "intent": intent
+        }))
+        .unwrap_or_else(|_| panic!("{label} should return an error envelope"));
+        assert_eq!(rejected["ok"], false, "{label}: {rejected:#}");
+    }
+
+    let valid = execute_project_intent(json!({
+        "sessionId": "test-session-selection-rejections",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-segment:video-track:segment-1"
+        }
+    }))
+    .expect("valid selection should still use unchanged revision");
+    assert_eq!(valid["ok"], true, "{valid:#}");
+    assert_eq!(valid["data"]["revision"], 1);
+    assert_eq!(valid["data"]["selection"]["segmentIds"][0], "segment-1");
+
+    close_project_session(json!({ "sessionId": "test-session-selection-rejections" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_track_mutation_intents_use_selected_track() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-selected-track.veproj");
@@ -602,9 +703,8 @@ fn project_session_track_mutation_intents_use_selected_track() {
         "sessionId": "test-session-selected-track",
         "expectedRevision": 0,
         "intent": {
-            "kind": "selectTimelineSegments",
-            "segmentIds": [],
-            "trackIds": ["video-track"]
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-track:video-track"
         }
     }))
     .expect("track selection intent should return an envelope");

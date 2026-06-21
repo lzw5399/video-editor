@@ -1,11 +1,14 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { join } from "node:path";
 
-import type { CommandName } from "../src/generated/CommandEnvelope";
-
 type ExecuteCommandCall = {
-  command: CommandName;
+  command: string;
   kind: string;
+};
+
+type ProjectSessionCall = {
+  command: string;
+  intentKind: string | null;
 };
 
 type RegionBox = {
@@ -48,15 +51,32 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
 }
 
 async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
-    );
-  });
+  const [legacyCalls, projectCalls] = await Promise.all([
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+          .__videoEditorTestExecuteCommandCalls ?? []
+      );
+    }),
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+          .__videoEditorTestProjectSessionCalls ?? []
+      );
+    })
+  ]);
+  return [
+    ...legacyCalls,
+    ...projectCalls
+      .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
+      .map((call) => ({
+        command: call.intentKind ?? "executeProjectIntent",
+        kind: call.intentKind ?? "executeProjectIntent"
+      }))
+  ];
 }
 
-async function expectCommandCall(app: ElectronApplication, command: CommandName): Promise<void> {
+async function expectCommandCall(app: ElectronApplication, command: string): Promise<void> {
   await expect
     .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === command))
     .toBe(true);
@@ -216,12 +236,12 @@ test("运行环境诊断不破坏时间线命令边界", async () => {
   try {
     await expectCommandCall(app, "probeRuntimeCapabilities");
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
+    await expectCommandCall(app, "selectTimelineItemIntent");
     await expect(page.getByLabel("片段信息")).toContainText("segment-main-video");
 
     const calls = await readExecuteCommandCalls(app);
     expect(calls.map((call) => call.command)).toEqual(
-      expect.arrayContaining(["probeRuntimeCapabilities", "selectTimelineSegments"])
+      expect.arrayContaining(["probeRuntimeCapabilities", "selectTimelineItemIntent"])
     );
   } finally {
     await app.close();

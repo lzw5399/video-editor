@@ -54,7 +54,7 @@ type InspectorProps = {
     fadeInDuration: number;
     fadeOutDuration: number;
   }) => void;
-  onSetSelectedTrackMute: (trackId: string, muted: boolean) => void;
+  onSetSelectedTrackMute: (itemHandle: string, muted: boolean) => void;
 };
 
 type InspectorTab = "画面" | "音频" | "变速" | "动画" | "调节" | "AI效果";
@@ -785,7 +785,7 @@ export function Inspector({
                 <input
                   type="checkbox"
                   checked={selected.track.muted}
-                  onChange={(event) => onSetSelectedTrackMute(selected.track.trackId, event.currentTarget.checked)}
+                  onChange={(event) => onSetSelectedTrackMute(selected.track.selectionHandle, event.currentTarget.checked)}
                   disabled={workspace.pendingCommand !== null}
                 />
                 <span>轨道静音</span>
