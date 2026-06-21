@@ -1405,14 +1405,10 @@ export function App(): React.ReactElement {
           };
         }
 
-        const materials = [
-          ...current.materials.filter((material) => material.materialId !== result.data.material.materialId),
-          result.data.material
-        ];
-
         return {
           ...current,
-          materials,
+          viewModel: result.data.viewModel,
+          materials: result.data.materials,
           materialDiagnostics: result.data.diagnostic === null || result.data.diagnostic === undefined ? [] : [result.data.diagnostic],
           pendingCommand: null,
           commandError: null

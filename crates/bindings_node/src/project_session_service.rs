@@ -1,7 +1,8 @@
+use draft_commands::delta::material_dependency_delta;
 use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
     AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload, AudioEffectSlot,
-    AudioFade, AudioPanBalance, CommandDelta, CommandErrorKind, CommandState,
+    AudioFade, AudioPanBalance, CommandDelta, CommandDeltaName, CommandErrorKind, CommandState,
     DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, EditTextSegmentCommandPayload,
     ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
     KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
@@ -227,8 +228,13 @@ struct ProjectSessionImportMaterialResponse {
     session_id: String,
     revision: u64,
     material: draft_model::Material,
+    materials: Vec<draft_model::Material>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostic: Option<MissingMaterialCommandDiagnostic>,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
+    events: Vec<draft_model::CommandEvent>,
+    delta: draft_model::CommandDelta,
     bundle_path: String,
     project_json_path: String,
 }
@@ -1259,12 +1265,27 @@ impl ProjectSession {
         self.draft = imported.draft;
         self.bundle_path = imported.bundle_path;
         self.project_json_path = imported.project_json_path;
+        let material = imported.material;
+        let delta = material_dependency_delta(
+            CommandDeltaName::ImportMaterial,
+            &self.draft,
+            std::slice::from_ref(&material.material_id),
+            "material imported",
+        );
 
         crate::to_js_value(crate::ok_envelope(ProjectSessionImportMaterialResponse {
             session_id: self.session_id.clone(),
             revision: self.revision,
-            material: imported.material,
+            material,
+            materials: crate::material_service::list_materials(&self.draft),
             diagnostic: imported.diagnostic.map(crate::command_diagnostic),
+            view_model: project_session_view_model(
+                &self.draft,
+                &self.command_state,
+                &self.selection,
+            ),
+            events: Vec::new(),
+            delta,
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
         }))

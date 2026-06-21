@@ -65,6 +65,19 @@ require_matches() {
   fi
 }
 
+require_matches_multiline() {
+  local description="$1"
+  local pattern="$2"
+  shift 2
+
+  local output
+  output="$(rg -n -U --pcre2 "$pattern" "$@" 2>/dev/null || true)"
+  if [ -z "$output" ]; then
+    echo "phase3-source-guards: missing required pattern: ${description}" >&2
+    failed=1
+  fi
+}
+
 assert_pattern_rejects() {
   local description="$1"
   local pattern="$2"
@@ -132,7 +145,7 @@ fail_if_matches \
 
 fail_if_matches_multiline \
   "project session importMaterial response must not expose full Draft payloads" \
-  'ProjectSessionImportMaterialResponse(?s:.{0,260})\bdraft\b' \
+  '(?:struct|type)[[:space:]]+ProjectSessionImportMaterialResponse(?s:.{0,360})\bdraft\b' \
   crates/bindings_node/src/project_session_service.rs \
   apps/desktop-electron/src/main/nativeBinding.ts
 
@@ -155,6 +168,41 @@ fail_if_matches \
 fail_if_matches_multiline \
   "renderer import material session result must use returned material data, not a returned full Draft" \
   'executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1400})result\.data\.draft' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+require_matches_multiline \
+  "project session importMaterial response returns Rust session view model" \
+  'ProjectSessionImportMaterialResponse(?s:.{0,360})\bviewModel\b' \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches_multiline \
+  "project session importMaterial response returns Rust command delta" \
+  'ProjectSessionImportMaterialResponse(?s:.{0,420})\bdelta\b' \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches_multiline \
+  "project session importMaterial response returns Rust-owned material list" \
+  'ProjectSessionImportMaterialResponse(?s:.{0,420})\bmaterials\b' \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches_multiline \
+  "renderer importMaterial must refresh canonical session materials instead of locally reconciling material arrays" \
+  'executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1800})current\.materials\.filter|executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1800})\.\.\.current\.materials' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+fail_if_matches_multiline \
+  "renderer importMaterial must apply atomic response materials instead of issuing a second session material read" \
+  'async function importMaterialPath(?s:(?!\n  async function handleCreateProject).)*listProjectSessionMaterials' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+require_matches_multiline \
+  "renderer importMaterial consumes Rust session view model" \
+  'executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1800})viewModel:[[:space:]]*result\.data\.viewModel' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+require_matches \
+  "renderer importMaterial applies Rust-owned response material list" \
+  'materials:[[:space:]]*result\.data\.materials' \
   apps/desktop-electron/src/renderer/App.tsx
 
 fail_if_matches \

@@ -228,7 +228,11 @@ export type ProjectSessionImportMaterialResponse = {
   sessionId: string;
   revision: number;
   material: Material;
+  materials: Material[];
   diagnostic?: MissingMaterialCommandDiagnostic | null;
+  viewModel: ProjectSessionViewModel;
+  events: CommandEvent[];
+  delta: CommandDelta;
   bundlePath: string;
   projectJsonPath: string;
 };

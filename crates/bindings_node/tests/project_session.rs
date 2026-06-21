@@ -235,7 +235,29 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
         "session-video-material"
     );
     assert_eq!(imported["data"]["material"]["status"], "available");
+    assert_eq!(
+        imported["data"]["materials"][0]["materialId"],
+        "session-video-material"
+    );
+    assert_eq!(
+        imported["data"]["materials"].as_array().unwrap().len(),
+        1,
+        "{imported:#}"
+    );
     assert_no_renderer_project_state_payload(&imported);
+    assert_eq!(
+        imported["data"]["viewModel"]["project"]["materialCount"], 1,
+        "{imported:#}"
+    );
+    assert_eq!(imported["data"]["delta"]["command"], "importMaterial");
+    assert_eq!(
+        imported["data"]["delta"]["changedEntities"][0],
+        json!({ "kind": "material", "materialId": "session-video-material" })
+    );
+    assert_eq!(
+        imported["data"]["delta"]["invalidation"]["materialIds"][0],
+        "session-video-material"
+    );
 
     let added = execute_project_intent(json!({
         "sessionId": "test-session-import-add",
