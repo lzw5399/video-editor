@@ -541,6 +541,82 @@ export function App(): React.ReactElement {
     }
   }
 
+  async function syncProjectSessionPlayhead(
+    playhead: number,
+    action: string,
+    options: { reportBusy?: boolean } = {}
+  ): Promise<boolean> {
+    const reportBusy = options.reportBusy ?? true;
+    const session = projectSessionRef.current;
+    if (session === null) {
+      if (reportBusy) {
+        const next = {
+          ...workspaceRef.current,
+          pendingCommand: null,
+          commandError: commandErrorMessage(`项目会话未就绪，无法${action}`)
+        };
+        workspaceRef.current = next;
+        setWorkspace(next);
+      }
+      return false;
+    }
+    if (commandInFlightRef.current) {
+      if (reportBusy) {
+        const next = {
+          ...workspaceRef.current,
+          commandError: commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回")
+        };
+        workspaceRef.current = next;
+        setWorkspace(next);
+      }
+      return false;
+    }
+
+    commandInFlightRef.current = true;
+    try {
+      const result = await window.videoEditorCore.executeProjectIntent<ProjectSessionTimelineIntentResponse>({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        intent: {
+          kind: "setSessionPlayhead",
+          playhead: normalizePlayheadTime(playhead)
+        }
+      });
+      if (result.ok && result.data !== null) {
+        projectSessionRef.current = {
+          sessionId: result.data.sessionId,
+          revision: result.data.revision
+        };
+        setBundlePath(result.data.bundlePath);
+        return true;
+      }
+      if (reportBusy) {
+        const next = {
+          ...workspaceRef.current,
+          pendingCommand: null,
+          commandError: commandErrorMessage(result)
+        };
+        workspaceRef.current = next;
+        setWorkspace(next);
+      }
+      return false;
+    } catch (error: unknown) {
+      if (reportBusy) {
+        const message = error instanceof Error ? error.message : String(error);
+        const next = {
+          ...workspaceRef.current,
+          pendingCommand: null,
+          commandError: commandErrorMessage(message)
+        };
+        workspaceRef.current = next;
+        setWorkspace(next);
+      }
+      return false;
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
   async function createProjectSessionForBundle(
     bundlePath: string,
     fixture?: WorkspaceStartupFixture
@@ -1986,33 +2062,46 @@ export function App(): React.ReactElement {
     interpolation: KeyframeInterpolation = "linear",
     easing: KeyframeEasing = "none"
   ): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "setSelectedSegmentKeyframe",
-        property,
-        at: normalizePlayheadTime(playheadUs),
-        interpolation,
-        easing
-      },
-      "设置关键帧"
-    );
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位关键帧播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "setSelectedSegmentKeyframe",
+          property,
+          interpolation,
+          easing
+        },
+        "设置关键帧"
+      );
+    })();
   }
 
-  function handleRemoveSelectedSegmentKeyframe(property: KeyframeProperty, at: number): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "removeSelectedSegmentKeyframe",
-        property,
-        at: Math.max(0, Math.round(at))
-      },
-      "删除关键帧"
-    );
+  function handleRemoveSelectedSegmentKeyframe(property: KeyframeProperty): void {
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位关键帧播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "removeSelectedSegmentKeyframe",
+          property
+        },
+        "删除关键帧"
+      );
+    })();
   }
 
   function handleSeekPlayhead(value: number): void {
     const targetTime = normalizePlayheadTime(value);
     setPlaybackRunning(false);
     setPlayheadUs(targetTime);
+    void syncProjectSessionPlayhead(targetTime, "定位播放头", { reportBusy: false });
     void seekRealtimePreviewHost(targetTime);
     void handleSeekAudioPreview(targetTime);
   }

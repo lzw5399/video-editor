@@ -181,6 +181,9 @@ enum ProjectIntent {
     SetSelectedTrackMute {
         muted: bool,
     },
+    SetSessionPlayhead {
+        playhead: Microseconds,
+    },
     UpdateDraftCanvasConfig {
         #[serde(rename = "canvasConfig")]
         canvas_config: DraftCanvasConfig,
@@ -190,13 +193,11 @@ enum ProjectIntent {
     },
     SetSelectedSegmentKeyframe {
         property: KeyframeProperty,
-        at: Microseconds,
         interpolation: KeyframeInterpolation,
         easing: KeyframeEasing,
     },
     RemoveSelectedSegmentKeyframe {
         property: KeyframeProperty,
-        at: Microseconds,
     },
     UndoTimelineEdit {},
     RedoTimelineEdit {},
@@ -417,6 +418,7 @@ struct ProjectSession {
     draft: Draft,
     command_state: CommandState,
     selection: TimelineSelection,
+    playhead: Microseconds,
 }
 
 #[derive(Debug, Clone)]
@@ -603,6 +605,7 @@ impl ProjectSessionRegistry {
             draft: bundle.draft.clone(),
             command_state: CommandState::empty(),
             selection: TimelineSelection::empty(),
+            playhead: Microseconds::new(0),
         };
         self.sessions.insert(session_id.clone(), session);
 
@@ -648,6 +651,7 @@ impl ProjectSessionRegistry {
             draft: opened.bundle.draft.clone(),
             command_state: CommandState::empty(),
             selection: TimelineSelection::empty(),
+            playhead: Microseconds::new(0),
         };
         self.sessions.insert(session_id.clone(), session);
 
@@ -786,6 +790,9 @@ impl ProjectSessionRegistry {
                 display_name,
                 material_kind_hint,
             ),
+            ProjectIntent::SetSessionPlayhead { playhead } => {
+                session.apply_session_playhead(playhead)
+            }
             intent => {
                 let payload = match session.intent_payload(intent) {
                     Ok(payload) => payload,
@@ -1019,6 +1026,9 @@ impl ProjectSession {
                     muted,
                 },
             )),
+            ProjectIntent::SetSessionPlayhead { .. } => {
+                unreachable!("setSessionPlayhead is handled before timeline payload conversion")
+            }
             ProjectIntent::UpdateDraftCanvasConfig { canvas_config } => {
                 Ok(TimelineEditPayload::UpdateDraftCanvasConfig(
                     UpdateDraftCanvasConfigCommandPayload {
@@ -1040,12 +1050,15 @@ impl ProjectSession {
             ),
             ProjectIntent::SetSelectedSegmentKeyframe {
                 property,
-                at,
                 interpolation,
                 easing,
             } => {
-                let (segment_id, keyframe) =
-                    self.keyframe_for_selected_segment(property, at, interpolation, easing)?;
+                let (segment_id, keyframe) = self.keyframe_for_selected_segment(
+                    property,
+                    self.playhead,
+                    interpolation,
+                    easing,
+                )?;
                 Ok(TimelineEditPayload::SetSegmentKeyframe(
                     SetSegmentKeyframeCommandPayload {
                         draft: self.draft.clone(),
@@ -1056,9 +1069,9 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::RemoveSelectedSegmentKeyframe { property, at } => {
+            ProjectIntent::RemoveSelectedSegmentKeyframe { property } => {
                 let segment = self.selected_segment("删除关键帧")?;
-                let relative_at = relative_keyframe_time(segment, at);
+                let relative_at = relative_keyframe_time(segment, self.playhead);
                 Ok(TimelineEditPayload::RemoveSegmentKeyframe(
                     RemoveSegmentKeyframeCommandPayload {
                         draft: self.draft.clone(),
@@ -1334,6 +1347,26 @@ impl ProjectSession {
             ),
             events: response.events,
             delta: response.delta,
+            bundle_path: self.bundle_path.display().to_string(),
+            project_json_path: self.project_json_path.display().to_string(),
+        }))
+    }
+
+    fn apply_session_playhead(&mut self, playhead: Microseconds) -> Result<serde_json::Value> {
+        self.playhead = playhead;
+        crate::to_js_value(crate::ok_envelope(ProjectSessionIntentResponse {
+            session_id: self.session_id.clone(),
+            revision: self.revision,
+            view_model: project_session_view_model(
+                &self.draft,
+                &self.command_state,
+                &self.selection,
+            ),
+            events: Vec::new(),
+            delta: CommandDelta::none(
+                CommandDeltaName::SelectTimelineSegments,
+                "session playhead changed",
+            ),
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
         }))

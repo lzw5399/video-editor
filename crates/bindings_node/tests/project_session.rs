@@ -1057,13 +1057,25 @@ fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
     .expect("volume intent should return an envelope");
     assert_eq!(volume["ok"], true, "{volume:#}");
 
+    let positioned = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 3,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 450_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned["ok"], true, "{positioned:#}");
+    assert_eq!(positioned["data"]["revision"], 3);
+    assert_no_renderer_project_state_payload(&positioned);
+
     let keyed = execute_project_intent(json!({
         "sessionId": "test-session-keyframe",
         "expectedRevision": 3,
         "intent": {
             "kind": "setSelectedSegmentKeyframe",
             "property": "volume",
-            "at": 450_000,
             "interpolation": "hold",
             "easing": "easeIn"
         }
@@ -1086,13 +1098,25 @@ fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
     assert_eq!(saved_segment.target_timerange.start.get(), 200_000);
     assert_eq!(saved_segment.keyframes[0].at.get(), 250_000);
 
+    let remove_positioned = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 4,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 450_000
+        }
+    }))
+    .expect("remove session playhead intent should return an envelope");
+    assert_eq!(remove_positioned["ok"], true, "{remove_positioned:#}");
+    assert_eq!(remove_positioned["data"]["revision"], 4);
+    assert_no_renderer_project_state_payload(&remove_positioned);
+
     let removed = execute_project_intent(json!({
         "sessionId": "test-session-keyframe",
         "expectedRevision": 4,
         "intent": {
             "kind": "removeSelectedSegmentKeyframe",
-            "property": "volume",
-            "at": 450_000
+            "property": "volume"
         }
     }))
     .expect("remove keyframe intent should return an envelope");
@@ -1140,6 +1164,36 @@ fn project_session_keyframe_intent_rejects_renderer_built_keyframe_payload() {
     assert_eq!(rejected["ok"], false, "{rejected:#}");
     assert_eq!(rejected["data"], Value::Null);
     assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    let rejected_set_at = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "setSelectedSegmentKeyframe",
+            "property": "visualPositionX",
+            "at": 0,
+            "interpolation": "linear",
+            "easing": "none"
+        }
+    }))
+    .expect("legacy keyframe at payload should return an envelope");
+    assert_eq!(rejected_set_at["ok"], false, "{rejected_set_at:#}");
+    assert_eq!(rejected_set_at["data"], Value::Null);
+    assert_eq!(rejected_set_at["error"]["kind"], "invalidPayload");
+
+    let rejected_remove_at = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "removeSelectedSegmentKeyframe",
+            "property": "visualPositionX",
+            "at": 0
+        }
+    }))
+    .expect("legacy remove keyframe at payload should return an envelope");
+    assert_eq!(rejected_remove_at["ok"], false, "{rejected_remove_at:#}");
+    assert_eq!(rejected_remove_at["data"], Value::Null);
+    assert_eq!(rejected_remove_at["error"]["kind"], "invalidPayload");
 
     close_project_session(json!({ "sessionId": "test-session-keyframe-reject" }))
         .expect("closeProjectSession should return an envelope");

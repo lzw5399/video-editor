@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg20 product UI diagnostic copy boundary
-last_updated: "2026-06-21T20:06:27Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg20: product UI diagnostic copy boundary
+stopped_at: Completed quick task 260622-sg21 session-owned playhead keyframes
+last_updated: "2026-06-21T20:22:46Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg21: session-owned playhead keyframes
 progress:
   total_phases: 23
   completed_phases: 20
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
-Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg20: product UI diagnostic copy boundary
+Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
+Last activity: 2026-06-22 -- Completed quick task 260622-sg21: session-owned playhead keyframes
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -218,6 +218,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview telemetry fanout is now driven by Rust native playback/control events instead of Electron main-process interval polling; packaged product cadence proves native `framePresented=90`, 90/90 presented frames, and only 13 presentation snapshot reads over each 3s playback window. (URGENT)
+- Selected-segment keyframe timing is now session-owned: renderer syncs playhead as runtime control state, Rust derives relative keyframe timestamps from selected segment + session playhead, and source guards reject legacy renderer-supplied keyframe `at` payloads. (URGENT)
 - Product renderer workspace no longer stores canonical `draft`, `commandState`, or `selection`; project session open/edit responses expose view models and metadata only, while still/segment preview artifact requests use Rust session-owned `{ sessionId, expectedRevision }` APIs. (URGENT)
 - Project session `importMaterial` now returns Rust-owned `viewModel`, `events`, `delta`, and full material list atomically; renderer no longer locally reconciles material arrays or performs a second material-read IPC after import. (URGENT)
 - Timeline display projection is now emitted by Rust project sessions as `viewModel`: renderer timeline rows, selected track/segment views, item handles, labels, visual kind, and ruler ticks are session-owned, and source guards block renderer projection/handle construction from returning. (URGENT)

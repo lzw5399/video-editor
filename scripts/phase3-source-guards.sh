@@ -17,6 +17,8 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
+KEYFRAME_INTENT_LEGACY_AT_PATTERN='kind:[[:space:]]*"(?:setSelectedSegmentKeyframe|removeSelectedSegmentKeyframe)"(?s:.{0,500})\bat[[:space:]]*:'
+KEYFRAME_REMOVE_CALLBACK_AT_PATTERN='onRemoveKeyframe[[:space:]]*\((?s:.{0,160})\bkeyframe\.at\b'
 PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN='(?:struct|type)[[:space:]]+(?:SelectedSegmentViewModel|TimelineTrackRowViewModel|TimelineSegmentViewModel)(?s:.{0,900})\b(?:track:[[:space:]]*Track|segment:[[:space:]]*Segment)\b'
 RENDERER_PRODUCT_RAW_TIMELINE_VM_PATTERN='\b(?:row\.track|segment\.segment|selected\.segment|selectedSegment\.segment)\b'
 PROJECT_SESSION_RESPONSE_STATE_PATTERN='(?:struct|type)[[:space:]]+ProjectSession(?:Open|TimelineIntent|Intent)Response(?s:.{0,500})\b(?:draft|commandState|command_state|selection)\b'
@@ -404,10 +406,35 @@ fail_if_matches \
   '\b(?:keyframeValueForSegmentProperty|resolveSegmentRelativePlayhead)\b|kind:[[:space:]]*"setSelectedSegmentKeyframe",[[:space:]]*keyframe\b|onRemoveKeyframe\(keyframe\.property,[[:space:]]*keyframe\.at\)' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Inspector.tsx
 
+fail_if_matches_multiline \
+  "renderer/native binding must not pass legacy keyframe at timestamps" \
+  "$KEYFRAME_INTENT_LEGACY_AT_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
+fail_if_matches_multiline \
+  "renderer must not delete keyframes by row-derived keyframe time" \
+  "$KEYFRAME_REMOVE_CALLBACK_AT_PATTERN" \
+  apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
 fail_if_matches \
   "project session intent contract must not accept renderer-built complete keyframes" \
   'setSelectedSegmentKeyframe";[[:space:]]*keyframe[[:space:]]*:' \
   apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches \
+  "native binding must expose session-owned playhead sync intent" \
+  '\bsetSessionPlayhead\b' \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches \
+  "renderer must sync session-owned playhead before keyframe intents" \
+  '\bsetSessionPlayhead\b' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+require_matches \
+  "Rust project session must own playhead sync intent" \
+  '\bSetSessionPlayhead\b' \
+  crates/bindings_node/src/project_session_service.rs
 
 fail_if_matches \
   "draft/schema/generated command contracts must not use floating-point or seconds-based persisted time" \
@@ -495,6 +522,22 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "legacy selected-segment keyframe at timestamp" \
+  "$KEYFRAME_INTENT_LEGACY_AT_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "setSelectedSegmentKeyframe",
+    property,
+    at: normalizePlayheadTime(playheadUs),
+    interpolation: "linear",
+    easing: "none"
+  }, "keyframe");'
+
+assert_pattern_rejects \
+  "row-derived keyframe deletion time" \
+  "$KEYFRAME_REMOVE_CALLBACK_AT_PATTERN" \
+  'onRemoveKeyframe(keyframe.property, selected.targetTimerange.start + keyframe.at)'
 
 assert_pattern_rejects \
   "project session response exposing renderer-owned state" \

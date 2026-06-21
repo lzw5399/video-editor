@@ -168,16 +168,16 @@ export type ProjectIntent =
   | { kind: "setSelectedTrackLock"; locked: boolean }
   | { kind: "setSelectedTrackVisibility"; visible: boolean }
   | { kind: "setSelectedTrackMute"; muted: boolean }
+  | { kind: "setSessionPlayhead"; playhead: Microseconds }
   | { kind: "updateDraftCanvasConfig"; canvasConfig: DraftCanvasConfig }
   | { kind: "updateSelectedSegmentVisual"; visual: SegmentVisual }
   | {
       kind: "setSelectedSegmentKeyframe";
       property: KeyframeProperty;
-      at: Microseconds;
       interpolation: KeyframeInterpolation;
       easing: KeyframeEasing;
     }
-  | { kind: "removeSelectedSegmentKeyframe"; property: KeyframeProperty; at: Microseconds }
+  | { kind: "removeSelectedSegmentKeyframe"; property: KeyframeProperty }
   | { kind: "undoTimelineEdit" }
   | { kind: "redoTimelineEdit" };
 

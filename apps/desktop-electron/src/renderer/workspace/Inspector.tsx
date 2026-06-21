@@ -45,7 +45,7 @@ type InspectorProps = {
     interpolation?: KeyframeInterpolation,
     easing?: KeyframeEasing
   ) => void;
-  onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty, at: number) => void;
+  onRemoveSelectedSegmentKeyframe: (property: KeyframeProperty) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onUpdateSelectedSegmentAudio: (options: {
     gainMillis: number;
@@ -241,7 +241,7 @@ export function Inspector({
       playheadAt={playheadUs}
       pending={workspace.pendingCommand !== null}
       onSet={() => onSetSelectedSegmentKeyframe(property)}
-      onRemove={(at) => onRemoveSelectedSegmentKeyframe(property, at)}
+      onRemove={() => onRemoveSelectedSegmentKeyframe(property)}
       onFocusProperty={() => {
         setFocusedKeyframeProperty(property);
         setActiveTab("动画");
@@ -1128,7 +1128,7 @@ function AnimationInspectorTab({
   pending: boolean;
   onFocusProperty: (property: KeyframeProperty) => void;
   onSetKeyframe: (property: KeyframeProperty, interpolation?: KeyframeInterpolation, easing?: KeyframeEasing) => void;
-  onRemoveKeyframe: (property: KeyframeProperty, at: number) => void;
+  onRemoveKeyframe: (property: KeyframeProperty) => void;
 }): React.ReactElement {
   if (selected === null) {
     return (
@@ -1209,7 +1209,7 @@ function AnimationInspectorTab({
             playheadAt={playheadAt}
             pending={pending}
             onSet={() => onSetKeyframe(activeFocusedProperty)}
-            onRemove={(at) => onRemoveKeyframe(activeFocusedProperty, at)}
+            onRemove={() => onRemoveKeyframe(activeFocusedProperty)}
             onFocusProperty={() => onFocusProperty(activeFocusedProperty)}
           />
         </div>
@@ -1223,9 +1223,7 @@ function AnimationInspectorTab({
                 keyframe={keyframe}
                 active={selected.targetTimerange.start + keyframe.at === playheadAt}
                 pending={pending}
-                onRemove={() =>
-                  onRemoveKeyframe(keyframe.property, selected.targetTimerange.start + keyframe.at)
-                }
+                onRemove={() => onRemoveKeyframe(keyframe.property)}
               />
             ))}
           </div>
@@ -1276,13 +1274,18 @@ function KeyframeDetailRow({
   pending: boolean;
   onRemove: () => void;
 }): React.ReactElement {
+  const disabled = pending || !active;
+  const label = active
+    ? `删除${formatKeyframeProperty(keyframe.property)}关键帧`
+    : `将播放头移动到${formatMicroseconds(keyframe.at)}后可删除`;
+
   return (
     <div className={active ? "keyframe-detail-row active" : "keyframe-detail-row"}>
       <span>{formatMicroseconds(keyframe.at)}</span>
       <span>{formatKeyframeValue(keyframe.value)}</span>
       <span>{formatKeyframeInterpolation(keyframe.interpolation)}</span>
       <span>{formatKeyframeEasing(keyframe.easing)}</span>
-      <button type="button" onClick={onRemove} disabled={pending} aria-label={`删除${formatKeyframeProperty(keyframe.property)}关键帧`}>
+      <button type="button" onClick={onRemove} disabled={disabled} aria-label={label} title={label}>
         删除
       </button>
     </div>
@@ -1316,7 +1319,7 @@ function KeyframeButton({
   pending?: boolean;
   deferredLabel?: string;
   onSet?: () => void;
-  onRemove?: (at: number) => void;
+  onRemove?: () => void;
   onFocusProperty?: () => void;
 }): React.ReactElement {
   if (deferredLabel !== undefined || property === undefined || propertyLabel === undefined) {
@@ -1352,7 +1355,7 @@ function KeyframeButton({
         aria-label={label}
         title={label}
         disabled={disabled}
-        onClick={() => onRemove?.(selected.targetTimerange.start + activeKeyframe.at)}
+        onClick={() => onRemove?.()}
       >
         <span aria-hidden="true">◆</span>
       </button>
