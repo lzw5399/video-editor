@@ -209,7 +209,6 @@ export type ProjectSessionTimelineIntentResponse = {
 export type ProjectSessionImportMaterialResponse = {
   sessionId: string;
   revision: number;
-  draft: Draft;
   material: Material;
   diagnostic?: MissingMaterialCommandDiagnostic | null;
   bundlePath: string;

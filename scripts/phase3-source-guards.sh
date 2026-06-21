@@ -105,6 +105,17 @@ fail_if_matches \
   'buildListMaterialsCommand|buildListMissingMaterialsCommand|command:[[:space:]]*"listMaterials"|command:[[:space:]]*"listMissingMaterials"|kind:[[:space:]]*"listMaterials"|kind:[[:space:]]*"listMissingMaterials"' \
   apps/desktop-electron/src/renderer
 
+fail_if_matches_multiline \
+  "project session importMaterial response must not expose full Draft payloads" \
+  'ProjectSessionImportMaterialResponse(?s:.{0,260})\bdraft\b' \
+  crates/bindings_node/src/project_session_service.rs \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches_multiline \
+  "renderer import material session result must use returned material data, not a returned full Draft" \
+  'executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1400})result\.data\.draft' \
+  apps/desktop-electron/src/renderer/App.tsx
+
 fail_if_matches \
   "renderer must not start export through renderer-owned draft payloads; use startProjectSessionExport" \
   'buildStartExportCommand|command:[[:space:]]*"startExport"|kind:[[:space:]]*"startExport"' \

@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg10 audio preview session boundary
-last_updated: "2026-06-21T17:09:04Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg10: audio preview session boundary
+stopped_at: Completed quick task 260622-sg11 import material no draft response
+last_updated: "2026-06-21T17:18:55Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg11: import material no draft response
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg10: audio preview session boundary
+Last activity: 2026-06-22 -- Completed quick task 260622-sg11: import material no draft response
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -219,6 +219,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview telemetry fanout is now driven by Rust native playback/control events instead of Electron main-process interval polling; packaged product cadence proves native `framePresented=90`, 90/90 presented frames, and only 13 presentation snapshot reads over each 3s playback window. (URGENT)
 - Product audio preview commands now use Rust project session identity (`projectSessionId` + `expectedRevision`) and no renderer-owned draft payload; Rust audio preview reads canonical project session snapshots internally, with source guards and product/workspace gates preventing draft reintroduction. (URGENT)
+- Product import-material session responses no longer return full `Draft` payloads; renderer updates its material panel from the returned material record while Rust project session remains the canonical draft/persistence owner, and phase3 guards reject reintroducing import response draft payloads. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
 - Product export start is now sourced from Rust project sessions: Electron sends `sessionId`, `expectedRevision`, output path, and preset through `startProjectSessionExport`; Rust reads the canonical session draft before starting the export registry, and renderer/preload guards reject full-draft `startExport` payloads. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)

@@ -146,12 +146,9 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
         "session-video-material"
     );
     assert_eq!(imported["data"]["material"]["status"], "available");
-    assert_eq!(
-        imported["data"]["draft"]["materials"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
+    assert!(
+        imported["data"].get("draft").is_none(),
+        "importMaterial session response must not return renderer-owned draft payloads: {imported:#}"
     );
 
     let added = execute_project_intent(json!({

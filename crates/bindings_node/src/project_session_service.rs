@@ -228,7 +228,6 @@ struct ProjectSessionIntentResponse {
 struct ProjectSessionImportMaterialResponse {
     session_id: String,
     revision: u64,
-    draft: Draft,
     material: draft_model::Material,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostic: Option<MissingMaterialCommandDiagnostic>,
@@ -1057,7 +1056,6 @@ impl ProjectSession {
         crate::to_js_value(crate::ok_envelope(ProjectSessionImportMaterialResponse {
             session_id: self.session_id.clone(),
             revision: self.revision,
-            draft: self.draft.clone(),
             material: imported.material,
             diagnostic: imported.diagnostic.map(crate::command_diagnostic),
             bundle_path: self.bundle_path.display().to_string(),
