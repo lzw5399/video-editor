@@ -17,6 +17,8 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
+PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN='(?:struct|type)[[:space:]]+(?:SelectedSegmentViewModel|TimelineTrackRowViewModel|TimelineSegmentViewModel)(?s:.{0,900})\b(?:track:[[:space:]]*Track|segment:[[:space:]]*Segment)\b'
+RENDERER_PRODUCT_RAW_TIMELINE_VM_PATTERN='\b(?:row\.track|segment\.segment|selected\.segment|selectedSegment\.segment)\b'
 
 fail_if_matches() {
   local description="$1"
@@ -271,6 +273,23 @@ require_matches \
   '\bworkspace\.viewModel\.editControls\b' \
   apps/desktop-electron/src/renderer/workspace/Inspector.tsx
 
+fail_if_matches_multiline \
+  "project session view model must not expose raw Track or Segment payloads" \
+  "$PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN" \
+  crates/bindings_node/src/project_session_service.rs \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches \
+  "renderer product workspace must not read raw Track/Segment objects from project session view models" \
+  "$RENDERER_PRODUCT_RAW_TIMELINE_VM_PATTERN" \
+  apps/desktop-electron/src/renderer/workspace \
+  apps/desktop-electron/src/renderer/App.tsx
+
+require_matches \
+  "renderer feature panels consume Rust session timeline capabilities" \
+  '\bworkspace\.viewModel\.timeline\.capabilities\b' \
+  apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx
+
 fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
@@ -387,6 +406,25 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "raw Track/Segment project session view model field" \
+  "$PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN" \
+  'export type TimelineTrackRowViewModel = {
+  track: Track;
+  segments: TimelineSegmentViewModel[];
+};
+
+struct TimelineSegmentViewModel {
+    segment: Segment,
+}'
+
+assert_pattern_rejects \
+  "renderer raw timeline view model consumption" \
+  "$RENDERER_PRODUCT_RAW_TIMELINE_VM_PATTERN" \
+  'const active = row.track.kind === "audio" ? !row.track.muted : row.track.visible;
+const id = segment.segment.segmentId;
+const text = selectedSegment.segment.text;'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

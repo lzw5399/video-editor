@@ -304,9 +304,21 @@ struct SelectedTrackViewModel {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SelectedSegmentViewModel {
-    segment: Segment,
+    segment_key: String,
+    selection_handle: String,
     track: SelectedTrackViewModel,
     material: Option<Material>,
+    source_timerange: SourceTimerange,
+    target_timerange: TargetTimerange,
+    source_label: String,
+    target_label: String,
+    visual: SegmentVisual,
+    volume: SegmentVolume,
+    audio: SegmentAudio,
+    text: Option<TextSegment>,
+    keyframes: Vec<Keyframe>,
+    has_text: bool,
+    has_audio_controls: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -315,13 +327,22 @@ struct TimelineViewModel {
     rows: Vec<TimelineTrackRowViewModel>,
     duration: Microseconds,
     ruler_ticks: Vec<Microseconds>,
+    capabilities: TimelineCapabilitiesViewModel,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineCapabilitiesViewModel {
+    has_text_track: bool,
+    has_audio_track: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TimelineTrackRowViewModel {
-    track: Track,
+    row_key: String,
     selection_handle: String,
+    name: String,
     symbol: String,
     kind_label: String,
     status_label: String,
@@ -329,14 +350,25 @@ struct TimelineTrackRowViewModel {
     visibility_label: String,
     mute_label: String,
     row_class_name: String,
+    selected: bool,
+    lock_active: bool,
+    visibility_active: bool,
+    mute_active: bool,
+    can_toggle_visibility: bool,
+    can_toggle_mute: bool,
+    next_locked: bool,
+    next_visible: bool,
+    next_muted: bool,
+    visibility_symbol: String,
     segments: Vec<TimelineSegmentViewModel>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TimelineSegmentViewModel {
-    segment: Segment,
+    segment_key: String,
     selection_handle: String,
+    waveform_material_id: Option<MaterialId>,
     material: Option<Material>,
     label: String,
     source_label: String,
@@ -345,6 +377,16 @@ struct TimelineSegmentViewModel {
     start: Microseconds,
     duration: Microseconds,
     selected: bool,
+    keyframe_markers: Vec<TimelineKeyframeMarkerViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TimelineKeyframeMarkerViewModel {
+    marker_key: String,
+    position_per_mille: u32,
+    title: String,
+    aria_label: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -1378,10 +1420,38 @@ fn selected_segment_view_model(
                 .iter()
                 .find(|candidate| candidate.material_id == segment.material_id)
                 .cloned();
+            let source_start = format_timeline_time(segment.source_timerange.start.get());
+            let source_duration = format_timeline_time(segment.source_timerange.duration.get());
+            let target_start = format_timeline_time(segment.target_timerange.start.get());
+            let target_duration = format_timeline_time(segment.target_timerange.duration.get());
+            let has_text = segment.text.is_some();
+            let has_audio_controls = track.kind == TrackKind::Audio
+                || material
+                    .as_ref()
+                    .is_some_and(|material| match material.kind {
+                        MaterialKind::Audio => true,
+                        MaterialKind::Video => material.metadata.has_audio,
+                        _ => false,
+                    });
             return Some(SelectedSegmentViewModel {
-                segment: segment.clone(),
+                segment_key: segment.segment_id.as_str().to_owned(),
+                selection_handle: timeline_segment_selection_handle(
+                    &track.track_id,
+                    &segment.segment_id,
+                ),
                 track: selected_track_view_model_from_track(track),
                 material,
+                source_timerange: segment.source_timerange.clone(),
+                target_timerange: segment.target_timerange.clone(),
+                source_label: format!("源 {source_start} / {source_duration}"),
+                target_label: format!("目标 {target_start} / {target_duration}"),
+                visual: segment.visual.clone(),
+                volume: segment.volume,
+                audio: segment.audio.clone(),
+                text: segment.text.clone(),
+                keyframes: segment.keyframes.clone(),
+                has_text,
+                has_audio_controls,
             });
         }
     }
@@ -1416,6 +1486,20 @@ fn timeline_view_model(draft: &Draft, selection: &TimelineSelection) -> Timeline
             .into_iter()
             .map(Microseconds::new)
             .collect(),
+        capabilities: timeline_capabilities_view_model(draft),
+    }
+}
+
+fn timeline_capabilities_view_model(draft: &Draft) -> TimelineCapabilitiesViewModel {
+    TimelineCapabilitiesViewModel {
+        has_text_track: draft
+            .tracks
+            .iter()
+            .any(|track| track.kind == TrackKind::Text),
+        has_audio_track: draft
+            .tracks
+            .iter()
+            .any(|track| track.kind == TrackKind::Audio),
     }
 }
 
@@ -1425,6 +1509,10 @@ fn timeline_track_row_view_model(
     track: &Track,
 ) -> TimelineTrackRowViewModel {
     let kind_label = format_track_kind(track.kind);
+    let selection_handle = timeline_track_selection_handle(&track.track_id);
+    let selected = selection.track_ids.contains(&track.track_id);
+    let can_toggle_visibility = track.kind != TrackKind::Audio;
+    let can_toggle_mute = track.kind == TrackKind::Audio;
     let segments = track
         .segments
         .iter()
@@ -1432,8 +1520,9 @@ fn timeline_track_row_view_model(
         .collect();
 
     TimelineTrackRowViewModel {
-        track: track.clone(),
-        selection_handle: timeline_track_selection_handle(&track.track_id),
+        row_key: selection_handle.clone(),
+        selection_handle,
+        name: track.name.clone(),
         symbol: timeline_track_symbol(track.kind).to_owned(),
         kind_label: kind_label.to_owned(),
         status_label: format!("{kind_label} · {} 片段", track.segments.len()),
@@ -1457,6 +1546,25 @@ fn timeline_track_row_view_model(
         }
         .to_owned(),
         row_class_name: timeline_track_row_class_name(track, selection),
+        selected,
+        lock_active: track.locked,
+        visibility_active: if track.kind == TrackKind::Audio {
+            !track.muted
+        } else {
+            track.visible
+        },
+        mute_active: track.muted,
+        can_toggle_visibility,
+        can_toggle_mute,
+        next_locked: !track.locked,
+        next_visible: !track.visible,
+        next_muted: !track.muted,
+        visibility_symbol: if track.kind == TrackKind::Audio {
+            "听"
+        } else {
+            "眼"
+        }
+        .to_owned(),
         segments,
     }
 }
@@ -1477,22 +1585,49 @@ fn timeline_segment_view_model(
     let source_duration = format_timeline_time(segment.source_timerange.duration.get());
     let target_start = format_timeline_time(segment.target_timerange.start.get());
     let target_duration = format_timeline_time(segment.target_timerange.duration.get());
+    let label = material
+        .as_ref()
+        .map(|material| material.display_name.clone())
+        .unwrap_or_else(|| format!("片段 {}", segment.segment_id.as_str()));
 
     TimelineSegmentViewModel {
-        segment: segment.clone(),
+        segment_key: segment.segment_id.as_str().to_owned(),
         selection_handle: timeline_segment_selection_handle(&track.track_id, &segment.segment_id),
-        label: material
-            .as_ref()
-            .map(|material| material.display_name.clone())
-            .unwrap_or_else(|| format!("片段 {}", segment.segment_id.as_str())),
+        waveform_material_id: Some(segment.material_id.clone()),
+        label: label.clone(),
         source_label: format!("源 {source_start} / {source_duration}"),
         target_label: format!("目标 {target_start} / {target_duration}"),
         visual_kind: timeline_segment_visual_kind(track.kind, material.as_ref()),
         start: segment.target_timerange.start,
         duration: segment.target_timerange.duration,
         selected,
+        keyframe_markers: timeline_keyframe_markers(segment, &label),
         material,
     }
+}
+
+fn timeline_keyframe_markers(
+    segment: &Segment,
+    segment_label: &str,
+) -> Vec<TimelineKeyframeMarkerViewModel> {
+    let duration = segment.target_timerange.duration.get().max(1);
+    segment
+        .keyframes
+        .iter()
+        .map(|keyframe| {
+            let clamped_at = keyframe.at.get().min(duration);
+            let position_per_mille = ((clamped_at.saturating_mul(1_000)) / duration) as u32;
+            let property_label = format_keyframe_property(&keyframe.property);
+            let time_label = format_timeline_time(keyframe.at.get());
+            let easing_label = format_keyframe_easing(keyframe.easing);
+            TimelineKeyframeMarkerViewModel {
+                marker_key: format!("{:?}-{}", keyframe.property, keyframe.at.get()),
+                position_per_mille,
+                title: format!("{property_label}关键帧 {time_label} · {easing_label}"),
+                aria_label: format!("{segment_label} {property_label}关键帧 {time_label}"),
+            }
+        })
+        .collect()
 }
 
 fn timeline_duration(draft: &Draft) -> u64 {
@@ -1579,6 +1714,40 @@ fn timeline_track_symbol(kind: TrackKind) -> &'static str {
         TrackKind::Text => "T",
         TrackKind::Sticker => "◇",
         TrackKind::Filter => "◐",
+    }
+}
+
+fn format_keyframe_property(property: &KeyframeProperty) -> &'static str {
+    match property {
+        KeyframeProperty::VisualPositionX => "位置 X",
+        KeyframeProperty::VisualPositionY => "位置 Y",
+        KeyframeProperty::VisualScaleX => "缩放 X",
+        KeyframeProperty::VisualScaleY => "缩放 Y",
+        KeyframeProperty::VisualRotation => "旋转",
+        KeyframeProperty::VisualOpacity => "不透明度",
+        KeyframeProperty::TextFontSize => "字号",
+        KeyframeProperty::TextColor => "颜色",
+        KeyframeProperty::TextLineHeight => "行高",
+        KeyframeProperty::TextLetterSpacing => "字间距",
+        KeyframeProperty::TextLayoutX => "布局 X",
+        KeyframeProperty::TextLayoutY => "布局 Y",
+        KeyframeProperty::TextLayoutWidth => "布局宽",
+        KeyframeProperty::TextLayoutHeight => "布局高",
+        KeyframeProperty::Volume => "音量",
+        KeyframeProperty::StickerPositionX => "贴纸位置 X",
+        KeyframeProperty::StickerPositionY => "贴纸位置 Y",
+        KeyframeProperty::StickerScaleX => "贴纸缩放 X",
+        KeyframeProperty::StickerScaleY => "贴纸缩放 Y",
+        KeyframeProperty::FilterParameterUnsupported => "滤镜参数",
+    }
+}
+
+fn format_keyframe_easing(easing: KeyframeEasing) -> &'static str {
+    match easing {
+        KeyframeEasing::None => "无",
+        KeyframeEasing::EaseIn => "缓入",
+        KeyframeEasing::EaseOut => "缓出",
+        KeyframeEasing::EaseInOut => "缓入缓出",
     }
 }
 

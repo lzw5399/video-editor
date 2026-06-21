@@ -228,7 +228,7 @@ export function Inspector({
   const [fadeInUs, setFadeInUs] = useState(0);
   const [fadeOutUs, setFadeOutUs] = useState(0);
   const sequenceDuration = workspace.viewModel.project.sequenceDuration;
-  const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
+  const hasText = selected?.text !== null && selected?.text !== undefined;
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
   const visibleTabs = useMemo(() => inspectorTabsForSelection(selected), [selected]);
   const effectiveActiveTab =
@@ -259,72 +259,72 @@ export function Inspector({
       return;
     }
 
-    setVolumePercent(Math.round((selected.segment.audio?.gainMillis ?? selected.segment.volume.levelMillis) / 10));
-    setPanPercent(Math.round((selected.segment.audio?.panBalanceMillis ?? 0) / 10));
-    setFadeInUs(selected.segment.audio?.fadeInDuration.duration ?? 0);
-    setFadeOutUs(selected.segment.audio?.fadeOutDuration.duration ?? 0);
+    setVolumePercent(Math.round((selected.audio?.gainMillis ?? selected.volume.levelMillis) / 10));
+    setPanPercent(Math.round((selected.audio?.panBalanceMillis ?? 0) / 10));
+    setFadeInUs(selected.audio?.fadeInDuration.duration ?? 0);
+    setFadeOutUs(selected.audio?.fadeOutDuration.duration ?? 0);
 
-    if (selected.segment.text === null || selected.segment.text === undefined) {
+    if (selected.text === null || selected.text === undefined) {
       setTextState(DEFAULT_TEXT_STATE);
       return;
     }
 
     setTextState({
-      content: selected.segment.text.content,
-      fontSize: selected.segment.text.style.fontSize,
-      color: selected.segment.text.style.color,
-      alignment: selected.segment.text.style.alignment,
-      strokeColor: selected.segment.text.style.stroke?.color ?? "#000000",
-      strokeWidth: selected.segment.text.style.stroke?.width ?? 2,
-      strokeEnabled: selected.segment.text.style.stroke !== null && selected.segment.text.style.stroke !== undefined,
-      shadowColor: selected.segment.text.style.shadow?.color ?? "#222222",
-      shadowEnabled: selected.segment.text.style.shadow !== null && selected.segment.text.style.shadow !== undefined,
-      backgroundColor: selected.segment.text.style.background?.color ?? "#101010",
+      content: selected.text.content,
+      fontSize: selected.text.style.fontSize,
+      color: selected.text.style.color,
+      alignment: selected.text.style.alignment,
+      strokeColor: selected.text.style.stroke?.color ?? "#000000",
+      strokeWidth: selected.text.style.stroke?.width ?? 2,
+      strokeEnabled: selected.text.style.stroke !== null && selected.text.style.stroke !== undefined,
+      shadowColor: selected.text.style.shadow?.color ?? "#222222",
+      shadowEnabled: selected.text.style.shadow !== null && selected.text.style.shadow !== undefined,
+      backgroundColor: selected.text.style.background?.color ?? "#101010",
       backgroundEnabled:
-        selected.segment.text.style.background !== null && selected.segment.text.style.background !== undefined,
-      fontFamily: selected.segment.text.style.font.family,
-      fontRef: selected.segment.text.style.font.fontRef ?? null,
-      lineHeightMillis: selected.segment.text.style.lineHeightMillis,
-      letterSpacingMillis: selected.segment.text.style.letterSpacingMillis,
-      textBoxWidthMillis: selected.segment.text.textBox.widthMillis,
-      textBoxHeightMillis: selected.segment.text.textBox.heightMillis,
-      layoutXMillis: selected.segment.text.layoutRegion.xMillis,
-      layoutYMillis: selected.segment.text.layoutRegion.yMillis,
-      layoutWidthMillis: selected.segment.text.layoutRegion.widthMillis,
-      layoutHeightMillis: selected.segment.text.layoutRegion.heightMillis,
-      wrapping: selected.segment.text.wrapping,
-      source: selected.segment.text.source
+        selected.text.style.background !== null && selected.text.style.background !== undefined,
+      fontFamily: selected.text.style.font.family,
+      fontRef: selected.text.style.font.fontRef ?? null,
+      lineHeightMillis: selected.text.style.lineHeightMillis,
+      letterSpacingMillis: selected.text.style.letterSpacingMillis,
+      textBoxWidthMillis: selected.text.textBox.widthMillis,
+      textBoxHeightMillis: selected.text.textBox.heightMillis,
+      layoutXMillis: selected.text.layoutRegion.xMillis,
+      layoutYMillis: selected.text.layoutRegion.yMillis,
+      layoutWidthMillis: selected.text.layoutRegion.widthMillis,
+      layoutHeightMillis: selected.text.layoutRegion.heightMillis,
+      wrapping: selected.text.wrapping,
+      source: selected.text.source
     });
   }, [
-    selected?.segment.segmentId,
-    selected?.segment.volume.levelMillis,
-    selected?.segment.audio?.gainMillis,
-    selected?.segment.audio?.panBalanceMillis,
-    selected?.segment.audio?.fadeInDuration.duration,
-    selected?.segment.audio?.fadeOutDuration.duration,
-    selected?.segment.text?.content,
-    selected?.segment.text?.style.fontSize,
-    selected?.segment.text?.style.color,
-    selected?.segment.text?.style.alignment,
-    selected?.segment.text?.style.stroke !== null && selected?.segment.text?.style.stroke !== undefined,
-    selected?.segment.text?.style.stroke?.color,
-    selected?.segment.text?.style.stroke?.width,
-    selected?.segment.text?.style.shadow !== null && selected?.segment.text?.style.shadow !== undefined,
-    selected?.segment.text?.style.shadow?.color,
-    selected?.segment.text?.style.background !== null && selected?.segment.text?.style.background !== undefined,
-    selected?.segment.text?.style.background?.color,
-    selected?.segment.text?.style.font.family,
-    selected?.segment.text?.style.font.fontRef,
-    selected?.segment.text?.style.lineHeightMillis,
-    selected?.segment.text?.style.letterSpacingMillis,
-    selected?.segment.text?.textBox.widthMillis,
-    selected?.segment.text?.textBox.heightMillis,
-    selected?.segment.text?.layoutRegion.xMillis,
-    selected?.segment.text?.layoutRegion.yMillis,
-    selected?.segment.text?.layoutRegion.widthMillis,
-    selected?.segment.text?.layoutRegion.heightMillis,
-    selected?.segment.text?.wrapping,
-    selected?.segment.text?.source
+    selected?.segmentKey,
+    selected?.volume.levelMillis,
+    selected?.audio?.gainMillis,
+    selected?.audio?.panBalanceMillis,
+    selected?.audio?.fadeInDuration.duration,
+    selected?.audio?.fadeOutDuration.duration,
+    selected?.text?.content,
+    selected?.text?.style.fontSize,
+    selected?.text?.style.color,
+    selected?.text?.style.alignment,
+    selected?.text?.style.stroke !== null && selected?.text?.style.stroke !== undefined,
+    selected?.text?.style.stroke?.color,
+    selected?.text?.style.stroke?.width,
+    selected?.text?.style.shadow !== null && selected?.text?.style.shadow !== undefined,
+    selected?.text?.style.shadow?.color,
+    selected?.text?.style.background !== null && selected?.text?.style.background !== undefined,
+    selected?.text?.style.background?.color,
+    selected?.text?.style.font.family,
+    selected?.text?.style.font.fontRef,
+    selected?.text?.style.lineHeightMillis,
+    selected?.text?.style.letterSpacingMillis,
+    selected?.text?.textBox.widthMillis,
+    selected?.text?.textBox.heightMillis,
+    selected?.text?.layoutRegion.xMillis,
+    selected?.text?.layoutRegion.yMillis,
+    selected?.text?.layoutRegion.widthMillis,
+    selected?.text?.layoutRegion.heightMillis,
+    selected?.text?.wrapping,
+    selected?.text?.source
   ]);
 
   useEffect(() => {
@@ -369,10 +369,10 @@ export function Inspector({
         heightMillis: textState.layoutHeightMillis
       },
       wrapping: textState.wrapping,
-      bubble: selected?.segment.text?.bubble ?? null,
-      effect: selected?.segment.text?.effect ?? null
+      bubble: selected?.text?.bubble ?? null,
+      effect: selected?.text?.effect ?? null
     }),
-    [selected?.segment.text?.bubble, selected?.segment.text?.effect, textState]
+    [selected?.text?.bubble, selected?.text?.effect, textState]
   );
   const textValidationMessage = validateTextForm(textState);
 
@@ -417,19 +417,19 @@ export function Inspector({
                   <h3>片段参数</h3>
                 </div>
                 <dl className="inspector-list compact">
-                  {showDeveloperDiagnostics ? <InspectorDatum label="片段ID" value={selected.segment.segmentId} /> : null}
+                  {showDeveloperDiagnostics ? <InspectorDatum label="片段ID" value={selected.segmentKey} /> : null}
                   <InspectorDatum label="素材" value={selected.material?.displayName ?? "未关联素材"} />
                   <InspectorDatum label="轨道" value={`${selected.track.name} / ${selected.track.kindLabel}`} />
                   <InspectorDatum
                     label="源时间"
-                    value={`${formatMicroseconds(selected.segment.sourceTimerange.start)} / ${formatMicroseconds(
-                      selected.segment.sourceTimerange.duration
+                    value={`${formatMicroseconds(selected.sourceTimerange.start)} / ${formatMicroseconds(
+                      selected.sourceTimerange.duration
                     )}`}
                   />
                   <InspectorDatum
                     label="目标时间"
-                    value={`${formatMicroseconds(selected.segment.targetTimerange.start)} / ${formatMicroseconds(
-                      selected.segment.targetTimerange.duration
+                    value={`${formatMicroseconds(selected.targetTimerange.start)} / ${formatMicroseconds(
+                      selected.targetTimerange.duration
                     )}`}
                   />
                 </dl>
@@ -441,7 +441,7 @@ export function Inspector({
                   {renderKeyframeButton("visualPositionX", "位置 X")}
                 </div>
                 <SegmentVisualControls
-                  visual={selected.segment.visual}
+                  visual={selected.visual}
                   pending={workspace.pendingCommand !== null}
                   renderKeyframeButton={renderKeyframeButton}
                   onUpdateVisual={onUpdateSelectedSegmentVisual}
@@ -1148,7 +1148,7 @@ function AnimationInspectorTab({
   const visibleProperties = visibleGroups.flatMap((group) => [...group.properties]);
   const activeFocusedProperty = visibleProperties.includes(focusedProperty) ? focusedProperty : visibleProperties[0];
   const supportedFocused = isSupportedPropertyForSegment(selected, activeFocusedProperty);
-  const focusedKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === activeFocusedProperty);
+  const focusedKeyframes = selected.keyframes.filter((keyframe) => keyframe.property === activeFocusedProperty);
   const segmentName = selected.material?.displayName ?? "未关联素材";
 
   return (
@@ -1159,14 +1159,14 @@ function AnimationInspectorTab({
 
       <div className="animation-summary" aria-label="关键帧概览">
         <strong>{segmentName}</strong>
-        <span>{selected.segment.keyframes.length} 个关键帧</span>
+        <span>{selected.keyframes.length} 个关键帧</span>
         <span>播放头 {formatMicroseconds(playheadAt)}</span>
         <em>当前 {formatKeyframeProperty(activeFocusedProperty)}</em>
       </div>
 
       {pending ? <p className="keyframe-pending">关键帧命令处理中</p> : null}
 
-      {selected.segment.keyframes.length === 0 ? (
+      {selected.keyframes.length === 0 ? (
         <div className="empty-state compact-empty keyframe-empty">
           <strong>还没有关键帧</strong>
           <span>在画面、文本或音频参数旁点击菱形，可在当前播放头添加关键帧。</span>
@@ -1180,7 +1180,7 @@ function AnimationInspectorTab({
               <strong>{group.name}</strong>
             </div>
             {group.properties.map((property) => {
-              const count = selected.segment.keyframes.filter((keyframe) => keyframe.property === property).length;
+              const count = selected.keyframes.filter((keyframe) => keyframe.property === property).length;
               const supported = isSupportedPropertyForSegment(selected, property);
               return (
                 <button
@@ -1221,10 +1221,10 @@ function AnimationInspectorTab({
               <KeyframeDetailRow
                 key={`${keyframe.property}-${keyframe.at}`}
                 keyframe={keyframe}
-                active={selected.segment.targetTimerange.start + keyframe.at === playheadAt}
+                active={selected.targetTimerange.start + keyframe.at === playheadAt}
                 pending={pending}
                 onRemove={() =>
-                  onRemoveKeyframe(keyframe.property, selected.segment.targetTimerange.start + keyframe.at)
+                  onRemoveKeyframe(keyframe.property, selected.targetTimerange.start + keyframe.at)
                 }
               />
             ))}
@@ -1337,9 +1337,9 @@ function KeyframeButton({
     );
   }
 
-  const propertyKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === property);
+  const propertyKeyframes = selected.keyframes.filter((keyframe) => keyframe.property === property);
   const activeKeyframe = propertyKeyframes.find(
-    (keyframe) => selected.segment.targetTimerange.start + keyframe.at === playheadAt
+    (keyframe) => selected.targetTimerange.start + keyframe.at === playheadAt
   );
   const disabled = pending;
 
@@ -1352,7 +1352,7 @@ function KeyframeButton({
         aria-label={label}
         title={label}
         disabled={disabled}
-        onClick={() => onRemove?.(selected.segment.targetTimerange.start + activeKeyframe.at)}
+        onClick={() => onRemove?.(selected.targetTimerange.start + activeKeyframe.at)}
       >
         <span aria-hidden="true">◆</span>
       </button>
@@ -1429,7 +1429,7 @@ function TextNumberField({
 
 function isSupportedPropertyForSegment(selected: SelectedSegmentView, property: KeyframeProperty): boolean {
   if (TEXT_KEYFRAME_PROPERTIES.includes(property)) {
-    return selected.segment.text !== null && selected.segment.text !== undefined;
+    return selected.text !== null && selected.text !== undefined;
   }
 
   return true;
@@ -1479,11 +1479,8 @@ function selectedSegmentContext(selected: SelectedSegmentView): {
   hasAudioSemantics: boolean;
 } {
   const materialKind = selected.material?.kind;
-  const hasText = selected.segment.text !== null && selected.segment.text !== undefined;
-  const hasAudioSemantics =
-    selected.track.kindLabel === "音频" ||
-    materialKind === "audio" ||
-    (materialKind === "video" && selected.material?.metadata.hasAudio === true);
+  const hasText = selected.hasText;
+  const hasAudioSemantics = selected.hasAudioControls;
 
   return { materialKind, hasText, hasAudioSemantics };
 }

@@ -275,7 +275,7 @@ export function PreviewMonitor({
     preview.frameDisplayUrl === null && !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (selectedSegment === null || !selectedSegment.segment.visual.visible) {
+    if (selectedSegment === null || !selectedSegment.visual.visible) {
       return;
     }
 
@@ -297,7 +297,7 @@ export function PreviewMonitor({
       startClientY: event.clientY,
       lastClientX: event.clientX,
       lastClientY: event.clientY,
-      startVisual: selectedSegment.segment.visual,
+      startVisual: selectedSegment.visual,
       canvasWidth: canvasRect.width,
       canvasHeight: canvasRect.height,
       moved: false
@@ -467,8 +467,8 @@ export function PreviewMonitor({
           <div
             className="preview-selection-outline"
             aria-label="预览选中框"
-            data-segment-id={selectedSegment.segment.segmentId}
-            data-fit-mode={selectedSegment.segment.visual.fitMode}
+            data-segment-id={selectedSegment.segmentKey}
+            data-fit-mode={selectedSegment.visual.fitMode}
             style={selectionOverlayStyle}
             onPointerDown={handlePreviewDragPointerDown}
             onPointerMove={handlePreviewDragPointerMove}
@@ -476,19 +476,19 @@ export function PreviewMonitor({
             onPointerCancel={handlePreviewDragPointerCancel}
           />
         ) : null}
-        {selectedSegment !== null && selectedSegment.segment.text !== null && textOverlayStyle !== null ? (
+        {selectedSegment !== null && selectedSegment.text !== null && textOverlayStyle !== null ? (
           <div
             className="preview-text-overlay"
             aria-label="预览文字"
-            data-segment-id={selectedSegment.segment.segmentId}
-            data-text-source={selectedSegment.segment.text.source}
+            data-segment-id={selectedSegment.segmentKey}
+            data-text-source={selectedSegment.text.source}
             style={textOverlayStyle}
             onPointerDown={handlePreviewDragPointerDown}
             onPointerMove={handlePreviewDragPointerMove}
             onPointerUp={handlePreviewDragPointerUp}
             onPointerCancel={handlePreviewDragPointerCancel}
           >
-            {selectedSegment.segment.text.content}
+            {selectedSegment.text.content}
           </div>
         ) : null}
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
@@ -825,11 +825,11 @@ function formatRealtimePreviewFallbackArtifact(
 }
 
 function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
-  if (selectedSegment === null || !selectedSegment.segment.visual.visible) {
+  if (selectedSegment === null || !selectedSegment.visual.visible) {
     return null;
   }
 
-  const visual = selectedSegment.segment.visual;
+  const visual = selectedSegment.visual;
   const crop = visual.transform.crop;
   const remainingWidthMillis = Math.max(1, 1000 - crop.leftMillis - crop.rightMillis);
   const remainingHeightMillis = Math.max(1, 1000 - crop.topMillis - crop.bottomMillis);
@@ -864,16 +864,16 @@ function clampCanvasPosition(value: number): number {
 function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
   if (
     selectedSegment === null ||
-    !selectedSegment.segment.visual.visible ||
-    selectedSegment.segment.text === null ||
-    selectedSegment.segment.text === undefined ||
-    selectedSegment.segment.text.content.trim().length === 0
+    !selectedSegment.visual.visible ||
+    selectedSegment.text === null ||
+    selectedSegment.text === undefined ||
+    selectedSegment.text.content.trim().length === 0
   ) {
     return null;
   }
 
-  const text = selectedSegment.segment.text;
-  const visual = selectedSegment.segment.visual;
+  const text = selectedSegment.text;
+  const visual = selectedSegment.visual;
   const region = text.layoutRegion;
   const style = text.style;
   const textBoxWidth = clampMillis(text.textBox.widthMillis);

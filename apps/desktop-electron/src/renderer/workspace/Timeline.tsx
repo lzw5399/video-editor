@@ -4,8 +4,6 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { TrackKind } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
-  formatKeyframeEasing,
-  formatKeyframeProperty,
   formatTimelineTime,
   segmentBlockStyle,
   type TimelineSegmentView,
@@ -186,7 +184,7 @@ export function Timeline({
           />
           {timeline.rows.map((row) => (
             <TimelineTrackRow
-              key={row.track.trackId}
+              key={row.rowKey}
               row={row}
               waveform={workspace.waveform}
               timelineDuration={timeline.duration}
@@ -423,24 +421,24 @@ function TimelineTrackRow({
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   pending: boolean;
 }): React.ReactElement {
-  const [draftName, setDraftName] = useState(row.track.name);
-  const selected = row.rowClassName.includes("selected-track");
-  const canToggleVisibility = row.track.kind !== "audio" && onSetTrackVisibility !== undefined;
+  const [draftName, setDraftName] = useState(row.name);
+  const selected = row.selected;
+  const canToggleVisibility = row.canToggleVisibility && onSetTrackVisibility !== undefined;
 
   useEffect(() => {
-    setDraftName(row.track.name);
-  }, [row.track.name]);
+    setDraftName(row.name);
+  }, [row.name]);
 
   const commitName = useCallback((value: string) => {
     const trimmed = value.trim();
     if (trimmed.length === 0) {
-      setDraftName(row.track.name);
+      setDraftName(row.name);
       return;
     }
-    if (trimmed !== row.track.name) {
+    if (trimmed !== row.name) {
       onRenameTrack?.(row.selectionHandle, trimmed);
     }
-  }, [onRenameTrack, row.selectionHandle, row.track.name]);
+  }, [onRenameTrack, row.selectionHandle, row.name]);
 
   return (
     <div className={row.rowClassName}>
@@ -449,9 +447,9 @@ function TimelineTrackRow({
           <button
             type="button"
             className="track-target-button"
-            aria-label={`选择轨道 ${row.track.name}`}
+            aria-label={`选择轨道 ${row.name}`}
             aria-pressed={selected}
-            title={`选择轨道 ${row.track.name}`}
+            title={`选择轨道 ${row.name}`}
             onClick={() => onSelectTrack?.(row.selectionHandle)}
             disabled={pending || onSelectTrack === undefined}
           >
@@ -461,7 +459,7 @@ function TimelineTrackRow({
           </button>
           <input
             className="track-name-input"
-            aria-label={`${row.track.name} 名称`}
+            aria-label={`${row.name} 名称`}
             value={draftName}
             disabled={pending || onRenameTrack === undefined}
             onChange={(event) => setDraftName(event.currentTarget.value)}
@@ -472,33 +470,33 @@ function TimelineTrackRow({
                 commitName(event.currentTarget.value);
               }
               if (event.key === "Escape") {
-                setDraftName(row.track.name);
+                setDraftName(row.name);
                 event.currentTarget.blur();
               }
             }}
           />
         </div>
-        <div className="track-header-controls" aria-label={`${row.track.name} 状态`}>
+        <div className="track-header-controls" aria-label={`${row.name} 状态`}>
           <TrackStateButton
-            label={`${row.track.name} 锁定状态：${row.lockLabel}`}
+            label={`${row.name} 锁定状态：${row.lockLabel}`}
             symbol="锁"
-            active={row.track.locked}
+            active={row.lockActive}
             disabled={pending || onSetTrackLock === undefined}
-            onClick={() => onSetTrackLock?.(row.selectionHandle, !row.track.locked)}
+            onClick={() => onSetTrackLock?.(row.selectionHandle, row.nextLocked)}
           />
           <TrackStateButton
-            label={`${row.track.name} 可见状态：${row.visibilityLabel}`}
-            symbol={row.track.kind === "audio" ? "听" : "眼"}
-            active={row.track.kind === "audio" ? !row.track.muted : row.track.visible}
+            label={`${row.name} 可见状态：${row.visibilityLabel}`}
+            symbol={row.visibilitySymbol}
+            active={row.visibilityActive}
             disabled={pending || !canToggleVisibility}
-            onClick={() => onSetTrackVisibility?.(row.selectionHandle, !row.track.visible)}
+            onClick={() => onSetTrackVisibility?.(row.selectionHandle, row.nextVisible)}
           />
           <TrackStateButton
-            label={`${row.track.name} 静音状态：${row.muteLabel}`}
+            label={`${row.name} 静音状态：${row.muteLabel}`}
             symbol="静"
-            active={row.track.muted}
-            disabled={pending || row.track.kind !== "audio" || onSetTrackMute === undefined}
-            onClick={() => onSetTrackMute?.(row.selectionHandle, !row.track.muted)}
+            active={row.muteActive}
+            disabled={pending || !row.canToggleMute || onSetTrackMute === undefined}
+            onClick={() => onSetTrackMute?.(row.selectionHandle, row.nextMuted)}
           />
         </div>
         <span className="track-status-line">
@@ -508,7 +506,7 @@ function TimelineTrackRow({
       <div className="segment-lane">
         {row.segments.map((segment) => (
           <TimelineSegmentBlock
-            key={segment.segment.segmentId}
+            key={segment.segmentKey}
             segment={segment}
             waveform={waveform}
             timelineDuration={timelineDuration}
@@ -652,20 +650,20 @@ function TimelineSegmentBlock({
       />
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
-      {showAudioWaveform ? <AudioWaveform waveform={waveform} materialId={segment.segment.materialId} /> : null}
-      {segment.segment.keyframes.length > 0 && showKeyframeStrip ? (
+      {showAudioWaveform && segment.waveformMaterialId !== null ? (
+        <AudioWaveform waveform={waveform} materialId={segment.waveformMaterialId} />
+      ) : null}
+      {segment.keyframeMarkers.length > 0 && showKeyframeStrip ? (
         <span className="segment-keyframe-strip" aria-label="关键帧标记">
-          {segment.segment.keyframes.map((keyframe) => (
+          {segment.keyframeMarkers.map((marker) => (
             <span
-              key={`${keyframe.property}-${keyframe.at}`}
+              key={marker.markerKey}
               className="segment-keyframe-marker"
               style={{
-                left: `${(Math.max(0, Math.min(segment.duration, keyframe.at)) / Math.max(1, segment.duration)) * 100}%`
+                left: `${marker.positionPerMille / 10}%`
               }}
-              title={`${formatKeyframeProperty(keyframe.property)}关键帧 ${formatTimelineTime(keyframe.at)} · ${formatKeyframeEasing(
-                keyframe.easing
-              )}`}
-              aria-label={`${segment.label} ${formatKeyframeProperty(keyframe.property)}关键帧 ${formatTimelineTime(keyframe.at)}`}
+              title={marker.title}
+              aria-label={marker.ariaLabel}
             />
           ))}
         </span>

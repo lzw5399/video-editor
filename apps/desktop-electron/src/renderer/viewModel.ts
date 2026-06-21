@@ -659,7 +659,11 @@ export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
     timeline: {
       rows: [],
       duration: 10_000_000,
-      rulerTicks: buildRulerTicks(10_000_000)
+      rulerTicks: buildRulerTicks(10_000_000),
+      capabilities: {
+        hasTextTrack: false,
+        hasAudioTrack: false
+      }
     },
     selectedTrack: null,
     selectedSegment: null

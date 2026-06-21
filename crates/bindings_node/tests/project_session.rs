@@ -144,6 +144,30 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
         added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["selectionHandle"],
         "timeline-segment:video-track:segment-1"
     );
+    assert!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]
+            .get("track")
+            .is_none(),
+        "timeline rows must not expose raw Track payloads: {added:#}"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]["name"],
+        "Video"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["timeline"]["capabilities"]["hasAudioTrack"],
+        false
+    );
+    assert!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]
+            .get("segment")
+            .is_none(),
+        "timeline segment views must not expose raw Segment payloads: {added:#}"
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["segmentKey"],
+        "segment-1"
+    );
     assert_eq!(
         added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["targetLabel"],
         "目标 00:00:00.000 / 00:00:01.000"
@@ -155,8 +179,14 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     assert_eq!(added["data"]["viewModel"]["project"]["trackCount"], 1);
     assert_eq!(added["data"]["viewModel"]["project"]["materialCount"], 1);
     assert_edit_controls(&added["data"]["viewModel"], true, false, true, true, true);
+    assert!(
+        added["data"]["viewModel"]["selectedSegment"]
+            .get("segment")
+            .is_none(),
+        "selected segment view must not expose raw Segment payloads: {added:#}"
+    );
     assert_eq!(
-        added["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
+        added["data"]["viewModel"]["selectedSegment"]["segmentKey"],
         "segment-1"
     );
 
@@ -671,7 +701,7 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
     assert_eq!(selected["data"]["revision"], 1);
     assert_eq!(selected["data"]["selection"]["segmentIds"][0], "segment-1");
     assert_eq!(
-        selected["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
+        selected["data"]["viewModel"]["selectedSegment"]["segmentKey"],
         "segment-1"
     );
     assert_eq!(
@@ -852,7 +882,7 @@ fn project_session_view_model_encodes_timeline_item_handles() {
     .expect("encoded handle selection should return an envelope");
     assert_eq!(selected["ok"], true, "{selected:#}");
     assert_eq!(
-        selected["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
+        selected["data"]["viewModel"]["selectedSegment"]["segmentKey"],
         "segment:1"
     );
     assert_eq!(selected["data"]["revision"], 0);

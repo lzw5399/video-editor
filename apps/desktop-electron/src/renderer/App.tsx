@@ -2976,7 +2976,7 @@ function normalizePlayheadTime(value: number): number {
 }
 
 function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
-  return response.viewModel.selectedSegment?.segment.targetTimerange.start ?? null;
+  return response.viewModel.selectedSegment?.targetTimerange.start ?? null;
 }
 
 function isFrameAlignedSequenceEnd(

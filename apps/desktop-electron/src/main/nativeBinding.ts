@@ -21,19 +21,21 @@ import type {
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
+  Keyframe,
   Material,
   MaterialId,
   MaterialKind,
   Microseconds,
-  Segment,
+  SegmentAudio,
+  SourceTimerange,
   SegmentVisual,
   SegmentVolume,
+  TargetTimerange,
   TextBox,
   TextLayoutRegion,
   TextSegment,
   TextStyle,
   TextWrapping,
-  Track,
   TrackKind
 } from "../generated/Draft";
 
@@ -256,20 +258,39 @@ export type SelectedTrackViewModel = {
 };
 
 export type SelectedSegmentViewModel = {
-  segment: Segment;
+  segmentKey: string;
+  selectionHandle: string;
   track: SelectedTrackViewModel;
   material: Material | null;
+  sourceTimerange: SourceTimerange;
+  targetTimerange: TargetTimerange;
+  sourceLabel: string;
+  targetLabel: string;
+  visual: SegmentVisual;
+  volume: SegmentVolume;
+  audio: SegmentAudio;
+  text: TextSegment | null;
+  keyframes: Keyframe[];
+  hasText: boolean;
+  hasAudioControls: boolean;
 };
 
 export type TimelineViewModel = {
   rows: TimelineTrackRowViewModel[];
   duration: Microseconds;
   rulerTicks: Microseconds[];
+  capabilities: TimelineCapabilitiesViewModel;
+};
+
+export type TimelineCapabilitiesViewModel = {
+  hasTextTrack: boolean;
+  hasAudioTrack: boolean;
 };
 
 export type TimelineTrackRowViewModel = {
-  track: Track;
+  rowKey: string;
   selectionHandle: string;
+  name: string;
   symbol: string;
   kindLabel: string;
   statusLabel: string;
@@ -277,12 +298,23 @@ export type TimelineTrackRowViewModel = {
   visibilityLabel: string;
   muteLabel: string;
   rowClassName: string;
+  selected: boolean;
+  lockActive: boolean;
+  visibilityActive: boolean;
+  muteActive: boolean;
+  canToggleVisibility: boolean;
+  canToggleMute: boolean;
+  nextLocked: boolean;
+  nextVisible: boolean;
+  nextMuted: boolean;
+  visibilitySymbol: string;
   segments: TimelineSegmentViewModel[];
 };
 
 export type TimelineSegmentViewModel = {
-  segment: Segment;
+  segmentKey: string;
   selectionHandle: string;
+  waveformMaterialId: MaterialId | null;
   material: Material | null;
   label: string;
   sourceLabel: string;
@@ -291,6 +323,14 @@ export type TimelineSegmentViewModel = {
   start: Microseconds;
   duration: Microseconds;
   selected: boolean;
+  keyframeMarkers: TimelineKeyframeMarkerViewModel[];
+};
+
+export type TimelineKeyframeMarkerViewModel = {
+  markerKey: string;
+  positionPerMille: number;
+  title: string;
+  ariaLabel: string;
 };
 
 export type TimelineSegmentVisualKind = "video" | "image" | "audio" | "text" | "sticker" | "filter";

@@ -219,7 +219,7 @@ function MaterialPanel({
 function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
   const [textDurationInputSeconds, setTextDurationInputSeconds] = useState(3);
-  const hasTextTrack = workspace.viewModel.timeline.rows.some((row) => row.track.kind === "text");
+  const hasTextTrack = workspace.viewModel.timeline.capabilities.hasTextTrack;
 
   const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
 
@@ -380,7 +380,7 @@ function AudioPanel({
   const [fadeOutSeconds, setFadeOutSeconds] = useState(0);
   const selectedSegment = workspace.viewModel.selectedSegment;
   const selectedTrack = workspace.viewModel.selectedTrack;
-  const hasAudioTrack = workspace.viewModel.timeline.rows.some((row) => row.track.kind === "audio");
+  const hasAudioTrack = workspace.viewModel.timeline.capabilities.hasAudioTrack;
   const selectedMaterialId = materialId || (audioMaterials[0]?.materialId ?? "");
 
   return (

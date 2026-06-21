@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg15 session edit controls view model
-last_updated: "2026-06-21T18:31:34Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg15: session edit controls view model
+stopped_at: Completed quick task 260622-sg16 session opaque timeline view model
+last_updated: "2026-06-21T18:47:59Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg16: session opaque timeline view model
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg15: session edit controls view model
+Last activity: 2026-06-22 -- Completed quick task 260622-sg16: session opaque timeline view model
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -221,6 +221,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Timeline display projection is now emitted by Rust project sessions as `viewModel`: renderer timeline rows, selected track/segment views, item handles, labels, visual kind, and ruler ticks are session-owned, and source guards block renderer projection/handle construction from returning. (URGENT)
 - Project summary display state is now emitted by Rust project sessions as `viewModel.project`: preview title/canvas config, inspector draft summary, sequence duration, frame duration, track count, and material count no longer scan renderer-held `workspace.draft`, and source guards block those product view reads from returning. (URGENT)
 - Edit control display state is now emitted by Rust project sessions as `viewModel.editControls`: timeline undo/redo, split/delete enablement, and snapping display no longer read renderer-held `workspace.commandState` or `workspace.selection`, and source guards block those product workspace reads from returning. (URGENT)
+- Timeline and selected-segment project session view models no longer expose raw `Track` or `Segment` objects: Rust emits explicit display, capability, action-state, keyframe marker, visual/audio/text, and timerange fields; source guards block raw VM exposure and product workspace reads such as `row.track`, `segment.segment`, and `selected.segment`. (URGENT)
 - Product audio preview commands now use Rust project session identity (`projectSessionId` + `expectedRevision`) and no renderer-owned draft payload; Rust audio preview reads canonical project session snapshots internally, with source guards and product/workspace gates preventing draft reintroduction. (URGENT)
 - Product import-material session responses no longer return full `Draft` payloads; renderer updates its material panel from the returned material record while Rust project session remains the canonical draft/persistence owner, and phase3 guards reject reintroducing import response draft payloads. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
@@ -499,6 +500,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg16-session-opaque-timeline-view-model | Removed raw `Track`/`Segment` from project session timeline and selected-segment view models; renderer now consumes Rust-owned capabilities, action state, segment keys, keyframe markers, visual/audio/text fields, and guards block raw VM exposure or product reads from returning. |
 | 2026-06-22 | 260622-sg15-session-edit-controls-view-model | Added Rust session `viewModel.editControls` for undo/redo, snapping, and selected track/segment availability; renderer timeline/inspector now consume it, guards block product workspace legacy edit-state reads, and session intents reject renderer-supplied `draft`/`commandState`/`selection` fields. |
 | 2026-06-22 | 260622-sg14-session-project-summary-view-model | Added Rust session `viewModel.project` for draft name, canvas config, sequence duration, frame duration, and counts; renderer preview/inspector/playback end detection now consume it, and guards block product views from deriving project summary from `workspace.draft`. |
 | 2026-06-22 | 260622-sg13-rust-timeline-view-model | Moved timeline rows, selection handles, selected track/segment views, labels, visual kind, and ruler ticks into Rust project session `viewModel`; renderer now consumes `workspace.viewModel`, and source guards reject renderer-owned timeline projection/handle encoding. |
