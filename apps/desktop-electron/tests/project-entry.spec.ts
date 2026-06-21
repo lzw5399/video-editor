@@ -2,11 +2,9 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { CommandName } from "../src/generated/CommandEnvelope";
-
-type ExecuteCommandCall = {
-  command: CommandName;
-  kind: string;
+type ProjectSessionCall = {
+  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  hasDraftField: boolean;
 };
 
 test.describe.configure({ timeout: 60_000 });
@@ -26,7 +24,7 @@ test("default launch starts at project entry before import", async () => {
   }
 });
 
-test("new project saves through the command bridge before showing import controls", async () => {
+test("new project creates a Rust-owned project session before showing import controls", async () => {
   const bundlePath = testProjectPath("new");
   const { app, page } = await launchProjectEntryApp({
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: bundlePath
@@ -36,7 +34,15 @@ test("new project saves through the command bridge before showing import control
     await expectProjectEntry(page);
     await page.getByRole("button", { name: "新建项目" }).click();
     await expectWorkspace(page);
-    await expect.poll(async () => commandCount(app, "saveProjectBundle"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => projectSessionCommandCount(app, "createProjectSession"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => projectSessionCalls(app), { timeout: 20_000 }).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "createProjectSession",
+          hasDraftField: false
+        })
+      ])
+    );
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
     await expect(page.getByText("草稿包路径")).toHaveCount(0);
   } finally {
@@ -44,7 +50,7 @@ test("new project saves through the command bridge before showing import control
   }
 });
 
-test("open project uses the command bridge and invalid projects show product-safe copy", async () => {
+test("open project uses a Rust-owned project session and invalid projects show product-safe copy", async () => {
   const bundlePath = testProjectPath("open");
   const created = await launchProjectEntryApp({
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: bundlePath
@@ -52,7 +58,7 @@ test("open project uses the command bridge and invalid projects show product-saf
   try {
     await created.page.getByRole("button", { name: "新建项目" }).click();
     await expectWorkspace(created.page);
-    await expect.poll(async () => commandCount(created.app, "saveProjectBundle"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => projectSessionCommandCount(created.app, "createProjectSession"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
   } finally {
     await created.app.close();
   }
@@ -64,7 +70,7 @@ test("open project uses the command bridge and invalid projects show product-saf
     await expectProjectEntry(opened.page);
     await opened.page.getByRole("button", { name: "打开项目" }).click();
     await expectWorkspace(opened.page);
-    await expect.poll(async () => commandCount(opened.app, "openProjectBundle"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => projectSessionCommandCount(opened.app, "openProjectSession"), { timeout: 20_000 }).toBeGreaterThanOrEqual(1);
   } finally {
     await opened.app.close();
   }
@@ -90,7 +96,6 @@ async function launchProjectEntryApp(env: NodeJS.ProcessEnv = {}): Promise<{ app
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
       VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([]),
@@ -116,14 +121,20 @@ async function expectWorkspace(page: Page): Promise<void> {
   await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
 }
 
-async function commandCount(app: ElectronApplication, command: CommandName): Promise<number> {
-  const calls = await app.evaluate(() => {
+async function projectSessionCommandCount(
+  app: ElectronApplication,
+  command: ProjectSessionCall["command"]
+): Promise<number> {
+  return (await projectSessionCalls(app)).filter((call) => call.command === command).length;
+}
+
+async function projectSessionCalls(app: ElectronApplication): Promise<ProjectSessionCall[]> {
+  return app.evaluate(() => {
     return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
+      (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+        .__videoEditorTestProjectSessionCalls ?? []
     );
   });
-  return calls.filter((call) => call.command === command).length;
 }
 
 function testProjectPath(label: string): string {

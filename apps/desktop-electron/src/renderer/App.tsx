@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
+  CreateProjectSessionRequest,
+  ExecuteProjectIntentRequest,
+  OpenProjectSessionRequest,
+  ProjectSessionImportMaterialResponse,
+  ProjectSessionIntentResponse,
+  ProjectSessionOpenResponse,
+  ProjectSessionRequest,
+  ProjectSessionTimelineIntentResponse,
+  ProjectSessionClosedResponse
+} from "../main/nativeBinding";
+import type {
   AudioOutputDeviceSummary,
   AudioPreviewCommandResponse,
   AudioPreviewStatusResponse,
@@ -10,25 +21,19 @@ import type {
   ArtifactStatusSummary,
   CommandResultEnvelope,
   ExportJobStatusResponse,
-  ImportMaterialResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
-  OpenProjectBundleResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
-  SaveProjectBundleResponse,
-  TimelineCommandResponse,
   WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
   Draft,
   DraftCanvasConfig,
-  Keyframe,
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
-  KeyframeValue,
   SegmentVisual,
   SegmentVolume,
   TextSegment,
@@ -36,14 +41,8 @@ import type {
 } from "../generated/Draft";
 import {
   applyTimelineCommandResult,
-  buildAddTimelineSegmentIntentCommand,
-  buildAddAudioSegmentIntentCommand,
-  buildAddTextSegmentIntentCommand,
-  buildAddTrackIntentCommand,
   buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
-  buildDeleteSegmentCommand,
-  buildEditTextSegmentCommand,
   buildCancelExportCommand,
   buildCreateAudioPreviewSessionCommand,
   buildGetAudioPreviewStatusCommand,
@@ -51,12 +50,8 @@ import {
   buildGetArtifactStatusCommand,
   buildGetExportJobStatusCommand,
   buildGetWaveformDisplayPeaksCommand,
-  buildImportMaterialCommand,
-  buildImportSubtitleSrtIntentCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
-  buildMoveSelectedSegmentIntentCommand,
-  buildOpenProjectBundleCommand,
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
   buildPauseAudioPreviewCommand,
@@ -64,30 +59,14 @@ import {
   buildRequestPreviewSegmentCommand,
   buildRefreshWaveformStatusCommand,
   buildRefreshArtifactStatusCommand,
-  buildRedoTimelineEditCommand,
-  buildRenameTrackCommand,
-  buildRemoveSegmentKeyframeCommand,
   buildResumeArtifactGenerationCommand,
   buildRetryArtifactGenerationCommand,
   buildRunArtifactGarbageCollectionCommand,
-  buildSaveProjectBundleCommand,
-  buildSelectTimelineSegmentsCommand,
   buildSeekAudioPreviewCommand,
   buildSelectAudioOutputDeviceCommand,
   buildListAudioOutputDevicesCommand,
-  buildSetSegmentKeyframeCommand,
-  buildSetSegmentVolumeCommand,
-  buildSetTrackLockCommand,
-  buildSetTrackMuteCommand,
-  buildSetTrackVisibilityCommand,
-  buildSplitSelectedSegmentIntentCommand,
   buildStopAudioPreviewCommand,
   buildStartExportCommand,
-  buildTrimSelectedSegmentIntentCommand,
-  buildUndoTimelineEditCommand,
-  buildUpdateDraftCanvasConfigCommand,
-  buildUpdateSegmentAudioCommand,
-  buildUpdateSegmentVisualCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -104,7 +83,6 @@ import {
   formatMicroseconds,
   formatPreviewStatus,
   getSelectedSegmentView,
-  getSelectedTrackView,
   resourcePanelFromArtifactStatus,
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
@@ -131,6 +109,12 @@ type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
   version: () => Promise<CommandResultEnvelope<VersionResponse>>;
   executeCommand: <T = unknown>(command: CommandEnvelope) => Promise<CommandResultEnvelope<T>>;
+  createProjectSession: (request: CreateProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionOpenResponse>>;
+  openProjectSession: (request: OpenProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionOpenResponse>>;
+  executeProjectIntent: <T = ProjectSessionIntentResponse>(
+    request: ExecuteProjectIntentRequest
+  ) => Promise<CommandResultEnvelope<T>>;
+  closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {
   canceled: boolean;
@@ -146,15 +130,15 @@ type VideoEditorPlatformApi = {
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
-type DraftCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
-type DraftCommandResultApplier<T> = (
+type CoreCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
+type CoreCommandResultApplier<T> = (
   current: WorkspaceState,
   result: CommandResultEnvelope<T>,
   command: CommandEnvelope
 ) => WorkspaceState;
-type ExecutedDraftCommand<T> = {
-  command: CommandEnvelope;
-  result: CommandResultEnvelope<T>;
+type ProjectSessionClientState = {
+  sessionId: string;
+  revision: number;
 };
 type ExportCommandResultApplier = (
   current: WorkspaceState,
@@ -241,6 +225,7 @@ export function App(): React.ReactElement {
   const [playbackRunning, setPlaybackRunning] = useState(false);
   const workspaceRef = useRef(workspace);
   const playheadRef = useRef(playheadUs);
+  const projectSessionRef = useRef<ProjectSessionClientState | null>(null);
   const commandInFlightRef = useRef(false);
   const audioCommandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
@@ -385,9 +370,7 @@ export function App(): React.ReactElement {
       const openedProject =
         openBundlePath === undefined || openBundlePath.length === 0
           ? null
-          : await window.videoEditorCore.executeCommand<OpenProjectBundleResponse>(
-              buildOpenProjectBundleCommand(openBundlePath)
-            );
+          : await openProjectSessionForBundle(openBundlePath);
       if (cancelled) {
         return;
       }
@@ -482,11 +465,25 @@ export function App(): React.ReactElement {
     return fixture === "demo" || fixture === "blank" ? fixture : undefined;
   }
 
-  async function executeDraftCommand<T>(
-    buildCommand: DraftCommandBuilder,
+  async function executeProjectSessionIntent<T extends ProjectSessionIntentResponse>(
+    intent: ExecuteProjectIntentRequest["intent"],
     pendingCommand: string,
-    applyResult: DraftCommandResultApplier<T>
-  ): Promise<ExecutedDraftCommand<T> | null> {
+    applyResult: (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState
+  ): Promise<CommandResultEnvelope<T> | null> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      const message = commandErrorMessage("项目会话未就绪，请先新建或打开项目");
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: null,
+          commandError: message
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return null;
+    }
     if (commandInFlightRef.current) {
       setWorkspace((current) => {
         const next = {
@@ -511,12 +508,22 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<T>(command);
-      const next = applyResult(workspaceRef.current, result, command);
+      const result = await window.videoEditorCore.executeProjectIntent<T>({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        intent
+      });
+      if (result.ok && result.data !== null) {
+        projectSessionRef.current = {
+          sessionId: result.data.sessionId,
+          revision: result.data.revision
+        };
+        setBundlePath(result.data.bundlePath);
+      }
+      const next = applyResult(workspaceRef.current, result);
       workspaceRef.current = next;
       setWorkspace(next);
-      return { command, result };
+      return result;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const next = {
@@ -532,132 +539,161 @@ export function App(): React.ReactElement {
     }
   }
 
-  async function executeTimelineCommand(
-    buildCommand: DraftCommandBuilder,
-    pendingCommand: string
-  ): Promise<ExecutedDraftCommand<TimelineCommandResponse> | null> {
-    const executed = await executeDraftCommand<TimelineCommandResponse>(buildCommand, pendingCommand, (current, result, command) => {
-      const applied = applyTimelineCommandResult(
-        {
-          draft: current.draft,
-          commandState: current.commandState,
-          selection: current.selection
-        },
-        result
-      );
-
-      const next = {
-        ...current,
-        draft: applied.state.draft,
-        commandState: applied.state.commandState,
-        selection: applied.state.selection,
-        materials: applied.state.draft.materials,
-        pendingCommand: null,
-        commandError: applied.errorMessage
-      };
-
-      if (
-        result.ok &&
-        result.data !== null &&
-        (command.payload.kind === "updateSegmentVisual" || command.payload.kind === "setTrackVisibility")
-      ) {
-        return {
-          ...next,
-          preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
-          export: clearDerivedExportState(current.export, VISUAL_DERIVED_STATE_COPY.exportLogSummary)
-        };
-      }
-
-      if (
-        result.ok &&
-        result.data !== null &&
-        (command.payload.kind === "addTextSegment" ||
-          command.payload.kind === "editTextSegment" ||
-          command.payload.kind === "importSubtitleSrt" ||
-          command.payload.kind === "importSubtitleSrtIntent")
-      ) {
-        return {
-          ...next,
-          preview: clearDerivedPreviewState(current.preview, TEXT_DERIVED_STATE_COPY),
-          export: clearDerivedExportState(current.export, TEXT_DERIVED_STATE_COPY.exportLogSummary)
-        };
-      }
-
-      if (
-        result.ok &&
-        result.data !== null &&
-        (command.payload.kind === "setSegmentKeyframe" || command.payload.kind === "removeSegmentKeyframe")
-      ) {
-        return {
-          ...next,
-          preview: clearDerivedPreviewState(current.preview, KEYFRAME_DERIVED_STATE_COPY),
-          export: clearDerivedExportState(current.export, KEYFRAME_DERIVED_STATE_COPY.exportLogSummary)
-        };
-      }
-
-      if (
-        result.ok &&
-        result.data !== null &&
-        (command.payload.kind === "setSegmentVolume" ||
-          command.payload.kind === "updateSegmentAudio" ||
-          command.payload.kind === "setTrackMute" ||
-          command.payload.kind === "addAudioSegment" ||
-          command.payload.kind === "addAudioSegmentIntent")
-      ) {
-        return {
-          ...next,
-          preview: clearDerivedPreviewState(current.preview, AUDIO_DERIVED_STATE_COPY),
-          export: clearDerivedExportState(current.export, AUDIO_DERIVED_STATE_COPY.exportLogSummary)
-        };
-      }
-
-      return next;
+  async function createProjectSessionForBundle(bundlePath: string): Promise<CommandResultEnvelope<ProjectSessionOpenResponse>> {
+    await closeCurrentProjectSession();
+    const result = await window.videoEditorCore.createProjectSession({
+      bundlePath,
+      draftName: projectNameFromBundlePath(bundlePath)
     });
-
-    if (executed !== null && executed.result.ok && executed.result.data !== null) {
-      await persistDraftSnapshot(executed.result.data.draft);
+    if (result.ok && result.data !== null) {
+      projectSessionRef.current = {
+        sessionId: result.data.sessionId,
+        revision: result.data.revision
+      };
+      setBundlePath(result.data.bundlePath);
+    } else {
+      projectSessionRef.current = null;
     }
+    return result;
+  }
+
+  async function openProjectSessionForBundle(bundlePath: string): Promise<CommandResultEnvelope<ProjectSessionOpenResponse>> {
+    await closeCurrentProjectSession();
+    const result = await window.videoEditorCore.openProjectSession({ bundlePath });
+    if (result.ok && result.data !== null) {
+      projectSessionRef.current = {
+        sessionId: result.data.sessionId,
+        revision: result.data.revision
+      };
+      setBundlePath(result.data.bundlePath);
+    } else {
+      projectSessionRef.current = null;
+    }
+    return result;
+  }
+
+  async function closeCurrentProjectSession(): Promise<void> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      return;
+    }
+    projectSessionRef.current = null;
+    await window.videoEditorCore.closeProjectSession({ sessionId: session.sessionId }).catch(() => undefined);
+  }
+
+  async function executeProjectTimelineIntent(
+    intent: ExecuteProjectIntentRequest["intent"],
+    pendingCommand: string
+  ): Promise<CommandResultEnvelope<ProjectSessionTimelineIntentResponse> | null> {
+    const result = await executeProjectSessionIntent<ProjectSessionTimelineIntentResponse>(
+      intent,
+      pendingCommand,
+      (current, result) => applyProjectSessionTimelineResult(current, result, intent.kind)
+    );
 
     if (
-      executed !== null &&
-      executed.result.ok &&
-      executed.result.data !== null &&
-      (executed.command.payload.kind === "addSegment" ||
-        executed.command.payload.kind === "addTimelineSegmentIntent" ||
-        executed.command.payload.kind === "addTextSegmentIntent" ||
-        executed.command.payload.kind === "addAudioSegmentIntent")
+      result !== null &&
+      result.ok &&
+      result.data !== null &&
+      (intent.kind === "addTimelineSegmentIntent" ||
+        intent.kind === "addTextSegmentIntent" ||
+        intent.kind === "addAudioSegmentIntent")
     ) {
-      const previewTarget = selectedSegmentStart(executed.result.data);
+      const previewTarget = selectedSegmentStart(result.data);
       if (previewTarget !== null) {
         queueAutoPreviewFrame(previewTarget);
       }
     }
 
-    return executed;
+    return result;
   }
 
-  async function persistDraftSnapshot(draft: Draft): Promise<void> {
-    const result = await window.videoEditorCore.executeCommand<SaveProjectBundleResponse>(
-      buildSaveProjectBundleCommand(draft, bundlePath)
+  function applyProjectSessionTimelineResult(
+    current: WorkspaceState,
+    result: CommandResultEnvelope<ProjectSessionTimelineIntentResponse>,
+    intentKind: ExecuteProjectIntentRequest["intent"]["kind"]
+  ): WorkspaceState {
+    const applied = applyTimelineCommandResult(
+      {
+        draft: current.draft,
+        commandState: current.commandState,
+        selection: current.selection
+      },
+      result
     );
-    if (!result.ok || result.data === null) {
-      const message = commandErrorMessage(result);
-      const next = {
-        ...workspaceRef.current,
-        commandError: message
+
+    const next = {
+      ...current,
+      draft: applied.state.draft,
+      commandState: applied.state.commandState,
+      selection: applied.state.selection,
+      materials: applied.state.draft.materials,
+      pendingCommand: null,
+      commandError: applied.errorMessage
+    };
+
+    if (result.ok && result.data !== null && (intentKind === "updateSelectedSegmentVisual" || intentKind === "setTrackVisibility")) {
+      return {
+        ...next,
+        preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
+        export: clearDerivedExportState(current.export, VISUAL_DERIVED_STATE_COPY.exportLogSummary)
       };
-      workspaceRef.current = next;
-      setWorkspace(next);
-      return;
     }
 
-    setBundlePath(result.data.bundlePath);
+    if (
+      result.ok &&
+      result.data !== null &&
+      (intentKind === "addTextSegmentIntent" || intentKind === "editSelectedText" || intentKind === "importSubtitleSrtIntent")
+    ) {
+      return {
+        ...next,
+        preview: clearDerivedPreviewState(current.preview, TEXT_DERIVED_STATE_COPY),
+        export: clearDerivedExportState(current.export, TEXT_DERIVED_STATE_COPY.exportLogSummary)
+      };
+    }
+
+    if (
+      result.ok &&
+      result.data !== null &&
+      (intentKind === "setSelectedSegmentKeyframe" || intentKind === "removeSelectedSegmentKeyframe")
+    ) {
+      return {
+        ...next,
+        preview: clearDerivedPreviewState(current.preview, KEYFRAME_DERIVED_STATE_COPY),
+        export: clearDerivedExportState(current.export, KEYFRAME_DERIVED_STATE_COPY.exportLogSummary)
+      };
+    }
+
+    if (
+      result.ok &&
+      result.data !== null &&
+      (intentKind === "setSelectedSegmentVolume" ||
+        intentKind === "updateSelectedSegmentAudio" ||
+        intentKind === "setTrackMute" ||
+        intentKind === "addAudioSegmentIntent")
+    ) {
+      return {
+        ...next,
+        preview: clearDerivedPreviewState(current.preview, AUDIO_DERIVED_STATE_COPY),
+        export: clearDerivedExportState(current.export, AUDIO_DERIVED_STATE_COPY.exportLogSummary)
+      };
+    }
+
+    if (result.ok && result.data !== null && intentKind === "updateDraftCanvasConfig") {
+      return {
+        ...next,
+        preview: clearDerivedPreviewState(current.preview),
+        export: clearDerivedExportState(current.export)
+      };
+    }
+
+    return next;
   }
 
   async function executePreviewCommand(
-    buildCommand: DraftCommandBuilder,
+    buildCommand: CoreCommandBuilder,
     pendingCommand: string,
-    applyResult: DraftCommandResultApplier<PreviewArtifactResponse>
+    applyResult: CoreCommandResultApplier<PreviewArtifactResponse>
   ): Promise<void> {
     if (commandInFlightRef.current) {
       setWorkspace((current) => {
@@ -728,7 +764,7 @@ export function App(): React.ReactElement {
   }
 
   async function executeExportCommand(
-    buildCommand: DraftCommandBuilder,
+    buildCommand: CoreCommandBuilder,
     pendingCommand: string,
     applyResult: ExportCommandResultApplier
   ): Promise<void> {
@@ -1176,13 +1212,11 @@ export function App(): React.ReactElement {
   }
 
   async function importMaterialPath(path: string): Promise<void> {
-    await executeDraftCommand<ImportMaterialResponse>(
-      (current) =>
-        buildImportMaterialCommand({
-          draft: current.draft,
-          bundlePath,
-          materialPath: path
-        }),
+    await executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(
+      {
+        kind: "importMaterial",
+        materialPath: path
+      },
       "导入素材",
       (current, result) => {
         if (!result.ok || result.data === null) {
@@ -1241,9 +1275,7 @@ export function App(): React.ReactElement {
         return next;
       });
 
-      const result = await window.videoEditorCore.executeCommand<SaveProjectBundleResponse>(
-        buildSaveProjectBundleCommand(workspaceRef.current.draft, nextBundlePath)
-      );
+      const result = await createProjectSessionForBundle(nextBundlePath);
       if (!result.ok || result.data === null) {
         setProjectEntryError("create", projectSafeErrorMessage("create"));
         return;
@@ -1295,9 +1327,7 @@ export function App(): React.ReactElement {
         return next;
       });
 
-      const result = await window.videoEditorCore.executeCommand<OpenProjectBundleResponse>(
-        buildOpenProjectBundleCommand(nextBundlePath)
-      );
+      const result = await openProjectSessionForBundle(nextBundlePath);
       if (!result.ok || result.data === null) {
         setProjectEntryError("open", projectSafeErrorMessage("open"));
         return;
@@ -1464,29 +1494,39 @@ export function App(): React.ReactElement {
   function handleAddTextSegment(text: TextSegment, durationUs: number): void {
     const safeDurationUs = toPositiveMicroseconds(durationUs);
 
-    void executeTimelineCommand(
-      (current) => buildAddTextSegmentIntentCommand(current, text, safeDurationUs),
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTextSegmentIntent",
+        text,
+        duration: safeDurationUs
+      },
       "添加文字"
     );
   }
 
   function handleImportSubtitleSrt(srtContent: string, timeOffsetUs: number, textTemplate: TextSegment): void {
-    void executeTimelineCommand(
-      (current) =>
-        buildImportSubtitleSrtIntentCommand(
-          current,
-          srtContent,
-          Math.max(0, Math.round(timeOffsetUs)),
-          textTemplate
-        ),
+    void executeProjectTimelineIntent(
+      {
+        kind: "importSubtitleSrtIntent",
+        srtContent,
+        timeOffset: Math.max(0, Math.round(timeOffsetUs)),
+        style: textTemplate.style,
+        textBox: textTemplate.textBox,
+        layoutRegion: textTemplate.layoutRegion,
+        wrapping: textTemplate.wrapping
+      },
       "导入字幕"
     );
   }
 
   function handleAddAudioSegment(materialId: string, durationUs: number): void {
     const safeDurationUs = toPositiveMicroseconds(durationUs);
-    void executeTimelineCommand(
-      (current) => buildAddAudioSegmentIntentCommand(current, materialId.length > 0 ? materialId : null, safeDurationUs),
+    void executeProjectTimelineIntent(
+      {
+        kind: "addAudioSegmentIntent",
+        materialId: materialId.length > 0 ? materialId : null,
+        duration: safeDurationUs
+      },
       "添加音频"
     );
   }
@@ -1496,95 +1536,96 @@ export function App(): React.ReactElement {
       levelMillis: Math.max(0, Math.min(4000, Math.round(levelMillis)))
     };
 
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null) {
-          throw new Error("请先选择一个片段");
-        }
-        return buildSetSegmentVolumeCommand(current, selectedSegment.segment.segmentId, volume);
+    void executeProjectTimelineIntent(
+      {
+        kind: "setSelectedSegmentVolume",
+        volume
       },
       "调整音量"
     );
   }
 
   function handleEditSelectedText(text: TextSegment): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null || selectedSegment.segment.text === null || selectedSegment.segment.text === undefined) {
-          throw new Error("请先选择一个文字片段");
-        }
-        return buildEditTextSegmentCommand(current, selectedSegment.segment.segmentId, text);
+    void executeProjectTimelineIntent(
+      {
+        kind: "editSelectedText",
+        text
       },
       "应用文字"
     );
   }
 
   function handleSetSelectedTrackMute(trackId: string, muted: boolean): void {
-    void executeTimelineCommand((current) => {
-      const selectedTrack = getSelectedTrackView(current.draft, current.selection);
-      const resolvedTrackId = trackId || selectedTrack?.trackId;
-
-      if (resolvedTrackId === undefined) {
-        throw new Error("请先选择一个轨道");
-      }
-
-      return buildSetTrackMuteCommand(current, resolvedTrackId, muted);
-    }, "切换轨道静音");
+    void executeProjectTimelineIntent(
+      {
+        kind: "setTrackMute",
+        trackId: trackId.length > 0 ? trackId : null,
+        muted
+      },
+      "切换轨道静音"
+    );
   }
 
   function handleSelectTimelineTrack(trackId: string): void {
-    void executeTimelineCommand((current) => {
-      const track = current.draft.tracks.find((candidate) => candidate.trackId === trackId);
-      if (track === undefined) {
-        throw new Error("找不到要选择的轨道");
-      }
-
-      return buildSelectTimelineSegmentsCommand(current, [], [trackId]);
-    }, "选择轨道");
+    void executeProjectTimelineIntent(
+      {
+        kind: "selectTimelineSegments",
+        segmentIds: [],
+        trackIds: [trackId]
+      },
+      "选择轨道"
+    );
   }
 
   function handleAddTimelineTrack(trackKind: TrackKind): void {
-    void executeTimelineCommand((current) => buildAddTrackIntentCommand(current, trackKind), "添加轨道");
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTrackIntent",
+        trackKind
+      },
+      "添加轨道"
+    );
   }
 
   function handleRenameTimelineTrack(trackId: string, name: string): void {
     const trimmedName = name.trim();
-    void executeTimelineCommand((current) => {
-      if (trimmedName.length === 0) {
-        throw new Error("轨道名称不能为空");
-      }
-      if (!current.draft.tracks.some((track) => track.trackId === trackId)) {
-        throw new Error("找不到要重命名的轨道");
-      }
-
-      return buildRenameTrackCommand(current, trackId, trimmedName);
-    }, "重命名轨道");
+    if (trimmedName.length === 0) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("轨道名称不能为空")
+      }));
+      return;
+    }
+    void executeProjectTimelineIntent(
+      {
+        kind: "renameTrack",
+        trackId,
+        name: trimmedName
+      },
+      "重命名轨道"
+    );
   }
 
   function handleSetTimelineTrackLock(trackId: string, locked: boolean): void {
-    void executeTimelineCommand((current) => {
-      if (!current.draft.tracks.some((track) => track.trackId === trackId)) {
-        throw new Error("找不到要锁定的轨道");
-      }
-
-      return buildSetTrackLockCommand(current, trackId, locked);
-    }, "切换轨道锁定");
+    void executeProjectTimelineIntent(
+      {
+        kind: "setTrackLock",
+        trackId,
+        locked
+      },
+      "切换轨道锁定"
+    );
   }
 
   function handleSetTimelineTrackVisibility(trackId: string, visible: boolean): void {
-    void executeTimelineCommand((current) => {
-      const track = current.draft.tracks.find((candidate) => candidate.trackId === trackId);
-      if (track === undefined) {
-        throw new Error("找不到要显示或隐藏的轨道");
-      }
-      if (track.kind === "audio") {
-        throw new Error("音频轨道没有画面显隐状态");
-      }
-
-      return buildSetTrackVisibilityCommand(current, trackId, visible);
-    }, "切换轨道显示");
+    void executeProjectTimelineIntent(
+      {
+        kind: "setTrackVisibility",
+        trackId,
+        visible
+      },
+      "切换轨道显示"
+    );
   }
 
   function handleUpdateSelectedSegmentAudio(options: {
@@ -1593,67 +1634,67 @@ export function App(): React.ReactElement {
     fadeInDuration: number;
     fadeOutDuration: number;
   }): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null) {
-          throw new Error("请先选择一个音频片段");
-        }
-
-        return buildUpdateSegmentAudioCommand({
-          context: current,
-          segmentId: selectedSegment.segment.segmentId,
-          gainMillis: Math.max(0, Math.min(4000, Math.round(options.gainMillis))),
-          panBalanceMillis: Math.max(-1000, Math.min(1000, Math.round(options.panBalanceMillis))),
-          fadeInDuration: { duration: Math.max(0, Math.round(options.fadeInDuration)) },
-          fadeOutDuration: { duration: Math.max(0, Math.round(options.fadeOutDuration)) },
-          effectSlots: []
-        });
+    void executeProjectTimelineIntent(
+      {
+        kind: "updateSelectedSegmentAudio",
+        gainMillis: Math.max(0, Math.min(4000, Math.round(options.gainMillis))),
+        panBalanceMillis: Math.max(-1000, Math.min(1000, Math.round(options.panBalanceMillis))),
+        fadeInDuration: { duration: Math.max(0, Math.round(options.fadeInDuration)) },
+        fadeOutDuration: { duration: Math.max(0, Math.round(options.fadeOutDuration)) },
+        effectSlots: []
       },
       "应用音频"
     );
   }
 
   function handleSelectTimelineSegment(segmentId: string): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selected = getSelectedSegmentView(current.draft, {
-          segmentIds: [segmentId],
-          trackIds: []
-        });
+    const selected = getSelectedSegmentView(workspaceRef.current.draft, {
+      segmentIds: [segmentId],
+      trackIds: []
+    });
+    if (selected === null) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("找不到要选择的片段")
+      }));
+      return;
+    }
 
-        if (selected === null) {
-          throw new Error("找不到要选择的片段");
-        }
-
-        return buildSelectTimelineSegmentsCommand(current, [segmentId], [selected.track.trackId]);
+    void executeProjectTimelineIntent(
+      {
+        kind: "selectTimelineSegments",
+        segmentIds: [segmentId],
+        trackIds: [selected.track.trackId]
       },
       "选择片段"
     );
   }
 
   function handleAddTimelineSegment(materialId: string): void {
-    void executeTimelineCommand(
-      (current) => {
-        return buildAddTimelineSegmentIntentCommand(current, materialId);
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTimelineSegmentIntent",
+        materialId
       },
       "添加片段"
     );
   }
 
   function handleMoveSelectedSegment(deltaUs: number): void {
-    void executeTimelineCommand(
-      (current) => {
-        return buildMoveSelectedSegmentIntentCommand(current, Math.max(0, Math.round(deltaUs)));
+    void executeProjectTimelineIntent(
+      {
+        kind: "moveSelectedSegmentIntent",
+        delta: Math.max(0, Math.round(deltaUs))
       },
       "移动片段"
     );
   }
 
   function handleSplitSelectedSegment(splitAt: number): void {
-    void executeTimelineCommand(
-      (current) => {
-        return buildSplitSelectedSegmentIntentCommand(current, Math.max(0, Math.round(splitAt)));
+    void executeProjectTimelineIntent(
+      {
+        kind: "splitSelectedSegmentIntent",
+        splitAt: Math.max(0, Math.round(splitAt))
       },
       "分割片段"
     );
@@ -1662,9 +1703,11 @@ export function App(): React.ReactElement {
   function handleTrimSelectedSegment(direction: "left" | "right", deltaUs: number): void {
     const safeDelta = Math.max(1, Math.round(deltaUs));
 
-    void executeTimelineCommand(
-      (current) => {
-        return buildTrimSelectedSegmentIntentCommand(current, direction, safeDelta);
+    void executeProjectTimelineIntent(
+      {
+        kind: "trimSelectedSegmentIntent",
+        direction,
+        delta: safeDelta
       },
       direction === "left" ? "左侧裁剪" : "右侧裁剪"
     );
@@ -1685,69 +1728,40 @@ export function App(): React.ReactElement {
       return;
     }
 
-    void executeTimelineCommand(
-      (current) => {
-        const currentSelected = getSelectedSegmentView(current.draft, current.selection);
-        if (currentSelected === null) {
-          throw new Error("请先选择一个片段");
-        }
-        return buildDeleteSegmentCommand(current, currentSelected.segment.segmentId);
+    void executeProjectTimelineIntent(
+      {
+        kind: "deleteSelectedSegment"
       },
       "删除片段"
     );
   }
 
   function handleUndoTimelineEdit(): void {
-    void executeTimelineCommand((current) => buildUndoTimelineEditCommand(current), "撤销");
+    void executeProjectTimelineIntent({ kind: "undoTimelineEdit" }, "撤销");
   }
 
   function handleRedoTimelineEdit(): void {
-    void executeTimelineCommand((current) => buildRedoTimelineEditCommand(current), "重做");
+    void executeProjectTimelineIntent({ kind: "redoTimelineEdit" }, "重做");
   }
 
   function handleUpdateDraftCanvasConfig(canvasConfig: DraftCanvasConfig): void {
     void (async () => {
-      const executed = await executeDraftCommand<TimelineCommandResponse>(
-        (current) => buildUpdateDraftCanvasConfigCommand(current, canvasConfig),
-        "应用草稿参数",
-        (current, result) => {
-          if (!result.ok || result.data === null) {
-            return {
-              ...current,
-              pendingCommand: null,
-              commandError: canvasCommandErrorMessage(result)
-            };
-          }
-
-          return {
-            ...current,
-            draft: result.data.draft,
-            commandState: result.data.commandState,
-            selection: result.data.selection,
-            materials: result.data.draft.materials,
-            preview: clearDerivedPreviewState(current.preview),
-            export: clearDerivedExportState(current.export),
-            pendingCommand: null,
-            commandError: null
-          };
-        }
+      await executeProjectTimelineIntent(
+        {
+          kind: "updateDraftCanvasConfig",
+          canvasConfig
+        },
+        "应用草稿参数"
       );
-      if (executed !== null && executed.result.ok && executed.result.data !== null) {
-        await persistDraftSnapshot(executed.result.data.draft);
-      }
     })();
   }
 
   function handleUpdateSelectedSegmentVisual(visual: SegmentVisual): void {
     void (async () => {
-      await executeTimelineCommand(
-        (current) => {
-          const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-          if (selectedSegment === null) {
-            throw new Error("请先选择一个片段");
-          }
-
-          return buildUpdateSegmentVisualCommand(current, selectedSegment.segment.segmentId, visual);
+      await executeProjectTimelineIntent(
+        {
+          kind: "updateSelectedSegmentVisual",
+          visual
         },
         "应用画面"
       );
@@ -1763,36 +1777,24 @@ export function App(): React.ReactElement {
     interpolation: KeyframeInterpolation = "linear",
     easing: KeyframeEasing = "none"
   ): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null) {
-          throw new Error("请先选择一个片段");
-        }
-
-        const keyframe: Keyframe = {
-          at: resolveSegmentRelativePlayhead(selectedSegment.segment.targetTimerange.start, selectedSegment.segment.targetTimerange.duration, playheadUs),
-          property,
-          value: keyframeValueForSegmentProperty(selectedSegment.segment, property),
-          interpolation,
-          easing
-        };
-
-        return buildSetSegmentKeyframeCommand(current, selectedSegment.segment.segmentId, keyframe);
+    void executeProjectTimelineIntent(
+      {
+        kind: "setSelectedSegmentKeyframe",
+        property,
+        at: normalizePlayheadTime(playheadUs),
+        interpolation,
+        easing
       },
       "设置关键帧"
     );
   }
 
   function handleRemoveSelectedSegmentKeyframe(property: KeyframeProperty, at: number): void {
-    void executeTimelineCommand(
-      (current) => {
-        const selectedSegment = getSelectedSegmentView(current.draft, current.selection);
-        if (selectedSegment === null) {
-          throw new Error("请先选择一个片段");
-        }
-
-        return buildRemoveSegmentKeyframeCommand(current, selectedSegment.segment.segmentId, property, Math.max(0, Math.round(at)));
+    void executeProjectTimelineIntent(
+      {
+        kind: "removeSelectedSegmentKeyframe",
+        property,
+        at: Math.max(0, Math.round(at))
       },
       "删除关键帧"
     );
@@ -2716,11 +2718,6 @@ function exportCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknow
   return `${actionLabel}失败（${kindLabel}）：${message}`;
 }
 
-function canvasCommandErrorMessage(result: CommandResultEnvelope<unknown>): string {
-  const message = result.error?.message ?? "剪辑核心返回未知画布错误";
-  return `画布参数更新失败：${message}。请检查画布尺寸、帧率或背景设置后重试。`;
-}
-
 function runtimeUnavailableMessage(workspace: WorkspaceState, actionLabel: string): string {
   const detail =
     workspace.runtimeDiagnostics.status === "checking"
@@ -2749,7 +2746,7 @@ function getSequenceDurationUs(workspace: WorkspaceState): number {
   }, 0);
 }
 
-function selectedSegmentStart(response: TimelineCommandResponse): number | null {
+function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
   return getSelectedSegmentView(response.draft, response.selection)?.segment.targetTimerange.start ?? null;
 }
 
@@ -2769,70 +2766,11 @@ function firstAudioMaterialId(workspace: WorkspaceState): string | null {
   return workspace.materials.find((material) => material.kind === "audio" && material.status === "available")?.materialId ?? null;
 }
 
-function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {
-  const relative = Math.round(playhead) - segmentStart;
-  return Math.max(0, Math.min(Math.max(0, segmentDuration), relative));
-}
-
-function keyframeValueForSegmentProperty(
-  segment: Draft["tracks"][number]["segments"][number],
-  property: KeyframeProperty
-): KeyframeValue {
-  switch (property) {
-    case "visualPositionX":
-      return { kind: "int", value: segment.visual.transform.position.x };
-    case "visualPositionY":
-      return { kind: "int", value: segment.visual.transform.position.y };
-    case "visualScaleX":
-      return { kind: "uint", value: segment.visual.transform.scale.xMillis };
-    case "visualScaleY":
-      return { kind: "uint", value: segment.visual.transform.scale.yMillis };
-    case "visualRotation":
-      return { kind: "int", value: segment.visual.transform.rotation.degrees };
-    case "visualOpacity":
-      return { kind: "uint", value: segment.visual.transform.opacity.valueMillis };
-    case "volume":
-      return { kind: "uint", value: segment.volume.levelMillis };
-    case "textFontSize":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.style.fontSize };
-    case "textColor":
-      assertSegmentHasText(segment, property);
-      return { kind: "color", value: segment.text.style.color };
-    case "textLineHeight":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.style.lineHeightMillis };
-    case "textLetterSpacing":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.style.letterSpacingMillis };
-    case "textLayoutX":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.layoutRegion.xMillis };
-    case "textLayoutY":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.layoutRegion.yMillis };
-    case "textLayoutWidth":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.layoutRegion.widthMillis };
-    case "textLayoutHeight":
-      assertSegmentHasText(segment, property);
-      return { kind: "uint", value: segment.text.layoutRegion.heightMillis };
-    case "stickerPositionX":
-    case "stickerPositionY":
-    case "stickerScaleX":
-    case "stickerScaleY":
-    case "filterParameterUnsupported":
-      throw new Error("当前阶段暂不支持该参数动画");
-  }
-}
-
-function assertSegmentHasText(
-  segment: Draft["tracks"][number]["segments"][number],
-  property: KeyframeProperty
-): asserts segment is Draft["tracks"][number]["segments"][number] & { text: TextSegment } {
-  if (segment.text === null || segment.text === undefined) {
-    throw new Error(`当前片段没有可用于 ${property} 的文字参数`);
-  }
+function projectNameFromBundlePath(bundlePath: string): string {
+  const normalized = bundlePath.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter((part) => part.length > 0);
+  const last = parts.length > 0 ? parts[parts.length - 1] ?? "未命名项目" : "未命名项目";
+  return last.endsWith(".veproj") ? last.slice(0, -".veproj".length) || "未命名项目" : last;
 }
 
 function toPositiveMicroseconds(value: number): number {

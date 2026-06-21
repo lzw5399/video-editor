@@ -62,6 +62,7 @@ pub struct MaterialImportResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SavedMaterialImport {
+    pub draft: Draft,
     pub material: Material,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostic: Option<MissingMaterialDiagnostic>,
@@ -354,6 +355,7 @@ fn add_or_update_recoverable_material(
 
 fn saved_import(imported: MaterialImportResult, bundle: ProjectBundle) -> SavedMaterialImport {
     SavedMaterialImport {
+        draft: bundle.draft,
         material: imported.material,
         diagnostic: imported.diagnostic,
         bundle_path: bundle.bundle_path,

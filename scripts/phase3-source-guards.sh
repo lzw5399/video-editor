@@ -64,6 +64,16 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
 fail_if_matches \
+  "renderer must not derive selected-segment keyframe time/value for product session intents" \
+  '\b(?:keyframeValueForSegmentProperty|resolveSegmentRelativePlayhead)\b|kind:[[:space:]]*"setSelectedSegmentKeyframe",[[:space:]]*keyframe\b|onRemoveKeyframe\(keyframe\.property,[[:space:]]*keyframe\.at\)' \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
+fail_if_matches \
+  "project session intent contract must not accept renderer-built complete keyframes" \
+  'setSelectedSegmentKeyframe";[[:space:]]*keyframe[[:space:]]*:' \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches \
   "draft/schema/generated command contracts must not use floating-point or seconds-based persisted time" \
   'durationSeconds|duration_seconds|source.*Seconds|target.*Seconds|seconds: f32|seconds: f64' \
   crates/draft_model/src crates/draft_commands/src schemas/command.schema.json schemas/draft.schema.json apps/desktop-electron/src/generated

@@ -1,7 +1,61 @@
-use bindings_node::{close_project_session, execute_project_intent, open_project_session};
+use bindings_node::{
+    close_project_session, create_project_session, execute_project_intent, open_project_session,
+};
 use draft_model::Draft;
+use media_runtime::discover_runtime_config;
+use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
 use serde_json::{Value, json};
+use std::sync::{Mutex, OnceLock};
+use testkit::generate_video_material_fixture;
+
+static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[test]
+fn project_session_creates_project_without_renderer_draft() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-create.veproj");
+
+    let created = create_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-create",
+        "draftId": "session-created-draft",
+        "draftName": "Session Created Project"
+    }))
+    .expect("createProjectSession should return an envelope");
+    assert_eq!(created["ok"], true, "{created:#}");
+    assert_eq!(created["data"]["sessionId"], "test-session-create");
+    assert_eq!(created["data"]["revision"], 0);
+    assert_eq!(created["data"]["draft"]["draftId"], "session-created-draft");
+    assert_eq!(
+        created["data"]["draft"]["metadata"]["name"],
+        "Session Created Project"
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("created session should save canonical project.json");
+    assert_eq!(
+        reopened.bundle.draft.draft_id.as_str(),
+        "session-created-draft"
+    );
+    assert!(reopened.bundle.draft.materials.is_empty());
+    assert_eq!(reopened.bundle.draft.tracks.len(), 3);
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].track_id.as_str(),
+        "track-main-video"
+    );
+    assert_eq!(
+        reopened.bundle.draft.tracks[1].track_id.as_str(),
+        "track-bgm"
+    );
+    assert_eq!(
+        reopened.bundle.draft.tracks[2].track_id.as_str(),
+        "track-title"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-create" }))
+        .expect("closeProjectSession should return an envelope");
+}
 
 #[test]
 fn project_session_add_timeline_segment_intent_persists_without_renderer_draft() {
@@ -46,6 +100,82 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     );
 
     close_project_session(json!({ "sessionId": "test-session-add" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");
+    let executor = DesktopFfmpegExecutor::default();
+    let video = generate_video_material_fixture(&executor, &runtime)
+        .expect("video material fixture should be generated");
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-import-add.veproj");
+    save_empty_timeline_draft(&bundle_path);
+
+    let opened = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-import-add"
+    }))
+    .expect("openProjectSession should return an envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+
+    let imported = execute_project_intent(json!({
+        "sessionId": "test-session-import-add",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "importMaterial",
+            "materialPath": video.path().display().to_string(),
+            "materialId": "session-video-material",
+            "displayName": "session-video.mp4"
+        }
+    }))
+    .expect("session importMaterial intent should return an envelope");
+    assert_eq!(imported["ok"], true, "{imported:#}");
+    assert_eq!(imported["data"]["revision"], 1);
+    assert_eq!(
+        imported["data"]["material"]["materialId"],
+        "session-video-material"
+    );
+    assert_eq!(imported["data"]["material"]["status"], "available");
+    assert_eq!(
+        imported["data"]["draft"]["materials"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-import-add",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "session-video-material"
+        }
+    }))
+    .expect("session addTimelineSegmentIntent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["revision"], 2);
+    assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
+    assert_eq!(
+        added["data"]["draft"]["tracks"][0]["segments"][0]["materialId"],
+        "session-video-material"
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session import and add should save canonical project.json");
+    assert_eq!(reopened.bundle.draft.materials.len(), 1);
+    assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 1);
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .material_id
+            .as_str(),
+        "session-video-material"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-import-add" }))
         .expect("closeProjectSession should return an envelope");
 }
 
@@ -169,11 +299,314 @@ fn project_session_undo_and_redo_use_rust_owned_command_state() {
         .expect("closeProjectSession should return an envelope");
 }
 
+#[test]
+fn project_session_opening_same_bundle_invalidates_previous_session() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-single-owner.veproj");
+    save_timeline_draft(&bundle_path);
+
+    let first = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-single-owner-a"
+    }))
+    .expect("first openProjectSession should return an envelope");
+    assert_eq!(first["ok"], true, "{first:#}");
+
+    let second = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-single-owner-b"
+    }))
+    .expect("second openProjectSession should return an envelope");
+    assert_eq!(second["ok"], true, "{second:#}");
+
+    let stale_owner = execute_project_intent(json!({
+        "sessionId": "test-session-single-owner-a",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("old owner executeProjectIntent should return an envelope");
+    assert_eq!(stale_owner["ok"], false, "{stale_owner:#}");
+    assert_eq!(stale_owner["error"]["kind"], "invalidProject");
+
+    let current_owner = execute_project_intent(json!({
+        "sessionId": "test-session-single-owner-b",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("current owner executeProjectIntent should return an envelope");
+    assert_eq!(current_owner["ok"], true, "{current_owner:#}");
+    assert_eq!(current_owner["data"]["revision"], 1);
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("current owner should save canonical project.json");
+    assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 1);
+
+    close_project_session(json!({ "sessionId": "test-session-single-owner-b" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[cfg(unix)]
+#[test]
+fn project_session_opening_same_bundle_through_symlink_invalidates_previous_session() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-single-owner-real.veproj");
+    let symlink_path = temp_dir.path().join("session-single-owner-link.veproj");
+    save_timeline_draft(&bundle_path);
+    symlink(&bundle_path, &symlink_path).expect("bundle symlink should be created");
+
+    let first = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-single-owner-real"
+    }))
+    .expect("first openProjectSession should return an envelope");
+    assert_eq!(first["ok"], true, "{first:#}");
+
+    let second = open_project_session(json!({
+        "bundlePath": symlink_path.display().to_string(),
+        "sessionId": "test-session-single-owner-link"
+    }))
+    .expect("second openProjectSession should return an envelope");
+    assert_eq!(second["ok"], true, "{second:#}");
+    assert_eq!(
+        second["data"]["bundlePath"],
+        std::fs::canonicalize(&bundle_path)
+            .expect("bundle should canonicalize")
+            .display()
+            .to_string()
+    );
+
+    let stale_owner = execute_project_intent(json!({
+        "sessionId": "test-session-single-owner-real",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("old owner executeProjectIntent should return an envelope");
+    assert_eq!(stale_owner["ok"], false, "{stale_owner:#}");
+    assert_eq!(stale_owner["error"]["kind"], "invalidProject");
+
+    let current_owner = execute_project_intent(json!({
+        "sessionId": "test-session-single-owner-link",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("current owner executeProjectIntent should return an envelope");
+    assert_eq!(current_owner["ok"], true, "{current_owner:#}");
+    assert_eq!(current_owner["data"]["revision"], 1);
+
+    close_project_session(json!({ "sessionId": "test-session-single-owner-link" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_selection_intent_does_not_persist_or_advance_revision() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-selection.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-selection"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-selection",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["revision"], 1);
+
+    let selected = execute_project_intent(json!({
+        "sessionId": "test-session-selection",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "selectTimelineSegments",
+            "segmentIds": ["segment-1"],
+            "trackIds": ["video-track"]
+        }
+    }))
+    .expect("selection intent should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    assert_eq!(selected["data"]["revision"], 1);
+    assert_eq!(selected["data"]["selection"]["segmentIds"][0], "segment-1");
+
+    let follow_up = execute_project_intent(json!({
+        "sessionId": "test-session-selection",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "setSelectedSegmentVolume",
+            "volume": { "levelMillis": 750 }
+        }
+    }))
+    .expect("follow-up edit should use unchanged revision after selection");
+    assert_eq!(follow_up["ok"], true, "{follow_up:#}");
+    assert_eq!(follow_up["data"]["revision"], 2);
+
+    close_project_session(json!({ "sessionId": "test-session-selection" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-keyframe.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-keyframe"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+
+    let moved = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "delta": 200_000
+        }
+    }))
+    .expect("move intent should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+
+    let volume = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "setSelectedSegmentVolume",
+            "volume": { "levelMillis": 750 }
+        }
+    }))
+    .expect("volume intent should return an envelope");
+    assert_eq!(volume["ok"], true, "{volume:#}");
+
+    let keyed = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 3,
+        "intent": {
+            "kind": "setSelectedSegmentKeyframe",
+            "property": "volume",
+            "at": 450_000,
+            "interpolation": "hold",
+            "easing": "easeIn"
+        }
+    }))
+    .expect("keyframe intent should return an envelope");
+    assert_eq!(keyed["ok"], true, "{keyed:#}");
+    assert_eq!(keyed["data"]["revision"], 4);
+
+    let keyframe = &keyed["data"]["draft"]["tracks"][0]["segments"][0]["keyframes"][0];
+    assert_eq!(keyframe["property"], "volume");
+    assert_eq!(keyframe["at"], 250_000);
+    assert_eq!(keyframe["value"], json!({ "kind": "uint", "value": 750 }));
+    assert_eq!(keyframe["interpolation"], "hold");
+    assert_eq!(keyframe["easing"], "easeIn");
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session keyframe should save canonical project.json");
+    let saved_segment = &reopened.bundle.draft.tracks[0].segments[0];
+    assert_eq!(saved_segment.target_timerange.start.get(), 200_000);
+    assert_eq!(saved_segment.keyframes[0].at.get(), 250_000);
+
+    let removed = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe",
+        "expectedRevision": 4,
+        "intent": {
+            "kind": "removeSelectedSegmentKeyframe",
+            "property": "volume",
+            "at": 450_000
+        }
+    }))
+    .expect("remove keyframe intent should return an envelope");
+    assert_eq!(removed["ok"], true, "{removed:#}");
+    assert_eq!(removed["data"]["revision"], 5);
+    assert_eq!(
+        removed["data"]["draft"]["tracks"][0]["segments"][0]["keyframes"]
+            .as_array()
+            .expect("keyframes should be an array")
+            .len(),
+        0
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-keyframe" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_keyframe_intent_rejects_renderer_built_keyframe_payload() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-keyframe-reject.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-keyframe-reject"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-keyframe-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "setSelectedSegmentKeyframe",
+            "keyframe": {
+                "at": 0,
+                "property": "visualPositionX",
+                "value": { "kind": "int", "value": 0 },
+                "interpolation": "linear",
+                "easing": "none"
+            }
+        }
+    }))
+    .expect("old keyframe payload should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-keyframe-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
 fn save_timeline_draft(bundle_path: &std::path::Path) {
     let draft: Draft =
         serde_json::from_value(timeline_draft_json()).expect("timeline draft fixture should parse");
     save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
         .expect("timeline draft fixture should be saved");
+}
+
+fn save_empty_timeline_draft(bundle_path: &std::path::Path) {
+    let mut draft: Draft =
+        serde_json::from_value(timeline_draft_json()).expect("timeline draft fixture should parse");
+    draft.materials.clear();
+    save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
+        .expect("empty timeline draft fixture should be saved");
 }
 
 fn timeline_draft_json() -> Value {

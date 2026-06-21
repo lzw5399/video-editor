@@ -24,6 +24,8 @@ import {
   launchProductJourneyApp,
   moveSelectedSegmentRight,
   readExecuteCommandCalls,
+  readLegacyExecuteCommandCalls,
+  readProjectSessionCalls,
   readRealtimePreviewHostCalls,
   readTimelineSegments,
   requestPreviewFrameCount,
@@ -120,6 +122,32 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    const sessionCalls = await readProjectSessionCalls(app);
+    expect(sessionCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "createProjectSession",
+          hasDraftField: false
+        }),
+        expect.objectContaining({
+          command: "executeProjectIntent",
+          expectedRevision: 0,
+          intentKind: "importMaterial",
+          hasDraftField: false
+        }),
+        expect.objectContaining({
+          command: "executeProjectIntent",
+          expectedRevision: 1,
+          intentKind: "addTimelineSegmentIntent",
+          hasDraftField: false
+        })
+      ])
+    );
+    const legacyCommands = (await readLegacyExecuteCommandCalls(app)).map((call) => call.command);
+    expect(legacyCommands, "product import must not use renderer-owned draft importMaterial").not.toContain("importMaterial");
+    expect(legacyCommands, "product add-to-timeline must not use renderer-owned draft addTimelineSegmentIntent").not.toContain(
+      "addTimelineSegmentIntent"
+    );
 
     const before = await capturePreviewEvidence(page);
     const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
@@ -634,6 +662,24 @@ test("product user editing matrix uses real commands and still produces visible 
         "redoTimelineEdit"
       ])
     );
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readLegacyExecuteCommandCalls(app),
+      [
+        "importMaterial",
+        "addTimelineSegmentIntent",
+        "addTrackIntent",
+        "updateSelectedSegmentVisual",
+        "addTextSegmentIntent",
+        "addAudioSegmentIntent",
+        "splitSelectedSegmentIntent",
+        "moveSelectedSegmentIntent",
+        "trimSelectedSegmentIntent",
+        "deleteSelectedSegment",
+        "undoTimelineEdit",
+        "redoTimelineEdit"
+      ]
+    );
     expect(requestPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
     expect(callsAfterEdits.find((call) => call.command === "addTextSegmentIntent")?.textContent).toBe("产品级端到端字幕");
     const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSegmentVisual");
@@ -679,6 +725,47 @@ function expectTimelineSegmentRange(
     Math.abs((segment?.targetDurationUs ?? -1) - durationUs),
     "timeline segment target duration changed"
   ).toBeLessThanOrEqual(toleranceUs);
+}
+
+function expectProductEditCommandsAreSessionOwned(
+  sessionCalls: Awaited<ReturnType<typeof readProjectSessionCalls>>,
+  legacyCalls: Awaited<ReturnType<typeof readLegacyExecuteCommandCalls>>,
+  intentKinds: readonly string[]
+): void {
+  const sessionIntentCalls = sessionCalls.filter((call) => call.command === "executeProjectIntent");
+  expect(
+    sessionIntentCalls,
+    "product edits must use Rust-owned project session intents without renderer draft fields"
+  ).toEqual(
+    expect.arrayContaining(
+      intentKinds.map((intentKind) =>
+        expect.objectContaining({
+          command: "executeProjectIntent",
+          intentKind,
+          hasDraftField: false
+        })
+      )
+    )
+  );
+
+  for (const call of sessionIntentCalls) {
+    expect(call.hasDraftField, `session intent ${call.intentKind ?? "<unknown>"} must not carry renderer draft`).toBe(false);
+  }
+
+  const forbiddenLegacyCommands = new Set(
+    intentKinds.map((intentKind) => {
+      switch (intentKind) {
+        case "deleteSelectedSegment":
+          return "deleteSegment";
+        case "updateSelectedSegmentVisual":
+          return "updateSegmentVisual";
+        default:
+          return intentKind;
+      }
+    })
+  );
+  const legacyEditCommands = legacyCalls.map((call) => call.command).filter((command) => forbiddenLegacyCommands.has(command));
+  expect(legacyEditCommands, "product edits must not fall back to renderer-owned executeCommand").toEqual([]);
 }
 
 test("product text and transform interaction UAT supports direct canvas drag", async () => {

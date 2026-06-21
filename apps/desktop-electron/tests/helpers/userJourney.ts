@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
-import type { CommandName } from "../../src/generated/CommandEnvelope";
 import {
   launchForegroundProductApp,
   type ForegroundProductAppController,
@@ -23,7 +22,7 @@ const TIMELINE_RULER_CLICK_TOLERANCE_US = 10_000;
 const execFileAsync = promisify(execFile);
 
 type ExecuteCommandCall = {
-  command: CommandName;
+  command: string;
   kind: string;
   targetTime?: number | null;
   targetTimerange?: { start: number; duration: number } | null;
@@ -45,6 +44,22 @@ type ExecuteCommandCall = {
   sessionId?: string | null;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
+};
+
+type ProjectSessionCall = {
+  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  sessionId: string | null;
+  expectedRevision: number | null;
+  intentKind: string | null;
+  materialId: string | null;
+  materialPath: string | null;
+  duration?: number | null;
+  visual?: ExecuteCommandCall["visual"] | null;
+  textContent?: string | null;
+  textSource?: string | null;
+  textFontRef?: string | null;
+  srtContent?: string | null;
+  hasDraftField: boolean;
 };
 
 type RealtimePreviewHostCall = {
@@ -130,6 +145,7 @@ export type ProductJourneyAppController = {
   readonly kind: "electron-launch" | "foreground-cdp";
   close: () => Promise<void>;
   readExecuteCommandCalls: () => Promise<ExecuteCommandCall[]>;
+  readProjectSessionCalls: () => Promise<ProjectSessionCall[]>;
   readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
   readWindowMetrics: () => Promise<ProductWindowMetrics | null>;
@@ -370,7 +386,6 @@ export async function launchProductJourneyApp(
       : {};
   const productEnv = {
     VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-    VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
     VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
     VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
@@ -415,9 +430,9 @@ export async function expectProductEntry(page: Page): Promise<void> {
 
 export async function createProjectFromProductEntry(app: ProductJourneyAppController, page: Page): Promise<void> {
   await expectProductEntry(page);
-  const nextCount = (await countCommand(app, "saveProjectBundle")) + 1;
+  const nextCount = (await countProjectSessionCommand(app, "createProjectSession")) + 1;
   await page.getByRole("button", { name: "新建项目" }).click();
-  await waitForCommandCount(app, "saveProjectBundle", nextCount);
+  await waitForProjectSessionCommandCount(app, "createProjectSession", nextCount);
 }
 
 export async function expectProductWorkspace(page: Page): Promise<void> {
@@ -444,9 +459,9 @@ export async function importMaterialThroughProductPicker(
   materialPath: string
 ): Promise<void> {
   const materialName = basename(materialPath);
-  const nextCount = (await countCommand(app, "importMaterial")) + 1;
+  const nextCount = (await countProjectSessionIntent(app, "importMaterial")) + 1;
   await page.getByRole("button", { name: "导入素材" }).click();
-  await waitForCommandCount(app, "importMaterial", nextCount);
+  await waitForProjectSessionIntentCount(app, "importMaterial", nextCount);
   await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", {
     timeout: 30_000
   });
@@ -457,9 +472,9 @@ export async function importMaterialsThroughProductPicker(
   page: Page,
   materialPaths: string[]
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "importMaterial")) + materialPaths.length;
+  const nextCount = (await countProjectSessionIntent(app, "importMaterial")) + materialPaths.length;
   await page.getByRole("button", { name: "导入素材" }).click();
-  await waitForCommandCount(app, "importMaterial", nextCount);
+  await waitForProjectSessionIntentCount(app, "importMaterial", nextCount);
   for (const materialPath of materialPaths) {
     const materialName = basename(materialPath);
     await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", {
@@ -474,11 +489,11 @@ export async function addMaterialToTimeline(
   materialPath: string
 ): Promise<void> {
   const materialName = basename(materialPath);
-  const nextCount = (await countCommand(app, "addTimelineSegmentIntent")) + 1;
+  const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toContainText("可用", { timeout: 10_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
-  await waitForCommandCount(app, "addTimelineSegmentIntent", nextCount);
+  await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
 }
@@ -792,7 +807,24 @@ export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidenc
 }
 
 export async function readExecuteCommandCalls(app: ProductJourneyAppController): Promise<ExecuteCommandCall[]> {
+  const [legacyCalls, sessionCalls] = await Promise.all([
+    app.readExecuteCommandCalls(),
+    app.readProjectSessionCalls()
+  ]);
+  return [
+    ...legacyCalls,
+    ...sessionCalls
+      .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
+      .map(projectSessionCallToCommandCall)
+  ];
+}
+
+export async function readLegacyExecuteCommandCalls(app: ProductJourneyAppController): Promise<ExecuteCommandCall[]> {
   return app.readExecuteCommandCalls();
+}
+
+export async function readProjectSessionCalls(app: ProductJourneyAppController): Promise<ProjectSessionCall[]> {
+  return app.readProjectSessionCalls();
 }
 
 export async function readRealtimePreviewHostCalls(app: ProductJourneyAppController): Promise<RealtimePreviewHostCall[]> {
@@ -845,12 +877,77 @@ async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreview
   });
 }
 
-async function waitForCommandCount(app: ProductJourneyAppController, command: CommandName, expectedCount: number): Promise<void> {
+async function waitForCommandCount(app: ProductJourneyAppController, command: string, expectedCount: number): Promise<void> {
   await expect.poll(async () => countCommand(app, command), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
 }
 
-async function countCommand(app: ProductJourneyAppController, command: CommandName): Promise<number> {
+async function waitForProjectSessionCommandCount(
+  app: ProductJourneyAppController,
+  command: ProjectSessionCall["command"],
+  expectedCount: number
+): Promise<void> {
+  await expect.poll(async () => countProjectSessionCommand(app, command), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
+}
+
+async function waitForProjectSessionIntentCount(
+  app: ProductJourneyAppController,
+  intentKind: string,
+  expectedCount: number
+): Promise<void> {
+  await expect.poll(async () => countProjectSessionIntent(app, intentKind), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
+}
+
+async function countCommand(app: ProductJourneyAppController, command: string): Promise<number> {
   return (await readExecuteCommandCalls(app)).filter((call) => call.command === command).length;
+}
+
+async function countProjectSessionCommand(app: ProductJourneyAppController, command: ProjectSessionCall["command"]): Promise<number> {
+  return (await readProjectSessionCalls(app)).filter((call) => call.command === command).length;
+}
+
+async function countProjectSessionIntent(app: ProductJourneyAppController, intentKind: string): Promise<number> {
+  return (await readProjectSessionCalls(app)).filter((call) => call.command === "executeProjectIntent" && call.intentKind === intentKind).length;
+}
+
+function projectSessionCallToCommandCall(call: ProjectSessionCall): ExecuteCommandCall {
+  const command = legacyCommandNameForProjectIntent(call.intentKind);
+  return {
+    command,
+    kind: command,
+    requestId: null,
+    targetTime: null,
+    targetTimerange: null,
+    duration: call.duration ?? null,
+    visual: call.visual ?? null,
+    textContent: call.textContent ?? null,
+    textSource: call.textSource ?? null,
+    textFontRef: call.textFontRef ?? null,
+    srtContent: call.srtContent ?? null,
+    sessionId: call.sessionId,
+    deviceSelectionId: null,
+    maxPeakBins: null
+  };
+}
+
+function legacyCommandNameForProjectIntent(intentKind: string | null): string {
+  switch (intentKind) {
+    case "deleteSelectedSegment":
+      return "deleteSegment";
+    case "editSelectedText":
+      return "editTextSegment";
+    case "setSelectedSegmentVolume":
+      return "setSegmentVolume";
+    case "updateSelectedSegmentAudio":
+      return "updateSegmentAudio";
+    case "updateSelectedSegmentVisual":
+      return "updateSegmentVisual";
+    case "setSelectedSegmentKeyframe":
+      return "setSegmentKeyframe";
+    case "removeSelectedSegmentKeyframe":
+      return "removeSegmentKeyframe";
+    default:
+      return intentKind ?? "executeProjectIntent";
+  }
 }
 
 function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController {
@@ -863,6 +960,13 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
         return (
           (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
             .__videoEditorTestExecuteCommandCalls ?? []
+        );
+      }),
+    readProjectSessionCalls: () =>
+      app.evaluate(() => {
+        return (
+          (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+            .__videoEditorTestProjectSessionCalls ?? []
         );
       }),
     readRealtimePreviewHostCalls: () =>
@@ -893,6 +997,7 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
     close: () => app.close(),
     readForegroundDiagnostics: () => app.readForegroundDiagnostics(),
     readExecuteCommandCalls: async () => (await app.readExecuteCommandCalls()) as ExecuteCommandCall[],
+    readProjectSessionCalls: async () => (await app.readProjectSessionCalls()) as ProjectSessionCall[],
     readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[],
     readWindowMetrics: () => app.readWindowMetrics()
   };

@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type { Draft } from "../generated/Draft";
+import type {
+  CreateProjectSessionRequest,
+  ExecuteProjectIntentRequest,
+  OpenProjectSessionRequest,
+  ProjectSessionRequest
+} from "../main/nativeBinding";
 
 type RealtimePreviewHostRect = {
   x: number;
@@ -26,7 +32,11 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorCore", {
     ping: () => ipcRenderer.invoke("core:ping"),
     version: () => ipcRenderer.invoke("core:version"),
-    executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command)
+    executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command),
+    createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
+    openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
+    executeProjectIntent: (request: ExecuteProjectIntentRequest) => ipcRenderer.invoke("core:executeProjectIntent", request),
+    closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {
     createProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:createProjectBundle"),
@@ -48,6 +58,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   if (process.argv.includes("--video-editor-test-observations=1")) {
     contextBridge.exposeInMainWorld("videoEditorTestObservations", {
       getExecuteCommandCalls: () => ipcRenderer.invoke("test:getExecuteCommandCalls"),
+      getProjectSessionCalls: () => ipcRenderer.invoke("test:getProjectSessionCalls"),
       getRealtimePreviewHostCalls: () => ipcRenderer.invoke("test:getRealtimePreviewHostCalls"),
       getWindowMetrics: () => ipcRenderer.invoke("test:getWindowMetrics")
     });

@@ -230,10 +230,6 @@ export function Inspector({
   const [fadeOutUs, setFadeOutUs] = useState(0);
   const sequenceDuration = getSequenceDuration(workspace);
   const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
-  const relativePlayheadUs =
-    selected === null
-      ? 0
-      : resolveSegmentRelativePlayhead(selected.segment.targetTimerange.start, selected.segment.targetTimerange.duration, playheadUs);
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
   const visibleTabs = useMemo(() => inspectorTabsForSelection(selected), [selected]);
   const effectiveActiveTab =
@@ -243,7 +239,7 @@ export function Inspector({
       property={property}
       propertyLabel={label}
       selected={selected}
-      playheadAt={relativePlayheadUs}
+      playheadAt={playheadUs}
       pending={workspace.pendingCommand !== null}
       onSet={() => onSetSelectedSegmentKeyframe(property)}
       onRemove={(at) => onRemoveSelectedSegmentKeyframe(property, at)}
@@ -815,7 +811,7 @@ export function Inspector({
           {effectiveActiveTab === "动画" ? (
             <AnimationInspectorTab
               selected={selected}
-              playheadAt={relativePlayheadUs}
+              playheadAt={playheadUs}
               focusedProperty={focusedKeyframeProperty}
               pending={pendingKeyframe}
               onFocusProperty={setFocusedKeyframeProperty}
@@ -1225,9 +1221,11 @@ function AnimationInspectorTab({
               <KeyframeDetailRow
                 key={`${keyframe.property}-${keyframe.at}`}
                 keyframe={keyframe}
-                active={keyframe.at === playheadAt}
+                active={selected.segment.targetTimerange.start + keyframe.at === playheadAt}
                 pending={pending}
-                onRemove={() => onRemoveKeyframe(keyframe.property, keyframe.at)}
+                onRemove={() =>
+                  onRemoveKeyframe(keyframe.property, selected.segment.targetTimerange.start + keyframe.at)
+                }
               />
             ))}
           </div>
@@ -1340,7 +1338,9 @@ function KeyframeButton({
   }
 
   const propertyKeyframes = selected.segment.keyframes.filter((keyframe) => keyframe.property === property);
-  const activeKeyframe = propertyKeyframes.find((keyframe) => keyframe.at === playheadAt);
+  const activeKeyframe = propertyKeyframes.find(
+    (keyframe) => selected.segment.targetTimerange.start + keyframe.at === playheadAt
+  );
   const disabled = pending;
 
   if (activeKeyframe !== undefined) {
@@ -1352,7 +1352,7 @@ function KeyframeButton({
         aria-label={label}
         title={label}
         disabled={disabled}
-        onClick={() => onRemove?.(activeKeyframe.at)}
+        onClick={() => onRemove?.(selected.segment.targetTimerange.start + activeKeyframe.at)}
       >
         <span aria-hidden="true">◆</span>
       </button>
@@ -1425,11 +1425,6 @@ function TextNumberField({
       {action}
     </div>
   );
-}
-
-function resolveSegmentRelativePlayhead(segmentStart: number, segmentDuration: number, playhead: number): number {
-  const relative = Math.round(playhead) - segmentStart;
-  return Math.max(0, Math.min(Math.max(0, segmentDuration), relative));
 }
 
 function isSupportedPropertyForSegment(selected: SelectedSegmentView, property: KeyframeProperty): boolean {

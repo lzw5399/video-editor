@@ -22,6 +22,7 @@ export type ForegroundProductAppController = {
   readonly diagnostics: ForegroundProductAppDiagnostics;
   close: () => Promise<void>;
   readExecuteCommandCalls: () => Promise<unknown[]>;
+  readProjectSessionCalls: () => Promise<unknown[]>;
   readRealtimePreviewHostCalls: () => Promise<unknown[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
   readWindowMetrics: () => Promise<ProductWindowMetrics>;
@@ -58,6 +59,7 @@ declare global {
   interface Window {
     videoEditorTestObservations?: {
       getExecuteCommandCalls: () => Promise<unknown[]>;
+      getProjectSessionCalls: () => Promise<unknown[]>;
       getRealtimePreviewHostCalls: () => Promise<unknown[]>;
       getWindowMetrics: () => Promise<ProductWindowMetrics>;
     };
@@ -106,6 +108,7 @@ export async function launchForegroundProductApp(
       await terminateMainProcess(remoteDebuggingPort, pid);
     },
     readExecuteCommandCalls: async () => readTestObservation(page, "getExecuteCommandCalls", diagnostics),
+    readProjectSessionCalls: async () => readTestObservation(page, "getProjectSessionCalls", diagnostics),
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
     readWindowMetrics: async () => readTestWindowMetrics(page, diagnostics),
     readForegroundDiagnostics: async () =>
@@ -149,9 +152,6 @@ function testSwitchesFromEnv(env: NodeJS.ProcessEnv): string[] {
   const switches: string[] = [];
   if (env.VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR === "1") {
     switches.push("--video-editor-test-disable-render-graph-compositor=1");
-  }
-  if (env.VIDEO_EDITOR_TEST_COMMAND_MOCKS !== undefined) {
-    switches.push(`--video-editor-test-command-mocks=${env.VIDEO_EDITOR_TEST_COMMAND_MOCKS}`);
   }
   if (env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES !== undefined) {
     switches.push(`--video-editor-test-mock-runtime-capabilities=${env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES}`);

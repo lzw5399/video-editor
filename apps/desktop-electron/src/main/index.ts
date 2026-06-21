@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, screen, type IpcMainInvokeEvent, t
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
+import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   AudioOutputDeviceSummary,
   AudioPreviewCommandResponse,
@@ -15,12 +15,23 @@ import type {
   ExportJobStatusResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
-  TimelineCommandResponse,
   WaveformDisplayPeaksResponse,
   WaveformDisplayStatus
 } from "../generated/CommandResultEnvelope";
-import type { Draft, Keyframe, Material, Segment, SegmentVisual, TextSegment, Track } from "../generated/Draft";
-import { executeCommand, ping, version } from "./nativeBinding";
+import type { Keyframe, SegmentVisual } from "../generated/Draft";
+import {
+  closeProjectSession,
+  createProjectSession,
+  executeCommand,
+  executeProjectIntent,
+  openProjectSession,
+  ping,
+  version,
+  type CreateProjectSessionRequest,
+  type ExecuteProjectIntentRequest,
+  type OpenProjectSessionRequest,
+  type ProjectSessionRequest
+} from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
 type TestExecuteCommandCall = {
@@ -51,6 +62,25 @@ type TestExecuteCommandCall = {
   maxPeakBins: number | null;
 };
 
+type TestProjectSessionCall = {
+  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  sessionId: string | null;
+  expectedRevision: number | null;
+  intentKind: string | null;
+  materialId: string | null;
+  materialPath: string | null;
+  duration: number | null;
+  canvasConfig: TestExecuteCommandCall["canvasConfig"];
+  visual: SegmentVisual | null;
+  keyframeProperty: string | null;
+  keyframeAt: number | null;
+  textContent: string | null;
+  textSource: string | null;
+  textFontRef: string | null;
+  srtContent: string | null;
+  hasDraftField: boolean;
+};
+
 type TestWindowMetrics = {
   bounds: Rectangle;
   contentBounds: Rectangle;
@@ -63,6 +93,7 @@ type ProjectBundlePickerResponse = {
 
 declare global {
   var __videoEditorTestExecuteCommandCalls: TestExecuteCommandCall[] | undefined;
+  var __videoEditorTestProjectSessionCalls: TestProjectSessionCall[] | undefined;
 }
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -76,9 +107,6 @@ const showDeveloperDiagnostics =
   process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
   process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
 const testObservationEnabled = process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1";
-const testCommandMocksEnabled =
-  process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1" &&
-  process.env.VIDEO_EDITOR_TEST_COMMAND_MOCKS !== "0";
 const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
@@ -102,26 +130,6 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
   if (testRuntimeCapabilitiesResponse !== null) {
     return testRuntimeCapabilitiesResponse;
   }
-  const testCanvasResponse = maybeBuildTestCanvasCommandResponse(command);
-  if (testCanvasResponse !== null) {
-    return testCanvasResponse;
-  }
-  const testVisualResponse = maybeBuildTestVisualCommandResponse(command);
-  if (testVisualResponse !== null) {
-    return testVisualResponse;
-  }
-  const testTextResponse = maybeBuildTestTextCommandResponse(command);
-  if (testTextResponse !== null) {
-    return testTextResponse;
-  }
-  const testTimelineAudioResponse = maybeBuildTestTimelineAudioCommandResponse(command);
-  if (testTimelineAudioResponse !== null) {
-    return testTimelineAudioResponse;
-  }
-  const testKeyframeResponse = maybeBuildTestKeyframeCommandResponse(command);
-  if (testKeyframeResponse !== null) {
-    return testKeyframeResponse;
-  }
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
     return testPreviewResponse;
@@ -139,6 +147,26 @@ ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
     return testAudioResponse;
   }
   return executeCommand(command);
+});
+ipcMain.handle("core:createProjectSession", (event, request: CreateProjectSessionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("createProjectSession", request);
+  return createProjectSession(request);
+});
+ipcMain.handle("core:openProjectSession", (event, request: OpenProjectSessionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("openProjectSession", request);
+  return openProjectSession(request);
+});
+ipcMain.handle("core:executeProjectIntent", (event, request: ExecuteProjectIntentRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("executeProjectIntent", request);
+  return executeProjectIntent(request);
+});
+ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("closeProjectSession", request);
+  return closeProjectSession(request);
 });
 ipcMain.handle("platform:openMaterialFiles", async (event) => {
   assertAllowedIpcSender(event);
@@ -220,6 +248,10 @@ if (testObservationEnabled) {
   ipcMain.handle("test:getExecuteCommandCalls", (event) => {
     assertAllowedIpcSender(event);
     return globalThis.__videoEditorTestExecuteCommandCalls ?? [];
+  });
+  ipcMain.handle("test:getProjectSessionCalls", (event) => {
+    assertAllowedIpcSender(event);
+    return globalThis.__videoEditorTestProjectSessionCalls ?? [];
   });
   ipcMain.handle("test:getRealtimePreviewHostCalls", (event) => {
     assertAllowedIpcSender(event);
@@ -369,7 +401,6 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE", "--video-editor-test-pick-open-project-bundle=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
-  setEnvFromArgument("VIDEO_EDITOR_TEST_COMMAND_MOCKS", "--video-editor-test-command-mocks=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
   setEnvFromArgument("VE_FFMPEG_PATH", "--video-editor-test-ve-ffmpeg-path=");
   setEnvFromArgument("VE_FFPROBE_PATH", "--video-editor-test-ve-ffprobe-path=");
@@ -483,6 +514,43 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   });
 }
 
+function recordTestProjectSessionCall(
+  command: TestProjectSessionCall["command"],
+  request: CreateProjectSessionRequest | OpenProjectSessionRequest | ExecuteProjectIntentRequest | ProjectSessionRequest
+): void {
+  if (!testObservationEnabled) {
+    return;
+  }
+
+  const intent = "intent" in request ? request.intent : null;
+  const intentRecord = intent as Record<string, unknown> | null;
+  const text = intentRecord?.text as { content?: unknown; source?: unknown; style?: { font?: { fontRef?: unknown } } } | undefined;
+  globalThis.__videoEditorTestProjectSessionCalls ??= [];
+  globalThis.__videoEditorTestProjectSessionCalls.push({
+    command,
+    sessionId: "sessionId" in request ? request.sessionId : null,
+    expectedRevision: "expectedRevision" in request ? request.expectedRevision : null,
+    intentKind: intent?.kind ?? null,
+    materialId: intent !== null && "materialId" in intent ? intent.materialId ?? null : null,
+    materialPath: intent !== null && "materialPath" in intent ? intent.materialPath ?? null : null,
+    duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
+    canvasConfig:
+      intentRecord?.kind === "updateDraftCanvasConfig"
+        ? (intentRecord.canvasConfig as TestExecuteCommandCall["canvasConfig"])
+        : null,
+    visual: intentRecord?.kind === "updateSelectedSegmentVisual" ? (intentRecord.visual as SegmentVisual) : null,
+    keyframeProperty: typeof intentRecord?.property === "string" ? intentRecord.property : null,
+    keyframeAt: typeof intentRecord?.at === "number" ? intentRecord.at : null,
+    textContent: typeof text?.content === "string" ? text.content : null,
+    textSource: typeof text?.source === "string" ? text.source : null,
+    textFontRef: typeof text?.style?.font?.fontRef === "string" ? text.style.font.fontRef : null,
+    srtContent: typeof intentRecord?.srtContent === "string" ? intentRecord.srtContent : null,
+    hasDraftField:
+      Object.prototype.hasOwnProperty.call(request, "draft") ||
+      (intent !== null && Object.prototype.hasOwnProperty.call(intent, "draft"))
+  });
+}
+
 function isAudioPreviewCommandKind(kind: CommandEnvelope["payload"]["kind"]): kind is
   | "createAudioPreviewSession"
   | "playAudioPreview"
@@ -508,518 +576,6 @@ function isAudioPreviewCommandKind(kind: CommandEnvelope["payload"]["kind"]): ki
     kind === "getWaveformDisplayPeaks" ||
     kind === "refreshWaveformStatus"
   );
-}
-
-function maybeBuildTestVisualCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
-  if (command.payload.kind !== "updateSegmentVisual") {
-    return null;
-  }
-
-  if (!testCommandMocksEnabled) {
-    return null;
-  }
-
-  const draft = {
-    ...command.payload.draft,
-    tracks: command.payload.draft.tracks.map((track) => ({
-      ...track,
-      segments: track.segments.map((segment) =>
-        segment.segmentId === command.payload.segmentId ? { ...segment, visual: command.payload.visual } : segment
-      )
-    }))
-  };
-
-  return {
-    ok: true,
-    data: {
-      draft,
-      commandState: {
-        ...command.payload.commandState,
-        undoStack: [
-          ...command.payload.commandState.undoStack,
-          {
-            draft: command.payload.draft,
-            selection: command.payload.selection,
-            label: "updateSegmentVisual"
-          }
-        ],
-        redoStack: []
-      },
-      selection: command.payload.selection,
-      events: [
-        {
-          kind: "segmentVisualUpdated",
-          message: null
-        }
-      ]
-    },
-    error: null,
-    events: [
-      {
-        kind: "segmentVisualUpdated",
-        message: null
-      }
-    ]
-  };
-}
-
-function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
-  if (
-    command.payload.kind !== "addTextSegment" &&
-    command.payload.kind !== "editTextSegment" &&
-    command.payload.kind !== "importSubtitleSrt" &&
-    command.payload.kind !== "importSubtitleSrtIntent"
-  ) {
-    return null;
-  }
-
-  if (!testCommandMocksEnabled) {
-    return null;
-  }
-
-  if (command.payload.kind === "addTextSegment") {
-    const segment: Segment = {
-      segmentId: command.payload.segmentId,
-      materialId: command.payload.materialId,
-      sourceTimerange: command.payload.sourceTimerange,
-      targetTimerange: command.payload.targetTimerange,
-      mainTrackMagnet: { enabled: false },
-      keyframes: [],
-      filters: [],
-      transition: null,
-          text: command.payload.text,
-          volume: { levelMillis: 1000 },
-          audio: defaultTestSegmentAudio(),
-          visual: defaultTestSegmentVisual(command.payload.draft)
-        };
-    const draft = {
-      ...ensureTestTextMaterial(command.payload.draft, command.payload.materialId, "默认文字"),
-      tracks: command.payload.draft.tracks.map((track) =>
-        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
-      )
-    };
-
-    return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [command.payload.segmentId], "textSegmentAdded");
-  }
-
-  if (command.payload.kind === "editTextSegment") {
-    let trackId = command.payload.selection.trackIds[0] ?? "";
-    const draft = {
-      ...command.payload.draft,
-      tracks: command.payload.draft.tracks.map((track) => ({
-        ...track,
-        segments: track.segments.map((segment) => {
-          if (segment.segmentId !== command.payload.segmentId) {
-            return segment;
-          }
-
-          trackId = track.trackId;
-          return { ...segment, text: command.payload.text };
-        })
-      }))
-    };
-
-    return buildTestTimelineCommandResponse(command, draft, trackId, [command.payload.segmentId], "textSegmentEdited");
-  }
-
-  const subtitleText: TextSegment = {
-    content: "测试字幕",
-    source: "subtitle",
-    style: command.payload.style,
-    textBox: command.payload.textBox,
-    layoutRegion: command.payload.layoutRegion,
-    wrapping: command.payload.wrapping,
-    bubble: null,
-    effect: null
-  };
-  const subtitleTrackId =
-    command.payload.kind === "importSubtitleSrt"
-      ? command.payload.trackId
-      : resolveTestSubtitleTrackId(command.payload.draft, command.payload.selection.trackIds);
-  const subtitleTrackName = command.payload.kind === "importSubtitleSrt" ? command.payload.trackName : "字幕";
-  const materialId =
-    command.payload.kind === "importSubtitleSrt" ? `${command.payload.materialIdPrefix}-1` : "subtitle-material-1";
-  const segmentId =
-    command.payload.kind === "importSubtitleSrt" ? `${command.payload.segmentIdPrefix}-1` : "subtitle-segment-1";
-  const segment: Segment = {
-    segmentId,
-    materialId,
-    sourceTimerange: { start: 0, duration: 2_000_000 },
-    targetTimerange: { start: command.payload.timeOffset, duration: 2_000_000 },
-    mainTrackMagnet: { enabled: false },
-    keyframes: [],
-    filters: [],
-    transition: null,
-    text: subtitleText,
-    volume: { levelMillis: 1000 },
-    audio: defaultTestSegmentAudio(),
-    visual: defaultTestSegmentVisual(command.payload.draft)
-  };
-  const draftWithMaterial = ensureTestTextMaterial(command.payload.draft, materialId, "导入字幕");
-  const tracks = draftWithMaterial.tracks.some((track) => track.trackId === subtitleTrackId)
-    ? draftWithMaterial.tracks.map((track) =>
-        track.trackId === subtitleTrackId ? { ...track, segments: [...track.segments, segment] } : track
-      )
-    : [
-        ...draftWithMaterial.tracks,
-        {
-          trackId: subtitleTrackId,
-          kind: "text",
-          name: subtitleTrackName,
-          muted: false,
-          locked: false,
-          visible: true,
-          segments: [segment]
-        } satisfies Track
-      ];
-  const draft = {
-    ...draftWithMaterial,
-    tracks
-  };
-
-  return buildTestTimelineCommandResponse(command, draft, subtitleTrackId, [segmentId], "subtitleSrtImported");
-}
-
-function resolveTestSubtitleTrackId(draft: Draft, selectedTrackIds: string[]): string {
-  const selectedSubtitleTrack = selectedTrackIds.find((trackId) =>
-    draft.tracks.some((track) => track.trackId === trackId && isTestSubtitleTrack(track) && !track.locked)
-  );
-  if (selectedSubtitleTrack !== undefined) {
-    return selectedSubtitleTrack;
-  }
-  const existingSubtitleTrack = draft.tracks.find((track) => isTestSubtitleTrack(track) && !track.locked);
-  if (existingSubtitleTrack !== undefined) {
-    return existingSubtitleTrack.trackId;
-  }
-
-  let ordinal = draft.tracks.length + 1;
-  for (;;) {
-    const candidate = `track-subtitle-${ordinal}`;
-    if (!draft.tracks.some((track) => track.trackId === candidate)) {
-      return candidate;
-    }
-    ordinal += 1;
-  }
-}
-
-function isTestSubtitleTrack(track: Track): boolean {
-  return (
-    track.kind === "text" &&
-    (track.trackId.startsWith("track-subtitle") || track.name.includes("字幕") || track.name.toLowerCase().includes("subtitle"))
-  );
-}
-
-function maybeBuildTestTimelineAudioCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
-  if (
-    command.payload.kind !== "addAudioSegment" &&
-    command.payload.kind !== "setSegmentVolume" &&
-    command.payload.kind !== "setTrackMute" &&
-    command.payload.kind !== "updateSegmentAudio"
-  ) {
-    return null;
-  }
-
-  if (!testCommandMocksEnabled) {
-    return null;
-  }
-
-  if (command.payload.kind === "addAudioSegment") {
-    const segment: Segment = {
-      segmentId: command.payload.segmentId,
-      materialId: command.payload.materialId,
-      sourceTimerange: command.payload.sourceTimerange,
-      targetTimerange: command.payload.targetTimerange,
-      mainTrackMagnet: { enabled: false },
-      keyframes: [],
-      filters: [],
-      transition: null,
-      text: null,
-      volume: { levelMillis: 1000 },
-      audio: defaultTestSegmentAudio(),
-      visual: defaultTestSegmentVisual(command.payload.draft)
-    };
-    const draft: Draft = {
-      ...command.payload.draft,
-      tracks: command.payload.draft.tracks.map((track) =>
-        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
-      )
-    };
-
-    return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [command.payload.segmentId], "audioSegmentAdded");
-  }
-
-  if (command.payload.kind === "setTrackMute") {
-    const draft: Draft = {
-      ...command.payload.draft,
-      tracks: command.payload.draft.tracks.map((track) =>
-        track.trackId === command.payload.trackId ? { ...track, muted: command.payload.muted } : track
-      )
-    };
-
-    return buildTestTimelineCommandResponse(
-      command,
-      draft,
-      command.payload.trackId,
-      command.payload.selection.segmentIds,
-      "trackMuteSet"
-    );
-  }
-
-  const segmentId = command.payload.segmentId;
-  let trackId = command.payload.selection.trackIds[0] ?? "";
-  const draft: Draft = {
-    ...command.payload.draft,
-    tracks: command.payload.draft.tracks.map((track) => ({
-      ...track,
-      segments: track.segments.map((segment) => {
-        if (segment.segmentId !== segmentId) {
-          return segment;
-        }
-
-        trackId = track.trackId;
-        if (command.payload.kind === "setSegmentVolume") {
-          return {
-            ...segment,
-            volume: command.payload.volume,
-            audio: {
-              ...(segment.audio ?? defaultTestSegmentAudio()),
-              gainMillis: command.payload.volume.levelMillis
-            }
-          };
-        }
-
-        return {
-          ...segment,
-          audio: {
-            ...(segment.audio ?? defaultTestSegmentAudio()),
-            gainMillis: command.payload.gainMillis ?? segment.audio?.gainMillis ?? segment.volume.levelMillis,
-            panBalanceMillis: command.payload.panBalanceMillis ?? segment.audio?.panBalanceMillis ?? 0,
-            fadeInDuration: command.payload.fadeInDuration ?? segment.audio?.fadeInDuration ?? { duration: 0 },
-            fadeOutDuration: command.payload.fadeOutDuration ?? segment.audio?.fadeOutDuration ?? { duration: 0 },
-            effectSlots: command.payload.effectSlots ?? segment.audio?.effectSlots ?? []
-          },
-          volume:
-            command.payload.gainMillis === null || command.payload.gainMillis === undefined
-              ? segment.volume
-              : { levelMillis: command.payload.gainMillis }
-        };
-      })
-    }))
-  };
-
-  return buildTestTimelineCommandResponse(command, draft, trackId, [segmentId], "segmentAudioUpdated");
-}
-
-function maybeBuildTestKeyframeCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
-  if (command.payload.kind !== "setSegmentKeyframe" && command.payload.kind !== "removeSegmentKeyframe") {
-    return null;
-  }
-
-  if (!testCommandMocksEnabled) {
-    return null;
-  }
-
-  let trackId = command.payload.selection.trackIds[0] ?? "";
-  const draft: Draft = {
-    ...command.payload.draft,
-    tracks: command.payload.draft.tracks.map((track) => ({
-      ...track,
-      segments: track.segments.map((segment) => {
-        if (segment.segmentId !== command.payload.segmentId) {
-          return segment;
-        }
-
-        trackId = track.trackId;
-
-        if (command.payload.kind === "setSegmentKeyframe") {
-          const keyframes = [
-            ...segment.keyframes.filter(
-              (keyframe) =>
-                keyframe.property !== command.payload.keyframe.property || keyframe.at !== command.payload.keyframe.at
-            ),
-            command.payload.keyframe
-          ].sort(compareKeyframes);
-
-          return {
-            ...segment,
-            keyframes
-          };
-        }
-
-        return {
-          ...segment,
-          keyframes: segment.keyframes
-            .filter((keyframe) => keyframe.property !== command.payload.property || keyframe.at !== command.payload.at)
-            .sort(compareKeyframes)
-        };
-      })
-    }))
-  };
-
-  return buildTestTimelineCommandResponse(
-    command,
-    draft,
-    trackId,
-    command.payload.selection.segmentIds,
-    command.payload.kind === "setSegmentKeyframe" ? "segmentKeyframeSet" : "segmentKeyframeRemoved"
-  );
-}
-
-function compareKeyframes(left: Keyframe, right: Keyframe): number {
-  const propertyOrder = left.property.localeCompare(right.property);
-  return propertyOrder === 0 ? left.at - right.at : propertyOrder;
-}
-
-function buildTestTimelineCommandResponse(
-  command: {
-    payload: {
-      kind: string;
-      draft: Draft;
-      commandState: CommandState;
-      selection: TimelineSelection;
-    };
-  },
-  draft: Draft,
-  trackId: string,
-  segmentIds: string[],
-  eventKind: string
-): CommandResultEnvelope<TimelineCommandResponse> {
-  return {
-    ok: true,
-    data: {
-      draft,
-      commandState: {
-        ...command.payload.commandState,
-        undoStack: [
-          ...command.payload.commandState.undoStack,
-          {
-            draft: command.payload.draft,
-            selection: command.payload.selection,
-            label: command.payload.kind
-          }
-        ],
-        redoStack: []
-      },
-      selection: {
-        segmentIds,
-        trackIds: [trackId]
-      },
-      events: [
-        {
-          kind: eventKind,
-          message: null
-        }
-      ]
-    },
-    error: null,
-    events: [
-      {
-        kind: eventKind,
-        message: null
-      }
-    ]
-  };
-}
-
-function ensureTestTextMaterial(draft: Draft, materialId: string, displayName: string): Draft {
-  if (draft.materials.some((material) => material.materialId === materialId)) {
-    return draft;
-  }
-
-  const material: Material = {
-    materialId,
-    kind: "text",
-    uri: `text://${materialId}`,
-    displayName,
-    metadata: {
-      hasVideo: false,
-      hasAudio: false
-    },
-    status: "available"
-  };
-
-  return {
-    ...draft,
-    materials: [...draft.materials, material]
-  };
-}
-
-function defaultTestSegmentVisual(draft: Draft): SegmentVisual {
-  return (
-    draft.tracks.flatMap((track) => track.segments).find((segment) => segment.visual !== undefined)?.visual ?? {
-      visible: true,
-      transform: {
-        position: { x: 0, y: 0 },
-        scale: { xMillis: 1000, yMillis: 1000 },
-        rotation: { degrees: 0 },
-        opacity: { valueMillis: 1000 },
-        crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
-        anchor: { xMillis: 500, yMillis: 500 }
-      },
-      fitMode: "fit",
-      backgroundFilling: { kind: "none" },
-      blendMode: { kind: "normal" },
-      mask: { kind: "none" }
-    }
-  );
-}
-
-function defaultTestSegmentAudio() {
-  return {
-    gainMillis: 1000,
-    panBalanceMillis: 0,
-    fadeInDuration: { duration: 0 },
-    fadeOutDuration: { duration: 0 },
-    effectSlots: []
-  };
-}
-
-function maybeBuildTestCanvasCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {
-  if (command.payload.kind !== "updateDraftCanvasConfig") {
-    return null;
-  }
-
-  if (!testCommandMocksEnabled) {
-    return null;
-  }
-
-  const draft = {
-    ...command.payload.draft,
-    canvasConfig: command.payload.canvasConfig
-  };
-
-  return {
-    ok: true,
-    data: {
-      draft,
-      commandState: {
-        ...command.payload.commandState,
-        undoStack: [
-          ...command.payload.commandState.undoStack,
-          {
-            draft: command.payload.draft,
-            selection: command.payload.selection,
-            label: "updateDraftCanvasConfig"
-          }
-        ],
-        redoStack: []
-      },
-      selection: command.payload.selection,
-      events: [
-        {
-          kind: "draftCanvasConfigUpdated",
-          message: null
-        }
-      ]
-    },
-    error: null,
-    events: [
-      {
-        kind: "draftCanvasConfigUpdated",
-        message: null
-      }
-    ]
-  };
 }
 
 function maybeBuildTestRuntimeCapabilitiesResponse(

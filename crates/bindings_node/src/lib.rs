@@ -295,6 +295,11 @@ pub fn open_project_session(request: serde_json::Value) -> Result<serde_json::Va
     project_session_service::open_project_session(request)
 }
 
+#[napi(js_name = "createProjectSession")]
+pub fn create_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::create_project_session(request)
+}
+
 #[napi(js_name = "closeProjectSession")]
 pub fn close_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
     project_session_service::close_project_session(request)

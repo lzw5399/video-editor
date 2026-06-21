@@ -3,8 +3,36 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 
 import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
-import type { CommandDelta, CommandEvent, CommandResultEnvelope } from "../generated/CommandResultEnvelope";
-import type { Draft, MaterialId } from "../generated/Draft";
+import type {
+  CommandDelta,
+  CommandEvent,
+  CommandResultEnvelope,
+  MissingMaterialCommandDiagnostic
+} from "../generated/CommandResultEnvelope";
+import type {
+  AudioEffectSlot,
+  AudioFade,
+  AudioPanBalance,
+  Draft,
+  DraftCanvasConfig,
+  KeyframeEasing,
+  KeyframeInterpolation,
+  KeyframeProperty,
+  Material,
+  MaterialId,
+  MaterialKind,
+  Microseconds,
+  SegmentId,
+  SegmentVisual,
+  SegmentVolume,
+  TextBox,
+  TextLayoutRegion,
+  TextSegment,
+  TextStyle,
+  TextWrapping,
+  TrackId,
+  TrackKind
+} from "../generated/Draft";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -13,6 +41,7 @@ type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
+  createProjectSession: (request: CreateProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
   executeProjectIntent: (request: ExecuteProjectIntentRequest) => CommandResultEnvelope<ProjectSessionIntentResponse>;
@@ -40,12 +69,67 @@ export type OpenProjectSessionRequest = {
   sessionId?: string;
 };
 
+export type CreateProjectSessionRequest = {
+  bundlePath: string;
+  sessionId?: string;
+  draftId?: string;
+  draftName?: string;
+};
+
 export type ProjectSessionRequest = {
   sessionId: string;
 };
 
 export type ProjectIntent =
+  | {
+      kind: "importMaterial";
+      materialPath: string;
+      materialId?: MaterialId | null;
+      displayName?: string | null;
+      materialKindHint?: MaterialKind | null;
+    }
   | { kind: "addTimelineSegmentIntent"; materialId: MaterialId }
+  | { kind: "selectTimelineSegments"; segmentIds?: SegmentId[]; trackIds?: TrackId[] }
+  | { kind: "moveSelectedSegmentIntent"; delta: Microseconds }
+  | { kind: "splitSelectedSegmentIntent"; splitAt: Microseconds }
+  | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; delta: Microseconds }
+  | { kind: "deleteSelectedSegment" }
+  | { kind: "addTextSegmentIntent"; text: TextSegment; duration: Microseconds }
+  | { kind: "editSelectedText"; text: TextSegment }
+  | {
+      kind: "importSubtitleSrtIntent";
+      srtContent: string;
+      timeOffset: Microseconds;
+      style: TextStyle;
+      textBox: TextBox;
+      layoutRegion: TextLayoutRegion;
+      wrapping: TextWrapping;
+    }
+  | { kind: "addAudioSegmentIntent"; materialId?: MaterialId | null; duration?: Microseconds | null }
+  | { kind: "setSelectedSegmentVolume"; volume: SegmentVolume }
+  | {
+      kind: "updateSelectedSegmentAudio";
+      gainMillis?: number | null;
+      panBalanceMillis?: AudioPanBalance | null;
+      fadeInDuration?: AudioFade | null;
+      fadeOutDuration?: AudioFade | null;
+      effectSlots?: AudioEffectSlot[] | null;
+    }
+  | { kind: "addTrackIntent"; trackKind: TrackKind }
+  | { kind: "renameTrack"; trackId: TrackId; name: string }
+  | { kind: "setTrackLock"; trackId: TrackId; locked: boolean }
+  | { kind: "setTrackVisibility"; trackId: TrackId; visible: boolean }
+  | { kind: "setTrackMute"; trackId?: TrackId | null; muted: boolean }
+  | { kind: "updateDraftCanvasConfig"; canvasConfig: DraftCanvasConfig }
+  | { kind: "updateSelectedSegmentVisual"; visual: SegmentVisual }
+  | {
+      kind: "setSelectedSegmentKeyframe";
+      property: KeyframeProperty;
+      at: Microseconds;
+      interpolation: KeyframeInterpolation;
+      easing: KeyframeEasing;
+    }
+  | { kind: "removeSelectedSegmentKeyframe"; property: KeyframeProperty; at: Microseconds }
   | { kind: "undoTimelineEdit" }
   | { kind: "redoTimelineEdit" };
 
@@ -69,7 +153,7 @@ export type ProjectSessionClosedResponse = {
   closed: boolean;
 };
 
-export type ProjectSessionIntentResponse = {
+export type ProjectSessionTimelineIntentResponse = {
   sessionId: string;
   revision: number;
   draft: Draft;
@@ -80,6 +164,18 @@ export type ProjectSessionIntentResponse = {
   bundlePath: string;
   projectJsonPath: string;
 };
+
+export type ProjectSessionImportMaterialResponse = {
+  sessionId: string;
+  revision: number;
+  draft: Draft;
+  material: Material;
+  diagnostic?: MissingMaterialCommandDiagnostic | null;
+  bundlePath: string;
+  projectJsonPath: string;
+};
+
+export type ProjectSessionIntentResponse = ProjectSessionTimelineIntentResponse | ProjectSessionImportMaterialResponse;
 
 export type RealtimePreviewSessionConfig = {
   sessionLabel: string;
@@ -306,6 +402,14 @@ export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<
   return binding.executeCommand(command);
 }
 
+export function createProjectSession(request: CreateProjectSessionRequest): CommandResultEnvelope<ProjectSessionOpenResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("createProjectSession");
+  }
+  return binding.createProjectSession(request);
+}
+
 export function openProjectSession(request: OpenProjectSessionRequest): CommandResultEnvelope<ProjectSessionOpenResponse> {
   const binding = loadNativeBinding();
   if (binding === null) {
@@ -410,6 +514,10 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.ping !== "function" ||
       typeof loaded.version !== "function" ||
       typeof loaded.executeCommand !== "function" ||
+      typeof loaded.createProjectSession !== "function" ||
+      typeof loaded.openProjectSession !== "function" ||
+      typeof loaded.closeProjectSession !== "function" ||
+      typeof loaded.executeProjectIntent !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.closeRealtimePreviewSession !== "function" ||
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
@@ -433,6 +541,10 @@ function loadNativeBinding(): NativeBinding | null {
       ping: loaded.ping,
       version: loaded.version,
       executeCommand: loaded.executeCommand,
+      createProjectSession: loaded.createProjectSession,
+      openProjectSession: loaded.openProjectSession,
+      closeProjectSession: loaded.closeProjectSession,
+      executeProjectIntent: loaded.executeProjectIntent,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       closeRealtimePreviewSession: loaded.closeRealtimePreviewSession,
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,

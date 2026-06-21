@@ -968,67 +968,6 @@ test("multitrack controls add target rename lock visibility and mute through Rus
   }
 });
 
-test("动画 tab and command-only keyframe add/remove update accepted timeline markers", async () => {
-  const { app, page } = await launchWorkspaceApp();
-
-  try {
-    await spyExecuteCommandCalls(app, page);
-
-    await expect(page.getByRole("tab", { name: "动画" })).toHaveCount(0);
-
-    await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
-    await expectCommandCall(app, "selectTimelineSegments");
-    await page.getByRole("tab", { name: "动画" }).click();
-    await expect(page.getByLabel("动画参数")).toContainText("还没有关键帧");
-    await expect(page.getByLabel("动画参数")).toContainText("位置 X");
-    await expect(page.getByLabel("动画参数")).toContainText("线性");
-    await expect(page.getByLabel("动画参数")).toContainText("缓入缓出");
-
-    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
-    await page.getByRole("button", { name: "添加位置 X关键帧" }).first().click();
-    await expectCommandCall(app, "setSegmentKeyframe");
-
-    await expect(page.locator(".segment-keyframe-marker")).toHaveCount(1);
-    await expect(page.getByLabel("关键帧标记")).toBeVisible();
-    await expect(page.getByLabel("关键帧列表")).toContainText("00:00:01.200");
-    await expect(page.getByLabel("关键帧列表")).toContainText("线性");
-    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
-    const exportDialog = await openExportDialog(page);
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("关键帧已更新，请重新开始导出");
-    await exportDialog.getByRole("button", { name: "关闭" }).click();
-
-    const addCalls = await readExecuteCommandCalls(app);
-    const addKeyframeCall = addCalls.find((call) => call.command === "setSegmentKeyframe");
-    expect(addKeyframeCall?.kind).toBe("setSegmentKeyframe");
-    expect(addKeyframeCall?.keyframeProperty).toBe("visualPositionX");
-    expect(addKeyframeCall?.keyframeAt).toBe(1_200_000);
-    expect(addKeyframeCall?.keyframe).toMatchObject({
-      at: 1_200_000,
-      property: "visualPositionX",
-      value: { kind: "int", value: 0 },
-      interpolation: "linear",
-      easing: "none"
-    });
-
-    await setViewportSizeAndVerifyLayout(app, page, 1280, 800);
-    await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
-    await expect(page.locator(".segment-keyframe-marker")).toHaveCount(1);
-
-    await page.locator(".animation-detail").getByRole("button", { name: "删除位置 X关键帧" }).first().click();
-    await expectCommandCall(app, "removeSegmentKeyframe");
-    await expect(page.locator(".segment-keyframe-marker")).toHaveCount(0);
-    await expect(page.getByLabel("动画参数")).toContainText("还没有关键帧");
-
-    const removeCalls = await readExecuteCommandCalls(app);
-    const removeKeyframeCall = removeCalls.find((call) => call.command === "removeSegmentKeyframe");
-    expect(removeKeyframeCall?.kind).toBe("removeSegmentKeyframe");
-    expect(removeKeyframeCall?.keyframeProperty).toBe("visualPositionX");
-    expect(removeKeyframeCall?.keyframeAt).toBe(1_200_000);
-  } finally {
-    await app.close();
-  }
-});
-
 test("material import routes through the same executeCommand bridge", async () => {
   const { app, page } = await launchWorkspaceApp();
 

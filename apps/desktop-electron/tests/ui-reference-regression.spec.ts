@@ -118,7 +118,6 @@ async function launchProjectEntryApp(): Promise<{ app: ElectronApplication; page
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_COMMAND_MOCKS: "0",
       VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([])

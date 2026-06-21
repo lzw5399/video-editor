@@ -18,6 +18,11 @@ fail_if_matches \
   apps/desktop-electron/src/main/realtimePreviewHost.ts
 
 fail_if_matches \
+  "Product tests and app launch must not keep the removed structural command mock switch alive" \
+  'VIDEO_EDITOR_TEST_COMMAND_MOCKS|video-editor-test-command-mocks' \
+  apps/desktop-electron/src apps/desktop-electron/tests
+
+fail_if_matches \
   "Electron native binding must not expose decoded/FFmpeg content evidence as realtime preview evidence" \
   'requestRealtimePreviewContentEvidence|RealtimePreviewContentEvidenceRequest|RealtimePreviewContentEvidenceResponse' \
   apps/desktop-electron/src/main/nativeBinding.ts
