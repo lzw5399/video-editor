@@ -138,7 +138,7 @@ export type ProjectIntent =
     }
   | { kind: "addTimelineSegmentIntent"; materialId: MaterialId }
   | { kind: "selectTimelineItemIntent"; itemHandle: string }
-  | { kind: "moveSelectedSegmentIntent"; delta: Microseconds }
+  | { kind: "moveSelectedSegmentIntent"; startAt: Microseconds }
   | { kind: "splitSelectedSegmentIntent" }
   | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; trimAt: Microseconds }
   | { kind: "deleteSelectedSegment" }

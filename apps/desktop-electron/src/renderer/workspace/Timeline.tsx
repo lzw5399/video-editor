@@ -44,7 +44,7 @@ type TimelineProps = {
   onRenameTrack?: (itemHandle: string, name: string) => void;
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
-  onMoveSelectedSegment?: (deltaUs: number) => void;
+  onMoveSelectedSegment?: (startAt: number) => void;
   onSplitSelectedSegment?: () => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   onDeleteSelectedSegment?: () => void;
@@ -417,7 +417,7 @@ function TimelineTrackRow({
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
-  onMoveSelectedSegment?: (deltaUs: number) => void;
+  onMoveSelectedSegment?: (startAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   pending: boolean;
 }): React.ReactElement {
@@ -534,7 +534,7 @@ function TimelineSegmentBlock({
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;
-  onMoveSelectedSegment?: (deltaUs: number) => void;
+  onMoveSelectedSegment?: (startAt: number) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   pending: boolean;
 }): React.ReactElement {
@@ -603,7 +603,7 @@ function TimelineSegmentBlock({
       suppressClickRef.current = true;
 
       if (drag.mode === "move") {
-        onMoveSelectedSegment?.(deltaUs);
+        onMoveSelectedSegment?.(segment.start + deltaUs);
         return;
       }
 

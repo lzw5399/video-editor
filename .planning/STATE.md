@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg23 session-owned trim boundary
-last_updated: "2026-06-21T20:37:38Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg23: session-owned trim boundary
+stopped_at: Completed quick task 260622-sg24 session-owned move target
+last_updated: "2026-06-21T20:43:38Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg24: session-owned move target
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg23: session-owned trim boundary
+Last activity: 2026-06-22 -- Completed quick task 260622-sg24: session-owned move target
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -221,6 +221,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Selected-segment keyframe timing is now session-owned: renderer syncs playhead as runtime control state, Rust derives relative keyframe timestamps from selected segment + session playhead, and source guards reject legacy renderer-supplied keyframe `at` payloads. (URGENT)
 - Selected-segment split timing is now session-owned: renderer syncs playhead as runtime control state, Rust derives split position from selected segment + session playhead, and source guards reject legacy renderer-supplied `splitAt` payloads. (URGENT)
 - Selected-segment trim timing is now session-owned: renderer sends the user boundary as `trimAt`, Rust derives target/source timeranges from selected segment + direction, and source guards reject legacy renderer-derived trim `delta` payloads. (URGENT)
+- Selected-segment move timing is now session-owned: renderer sends target start as `startAt`, Rust derives the canonical move command from selected segment + track, and source guards reject legacy renderer-derived move `delta` payloads. (URGENT)
 - Product renderer workspace no longer stores canonical `draft`, `commandState`, or `selection`; project session open/edit responses expose view models and metadata only, while still/segment preview artifact requests use Rust session-owned `{ sessionId, expectedRevision }` APIs. (URGENT)
 - Project session `importMaterial` now returns Rust-owned `viewModel`, `events`, `delta`, and full material list atomically; renderer no longer locally reconciles material arrays or performs a second material-read IPC after import. (URGENT)
 - Timeline display projection is now emitted by Rust project sessions as `viewModel`: renderer timeline rows, selected track/segment views, item handles, labels, visual kind, and ruler ticks are session-owned, and source guards block renderer projection/handle construction from returning. (URGENT)

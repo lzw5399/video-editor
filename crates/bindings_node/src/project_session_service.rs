@@ -6,10 +6,9 @@ use draft_model::{
     DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, EditTextSegmentCommandPayload,
     ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
     KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
-    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MoveSelectedSegmentIntentCommandPayload, RationalFrameRate,
-    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
-    SegmentId, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload,
+    RationalFrameRate, RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment,
+    SegmentAudio, SegmentId, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
     SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextBox, TextLayoutRegion,
@@ -114,7 +113,8 @@ enum ProjectIntent {
         item_handle: String,
     },
     MoveSelectedSegmentIntent {
-        delta: Microseconds,
+        #[serde(rename = "startAt")]
+        start_at: Microseconds,
     },
     SplitSelectedSegmentIntent {},
     TrimSelectedSegmentIntent {
@@ -863,13 +863,16 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::MoveSelectedSegmentIntent { delta } => {
-                Ok(TimelineEditPayload::MoveSelectedSegmentIntent(
-                    MoveSelectedSegmentIntentCommandPayload {
+            ProjectIntent::MoveSelectedSegmentIntent { start_at } => {
+                let (segment_id, track_id) = self.selected_segment_location("移动片段")?;
+                Ok(TimelineEditPayload::MoveSegment(
+                    MoveSegmentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
-                        delta,
+                        segment_id,
+                        target_track_id: track_id,
+                        target_start: start_at,
                     },
                 ))
             }
@@ -1201,6 +1204,26 @@ impl ProjectSession {
             .iter()
             .flat_map(|track| track.segments.iter())
             .find(|segment| &segment.segment_id == segment_id)
+            .ok_or_else(|| format!("{action}失败：选中的片段不存在"))
+    }
+
+    fn selected_segment_location(
+        &self,
+        action: &str,
+    ) -> std::result::Result<(SegmentId, TrackId), String> {
+        let Some(segment_id) = self.selection.segment_ids.first() else {
+            return Err(format!("{action}失败：请先选择一个片段"));
+        };
+        self.draft
+            .tracks
+            .iter()
+            .find_map(|track| {
+                track
+                    .segments
+                    .iter()
+                    .any(|segment| &segment.segment_id == segment_id)
+                    .then(|| (segment_id.clone(), track.track_id.clone()))
+            })
             .ok_or_else(|| format!("{action}失败：选中的片段不存在"))
     }
 

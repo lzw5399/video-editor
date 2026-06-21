@@ -17,6 +17,8 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
+MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
+MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
 TRIM_CALLBACK_DELTA_PATTERN='onTrimSelectedSegment\?\.\([[:space:]]*"(?:left|right)"[[:space:]]*,[[:space:]]*(?:deltaUs|Math\.abs\([[:space:]]*deltaUs[[:space:]]*\))'
 SPLIT_INTENT_LEGACY_SPLIT_AT_PATTERN='kind:[[:space:]]*"splitSelectedSegmentIntent"(?s:.{0,300})\bsplitAt[[:space:]]*:'
@@ -406,6 +408,16 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
 fail_if_matches_multiline \
+  "renderer/native binding must not pass legacy move delta for selected-segment move" \
+  "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+fail_if_matches \
+  "timeline UI must pass move target start intent, not raw move delta" \
+  "$MOVE_CALLBACK_DELTA_PATTERN" \
+  apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+fail_if_matches_multiline \
   "renderer/native binding must not pass legacy trim delta for selected-segment trim" \
   "$TRIM_INTENT_LEGACY_DELTA_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
@@ -546,6 +558,19 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "legacy selected-segment move delta" \
+  "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "moveSelectedSegmentIntent",
+    delta: Math.max(0, Math.round(deltaUs))
+  }, "move");'
+
+assert_pattern_rejects \
+  "raw move delta callback" \
+  "$MOVE_CALLBACK_DELTA_PATTERN" \
+  'onMoveSelectedSegment?.(deltaUs)'
 
 assert_pattern_rejects \
   "legacy selected-segment trim delta" \

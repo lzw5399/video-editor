@@ -1965,11 +1965,11 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleMoveSelectedSegment(deltaUs: number): void {
+  function handleMoveSelectedSegment(startAt: number): void {
     void executeProjectTimelineIntent(
       {
         kind: "moveSelectedSegmentIntent",
-        delta: Math.max(0, Math.round(deltaUs))
+        startAt: normalizePlayheadTime(startAt)
       },
       "移动片段"
     );

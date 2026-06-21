@@ -200,6 +200,93 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
 }
 
 #[test]
+fn project_session_move_selected_segment_uses_target_start() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-move.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-move"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-move",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+
+    let moved = execute_project_intent(json!({
+        "sessionId": "test-session-move",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "startAt": 200_000
+        }
+    }))
+    .expect("move intent should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+    assert_eq!(moved["data"]["revision"], 2);
+    assert_eq!(moved["data"]["events"][0]["kind"], "segmentMoved");
+    assert_no_renderer_project_state_payload(&moved);
+    assert_eq!(
+        moved["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        200_000
+    );
+    assert_eq!(
+        moved["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["duration"],
+        1_000_000
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session move should save canonical project.json");
+    assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 1);
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .target_timerange
+            .start
+            .get(),
+        200_000
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-move" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_move_intent_rejects_renderer_built_delta() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-move-reject.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-move-reject"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-move-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "delta": 200_000
+        }
+    }))
+    .expect("legacy move delta payload should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-move-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_split_selected_segment_uses_session_playhead() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-split.veproj");
@@ -226,7 +313,7 @@ fn project_session_split_selected_segment_uses_session_playhead() {
         "expectedRevision": 1,
         "intent": {
             "kind": "moveSelectedSegmentIntent",
-            "delta": 200_000
+            "startAt": 200_000
         }
     }))
     .expect("move intent should return an envelope");
@@ -361,7 +448,7 @@ fn project_session_trim_selected_segment_uses_trim_boundary() {
         "expectedRevision": 1,
         "intent": {
             "kind": "moveSelectedSegmentIntent",
-            "delta": 200_000
+            "startAt": 200_000
         }
     }))
     .expect("move intent should return an envelope");
@@ -1285,7 +1372,7 @@ fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
         "expectedRevision": 1,
         "intent": {
             "kind": "moveSelectedSegmentIntent",
-            "delta": 200_000
+            "startAt": 200_000
         }
     }))
     .expect("move intent should return an envelope");
