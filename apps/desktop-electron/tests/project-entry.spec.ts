@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 type ProjectSessionCall = {
-  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  command:
+    | "createProjectSession"
+    | "openProjectSession"
+    | "executeProjectIntent"
+    | "listProjectSessionMaterials"
+    | "listProjectSessionMissingMaterials"
+    | "closeProjectSession";
   hasDraftField: boolean;
   timelineSemanticKeys?: string[];
 };

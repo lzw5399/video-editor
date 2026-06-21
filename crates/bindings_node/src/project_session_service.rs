@@ -68,6 +68,13 @@ struct ProjectSessionRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProjectSessionReadRequest {
+    session_id: String,
+    expected_revision: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExecuteProjectIntentRequest {
     session_id: String,
     expected_revision: u64,
@@ -220,6 +227,26 @@ struct ProjectSessionImportMaterialResponse {
     project_json_path: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectSessionMaterialsResponse {
+    session_id: String,
+    revision: u64,
+    bundle_path: String,
+    project_json_path: String,
+    materials: Vec<draft_model::Material>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectSessionMissingMaterialsResponse {
+    session_id: String,
+    revision: u64,
+    bundle_path: String,
+    project_json_path: String,
+    diagnostics: Vec<MissingMaterialCommandDiagnostic>,
+}
+
 #[derive(Debug, Default)]
 struct ProjectSessionRegistry {
     sessions: HashMap<String, ProjectSession>,
@@ -295,6 +322,38 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     };
 
     with_project_session_registry(|registry| registry.execute_intent(request))
+}
+
+pub fn list_project_session_materials(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<ProjectSessionReadRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid listProjectSessionMaterials payload: {error}"),
+                Some("listProjectSessionMaterials".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.list_materials(request))
+}
+
+pub fn list_project_session_missing_materials(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<ProjectSessionReadRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid listProjectSessionMissingMaterials payload: {error}"),
+                Some("listProjectSessionMissingMaterials".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.list_missing_materials(request))
 }
 
 fn with_project_session_registry(
@@ -410,6 +469,81 @@ impl ProjectSessionRegistry {
             session_id: request.session_id,
             closed,
         }))
+    }
+
+    fn list_materials(&self, request: ProjectSessionReadRequest) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get(&request.session_id) else {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+                Some("listProjectSessionMaterials".to_string()),
+            ));
+        };
+        if request.expected_revision != session.revision {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!(
+                    "Stale project session revision: expected {}, current {}",
+                    request.expected_revision, session.revision
+                ),
+                Some("listProjectSessionMaterials".to_string()),
+            ));
+        }
+
+        crate::to_js_value(crate::ok_envelope(ProjectSessionMaterialsResponse {
+            session_id: session.session_id.clone(),
+            revision: session.revision,
+            bundle_path: session.bundle_path.display().to_string(),
+            project_json_path: session.project_json_path.display().to_string(),
+            materials: crate::material_service::list_materials(&session.draft),
+        }))
+    }
+
+    fn list_missing_materials(
+        &self,
+        request: ProjectSessionReadRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get(&request.session_id) else {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+                Some("listProjectSessionMissingMaterials".to_string()),
+            ));
+        };
+        if request.expected_revision != session.revision {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!(
+                    "Stale project session revision: expected {}, current {}",
+                    request.expected_revision, session.revision
+                ),
+                Some("listProjectSessionMissingMaterials".to_string()),
+            ));
+        }
+
+        let fs = StdPlatformFileSystem;
+        match crate::material_service::list_missing_materials(
+            &session.draft,
+            &fs,
+            &session.bundle_path,
+        ) {
+            Ok(diagnostics) => {
+                crate::to_js_value(crate::ok_envelope(ProjectSessionMissingMaterialsResponse {
+                    session_id: session.session_id.clone(),
+                    revision: session.revision,
+                    bundle_path: session.bundle_path.display().to_string(),
+                    project_json_path: session.project_json_path.display().to_string(),
+                    diagnostics: diagnostics
+                        .into_iter()
+                        .map(crate::command_diagnostic)
+                        .collect(),
+                }))
+            }
+            Err(error) => crate::to_js_value(crate::material_service_error_envelope(
+                "listProjectSessionMissingMaterials",
+                error,
+            )),
+        }
     }
 
     fn execute_intent(

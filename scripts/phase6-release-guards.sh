@@ -69,6 +69,22 @@ require_bundled_runtime_entries() {
   forbid_literal "VE_FFPROBE_SOURCE" apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
 }
 
+forbid_local_ffmpeg_lookup() {
+  local targets=(
+    crates/media_runtime/src
+    apps/desktop-electron/src/main
+    apps/desktop-electron/scripts
+    apps/desktop-electron/electron-builder.yml
+  )
+  local pattern='VE_FFMPEG_PATH|VE_FFPROBE_PATH|VE_FFMPEG_SOURCE|VE_FFPROBE_SOURCE|command -v|which[[:space:]]+ffmpeg|which[[:space:]]+ffprobe|which\(|/opt/homebrew|/usr/local/bin/ffmpeg|/usr/local/bin/ffprobe|brew[[:space:]]+install|PATH[^[:alnum:]_].*ffmpeg|ffmpeg.*PATH[^[:alnum:]_]|PATH[^[:alnum:]_].*ffprobe|ffprobe.*PATH[^[:alnum:]_]|当前使用本机 FFmpeg|本机外部运行环境'
+
+  if rg -n -S "$pattern" "${targets[@]}" >/tmp/video-editor-local-ffmpeg-lookup.txt; then
+    cat /tmp/video-editor-local-ffmpeg-lookup.txt >&2
+    printf 'Product FFmpeg runtime must use bundled application resources only; local/Homebrew/PATH lookup is forbidden.\n' >&2
+    exit 1
+  fi
+}
+
 test -f docs/release-ffmpeg-manifest.md
 test -f docs/third-party-notices.md
 test -f docs/mvp-known-limits.md
@@ -106,6 +122,7 @@ require_script package.json test:phase6
 
 require_bundled_runtime_entries
 require_packaged_runtime_forces_resources_path
+forbid_local_ffmpeg_lookup
 
 bash scripts/phase5-source-guards.sh
 git diff --exit-code schemas apps/desktop-electron/src/generated

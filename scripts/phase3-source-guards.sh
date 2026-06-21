@@ -101,6 +101,11 @@ fail_if_matches \
   --glob '!App.tsx'
 
 fail_if_matches \
+  "renderer must not read materials through legacy draft-bearing executeCommand payloads; use project-session read APIs" \
+  'buildListMaterialsCommand|buildListMissingMaterialsCommand|command:[[:space:]]*"listMaterials"|command:[[:space:]]*"listMissingMaterials"|kind:[[:space:]]*"listMaterials"|kind:[[:space:]]*"listMissingMaterials"' \
+  apps/desktop-electron/src/renderer
+
+fail_if_matches \
   "renderer command helpers must not expose legacy low-level timeline command payloads" \
   '\b(?:AddSegmentCommandPayload|MoveSegmentCommandPayload|SplitSegmentCommandPayload|TrimSegmentCommandPayload|DeleteSegmentCommandPayload|AddTextSegmentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|AddAudioSegmentCommandPayload|SetSegmentVolumeCommandPayload|UpdateSegmentAudioCommandPayload|AddTrackCommandPayload|RenameTrackCommandPayload|SetTrackLockCommandPayload|SetTrackVisibilityCommandPayload|UpdateSegmentVisualCommandPayload|SetSegmentKeyframeCommandPayload|RemoveSegmentKeyframeCommandPayload|SourceTimerange|SegmentId|TrackId|AddSegmentOptions|TextCommandOptions|ImportSubtitleSrtOptions|AudioCommandOptions|UpdateSegmentAudioOptions|segmentIdPrefix|materialIdPrefix)\b' \
   apps/desktop-electron/src/renderer/commandHelpers.ts

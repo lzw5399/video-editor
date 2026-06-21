@@ -6,6 +6,7 @@ import type {
   CreateProjectSessionRequest,
   ExecuteProjectIntentRequest,
   OpenProjectSessionRequest,
+  ProjectSessionReadRequest,
   ProjectSessionRequest
 } from "../main/nativeBinding";
 
@@ -36,6 +37,10 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
     openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
     executeProjectIntent: (request: ExecuteProjectIntentRequest) => ipcRenderer.invoke("core:executeProjectIntent", request),
+    listProjectSessionMaterials: (request: ProjectSessionReadRequest) =>
+      ipcRenderer.invoke("core:listProjectSessionMaterials", request),
+    listProjectSessionMissingMaterials: (request: ProjectSessionReadRequest) =>
+      ipcRenderer.invoke("core:listProjectSessionMissingMaterials", request),
     closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {

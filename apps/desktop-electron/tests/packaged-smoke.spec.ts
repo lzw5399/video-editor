@@ -58,6 +58,8 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
         "createProjectSession",
         "openProjectSession",
         "executeProjectIntent",
+        "listProjectSessionMaterials",
+        "listProjectSessionMissingMaterials",
         "closeProjectSession"
       ]
     });

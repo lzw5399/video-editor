@@ -144,6 +144,8 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
       ])
     );
     const legacyCommands = (await readLegacyExecuteCommandCalls(app)).map((call) => call.command);
+    expect(legacyCommands, "product material reads must use Rust project session APIs").not.toContain("listMaterials");
+    expect(legacyCommands, "product missing-material reads must use Rust project session APIs").not.toContain("listMissingMaterials");
     expect(legacyCommands, "product import must not use renderer-owned draft importMaterial").not.toContain("importMaterial");
     expect(legacyCommands, "product add-to-timeline must not use renderer-owned draft addTimelineSegmentIntent").not.toContain(
       "addTimelineSegmentIntent"
@@ -786,7 +788,9 @@ function expectProductEditCommandsAreSessionOwned(
     "setTrackLock",
     "setTrackVisibility",
     "setTrackMute",
-    "updateSegmentVisual"
+    "updateSegmentVisual",
+    "listMaterials",
+    "listMissingMaterials"
   ]);
   const legacyEditCommands = legacyCalls.map((call) => call.command).filter((command) => forbiddenLegacyCommands.has(command));
   expect(legacyEditCommands, "product edits must not fall back to renderer-owned executeCommand").toEqual([]);

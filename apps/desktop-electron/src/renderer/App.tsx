@@ -7,7 +7,10 @@ import type {
   OpenProjectSessionRequest,
   ProjectSessionImportMaterialResponse,
   ProjectSessionIntentResponse,
+  ProjectSessionMaterialsResponse,
+  ProjectSessionMissingMaterialsResponse,
   ProjectSessionOpenResponse,
+  ProjectSessionReadRequest,
   ProjectSessionRequest,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse
@@ -21,8 +24,6 @@ import type {
   ArtifactStatusSummary,
   CommandResultEnvelope,
   ExportJobStatusResponse,
-  ListMaterialsResponse,
-  ListMissingMaterialsResponse,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
   WaveformDisplayPeaksResponse
@@ -50,8 +51,6 @@ import {
   buildGetArtifactStatusCommand,
   buildGetExportJobStatusCommand,
   buildGetWaveformDisplayPeaksCommand,
-  buildListMaterialsCommand,
-  buildListMissingMaterialsCommand,
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
   buildPauseAudioPreviewCommand,
@@ -114,6 +113,10 @@ type VideoEditorCoreApi = {
   executeProjectIntent: <T = ProjectSessionIntentResponse>(
     request: ExecuteProjectIntentRequest
   ) => Promise<CommandResultEnvelope<T>>;
+  listProjectSessionMaterials: (request: ProjectSessionReadRequest) => Promise<CommandResultEnvelope<ProjectSessionMaterialsResponse>>;
+  listProjectSessionMissingMaterials: (
+    request: ProjectSessionReadRequest
+  ) => Promise<CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>>;
   closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {
@@ -395,21 +398,11 @@ export function App(): React.ReactElement {
 
       const openedDraft = openedProject?.data?.draft ?? null;
       const activeDraft = openedDraft ?? workspaceRef.current.draft;
-      const materialList = await window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(activeDraft));
+      const materials =
+        openedProject?.data === undefined
+          ? activeDraft.materials
+          : await listProjectSessionMaterials(openedProject.data.sessionId, openedProject.data.revision);
       if (cancelled) {
-        return;
-      }
-
-      if (!materialList.ok) {
-        const message = materialList.error?.message ?? "素材列表读取失败";
-        setWorkspace((current) => ({
-          ...current,
-          bindingStatus: {
-            kind: "error",
-            label: formatCommandError(message)
-          },
-          commandError: formatCommandError(message)
-        }));
         return;
       }
 
@@ -423,7 +416,7 @@ export function App(): React.ReactElement {
         });
         const next = {
           ...base,
-          materials: materialList.data?.materials ?? base.materials,
+          materials,
           bindingStatus: readyBindingStatus,
           commandError: openedProject?.data?.warnings.length ? commandErrorMessage(openedProject.data.warnings.join("；")) : null
         };
@@ -579,6 +572,45 @@ export function App(): React.ReactElement {
     }
     projectSessionRef.current = null;
     await window.videoEditorCore.closeProjectSession({ sessionId: session.sessionId }).catch(() => undefined);
+  }
+
+  function currentProjectSessionReadRequest(action: string): { sessionId: string; expectedRevision: number } | null {
+    const session = projectSessionRef.current;
+    if (session !== null) {
+      return {
+        sessionId: session.sessionId,
+        expectedRevision: session.revision
+      };
+    }
+
+    setWorkspace((current) => ({
+      ...current,
+      pendingCommand: null,
+      commandError: commandErrorMessage(`项目会话未就绪，无法${action}`)
+    }));
+    return null;
+  }
+
+  async function listProjectSessionMaterials(sessionId: string, expectedRevision: number) {
+    const result = await window.videoEditorCore.listProjectSessionMaterials({
+      sessionId,
+      expectedRevision
+    });
+    if (!result.ok || result.data === null) {
+      throw new Error(result.error?.message ?? "素材列表读取失败");
+    }
+    return result.data.materials;
+  }
+
+  async function listProjectSessionMissingMaterials(sessionId: string, expectedRevision: number) {
+    const result = await window.videoEditorCore.listProjectSessionMissingMaterials({
+      sessionId,
+      expectedRevision
+    });
+    if (!result.ok || result.data === null) {
+      throw new Error(result.error?.message ?? "丢失素材检查失败");
+    }
+    return result.data.diagnostics;
   }
 
   async function executeProjectTimelineIntent(
@@ -1451,12 +1483,16 @@ export function App(): React.ReactElement {
     }));
 
     try {
-      const result = await window.videoEditorCore.executeCommand<ListMaterialsResponse>(buildListMaterialsCommand(workspace.draft));
+      const request = currentProjectSessionReadRequest("刷新素材");
+      if (request === null) {
+        return;
+      }
+      const materials = await listProjectSessionMaterials(request.sessionId, request.expectedRevision);
       setWorkspace((current) => ({
         ...current,
-        materials: result.ok && result.data !== null ? result.data.materials : current.materials,
+        materials,
         pendingCommand: null,
-        commandError: result.ok ? null : commandErrorMessage(result)
+        commandError: null
       }));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1476,14 +1512,16 @@ export function App(): React.ReactElement {
     }));
 
     try {
-      const result = await window.videoEditorCore.executeCommand<ListMissingMaterialsResponse>(
-        buildListMissingMaterialsCommand(workspace.draft, bundlePath)
-      );
+      const request = currentProjectSessionReadRequest("检查丢失素材");
+      if (request === null) {
+        return;
+      }
+      const diagnostics = await listProjectSessionMissingMaterials(request.sessionId, request.expectedRevision);
       setWorkspace((current) => ({
         ...current,
-        materialDiagnostics: result.ok && result.data !== null ? result.data.diagnostics : current.materialDiagnostics,
+        materialDiagnostics: diagnostics,
         pendingCommand: null,
-        commandError: result.ok ? null : commandErrorMessage(result)
+        commandError: null
       }));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

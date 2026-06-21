@@ -1,5 +1,6 @@
 use bindings_node::{
-    close_project_session, create_project_session, execute_project_intent, open_project_session,
+    close_project_session, create_project_session, execute_project_intent,
+    list_project_session_materials, list_project_session_missing_materials, open_project_session,
 };
 use draft_model::Draft;
 use media_runtime::discover_runtime_config;
@@ -176,6 +177,125 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
     );
 
     close_project_session(json!({ "sessionId": "test-session-import-add" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_material_reads_use_canonical_session_draft() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");
+    let executor = DesktopFfmpegExecutor::default();
+    let video = generate_video_material_fixture(&executor, &runtime)
+        .expect("video material fixture should be generated");
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-material-read.veproj");
+    save_empty_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-material-read"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let imported = execute_project_intent(json!({
+        "sessionId": "test-session-material-read",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "importMaterial",
+            "materialPath": video.path().display().to_string(),
+            "materialId": "session-read-material",
+            "displayName": "session-read.mp4"
+        }
+    }))
+    .expect("session importMaterial intent should return an envelope");
+    assert_eq!(imported["ok"], true, "{imported:#}");
+    assert_eq!(imported["data"]["revision"], 1);
+
+    let listed = list_project_session_materials(json!({
+        "sessionId": "test-session-material-read",
+        "expectedRevision": 1
+    }))
+    .expect("listProjectSessionMaterials should return an envelope");
+    assert_eq!(listed["ok"], true, "{listed:#}");
+    assert_eq!(listed["data"]["revision"], 1);
+    assert_eq!(
+        listed["data"]["materials"][0]["materialId"],
+        "session-read-material"
+    );
+    assert_eq!(
+        listed["data"]["bundlePath"],
+        bundle_path.canonicalize().unwrap().display().to_string()
+    );
+
+    let stale = list_project_session_materials(json!({
+        "sessionId": "test-session-material-read",
+        "expectedRevision": 0
+    }))
+    .expect("stale listProjectSessionMaterials should return an envelope");
+    assert_eq!(stale["ok"], false, "{stale:#}");
+    assert_eq!(stale["error"]["kind"], "invalidPayload");
+
+    let rejected = list_project_session_materials(json!({
+        "sessionId": "test-session-material-read",
+        "expectedRevision": 1,
+        "draft": timeline_draft_json()
+    }))
+    .expect("draft-bearing material read should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-material-read" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_missing_material_reads_use_session_bundle_path() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-missing-read.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-missing-read"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let listed = list_project_session_missing_materials(json!({
+        "sessionId": "test-session-missing-read",
+        "expectedRevision": 0
+    }))
+    .expect("listProjectSessionMissingMaterials should return an envelope");
+    assert_eq!(listed["ok"], true, "{listed:#}");
+    assert_eq!(listed["data"]["revision"], 0);
+    assert_eq!(
+        listed["data"]["diagnostics"][0]["materialId"],
+        "video-material"
+    );
+    assert_eq!(listed["data"]["diagnostics"][0]["kind"], "missingFile");
+    let resolved_path = listed["data"]["diagnostics"][0]["lastKnownResolvedPath"]
+        .as_str()
+        .expect("missing material should include resolved path");
+    assert!(
+        resolved_path.contains("session-missing-read.veproj"),
+        "missing diagnostics should resolve against the session bundle path: {resolved_path}"
+    );
+
+    let unknown = list_project_session_missing_materials(json!({
+        "sessionId": "missing-session",
+        "expectedRevision": 0
+    }))
+    .expect("unknown session missing material read should return an envelope");
+    assert_eq!(unknown["ok"], false, "{unknown:#}");
+    assert_eq!(unknown["error"]["kind"], "invalidProject");
+
+    let rejected = list_project_session_missing_materials(json!({
+        "sessionId": "test-session-missing-read",
+        "expectedRevision": 0,
+        "bundlePath": "/tmp/renderer-owned-path"
+    }))
+    .expect("bundlePath-bearing missing material read should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-missing-read" }))
         .expect("closeProjectSession should return an envelope");
 }
 

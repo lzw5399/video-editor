@@ -11,7 +11,6 @@ import type {
   GetExportJobStatusCommandPayload,
   ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
-  ListMissingMaterialsCommandPayload,
   OpenProjectBundleCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
@@ -90,23 +89,6 @@ export function buildImportMaterialCommand(options: ImportMaterialOptions): Comm
   } satisfies ImportMaterialCommandPayload & { kind: "importMaterial" };
 
   return envelope("importMaterial", payload);
-}
-
-export function buildListMaterialsCommand(draft: Draft): CommandEnvelope {
-  return envelope("listMaterials", {
-    kind: "listMaterials",
-    draft
-  });
-}
-
-export function buildListMissingMaterialsCommand(draft: Draft, bundlePath: string): CommandEnvelope {
-  const payload = {
-    kind: "listMissingMaterials",
-    draft,
-    bundlePath
-  } satisfies ListMissingMaterialsCommandPayload & { kind: "listMissingMaterials" };
-
-  return envelope("listMissingMaterials", payload);
 }
 
 export function buildProbeRuntimeCapabilitiesCommand(): CommandEnvelope {
@@ -450,7 +432,7 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
         : status === "error"
           ? "运行环境检测失败，请检查媒体运行环境后重试。"
         : "部分能力不可用，可继续编辑，但预览或导出可能受限。",
-    packageStatusLabel: report.licensePosture.externalRuntime ? "外部运行环境" : "打包应用已就绪",
+    packageStatusLabel: report.licensePosture.externalRuntime ? "运行环境异常" : "内置运行环境",
     rows: [
       binaryRow("媒体运行环境", report.ffmpeg),
       binaryRow("媒体探测环境", report.ffprobe),
@@ -459,7 +441,7 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
       fontRow("字体环境", report.fontReadiness),
       {
         label: "打包状态",
-        value: report.licensePosture.redistributableBuild ? "可再发行构建" : "本机外部运行环境",
+        value: report.licensePosture.redistributableBuild ? "可再发行构建" : "内置运行环境待审查",
         detail: report.licensePosture.message,
         tone: report.licensePosture.redistributableBuild ? "ready" : "warning"
       }

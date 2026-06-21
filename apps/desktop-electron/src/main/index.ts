@@ -24,12 +24,15 @@ import {
   createProjectSession,
   executeCommand,
   executeProjectIntent,
+  listProjectSessionMaterials,
+  listProjectSessionMissingMaterials,
   openProjectSession,
   ping,
   version,
   type CreateProjectSessionRequest,
   type ExecuteProjectIntentRequest,
   type OpenProjectSessionRequest,
+  type ProjectSessionReadRequest,
   type ProjectSessionRequest
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
@@ -62,7 +65,13 @@ type TestExecuteCommandCall = {
 };
 
 type TestProjectSessionCall = {
-  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  command:
+    | "createProjectSession"
+    | "openProjectSession"
+    | "executeProjectIntent"
+    | "listProjectSessionMaterials"
+    | "listProjectSessionMissingMaterials"
+    | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;
@@ -163,6 +172,16 @@ ipcMain.handle("core:executeProjectIntent", (event, request: ExecuteProjectInten
   assertAllowedIpcSender(event);
   recordTestProjectSessionCall("executeProjectIntent", request);
   return executeProjectIntent(request);
+});
+ipcMain.handle("core:listProjectSessionMaterials", (event, request: ProjectSessionReadRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("listProjectSessionMaterials", request);
+  return listProjectSessionMaterials(request);
+});
+ipcMain.handle("core:listProjectSessionMissingMaterials", (event, request: ProjectSessionReadRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("listProjectSessionMissingMaterials", request);
+  return listProjectSessionMissingMaterials(request);
 });
 ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
   assertAllowedIpcSender(event);
@@ -667,10 +686,10 @@ function maybeBuildTestRuntimeCapabilitiesResponse(
         diagnostic: null
       },
       licensePosture: {
-        externalRuntime: true,
+        externalRuntime: false,
         redistributableBuild: false,
-        source: "externalRuntime",
-        message: "当前使用本机 FFmpeg，仅用于本地测试，不代表可再发行构建。"
+        source: "bundledRuntime",
+        message: "当前使用打包内置 FFmpeg/ffprobe；公开再发行仍需完成法律审查。"
       },
       diagnostics: []
     },

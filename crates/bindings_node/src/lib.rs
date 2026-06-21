@@ -246,6 +246,18 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     project_session_service::execute_project_intent(request)
 }
 
+#[napi(js_name = "listProjectSessionMaterials")]
+pub fn list_project_session_materials(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::list_project_session_materials(request)
+}
+
+#[napi(js_name = "listProjectSessionMissingMaterials")]
+pub fn list_project_session_missing_materials(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    project_session_service::list_project_session_missing_materials(request)
+}
+
 #[napi(js_name = "createRealtimePreviewSession")]
 pub fn create_realtime_preview_session(config: serde_json::Value) -> Result<serde_json::Value> {
     let config = parse_realtime_preview_payload::<RealtimePreviewSessionBindingConfig>(config)?;

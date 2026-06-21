@@ -7,6 +7,8 @@ import type {
   CommandDelta,
   CommandEvent,
   CommandResultEnvelope,
+  ListMaterialsResponse,
+  ListMissingMaterialsResponse,
   MissingMaterialCommandDiagnostic
 } from "../generated/CommandResultEnvelope";
 import type {
@@ -45,6 +47,10 @@ type NativeBinding = {
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
   executeProjectIntent: (request: ExecuteProjectIntentRequest) => CommandResultEnvelope<ProjectSessionIntentResponse>;
+  listProjectSessionMaterials: (request: ProjectSessionReadRequest) => CommandResultEnvelope<ProjectSessionMaterialsResponse>;
+  listProjectSessionMissingMaterials: (
+    request: ProjectSessionReadRequest
+  ) => CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   closeRealtimePreviewSession: (request: RealtimePreviewSessionRequest) => RealtimePreviewClosedResponse;
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
@@ -78,6 +84,11 @@ export type CreateProjectSessionRequest = {
 
 export type ProjectSessionRequest = {
   sessionId: string;
+};
+
+export type ProjectSessionReadRequest = {
+  sessionId: string;
+  expectedRevision: number;
 };
 
 export type ProjectIntent =
@@ -146,6 +157,20 @@ export type ProjectSessionOpenResponse = {
   bundlePath: string;
   projectJsonPath: string;
   warnings: string[];
+};
+
+export type ProjectSessionMaterialsResponse = ListMaterialsResponse & {
+  sessionId: string;
+  revision: number;
+  bundlePath: string;
+  projectJsonPath: string;
+};
+
+export type ProjectSessionMissingMaterialsResponse = ListMissingMaterialsResponse & {
+  sessionId: string;
+  revision: number;
+  bundlePath: string;
+  projectJsonPath: string;
 };
 
 export type ProjectSessionClosedResponse = {
@@ -436,6 +461,26 @@ export function executeProjectIntent(
   return binding.executeProjectIntent(request);
 }
 
+export function listProjectSessionMaterials(
+  request: ProjectSessionReadRequest
+): CommandResultEnvelope<ProjectSessionMaterialsResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("listProjectSessionMaterials");
+  }
+  return binding.listProjectSessionMaterials(request);
+}
+
+export function listProjectSessionMissingMaterials(
+  request: ProjectSessionReadRequest
+): CommandResultEnvelope<ProjectSessionMissingMaterialsResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("listProjectSessionMissingMaterials");
+  }
+  return binding.listProjectSessionMissingMaterials(request);
+}
+
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
@@ -518,6 +563,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.openProjectSession !== "function" ||
       typeof loaded.closeProjectSession !== "function" ||
       typeof loaded.executeProjectIntent !== "function" ||
+      typeof loaded.listProjectSessionMaterials !== "function" ||
+      typeof loaded.listProjectSessionMissingMaterials !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.closeRealtimePreviewSession !== "function" ||
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
@@ -545,6 +592,8 @@ function loadNativeBinding(): NativeBinding | null {
       openProjectSession: loaded.openProjectSession,
       closeProjectSession: loaded.closeProjectSession,
       executeProjectIntent: loaded.executeProjectIntent,
+      listProjectSessionMaterials: loaded.listProjectSessionMaterials,
+      listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       closeRealtimePreviewSession: loaded.closeRealtimePreviewSession,
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,

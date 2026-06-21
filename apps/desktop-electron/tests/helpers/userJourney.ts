@@ -47,7 +47,13 @@ type ExecuteCommandCall = {
 };
 
 type ProjectSessionCall = {
-  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  command:
+    | "createProjectSession"
+    | "openProjectSession"
+    | "executeProjectIntent"
+    | "listProjectSessionMaterials"
+    | "listProjectSessionMissingMaterials"
+    | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;

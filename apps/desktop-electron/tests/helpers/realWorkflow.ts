@@ -15,7 +15,13 @@ type ExecuteCommandCall = {
 };
 
 type ProjectSessionCall = {
-  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  command:
+    | "createProjectSession"
+    | "openProjectSession"
+    | "executeProjectIntent"
+    | "listProjectSessionMaterials"
+    | "listProjectSessionMissingMaterials"
+    | "closeProjectSession";
   intentKind: string | null;
   timelineSemanticKeys?: string[];
 };
