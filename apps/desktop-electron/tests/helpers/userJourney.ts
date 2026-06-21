@@ -19,9 +19,10 @@ export const USER_JOURNEY_AV_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-av-tone-te
 export const USER_JOURNEY_OVERLAY_IMAGE = join(USER_JOURNEY_MEDIA_DIR, "p0-overlay-testsrc.png");
 export const USER_JOURNEY_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-tone.wav");
 const TIMELINE_RULER_CLICK_TOLERANCE_US = 10_000;
+const DEFAULT_INTENT_SEGMENT_DURATION_US = 3_000_000;
 const execFileAsync = promisify(execFile);
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: string;
   kind: string;
   targetTime?: number | null;
@@ -72,7 +73,7 @@ type ProjectSessionCall = {
   targetTime?: number | null;
   targetTimerange?: { start: number; duration: number } | null;
   duration?: number | null;
-  visual?: ExecuteCommandCall["visual"] | null;
+  visual?: NativeCommandObservation["visual"] | null;
   textContent?: string | null;
   textSource?: string | null;
   textFontRef?: string | null;
@@ -165,7 +166,7 @@ type RealtimePreviewHostState = {
 export type ProductJourneyAppController = {
   readonly kind: "electron-launch" | "foreground-cdp";
   close: () => Promise<void>;
-  readExecuteCommandCalls: () => Promise<ExecuteCommandCall[]>;
+  readNativeCommandObservations: () => Promise<NativeCommandObservation[]>;
   readProjectSessionCalls: () => Promise<ProjectSessionCall[]>;
   readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
@@ -245,7 +246,7 @@ export async function waitForProductPlaybackSuccess(
     visibleMotion,
     after,
     frameRequestsBeforePlay,
-    frameRequestsAfterPlay: requestPreviewFrameCount(await readExecuteCommandCalls(app))
+    frameRequestsAfterPlay: requestPreviewFrameCount(await readNativeCommandObservations(app))
   });
   return { after, visibleMotion };
 }
@@ -510,18 +511,15 @@ export async function addTextThroughProductPanel(
   page: Page,
   app: ProductJourneyAppController,
   content: string,
-  durationUs = 2_000_000
+  expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
 ): Promise<void> {
   const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
-  await textPanel.getByLabel("文字时长（秒）").fill(formatSecondsInput(durationUs));
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
   await waitForCommandCount(app, "addTextSegmentIntent", nextCount);
-  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addTextSegmentIntent")?.duration).toBe(
-    durationUs
-  );
+  await expectTimelineSegmentDuration(page, new RegExp(escapeRegex(content)), expectedDurationUs);
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
     content
   );
@@ -530,18 +528,16 @@ export async function addTextThroughProductPanel(
 export async function importSubtitleSrtThroughProductPanel(
   page: Page,
   app: ProductJourneyAppController,
-  srtContent: string,
-  offsetUs = 0
+  srtContent: string
 ): Promise<void> {
   const nextCount = (await countCommand(app, "importSubtitleSrtIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "字幕" }).click();
   const captionsPanel = page.getByRole("region", { name: "素材面板" });
   await expect(captionsPanel).not.toContainText("字幕暂未开放");
   await captionsPanel.getByLabel("SRT 内容").fill(srtContent);
-  await captionsPanel.getByLabel("字幕时间偏移").fill(formatSecondsInput(offsetUs));
   await captionsPanel.getByRole("button", { name: "导入字幕", exact: true }).click();
   await waitForCommandCount(app, "importSubtitleSrtIntent", nextCount);
-  const lastImport = (await readExecuteCommandCalls(app)).findLast((call) => call.command === "importSubtitleSrtIntent");
+  const lastImport = (await readNativeCommandObservations(app)).findLast((call) => call.command === "importSubtitleSrtIntent");
   expect(lastImport?.srtContent).toBe(srtContent);
   const firstCueText = firstSrtCueText(srtContent);
   if (firstCueText.length > 0) {
@@ -555,19 +551,16 @@ export async function addAudioThroughProductPanel(
   page: Page,
   app: ProductJourneyAppController,
   audioPath: string,
-  durationUs = 2_000_000
+  expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
 ): Promise<void> {
   const nextCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   const audioPanel = page.getByRole("region", { name: "素材面板" });
   await audioPanel.getByLabel("BGM素材").selectOption({ label: basename(audioPath) });
-  await audioPanel.getByLabel("音频时长（秒）").fill(formatSecondsInput(durationUs));
   await audioPanel.getByRole("button", { name: "添加音频", exact: true }).click();
   await waitForCommandCount(app, "addAudioSegmentIntent", nextCount);
-  expect((await readExecuteCommandCalls(app)).findLast((call) => call.command === "addAudioSegmentIntent")?.duration).toBe(
-    durationUs
-  );
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(basename(audioPath))}`) })).toBeVisible();
+  await expectTimelineSegmentDuration(page, new RegExp(escapeRegex(basename(audioPath))), expectedDurationUs);
 }
 
 type VisualInspectorEdit = {
@@ -611,7 +604,7 @@ export async function updateSelectedVisualThroughInspector(
 }
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
-  const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+  const frameRequestsBefore = requestPreviewFrameCount(await readNativeCommandObservations(app));
   await clickTimelineRulerAt(page, targetTimeUs);
   await expect
     .poll(async () => parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""), {
@@ -624,7 +617,7 @@ export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppCon
     })
     .toBeLessThanOrEqual(targetTimeUs + TIMELINE_RULER_CLICK_TOLERANCE_US);
   expect(
-    requestPreviewFrameCount(await readExecuteCommandCalls(app)),
+    requestPreviewFrameCount(await readNativeCommandObservations(app)),
     "product seek must not fall back to preview artifact frame requests"
   ).toBe(frameRequestsBefore);
 }
@@ -807,13 +800,13 @@ export async function capturePreviewEvidence(page: Page): Promise<PreviewEvidenc
   };
 }
 
-export async function readExecuteCommandCalls(app: ProductJourneyAppController): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, sessionCalls] = await Promise.all([
-    app.readExecuteCommandCalls(),
+export async function readNativeCommandObservations(app: ProductJourneyAppController): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, sessionCalls] = await Promise.all([
+    app.readNativeCommandObservations(),
     app.readProjectSessionCalls()
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...sessionCalls
       .filter(
         (call) =>
@@ -822,12 +815,12 @@ export async function readExecuteCommandCalls(app: ProductJourneyAppController):
           call.command === "requestProjectSessionPreviewFrame" ||
           call.command === "requestProjectSessionPreviewSegment"
       )
-      .map(projectSessionCallToCommandCall)
+      .map(projectSessionCallToNativeObservation)
   ];
 }
 
-export async function readLegacyExecuteCommandCalls(app: ProductJourneyAppController): Promise<ExecuteCommandCall[]> {
-  return app.readExecuteCommandCalls();
+export async function readDirectNativeCommandObservations(app: ProductJourneyAppController): Promise<NativeCommandObservation[]> {
+  return app.readNativeCommandObservations();
 }
 
 export async function readProjectSessionCalls(app: ProductJourneyAppController): Promise<ProjectSessionCall[]> {
@@ -838,7 +831,7 @@ export async function readRealtimePreviewHostCalls(app: ProductJourneyAppControl
   return app.readRealtimePreviewHostCalls();
 }
 
-export function requestPreviewFrameCount(calls: ExecuteCommandCall[]): number {
+export function requestPreviewFrameCount(calls: NativeCommandObservation[]): number {
   return calls.filter((call) => call.command === "requestPreviewFrame").length;
 }
 
@@ -872,6 +865,15 @@ export async function readTimelineSegments(
       }
       return typeof labelFilter === "string" ? segment.label.includes(labelFilter) : labelFilter.test(segment.label);
     });
+}
+
+async function expectTimelineSegmentDuration(page: Page, labelFilter: RegExp, expectedDurationUs: number): Promise<void> {
+  await expect
+    .poll(async () => {
+      const segments = await readTimelineSegments(page, labelFilter);
+      return segments.findLast((segment) => segment.selected)?.targetDurationUs ?? segments.at(-1)?.targetDurationUs ?? null;
+    })
+    .toBe(expectedDurationUs);
 }
 
 async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreviewHostState | null> {
@@ -922,7 +924,7 @@ async function waitForProjectSessionIntentCount(
 }
 
 async function countCommand(app: ProductJourneyAppController, command: string): Promise<number> {
-  return (await readExecuteCommandCalls(app)).filter((call) => call.command === command).length;
+  return (await readNativeCommandObservations(app)).filter((call) => call.command === command).length;
 }
 
 async function countProjectSessionCommand(app: ProductJourneyAppController, command: ProjectSessionCall["command"]): Promise<number> {
@@ -933,7 +935,7 @@ async function countProjectSessionIntent(app: ProductJourneyAppController, inten
   return (await readProjectSessionCalls(app)).filter((call) => call.command === "executeProjectIntent" && call.intentKind === intentKind).length;
 }
 
-function projectSessionCallToCommandCall(call: ProjectSessionCall): ExecuteCommandCall {
+function projectSessionCallToNativeObservation(call: ProjectSessionCall): NativeCommandObservation {
   const command =
     call.command === "startProjectSessionExport"
       ? "startExport"
@@ -988,11 +990,11 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
     kind: "electron-launch",
     close: () => app.close(),
     readForegroundDiagnostics: async () => null,
-    readExecuteCommandCalls: () =>
+    readNativeCommandObservations: () =>
       app.evaluate(() => {
         return (
-          (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-            .__videoEditorTestExecuteCommandCalls ?? []
+          (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+            .__videoEditorTestNativeCommandObservations ?? []
         );
       }),
     readProjectSessionCalls: () =>
@@ -1029,7 +1031,7 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
     kind: app.kind,
     close: () => app.close(),
     readForegroundDiagnostics: () => app.readForegroundDiagnostics(),
-    readExecuteCommandCalls: async () => (await app.readExecuteCommandCalls()) as ExecuteCommandCall[],
+    readNativeCommandObservations: async () => (await app.readNativeCommandObservations()) as NativeCommandObservation[],
     readProjectSessionCalls: async () => (await app.readProjectSessionCalls()) as ProjectSessionCall[],
     readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[],
     readWindowMetrics: () => app.readWindowMetrics()
@@ -1176,8 +1178,4 @@ function firstSrtCueText(srtContent: string): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function formatSecondsInput(durationUs: number): string {
-  return String(durationUs / 1_000_000);
 }

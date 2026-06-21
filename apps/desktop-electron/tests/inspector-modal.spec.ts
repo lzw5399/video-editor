@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: CommandName | string;
   canvasConfig: {
     width: number;
@@ -15,13 +15,13 @@ type ExecuteCommandCall = {
 type ProjectSessionCall = {
   command: "executeProjectIntent" | string;
   intentKind?: string | null;
-  canvasConfig?: ExecuteCommandCall["canvasConfig"];
+  canvasConfig?: NativeCommandObservation["canvasConfig"];
 };
 
 declare global {
   interface Window {
     videoEditorTestObservations?: {
-      getExecuteCommandCalls: () => Promise<unknown[]>;
+      getNativeCommandObservations: () => Promise<unknown[]>;
     };
   }
 }
@@ -46,26 +46,26 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
   return { app, page };
 }
 
-async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Promise<void> {
-  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getExecuteCommandCalls === "function");
+async function resetNativeCommandObservations(app: ElectronApplication, page: Page): Promise<void> {
+  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getNativeCommandObservations === "function");
   if (!hasBridge) {
     throw new Error("inspector modal test setup error: native test observation bridge is unavailable");
   }
 
   await app.evaluate(() => {
-    (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-      .__videoEditorTestExecuteCommandCalls = [];
+    (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+      .__videoEditorTestNativeCommandObservations = [];
     (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
       .__videoEditorTestProjectSessionCalls = [];
   });
 }
 
-async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, projectCalls] = await Promise.all([
+async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, projectCalls] = await Promise.all([
     app.evaluate(() => {
       return (
-        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-          .__videoEditorTestExecuteCommandCalls ?? []
+        (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+          .__videoEditorTestNativeCommandObservations ?? []
       );
     }),
     app.evaluate(() => {
@@ -76,7 +76,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     })
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...projectCalls
       .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
       .map((call) => ({
@@ -102,7 +102,7 @@ test.describe("draft parameter inspector modal", () => {
     const { app, page } = await launchWorkspaceApp();
 
     try {
-      await spyExecuteCommandCalls(app, page);
+      await resetNativeCommandObservations(app, page);
 
       const inspector = page.getByLabel("草稿参数");
       await expect(inspector).toContainText("草稿参数");
@@ -116,7 +116,7 @@ test.describe("draft parameter inspector modal", () => {
       await dialog.getByRole("button", { name: "取消" }).click();
       await expect(page.getByRole("dialog", { name: "草稿参数" })).toHaveCount(0);
       await expect(inspector).toContainText("16:9");
-      expect((await readExecuteCommandCalls(app)).some((call) => call.command === "updateDraftCanvasConfig")).toBe(false);
+      expect((await readNativeCommandObservations(app)).some((call) => call.command === "updateDraftCanvasConfig")).toBe(false);
 
       dialog = await openDraftParametersDialog(page);
       await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
@@ -126,11 +126,11 @@ test.describe("draft parameter inspector modal", () => {
       await expect(page.getByRole("dialog", { name: "草稿参数" })).toHaveCount(0);
 
       await expect
-        .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === "updateDraftCanvasConfig"))
+        .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === "updateDraftCanvasConfig"))
         .toBe(true);
       await expect(page.getByLabel("预览窗口")).toContainText("画布 9:16 · 1080 x 1920 · 30 fps");
 
-      const canvasCall = (await readExecuteCommandCalls(app)).find((call) => call.command === "updateDraftCanvasConfig");
+      const canvasCall = (await readNativeCommandObservations(app)).find((call) => call.command === "updateDraftCanvasConfig");
       expect(canvasCall?.canvasConfig).toMatchObject({
         width: 1080,
         height: 1920,

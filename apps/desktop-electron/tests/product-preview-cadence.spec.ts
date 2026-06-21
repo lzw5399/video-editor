@@ -13,7 +13,7 @@ import {
   importSubtitleSrtThroughProductPanel,
   launchProductJourneyApp,
   type ProductJourneyAppController,
-  readExecuteCommandCalls,
+  readNativeCommandObservations,
   readRealtimePreviewHostCalls,
   requestPreviewFrameCount
 } from "./helpers/userJourney";
@@ -67,7 +67,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
 
-    const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBefore = requestPreviewFrameCount(await readNativeCommandObservations(app));
     const before = await readHostState(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
     const nativeHostCallCountBeforePlay = (await readRealtimePreviewHostCalls(app)).length;
@@ -133,7 +133,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       renderDurationMs: after?.telemetry?.renderDurationMs ?? null,
       firstFrameLatencyMs: after?.telemetry?.firstFrameLatencyMs ?? null,
       frameRequestsBefore,
-      frameRequestsAfter: requestPreviewFrameCount(await readExecuteCommandCalls(app))
+      frameRequestsAfter: requestPreviewFrameCount(await readNativeCommandObservations(app))
     };
     console.log(`product preview cadence metrics ${JSON.stringify(metrics)}`);
 
@@ -228,7 +228,7 @@ async function expectCadencePlayback(
   const playButton = controls.getByRole("button", { name: "播放预览" });
   await expect(playButton).toBeEnabled({ timeout: 20_000 });
 
-  const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+  const frameRequestsBefore = requestPreviewFrameCount(await readNativeCommandObservations(app));
   const before = await readHostState(page);
   const visibleBefore = await captureVisiblePreviewEvidence(page, app);
   const nativeHostCallCountBeforePlay = (await readRealtimePreviewHostCalls(app)).length;
@@ -294,7 +294,7 @@ async function expectCadencePlayback(
     renderDurationMs: after?.telemetry?.renderDurationMs ?? null,
     firstFrameLatencyMs: after?.telemetry?.firstFrameLatencyMs ?? null,
     frameRequestsBefore,
-    frameRequestsAfter: requestPreviewFrameCount(await readExecuteCommandCalls(app))
+    frameRequestsAfter: requestPreviewFrameCount(await readNativeCommandObservations(app))
   };
   console.log(`${logLabel} ${JSON.stringify(metrics)}`);
 

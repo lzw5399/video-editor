@@ -117,7 +117,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   });
   if (process.argv.includes("--video-editor-test-observations=1")) {
     contextBridge.exposeInMainWorld("videoEditorTestObservations", {
-      getExecuteCommandCalls: () => ipcRenderer.invoke("test:getExecuteCommandCalls"),
+      getNativeCommandObservations: () => ipcRenderer.invoke("test:getNativeCommandObservations"),
       getProjectSessionCalls: () => ipcRenderer.invoke("test:getProjectSessionCalls"),
       getRealtimePreviewHostCalls: () => ipcRenderer.invoke("test:getRealtimePreviewHostCalls"),
       getWindowMetrics: () => ipcRenderer.invoke("test:getWindowMetrics")

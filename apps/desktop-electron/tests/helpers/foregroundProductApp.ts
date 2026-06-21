@@ -21,7 +21,7 @@ export type ForegroundProductAppController = {
   readonly kind: "foreground-cdp";
   readonly diagnostics: ForegroundProductAppDiagnostics;
   close: () => Promise<void>;
-  readExecuteCommandCalls: () => Promise<unknown[]>;
+  readNativeCommandObservations: () => Promise<unknown[]>;
   readProjectSessionCalls: () => Promise<unknown[]>;
   readRealtimePreviewHostCalls: () => Promise<unknown[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
@@ -58,7 +58,7 @@ export type CoreGraphicsWindowSummary = {
 declare global {
   interface Window {
     videoEditorTestObservations?: {
-      getExecuteCommandCalls: () => Promise<unknown[]>;
+      getNativeCommandObservations: () => Promise<unknown[]>;
       getProjectSessionCalls: () => Promise<unknown[]>;
       getRealtimePreviewHostCalls: () => Promise<unknown[]>;
       getWindowMetrics: () => Promise<ProductWindowMetrics>;
@@ -107,7 +107,7 @@ export async function launchForegroundProductApp(
       await browser.close().catch(() => undefined);
       await terminateMainProcess(remoteDebuggingPort, pid);
     },
-    readExecuteCommandCalls: async () => readTestObservation(page, "getExecuteCommandCalls", diagnostics),
+    readNativeCommandObservations: async () => readTestObservation(page, "getNativeCommandObservations", diagnostics),
     readProjectSessionCalls: async () => readTestObservation(page, "getProjectSessionCalls", diagnostics),
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
     readWindowMetrics: async () => readTestWindowMetrics(page, diagnostics),

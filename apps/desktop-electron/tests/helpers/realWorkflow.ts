@@ -9,7 +9,7 @@ import type { Phase6MediaFixtures } from "./mediaFixtures";
 
 const execFileAsync = promisify(execFile);
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: CommandName;
   kind: string;
   outputPath?: string | null;
@@ -55,7 +55,7 @@ type RealtimePreviewHostState = {
 };
 
 export type RealWorkflowResult = {
-  calls: ExecuteCommandCall[];
+  calls: NativeCommandObservation[];
   realtimePreviewHostCalls: RealtimePreviewHostCall[];
   outputPath: string;
 };
@@ -83,7 +83,7 @@ export async function runRealImportPreviewExportWorkflow(
   await verifyRealtimePreviewPlayback(page, app);
   await exportDraft(page, app, fixtures);
 
-  const calls = await readExecuteCommandCalls(app);
+  const calls = await readNativeCommandObservations(app);
   const projectCalls = await readProjectSessionCalls(app);
   const observedActions = [
     ...calls.map((call) => call.command),
@@ -149,18 +149,18 @@ async function enterProjectFromProductEntryIfNeeded(page: Page, app: ElectronApp
     .toBe(true);
 }
 
-export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, projectCalls] = await Promise.all([
+export async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, projectCalls] = await Promise.all([
     app.evaluate(() => {
       return (
-        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-          .__videoEditorTestExecuteCommandCalls ?? []
+        (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+          .__videoEditorTestNativeCommandObservations ?? []
       );
     }),
     readProjectSessionCalls(app)
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...projectCalls
       .filter((call) => call.command === "startProjectSessionExport")
       .map((call) => ({
@@ -172,11 +172,11 @@ export async function readExecuteCommandCalls(app: ElectronApplication): Promise
   ];
 }
 
-async function readLegacyExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
+async function readDirectNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
   return app.evaluate(() => {
     return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
+      (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+        .__videoEditorTestNativeCommandObservations ?? []
     );
   });
 }
@@ -243,7 +243,6 @@ async function addTextSegment(page: Page, app: ElectronApplication, content: str
   const nextIntentCount = (await countProjectSessionIntent(app, "addTextSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
-  await page.getByLabel("文字时长（秒）").fill("3");
   await page.getByRole("button", { name: "添加文字", exact: true }).click();
   await waitForCommandOrProjectIntentCount(page, app, "addTextSegmentIntent", nextCommandCount, nextIntentCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(content)}`) })).toBeVisible();
@@ -255,7 +254,6 @@ async function addAudioSegment(page: Page, app: ElectronApplication, audioName: 
   const nextIntentCount = (await countProjectSessionIntent(app, "addAudioSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   await page.getByLabel("BGM素材").selectOption({ label: audioName });
-  await page.getByLabel("音频时长（秒）").fill("2");
   await page.getByRole("button", { name: "添加音频", exact: true }).click();
   await waitForCommandOrProjectIntentCount(page, app, "addAudioSegmentIntent", nextCommandCount, nextIntentCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(audioName)}`) })).toBeVisible();
@@ -321,7 +319,7 @@ async function exportDraft(
   try {
     await expect(statusButton).toBeEnabled({ timeout: 10_000 });
   } catch (error) {
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
     const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
     const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
@@ -351,7 +349,7 @@ async function exportDraft(
 
   const finalProgressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
   if (!finalProgressText.includes("已完成")) {
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
     const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
     throw new Error(
@@ -380,7 +378,7 @@ async function waitForCommandCount(
   try {
     await expect.poll(async () => countCommand(app, command), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
   } catch (error) {
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const materialCards = await page.getByRole("article").allTextContents();
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -395,7 +393,7 @@ async function waitForCommandCount(
 }
 
 async function countCommand(app: ElectronApplication, command: CommandName): Promise<number> {
-  return (await readExecuteCommandCalls(app)).filter((call) => call.command === command).length;
+  return (await readNativeCommandObservations(app)).filter((call) => call.command === command).length;
 }
 
 async function readProjectSessionCalls(app: ElectronApplication): Promise<ProjectSessionCall[]> {
@@ -456,7 +454,7 @@ async function waitForCommandOrProjectIntentCount(
       )
       .toBe(true);
   } catch (error) {
-    const commandCalls = await readLegacyExecuteCommandCalls(app);
+    const commandCalls = await readDirectNativeCommandObservations(app);
     const projectCalls = await readProjectSessionCalls(app);
     const materialCards = await page.getByRole("article").allTextContents();
     const message = error instanceof Error ? error.message : String(error);

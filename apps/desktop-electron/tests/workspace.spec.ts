@@ -13,7 +13,7 @@ import {
 } from "../src/renderer/viewModel";
 import type { RealtimePreviewHostApi } from "../src/renderer/workspace/PreviewMonitor";
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: string;
   kind: string;
   requestId: string | null;
@@ -48,7 +48,7 @@ type ProjectSessionCall = {
   targetTimerange?: { start: number; duration: number } | null;
   outputPath?: string | null;
   preset?: string | null;
-  canvasConfig?: ExecuteCommandCall["canvasConfig"];
+  canvasConfig?: NativeCommandObservation["canvasConfig"];
   visual?: SegmentVisual | null;
   keyframeProperty?: string | null;
   keyframeAt?: number | null;
@@ -93,7 +93,7 @@ const PORTRAIT_VIDEO_FIXTURE = join(MEDIA_FIXTURE_DIR, "p0-portrait-testsrc.mp4"
 declare global {
   interface Window {
     videoEditorTestObservations?: {
-      getExecuteCommandCalls: () => Promise<unknown[]>;
+      getNativeCommandObservations: () => Promise<unknown[]>;
     };
     videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
   }
@@ -171,26 +171,26 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
   await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
 }
 
-async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Promise<void> {
-  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getExecuteCommandCalls === "function");
+async function resetNativeCommandObservations(app: ElectronApplication, page: Page): Promise<void> {
+  const hasBridge = await page.evaluate(() => typeof window.videoEditorTestObservations?.getNativeCommandObservations === "function");
   if (!hasBridge) {
     throw new Error("workspace test setup error: native test observation bridge is unavailable");
   }
 
   await app.evaluate(() => {
-    (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-      .__videoEditorTestExecuteCommandCalls = [];
+    (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+      .__videoEditorTestNativeCommandObservations = [];
     (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
       .__videoEditorTestProjectSessionCalls = [];
   });
 }
 
-async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, projectCalls] = await Promise.all([
+async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, projectCalls] = await Promise.all([
     app.evaluate(() => {
       return (
-        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-          .__videoEditorTestExecuteCommandCalls ?? []
+        (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+          .__videoEditorTestNativeCommandObservations ?? []
       );
     }),
     app.evaluate(() => {
@@ -201,7 +201,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     })
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...projectCalls
       .filter(
         (call) =>
@@ -292,7 +292,7 @@ async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<R
 
 async function expectCommandCall(app: ElectronApplication, command: string): Promise<void> {
   await expect
-    .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === command))
+    .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === command))
     .toBe(true);
 }
 
@@ -313,7 +313,7 @@ async function openDraftParametersDialog(page: Page): Promise<Locator> {
 async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
   await expect
     .poll(async () => {
-      const calls = (await readExecuteCommandCalls(app)).filter((call) => call.command === "requestPreviewFrame");
+      const calls = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestPreviewFrame");
       return calls.at(-1)?.targetTime ?? null;
     })
     .toBe(targetTime);
@@ -329,7 +329,7 @@ async function expectLatestRealtimeHostSeekTarget(app: ElectronApplication, targ
 }
 
 async function expectNoPreviewFrameCommands(app: ElectronApplication): Promise<void> {
-  const calls = await readExecuteCommandCalls(app);
+  const calls = await readNativeCommandObservations(app);
   expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
 }
 
@@ -710,7 +710,6 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
-    await expect(page.getByLabel("文字时长（秒）")).toBeVisible();
     await expect(page.getByLabel("素材面板")).not.toContainText("微秒");
     await expect(page.getByLabel("默认文字").getByText("字号")).toHaveCount(0);
     await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
@@ -719,7 +718,6 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加音频", exact: true })).toBeVisible();
-    await expect(page.getByLabel("音频时长（秒）")).toBeVisible();
     await expect(page.getByLabel("素材面板")).not.toContainText("微秒");
     await expect(page.getByText("音量", { exact: true })).toBeVisible();
     await expect(page.getByText("声像", { exact: true })).toBeVisible();
@@ -732,7 +730,6 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("导入字幕");
     await expect(page.getByLabel("SRT 内容")).toBeVisible();
-    await expect(page.getByLabel("字幕时间偏移")).toBeVisible();
 
     for (const category of DEFERRED_CATEGORIES) {
       await topFeatureNav.getByRole("button", { name: category }).click();
@@ -777,10 +774,9 @@ test("text edit routes complete text inspector changes through project session i
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("开场标题");
-    await page.getByLabel("文字时长（秒）").fill("2.5");
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegment");
 
@@ -834,7 +830,7 @@ test("text edit routes complete text inspector changes through project session i
     const exportDialog = await openExportDialog(page);
     await expect(exportDialog.getByLabel("导出状态")).toContainText("文字已更新，请重新开始导出");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const addTextCall = calls.find((call) => call.command === "addTextSegment");
     const editTextCall = calls.find((call) => call.command === "editTextSegment");
     expect(addTextCall?.textSource).toBe("text");
@@ -852,13 +848,13 @@ test("bundled font is the default fontRef for new text segments", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("默认字体");
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegment");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const addTextCall = calls.find((call) => call.command === "addTextSegment");
     expect(addTextCall?.textContent).toBe("默认字体");
     expect(addTextCall?.textFontRef).toBe("font://bundled/noto-sans-cjk-sc-regular");
@@ -872,13 +868,12 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(1);
 
-    await page.getByLabel("音频时长（秒）").fill("2.25");
     await page.getByRole("button", { name: "添加音频", exact: true }).click();
     await expectCommandCall(app, "addAudioSegment");
     await expect(page.getByRole("button", { name: /片段 背景音乐\.wav/ })).toHaveCount(2);
@@ -901,7 +896,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
     await expect(page.getByLabel("音频参数").getByRole("checkbox", { name: "轨道静音" })).toBeChecked();
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const addAudioCall = calls.find((call) => call.command === "addAudioSegment");
     expect(addAudioCall?.targetTimerange?.duration).toBe(2_250_000);
     expect(calls.map((call) => call.command)).toEqual(
@@ -931,13 +926,12 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "字幕" }).click();
     await expect(page.getByRole("heading", { name: "字幕", exact: true })).toBeVisible();
     await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("SRT 字幕");
     await page.getByLabel("SRT 内容").fill("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n\n2\n00:00:02,000 --> 00:00:04,000\n第二句字幕\n");
-    await page.getByLabel("字幕时间偏移").fill("1");
     mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
     await page.screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, "captions-panel-1280x800.png"), fullPage: true });
     await page.getByRole("button", { name: "导入字幕" }).click();
@@ -961,7 +955,7 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
     await visualForm.getByRole("button", { name: "应用画面" }).click();
     await expectCommandCall(app, "updateSegmentVisual");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const importCalls = calls.filter((call) => call.command === "importSubtitleSrtIntent");
     expect(importCalls).toHaveLength(1);
     expect(importCalls[0].srtContent).toContain("第二句字幕");
@@ -981,7 +975,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const videoSegment = page.getByRole("button", { name: /片段 城市街景\.mp4/ });
     await videoSegment.click();
@@ -1008,7 +1002,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByLabel("画面变换")).toContainText("位置");
 
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
-    const callsBeforeAdd = await readExecuteCommandCalls(app);
+    const callsBeforeAdd = await readNativeCommandObservations(app);
     await page.getByRole("button", { name: "添加片段" }).evaluate((button) => {
       (button as HTMLButtonElement).click();
       (button as HTMLButtonElement).click();
@@ -1020,7 +1014,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expectNoPreviewFrameCommands(app);
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const addSegmentCallsBefore = callsBeforeAdd.filter((call) => call.command === "addSegment").length;
     const addSegmentCallsAfter = calls.filter((call) => call.command === "addSegment").length;
     expect(addSegmentCallsAfter - addSegmentCallsBefore).toBe(1);
@@ -1034,7 +1028,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const trackControls = page.getByRole("group", { name: "添加轨道" });
     await expect(trackControls.getByRole("button", { name: "添加视频轨道" })).toBeVisible();
@@ -1076,7 +1070,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
     await expect(page.getByRole("button", { name: "选择轨道 音频轨道 2" })).toBeVisible();
     await expect(page.getByRole("button", { name: "选择轨道 文字轨道 2" })).toBeVisible();
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "addTrack",
@@ -1098,12 +1092,12 @@ test("material import routes through project session intent observations", async
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "导入素材" }).click();
     await expectCommandCall(app, "importMaterial");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toContain("importMaterial");
   } finally {
     await app.close();
@@ -1119,7 +1113,7 @@ test("auto canvas adopts the first imported portrait material without renderer-o
   });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await expect(page.getByText("还没有素材")).toBeVisible();
     await page.getByRole("button", { name: "导入素材" }).click();
@@ -1142,7 +1136,7 @@ test("预览控制通过实时预览和会话预览 API 更新帧和片段状态
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await seekWorkspaceTimelinePlayhead(page, 1_200_000);
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
@@ -1162,7 +1156,7 @@ test("预览控制通过实时预览和会话预览 API 更新帧和片段状态
     await expect(page.getByLabel("预览产物")).toContainText("video/mp4");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-1200000.mp4");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const frameCall = calls.find((call) => call.command === "requestPreviewFrame");
     const segmentCall = calls.find((call) => call.command === "requestPreviewSegment");
     expect(frameCall?.targetTime).toBe(1_200_000);
@@ -1176,7 +1170,7 @@ test("developer diagnostics preview time input and production frame buttons seek
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByLabel("预览时间").fill("1200000");
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
@@ -1192,7 +1186,7 @@ test("developer diagnostics preview time input and production frame buttons seek
     await expectCommandCall(app, "updateDraftCanvasConfig");
     await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
 
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await page.getByLabel("预览时间").fill("0");
     await expectLatestRealtimeHostSeekTarget(app, 0);
     await page.getByLabel("预览时间").fill("1200000");
@@ -1224,14 +1218,14 @@ test("预览播放按钮使用实时预览画面而不是连续请求预览帧",
     await page.locator(".compact-select select").selectOption({ label: "p0-portrait-testsrc.mp4" });
     await page.getByRole("button", { name: "添加片段" }).click();
     await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const previewControls = page.getByRole("group", { name: "预览播放控制" });
     await expect(previewControls.getByRole("button", { name: "播放" })).toBeEnabled({ timeout: 20_000 });
     await previewControls.getByRole("button", { name: "播放" }).click();
     await page.waitForTimeout(500);
 
-    const playbackFrameRequests = (await readExecuteCommandCalls(app)).filter((call) => call.command === "requestPreviewFrame");
+    const playbackFrameRequests = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestPreviewFrame");
     expect(playbackFrameRequests).toHaveLength(0);
   } finally {
     await app.close();
@@ -1242,7 +1236,7 @@ test("音频预览 controls call explicit native APIs and preserve state after r
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await expect(page.getByLabel("音频预览状态")).toContainText("音频就绪");
     await expect(page.getByLabel("输出设备状态")).toContainText("系统默认");
@@ -1258,7 +1252,7 @@ test("音频预览 controls call explicit native APIs and preserve state after r
     await page.getByRole("button", { name: "停止预览" }).first().click();
     await expectCommandCall(app, "stopAudioPreview");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "createAudioPreviewSession",
@@ -1294,7 +1288,7 @@ test("音频预览 panel and inspector expose production audio controls through 
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
     const audioPanel = page.getByRole("region", { name: "素材面板" });
@@ -1318,10 +1312,10 @@ test("音频预览 panel and inspector expose production audio controls through 
     await audioInspector.getByRole("spinbutton", { name: "淡出" }).fill("500000");
     await audioInspector.getByRole("button", { name: "应用音频" }).click();
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === "updateSelectedSegmentAudio"))
+      .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === "updateSelectedSegmentAudio"))
       .toBe(true);
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toContain("updateSelectedSegmentAudio");
   } finally {
     await app.close();
@@ -1332,7 +1326,7 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const audioSegment = page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first();
     await expect(audioSegment.locator('[aria-label="音频波形"]')).toBeVisible();
@@ -1340,7 +1334,7 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
     await expect(page.getByText("波形就绪")).toBeVisible();
     await expectCommandCall(app, "getWaveformDisplayPeaks");
     await expectCommandCall(app, "refreshWaveformStatus");
-    const waveformCalls = (await readExecuteCommandCalls(app)).filter(
+    const waveformCalls = (await readNativeCommandObservations(app)).filter(
       (call) => call.command === "getWaveformDisplayPeaks" || call.command === "refreshWaveformStatus"
     );
     expect(waveformCalls.every((call) => call.hasDraftField === false)).toBe(true);
@@ -1760,7 +1754,7 @@ test("播放头支持时间线标尺点击和拖动寻帧到实时预览画面",
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const rulerTrack = page.locator(".ruler-track");
     const rulerBox = await expectStableBox(rulerTrack, "时间线标尺轨道");
@@ -1769,7 +1763,7 @@ test("播放头支持时间线标尺点击和拖动寻帧到实时预览画面",
     await expectLatestRealtimeHostSeekTarget(app, 5_000_000);
     await expectNoPreviewFrameCommands(app);
 
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     const playhead = page.locator(".playhead");
     const playheadBox = await expectStableBox(playhead, "播放头拖动线");
     await page.mouse.move(playheadBox.x + playheadBox.width / 2, playheadBox.y + 4);
@@ -1795,7 +1789,7 @@ test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截�
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await expectNoLeftSecondaryMenu(page);
 
     const inspector = page.getByLabel("草稿参数");
@@ -1822,7 +1816,7 @@ test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截�
     ).toBeVisible();
     await expect(page.getByText("模糊填充 · 降级").first()).toBeVisible();
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     const canvasCall = calls.find((call) => call.command === "updateDraftCanvasConfig");
     expect(canvasCall?.canvasConfig).toMatchObject({
       width: 1080,
@@ -1848,7 +1842,7 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     let dialog = await openDraftParametersDialog(page);
     await dialog.getByLabel("帧率", { exact: true }).selectOption("custom");
@@ -1864,10 +1858,10 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
     await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "updateDraftCanvasConfig").length)
+      .poll(async () => (await readNativeCommandObservations(app)).filter((call) => call.command === "updateDraftCanvasConfig").length)
       .toBe(2);
 
-    const canvasCalls = (await readExecuteCommandCalls(app)).filter((call) => call.command === "updateDraftCanvasConfig");
+    const canvasCalls = (await readNativeCommandObservations(app)).filter((call) => call.command === "updateDraftCanvasConfig");
     expect(canvasCalls.at(-1)?.canvasConfig?.frameRate).toEqual({ numerator: 30000, denominator: 1001 });
   } finally {
     await app.close();
@@ -1878,7 +1872,7 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true, startup: "newProject" });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
     await expectCommandCall(app, "requestPreviewFrame");
@@ -1921,7 +1915,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await expectNoLeftSecondaryMenu(page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
@@ -1987,7 +1981,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
     await exportDialog.getByRole("button", { name: "关闭" }).click();
 
-    const visualCall = (await readExecuteCommandCalls(app)).find((call) => call.command === "updateSegmentVisual");
+    const visualCall = (await readNativeCommandObservations(app)).find((call) => call.command === "updateSegmentVisual");
     expect(visualCall?.kind).toBe("updateSegmentVisual");
     expect(visualCall?.visual).toMatchObject({
       visible: true,
@@ -2016,7 +2010,7 @@ test("selection preview overlay follows accepted visible segment and allows dire
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
     await expectCommandCall(app, "requestPreviewFrame");
@@ -2050,7 +2044,7 @@ test("预览失败显示中文分类错误且不改草稿", async () => {
   });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
     await expectCommandCall(app, "requestPreviewFrame");
@@ -2068,7 +2062,7 @@ test("concurrent material commands are blocked while a timeline edit is pending"
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
     await page.evaluate(() => {
@@ -2090,7 +2084,7 @@ test("concurrent material commands are blocked while a timeline edit is pending"
 
     await expectCommandCall(app, "addSegment");
 
-    const draftMutatingCalls = (await readExecuteCommandCalls(app)).filter(
+    const draftMutatingCalls = (await readNativeCommandObservations(app)).filter(
       (call) => call.command === "addSegment" || call.command === "importMaterial"
     );
     expect(draftMutatingCalls.map((call) => call.command)).toEqual(["addSegment"]);
@@ -2181,7 +2175,7 @@ test("导出控制通过显式导出 API 更新导出状态并保存截图", asy
   const { app, page } = await launchWorkspaceApp({ startup: "newProject" });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     const exportDialog = await openExportDialog(page);
     await expect(page.getByLabel("预览窗口").getByLabel("导出面板")).toHaveCount(0);
@@ -2213,7 +2207,7 @@ test("导出控制通过显式导出 API 更新导出状态并保存截图", asy
     await expect(exportDialog.getByLabel("输出校验")).toContainText("1920x1080");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("含音频");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining(["startExport", "cancelExport", "getExportJobStatus"])
     );
@@ -2238,7 +2232,7 @@ test("素材资源状态 uses explicit native artifact APIs", async () => {
   const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true, showDeveloperDiagnostics: true });
 
   try {
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
 
     await expect(page.getByLabel("素材资源状态").first()).toBeVisible();
     await page.getByRole("button", { name: "更新状态" }).click();
@@ -2249,7 +2243,7 @@ test("素材资源状态 uses explicit native artifact APIs", async () => {
     await page.getByRole("button", { name: "确认清理缓存" }).click();
 
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command))
+      .poll(async () => (await readNativeCommandObservations(app)).map((call) => call.command))
       .toEqual(
         expect.arrayContaining([
           "getArtifactStatus",
@@ -2359,7 +2353,7 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await expect(page.locator(".segment-kind-video")).toHaveCount(1);
     await expect(page.locator(".segment-kind-audio")).toHaveCount(1);
 
-    await spyExecuteCommandCalls(app, page);
+    await resetNativeCommandObservations(app, page);
     await page.getByRole("button", { name: "音频轨道 1 静音状态：未静音" }).click();
     await expectCommandCall(app, "setTrackMute");
     await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();

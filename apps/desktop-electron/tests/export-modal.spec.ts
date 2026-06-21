@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: CommandName;
   outputPath: string | null;
   preset: string | null;
@@ -64,12 +64,12 @@ function testProjectPath(): string {
   return join(tmpdir(), `video-editor-export-modal-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.veproj`);
 }
 
-async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, projectCalls] = await Promise.all([
+async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, projectCalls] = await Promise.all([
     app.evaluate(() => {
       return (
-        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-          .__videoEditorTestExecuteCommandCalls ?? []
+        (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+          .__videoEditorTestNativeCommandObservations ?? []
       );
     }),
     app.evaluate(() => {
@@ -80,7 +80,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     })
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...projectCalls
       .filter((call) => call.command === "startProjectSessionExport")
       .map((call) => ({
@@ -94,7 +94,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
 
 async function expectCommandCall(app: ElectronApplication, command: CommandName): Promise<void> {
   await expect
-    .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === command))
+    .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === command))
     .toBe(true);
 }
 
@@ -148,7 +148,7 @@ test("export modal starts, cancels, refreshes, and keeps command ownership in he
     await expect(dialog.getByLabel("输出校验")).toContainText("含音频");
     await expect(dialog.getByRole("button", { name: "打开位置" })).toBeEnabled();
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining(["startExport", "cancelExport", "getExportJobStatus"])
     );

@@ -35,6 +35,7 @@ RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeComm
 PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*\([^)]*CommandEnvelope|core:executeCommand'
 ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN='ipcMain\.handle\([[:space:]]*"core:executeCommand"|executeCommand[[:space:]]*:[[:space:]]*\(command:[[:space:]]*CommandEnvelope|export[[:space:]]+function[[:space:]]+executeCommand[[:space:]]*\('
 NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN='module\.exports\.executeCommand|export[[:space:]]+declare[[:space:]]+function[[:space:]]+executeCommand'
+LEGACY_TEST_EXECUTE_OBSERVATION_PATTERN='\b(?:TestExecuteCommandCall|ExecuteCommandCall|__videoEditorTestExecuteCommandCalls|getExecuteCommandCalls|readExecuteCommandCalls|readLegacyExecuteCommandCalls|readLegacyNativeCommandObservations|spyExecuteCommandCalls|spyNativeCommandObservations)\b|test:getExecuteCommandCalls'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -507,6 +508,13 @@ fail_if_matches \
   "$NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN" \
   apps/desktop-electron/native/index.cjs apps/desktop-electron/native/index.d.ts
 
+fail_if_matches \
+  "test observation bridge must use native command observation terminology, not executeCommand call naming" \
+  "$LEGACY_TEST_EXECUTE_OBSERVATION_PATTERN" \
+  apps/desktop-electron/src/main/index.ts \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/tests
+
 require_matches \
   "preload/native binding expose explicit runtime discovery API" \
   '\bprobeMediaRuntime\b' \
@@ -789,6 +797,13 @@ assert_pattern_rejects \
   "generated native JS executeCommand export" \
   "$NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN" \
   'module.exports.executeCommand = nativeBinding.executeCommand'
+
+assert_pattern_rejects \
+  "legacy executeCommand test observation naming" \
+  "$LEGACY_TEST_EXECUTE_OBSERVATION_PATTERN" \
+  'window.videoEditorTestObservations.getExecuteCommandCalls();
+const calls = await readLegacyExecuteCommandCalls(app);
+globalThis.__videoEditorTestExecuteCommandCalls = [];'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

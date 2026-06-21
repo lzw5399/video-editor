@@ -71,7 +71,7 @@ import {
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
-type TestExecuteCommandCall = {
+type TestNativeCommandObservation = {
   command: CommandEnvelope["command"];
   kind: CommandEnvelope["payload"]["kind"];
   requestId: string | null;
@@ -122,7 +122,7 @@ type TestProjectSessionCall = {
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
   duration: number | null;
-  canvasConfig: TestExecuteCommandCall["canvasConfig"];
+  canvasConfig: TestNativeCommandObservation["canvasConfig"];
   visual: SegmentVisual | null;
   keyframeProperty: string | null;
   keyframeAt: number | null;
@@ -165,7 +165,7 @@ type ProjectBundlePickerResponse = {
 };
 
 declare global {
-  var __videoEditorTestExecuteCommandCalls: TestExecuteCommandCall[] | undefined;
+  var __videoEditorTestNativeCommandObservations: TestNativeCommandObservation[] | undefined;
   var __videoEditorTestProjectSessionCalls: TestProjectSessionCall[] | undefined;
 }
 
@@ -523,9 +523,9 @@ ipcMain.handle("platform:pathToFileUrl", (event, filePath: string) => {
   return pathToFileURL(filePath).toString();
 });
 if (testObservationEnabled) {
-  ipcMain.handle("test:getExecuteCommandCalls", (event) => {
+  ipcMain.handle("test:getNativeCommandObservations", (event) => {
     assertAllowedIpcSender(event);
-    return globalThis.__videoEditorTestExecuteCommandCalls ?? [];
+    return globalThis.__videoEditorTestNativeCommandObservations ?? [];
   });
   ipcMain.handle("test:getProjectSessionCalls", (event) => {
     assertAllowedIpcSender(event);
@@ -719,7 +719,7 @@ function decodeTestArgumentValue(value: string | undefined): string | undefined 
   }
 }
 
-function recordTestExecuteCommand(command: CommandEnvelope): void {
+function recordTestNativeCommandObservation(command: CommandEnvelope): void {
   if (!testObservationEnabled) {
     return;
   }
@@ -746,8 +746,8 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
       ? command.payload.jobId
       : null;
 
-  globalThis.__videoEditorTestExecuteCommandCalls ??= [];
-  globalThis.__videoEditorTestExecuteCommandCalls.push({
+  globalThis.__videoEditorTestNativeCommandObservations ??= [];
+  globalThis.__videoEditorTestNativeCommandObservations.push({
     command: command.command,
     kind: command.payload.kind,
     requestId: command.requestId ?? null,
@@ -775,7 +775,7 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
 }
 
 function recordTestExplicitExportControlCall(command: "getExportJobStatus" | "cancelExport", request: ExportJobRequest): void {
-  recordTestExecuteCommand({
+  recordTestNativeCommandObservation({
     command,
     payload: {
       kind: command,
@@ -786,14 +786,14 @@ function recordTestExplicitExportControlCall(command: "getExportJobStatus" | "ca
 }
 
 function recordTestExplicitAudioPreviewCall(command: AudioPreviewCommandName, request: AudioPreviewRequest): void {
-  recordTestExecuteCommand(buildExplicitAudioPreviewEnvelope(command, request));
+  recordTestNativeCommandObservation(buildExplicitAudioPreviewEnvelope(command, request));
 }
 
 function recordTestExplicitArtifactCall(
   command: ArtifactCommandName,
   request: ArtifactStatusRequest | ArtifactGenerationActionRequest | ArtifactQuotaRequest | ArtifactGarbageCollectionRequest
 ): void {
-  recordTestExecuteCommand(buildExplicitArtifactEnvelope(command, request));
+  recordTestNativeCommandObservation(buildExplicitArtifactEnvelope(command, request));
 }
 
 function recordTestProjectSessionCall(
@@ -830,7 +830,7 @@ function recordTestProjectSessionCall(
     duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
     canvasConfig:
       intentRecord?.kind === "updateDraftCanvasConfig"
-        ? (intentRecord.canvasConfig as TestExecuteCommandCall["canvasConfig"])
+        ? (intentRecord.canvasConfig as TestNativeCommandObservation["canvasConfig"])
         : null,
     visual: intentRecord?.kind === "updateSelectedSegmentVisual" ? (intentRecord.visual as SegmentVisual) : null,
     keyframeProperty: typeof intentRecord?.property === "string" ? intentRecord.property : null,

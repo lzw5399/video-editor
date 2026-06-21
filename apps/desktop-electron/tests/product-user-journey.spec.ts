@@ -23,8 +23,8 @@ import {
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   moveSelectedSegmentRight,
-  readExecuteCommandCalls,
-  readLegacyExecuteCommandCalls,
+  readNativeCommandObservations,
+  readDirectNativeCommandObservations,
   readProjectSessionCalls,
   readRealtimePreviewHostCalls,
   readTimelineSegments,
@@ -143,16 +143,16 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
         })
       ])
     );
-    const legacyCommands = (await readLegacyExecuteCommandCalls(app)).map((call) => call.command);
-    expect(legacyCommands, "product material reads must use Rust project session APIs").not.toContain("listMaterials");
-    expect(legacyCommands, "product missing-material reads must use Rust project session APIs").not.toContain("listMissingMaterials");
-    expect(legacyCommands, "product import must not use renderer-owned draft importMaterial").not.toContain("importMaterial");
-    expect(legacyCommands, "product add-to-timeline must not use renderer-owned draft addTimelineSegmentIntent").not.toContain(
+    const directNativeCommands = (await readDirectNativeCommandObservations(app)).map((call) => call.command);
+    expect(directNativeCommands, "product material reads must use Rust project session APIs").not.toContain("listMaterials");
+    expect(directNativeCommands, "product missing-material reads must use Rust project session APIs").not.toContain("listMissingMaterials");
+    expect(directNativeCommands, "product import must not use renderer-owned draft importMaterial").not.toContain("importMaterial");
+    expect(directNativeCommands, "product add-to-timeline must not use renderer-owned draft addTimelineSegmentIntent").not.toContain(
       "addTimelineSegmentIntent"
     );
 
     const before = await capturePreviewEvidence(page);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
 
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
@@ -162,7 +162,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
 
     await page.waitForTimeout(800);
     const after = await capturePreviewEvidence(page);
-    const frameRequestsAfterPlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsAfterPlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
 
     expect(
       after.timecodeUs,
@@ -247,7 +247,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
@@ -314,7 +314,7 @@ test("product playback UAT keeps the native surface aligned with the preview mon
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
@@ -364,15 +364,15 @@ test("product playback UAT uses native audio output instead of status-only or mo
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
 
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
+      .poll(async () => (await readNativeCommandObservations(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
-    await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+    await expect.poll(async () => (await readNativeCommandObservations(app)).some((call) => (
       call.command === "playAudioPreview" &&
       call.sessionId !== null &&
       typeof call.projectSessionId === "string" &&
@@ -394,15 +394,15 @@ test("product playback UAT plays embedded video audio through native output", as
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
 
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
+      .poll(async () => (await readNativeCommandObservations(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
-    await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+    await expect.poll(async () => (await readNativeCommandObservations(app)).some((call) => (
       call.command === "playAudioPreview" &&
       call.sessionId !== null &&
       typeof call.projectSessionId === "string" &&
@@ -429,9 +429,9 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
     await addTextThroughProductPanel(page, app, "产品级组合文字", 300_000);
 
-    const commandCountBeforeSrt = await readExecuteCommandCalls(app);
+    const commandCountBeforeSrt = await readNativeCommandObservations(app);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
-    const commandCountAfterSrt = await readExecuteCommandCalls(app);
+    const commandCountAfterSrt = await readNativeCommandObservations(app);
     expect(commandCountAfterSrt.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(1);
     expect(
       commandCountAfterSrt.filter((call) => call.command === "addTextSegment").length,
@@ -441,11 +441,11 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     await seekTimelinePlayhead(page, app, 0);
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await expect
-      .poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+      .poll(async () => (await readNativeCommandObservations(app)).some((call) => (
         call.command === "playAudioPreview" &&
         call.sessionId !== null &&
         typeof call.projectSessionId === "string" &&
@@ -464,7 +464,7 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     const hostCalls = await readRealtimePreviewHostCalls(app);
     expectNoProductFallbackCalls(hostCalls);
     expectNoRejectedSurfaceAcquire(hostCalls);
-    expect(requestPreviewFrameCount(await readExecuteCommandCalls(app))).toBe(frameRequestsBeforePlay);
+    expect(requestPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
   }
@@ -479,7 +479,7 @@ test("product playback UAT keeps video presentation synchronized with timeline t
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
@@ -640,11 +640,11 @@ test("product user editing matrix uses real commands and still produces visible 
     expectTimelineSegmentRange(movingSegments[0], 0, 1_500_000);
     expectTimelineSegmentRange(movingSegments[1], 1_500_000, 1_500_000);
     const nextOverlaySelectionCount =
-      (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineItemIntent").length + 1;
+      (await readNativeCommandObservations(app)).filter((call) => call.command === "selectTimelineItemIntent").length + 1;
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
     await expect
       .poll(
-        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineItemIntent").length,
+        async () => (await readNativeCommandObservations(app)).filter((call) => call.command === "selectTimelineItemIntent").length,
         { timeout: 30_000 }
       )
       .toBeGreaterThanOrEqual(nextOverlaySelectionCount);
@@ -666,7 +666,7 @@ test("product user editing matrix uses real commands and still produces visible 
     expectTimelineSegmentRange(overlaySegments[0], 350_000, 2_900_000);
     await seekTimelinePlayhead(page, app, 2_100_000);
 
-    const callsAfterEdits = await readExecuteCommandCalls(app);
+    const callsAfterEdits = await readNativeCommandObservations(app);
     expect(callsAfterEdits.map((call) => call.command)).toEqual(
       expect.arrayContaining([
         "importMaterial",
@@ -685,7 +685,7 @@ test("product user editing matrix uses real commands and still produces visible 
     );
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
-      await readLegacyExecuteCommandCalls(app),
+      await readDirectNativeCommandObservations(app),
       [
         "importMaterial",
         "addTimelineSegmentIntent",
@@ -711,7 +711,7 @@ test("product user editing matrix uses real commands and still produces visible 
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
@@ -750,7 +750,7 @@ function expectTimelineSegmentRange(
 
 function expectProductEditCommandsAreSessionOwned(
   sessionCalls: Awaited<ReturnType<typeof readProjectSessionCalls>>,
-  legacyCalls: Awaited<ReturnType<typeof readLegacyExecuteCommandCalls>>,
+  directNativeObservations: Awaited<ReturnType<typeof readDirectNativeCommandObservations>>,
   intentKinds: readonly string[]
 ): void {
   const sessionIntentCalls = sessionCalls.filter((call) => call.command === "executeProjectIntent");
@@ -793,7 +793,7 @@ function expectProductEditCommandsAreSessionOwned(
     }
   }
 
-  const forbiddenLegacyCommands = new Set([
+  const forbiddenDirectNativeCommandSet = new Set([
     "addSegment",
     "moveSegment",
     "splitSegment",
@@ -813,8 +813,10 @@ function expectProductEditCommandsAreSessionOwned(
     "listMaterials",
     "listMissingMaterials"
   ]);
-  const legacyEditCommands = legacyCalls.map((call) => call.command).filter((command) => forbiddenLegacyCommands.has(command));
-  expect(legacyEditCommands, "product edits must not fall back to renderer-owned executeCommand").toEqual([]);
+  const forbiddenDirectNativeCommands = directNativeObservations
+    .map((call) => call.command)
+    .filter((command) => forbiddenDirectNativeCommandSet.has(command));
+  expect(forbiddenDirectNativeCommands, "product edits must not fall back to renderer-owned generic command path").toEqual([]);
 }
 
 test("product text and transform interaction UAT supports direct canvas drag", async () => {
@@ -830,7 +832,7 @@ test("product text and transform interaction UAT supports direct canvas drag", a
     const beforeBox = await textOverlay.boundingBox();
     expect(beforeBox, "text overlay must have a visible canvas box before drag").not.toBeNull();
 
-    const commandsBefore = await readExecuteCommandCalls(app);
+    const commandsBefore = await readNativeCommandObservations(app);
     const visualUpdatesBefore = commandsBefore.filter((call) => call.command === "updateSegmentVisual").length;
     await page.mouse.move(beforeBox!.x + beforeBox!.width / 2, beforeBox!.y + beforeBox!.height / 2);
     await page.mouse.down();
@@ -841,7 +843,7 @@ test("product text and transform interaction UAT supports direct canvas drag", a
 
     await expect
       .poll(
-        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "updateSegmentVisual").length,
+        async () => (await readNativeCommandObservations(app)).filter((call) => call.command === "updateSegmentVisual").length,
         { timeout: 5_000 }
       )
       .toBeGreaterThan(visualUpdatesBefore);

@@ -1,7 +1,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { join } from "node:path";
 
-type ExecuteCommandCall = {
+type NativeCommandObservation = {
   command: string;
   kind: string;
 };
@@ -50,12 +50,12 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
   await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
 }
 
-async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  const [legacyCalls, projectCalls] = await Promise.all([
+async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
+  const [directNativeObservations, projectCalls] = await Promise.all([
     app.evaluate(() => {
       return (
-        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-          .__videoEditorTestExecuteCommandCalls ?? []
+        (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
+          .__videoEditorTestNativeCommandObservations ?? []
       );
     }),
     app.evaluate(() => {
@@ -66,7 +66,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
     })
   ]);
   return [
-    ...legacyCalls,
+    ...directNativeObservations,
     ...projectCalls
       .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
       .map((call) => ({
@@ -78,7 +78,7 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
 
 async function expectCommandCall(app: ElectronApplication, command: string): Promise<void> {
   await expect
-    .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === command))
+    .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === command))
     .toBe(true);
 }
 
@@ -241,7 +241,7 @@ test("运行环境诊断不破坏时间线命令边界", async () => {
     await expectCommandCall(app, "selectTimelineItemIntent");
     await expect(page.getByLabel("片段信息")).toContainText("segment-main-video");
 
-    const calls = await readExecuteCommandCalls(app);
+    const calls = await readNativeCommandObservations(app);
     expect(calls.map((call) => call.command)).toEqual(
       expect.arrayContaining(["probeRuntimeCapabilities", "selectTimelineItemIntent"])
     );
