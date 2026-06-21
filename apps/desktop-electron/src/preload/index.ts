@@ -6,7 +6,8 @@ import type {
   ExecuteProjectIntentRequest,
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
-  ProjectSessionRequest
+  ProjectSessionRequest,
+  StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 
 type RealtimePreviewHostRect = {
@@ -49,6 +50,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("core:listProjectSessionMaterials", request),
     listProjectSessionMissingMaterials: (request: ProjectSessionReadRequest) =>
       ipcRenderer.invoke("core:listProjectSessionMissingMaterials", request),
+    startProjectSessionExport: (request: StartProjectSessionExportRequest) =>
+      ipcRenderer.invoke("core:startProjectSessionExport", request),
     closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {

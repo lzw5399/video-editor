@@ -80,7 +80,10 @@ require_bundled_runtime_entries() {
 
 forbid_local_ffmpeg_lookup() {
   local targets=(
+    crates/bindings_node/src
     crates/media_runtime/src
+    crates/media_runtime_desktop/src
+    crates/preview_service/src
     apps/desktop-electron/src/main
     apps/desktop-electron/scripts
     apps/desktop-electron/electron-builder.yml

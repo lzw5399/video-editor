@@ -8,6 +8,7 @@ type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<{ pong: boolean }>>;
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
   executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
+  startProjectSessionExport?: (request: unknown) => Promise<CommandResultEnvelope<unknown>>;
 };
 
 declare global {
@@ -60,6 +61,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
         "executeProjectIntent",
         "listProjectSessionMaterials",
         "listProjectSessionMissingMaterials",
+        "startProjectSessionExport",
         "closeProjectSession"
       ]
     });

@@ -789,6 +789,7 @@ function expectProductEditCommandsAreSessionOwned(
     "setTrackVisibility",
     "setTrackMute",
     "updateSegmentVisual",
+    "startExport",
     "listMaterials",
     "listMissingMaterials"
   ]);

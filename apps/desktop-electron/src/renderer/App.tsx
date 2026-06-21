@@ -13,7 +13,8 @@ import type {
   ProjectSessionReadRequest,
   ProjectSessionRequest,
   ProjectSessionTimelineIntentResponse,
-  ProjectSessionClosedResponse
+  ProjectSessionClosedResponse,
+  StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 import type {
   AudioOutputDeviceSummary,
@@ -65,7 +66,6 @@ import {
   buildSelectAudioOutputDeviceCommand,
   buildListAudioOutputDevicesCommand,
   buildStopAudioPreviewCommand,
-  buildStartExportCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -117,6 +117,9 @@ type VideoEditorCoreApi = {
   listProjectSessionMissingMaterials: (
     request: ProjectSessionReadRequest
   ) => Promise<CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>>;
+  startProjectSessionExport: (
+    request: StartProjectSessionExportRequest
+  ) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
   closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {
@@ -855,6 +858,93 @@ export function App(): React.ReactElement {
       });
     } catch (error: unknown) {
       const message = exportCommandErrorMessage(error instanceof Error ? error.message : String(error), pendingCommand);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: null,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message,
+            logSummary: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
+  async function executeProjectSessionStartExport(applyResult: ExportCommandResultApplier): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
+        const next = {
+          ...current,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    const projectSession = projectSessionRef.current;
+    if (projectSession === null) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("项目会话尚未建立，无法开始导出");
+        const next = {
+          ...current,
+          commandError: message,
+          export: {
+            ...current.export,
+            error: message,
+            logSummary: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    commandInFlightRef.current = true;
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand: "开始导出",
+        commandError: null,
+        export: {
+          ...current.export,
+          error: null,
+          logSummary: "正在开始导出"
+        }
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+
+    try {
+      const current = workspaceRef.current;
+      const result = await window.videoEditorCore.startProjectSessionExport({
+        sessionId: projectSession.sessionId,
+        expectedRevision: projectSession.revision,
+        outputPath: current.export.outputPath,
+        preset: current.export.preset
+      });
+      setWorkspace((current) => {
+        const next = applyResult(current, result);
+        workspaceRef.current = next;
+        return next;
+      });
+    } catch (error: unknown) {
+      const message = exportCommandErrorMessage(error instanceof Error ? error.message : String(error), "开始导出");
       setWorkspace((current) => {
         const next = {
           ...current,
@@ -2444,16 +2534,7 @@ export function App(): React.ReactElement {
       return;
     }
 
-    void executeExportCommand(
-      (current) =>
-        buildStartExportCommand({
-          draft: current.draft,
-          outputPath: current.export.outputPath,
-          preset: current.export.preset
-        }),
-      "开始导出",
-      (current, result) => applyExportCommandResult(current, result, "开始导出")
-    );
+    void executeProjectSessionStartExport((current, result) => applyExportCommandResult(current, result, "开始导出"));
   }
 
   function handleRefreshExportStatus(): void {

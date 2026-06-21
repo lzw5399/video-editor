@@ -41,6 +41,8 @@ type ExecuteCommandCall = {
   textSource?: string | null;
   textFontRef?: string | null;
   srtContent?: string | null;
+  outputPath?: string | null;
+  preset?: string | null;
   sessionId?: string | null;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
@@ -53,12 +55,15 @@ type ProjectSessionCall = {
     | "executeProjectIntent"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
+    | "startProjectSessionExport"
     | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;
   materialId: string | null;
   materialPath: string | null;
+  outputPath?: string | null;
+  preset?: string | null;
   duration?: number | null;
   visual?: ExecuteCommandCall["visual"] | null;
   textContent?: string | null;
@@ -805,7 +810,11 @@ export async function readExecuteCommandCalls(app: ProductJourneyAppController):
   return [
     ...legacyCalls,
     ...sessionCalls
-      .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
+      .filter(
+        (call) =>
+          (call.command === "executeProjectIntent" && call.intentKind !== null) ||
+          call.command === "startProjectSessionExport"
+      )
       .map(projectSessionCallToCommandCall)
   ];
 }
@@ -918,7 +927,7 @@ async function countProjectSessionIntent(app: ProductJourneyAppController, inten
 }
 
 function projectSessionCallToCommandCall(call: ProjectSessionCall): ExecuteCommandCall {
-  const command = legacyCommandNameForProjectIntent(call.intentKind);
+  const command = call.command === "startProjectSessionExport" ? "startExport" : legacyCommandNameForProjectIntent(call.intentKind);
   return {
     command,
     kind: command,
@@ -931,6 +940,8 @@ function projectSessionCallToCommandCall(call: ProjectSessionCall): ExecuteComma
     textSource: call.textSource ?? null,
     textFontRef: call.textFontRef ?? null,
     srtContent: call.srtContent ?? null,
+    outputPath: call.outputPath ?? null,
+    preset: call.preset ?? null,
     sessionId: call.sessionId,
     deviceSelectionId: null,
     maxPeakBins: null

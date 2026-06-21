@@ -104,6 +104,11 @@ fail_if_matches \
   apps/desktop-electron/src/main/nativeBinding.ts \
   crates/bindings_node/src/lib.rs
 
+fail_if_matches \
+  "renderer must not start export through renderer-owned draft payloads; use startProjectSessionExport" \
+  'buildStartExportCommand|command:[[:space:]]*"startExport"|kind:[[:space:]]*"startExport"' \
+  apps/desktop-electron/src/renderer apps/desktop-electron/src/preload
+
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "waitForVisiblePreviewCenterChange"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "renderGraphGpuComposited"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "requestPreviewFrameCount"

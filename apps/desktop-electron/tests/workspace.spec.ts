@@ -1,5 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
@@ -35,6 +36,21 @@ type ExecuteCommandCall = {
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
+};
+
+type ProjectSessionCall = {
+  command: "startProjectSessionExport" | string;
+  intentKind?: string | null;
+  outputPath?: string | null;
+  preset?: string | null;
+  canvasConfig?: ExecuteCommandCall["canvasConfig"];
+  visual?: SegmentVisual | null;
+  keyframeProperty?: string | null;
+  keyframeAt?: number | null;
+  textContent?: string | null;
+  textSource?: string | null;
+  textFontRef?: string | null;
+  srtContent?: string | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -86,19 +102,24 @@ async function launchWorkspaceApp(
     mockArtifactCommands?: boolean;
     mockAudioCommands?: boolean;
     showDeveloperDiagnostics?: boolean;
+    startup?: "demoFixture" | "newProject";
     env?: NodeJS.ProcessEnv;
   } = {}
 ): Promise<{ app: ElectronApplication; page: Page }> {
+  const useNewProject = options.startup === "newProject";
   const app = await electron.launch({
     args: [join(process.cwd(), "dist/main/index.cjs")],
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
+      ...(useNewProject
+        ? { VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: testProjectPath("workspace") }
+        : { VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo" }),
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: options.mockPreviewCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: options.mockExportCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: options.mockArtifactCommands === false ? "0" : "1",
       VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS: options.mockAudioCommands === false ? "0" : "1",
+      VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: options.showDeveloperDiagnostics === true ? "1" : "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"]),
       ...options.env
@@ -106,8 +127,35 @@ async function launchWorkspaceApp(
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
+  if (useNewProject) {
+    await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
+    await page.getByRole("button", { name: "新建项目" }).click();
+  }
   await expectVisibleWorkspaceRegions(page);
+  if (useNewProject) {
+    await expect
+      .poll(
+        async () =>
+          (
+            await app.evaluate(() => {
+              return (
+                (
+                  globalThis as typeof globalThis & {
+                    __videoEditorTestProjectSessionCalls?: ProjectSessionCall[];
+                  }
+                ).__videoEditorTestProjectSessionCalls ?? []
+              );
+            })
+          ).some((call) => call.command === "createProjectSession"),
+        { timeout: 20_000 }
+      )
+      .toBe(true);
+  }
   return { app, page };
+}
+
+function testProjectPath(label: string): string {
+  return join(tmpdir(), `video-editor-${label}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.veproj`);
 }
 
 async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
@@ -128,16 +176,53 @@ async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Pro
   await app.evaluate(() => {
     (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
       .__videoEditorTestExecuteCommandCalls = [];
+    (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+      .__videoEditorTestProjectSessionCalls = [];
   });
 }
 
 async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
-    );
-  });
+  const [legacyCalls, projectCalls] = await Promise.all([
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+          .__videoEditorTestExecuteCommandCalls ?? []
+      );
+    }),
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+          .__videoEditorTestProjectSessionCalls ?? []
+      );
+    })
+  ]);
+  return [
+    ...legacyCalls,
+    ...projectCalls
+      .filter((call) => call.command === "startProjectSessionExport" || call.intentKind !== null)
+      .map((call) => {
+        const command = call.command === "startProjectSessionExport" ? "startExport" : call.intentKind ?? "executeProjectIntent";
+        return {
+          command: command as CommandName,
+          kind: command,
+          requestId: null,
+          targetTime: null,
+          targetTimerange: null,
+          canvasConfig: call.canvasConfig ?? null,
+          visual: call.visual ?? null,
+          keyframe: null,
+          keyframeProperty: call.keyframeProperty ?? null,
+          keyframeAt: call.keyframeAt ?? null,
+          textContent: call.textContent ?? null,
+          textSource: call.textSource ?? null,
+          textFontRef: call.textFontRef ?? null,
+          srtContent: call.srtContent ?? null,
+          outputPath: call.outputPath ?? null,
+          preset: call.preset ?? null,
+          jobId: null
+        };
+      })
+  ];
 }
 
 async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<RealtimePreviewHostCall[]> {
@@ -1702,7 +1787,7 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
 });
 
 test("画布变更后旧预览和导出派生状态失效", async () => {
-  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true, startup: "newProject" });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -2005,7 +2090,7 @@ test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async 
 });
 
 test("导出命令通过 executeCommand 更新导出状态并保存截图", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ startup: "newProject" });
 
   try {
     await spyExecuteCommandCalls(app, page);

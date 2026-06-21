@@ -18,7 +18,6 @@ import type {
   RequestPreviewSegmentCommandPayload,
   RefreshArtifactStatusCommandPayload,
   SaveProjectBundleCommandPayload,
-  StartExportCommandPayload,
   RunArtifactGarbageCollectionCommandPayload,
   TimelineSelection
 } from "../generated/CommandEnvelope";
@@ -337,25 +336,6 @@ export function buildRunArtifactGarbageCollectionCommand(
   } satisfies RunArtifactGarbageCollectionCommandPayload & { kind: "runArtifactGarbageCollection" };
 
   return envelope("runArtifactGarbageCollection", payload);
-}
-
-type StartExportOptions = {
-  draft: Draft;
-  outputPath: string;
-  preset: ExportPreset;
-  dirtyFacts?: StartExportCommandPayload["dirtyFacts"];
-};
-
-export function buildStartExportCommand(options: StartExportOptions): CommandEnvelope {
-  const payload = {
-    kind: "startExport",
-    draft: options.draft,
-    outputPath: options.outputPath,
-    preset: options.preset,
-    dirtyFacts: options.dirtyFacts
-  } satisfies StartExportCommandPayload & { kind: "startExport" };
-
-  return envelope("startExport", payload);
 }
 
 export function buildGetExportJobStatusCommand(jobId: string): CommandEnvelope {

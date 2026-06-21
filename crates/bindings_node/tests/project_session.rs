@@ -1,15 +1,19 @@
 use bindings_node::{
     close_project_session, close_realtime_preview_session, create_project_session,
-    create_realtime_preview_session, execute_project_intent, list_project_session_materials,
-    list_project_session_missing_materials, open_project_session,
-    update_realtime_preview_project_session_snapshot,
+    create_realtime_preview_session, execute_command, execute_project_intent,
+    list_project_session_materials, list_project_session_missing_materials, open_project_session,
+    start_project_session_export, update_realtime_preview_project_session_snapshot,
 };
 use draft_model::Draft;
 use media_runtime::discover_runtime_config;
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
 use serde_json::{Value, json};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use testkit::generate_video_material_fixture;
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -818,6 +822,112 @@ fn project_session_keyframe_intent_rejects_renderer_built_keyframe_payload() {
 }
 
 #[test]
+fn project_session_export_starts_from_session_snapshot_without_renderer_draft() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = ExportSandbox::new("session-export-start");
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success(160, 90, false);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-export.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-export"
+    }))
+    .expect("openProjectSession should return an envelope");
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-export",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add segment before export should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+
+    let output_path = sandbox.root.join("session-export.mp4");
+    let started = start_project_session_export(json!({
+        "sessionId": "test-session-export",
+        "expectedRevision": 1,
+        "outputPath": output_path.display().to_string(),
+        "preset": "h264AacBalanced"
+    }))
+    .expect("startProjectSessionExport should return an envelope");
+
+    assert_eq!(started["ok"], true, "{started:#}");
+    assert_eq!(started["data"]["phase"], "running");
+    assert_eq!(
+        started["data"]["outputPath"],
+        output_path.display().to_string()
+    );
+    let job_id = started["data"]["jobId"]
+        .as_str()
+        .expect("export job id should be present")
+        .to_owned();
+    let completed = wait_for_export_phase(&job_id);
+    assert_eq!(completed["ok"], true, "{completed:#}");
+    assert_eq!(completed["data"]["phase"], "completed");
+
+    close_project_session(json!({ "sessionId": "test-session-export" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_export_rejects_stale_and_unknown_sessions() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-export-stale.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-export-stale"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let stale = start_project_session_export(json!({
+        "sessionId": "test-session-export-stale",
+        "expectedRevision": 1,
+        "outputPath": temp_dir.path().join("stale.mp4").display().to_string(),
+        "preset": "h264AacBalanced"
+    }))
+    .expect("stale export should return an envelope");
+    assert_eq!(stale["ok"], false, "{stale:#}");
+    assert_eq!(stale["error"]["kind"], "invalidPayload");
+    assert_eq!(stale["error"]["command"], "startProjectSessionExport");
+
+    let unknown = start_project_session_export(json!({
+        "sessionId": "missing-session-export",
+        "expectedRevision": 0,
+        "outputPath": temp_dir.path().join("unknown.mp4").display().to_string(),
+        "preset": "h264AacBalanced"
+    }))
+    .expect("unknown export should return an envelope");
+    assert_eq!(unknown["ok"], false, "{unknown:#}");
+    assert_eq!(unknown["error"]["kind"], "invalidProject");
+    assert_eq!(unknown["error"]["command"], "startProjectSessionExport");
+
+    close_project_session(json!({ "sessionId": "test-session-export-stale" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_export_rejects_renderer_draft_payload() {
+    let rejected = start_project_session_export(json!({
+        "sessionId": "test-session-export",
+        "expectedRevision": 0,
+        "outputPath": "/tmp/renderer-draft-export.mp4",
+        "preset": "h264AacBalanced",
+        "draft": timeline_draft_json()
+    }))
+    .expect("draft-bearing export should return an envelope");
+
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+}
+
+#[test]
 fn realtime_preview_updates_from_project_session_snapshot() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-preview.veproj");
@@ -976,3 +1086,148 @@ fn timeline_draft_json() -> Value {
         }]
     })
 }
+
+fn wait_for_export_phase(job_id: &str) -> Value {
+    let mut last = Value::Null;
+    for _ in 0..20 {
+        let status = execute_command(json!({
+            "command": "getExportJobStatus",
+            "payload": {
+                "kind": "getExportJobStatus",
+                "jobId": job_id
+            },
+            "requestId": "req-session-export-status"
+        }))
+        .expect("status command should return envelope");
+        last = status.clone();
+        if status["data"]["phase"] == "completed" {
+            return status;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("export job did not complete; last={last:#}");
+}
+
+struct ExportSandbox {
+    root: PathBuf,
+}
+
+impl ExportSandbox {
+    fn new(name: &str) -> Self {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "video-editor-binding-session-export-{name}-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        Self { root }
+    }
+
+    fn ffmpeg_complete(&self) -> PathBuf {
+        self.script(
+            "ffmpeg",
+            r#"#!/bin/sh
+if [ "$1" = "-version" ]; then
+  printf 'ffmpeg version session-export-test\n'
+  exit 0
+fi
+for arg in "$@"; do
+  if [ "$arg" = "-encoders" ]; then
+    printf ' V..... libx264 H.264 encoder\n'
+    printf ' A..... aac AAC encoder\n'
+    exit 0
+  fi
+  if [ "$arg" = "-filters" ]; then
+    printf ' ... ass Render ASS subtitles\n'
+    printf ' ... subtitles Render text subtitles\n'
+    exit 0
+  fi
+done
+last=""
+for arg in "$@"; do
+  last="$arg"
+done
+mkdir -p "$(dirname "$last")"
+printf 'out_time_us=500000\n'
+printf 'progress=continue\n'
+printf 'fake mp4\n' > "$last"
+printf 'out_time_us=1000000\n'
+printf 'progress=end\n'
+"#,
+        )
+    }
+
+    fn ffprobe_success(&self, width: u32, height: u32, has_audio: bool) -> PathBuf {
+        let audio_stream = if has_audio {
+            r#",{"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2,"duration":"1.000000"}"#
+        } else {
+            ""
+        };
+        self.script(
+            "ffprobe",
+            &format!(
+                r#"#!/bin/sh
+if [ "$1" = "-version" ]; then
+  printf 'ffprobe version session-export-test\n'
+  exit 0
+fi
+cat <<'JSON'
+{{"streams":[{{"codec_type":"video","codec_name":"h264","width":{width},"height":{height},"r_frame_rate":"30/1","duration":"1.000000"}}{audio_stream}],"format":{{"duration":"1.000000"}}}}
+JSON
+"#
+            ),
+        )
+    }
+
+    fn script(&self, name: &str, contents: &str) -> PathBuf {
+        let path = self.root.join(name);
+        fs::write(&path, contents).unwrap();
+        make_executable(&path);
+        path
+    }
+}
+
+impl Drop for ExportSandbox {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    fn set_path(key: &'static str, value: impl AsRef<Path>) -> Self {
+        let previous = std::env::var_os(key);
+        unsafe {
+            std::env::set_var(key, value.as_ref());
+        }
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) {}

@@ -12,6 +12,8 @@ type VideoEditorCoreApi = {
   executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
 };
 type VideoEditorPlatformApi = {
+  createProjectBundle: () => Promise<{ canceled: boolean; bundlePath: string | null }>;
+  openProjectBundle: () => Promise<{ canceled: boolean; bundlePath: string | null }>;
   openMaterialFiles: () => Promise<{ canceled: boolean; filePaths: string[] }>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
@@ -42,6 +44,13 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
   await expect(page.locator('[aria-label="预览窗口"]')).toBeVisible();
   await expect(page.locator('[aria-label="属性检查器"]')).toBeVisible();
   await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
+}
+
+async function expectProjectEntry(page: Page): Promise<void> {
+  await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建项目" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开项目" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toHaveCount(0);
 }
 
 async function launchSmokeAppWithEnv(
@@ -93,15 +102,13 @@ async function startUntrustedHttpPage(): Promise<{ origin: string; url: string; 
 }
 
 test("renderer reaches Rust binding only through the typed preload bridge", async () => {
-    const { app, page } = await launchSmokeApp();
+  const { app, page } = await launchSmokeApp();
 
   try {
-    await expectVisibleWorkspaceRegions(page);
+    await expectProjectEntry(page);
     await expect(page.getByText("预览命令已接入")).toHaveCount(0);
     await expect(page.getByLabel("预览产物")).toHaveCount(0);
     await expect(page.getByLabel("运行环境诊断")).toHaveCount(0);
-    await expect(page.getByText("添加素材到时间线后显示预览").first()).toBeVisible();
-    await expect(page.getByText("未选择片段")).toBeVisible();
 
     const exposedKeys = await page.evaluate(() => Object.keys(window));
     expect(exposedKeys).toContain("videoEditorCore");
@@ -121,8 +128,19 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       ping: "function",
       version: "function",
       executeCommand: "function",
-      keys: ["ping", "version", "executeCommand"],
-      platformKeys: ["openMaterialFiles", "pathToFileUrl"],
+      keys: [
+        "ping",
+        "version",
+        "executeCommand",
+        "createProjectSession",
+        "openProjectSession",
+        "executeProjectIntent",
+        "listProjectSessionMaterials",
+        "listProjectSessionMissingMaterials",
+        "startProjectSessionExport",
+        "closeProjectSession"
+      ],
+      platformKeys: ["createProjectBundle", "openProjectBundle", "openMaterialFiles", "pathToFileUrl"],
       openMaterialFiles: "function",
       pathToFileUrl: "function"
     });
@@ -157,12 +175,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       events: []
     });
 
-    const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
-    for (const category of ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"]) {
-      await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
-    }
-
-    await expect(page.getByText("还没有素材")).toBeVisible();
+    await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
     await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
     await expect(page.getByLabel("素材路径")).toHaveCount(0);
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toHaveCount(0);
@@ -204,7 +217,7 @@ test("main process ignores non-loopback dev server URLs", async () => {
   });
 
   try {
-    await expectVisibleWorkspaceRegions(page);
+    await expectProjectEntry(page);
     const location = await page.evaluate(() => window.location.href);
     expect(location).not.toContain("example.com");
   } finally {
@@ -217,7 +230,7 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
   const { app, page } = await launchSmokeApp();
 
   try {
-    await expectVisibleWorkspaceRegions(page);
+    await expectProjectEntry(page);
     const initialLocation = await page.evaluate(() => window.location.href);
 
     await page.goto(untrustedPage.url).catch(() => undefined);
@@ -225,7 +238,7 @@ test("untrusted navigation cannot access the native preload bridge", async () =>
     const location = await page.evaluate(() => window.location.href);
 
     if (location === initialLocation) {
-      await expectVisibleWorkspaceRegions(page);
+      await expectProjectEntry(page);
       expect(location).not.toContain(untrustedPage.origin);
       return;
     }

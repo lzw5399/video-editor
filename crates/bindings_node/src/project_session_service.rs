@@ -366,6 +366,13 @@ pub(crate) fn realtime_preview_snapshot(
     session_id: &str,
     expected_revision: u64,
 ) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
+    project_session_snapshot(session_id, expected_revision)
+}
+
+pub(crate) fn project_session_snapshot(
+    session_id: &str,
+    expected_revision: u64,
+) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
     let registry = global_project_session_registry();
     let registry = registry
         .lock()

@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CommandName } from "../src/generated/CommandEnvelope";
@@ -10,6 +11,12 @@ type ExecuteCommandCall = {
   jobId: string | null;
 };
 
+type ProjectSessionCall = {
+  command: "startProjectSessionExport" | string;
+  outputPath?: string | null;
+  preset?: string | null;
+};
+
 async function launchWorkspaceApp(
   options: { showDeveloperDiagnostics?: boolean } = {}
 ): Promise<{ app: ElectronApplication; page: Page }> {
@@ -18,28 +25,71 @@ async function launchWorkspaceApp(
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
+      VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: testProjectPath(),
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS: "1",
+      VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: options.showDeveloperDiagnostics === true ? "1" : "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"])
     }
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
+  await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
+  await page.getByRole("button", { name: "新建项目" }).click();
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (
+          await app.evaluate(() => {
+            return (
+              (
+                globalThis as typeof globalThis & {
+                  __videoEditorTestProjectSessionCalls?: ProjectSessionCall[];
+                }
+              ).__videoEditorTestProjectSessionCalls ?? []
+            );
+          })
+        ).some((call) => call.command === "createProjectSession"),
+      { timeout: 20_000 }
+    )
+    .toBe(true);
   return { app, page };
 }
 
+function testProjectPath(): string {
+  return join(tmpdir(), `video-editor-export-modal-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.veproj`);
+}
+
 async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
-    );
-  });
+  const [legacyCalls, projectCalls] = await Promise.all([
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+          .__videoEditorTestExecuteCommandCalls ?? []
+      );
+    }),
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+          .__videoEditorTestProjectSessionCalls ?? []
+      );
+    })
+  ]);
+  return [
+    ...legacyCalls,
+    ...projectCalls
+      .filter((call) => call.command === "startProjectSessionExport")
+      .map((call) => ({
+        command: "startExport" as CommandName,
+        outputPath: call.outputPath ?? null,
+        preset: call.preset ?? null,
+        jobId: null
+      }))
+  ];
 }
 
 async function expectCommandCall(app: ElectronApplication, command: CommandName): Promise<void> {

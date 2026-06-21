@@ -114,6 +114,11 @@ fail_matches \
   --glob '!commandHelpers.ts'
 
 fail_matches \
+  "renderer must not start export through renderer-owned draft payloads; use startProjectSessionExport" \
+  'buildStartExportCommand|command:[[:space:]]*"startExport"|kind:[[:space:]]*"startExport"' \
+  apps/desktop-electron/src/renderer apps/desktop-electron/src/preload
+
+fail_matches \
   "renderer must not construct preview cache keys, semantic fingerprints, material dependency sets, or dirty range propagation" \
   "$CACHE_DIRTY_PATTERN" \
   "$RENDERER_DIR" \

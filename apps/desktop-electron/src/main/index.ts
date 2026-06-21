@@ -28,12 +28,14 @@ import {
   listProjectSessionMissingMaterials,
   openProjectSession,
   ping,
+  startProjectSessionExport,
   version,
   type CreateProjectSessionRequest,
   type ExecuteProjectIntentRequest,
   type OpenProjectSessionRequest,
   type ProjectSessionReadRequest,
-  type ProjectSessionRequest
+  type ProjectSessionRequest,
+  type StartProjectSessionExportRequest
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
@@ -71,12 +73,15 @@ type TestProjectSessionCall = {
     | "executeProjectIntent"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
+    | "startProjectSessionExport"
     | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;
   materialId: string | null;
   materialPath: string | null;
+  outputPath: string | null;
+  preset: string | null;
   duration: number | null;
   canvasConfig: TestExecuteCommandCall["canvasConfig"];
   visual: SegmentVisual | null;
@@ -182,6 +187,15 @@ ipcMain.handle("core:listProjectSessionMissingMaterials", (event, request: Proje
   assertAllowedIpcSender(event);
   recordTestProjectSessionCall("listProjectSessionMissingMaterials", request);
   return listProjectSessionMissingMaterials(request);
+});
+ipcMain.handle("core:startProjectSessionExport", (event, request: StartProjectSessionExportRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("startProjectSessionExport", request);
+  const testExportResponse = maybeBuildTestProjectSessionExportResponse(request);
+  if (testExportResponse !== null) {
+    return testExportResponse;
+  }
+  return startProjectSessionExport(request);
 });
 ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
   assertAllowedIpcSender(event);
@@ -510,7 +524,13 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
 
 function recordTestProjectSessionCall(
   command: TestProjectSessionCall["command"],
-  request: CreateProjectSessionRequest | OpenProjectSessionRequest | ExecuteProjectIntentRequest | ProjectSessionRequest
+  request:
+    | CreateProjectSessionRequest
+    | OpenProjectSessionRequest
+    | ExecuteProjectIntentRequest
+    | ProjectSessionRequest
+    | ProjectSessionReadRequest
+    | StartProjectSessionExportRequest
 ): void {
   if (!testObservationEnabled) {
     return;
@@ -527,6 +547,8 @@ function recordTestProjectSessionCall(
     intentKind: intent?.kind ?? null,
     materialId: intent !== null && "materialId" in intent ? intent.materialId ?? null : null,
     materialPath: intent !== null && "materialPath" in intent ? intent.materialPath ?? null : null,
+    outputPath: "outputPath" in request ? request.outputPath : null,
+    preset: "preset" in request ? request.preset : null,
     duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
     canvasConfig:
       intentRecord?.kind === "updateDraftCanvasConfig"
@@ -806,6 +828,31 @@ function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEn
   }
 
   return null;
+}
+
+function maybeBuildTestProjectSessionExportResponse(
+  request: StartProjectSessionExportRequest
+): CommandResultEnvelope<ExportJobStatusResponse> | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS !== "1") {
+    return null;
+  }
+
+  return {
+    ok: true,
+    data: {
+      jobId: "test-export-job",
+      phase: "running",
+      outputPath: request.outputPath,
+      preset: request.preset,
+      progressPerMille: 120,
+      outTime: 960_000,
+      logSummary: "导出任务已启动",
+      validation: null,
+      diagnostic: null
+    },
+    error: null,
+    events: []
+  };
 }
 
 function maybeBuildTestAudioResponse(

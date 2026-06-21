@@ -12,6 +12,8 @@ const execFileAsync = promisify(execFile);
 type ExecuteCommandCall = {
   command: CommandName;
   kind: string;
+  outputPath?: string | null;
+  preset?: string | null;
 };
 
 type ProjectSessionCall = {
@@ -21,9 +23,12 @@ type ProjectSessionCall = {
     | "executeProjectIntent"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
+    | "startProjectSessionExport"
     | "closeProjectSession";
   intentKind: string | null;
   timelineSemanticKeys?: string[];
+  outputPath?: string | null;
+  preset?: string | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -146,6 +151,29 @@ async function enterProjectFromProductEntryIfNeeded(page: Page, app: ElectronApp
 }
 
 export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
+  const [legacyCalls, projectCalls] = await Promise.all([
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+          .__videoEditorTestExecuteCommandCalls ?? []
+      );
+    }),
+    readProjectSessionCalls(app)
+  ]);
+  return [
+    ...legacyCalls,
+    ...projectCalls
+      .filter((call) => call.command === "startProjectSessionExport")
+      .map((call) => ({
+        command: "startExport" as CommandName,
+        kind: "startExport",
+        outputPath: call.outputPath ?? null,
+        preset: call.preset ?? null
+      }))
+  ];
+}
+
+async function readLegacyExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
   return app.evaluate(() => {
     return (
       (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
@@ -429,7 +457,7 @@ async function waitForCommandOrProjectIntentCount(
       )
       .toBe(true);
   } catch (error) {
-    const commandCalls = await readExecuteCommandCalls(app);
+    const commandCalls = await readLegacyExecuteCommandCalls(app);
     const projectCalls = await readProjectSessionCalls(app);
     const materialCards = await page.getByRole("article").allTextContents();
     const message = error instanceof Error ? error.message : String(error);

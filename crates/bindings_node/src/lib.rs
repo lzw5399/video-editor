@@ -258,6 +258,21 @@ pub fn list_project_session_missing_materials(
     project_session_service::list_project_session_missing_materials(request)
 }
 
+#[napi(js_name = "startProjectSessionExport")]
+pub fn start_project_session_export(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<StartProjectSessionExportRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid startProjectSessionExport payload: {error}"),
+                Some("startProjectSessionExport".to_string()),
+            ));
+        }
+    };
+    start_project_session_export_command(request)
+}
+
 #[napi(js_name = "createRealtimePreviewSession")]
 pub fn create_realtime_preview_session(config: serde_json::Value) -> Result<serde_json::Value> {
     let config = parse_realtime_preview_payload::<RealtimePreviewSessionBindingConfig>(config)?;
@@ -649,6 +664,49 @@ fn start_export_command(payload: StartExportCommandPayload) -> Result<serde_json
     }
 }
 
+fn start_project_session_export_command(
+    request: StartProjectSessionExportRequest,
+) -> Result<serde_json::Value> {
+    let snapshot = match project_session_service::project_session_snapshot(
+        &request.session_id,
+        request.expected_revision,
+    ) {
+        Ok(snapshot) => snapshot,
+        Err(message) => {
+            let kind = if message.contains("not found") {
+                CommandErrorKind::InvalidProject
+            } else {
+                CommandErrorKind::InvalidPayload
+            };
+            return to_js_value(error_envelope(
+                kind,
+                message,
+                Some("startProjectSessionExport".to_string()),
+            ));
+        }
+    };
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::ExportServiceFailed,
+                runtime_discovery_message(error),
+                Some("startProjectSessionExport".to_string()),
+            ));
+        }
+    };
+    let payload = StartExportCommandPayload {
+        draft: snapshot.draft,
+        output_path: request.output_path,
+        preset: request.preset,
+        dirty_facts: None,
+    };
+    match global_export_registry().start_export(runtime, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(export_error_envelope("startProjectSessionExport", error)),
+    }
+}
+
 fn get_export_job_status_command(
     payload: GetExportJobStatusCommandPayload,
 ) -> Result<serde_json::Value> {
@@ -929,6 +987,15 @@ struct RealtimePreviewProjectSessionSnapshotRequest {
     session_id: String,
     project_session_id: String,
     expected_revision: u64,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StartProjectSessionExportRequest {
+    session_id: String,
+    expected_revision: u64,
+    output_path: String,
+    preset: draft_model::ExportPreset,
 }
 
 #[derive(Debug, serde::Deserialize)]

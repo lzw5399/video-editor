@@ -2,11 +2,12 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
+import type { CommandEnvelope, CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
 import type {
   CommandDelta,
   CommandEvent,
   CommandResultEnvelope,
+  ExportJobStatusResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
   MissingMaterialCommandDiagnostic
@@ -51,6 +52,7 @@ type NativeBinding = {
   listProjectSessionMissingMaterials: (
     request: ProjectSessionReadRequest
   ) => CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>;
+  startProjectSessionExport: (request: StartProjectSessionExportRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   closeRealtimePreviewSession: (request: RealtimePreviewSessionRequest) => RealtimePreviewClosedResponse;
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
@@ -91,6 +93,13 @@ export type ProjectSessionRequest = {
 export type ProjectSessionReadRequest = {
   sessionId: string;
   expectedRevision: number;
+};
+
+export type StartProjectSessionExportRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  outputPath: string;
+  preset: ExportPreset;
 };
 
 export type ProjectIntent =
@@ -483,6 +492,16 @@ export function listProjectSessionMissingMaterials(
   return binding.listProjectSessionMissingMaterials(request);
 }
 
+export function startProjectSessionExport(
+  request: StartProjectSessionExportRequest
+): CommandResultEnvelope<ExportJobStatusResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("startProjectSessionExport");
+  }
+  return binding.startProjectSessionExport(request);
+}
+
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
@@ -567,6 +586,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.executeProjectIntent !== "function" ||
       typeof loaded.listProjectSessionMaterials !== "function" ||
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
+      typeof loaded.startProjectSessionExport !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.closeRealtimePreviewSession !== "function" ||
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
@@ -596,6 +616,7 @@ function loadNativeBinding(): NativeBinding | null {
       executeProjectIntent: loaded.executeProjectIntent,
       listProjectSessionMaterials: loaded.listProjectSessionMaterials,
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
+      startProjectSessionExport: loaded.startProjectSessionExport,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       closeRealtimePreviewSession: loaded.closeRealtimePreviewSession,
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,

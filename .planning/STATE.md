@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260621-sg7 bundled-only FFmpeg runtime
-last_updated: "2026-06-21T15:01:07Z"
-last_activity: 2026-06-21 -- Completed quick task 260621-sg7: bundled-only FFmpeg runtime
+stopped_at: Completed quick task 260621-sg8 session-owned export boundary
+last_updated: "2026-06-21T15:38:29Z"
+last_activity: 2026-06-21 -- Completed quick task 260621-sg8: session-owned export boundary
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-21 -- Completed quick task 260621-sg7: bundled-only FFmpeg runtime
+Last activity: 2026-06-21 -- Completed quick task 260621-sg8: session-owned export boundary
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -218,6 +218,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
+- Product export start is now sourced from Rust project sessions: Electron sends `sessionId`, `expectedRevision`, output path, and preset through `startProjectSessionExport`; Rust reads the canonical session draft before starting the export registry, and renderer/preload guards reject full-draft `startExport` payloads. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
