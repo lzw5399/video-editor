@@ -926,7 +926,7 @@ function CanvasDraftSettings({
         <InspectorDatum label="序列时长" value={formatMicroseconds(sequenceDuration)} />
         <InspectorDatum label="轨道数量" value={`${project.trackCount} 条`} />
         <InspectorDatum label="素材数量" value={`${project.materialCount} 个`} />
-        <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
+        <InspectorDatum label="吸附状态" value={workspace.viewModel.editControls.snappingEnabled ? "开启" : "关闭"} />
       </dl>
 
       {modalOpen ? (

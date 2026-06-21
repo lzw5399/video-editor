@@ -648,6 +648,14 @@ export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
       trackCount: 0,
       materialCount: 0
     },
+    editControls: {
+      canUndo: false,
+      canRedo: false,
+      snappingEnabled: true,
+      snappingLabel: "吸附 开",
+      hasSelectedSegment: false,
+      hasSelectedTrack: false
+    },
     timeline: {
       rows: [],
       duration: 10_000_000,

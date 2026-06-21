@@ -250,9 +250,9 @@ function TransportStrip({
   );
   const [materialId, setMaterialId] = useState(timelineMaterials[0]?.materialId ?? "");
   const selectedMaterialId = materialId || (timelineMaterials[0]?.materialId ?? "");
-  const hasSelection = workspace.selection.segmentIds.length > 0;
+  const editControls = workspace.viewModel.editControls;
   const pending = workspace.pendingCommand !== null;
-  const snappingLabel = workspace.commandState.snapping.enabled ? "吸附 开" : "吸附 关";
+  const snappingLabel = editControls.snappingLabel;
   const isPlaybackRunning = playbackRunning;
   const togglePlayback = onTogglePlayback;
 
@@ -263,13 +263,13 @@ function TransportStrip({
           label="撤销"
           icon="undo"
           onClick={onUndo}
-          disabled={pending || workspace.commandState.undoStack.length === 0}
+          disabled={pending || !editControls.canUndo}
         />
         <TimelineIconButton
           label="重做"
           icon="redo"
           onClick={onRedo}
-          disabled={pending || workspace.commandState.redoStack.length === 0}
+          disabled={pending || !editControls.canRedo}
         />
         <TimelineIconButton
           label={isPlaybackRunning ? "暂停" : "播放"}
@@ -307,14 +307,14 @@ function TransportStrip({
         label="分割所选片段"
         icon="split"
         onClick={() => onSplitSelectedSegment?.(playheadUs)}
-        disabled={pending || !hasSelection}
+        disabled={pending || !editControls.hasSelectedSegment}
       />
       <TimelineIconButton
         label="删除所选片段"
         icon="delete"
         className="danger"
         onClick={onDeleteSelectedSegment}
-        disabled={pending || !hasSelection}
+        disabled={pending || !editControls.hasSelectedSegment}
       />
       <div className="timeline-zoom-shell" aria-label="时间线缩放">
         <TimelineIconButton
@@ -344,7 +344,7 @@ function TransportStrip({
         type="button"
         className="snapping-status"
         aria-label={snappingLabel}
-        aria-pressed={workspace.commandState.snapping.enabled}
+        aria-pressed={editControls.snappingEnabled}
         disabled
       >
         {snappingLabel}

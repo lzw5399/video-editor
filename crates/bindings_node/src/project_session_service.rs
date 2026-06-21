@@ -261,9 +261,21 @@ struct ProjectSessionMissingMaterialsResponse {
 #[serde(rename_all = "camelCase")]
 struct ProjectSessionViewModel {
     project: ProjectSummaryViewModel,
+    edit_controls: EditControlsViewModel,
     timeline: TimelineViewModel,
     selected_track: Option<SelectedTrackViewModel>,
     selected_segment: Option<SelectedSegmentViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EditControlsViewModel {
+    can_undo: bool,
+    can_redo: bool,
+    snapping_enabled: bool,
+    snapping_label: String,
+    has_selected_segment: bool,
+    has_selected_track: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -553,7 +565,11 @@ impl ProjectSessionRegistry {
         crate::to_js_value(crate::ok_envelope(ProjectSessionOpenResponse {
             session_id,
             revision: 0,
-            view_model: project_session_view_model(&bundle.draft, &TimelineSelection::empty()),
+            view_model: project_session_view_model(
+                &bundle.draft,
+                &CommandState::empty(),
+                &TimelineSelection::empty(),
+            ),
             draft: bundle.draft,
             bundle_path: bundle_path.display().to_string(),
             project_json_path: project_json_path.display().to_string(),
@@ -597,6 +613,7 @@ impl ProjectSessionRegistry {
             revision: 0,
             view_model: project_session_view_model(
                 &opened.bundle.draft,
+                &CommandState::empty(),
                 &TimelineSelection::empty(),
             ),
             draft: opened.bundle.draft,
@@ -1227,7 +1244,11 @@ impl ProjectSession {
                 draft: self.draft.clone(),
                 command_state: self.command_state.clone(),
                 selection: self.selection.clone(),
-                view_model: project_session_view_model(&self.draft, &self.selection),
+                view_model: project_session_view_model(
+                    &self.draft,
+                    &self.command_state,
+                    &self.selection,
+                ),
                 events: response.events,
                 delta: response.delta,
                 bundle_path: self.bundle_path.display().to_string(),
@@ -1255,7 +1276,11 @@ impl ProjectSession {
             draft: self.draft.clone(),
             command_state: self.command_state.clone(),
             selection: self.selection.clone(),
-            view_model: project_session_view_model(&self.draft, &self.selection),
+            view_model: project_session_view_model(
+                &self.draft,
+                &self.command_state,
+                &self.selection,
+            ),
             events: response.events,
             delta: response.delta,
             bundle_path: self.bundle_path.display().to_string(),
@@ -1266,18 +1291,40 @@ impl ProjectSession {
 
 fn project_session_view_model(
     draft: &Draft,
+    command_state: &CommandState,
     selection: &TimelineSelection,
 ) -> ProjectSessionViewModel {
     let project = project_summary_view_model(draft);
+    let edit_controls = edit_controls_view_model(command_state, selection);
     let timeline = timeline_view_model(draft, selection);
     let selected_track = selected_track_view_model(draft, selection);
     let selected_segment = selected_segment_view_model(draft, selection);
 
     ProjectSessionViewModel {
         project,
+        edit_controls,
         timeline,
         selected_track,
         selected_segment,
+    }
+}
+
+fn edit_controls_view_model(
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+) -> EditControlsViewModel {
+    EditControlsViewModel {
+        can_undo: !command_state.undo_stack.is_empty(),
+        can_redo: !command_state.redo_stack.is_empty(),
+        snapping_enabled: command_state.snapping.enabled,
+        snapping_label: if command_state.snapping.enabled {
+            "吸附 开"
+        } else {
+            "吸附 关"
+        }
+        .to_owned(),
+        has_selected_segment: !selection.segment_ids.is_empty(),
+        has_selected_track: !selection.track_ids.is_empty(),
     }
 }
 

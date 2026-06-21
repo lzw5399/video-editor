@@ -16,6 +16,7 @@ SELECTION_INTENT_LEGACY_FIELD_PATTERN='kind:[[:space:]]*"selectTimelineItemInten
 RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSegmentView|getSelectedTrackView|timelineTrackSelectionHandle|timelineSegmentSelectionHandle)\b'
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
+RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
 
 fail_if_matches() {
   local description="$1"
@@ -256,6 +257,21 @@ require_matches \
   apps/desktop-electron/src/renderer/workspace/Inspector.tsx
 
 fail_if_matches \
+  "renderer product workspace must not read legacy commandState or selection for edit controls; consume Rust session editControls view model" \
+  "$RENDERER_PRODUCT_EDIT_STATE_PATTERN" \
+  apps/desktop-electron/src/renderer/workspace
+
+require_matches \
+  "renderer timeline consumes Rust session edit controls view model" \
+  '\bworkspace\.viewModel\.editControls\b' \
+  apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+require_matches \
+  "renderer inspector consumes Rust session edit controls view model" \
+  '\bworkspace\.viewModel\.editControls\b' \
+  apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
+fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
@@ -364,6 +380,13 @@ assert_pattern_rejects \
   "renderer-owned project summary derivation from workspace draft" \
   "$RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN" \
   'const sequenceDuration = workspace.draft.tracks.reduce((duration, track) => duration + track.segments.length, 0);'
+
+assert_pattern_rejects \
+  "renderer-owned product edit controls from legacy commandState and selection" \
+  "$RENDERER_PRODUCT_EDIT_STATE_PATTERN" \
+  'const canUndo = workspace.commandState.undoStack.length > 0;
+const hasSelection = workspace.selection.segmentIds.length > 0;
+const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

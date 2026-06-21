@@ -221,9 +221,19 @@ export type ProjectSessionIntentResponse = ProjectSessionTimelineIntentResponse 
 
 export type ProjectSessionViewModel = {
   project: ProjectSummaryViewModel;
+  editControls: EditControlsViewModel;
   timeline: TimelineViewModel;
   selectedTrack: SelectedTrackViewModel | null;
   selectedSegment: SelectedSegmentViewModel | null;
+};
+
+export type EditControlsViewModel = {
+  canUndo: boolean;
+  canRedo: boolean;
+  snappingEnabled: boolean;
+  snappingLabel: string;
+  hasSelectedSegment: boolean;
+  hasSelectedTrack: boolean;
 };
 
 export type ProjectSummaryViewModel = {

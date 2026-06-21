@@ -63,6 +63,14 @@ fn project_session_creates_project_without_renderer_draft() {
         created["data"]["viewModel"]["project"]["frameDuration"],
         33333
     );
+    assert_edit_controls(
+        &created["data"]["viewModel"],
+        false,
+        false,
+        true,
+        false,
+        false,
+    );
     assert_eq!(
         created["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
         "timeline-track:track-main-video"
@@ -146,6 +154,7 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     );
     assert_eq!(added["data"]["viewModel"]["project"]["trackCount"], 1);
     assert_eq!(added["data"]["viewModel"]["project"]["materialCount"], 1);
+    assert_edit_controls(&added["data"]["viewModel"], true, false, true, true, true);
     assert_eq!(
         added["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
         "segment-1"
@@ -358,22 +367,50 @@ fn project_session_missing_material_reads_use_session_bundle_path() {
 }
 
 #[test]
-fn project_session_rejects_renderer_draft_field_before_execution() {
-    let envelope = execute_project_intent(json!({
-        "sessionId": "test-session-reject-draft",
-        "expectedRevision": 0,
-        "draft": timeline_draft_json(),
-        "intent": {
-            "kind": "addTimelineSegmentIntent",
-            "materialId": "video-material"
-        }
-    }))
-    .expect("executeProjectIntent should return a structured envelope");
+fn project_session_rejects_renderer_owned_state_fields_before_execution() {
+    for (label, extra_field) in [
+        ("draft", json!({ "draft": timeline_draft_json() })),
+        (
+            "commandState",
+            json!({ "commandState": { "undoStack": [], "redoStack": [] } }),
+        ),
+        (
+            "selection",
+            json!({ "selection": { "segmentIds": [], "trackIds": [] } }),
+        ),
+    ] {
+        let mut request = json!({
+            "sessionId": "test-session-reject-draft",
+            "expectedRevision": 0,
+            "intent": {
+                "kind": "addTimelineSegmentIntent",
+                "materialId": "video-material"
+            }
+        });
+        request
+            .as_object_mut()
+            .expect("request should be an object")
+            .extend(
+                extra_field
+                    .as_object()
+                    .expect("extra field should be an object")
+                    .clone(),
+            );
 
-    assert_eq!(envelope["ok"], false, "{envelope:#}");
-    assert_eq!(envelope["data"], Value::Null);
-    assert_eq!(envelope["error"]["kind"], "invalidPayload");
-    assert_eq!(envelope["error"]["command"], "executeProjectIntent");
+        let envelope = execute_project_intent(request)
+            .unwrap_or_else(|_| panic!("{label} should return a structured envelope"));
+
+        assert_eq!(envelope["ok"], false, "{label}: {envelope:#}");
+        assert_eq!(envelope["data"], Value::Null, "{label}: {envelope:#}");
+        assert_eq!(
+            envelope["error"]["kind"], "invalidPayload",
+            "{label}: {envelope:#}"
+        );
+        assert_eq!(
+            envelope["error"]["command"], "executeProjectIntent",
+            "{label}: {envelope:#}"
+        );
+    }
 }
 
 #[test]
@@ -456,6 +493,14 @@ fn project_session_undo_and_redo_use_rust_owned_command_state() {
     assert_eq!(undone["ok"], true, "{undone:#}");
     assert_eq!(undone["data"]["revision"], 2);
     assert_eq!(undone["data"]["events"][0]["kind"], "undoCommitted");
+    assert_edit_controls(
+        &undone["data"]["viewModel"],
+        false,
+        true,
+        true,
+        false,
+        false,
+    );
     let reopened_after_undo = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("undo should save canonical project.json");
     assert_eq!(reopened_after_undo.bundle.draft.tracks[0].segments.len(), 0);
@@ -469,6 +514,7 @@ fn project_session_undo_and_redo_use_rust_owned_command_state() {
     assert_eq!(redone["ok"], true, "{redone:#}");
     assert_eq!(redone["data"]["revision"], 3);
     assert_eq!(redone["data"]["events"][0]["kind"], "redoCommitted");
+    assert_edit_controls(&redone["data"]["viewModel"], true, false, true, true, true);
     let reopened_after_redo = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("redo should save canonical project.json");
     assert_eq!(reopened_after_redo.bundle.draft.tracks[0].segments.len(), 1);
@@ -631,6 +677,14 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
     assert_eq!(
         selected["data"]["viewModel"]["selectedSegment"]["track"]["selectionHandle"],
         "timeline-track:video-track"
+    );
+    assert_edit_controls(
+        &selected["data"]["viewModel"],
+        true,
+        false,
+        true,
+        true,
+        true,
     );
 
     let follow_up = execute_project_intent(json!({
@@ -1345,6 +1399,40 @@ fn create_preview_session(label: &str) -> Value {
         "playbackRateDenominator": 1
     }))
     .expect("createRealtimePreviewSession should return a response")
+}
+
+fn assert_edit_controls(
+    view_model: &Value,
+    can_undo: bool,
+    can_redo: bool,
+    snapping_enabled: bool,
+    has_selected_segment: bool,
+    has_selected_track: bool,
+) {
+    let edit_controls = &view_model["editControls"];
+    assert_eq!(edit_controls["canUndo"], can_undo, "{view_model:#}");
+    assert_eq!(edit_controls["canRedo"], can_redo, "{view_model:#}");
+    assert_eq!(
+        edit_controls["snappingEnabled"], snapping_enabled,
+        "{view_model:#}"
+    );
+    assert_eq!(
+        edit_controls["snappingLabel"],
+        if snapping_enabled {
+            "吸附 开"
+        } else {
+            "吸附 关"
+        },
+        "{view_model:#}"
+    );
+    assert_eq!(
+        edit_controls["hasSelectedSegment"], has_selected_segment,
+        "{view_model:#}"
+    );
+    assert_eq!(
+        edit_controls["hasSelectedTrack"], has_selected_track,
+        "{view_model:#}"
+    );
 }
 
 fn save_timeline_draft(bundle_path: &std::path::Path) {
