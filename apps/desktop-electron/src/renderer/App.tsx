@@ -1991,14 +1991,12 @@ export function App(): React.ReactElement {
     })();
   }
 
-  function handleTrimSelectedSegment(direction: "left" | "right", deltaUs: number): void {
-    const safeDelta = Math.max(1, Math.round(deltaUs));
-
+  function handleTrimSelectedSegment(direction: "left" | "right", trimAt: number): void {
     void executeProjectTimelineIntent(
       {
         kind: "trimSelectedSegmentIntent",
         direction,
-        delta: safeDelta
+        trimAt: normalizePlayheadTime(trimAt)
       },
       direction === "left" ? "左侧裁剪" : "右侧裁剪"
     );

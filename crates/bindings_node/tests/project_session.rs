@@ -335,6 +335,116 @@ fn project_session_split_intent_rejects_renderer_built_split_at() {
 }
 
 #[test]
+fn project_session_trim_selected_segment_uses_trim_boundary() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-trim.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-trim"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-trim",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+
+    let moved = execute_project_intent(json!({
+        "sessionId": "test-session-trim",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "delta": 200_000
+        }
+    }))
+    .expect("move intent should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+
+    let left_trimmed = execute_project_intent(json!({
+        "sessionId": "test-session-trim",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "trimSelectedSegmentIntent",
+            "direction": "left",
+            "trimAt": 450_000
+        }
+    }))
+    .expect("left trim intent should return an envelope");
+    assert_eq!(left_trimmed["ok"], true, "{left_trimmed:#}");
+    assert_eq!(left_trimmed["data"]["revision"], 3);
+    assert_eq!(left_trimmed["data"]["events"][0]["kind"], "segmentTrimmed");
+    assert_no_renderer_project_state_payload(&left_trimmed);
+
+    let right_trimmed = execute_project_intent(json!({
+        "sessionId": "test-session-trim",
+        "expectedRevision": 3,
+        "intent": {
+            "kind": "trimSelectedSegmentIntent",
+            "direction": "right",
+            "trimAt": 900_000
+        }
+    }))
+    .expect("right trim intent should return an envelope");
+    assert_eq!(right_trimmed["ok"], true, "{right_trimmed:#}");
+    assert_eq!(right_trimmed["data"]["revision"], 4);
+    assert_eq!(right_trimmed["data"]["events"][0]["kind"], "segmentTrimmed");
+    assert_no_renderer_project_state_payload(&right_trimmed);
+
+    let selected = &right_trimmed["data"]["viewModel"]["selectedSegment"];
+    assert_eq!(selected["targetTimerange"]["start"], 450_000);
+    assert_eq!(selected["targetTimerange"]["duration"], 450_000);
+    assert_eq!(selected["sourceTimerange"]["start"], 250_000);
+    assert_eq!(selected["sourceTimerange"]["duration"], 450_000);
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session trim should save canonical project.json");
+    let segment = &reopened.bundle.draft.tracks[0].segments[0];
+    assert_eq!(segment.target_timerange.start.get(), 450_000);
+    assert_eq!(segment.target_timerange.duration.get(), 450_000);
+    assert_eq!(segment.source_timerange.start.get(), 250_000);
+    assert_eq!(segment.source_timerange.duration.get(), 450_000);
+
+    close_project_session(json!({ "sessionId": "test-session-trim" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_trim_intent_rejects_renderer_built_delta() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-trim-reject.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-trim-reject"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-trim-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "trimSelectedSegmentIntent",
+            "direction": "left",
+            "delta": 250_000
+        }
+    }))
+    .expect("legacy trim delta payload should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-trim-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");

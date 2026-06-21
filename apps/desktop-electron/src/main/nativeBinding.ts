@@ -140,7 +140,7 @@ export type ProjectIntent =
   | { kind: "selectTimelineItemIntent"; itemHandle: string }
   | { kind: "moveSelectedSegmentIntent"; delta: Microseconds }
   | { kind: "splitSelectedSegmentIntent" }
-  | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; delta: Microseconds }
+  | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; trimAt: Microseconds }
   | { kind: "deleteSelectedSegment" }
   | { kind: "addTextSegmentIntent"; text: TextSegment; duration: Microseconds }
   | { kind: "editSelectedText"; text: TextSegment }

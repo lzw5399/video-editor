@@ -46,7 +46,7 @@ type TimelineProps = {
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
   onSplitSelectedSegment?: () => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
+  onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   onDeleteSelectedSegment?: () => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
   onUndo?: () => void;
@@ -418,7 +418,7 @@ function TimelineTrackRow({
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
+  onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   pending: boolean;
 }): React.ReactElement {
   const [draftName, setDraftName] = useState(row.name);
@@ -535,7 +535,7 @@ function TimelineSegmentBlock({
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
+  onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   pending: boolean;
 }): React.ReactElement {
   const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
@@ -608,10 +608,10 @@ function TimelineSegmentBlock({
       }
 
       if (drag.mode === "trim-left" && deltaUs > 0) {
-        onTrimSelectedSegment?.("left", deltaUs);
+        onTrimSelectedSegment?.("left", segment.start + deltaUs);
       }
       if (drag.mode === "trim-right" && deltaUs < 0) {
-        onTrimSelectedSegment?.("right", Math.abs(deltaUs));
+        onTrimSelectedSegment?.("right", segment.start + segment.duration + deltaUs);
       }
     },
     [onMoveSelectedSegment, onTrimSelectedSegment, timelineDuration]

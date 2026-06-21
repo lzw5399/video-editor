@@ -14,9 +14,9 @@ use draft_model::{
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
     SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextBox, TextLayoutRegion,
     TextSegment, TextStyle, TextWrapping, TimelineCommandResponse, TimelineEditPayload,
-    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection,
-    TrimSelectedSegmentIntentCommandPayload, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentAudioCommandPayload, UpdateSegmentVisualCommandPayload,
+    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    UpdateSegmentVisualCommandPayload,
 };
 use media_runtime::discover_runtime_config;
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -119,7 +119,8 @@ enum ProjectIntent {
     SplitSelectedSegmentIntent {},
     TrimSelectedSegmentIntent {
         direction: TrimSegmentDirection,
-        delta: Microseconds,
+        #[serde(rename = "trimAt")]
+        trim_at: Microseconds,
     },
     DeleteSelectedSegment {},
     AddTextSegmentIntent {
@@ -882,14 +883,17 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::TrimSelectedSegmentIntent { direction, delta } => {
-                Ok(TimelineEditPayload::TrimSelectedSegmentIntent(
-                    TrimSelectedSegmentIntentCommandPayload {
+            ProjectIntent::TrimSelectedSegmentIntent { direction, trim_at } => {
+                let segment = self.selected_segment("裁剪片段")?;
+                let target_timerange = trim_target_timerange(segment, direction, trim_at)?;
+                Ok(TimelineEditPayload::TrimSegment(
+                    TrimSegmentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
+                        segment_id: segment.segment_id.clone(),
                         direction,
-                        delta,
+                        target_timerange,
                     },
                 ))
             }
@@ -1844,6 +1848,38 @@ fn relative_keyframe_time(segment: &Segment, timeline_at: Microseconds) -> Micro
     let segment_duration = segment.target_timerange.duration.get();
     let relative = timeline_at.get().saturating_sub(segment_start);
     Microseconds::new(relative.min(segment_duration))
+}
+
+fn trim_target_timerange(
+    segment: &Segment,
+    direction: TrimSegmentDirection,
+    trim_at: Microseconds,
+) -> std::result::Result<TargetTimerange, String> {
+    let old_start = segment.target_timerange.start.get();
+    let old_duration = segment.target_timerange.duration.get();
+    if old_duration == 0 {
+        return Err("裁剪片段失败：片段时长无效".to_owned());
+    }
+    let old_end = old_start
+        .checked_add(old_duration)
+        .ok_or_else(|| "裁剪片段失败：片段时间范围溢出".to_owned())?;
+
+    match direction {
+        TrimSegmentDirection::Left => {
+            let new_start = trim_at.get().clamp(old_start, old_end.saturating_sub(1));
+            Ok(TargetTimerange {
+                start: Microseconds::new(new_start),
+                duration: Microseconds::new(old_end.saturating_sub(new_start).max(1)),
+            })
+        }
+        TrimSegmentDirection::Right => {
+            let new_end = trim_at.get().clamp(old_start.saturating_add(1), old_end);
+            Ok(TargetTimerange {
+                start: Microseconds::new(old_start),
+                duration: Microseconds::new(new_end.saturating_sub(old_start).max(1)),
+            })
+        }
+    }
 }
 
 fn percent_decode_timeline_handle_component(encoded: &str) -> std::result::Result<String, ()> {
