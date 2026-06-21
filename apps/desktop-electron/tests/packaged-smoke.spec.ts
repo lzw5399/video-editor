@@ -103,29 +103,3 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     await app.close();
   }
 });
-
-test("packaged app ignores external bundled runtime overrides", async () => {
-  const { app, page } = await launchPackagedApp({
-    VE_BUNDLED_FFMPEG_DIR: "/definitely-missing/video-editor/ffmpeg-runtime"
-  });
-
-  try {
-    await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
-
-    const resourcesPath = await app.evaluate(() => process.resourcesPath);
-    const result = await page.evaluate(() => window.videoEditorCore?.probeMediaRuntime());
-
-    const runtime = result?.data as {
-      ffmpeg?: { path?: string; source?: { directory?: string } };
-      ffprobe?: { path?: string; source?: { directory?: string } };
-    } | undefined;
-    expect(result?.ok).toBe(true);
-    expect(result?.error).toBeNull();
-    expect(runtime?.ffmpeg?.source?.directory).toContain(resourcesPath);
-    expect(runtime?.ffprobe?.source?.directory).toContain(resourcesPath);
-    expect(runtime?.ffmpeg?.path).not.toContain("/definitely-missing");
-    expect(runtime?.ffprobe?.path).not.toContain("/definitely-missing");
-  } finally {
-    await app.close();
-  }
-});

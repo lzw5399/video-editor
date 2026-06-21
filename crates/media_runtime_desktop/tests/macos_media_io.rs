@@ -108,7 +108,7 @@ fn macos_native_decodes_h264_fixture_into_corevideo_frame_lease_when_enabled() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -167,7 +167,7 @@ fn macos_native_decode_honors_requested_source_time() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -224,7 +224,7 @@ fn macos_texture_decode_degrades_when_texture_interop_is_disabled() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -275,7 +275,7 @@ fn macos_texture_decode_returns_metal_texture_when_preview_device_is_compatible(
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -334,7 +334,7 @@ fn macos_native_close_reports_unreleased_corevideo_leases() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);

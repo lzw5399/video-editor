@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use media_runtime::{
     BinaryKind, DiscoveryErrorKind, DiscoverySource, MAX_STDERR_SUMMARY_BYTES,
     discover_runtime_config, probe_binary_version_with_timeout,
+    replace_configured_bundled_runtime_directory_for_tests,
 };
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -16,7 +17,7 @@ fn discovery_runtime_config_uses_bundled_runtime_directory() {
     let sandbox = Sandbox::new("bundled-success");
     let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version bundled-build\n", "", 0);
     let ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let _legacy_ffmpeg = EnvVarGuard::remove("VE_FFMPEG_PATH");
     let _legacy_ffprobe = EnvVarGuard::remove("VE_FFPROBE_PATH");
     let _path = EnvVarGuard::set_path("PATH", sandbox.dir("poison-path"));
@@ -53,7 +54,7 @@ fn discovery_never_falls_back_to_legacy_env_or_path() {
     let _legacy_ffprobe_path = sandbox.bin_at(legacy, "ffprobe", "ffprobe version legacy\n", "", 0);
     let missing_bundled_dir = sandbox.root.join("missing-bundled");
 
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &missing_bundled_dir);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&missing_bundled_dir);
     let _legacy_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", legacy.join("ffmpeg"));
     let _legacy_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", legacy.join("ffprobe"));
     let _path = EnvVarGuard::set_path("PATH", legacy);
@@ -82,7 +83,7 @@ fn discovery_bad_bundled_binary_error_uses_bounded_output_summary() {
     let long_stderr = "x".repeat(MAX_STDERR_SUMMARY_BYTES + 128);
     let bad_ffmpeg = sandbox.bin("ffmpeg", "not really ffmpeg\n", &long_stderr, 23);
     let _good_ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
 
     let error = discover_runtime_config().expect_err("bad ffmpeg should fail version probe");
 
@@ -106,7 +107,7 @@ fn discovery_unsupported_bundled_binary_does_not_suggest_system_install() {
     let sandbox = Sandbox::new("unsupported-binary");
     let bad_ffmpeg = sandbox.bin("ffmpeg", "custom tool 1.0\n", "", 0);
     let _good_ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.dir("poison-path"));
 
     let error = discover_runtime_config().expect_err("unsupported bundled ffmpeg should fail");
@@ -219,6 +220,26 @@ impl Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
+}
+
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
+        }
+    }
+}
+
+impl Drop for RuntimeDirectoryGuard {
+    fn drop(&mut self) {
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 

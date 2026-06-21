@@ -37,10 +37,10 @@ pub use decoder::{
     VideoDecoder,
 };
 pub use discovery::{
-    BUNDLED_FFMPEG_DIR_ENV, BinaryKind, DiscoveredBinary, DiscoverySource,
-    MAX_STDERR_SUMMARY_BYTES, RuntimeConfig, configure_bundled_runtime_directory,
-    discover_bundled_runtime_config, discover_runtime_config, probe_binary_version,
-    probe_binary_version_with_timeout, resolve_binary,
+    BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
+    configure_bundled_runtime_directory, discover_bundled_runtime_config, discover_runtime_config,
+    probe_binary_version, probe_binary_version_with_timeout,
+    replace_configured_bundled_runtime_directory_for_tests, resolve_binary,
 };
 pub use error::{DiscoveryError, DiscoveryErrorKind};
 pub use fallback::{

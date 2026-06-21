@@ -39,6 +39,7 @@
     "test:phase6-packaging": "pnpm --filter @video-editor/desktop test:packaged",
     "test:phase6-runtime": "cargo test -p media_runtime runtime_capability -- --nocapture && cargo test -p bindings_node runtime_capabilities -- --nocapture && pnpm --filter @video-editor/desktop test:runtime-diagnostics && pnpm --filter @video-editor/desktop test:real-workflow",
     "test:phase6-release-gates": "bash scripts/phase6-release-guards.sh",
+    "test:phase6-release": "pnpm run test:phase6-packaging && pnpm run test:phase6-release-gates",
     "test:phase6": "pnpm run test:phase6-runtime && pnpm run test:phase6-release-gates",
     "test:phase7-rust": "cargo test -p draft_model canvas -- --nocapture && cargo test -p draft_commands canvas -- --nocapture && cargo test -p bindings_node canvas_commands -- --nocapture && cargo test -p engine_core canvas -- --nocapture && cargo test -p render_graph canvas -- --nocapture && cargo test -p ffmpeg_compiler canvas -- --nocapture && cargo test -p preview_service canvas -- --nocapture && cargo test -p bindings_node export_commands -- --nocapture && cargo test -p testkit preview_export_parity -- --nocapture",
     "test:phase7-source-guards": "bash scripts/phase7-source-guards.sh",

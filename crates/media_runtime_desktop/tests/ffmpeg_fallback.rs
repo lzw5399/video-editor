@@ -25,7 +25,7 @@ use std::os::windows::process::ExitStatusExt;
 #[test]
 fn ffmpeg_fallback_decodes_h264_fixture_into_cpu_frame_lease() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);

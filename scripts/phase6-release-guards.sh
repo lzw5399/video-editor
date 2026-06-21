@@ -66,13 +66,13 @@ if (source.includes("--video-editor-test-ve-bundled-ffmpeg-dir")) {
 }
 
 const discovery = fs.readFileSync("crates/media_runtime/src/discovery.rs", "utf8");
-const envIndex = discovery.indexOf("env::var_os(BUNDLED_FFMPEG_DIR_ENV)");
-if (envIndex >= 0) {
-  const cfgIndex = discovery.lastIndexOf("#[cfg(debug_assertions)]", envIndex);
-  if (cfgIndex < 0 || envIndex - cfgIndex > 240) {
-    console.error("Rust runtime may read VE_BUNDLED_FFMPEG_DIR only inside the debug/test helper branch");
-    process.exit(1);
-  }
+if (discovery.includes("VE_BUNDLED_FFMPEG_DIR") || discovery.includes("BUNDLED_FFMPEG_DIR_ENV")) {
+  console.error("Rust runtime discovery must not expose a process-env bundled FFmpeg resolver");
+  process.exit(1);
+}
+if (/env::var_os\([^)]*FFMPEG/i.test(discovery) || /std::env::var_os\([^)]*FFMPEG/i.test(discovery)) {
+  console.error("Rust runtime discovery must not read process env for FFmpeg resolution");
+  process.exit(1);
 }
 NODE
 }
@@ -98,7 +98,7 @@ forbid_local_ffmpeg_lookup() {
     apps/desktop-electron/scripts
     apps/desktop-electron/electron-builder.yml
   )
-  local pattern='VE_FFMPEG_PATH|VE_FFPROBE_PATH|VE_FFMPEG_SOURCE|VE_FFPROBE_SOURCE|command -v|which[[:space:]]+ffmpeg|which[[:space:]]+ffprobe|which\(|/opt/homebrew|/usr/local/bin/ffmpeg|/usr/local/bin/ffprobe|brew[[:space:]]+install|PATH[^[:alnum:]_].*ffmpeg|ffmpeg.*PATH[^[:alnum:]_]|PATH[^[:alnum:]_].*ffprobe|ffprobe.*PATH[^[:alnum:]_]|当前使用本机 FFmpeg|本机外部运行环境'
+  local pattern='VE_BUNDLED_FFMPEG_DIR|BUNDLED_FFMPEG_DIR_ENV|VE_FFMPEG_PATH|VE_FFPROBE_PATH|VE_FFMPEG_SOURCE|VE_FFPROBE_SOURCE|command -v|which[[:space:]]+ffmpeg|which[[:space:]]+ffprobe|which\(|/opt/homebrew|/usr/local/bin/ffmpeg|/usr/local/bin/ffprobe|brew[[:space:]]+install|PATH[^[:alnum:]_].*ffmpeg|ffmpeg.*PATH[^[:alnum:]_]|PATH[^[:alnum:]_].*ffprobe|ffprobe.*PATH[^[:alnum:]_]|当前使用本机 FFmpeg|本机外部运行环境'
 
   if rg -n -S "$pattern" "${targets[@]}" >/tmp/video-editor-local-ffmpeg-lookup.txt; then
     cat /tmp/video-editor-local-ffmpeg-lookup.txt >&2
@@ -141,6 +141,7 @@ require_script apps/desktop-electron/package.json test:packaged
 require_script package.json test:phase6-packaging
 require_script package.json test:phase6-runtime
 require_script package.json test:phase6-release-gates
+require_script package.json test:phase6-release
 require_script package.json test:phase6
 
 require_bundled_runtime_entries

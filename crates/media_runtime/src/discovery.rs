@@ -10,9 +10,6 @@ use crate::{DEFAULT_PROCESS_TIMEOUT, DiscoveryError, run_process_with_timeout};
 
 /// Maximum bytes retained from external process stdout/stderr summaries.
 pub const MAX_STDERR_SUMMARY_BYTES: usize = 4096;
-/// Test/development override for packaged FFmpeg-family resources.
-pub const BUNDLED_FFMPEG_DIR_ENV: &str = "VE_BUNDLED_FFMPEG_DIR";
-
 static CONFIGURED_BUNDLED_RUNTIME_DIRECTORY: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
 /// FFmpeg-family binary kind discovered by the runtime.
@@ -65,6 +62,16 @@ pub fn discover_runtime_config() -> Result<RuntimeConfig, DiscoveryError> {
 /// Configure the packaged FFmpeg-family runtime directory from the app shell.
 pub fn configure_bundled_runtime_directory(directory: PathBuf) {
     *configured_bundled_runtime_directory_slot().lock().unwrap() = Some(directory);
+}
+
+#[doc(hidden)]
+pub fn replace_configured_bundled_runtime_directory_for_tests(
+    directory: Option<PathBuf>,
+) -> Option<PathBuf> {
+    std::mem::replace(
+        &mut *configured_bundled_runtime_directory_slot().lock().unwrap(),
+        directory,
+    )
 }
 
 /// Discover only packaged FFmpeg-family resources.
@@ -169,10 +176,6 @@ fn bundled_runtime_directory() -> PathBuf {
         return directory;
     }
 
-    if let Some(directory) = debug_env_bundled_runtime_directory() {
-        return directory;
-    }
-
     default_development_bundled_runtime_directory()
 }
 
@@ -185,16 +188,6 @@ fn configured_bundled_runtime_directory() -> Option<PathBuf> {
 
 fn configured_bundled_runtime_directory_slot() -> &'static Mutex<Option<PathBuf>> {
     CONFIGURED_BUNDLED_RUNTIME_DIRECTORY.get_or_init(|| Mutex::new(None))
-}
-
-#[cfg(debug_assertions)]
-fn debug_env_bundled_runtime_directory() -> Option<PathBuf> {
-    env::var_os(BUNDLED_FFMPEG_DIR_ENV).map(PathBuf::from)
-}
-
-#[cfg(not(debug_assertions))]
-fn debug_env_bundled_runtime_directory() -> Option<PathBuf> {
-    None
 }
 
 fn default_development_bundled_runtime_directory() -> PathBuf {

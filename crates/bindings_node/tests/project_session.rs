@@ -8,7 +8,9 @@ use bindings_node::{
     update_realtime_preview_project_session_snapshot,
 };
 use draft_model::{Draft, TextSegmentSource};
-use media_runtime::discover_runtime_config;
+use media_runtime::{
+    discover_runtime_config, replace_configured_bundled_runtime_directory_for_tests,
+};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
 use serde_json::{Value, json};
@@ -1871,7 +1873,7 @@ fn project_session_export_starts_from_session_snapshot_without_renderer_draft() 
     let sandbox = ExportSandbox::new("session-export-start");
     let _ffmpeg = sandbox.ffmpeg_complete();
     let _ffprobe = sandbox.ffprobe_success(160, 90, false);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-export.veproj");
     save_timeline_draft(&bundle_path);
@@ -2525,30 +2527,23 @@ impl Drop for ExportSandbox {
     }
 }
 
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<std::ffi::OsString>,
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
 }
 
-impl EnvVarGuard {
-    fn set_path(key: &'static str, value: impl AsRef<Path>) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe {
-            std::env::set_var(key, value.as_ref());
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
         }
-        Self { key, previous }
     }
 }
 
-impl Drop for EnvVarGuard {
+impl Drop for RuntimeDirectoryGuard {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(previous) = &self.previous {
-                std::env::set_var(self.key, previous);
-            } else {
-                std::env::remove_var(self.key);
-            }
-        }
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 

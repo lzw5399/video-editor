@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn generate_tiny_lavfi_media_creates_temporary_mp4() {
         let media = generate_tiny_lavfi_media().expect(
-            "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+            "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
         );
 
         assert!(
@@ -761,7 +761,7 @@ mod tests {
     #[test]
     fn generated_material_fixtures_probe_to_expected_metadata() {
         let runtime = discover_runtime_config().expect(
-            "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+            "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
         );
         let executor = DesktopFfmpegExecutor::default();
 

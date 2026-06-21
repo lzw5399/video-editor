@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bindings_node::{execute_command, probe_runtime_capabilities};
 use draft_model::CommandErrorKind;
+use media_runtime::replace_configured_bundled_runtime_directory_for_tests;
 use serde_json::{Value, json};
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -57,7 +58,7 @@ fi
     let font_path = sandbox.root.join("PingFang.ttc");
     fs::write(&font_path, b"font").unwrap();
 
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", &font_path);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
@@ -134,7 +135,7 @@ fi
 fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("runtime-capabilities-missing-ffmpeg");
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
     let envelope =
@@ -150,8 +151,7 @@ fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     let message = envelope["error"]["message"].as_str().unwrap();
     assert!(message.contains("未找到内置 FFmpeg"), "{message}");
     assert!(message.contains("runtime/ffmpeg"), "{message}");
-    assert!(!message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
-    assert!(!message.contains("VE_FFMPEG_PATH"), "{message}");
+    assert!(!message.contains("VE_"), "{message}");
 }
 
 #[test]
@@ -170,7 +170,7 @@ else
 fi
 "#,
     );
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
     let envelope =
@@ -185,8 +185,7 @@ fi
     let message = envelope["error"]["message"].as_str().unwrap();
     assert!(message.contains("未找到内置 ffprobe"), "{message}");
     assert!(message.contains("runtime/ffmpeg"), "{message}");
-    assert!(!message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
-    assert!(!message.contains("VE_FFPROBE_PATH"), "{message}");
+    assert!(!message.contains("VE_"), "{message}");
 }
 
 #[test]
@@ -238,6 +237,26 @@ impl Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
+}
+
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
+        }
+    }
+}
+
+impl Drop for RuntimeDirectoryGuard {
+    fn drop(&mut self) {
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 

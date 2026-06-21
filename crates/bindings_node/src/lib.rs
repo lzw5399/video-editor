@@ -12,8 +12,7 @@ use draft_model::{
     InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
     ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    PreviewDecodeRequest,
-    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
+    PreviewDecodeRequest, RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
     RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
     RunArtifactGarbageCollectionCommandPayload, StartExportCommandPayload, VersionResponse,
 };
@@ -23,9 +22,7 @@ use napi::Env;
 use napi::bindgen_prelude::Result;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
-use project_store::{
-    ProjectStoreError, ProjectStoreWarning, StdPlatformFileSystem,
-};
+use project_store::{ProjectStoreError, ProjectStoreWarning, StdPlatformFileSystem};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 

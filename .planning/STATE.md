@@ -519,6 +519,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg39-remove-ffmpeg-env-runtime-lookup | Removed the debug/test FFmpeg runtime env resolver, kept discovery on explicit bundled-directory configuration plus app-local dev default, strengthened release guards and packaged PATH poisoning, and revalidated packaged release gates. |
 | 2026-06-22 | 260622-sg38-remove-generic-project-bundle-commands | Removed generic CommandEnvelope project bundle open/save routes and full-Draft responses, regenerated schema/TS contracts, guarded against reintroduction, and revalidated no-mock real workflow plus product cadence at 90/90 accounted frames. |
 | 2026-06-22 | 260622-sg37-remove-test-legacy-intent-aliases | Removed remaining test-side project-session intent alias mappings, updated product journey assertions to raw Rust intent names, guarded against alias mapper reintroduction, and revalidated product user journeys plus cadence at 90/90 accounted frames. |
 | 2026-06-22 | 260622-sg36-align-workspace-product-contract | Aligned workspace E2E assertions with Rust project-session intent ownership, removed legacy command alias expectations, kept product realtime diagnostics hidden by default, and revalidated workspace plus product cadence gates at 90/90 accounted frames. |

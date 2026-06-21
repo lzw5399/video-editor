@@ -8,6 +8,7 @@ use draft_model::{BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF};
 use media_runtime::{
     BinaryKind, DiscoveredBinary, DiscoveryErrorKind, DiscoverySource, FfmpegExecutor,
     RuntimeCapabilityStatus, RuntimeConfig, discover_runtime_config, probe_runtime_capabilities,
+    replace_configured_bundled_runtime_directory_for_tests,
 };
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -201,7 +202,7 @@ fn runtime_capability_missing_bundled_dir_returns_classified_discovery_error() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let missing_dir = PathBuf::from("/definitely-missing/video-editor/bundled-ffmpeg");
     let missing_ffmpeg = missing_dir.join("ffmpeg");
-    let _bundled_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &missing_dir);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&missing_dir);
     let _legacy_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", "/tmp/ignored-ffmpeg");
     let _legacy_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", "/tmp/ignored-ffprobe");
     let _path = EnvVarGuard::set_path("PATH", "/definitely-missing/video-editor/bin");
@@ -275,6 +276,26 @@ impl FfmpegExecutor for FakeExecutor {
             stdout: Vec::new(),
             stderr: format!("unexpected probe args: {key:?}").into_bytes(),
         }))
+    }
+}
+
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
+}
+
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
+        }
+    }
+}
+
+impl Drop for RuntimeDirectoryGuard {
+    fn drop(&mut self) {
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 

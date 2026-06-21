@@ -11,6 +11,7 @@ use draft_model::{
     Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SourceTimerange,
     TargetTimerange, Track, TrackKind,
 };
+use media_runtime::replace_configured_bundled_runtime_directory_for_tests;
 use serde_json::{Value, json};
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -21,7 +22,7 @@ fn export_commands_start_status_and_complete_through_binding_registry() {
     let sandbox = Sandbox::new("export-complete");
     let _ffmpeg = sandbox.ffmpeg_complete();
     let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let output = sandbox.root.join("导出.mp4");
 
     let started = execute_command(json!({
@@ -62,7 +63,7 @@ fn export_commands_transport_export_prep_dirty_facts() {
     let sandbox = Sandbox::new("export-dirty-facts");
     let _ffmpeg = sandbox.ffmpeg_complete();
     let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let output = sandbox.root.join("dirty-facts.mp4");
 
     let started = execute_command(json!({
@@ -119,7 +120,7 @@ fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() 
         let sandbox = Sandbox::new(name);
         let _ffmpeg = sandbox.ffmpeg_complete();
         let _ffprobe = sandbox.ffprobe_success_with_frame_rate(1080, 1920, 24, 1, true);
-        let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+        let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
         let output = sandbox.root.join(format!("{name}.mp4"));
 
         let started = execute_command(json!({
@@ -172,7 +173,7 @@ fn export_commands_cancel_running_job_and_report_classified_status() {
     let sandbox = Sandbox::new("export-cancel");
     let _ffmpeg = sandbox.ffmpeg_slow();
     let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let output = sandbox.root.join("cancel.mp4");
 
     let started = execute_command(json!({
@@ -216,7 +217,7 @@ fn explicit_export_control_apis_query_and_cancel_jobs_without_command_envelopes(
     let sandbox = Sandbox::new("export-explicit-control");
     let _ffmpeg = sandbox.ffmpeg_slow();
     let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let output = sandbox.root.join("explicit-control.mp4");
 
     let started = execute_command(json!({
@@ -251,7 +252,7 @@ fn export_commands_cancelled_validation_job_stays_cancelled() {
     let sandbox = Sandbox::new("export-cancel-validation");
     let _ffmpeg = sandbox.ffmpeg_complete();
     let _ffprobe = sandbox.ffprobe_slow_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
     let output = sandbox.root.join("cancel-validation.mp4");
 
     let started = execute_command(json!({
@@ -303,7 +304,7 @@ fn export_commands_classify_invalid_output_path_as_export_service_failure() {
     let sandbox = Sandbox::new("export-invalid");
     let _ffmpeg = sandbox.ffmpeg_complete();
     let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "startExport",
@@ -568,30 +569,23 @@ impl Drop for Sandbox {
     }
 }
 
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<std::ffi::OsString>,
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
 }
 
-impl EnvVarGuard {
-    fn set_path(key: &'static str, value: impl AsRef<Path>) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe {
-            std::env::set_var(key, value.as_ref());
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
         }
-        Self { key, previous }
     }
 }
 
-impl Drop for EnvVarGuard {
+impl Drop for RuntimeDirectoryGuard {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(previous) = &self.previous {
-                std::env::set_var(self.key, previous);
-            } else {
-                std::env::remove_var(self.key);
-            }
-        }
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 

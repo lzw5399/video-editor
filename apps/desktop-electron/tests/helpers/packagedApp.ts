@@ -39,20 +39,22 @@ function sanitizedPackagedEnv(poisonPath: string, overrides: NodeJS.ProcessEnv):
 
 async function createPoisonRuntimePath(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "video-editor-poison-runtime-"));
-  await Promise.all(["ffmpeg", "ffprobe"].map((name) => writePoisonBinary(directory, name)));
+  await Promise.all(["ffmpeg", "ffprobe"].map((name) => writePoisonBinaries(directory, name)));
   return directory;
 }
 
-async function writePoisonBinary(directory: string, name: string): Promise<void> {
-  const binaryName = process.platform === "win32" ? `${name}.cmd` : name;
-  const path = join(directory, binaryName);
+async function writePoisonBinaries(directory: string, name: string): Promise<void> {
+  const binaryNames = process.platform === "win32" ? [`${name}.cmd`, `${name}.exe`] : [name];
   const script =
     process.platform === "win32"
       ? `@echo off\r\necho VIDEO_EDITOR_POISON_PATH_${name} 1>&2\r\nexit /b 86\r\n`
       : `#!/bin/sh\necho VIDEO_EDITOR_POISON_PATH_${name} >&2\nexit 86\n`;
-  await writeFile(path, script);
-  if (process.platform !== "win32") {
-    await chmod(path, 0o755);
+  for (const binaryName of binaryNames) {
+    const path = join(directory, binaryName);
+    await writeFile(path, script);
+    if (process.platform !== "win32") {
+      await chmod(path, 0o755);
+    }
   }
 }
 

@@ -5,7 +5,7 @@ use testkit::{
 #[test]
 fn render_smoke_asserts_generated_output_metadata() {
     let smoke = run_tiny_render_smoke().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
 
     assert!(smoke.output_path().is_file());
@@ -16,7 +16,7 @@ fn render_smoke_asserts_generated_output_metadata() {
 #[test]
 fn render_smoke_probe_metadata_reports_video_and_audio_streams() {
     let media = testkit::generate_tiny_lavfi_media().expect(
-        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime",
     );
 
     let metadata: SmokeMetadata = probe_media_metadata(media.output_path())

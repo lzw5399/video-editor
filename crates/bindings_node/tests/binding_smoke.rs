@@ -1,6 +1,8 @@
 use bindings_node::{execute_command, ping, probe_media_runtime, version};
 use draft_model::{CommandErrorKind, Draft};
-use media_runtime::discover_runtime_config;
+use media_runtime::{
+    discover_runtime_config, replace_configured_bundled_runtime_directory_for_tests,
+};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::open_project_bundle;
 use serde_json::{Value, json};
@@ -298,7 +300,7 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     let sandbox = Sandbox::new("binding-probe-ok");
     let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version binding-test\n", "", 0);
     let ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "probeMediaRuntime",
@@ -340,7 +342,7 @@ fn probe_media_runtime_explicit_api_returns_standard_ok_envelope() {
     let sandbox = Sandbox::new("binding-explicit-probe-ok");
     let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version binding-test\n", "", 0);
     let ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
 
     let envelope = probe_media_runtime().expect("runtime probe returns a JSON envelope");
 
@@ -362,7 +364,7 @@ fn execute_command_probe_media_runtime_maps_discovery_failure_to_stable_error() 
     let bad_stderr = "runtime probe failure ".repeat(300);
     let _ffmpeg = sandbox.bin("ffmpeg", "not ffmpeg\n", &bad_stderr, 42);
     let _ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
-    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "probeMediaRuntime",
@@ -433,30 +435,23 @@ impl Drop for Sandbox {
     }
 }
 
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<std::ffi::OsString>,
+struct RuntimeDirectoryGuard {
+    previous: Option<PathBuf>,
 }
 
-impl EnvVarGuard {
-    fn set_path(key: &'static str, value: impl AsRef<Path>) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe {
-            std::env::set_var(key, value.as_ref());
+impl RuntimeDirectoryGuard {
+    fn set(directory: impl AsRef<Path>) -> Self {
+        Self {
+            previous: replace_configured_bundled_runtime_directory_for_tests(Some(
+                directory.as_ref().to_path_buf(),
+            )),
         }
-        Self { key, previous }
     }
 }
 
-impl Drop for EnvVarGuard {
+impl Drop for RuntimeDirectoryGuard {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(previous) = &self.previous {
-                std::env::set_var(self.key, previous);
-            } else {
-                std::env::remove_var(self.key);
-            }
-        }
+        replace_configured_bundled_runtime_directory_for_tests(self.previous.take());
     }
 }
 
