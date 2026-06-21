@@ -2236,7 +2236,7 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
   }
 });
 
-test("素材资源状态 uses generated artifact command envelopes", async () => {
+test("素材资源状态 uses explicit native artifact APIs", async () => {
   const { app, page } = await launchWorkspaceApp({ mockArtifactCommands: true, showDeveloperDiagnostics: true });
 
   try {

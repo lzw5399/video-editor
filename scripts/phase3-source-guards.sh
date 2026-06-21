@@ -27,6 +27,9 @@ EXPORT_CONTROL_LEGACY_COMMAND_PATTERN='\b(?:buildGetExportJobStatusCommand|build
 AUDIO_PREVIEW_LEGACY_COMMAND_BUILDER_PATTERN='\bbuild(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command\b'
 AUDIO_PREVIEW_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*(?:Audio|Waveform)|executeAudioCommand<[^>]*>\([[:space:]]*\([^)]*\)[[:space:]]*=>[[:space:]]*build(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command'
 AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:createAudioPreviewSession|playAudioPreview|pauseAudioPreview|stopAudioPreview|seekAudioPreview|cancelAudioPreview|getAudioPreviewStatus|listAudioOutputDevices|selectAudioOutputDevice|getWaveformDisplayPeaks|refreshWaveformStatus)"'
+ARTIFACT_CONTROL_LEGACY_COMMAND_BUILDER_PATTERN='\bbuild(?:GetArtifactStatus|RefreshArtifactStatus|RetryArtifactGeneration|ResumeArtifactGeneration|CancelArtifactGeneration|GetArtifactQuotaStatus|RunArtifactGarbageCollection)Command\b'
+ARTIFACT_CONTROL_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*(?:Artifact|Quota|Maintenance)|executeArtifactCommand<[^>]*>\([[:space:]]*\([^)]*\)[[:space:]]*=>[[:space:]]*build(?:GetArtifactStatus|RefreshArtifactStatus|RetryArtifactGeneration|ResumeArtifactGeneration|CancelArtifactGeneration|GetArtifactQuotaStatus|RunArtifactGarbageCollection)Command'
+ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:getArtifactStatus|refreshArtifactStatus|retryArtifactGeneration|resumeArtifactGeneration|cancelArtifactGeneration|getArtifactQuotaStatus|runArtifactGarbageCollection)"'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -462,6 +465,16 @@ fail_if_matches \
   "$AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN" \
   crates/bindings_node/src/lib.rs
 
+fail_if_matches \
+  "renderer must not construct artifact control command envelopes; use explicit artifact APIs" \
+  "$ARTIFACT_CONTROL_LEGACY_COMMAND_BUILDER_PATTERN|$ARTIFACT_CONTROL_GENERIC_EXECUTE_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts
+
+fail_if_matches \
+  "bindings_node executeCommand must not allow artifact control command names; use explicit artifact APIs" \
+  "$ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN" \
+  crates/bindings_node/src/lib.rs
+
 fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
@@ -698,6 +711,16 @@ assert_pattern_rejects \
   "legacy audio preview executeCommand allowlist" \
   "$AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN" \
   '| "playAudioPreview"'
+
+assert_pattern_rejects \
+  "legacy artifact control command builder" \
+  "$ARTIFACT_CONTROL_LEGACY_COMMAND_BUILDER_PATTERN|$ARTIFACT_CONTROL_GENERIC_EXECUTE_PATTERN" \
+  'return buildGetArtifactStatusCommand({ sessionId, bundlePath });'
+
+assert_pattern_rejects \
+  "legacy artifact control executeCommand allowlist" \
+  "$ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN" \
+  '| "getArtifactStatus"'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

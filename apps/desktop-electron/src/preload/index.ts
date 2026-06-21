@@ -3,6 +3,10 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   AudioPreviewRequest,
+  ArtifactGarbageCollectionRequest,
+  ArtifactGenerationActionRequest,
+  ArtifactQuotaRequest,
+  ArtifactStatusRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -73,6 +77,17 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("core:selectAudioOutputDevice", request),
     getWaveformDisplayPeaks: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:getWaveformDisplayPeaks", request),
     refreshWaveformStatus: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:refreshWaveformStatus", request),
+    getArtifactStatus: (request: ArtifactStatusRequest) => ipcRenderer.invoke("core:getArtifactStatus", request),
+    refreshArtifactStatus: (request: ArtifactStatusRequest) => ipcRenderer.invoke("core:refreshArtifactStatus", request),
+    retryArtifactGeneration: (request: ArtifactGenerationActionRequest) =>
+      ipcRenderer.invoke("core:retryArtifactGeneration", request),
+    resumeArtifactGeneration: (request: ArtifactGenerationActionRequest) =>
+      ipcRenderer.invoke("core:resumeArtifactGeneration", request),
+    cancelArtifactGeneration: (request: ArtifactGenerationActionRequest) =>
+      ipcRenderer.invoke("core:cancelArtifactGeneration", request),
+    getArtifactQuotaStatus: (request: ArtifactQuotaRequest) => ipcRenderer.invoke("core:getArtifactQuotaStatus", request),
+    runArtifactGarbageCollection: (request: ArtifactGarbageCollectionRequest) =>
+      ipcRenderer.invoke("core:runArtifactGarbageCollection", request),
     requestProjectSessionPreviewFrame: (request: RequestProjectSessionPreviewFrameRequest) =>
       ipcRenderer.invoke("core:requestProjectSessionPreviewFrame", request),
     requestProjectSessionPreviewSegment: (request: RequestProjectSessionPreviewSegmentRequest) =>

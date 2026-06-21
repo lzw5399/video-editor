@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   AudioPreviewRequest,
+  ArtifactGarbageCollectionRequest,
+  ArtifactGenerationActionRequest,
+  ArtifactQuotaRequest,
+  ArtifactStatusRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -45,14 +49,7 @@ import type {
   TrackKind
 } from "../generated/Draft";
 import {
-  buildCancelArtifactGenerationCommand,
-  buildGetArtifactQuotaStatusCommand,
-  buildGetArtifactStatusCommand,
   buildProbeRuntimeCapabilitiesCommand,
-  buildRefreshArtifactStatusCommand,
-  buildResumeArtifactGenerationCommand,
-  buildRetryArtifactGenerationCommand,
-  buildRunArtifactGarbageCollectionCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -118,6 +115,21 @@ type VideoEditorCoreApi = {
   selectAudioOutputDevice: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
   getWaveformDisplayPeaks: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<WaveformDisplayPeaksResponse>>;
   refreshWaveformStatus: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<WaveformDisplayPeaksResponse>>;
+  getArtifactStatus: (request: ArtifactStatusRequest) => Promise<CommandResultEnvelope<ArtifactStatusSummary>>;
+  refreshArtifactStatus: (request: ArtifactStatusRequest) => Promise<CommandResultEnvelope<ArtifactStatusSummary>>;
+  retryArtifactGeneration: (
+    request: ArtifactGenerationActionRequest
+  ) => Promise<CommandResultEnvelope<ArtifactStatusSummary>>;
+  resumeArtifactGeneration: (
+    request: ArtifactGenerationActionRequest
+  ) => Promise<CommandResultEnvelope<ArtifactStatusSummary>>;
+  cancelArtifactGeneration: (
+    request: ArtifactGenerationActionRequest
+  ) => Promise<CommandResultEnvelope<ArtifactStatusSummary>>;
+  getArtifactQuotaStatus: (request: ArtifactQuotaRequest) => Promise<CommandResultEnvelope<ArtifactQuotaStatus>>;
+  runArtifactGarbageCollection: (
+    request: ArtifactGarbageCollectionRequest
+  ) => Promise<CommandResultEnvelope<ArtifactMaintenanceResult>>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
@@ -140,7 +152,6 @@ type VideoEditorPlatformApi = {
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
   pathToFileUrl: (path: string) => Promise<string>;
 };
-type CoreCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
 type PreviewCommandRunner = (session: ProjectSessionClientState) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
 type PreviewCommandResultApplier = (
   current: WorkspaceState,
@@ -1069,7 +1080,7 @@ export function App(): React.ReactElement {
   }
 
   async function executeArtifactCommand<T>(
-    buildCommand: (current: WorkspaceState) => CommandEnvelope,
+    runCommand: (current: WorkspaceState) => Promise<CommandResultEnvelope<T>>,
     pendingCommand: string,
     applyResult: ArtifactCommandResultApplier<T>
   ): Promise<void> {
@@ -1104,8 +1115,7 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<T>(command);
+      const result = await runCommand(workspaceRef.current);
       setWorkspace((current) => {
         const next = applyResult(current, result);
         workspaceRef.current = next;
@@ -1131,7 +1141,7 @@ export function App(): React.ReactElement {
   function handleGetArtifactStatus(): void {
     void executeArtifactCommand<ArtifactStatusSummary>(
       (current) =>
-        buildGetArtifactStatusCommand({
+        window.videoEditorCore.getArtifactStatus({
           sessionId: current.resourcePanel.sessionId,
           bundlePath
         }),
@@ -1144,7 +1154,7 @@ export function App(): React.ReactElement {
     void (async () => {
       await executeArtifactCommand<ArtifactStatusSummary>(
         (current) =>
-          buildGetArtifactStatusCommand({
+          window.videoEditorCore.getArtifactStatus({
             sessionId: current.resourcePanel.sessionId,
             bundlePath
           }),
@@ -1153,7 +1163,7 @@ export function App(): React.ReactElement {
       );
       await executeArtifactCommand<ArtifactStatusSummary>(
         (current) =>
-          buildRefreshArtifactStatusCommand({
+          window.videoEditorCore.refreshArtifactStatus({
             sessionId: current.resourcePanel.sessionId,
             bundlePath
           }),
@@ -1182,19 +1192,25 @@ export function App(): React.ReactElement {
       return next;
     });
 
-    const buildCommand =
-      action === "cancel"
-        ? buildCancelArtifactGenerationCommand
-        : action === "retry"
-          ? buildRetryArtifactGenerationCommand
-          : buildResumeArtifactGenerationCommand;
     void executeArtifactCommand<ArtifactStatusSummary>(
       (current) =>
-        buildCommand({
-          sessionId: current.resourcePanel.sessionId,
-          bundlePath,
-          jobId
-        }),
+        action === "cancel"
+          ? window.videoEditorCore.cancelArtifactGeneration({
+              sessionId: current.resourcePanel.sessionId,
+              bundlePath,
+              jobId
+            })
+          : action === "retry"
+            ? window.videoEditorCore.retryArtifactGeneration({
+                sessionId: current.resourcePanel.sessionId,
+                bundlePath,
+                jobId
+              })
+            : window.videoEditorCore.resumeArtifactGeneration({
+                sessionId: current.resourcePanel.sessionId,
+                bundlePath,
+                jobId
+              }),
       `资源任务${action}`,
       applyArtifactStatusResult
     );
@@ -1202,7 +1218,11 @@ export function App(): React.ReactElement {
 
   function handlePrepareArtifactCleanup(): void {
     void executeArtifactCommand<ArtifactQuotaStatus>(
-      (current) => buildGetArtifactQuotaStatusCommand(current.resourcePanel.sessionId, bundlePath),
+      (current) =>
+        window.videoEditorCore.getArtifactQuotaStatus({
+          sessionId: current.resourcePanel.sessionId,
+          bundlePath
+        }),
       "检查缓存空间",
       (current, result) => ({
         ...current,
@@ -1221,7 +1241,12 @@ export function App(): React.ReactElement {
 
   function handleConfirmArtifactCleanup(): void {
     void executeArtifactCommand<ArtifactMaintenanceResult>(
-      (current) => buildRunArtifactGarbageCollectionCommand(current.resourcePanel.sessionId, bundlePath, false),
+      (current) =>
+        window.videoEditorCore.runArtifactGarbageCollection({
+          sessionId: current.resourcePanel.sessionId,
+          bundlePath,
+          dryRun: false
+        }),
       "清理缓存",
       (current, result) => ({
         ...current,

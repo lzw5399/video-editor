@@ -4,15 +4,18 @@
 //! semantics remain owned by Rust contract crates and later command crates.
 
 use draft_model::{
-    AudioPreviewCommandPayload, CancelExportCommandPayload, CommandEnvelope, CommandError,
-    CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION,
-    ExportJobStatusResponse, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
-    ImportMaterialResponse, InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    ArtifactGenerationActionCommandPayload, AudioPreviewCommandPayload, CancelExportCommandPayload,
+    CommandEnvelope, CommandError, CommandErrorKind, CommandName, CommandPayload,
+    CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
+    GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
+    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
+    InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingResponse, PreviewDecodeRequest,
-    ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, SaveProjectBundleCommandPayload,
+    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RunArtifactGarbageCollectionCommandPayload, SaveProjectBundleCommandPayload,
     SaveProjectBundleResponse, StartExportCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
@@ -95,13 +98,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
-                | "getArtifactStatus"
-                | "refreshArtifactStatus"
-                | "retryArtifactGeneration"
-                | "resumeArtifactGeneration"
-                | "cancelArtifactGeneration"
-                | "getArtifactQuotaStatus"
-                | "runArtifactGarbageCollection"
                 | "startExport"
                 | "getExportJobStatus"
                 | "cancelExport"
@@ -205,9 +201,10 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::ResumeArtifactGeneration
         | CommandName::CancelArtifactGeneration
         | CommandName::GetArtifactQuotaStatus
-        | CommandName::RunArtifactGarbageCollection => to_js_value(handle_artifact_store_command(
-            envelope.command,
-            envelope.payload,
+        | CommandName::RunArtifactGarbageCollection => to_js_value(error_envelope(
+            CommandErrorKind::UnsupportedCommand,
+            "Artifact controls require explicit native APIs".to_string(),
+            Some(format!("{:?}", envelope.command)),
         )),
         CommandName::StartExport => match envelope.payload {
             CommandPayload::StartExport(payload) => start_export_command(payload),
@@ -381,6 +378,111 @@ pub fn refresh_waveform_status(request: serde_json::Value) -> Result<serde_json:
         CommandName::RefreshWaveformStatus,
         "refreshWaveformStatus",
         request,
+    )
+}
+
+#[napi(js_name = "getArtifactStatus")]
+pub fn get_artifact_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<GetArtifactStatusCommandPayload>(
+        "getArtifactStatus",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::GetArtifactStatus,
+        CommandPayload::GetArtifactStatus(payload),
+    )
+}
+
+#[napi(js_name = "refreshArtifactStatus")]
+pub fn refresh_artifact_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<RefreshArtifactStatusCommandPayload>(
+        "refreshArtifactStatus",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::RefreshArtifactStatus,
+        CommandPayload::RefreshArtifactStatus(payload),
+    )
+}
+
+#[napi(js_name = "retryArtifactGeneration")]
+pub fn retry_artifact_generation(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<ArtifactGenerationActionCommandPayload>(
+        "retryArtifactGeneration",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::RetryArtifactGeneration,
+        CommandPayload::RetryArtifactGeneration(payload),
+    )
+}
+
+#[napi(js_name = "resumeArtifactGeneration")]
+pub fn resume_artifact_generation(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<ArtifactGenerationActionCommandPayload>(
+        "resumeArtifactGeneration",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::ResumeArtifactGeneration,
+        CommandPayload::ResumeArtifactGeneration(payload),
+    )
+}
+
+#[napi(js_name = "cancelArtifactGeneration")]
+pub fn cancel_artifact_generation(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<ArtifactGenerationActionCommandPayload>(
+        "cancelArtifactGeneration",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::CancelArtifactGeneration,
+        CommandPayload::CancelArtifactGeneration(payload),
+    )
+}
+
+#[napi(js_name = "getArtifactQuotaStatus")]
+pub fn get_artifact_quota_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<GetArtifactQuotaStatusCommandPayload>(
+        "getArtifactQuotaStatus",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::GetArtifactQuotaStatus,
+        CommandPayload::GetArtifactQuotaStatus(payload),
+    )
+}
+
+#[napi(js_name = "runArtifactGarbageCollection")]
+pub fn run_artifact_garbage_collection(request: serde_json::Value) -> Result<serde_json::Value> {
+    let payload = match parse_binding_payload::<RunArtifactGarbageCollectionCommandPayload>(
+        "runArtifactGarbageCollection",
+        request,
+    ) {
+        Ok(payload) => payload,
+        Err(envelope) => return to_js_value(envelope),
+    };
+    artifact_store_binding_command(
+        CommandName::RunArtifactGarbageCollection,
+        CommandPayload::RunArtifactGarbageCollection(payload),
     )
 }
 
@@ -796,15 +898,10 @@ fn audio_preview_binding_command(
     command_label: &'static str,
     request: serde_json::Value,
 ) -> Result<serde_json::Value> {
-    let payload = match serde_json::from_value::<AudioPreviewCommandPayload>(request) {
+    let payload = match parse_binding_payload::<AudioPreviewCommandPayload>(command_label, request)
+    {
         Ok(payload) => payload,
-        Err(error) => {
-            return to_js_value(error_envelope(
-                CommandErrorKind::InvalidPayload,
-                format!("Invalid {command_label} payload: {error}"),
-                Some(command_label.to_string()),
-            ));
-        }
+        Err(envelope) => return to_js_value(envelope),
     };
     let command_payload = match command {
         CommandName::CreateAudioPreviewSession => {
@@ -823,6 +920,30 @@ fn audio_preview_binding_command(
         _ => unreachable!("audio preview binding command called with non-audio command"),
     };
     audio_service_command(command, command_payload)
+}
+
+fn artifact_store_binding_command(
+    command: CommandName,
+    payload: CommandPayload,
+) -> Result<serde_json::Value> {
+    to_js_value(handle_artifact_store_command(command, payload))
+}
+
+fn parse_binding_payload<T>(
+    command_label: &'static str,
+    request: serde_json::Value,
+) -> std::result::Result<T, CommandResultEnvelope<serde_json::Value>>
+where
+    T: serde::de::DeserializeOwned,
+{
+    match serde_json::from_value::<T>(request) {
+        Ok(payload) => Ok(payload),
+        Err(error) => Err(error_envelope(
+            CommandErrorKind::InvalidPayload,
+            format!("Invalid {command_label} payload: {error}"),
+            Some(command_label.to_string()),
+        )),
+    }
 }
 
 fn preview_service_config_from_preview_payload(

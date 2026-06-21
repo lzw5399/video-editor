@@ -143,8 +143,14 @@ require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "ex
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type ArtifactMaintenanceResult ="
 require_fixed "schemas/command.schema.json" "\"getArtifactStatus\""
 require_fixed "schemas/command.schema.json" "\"runArtifactGarbageCollection\""
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "素材资源状态 uses generated artifact command envelopes"
+require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "素材资源状态 uses explicit native artifact APIs"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "资源维护 and 素材资源状态 hide forbidden internal production copy"
+
+fail_matches \
+  "renderer must not construct artifact command envelopes; use explicit native artifact APIs" \
+  '\bbuild(?:GetArtifactStatus|RefreshArtifactStatus|RetryArtifactGeneration|ResumeArtifactGeneration|CancelArtifactGeneration|GetArtifactQuotaStatus|RunArtifactGarbageCollection)Command\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts
 
 fail_matches \
   "renderer must not compute artifact roots, blob paths, SQLite paths, or SQL for derived artifacts" \
@@ -179,6 +185,7 @@ fail_matches \
   apps/desktop-electron/src \
   scripts \
   --glob '!scripts/phase13-source-guards.sh' \
+  --glob '!scripts/phase3-source-guards.sh' \
   --glob '!scripts/phase14-source-guards.sh'
 
 fail_matches \

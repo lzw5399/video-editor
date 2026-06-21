@@ -7,6 +7,9 @@ import type {
   AudioOutputDeviceSummary,
   AudioPreviewCommandResponse,
   AudioPreviewStatusResponse,
+  ArtifactMaintenanceResult,
+  ArtifactQuotaStatus,
+  ArtifactStatusSummary,
   CommandDelta,
   CommandEvent,
   CommandResultEnvelope,
@@ -69,6 +72,15 @@ type NativeBinding = {
   selectAudioOutputDevice: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
   getWaveformDisplayPeaks: (request: AudioPreviewRequest) => CommandResultEnvelope<WaveformDisplayPeaksResponse>;
   refreshWaveformStatus: (request: AudioPreviewRequest) => CommandResultEnvelope<WaveformDisplayPeaksResponse>;
+  getArtifactStatus: (request: ArtifactStatusRequest) => CommandResultEnvelope<ArtifactStatusSummary>;
+  refreshArtifactStatus: (request: ArtifactStatusRequest) => CommandResultEnvelope<ArtifactStatusSummary>;
+  retryArtifactGeneration: (request: ArtifactGenerationActionRequest) => CommandResultEnvelope<ArtifactStatusSummary>;
+  resumeArtifactGeneration: (request: ArtifactGenerationActionRequest) => CommandResultEnvelope<ArtifactStatusSummary>;
+  cancelArtifactGeneration: (request: ArtifactGenerationActionRequest) => CommandResultEnvelope<ArtifactStatusSummary>;
+  getArtifactQuotaStatus: (request: ArtifactQuotaRequest) => CommandResultEnvelope<ArtifactQuotaStatus>;
+  runArtifactGarbageCollection: (
+    request: ArtifactGarbageCollectionRequest
+  ) => CommandResultEnvelope<ArtifactMaintenanceResult>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => CommandResultEnvelope<PreviewArtifactResponse>;
@@ -143,6 +155,29 @@ export type AudioPreviewRequest = {
   playbackGeneration?: number | null;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
+};
+
+export type ArtifactStatusRequest = {
+  sessionId: string;
+  bundlePath: string;
+  materialId?: MaterialId | null;
+};
+
+export type ArtifactGenerationActionRequest = {
+  sessionId: string;
+  bundlePath: string;
+  jobId: string;
+};
+
+export type ArtifactQuotaRequest = {
+  sessionId: string;
+  bundlePath: string;
+};
+
+export type ArtifactGarbageCollectionRequest = {
+  sessionId: string;
+  bundlePath: string;
+  dryRun: boolean;
 };
 
 export type RequestProjectSessionPreviewFrameRequest = {
@@ -788,6 +823,70 @@ export function refreshWaveformStatus(request: AudioPreviewRequest): CommandResu
   return binding.refreshWaveformStatus(request);
 }
 
+export function getArtifactStatus(request: ArtifactStatusRequest): CommandResultEnvelope<ArtifactStatusSummary> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getArtifactStatus");
+  }
+  return binding.getArtifactStatus(request);
+}
+
+export function refreshArtifactStatus(request: ArtifactStatusRequest): CommandResultEnvelope<ArtifactStatusSummary> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("refreshArtifactStatus");
+  }
+  return binding.refreshArtifactStatus(request);
+}
+
+export function retryArtifactGeneration(
+  request: ArtifactGenerationActionRequest
+): CommandResultEnvelope<ArtifactStatusSummary> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("retryArtifactGeneration");
+  }
+  return binding.retryArtifactGeneration(request);
+}
+
+export function resumeArtifactGeneration(
+  request: ArtifactGenerationActionRequest
+): CommandResultEnvelope<ArtifactStatusSummary> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("resumeArtifactGeneration");
+  }
+  return binding.resumeArtifactGeneration(request);
+}
+
+export function cancelArtifactGeneration(
+  request: ArtifactGenerationActionRequest
+): CommandResultEnvelope<ArtifactStatusSummary> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("cancelArtifactGeneration");
+  }
+  return binding.cancelArtifactGeneration(request);
+}
+
+export function getArtifactQuotaStatus(request: ArtifactQuotaRequest): CommandResultEnvelope<ArtifactQuotaStatus> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getArtifactQuotaStatus");
+  }
+  return binding.getArtifactQuotaStatus(request);
+}
+
+export function runArtifactGarbageCollection(
+  request: ArtifactGarbageCollectionRequest
+): CommandResultEnvelope<ArtifactMaintenanceResult> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("runArtifactGarbageCollection");
+  }
+  return binding.runArtifactGarbageCollection(request);
+}
+
 export function requestProjectSessionPreviewFrame(
   request: RequestProjectSessionPreviewFrameRequest
 ): CommandResultEnvelope<PreviewArtifactResponse> {
@@ -917,6 +1016,13 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.selectAudioOutputDevice !== "function" ||
       typeof loaded.getWaveformDisplayPeaks !== "function" ||
       typeof loaded.refreshWaveformStatus !== "function" ||
+      typeof loaded.getArtifactStatus !== "function" ||
+      typeof loaded.refreshArtifactStatus !== "function" ||
+      typeof loaded.retryArtifactGeneration !== "function" ||
+      typeof loaded.resumeArtifactGeneration !== "function" ||
+      typeof loaded.cancelArtifactGeneration !== "function" ||
+      typeof loaded.getArtifactQuotaStatus !== "function" ||
+      typeof loaded.runArtifactGarbageCollection !== "function" ||
       typeof loaded.requestProjectSessionPreviewFrame !== "function" ||
       typeof loaded.requestProjectSessionPreviewSegment !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
@@ -965,6 +1071,13 @@ function loadNativeBinding(): NativeBinding | null {
       selectAudioOutputDevice: loaded.selectAudioOutputDevice,
       getWaveformDisplayPeaks: loaded.getWaveformDisplayPeaks,
       refreshWaveformStatus: loaded.refreshWaveformStatus,
+      getArtifactStatus: loaded.getArtifactStatus,
+      refreshArtifactStatus: loaded.refreshArtifactStatus,
+      retryArtifactGeneration: loaded.retryArtifactGeneration,
+      resumeArtifactGeneration: loaded.resumeArtifactGeneration,
+      cancelArtifactGeneration: loaded.cancelArtifactGeneration,
+      getArtifactQuotaStatus: loaded.getArtifactQuotaStatus,
+      runArtifactGarbageCollection: loaded.runArtifactGarbageCollection,
       requestProjectSessionPreviewFrame: loaded.requestProjectSessionPreviewFrame,
       requestProjectSessionPreviewSegment: loaded.requestProjectSessionPreviewSegment,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,

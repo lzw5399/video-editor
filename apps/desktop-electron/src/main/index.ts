@@ -21,6 +21,7 @@ import type {
 import type { SegmentVisual } from "../generated/Draft";
 import {
   cancelAudioPreview,
+  cancelArtifactGeneration,
   closeProjectSession,
   configureBundledRuntimeDirectory,
   createAudioPreviewSession,
@@ -29,6 +30,8 @@ import {
   executeCommand,
   executeProjectIntent,
   getAudioPreviewStatus,
+  getArtifactQuotaStatus,
+  getArtifactStatus,
   getExportJobStatus,
   getWaveformDisplayPeaks,
   listProjectSessionMaterials,
@@ -41,12 +44,20 @@ import {
   requestProjectSessionPreviewFrame,
   requestProjectSessionPreviewSegment,
   refreshWaveformStatus,
+  refreshArtifactStatus,
+  resumeArtifactGeneration,
+  retryArtifactGeneration,
+  runArtifactGarbageCollection,
   seekAudioPreview,
   selectAudioOutputDevice,
   startProjectSessionExport,
   stopAudioPreview,
   version,
   type AudioPreviewRequest,
+  type ArtifactGarbageCollectionRequest,
+  type ArtifactGenerationActionRequest,
+  type ArtifactQuotaRequest,
+  type ArtifactStatusRequest,
   type CreateProjectSessionRequest,
   type ExportJobRequest,
   type ExecuteProjectIntentRequest,
@@ -139,6 +150,14 @@ type AudioPreviewCommandName =
   | "selectAudioOutputDevice"
   | "getWaveformDisplayPeaks"
   | "refreshWaveformStatus";
+type ArtifactCommandName =
+  | "getArtifactStatus"
+  | "refreshArtifactStatus"
+  | "retryArtifactGeneration"
+  | "resumeArtifactGeneration"
+  | "cancelArtifactGeneration"
+  | "getArtifactQuotaStatus"
+  | "runArtifactGarbageCollection";
 type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
@@ -352,6 +371,69 @@ ipcMain.handle("core:refreshWaveformStatus", (event, request: AudioPreviewReques
     return testAudioResponse;
   }
   return refreshWaveformStatus(request);
+});
+ipcMain.handle("core:getArtifactStatus", (event, request: ArtifactStatusRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("getArtifactStatus", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("getArtifactStatus", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return getArtifactStatus(request);
+});
+ipcMain.handle("core:refreshArtifactStatus", (event, request: ArtifactStatusRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("refreshArtifactStatus", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("refreshArtifactStatus", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return refreshArtifactStatus(request);
+});
+ipcMain.handle("core:retryArtifactGeneration", (event, request: ArtifactGenerationActionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("retryArtifactGeneration", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("retryArtifactGeneration", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return retryArtifactGeneration(request);
+});
+ipcMain.handle("core:resumeArtifactGeneration", (event, request: ArtifactGenerationActionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("resumeArtifactGeneration", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("resumeArtifactGeneration", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return resumeArtifactGeneration(request);
+});
+ipcMain.handle("core:cancelArtifactGeneration", (event, request: ArtifactGenerationActionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("cancelArtifactGeneration", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("cancelArtifactGeneration", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return cancelArtifactGeneration(request);
+});
+ipcMain.handle("core:getArtifactQuotaStatus", (event, request: ArtifactQuotaRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("getArtifactQuotaStatus", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("getArtifactQuotaStatus", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return getArtifactQuotaStatus(request);
+});
+ipcMain.handle("core:runArtifactGarbageCollection", (event, request: ArtifactGarbageCollectionRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitArtifactCall("runArtifactGarbageCollection", request);
+  const testArtifactResponse = maybeBuildTestExplicitArtifactResponse("runArtifactGarbageCollection", request);
+  if (testArtifactResponse !== null) {
+    return testArtifactResponse;
+  }
+  return runArtifactGarbageCollection(request);
 });
 ipcMain.handle("core:requestProjectSessionPreviewFrame", (event, request: RequestProjectSessionPreviewFrameRequest) => {
   assertAllowedIpcSender(event);
@@ -719,6 +801,13 @@ function recordTestExplicitAudioPreviewCall(command: AudioPreviewCommandName, re
   recordTestExecuteCommand(buildExplicitAudioPreviewEnvelope(command, request));
 }
 
+function recordTestExplicitArtifactCall(
+  command: ArtifactCommandName,
+  request: ArtifactStatusRequest | ArtifactGenerationActionRequest | ArtifactQuotaRequest | ArtifactGarbageCollectionRequest
+): void {
+  recordTestExecuteCommand(buildExplicitArtifactEnvelope(command, request));
+}
+
 function recordTestProjectSessionCall(
   command: TestProjectSessionCall["command"],
   request:
@@ -1057,7 +1146,32 @@ function maybeBuildTestExplicitAudioResponse(
   return maybeBuildTestAudioResponse(buildExplicitAudioPreviewEnvelope(command, request));
 }
 
+function maybeBuildTestExplicitArtifactResponse(
+  command: ArtifactCommandName,
+  request: ArtifactStatusRequest | ArtifactGenerationActionRequest | ArtifactQuotaRequest | ArtifactGarbageCollectionRequest
+):
+  | CommandResultEnvelope<ArtifactStatusSummary>
+  | CommandResultEnvelope<ArtifactQuotaStatus>
+  | CommandResultEnvelope<ArtifactMaintenanceResult>
+  | null {
+  return maybeBuildTestArtifactResponse(buildExplicitArtifactEnvelope(command, request));
+}
+
 function buildExplicitAudioPreviewEnvelope(command: AudioPreviewCommandName, request: AudioPreviewRequest): CommandEnvelope {
+  return {
+    command,
+    payload: {
+      ...request,
+      kind: command
+    } as CommandEnvelope["payload"],
+    requestId: `explicit-${command}`
+  };
+}
+
+function buildExplicitArtifactEnvelope(
+  command: ArtifactCommandName,
+  request: ArtifactStatusRequest | ArtifactGenerationActionRequest | ArtifactQuotaRequest | ArtifactGarbageCollectionRequest
+): CommandEnvelope {
   return {
     command,
     payload: {
