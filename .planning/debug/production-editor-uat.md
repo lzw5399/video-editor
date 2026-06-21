@@ -17,10 +17,10 @@ updated: 2026-06-21
 
 ## Current Focus
 
-- hypothesis: "The immediate P0 surface issue was a native preview placement contract bug: renderer/main used Electron top-left logical pixels while Rust/AppKit reported bottom-left screen coordinates, and old tests accepted heuristic direct/flipped alignment."
-- test: "Verify WGPU native child view placement during real playback by comparing DOM preview host screen rect, Electron-converted native child rect, and visible preview pixel motion."
-- expecting: "Native surface placement telemetry reports a single coordinate contract and Playwright fails if the child view is shifted off the DOM preview host."
-- next_action: "Continue broader production UAT gaps after this slice: Rust canonical draft session, product workbench hierarchy, and permanent preview worker architecture."
+- hypothesis: "The remaining realtime preview ownership leak was an Electron 33ms status/presentation loop plus a synchronous play boundary that still made Electron look like part of the playback pump."
+- test: "Delete Electron playbackTimer/presentPlaybackTick, make play enqueue the Rust worker without waiting for first-frame presentation, keep resize continuation inside Rust, and require cadence gates to pass with low snapshot-read counts."
+- expecting: "Rust worker telemetry accounts for 90 frames over the 3s 30fps media window, Electron snapshot reads stay coarse and below frame cadence, and resize during playback continues on the new generation."
+- next_action: "Continue broader production UAT gaps after this slice: deterministic packaged FFmpeg/ffprobe, product playback visual screenshot gates at required viewports, and longer-term Rust playback supervisor/event stream."
 - reasoning_checkpoint: "Use production-architecture-review output shape: Decision, Current chain, Production target, Gap, Required action, Verification gates."
 - tdd_checkpoint: "Before product code edits, add or strengthen gates that would fail the observed bad UI/playback/parity state."
 
@@ -80,6 +80,15 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "Source and product gates now fail the known bad ownership regressions: removed structural command mock switch, forbidden renderer keyframe value/time derivation in App/Inspector, and product edit matrix asserts migrated edits use executeProjectIntent with hasDraftField=false and no legacy executeCommand fallback."
   data: "Verification: cargo fmt --all --check -> passed; corepack pnpm run test:phase3-source-guards -> passed; corepack pnpm run test:phase10-1-source-guards -> passed; corepack pnpm run test:no-product-fallback -> passed; corepack pnpm --dir apps/desktop-electron run build -> passed; corepack pnpm --dir apps/desktop-electron run package:dir -> passed; project-entry.spec.ts -> 3 passed; product-user-journey.spec.ts -> 10 passed; product-preview-cadence.spec.ts -> 2 passed with single-video presentedDelta=90/droppedDelta=0 and combo presentedDelta=90/droppedDelta=0."
+- timestamp: 2026-06-21
+  observation: "A dedicated production-architecture-review subagent confirmed the next realtime preview slice: Electron/renderer 33ms frame-pump-style polling must be deleted, play must return after starting the Rust worker rather than waiting for first-frame present, and resize continuity must be Rust-owned."
+  data: "Subagent decision=confirmed. It also identified the cleaner later target as a Rust playback supervisor/command queue with evented telemetry, while accepting a generation-aware internal worker restart for this slice."
+- timestamp: 2026-06-21
+  observation: "Electron no longer owns a realtime preview playback cadence. The main host has no playbackTimer/presentPlaybackTimerTick/pauseAtSequenceEnd/presentPlaybackTick path, renderer telemetry polling is coarse, and cadence tests now fail if snapshot reads become frame-cadence driven."
+  data: "product-preview-cadence.spec.ts passed with single-video presentedDelta=90/droppedDelta=0/accountedFrameDelta=90/targetDeltaMicroseconds=2966637/presentationSnapshotReads=19 and combo presentedDelta=90/droppedDelta=0/accountedFrameDelta=90/targetDeltaMicroseconds=2966637/presentationSnapshotReads=18."
+- timestamp: 2026-06-21
+  observation: "Rust preview play now starts the background worker asynchronously and returns without waiting for the first frame; surface resize during playback cancels the old worker without join, clears stale evidence, advances generation, and resumes playback on the new generation."
+  data: "Added scheduler_surface_resize_during_playback_resumes_on_new_generation. Verification: cargo test -p bindings_node -- --nocapture -> 18 lib tests plus all integration tests passed; cargo fmt --all --check -> passed."
 
 ## Eliminated
 

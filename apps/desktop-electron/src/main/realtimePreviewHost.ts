@@ -178,12 +178,7 @@ export class RealtimePreviewHost {
   private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
-  private draftSnapshot: Draft | null = null;
   private bundlePath: string | null = null;
-  private playbackPositionMicroseconds = 0;
-  private playbackTimer: ReturnType<typeof setInterval> | null = null;
-  private playbackTickInFlight = false;
-  private playbackRunning = false;
   private closed = false;
 
   constructor(private readonly window: BrowserWindow) {
@@ -236,7 +231,7 @@ export class RealtimePreviewHost {
       }
 
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: !this.playbackRunning });
+      this.refreshPreviewState();
       return this.state("实时预览已接入");
     } catch (error) {
       this.attached = false;
@@ -250,7 +245,7 @@ export class RealtimePreviewHost {
     try {
       this.ensureSession();
       this.mockRealtimeFrameForTest();
-      this.refreshTelemetry({ presentPlaybackTick: !this.playbackRunning });
+      this.refreshPreviewState();
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
     }
@@ -264,16 +259,10 @@ export class RealtimePreviewHost {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
-      this.draftSnapshot = draft;
       this.bundlePath = typeof bundlePath === "string" && bundlePath.trim().length > 0 ? bundlePath : null;
       this.lastFrame = null;
       this.lastContentEvidence = null;
       this.telemetry = null;
-      this.stopPlaybackTimer();
-      this.playbackPositionMicroseconds = Math.min(
-        this.playbackPositionMicroseconds,
-        sequenceDurationMicroseconds(draft)
-      );
       const response = updateRealtimePreviewDraftSnapshot({
         sessionId: this.sessionId,
         draft,
@@ -285,7 +274,7 @@ export class RealtimePreviewHost {
         playbackGeneration: response.playbackGeneration
       });
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: false });
+      this.refreshPreviewState();
       return this.state("实时预览草稿已更新");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
@@ -300,8 +289,6 @@ export class RealtimePreviewHost {
         throw new Error("实时预览会话尚未创建");
       }
       const targetTime = sanitizeTargetTimeMicroseconds(targetTimeMicroseconds);
-      this.stopPlaybackTimer();
-      this.playbackPositionMicroseconds = targetTime;
       const response = seekRealtimePreview({
         sessionId: this.sessionId,
         targetTimeMicroseconds: targetTime
@@ -313,7 +300,7 @@ export class RealtimePreviewHost {
         playbackGeneration: response.playbackGeneration
       });
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: false });
+      this.refreshPreviewState();
       return this.state("实时预览已寻帧");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
@@ -327,20 +314,13 @@ export class RealtimePreviewHost {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
-      this.stopPlaybackTimer();
       this.ensureNativeWindowVisible();
       const response = playRealtimePreview({ sessionId: this.sessionId });
       this.playbackGeneration = response.playbackGeneration;
       recordRealtimePreviewHostCall({ kind: "schedulerPlaybackWorkerStart" });
       recordRealtimePreviewHostCall({ kind: "play", playbackGeneration: response.playbackGeneration });
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: false });
-      this.startPlaybackTimer();
-      recordRealtimePreviewHostCall({
-        kind: "schedulerCompositedEvidence",
-        targetTimeMicroseconds: this.lastContentEvidence?.targetTimeMicroseconds,
-        playbackGeneration: response.playbackGeneration
-      });
+      this.refreshPreviewState();
       return this.state("实时预览播放中");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -355,9 +335,8 @@ export class RealtimePreviewHost {
         kind: "playRejectedMissingCompositor",
         errorMessage
       });
-      this.stopPlaybackTimer();
       try {
-        this.refreshTelemetry({ presentPlaybackTick: false });
+        this.refreshPreviewState();
       } catch {
         this.telemetry = null;
       }
@@ -375,7 +354,6 @@ export class RealtimePreviewHost {
   }
 
   stop(): RealtimePreviewHostDisplayState {
-    this.playbackPositionMicroseconds = 0;
     return this.applySessionPlaybackCommand("stop", () => {
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
@@ -390,14 +368,12 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
-    this.stopPlaybackTimer();
     if (this.sessionId === null) {
       return;
     }
 
     if (this.attached) {
       try {
-        this.stopPlaybackTimer();
         detachRealtimePreviewSurface({ sessionId: this.sessionId });
         recordRealtimePreviewHostCall({ kind: "detachSurface" });
       } catch {
@@ -491,19 +467,17 @@ export class RealtimePreviewHost {
     });
   }
 
-  private refreshTelemetry({ presentPlaybackTick }: { presentPlaybackTick: boolean }): void {
+  private refreshPreviewState(): void {
     if (this.sessionId === null) {
       return;
     }
 
-    if (presentPlaybackTick) {
-      this.refreshPresentationState();
-    }
+    this.refreshPresentationSnapshot();
     this.telemetry = getRealtimePreviewTelemetry({ sessionId: this.sessionId });
     recordRealtimePreviewHostCall({ kind: "getTelemetry" });
   }
 
-  private refreshPresentationState(): void {
+  private refreshPresentationSnapshot(): void {
     if (this.sessionId === null) {
       return;
     }
@@ -530,86 +504,16 @@ export class RealtimePreviewHost {
   ): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
-      if (kind !== "play") {
-        this.stopPlaybackTimer();
-      }
       const playbackGeneration = command();
       this.playbackGeneration = playbackGeneration;
       recordRealtimePreviewHostCall({ kind, playbackGeneration });
       this.fallbackLabel = null;
-      this.refreshTelemetry({ presentPlaybackTick: false });
+      this.refreshPreviewState();
       return this.state(statusLabel);
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
       return this.state("实时预览不可用");
     }
-  }
-
-  private startPlaybackTimer(): void {
-    if (this.playbackTimer !== null || this.sessionId === null) {
-      this.playbackRunning = true;
-      return;
-    }
-
-    this.playbackRunning = true;
-    this.playbackTimer = setInterval(() => {
-      this.presentPlaybackTimerTick();
-    }, 33);
-  }
-
-  private stopPlaybackTimer(): void {
-    this.playbackRunning = false;
-    this.playbackTickInFlight = false;
-    if (this.playbackTimer === null) {
-      return;
-    }
-    clearInterval(this.playbackTimer);
-    this.playbackTimer = null;
-  }
-
-  private presentPlaybackTimerTick(): void {
-    if (this.closed || this.sessionId === null || !this.playbackRunning || this.playbackTickInFlight) {
-      return;
-    }
-
-    this.playbackTickInFlight = true;
-    try {
-      this.refreshTelemetry({ presentPlaybackTick: true });
-      const sequenceDuration = this.draftSnapshot === null ? 0 : sequenceDurationMicroseconds(this.draftSnapshot);
-      const targetTime = Math.max(
-        this.telemetry?.targetTimeMicroseconds ?? 0,
-        this.lastContentEvidence?.targetTimeMicroseconds ?? 0
-      );
-      if (sequenceDuration > 0 && targetTime >= sequenceDuration) {
-        this.pauseAtSequenceEnd();
-      }
-    } catch (error) {
-      this.fallbackLabel = attachFailureLabel(error);
-      recordRealtimePreviewHostCall({
-        kind: "playbackTimerError",
-        errorMessage: error instanceof Error ? error.message : String(error)
-      });
-      this.stopPlaybackTimer();
-    } finally {
-      this.playbackTickInFlight = false;
-    }
-  }
-
-  private pauseAtSequenceEnd(): void {
-    if (this.sessionId === null) {
-      this.stopPlaybackTimer();
-      return;
-    }
-
-    this.playbackRunning = false;
-    if (this.playbackTimer !== null) {
-      clearInterval(this.playbackTimer);
-      this.playbackTimer = null;
-    }
-    const response = pauseRealtimePreview({ sessionId: this.sessionId });
-    this.playbackGeneration = response.playbackGeneration;
-    recordRealtimePreviewHostCall({ kind: "pauseAtSequenceEnd", playbackGeneration: response.playbackGeneration });
-    this.refreshTelemetry({ presentPlaybackTick: false });
   }
 
   private mockRealtimeFrameForTest(): void {
@@ -811,19 +715,6 @@ function maxRectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewS
     Math.abs(first.width - second.width),
     Math.abs(first.height - second.height)
   );
-}
-
-function sequenceDurationMicroseconds(draft: Draft | null): number {
-  if (draft === null) {
-    return 0;
-  }
-
-  return draft.tracks.reduce((duration, track) => {
-    const trackEnd = track.segments.reduce((end, segment) => {
-      return Math.max(end, segment.targetTimerange.start + segment.targetTimerange.duration);
-    }, 0);
-    return Math.max(duration, trackEnd);
-  }, 0);
 }
 
 function nativeSurfaceKind(): RealtimePreviewSurfaceDescriptor["kind"] {

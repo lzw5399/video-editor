@@ -294,7 +294,6 @@ test("product user can import a repo video, add it to the timeline, and see rend
         "updateDraftSnapshot",
         "seek",
         "schedulerPlaybackWorkerStart",
-        "schedulerCompositedEvidence",
         "play"
       ])
     );

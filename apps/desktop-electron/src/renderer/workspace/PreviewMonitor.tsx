@@ -377,12 +377,6 @@ export function PreviewMonitor({
 
       const rectKey = `${rect.x}:${rect.y}:${rect.width}:${rect.height}:${rect.scaleFactorMillis}`;
       if (lastSentHostRectRef.current === rectKey) {
-        void bridge.getTelemetry().then((state) => {
-          if (!cancelled) {
-            setNativeHostState(state);
-            onRealtimePreviewHostStateChange(state);
-          }
-        });
         return;
       }
       lastSentHostRectRef.current = rectKey;
@@ -472,7 +466,7 @@ export function PreviewMonitor({
     };
 
     refresh();
-    const timer = window.setInterval(refresh, playbackRunning ? 33 : 250);
+    const timer = window.setInterval(refresh, 250);
     return () => {
       cancelled = true;
       window.clearInterval(timer);

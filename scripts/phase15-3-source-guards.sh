@@ -79,6 +79,16 @@ fail_if_matches \
   'backend.*(select|button|combobox)|mock.*(select|button|combobox)|(select|button|combobox).*backend|(select|button|combobox).*mock' \
   apps/desktop-electron/src/renderer/workspace
 
+fail_if_matches \
+  "Electron realtime preview host must not own playback cadence or fake compositor evidence" \
+  'playbackTimer|playbackTickInFlight|presentPlaybackTimerTick|pauseAtSequenceEnd|presentPlaybackTick|schedulerCompositedEvidence' \
+  apps/desktop-electron/src/main/realtimePreviewHost.ts
+
+fail_if_matches \
+  "PreviewMonitor telemetry polling must stay coarse and must not switch to 33ms while playing" \
+  'playbackRunning\s*\?\s*33|setInterval\(\s*refresh\s*,\s*33\s*\)' \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
+
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "waitForVisiblePreviewCenterChange"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "renderGraphGpuComposited"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "requestPreviewFrameCount"

@@ -68,12 +68,13 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
 
     const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
-    const hostCallCountBefore = (await readRealtimePreviewHostCalls(app)).length;
     const before = await readHostState(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
 
     await activateProductJourneyApp(app, page);
     await playButton.click();
+    await waitForPlaybackProgress(page, before);
+    const hostCallCountBefore = (await readRealtimePreviewHostCalls(app)).length;
     await page.waitForTimeout(3_000);
     const after = await readHostState(page);
     const visibleAfter = await captureVisiblePreviewEvidence(page, app);
@@ -116,7 +117,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       targetDeltaMicroseconds: targetAfter - targetBefore,
       evidenceDigestChanged,
       visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
-      presentationDurationMs: {
+      presentationSnapshotReads: {
         count: presentationDurations.length,
         min: presentationDurations[0] ?? null,
         p50: durationPercentile(0.5),
@@ -151,15 +152,15 @@ test("product preview cadence presents sustained GPU frames without artifact fal
         90
       );
     }
-    expect(metrics.presentationDurationMs.count, "UI status polling should remain near the playback cadence").toBeGreaterThanOrEqual(
-      70
+    expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
+      30
     );
-    expect(metrics.presentationDurationMs.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
-    expect(metrics.presentationDurationMs.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
+    expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
+    expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
       16
     );
-    expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").not.toBeNull();
-    expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
+    expect(metrics.presentationSnapshotReads.p95, "presentation state p95 should stay below frame budget tail latency").not.toBeNull();
+    expect(metrics.presentationSnapshotReads.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
       50
     );
     expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
@@ -215,12 +216,13 @@ async function expectCadencePlayback(
   await expect(playButton).toBeEnabled({ timeout: 20_000 });
 
   const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
-  const hostCallCountBefore = (await readRealtimePreviewHostCalls(app)).length;
   const before = await readHostState(page);
   const visibleBefore = await captureVisiblePreviewEvidence(page, app);
 
   await activateProductJourneyApp(app, page);
   await playButton.click();
+  await waitForPlaybackProgress(page, before);
+  const hostCallCountBefore = (await readRealtimePreviewHostCalls(app)).length;
   await page.waitForTimeout(3_000);
   const after = await readHostState(page);
   const visibleAfter = await captureVisiblePreviewEvidence(page, app);
@@ -263,7 +265,7 @@ async function expectCadencePlayback(
     targetDeltaMicroseconds: targetAfter - targetBefore,
     evidenceDigestChanged,
     visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
-    presentationDurationMs: {
+    presentationSnapshotReads: {
       count: presentationDurations.length,
       min: presentationDurations[0] ?? null,
       p50: durationPercentile(0.5),
@@ -298,15 +300,15 @@ async function expectCadencePlayback(
       90
     );
   }
-  expect(metrics.presentationDurationMs.count, "UI status polling should remain near the playback cadence").toBeGreaterThanOrEqual(
-    70
+  expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
+    30
   );
-  expect(metrics.presentationDurationMs.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
-  expect(metrics.presentationDurationMs.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
+  expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
+  expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
     16
   );
-  expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").not.toBeNull();
-  expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
+  expect(metrics.presentationSnapshotReads.p95, "presentation state p95 should stay below frame budget tail latency").not.toBeNull();
+  expect(metrics.presentationSnapshotReads.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
     50
   );
   expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
@@ -341,6 +343,36 @@ function summarizeFramePacing(framePacing: NonNullable<HostState["telemetry"]>["
     scheduleLatenessP95Ms: framePacing.scheduleLatenessP95Ms,
     scheduleLatenessMaxMs: framePacing.scheduleLatenessMaxMs
   };
+}
+
+async function waitForPlaybackProgress(
+  page: import("@playwright/test").Page,
+  baseline: HostState | null
+): Promise<HostState> {
+  const baselinePresented = baseline?.telemetry?.presentedFrameCount ?? 0;
+  const baselineTarget = baseline?.contentEvidence?.targetTimeMicroseconds ?? -1;
+  const deadline = Date.now() + 10_000;
+  let lastState: HostState | null = null;
+
+  while (Date.now() < deadline) {
+    lastState = await readHostState(page);
+    const presented = lastState?.telemetry?.presentedFrameCount ?? 0;
+    const target = lastState?.contentEvidence?.targetTimeMicroseconds ?? -1;
+    if (
+      lastState?.ok === true &&
+      lastState.productReady &&
+      !lastState.fallbackActive &&
+      lastState.backend === "renderGraphGpu" &&
+      lastState.contentEvidence?.source === "renderGraphGpuComposited" &&
+      presented > baselinePresented &&
+      target > baselineTarget
+    ) {
+      return lastState;
+    }
+    await page.waitForTimeout(50);
+  }
+
+  throw new Error(`Timed out waiting for Rust playback progress. Last host state: ${JSON.stringify(lastState)}`);
 }
 
 async function readHostState(page: import("@playwright/test").Page): Promise<HostState | null> {
