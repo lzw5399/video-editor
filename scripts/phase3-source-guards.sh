@@ -24,6 +24,9 @@ TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent"(?
 TEXT_ADD_NATIVE_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent";[^\n|]*\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent";(?s:.{0,260})\b(?:style|textBox|layoutRegion|wrapping)[[:space:]]*:'
 TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN='\bcreateDefaultTextSegment\b|on(?:AddTextSegment|ImportSubtitleSrt)[^;\n]*\b(?:TextSegment|textTemplate)\b|function[[:space:]]+handle(?:AddTextSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:TextSegment|textTemplate)\b'
 EXPORT_CONTROL_LEGACY_COMMAND_PATTERN='\b(?:buildGetExportJobStatusCommand|buildCancelExportCommand|executeExportCommand)\b'
+AUDIO_PREVIEW_LEGACY_COMMAND_BUILDER_PATTERN='\bbuild(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command\b'
+AUDIO_PREVIEW_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*(?:Audio|Waveform)|executeAudioCommand<[^>]*>\([[:space:]]*\([^)]*\)[[:space:]]*=>[[:space:]]*build(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command'
+AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:createAudioPreviewSession|playAudioPreview|pauseAudioPreview|stopAudioPreview|seekAudioPreview|cancelAudioPreview|getAudioPreviewStatus|listAudioOutputDevices|selectAudioOutputDevice|getWaveformDisplayPeaks|refreshWaveformStatus)"'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -449,6 +452,16 @@ fail_if_matches \
   "$EXPORT_CONTROL_LEGACY_COMMAND_PATTERN" \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts
 
+fail_if_matches \
+  "renderer must not construct audio preview command envelopes; use explicit audio preview APIs" \
+  "$AUDIO_PREVIEW_LEGACY_COMMAND_BUILDER_PATTERN|$AUDIO_PREVIEW_GENERIC_EXECUTE_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts
+
+fail_if_matches \
+  "bindings_node executeCommand must not allow audio preview command names; use explicit audio preview APIs" \
+  "$AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN" \
+  crates/bindings_node/src/lib.rs
+
 fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
@@ -675,6 +688,16 @@ assert_pattern_rejects \
   "legacy export control command builder" \
   "$EXPORT_CONTROL_LEGACY_COMMAND_PATTERN" \
   'return buildGetExportJobStatusCommand(current.export.jobId);'
+
+assert_pattern_rejects \
+  "legacy audio preview command builder" \
+  "$AUDIO_PREVIEW_LEGACY_COMMAND_BUILDER_PATTERN|$AUDIO_PREVIEW_GENERIC_EXECUTE_PATTERN" \
+  'return buildPlayAudioPreviewCommand({ projectSessionId, expectedRevision, sessionId });'
+
+assert_pattern_rejects \
+  "legacy audio preview executeCommand allowlist" \
+  "$AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN" \
+  '| "playAudioPreview"'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

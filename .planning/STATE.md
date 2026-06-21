@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg28 explicit export control API
-last_updated: "2026-06-21T21:21:36Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg28: explicit export control API
+stopped_at: Completed quick task 260622-sg29 explicit audio preview API
+last_updated: "2026-06-21T21:41:23Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg29: explicit audio preview API
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg28: explicit export control API
+Last activity: 2026-06-22 -- Completed quick task 260622-sg29: explicit audio preview API
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -236,6 +236,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
 - Product export start is now sourced from Rust project sessions: Electron sends `sessionId`, `expectedRevision`, output path, and preset through `startProjectSessionExport`; Rust reads the canonical session draft before starting the export registry, and renderer/preload guards reject full-draft `startExport` payloads. (URGENT)
 - Product export status and cancellation now use explicit native APIs instead of renderer-constructed command envelopes; source guards reject `buildGetExportJobStatusCommand`, `buildCancelExportCommand`, and the old renderer `executeExportCommand` path. (URGENT)
+- Product audio preview controls now use explicit native APIs for create/play/pause/stop/seek/cancel/status/device/waveform actions; renderer audio command builders were removed, and Rust `executeCommand` rejects legacy audio preview envelopes. (URGENT)
 - Product FFmpeg runtime discovery no longer uses a process env variable as the production resolver: Electron computes the app-local bundled runtime directory and configures the native binding explicitly, Rust release discovery ignores env, and `VE_BUNDLED_FFMPEG_DIR` remains debug/test-only. (URGENT)
 - Default product export/preview UI no longer surfaces raw runtime diagnostics, host/log terminology, render-graph wording, or aria/title diagnostic leaks; raw export diagnostics and realtime telemetry remain developer-diagnostics-only. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
@@ -512,6 +513,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg29-explicit-audio-preview-api | Audio preview, device, and waveform product controls now call explicit native APIs; renderer audio command builders were removed, Rust `executeCommand` rejects legacy audio envelopes, and workspace/product audio UATs passed. |
 | 2026-06-22 | 260622-sg28-explicit-export-control-api | Export status/cancel product controls now call explicit native APIs; renderer export command builders were removed, and source guards block reintroducing generic export control envelopes. |
 | 2026-06-22 | 260622-sg20-product-ui-diagnostic-copy-boundary | Product export/preview copy now hides raw diagnostics, host/log terminology, and render/runtime wording in default UI; screenshot/source gates inspect aria/title leaks, and packaged product journey passed. |
 | 2026-06-22 | 260622-sg19-bundled-ffmpeg-product-boundary | Replaced product FFmpeg runtime env injection with explicit native binding configuration, kept env only as debug/test helper, removed user-facing env remediation, strengthened release docs/guards, and verified packaged smoke ignores external runtime env overrides. |

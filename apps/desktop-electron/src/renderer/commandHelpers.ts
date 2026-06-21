@@ -1,5 +1,4 @@
 import type {
-  AudioPreviewCommandPayload,
   CommandEnvelope,
   DirtyRange,
   ExportPreset,
@@ -19,11 +18,7 @@ import type {
   RuntimeFeatureCapability,
   RuntimeFontCapability
 } from "../generated/CommandResultEnvelope";
-import type {
-  MaterialId,
-  Microseconds,
-  TargetTimerange
-} from "../generated/Draft";
+import type { MaterialId } from "../generated/Draft";
 import type {
   RuntimeDiagnosticsDisplayState,
   RuntimeDiagnosticsRow,
@@ -69,92 +64,6 @@ export function buildInvalidatePreviewCacheCommand(options: InvalidatePreviewCac
   } satisfies InvalidatePreviewCacheCommandPayload & { kind: "invalidatePreviewCache" };
 
   return envelope("invalidatePreviewCache", payload);
-}
-
-type AudioPreviewCommandKind =
-  | "createAudioPreviewSession"
-  | "playAudioPreview"
-  | "pauseAudioPreview"
-  | "stopAudioPreview"
-  | "seekAudioPreview"
-  | "cancelAudioPreview"
-  | "getAudioPreviewStatus"
-  | "listAudioOutputDevices"
-  | "selectAudioOutputDevice"
-  | "getWaveformDisplayPeaks"
-  | "refreshWaveformStatus";
-
-type AudioPreviewCommandOptions = {
-  projectSessionId?: string | null;
-  expectedRevision?: number | null;
-  sessionId?: string | null;
-  materialId?: MaterialId | null;
-  targetTime?: Microseconds | null;
-  targetTimerange?: TargetTimerange | null;
-  playbackGeneration?: number | null;
-  deviceSelectionId?: string | null;
-  maxPeakBins?: number | null;
-};
-
-export function buildCreateAudioPreviewSessionCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("createAudioPreviewSession", options);
-}
-
-export function buildPlayAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("playAudioPreview", options);
-}
-
-export function buildPauseAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("pauseAudioPreview", options);
-}
-
-export function buildStopAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("stopAudioPreview", options);
-}
-
-export function buildSeekAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("seekAudioPreview", options);
-}
-
-export function buildCancelAudioPreviewCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("cancelAudioPreview", options);
-}
-
-export function buildGetAudioPreviewStatusCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("getAudioPreviewStatus", options);
-}
-
-export function buildListAudioOutputDevicesCommand(options: AudioPreviewCommandOptions = {}): CommandEnvelope {
-  return buildAudioPreviewCommand("listAudioOutputDevices", options);
-}
-
-export function buildSelectAudioOutputDeviceCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("selectAudioOutputDevice", options);
-}
-
-export function buildGetWaveformDisplayPeaksCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("getWaveformDisplayPeaks", options);
-}
-
-export function buildRefreshWaveformStatusCommand(options: AudioPreviewCommandOptions): CommandEnvelope {
-  return buildAudioPreviewCommand("refreshWaveformStatus", options);
-}
-
-function buildAudioPreviewCommand(kind: AudioPreviewCommandKind, options: AudioPreviewCommandOptions): CommandEnvelope {
-  const payload = {
-    kind,
-    projectSessionId: options.projectSessionId ?? null,
-    expectedRevision: options.expectedRevision ?? null,
-    sessionId: options.sessionId ?? null,
-    materialId: options.materialId ?? null,
-    targetTime: options.targetTime ?? null,
-    targetTimerange: options.targetTimerange ?? null,
-    playbackGeneration: options.playbackGeneration ?? null,
-    deviceSelectionId: options.deviceSelectionId ?? null,
-    maxPeakBins: options.maxPeakBins ?? null
-  } satisfies AudioPreviewCommandPayload & { kind: AudioPreviewCommandKind };
-
-  return envelope(kind, payload);
 }
 
 type ArtifactStatusCommandOptions = {

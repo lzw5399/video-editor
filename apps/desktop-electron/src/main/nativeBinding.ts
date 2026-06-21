@@ -4,6 +4,9 @@ import { join } from "node:path";
 
 import type { CommandEnvelope, ExportPreset } from "../generated/CommandEnvelope";
 import type {
+  AudioOutputDeviceSummary,
+  AudioPreviewCommandResponse,
+  AudioPreviewStatusResponse,
   CommandDelta,
   CommandEvent,
   CommandResultEnvelope,
@@ -11,7 +14,8 @@ import type {
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
   MissingMaterialCommandDiagnostic,
-  PreviewArtifactResponse
+  PreviewArtifactResponse,
+  WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
 import type {
   AudioEffectSlot,
@@ -54,6 +58,17 @@ type NativeBinding = {
   startProjectSessionExport: (request: StartProjectSessionExportRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
   getExportJobStatus: (request: ExportJobRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
   cancelExport: (request: ExportJobRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
+  createAudioPreviewSession: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  playAudioPreview: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  pauseAudioPreview: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  stopAudioPreview: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  seekAudioPreview: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  cancelAudioPreview: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  getAudioPreviewStatus: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewStatusResponse>;
+  listAudioOutputDevices: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioOutputDeviceSummary[]>;
+  selectAudioOutputDevice: (request: AudioPreviewRequest) => CommandResultEnvelope<AudioPreviewCommandResponse>;
+  getWaveformDisplayPeaks: (request: AudioPreviewRequest) => CommandResultEnvelope<WaveformDisplayPeaksResponse>;
+  refreshWaveformStatus: (request: AudioPreviewRequest) => CommandResultEnvelope<WaveformDisplayPeaksResponse>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => CommandResultEnvelope<PreviewArtifactResponse>;
@@ -116,6 +131,18 @@ export type StartProjectSessionExportRequest = {
 
 export type ExportJobRequest = {
   jobId: string;
+};
+
+export type AudioPreviewRequest = {
+  projectSessionId?: string | null;
+  expectedRevision?: number | null;
+  sessionId?: string | null;
+  materialId?: MaterialId | null;
+  targetTime?: Microseconds | null;
+  targetTimerange?: TargetTimerange | null;
+  playbackGeneration?: number | null;
+  deviceSelectionId?: string | null;
+  maxPeakBins?: number | null;
 };
 
 export type RequestProjectSessionPreviewFrameRequest = {
@@ -673,6 +700,94 @@ export function cancelExport(request: ExportJobRequest): CommandResultEnvelope<E
   return binding.cancelExport(request);
 }
 
+export function createAudioPreviewSession(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("createAudioPreviewSession");
+  }
+  return binding.createAudioPreviewSession(request);
+}
+
+export function playAudioPreview(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("playAudioPreview");
+  }
+  return binding.playAudioPreview(request);
+}
+
+export function pauseAudioPreview(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("pauseAudioPreview");
+  }
+  return binding.pauseAudioPreview(request);
+}
+
+export function stopAudioPreview(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("stopAudioPreview");
+  }
+  return binding.stopAudioPreview(request);
+}
+
+export function seekAudioPreview(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("seekAudioPreview");
+  }
+  return binding.seekAudioPreview(request);
+}
+
+export function cancelAudioPreview(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("cancelAudioPreview");
+  }
+  return binding.cancelAudioPreview(request);
+}
+
+export function getAudioPreviewStatus(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewStatusResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getAudioPreviewStatus");
+  }
+  return binding.getAudioPreviewStatus(request);
+}
+
+export function listAudioOutputDevices(request: AudioPreviewRequest): CommandResultEnvelope<AudioOutputDeviceSummary[]> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("listAudioOutputDevices");
+  }
+  return binding.listAudioOutputDevices(request);
+}
+
+export function selectAudioOutputDevice(request: AudioPreviewRequest): CommandResultEnvelope<AudioPreviewCommandResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("selectAudioOutputDevice");
+  }
+  return binding.selectAudioOutputDevice(request);
+}
+
+export function getWaveformDisplayPeaks(request: AudioPreviewRequest): CommandResultEnvelope<WaveformDisplayPeaksResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getWaveformDisplayPeaks");
+  }
+  return binding.getWaveformDisplayPeaks(request);
+}
+
+export function refreshWaveformStatus(request: AudioPreviewRequest): CommandResultEnvelope<WaveformDisplayPeaksResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("refreshWaveformStatus");
+  }
+  return binding.refreshWaveformStatus(request);
+}
+
 export function requestProjectSessionPreviewFrame(
   request: RequestProjectSessionPreviewFrameRequest
 ): CommandResultEnvelope<PreviewArtifactResponse> {
@@ -791,6 +906,17 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.startProjectSessionExport !== "function" ||
       typeof loaded.getExportJobStatus !== "function" ||
       typeof loaded.cancelExport !== "function" ||
+      typeof loaded.createAudioPreviewSession !== "function" ||
+      typeof loaded.playAudioPreview !== "function" ||
+      typeof loaded.pauseAudioPreview !== "function" ||
+      typeof loaded.stopAudioPreview !== "function" ||
+      typeof loaded.seekAudioPreview !== "function" ||
+      typeof loaded.cancelAudioPreview !== "function" ||
+      typeof loaded.getAudioPreviewStatus !== "function" ||
+      typeof loaded.listAudioOutputDevices !== "function" ||
+      typeof loaded.selectAudioOutputDevice !== "function" ||
+      typeof loaded.getWaveformDisplayPeaks !== "function" ||
+      typeof loaded.refreshWaveformStatus !== "function" ||
       typeof loaded.requestProjectSessionPreviewFrame !== "function" ||
       typeof loaded.requestProjectSessionPreviewSegment !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
@@ -828,6 +954,17 @@ function loadNativeBinding(): NativeBinding | null {
       startProjectSessionExport: loaded.startProjectSessionExport,
       getExportJobStatus: loaded.getExportJobStatus,
       cancelExport: loaded.cancelExport,
+      createAudioPreviewSession: loaded.createAudioPreviewSession,
+      playAudioPreview: loaded.playAudioPreview,
+      pauseAudioPreview: loaded.pauseAudioPreview,
+      stopAudioPreview: loaded.stopAudioPreview,
+      seekAudioPreview: loaded.seekAudioPreview,
+      cancelAudioPreview: loaded.cancelAudioPreview,
+      getAudioPreviewStatus: loaded.getAudioPreviewStatus,
+      listAudioOutputDevices: loaded.listAudioOutputDevices,
+      selectAudioOutputDevice: loaded.selectAudioOutputDevice,
+      getWaveformDisplayPeaks: loaded.getWaveformDisplayPeaks,
+      refreshWaveformStatus: loaded.refreshWaveformStatus,
       requestProjectSessionPreviewFrame: loaded.requestProjectSessionPreviewFrame,
       requestProjectSessionPreviewSegment: loaded.requestProjectSessionPreviewSegment,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,

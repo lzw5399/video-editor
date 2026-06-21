@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
+  AudioPreviewRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -44,25 +45,14 @@ import type {
   TrackKind
 } from "../generated/Draft";
 import {
-  buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
-  buildCreateAudioPreviewSessionCommand,
-  buildGetAudioPreviewStatusCommand,
   buildGetArtifactQuotaStatusCommand,
   buildGetArtifactStatusCommand,
-  buildGetWaveformDisplayPeaksCommand,
   buildProbeRuntimeCapabilitiesCommand,
-  buildPlayAudioPreviewCommand,
-  buildPauseAudioPreviewCommand,
-  buildRefreshWaveformStatusCommand,
   buildRefreshArtifactStatusCommand,
   buildResumeArtifactGenerationCommand,
   buildRetryArtifactGenerationCommand,
   buildRunArtifactGarbageCollectionCommand,
-  buildSeekAudioPreviewCommand,
-  buildSelectAudioOutputDeviceCommand,
-  buildListAudioOutputDevicesCommand,
-  buildStopAudioPreviewCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -117,6 +107,17 @@ type VideoEditorCoreApi = {
   ) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
   getExportJobStatus: (request: ExportJobRequest) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
   cancelExport: (request: ExportJobRequest) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
+  createAudioPreviewSession: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  playAudioPreview: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  pauseAudioPreview: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  stopAudioPreview: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  seekAudioPreview: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  cancelAudioPreview: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  getAudioPreviewStatus: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewStatusResponse>>;
+  listAudioOutputDevices: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioOutputDeviceSummary[]>>;
+  selectAudioOutputDevice: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<AudioPreviewCommandResponse>>;
+  getWaveformDisplayPeaks: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<WaveformDisplayPeaksResponse>>;
+  refreshWaveformStatus: (request: AudioPreviewRequest) => Promise<CommandResultEnvelope<WaveformDisplayPeaksResponse>>;
   requestProjectSessionPreviewFrame: (
     request: RequestProjectSessionPreviewFrameRequest
   ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
@@ -1305,7 +1306,7 @@ export function App(): React.ReactElement {
   }
 
   async function executeAudioCommand<T>(
-    buildCommand: (current: WorkspaceState) => CommandEnvelope,
+    runCommand: (current: WorkspaceState) => Promise<CommandResultEnvelope<T>>,
     pendingAudioCommand: string,
     applyResult: (current: WorkspaceState, result: CommandResultEnvelope<T>) => WorkspaceState
   ): Promise<CommandResultEnvelope<T> | null> {
@@ -1333,8 +1334,7 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<T>(command);
+      const result = await runCommand(workspaceRef.current);
       setWorkspace((current) => {
         const next = applyResult(current, result);
         workspaceRef.current = next;
@@ -1371,7 +1371,7 @@ export function App(): React.ReactElement {
 
     const result = await executeAudioCommand<AudioPreviewCommandResponse>(
       () =>
-        buildCreateAudioPreviewSessionCommand({
+        window.videoEditorCore.createAudioPreviewSession({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           targetTime: playheadRef.current
@@ -1390,7 +1390,7 @@ export function App(): React.ReactElement {
     }
     await executeAudioCommand<AudioOutputDeviceSummary[]>(
       () =>
-        buildListAudioOutputDevicesCommand({
+        window.videoEditorCore.listAudioOutputDevices({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision
         }),
@@ -1419,7 +1419,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<AudioPreviewStatusResponse>(
       () =>
-        buildGetAudioPreviewStatusCommand({
+        window.videoEditorCore.getAudioPreviewStatus({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -1447,7 +1447,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<WaveformDisplayPeaksResponse>(
       () =>
-        buildGetWaveformDisplayPeaksCommand({
+        window.videoEditorCore.getWaveformDisplayPeaks({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           materialId,
@@ -1458,7 +1458,7 @@ export function App(): React.ReactElement {
     );
     await executeAudioCommand<WaveformDisplayPeaksResponse>(
       () =>
-        buildRefreshWaveformStatusCommand({
+        window.videoEditorCore.refreshWaveformStatus({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           materialId,
@@ -2368,7 +2368,7 @@ export function App(): React.ReactElement {
     }
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildPlayAudioPreviewCommand({
+        window.videoEditorCore.playAudioPreview({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -2392,7 +2392,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildPauseAudioPreviewCommand({
+        window.videoEditorCore.pauseAudioPreview({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -2416,7 +2416,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildStopAudioPreviewCommand({
+        window.videoEditorCore.stopAudioPreview({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -2440,7 +2440,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildSeekAudioPreviewCommand({
+        window.videoEditorCore.seekAudioPreview({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -2464,7 +2464,7 @@ export function App(): React.ReactElement {
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildCancelAudioPreviewCommand({
+        window.videoEditorCore.cancelAudioPreview({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,
@@ -2485,7 +2485,7 @@ export function App(): React.ReactElement {
     }
     void executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
-        buildSelectAudioOutputDeviceCommand({
+        window.videoEditorCore.selectAudioOutputDevice({
           projectSessionId: projectSession.projectSessionId,
           expectedRevision: projectSession.expectedRevision,
           sessionId,

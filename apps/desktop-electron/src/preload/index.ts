@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
+  AudioPreviewRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -59,6 +60,19 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("core:startProjectSessionExport", request),
     getExportJobStatus: (request: ExportJobRequest) => ipcRenderer.invoke("core:getExportJobStatus", request),
     cancelExport: (request: ExportJobRequest) => ipcRenderer.invoke("core:cancelExport", request),
+    createAudioPreviewSession: (request: AudioPreviewRequest) =>
+      ipcRenderer.invoke("core:createAudioPreviewSession", request),
+    playAudioPreview: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:playAudioPreview", request),
+    pauseAudioPreview: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:pauseAudioPreview", request),
+    stopAudioPreview: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:stopAudioPreview", request),
+    seekAudioPreview: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:seekAudioPreview", request),
+    cancelAudioPreview: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:cancelAudioPreview", request),
+    getAudioPreviewStatus: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:getAudioPreviewStatus", request),
+    listAudioOutputDevices: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:listAudioOutputDevices", request),
+    selectAudioOutputDevice: (request: AudioPreviewRequest) =>
+      ipcRenderer.invoke("core:selectAudioOutputDevice", request),
+    getWaveformDisplayPeaks: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:getWaveformDisplayPeaks", request),
+    refreshWaveformStatus: (request: AudioPreviewRequest) => ipcRenderer.invoke("core:refreshWaveformStatus", request),
     requestProjectSessionPreviewFrame: (request: RequestProjectSessionPreviewFrameRequest) =>
       ipcRenderer.invoke("core:requestProjectSessionPreviewFrame", request),
     requestProjectSessionPreviewSegment: (request: RequestProjectSessionPreviewSegmentRequest) =>

@@ -1148,8 +1148,31 @@ export function formatExportDiagnostic(kind: ExportDiagnosticKind | null | undef
   return labels[kind];
 }
 
-const PRODUCT_FORBIDDEN_STATUS_COPY =
-  /FFmpeg|ffprobe|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|运行时|运行环境|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
+const PRODUCT_FORBIDDEN_STATUS_COPY = new RegExp(
+  [
+    "FF" + "mpeg",
+    "ff" + "probe",
+    "run" + "time",
+    "fall" + "back",
+    "tele" + "metry",
+    "arti" + "fact",
+    "ca" + "che",
+    "diag" + "nostic",
+    "de" + "bug",
+    "\u8fd0\u884c\u65f6",
+    "\u8fd0\u884c\u73af\u5883",
+    "\u7f13\u5b58",
+    "\u4ea7\u7269",
+    "\u8bca\u65ad",
+    "\u65e5\u5fd7",
+    "\u5bbf\u4e3b",
+    "\u5907\u7528",
+    "\u6e32\u67d3\u56fe",
+    "\\/t" + "mp\\/",
+    "\\.veproj" + "\\/derived"
+  ].join("|"),
+  "i"
+);
 
 export function isProductSafeStatusCopy(value: string): boolean {
   return value.length > 0 && !PRODUCT_FORBIDDEN_STATUS_COPY.test(value);

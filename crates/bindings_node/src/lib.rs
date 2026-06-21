@@ -4,11 +4,11 @@
 //! semantics remain owned by Rust contract crates and later command crates.
 
 use draft_model::{
-    CancelExportCommandPayload, CommandEnvelope, CommandError, CommandErrorKind, CommandName,
-    CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
-    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
-    InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    AudioPreviewCommandPayload, CancelExportCommandPayload, CommandEnvelope, CommandError,
+    CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope, DRAFT_MODEL_VERSION,
+    ExportJobStatusResponse, GetExportJobStatusCommandPayload, ImportMaterialCommandPayload,
+    ImportMaterialResponse, InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload,
+    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
     OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingResponse, PreviewDecodeRequest,
     ReleasePreviewFrameCommandPayload, RequestPreviewFrameCommandPayload,
@@ -95,17 +95,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "requestPreviewFrame"
                 | "requestPreviewSegment"
                 | "invalidatePreviewCache"
-                | "createAudioPreviewSession"
-                | "playAudioPreview"
-                | "pauseAudioPreview"
-                | "stopAudioPreview"
-                | "seekAudioPreview"
-                | "cancelAudioPreview"
-                | "getAudioPreviewStatus"
-                | "listAudioOutputDevices"
-                | "selectAudioOutputDevice"
-                | "getWaveformDisplayPeaks"
-                | "refreshWaveformStatus"
                 | "getArtifactStatus"
                 | "refreshArtifactStatus"
                 | "retryArtifactGeneration"
@@ -205,9 +194,11 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::ListAudioOutputDevices
         | CommandName::SelectAudioOutputDevice
         | CommandName::GetWaveformDisplayPeaks
-        | CommandName::RefreshWaveformStatus => {
-            audio_service_command(envelope.command, envelope.payload)
-        }
+        | CommandName::RefreshWaveformStatus => to_js_value(error_envelope(
+            CommandErrorKind::UnsupportedCommand,
+            "Audio preview commands require explicit native APIs".to_string(),
+            Some(format!("{:?}", envelope.command)),
+        )),
         CommandName::GetArtifactStatus
         | CommandName::RefreshArtifactStatus
         | CommandName::RetryArtifactGeneration
@@ -308,6 +299,89 @@ pub fn cancel_export(request: serde_json::Value) -> Result<serde_json::Value> {
         }
     };
     cancel_export_command(request)
+}
+
+#[napi(js_name = "createAudioPreviewSession")]
+pub fn create_audio_preview_session(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::CreateAudioPreviewSession,
+        "createAudioPreviewSession",
+        request,
+    )
+}
+
+#[napi(js_name = "playAudioPreview")]
+pub fn play_audio_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(CommandName::PlayAudioPreview, "playAudioPreview", request)
+}
+
+#[napi(js_name = "pauseAudioPreview")]
+pub fn pause_audio_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(CommandName::PauseAudioPreview, "pauseAudioPreview", request)
+}
+
+#[napi(js_name = "stopAudioPreview")]
+pub fn stop_audio_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(CommandName::StopAudioPreview, "stopAudioPreview", request)
+}
+
+#[napi(js_name = "seekAudioPreview")]
+pub fn seek_audio_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(CommandName::SeekAudioPreview, "seekAudioPreview", request)
+}
+
+#[napi(js_name = "cancelAudioPreview")]
+pub fn cancel_audio_preview(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::CancelAudioPreview,
+        "cancelAudioPreview",
+        request,
+    )
+}
+
+#[napi(js_name = "getAudioPreviewStatus")]
+pub fn get_audio_preview_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::GetAudioPreviewStatus,
+        "getAudioPreviewStatus",
+        request,
+    )
+}
+
+#[napi(js_name = "listAudioOutputDevices")]
+pub fn list_audio_output_devices(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::ListAudioOutputDevices,
+        "listAudioOutputDevices",
+        request,
+    )
+}
+
+#[napi(js_name = "selectAudioOutputDevice")]
+pub fn select_audio_output_device(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::SelectAudioOutputDevice,
+        "selectAudioOutputDevice",
+        request,
+    )
+}
+
+#[napi(js_name = "getWaveformDisplayPeaks")]
+pub fn get_waveform_display_peaks(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::GetWaveformDisplayPeaks,
+        "getWaveformDisplayPeaks",
+        request,
+    )
+}
+
+#[napi(js_name = "refreshWaveformStatus")]
+pub fn refresh_waveform_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    audio_preview_binding_command(
+        CommandName::RefreshWaveformStatus,
+        "refreshWaveformStatus",
+        request,
+    )
 }
 
 #[napi(js_name = "requestProjectSessionPreviewFrame")]
@@ -715,6 +789,40 @@ fn audio_service_command(
     to_js_value(with_audio_preview_registry(|registry| {
         handle_audio_service_command(registry, command, payload)
     })?)
+}
+
+fn audio_preview_binding_command(
+    command: CommandName,
+    command_label: &'static str,
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let payload = match serde_json::from_value::<AudioPreviewCommandPayload>(request) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid {command_label} payload: {error}"),
+                Some(command_label.to_string()),
+            ));
+        }
+    };
+    let command_payload = match command {
+        CommandName::CreateAudioPreviewSession => {
+            CommandPayload::CreateAudioPreviewSession(payload)
+        }
+        CommandName::PlayAudioPreview => CommandPayload::PlayAudioPreview(payload),
+        CommandName::PauseAudioPreview => CommandPayload::PauseAudioPreview(payload),
+        CommandName::StopAudioPreview => CommandPayload::StopAudioPreview(payload),
+        CommandName::SeekAudioPreview => CommandPayload::SeekAudioPreview(payload),
+        CommandName::CancelAudioPreview => CommandPayload::CancelAudioPreview(payload),
+        CommandName::GetAudioPreviewStatus => CommandPayload::GetAudioPreviewStatus(payload),
+        CommandName::ListAudioOutputDevices => CommandPayload::ListAudioOutputDevices(payload),
+        CommandName::SelectAudioOutputDevice => CommandPayload::SelectAudioOutputDevice(payload),
+        CommandName::GetWaveformDisplayPeaks => CommandPayload::GetWaveformDisplayPeaks(payload),
+        CommandName::RefreshWaveformStatus => CommandPayload::RefreshWaveformStatus(payload),
+        _ => unreachable!("audio preview binding command called with non-audio command"),
+    };
+    audio_service_command(command, command_payload)
 }
 
 fn preview_service_config_from_preview_payload(

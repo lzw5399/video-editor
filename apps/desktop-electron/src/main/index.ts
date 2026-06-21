@@ -20,21 +20,33 @@ import type {
 } from "../generated/CommandResultEnvelope";
 import type { SegmentVisual } from "../generated/Draft";
 import {
+  cancelAudioPreview,
   closeProjectSession,
   configureBundledRuntimeDirectory,
+  createAudioPreviewSession,
   createProjectSession,
   cancelExport,
   executeCommand,
   executeProjectIntent,
+  getAudioPreviewStatus,
   getExportJobStatus,
+  getWaveformDisplayPeaks,
   listProjectSessionMaterials,
   listProjectSessionMissingMaterials,
+  listAudioOutputDevices,
   openProjectSession,
+  pauseAudioPreview,
   ping,
+  playAudioPreview,
   requestProjectSessionPreviewFrame,
   requestProjectSessionPreviewSegment,
+  refreshWaveformStatus,
+  seekAudioPreview,
+  selectAudioOutputDevice,
   startProjectSessionExport,
+  stopAudioPreview,
   version,
+  type AudioPreviewRequest,
   type CreateProjectSessionRequest,
   type ExportJobRequest,
   type ExecuteProjectIntentRequest,
@@ -115,6 +127,18 @@ type TestWindowMetrics = {
   contentBounds: Rectangle;
   displayScaleFactor: number;
 };
+type AudioPreviewCommandName =
+  | "createAudioPreviewSession"
+  | "playAudioPreview"
+  | "pauseAudioPreview"
+  | "stopAudioPreview"
+  | "seekAudioPreview"
+  | "cancelAudioPreview"
+  | "getAudioPreviewStatus"
+  | "listAudioOutputDevices"
+  | "selectAudioOutputDevice"
+  | "getWaveformDisplayPeaks"
+  | "refreshWaveformStatus";
 type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
@@ -229,6 +253,105 @@ ipcMain.handle("core:cancelExport", (event, request: ExportJobRequest) => {
     return testExportResponse;
   }
   return cancelExport(request);
+});
+ipcMain.handle("core:createAudioPreviewSession", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("createAudioPreviewSession", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("createAudioPreviewSession", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return createAudioPreviewSession(request);
+});
+ipcMain.handle("core:playAudioPreview", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("playAudioPreview", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("playAudioPreview", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return playAudioPreview(request);
+});
+ipcMain.handle("core:pauseAudioPreview", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("pauseAudioPreview", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("pauseAudioPreview", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return pauseAudioPreview(request);
+});
+ipcMain.handle("core:stopAudioPreview", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("stopAudioPreview", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("stopAudioPreview", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return stopAudioPreview(request);
+});
+ipcMain.handle("core:seekAudioPreview", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("seekAudioPreview", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("seekAudioPreview", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return seekAudioPreview(request);
+});
+ipcMain.handle("core:cancelAudioPreview", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("cancelAudioPreview", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("cancelAudioPreview", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return cancelAudioPreview(request);
+});
+ipcMain.handle("core:getAudioPreviewStatus", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("getAudioPreviewStatus", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("getAudioPreviewStatus", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return getAudioPreviewStatus(request);
+});
+ipcMain.handle("core:listAudioOutputDevices", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("listAudioOutputDevices", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("listAudioOutputDevices", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return listAudioOutputDevices(request);
+});
+ipcMain.handle("core:selectAudioOutputDevice", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("selectAudioOutputDevice", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("selectAudioOutputDevice", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return selectAudioOutputDevice(request);
+});
+ipcMain.handle("core:getWaveformDisplayPeaks", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("getWaveformDisplayPeaks", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("getWaveformDisplayPeaks", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return getWaveformDisplayPeaks(request);
+});
+ipcMain.handle("core:refreshWaveformStatus", (event, request: AudioPreviewRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestExplicitAudioPreviewCall("refreshWaveformStatus", request);
+  const testAudioResponse = maybeBuildTestExplicitAudioResponse("refreshWaveformStatus", request);
+  if (testAudioResponse !== null) {
+    return testAudioResponse;
+  }
+  return refreshWaveformStatus(request);
 });
 ipcMain.handle("core:requestProjectSessionPreviewFrame", (event, request: RequestProjectSessionPreviewFrameRequest) => {
   assertAllowedIpcSender(event);
@@ -592,6 +715,10 @@ function recordTestExplicitExportControlCall(command: "getExportJobStatus" | "ca
   });
 }
 
+function recordTestExplicitAudioPreviewCall(command: AudioPreviewCommandName, request: AudioPreviewRequest): void {
+  recordTestExecuteCommand(buildExplicitAudioPreviewEnvelope(command, request));
+}
+
 function recordTestProjectSessionCall(
   command: TestProjectSessionCall["command"],
   request:
@@ -916,6 +1043,29 @@ function maybeBuildTestExplicitExportControlResponse(
     },
     requestId: `explicit-${command}`
   });
+}
+
+function maybeBuildTestExplicitAudioResponse(
+  command: AudioPreviewCommandName,
+  request: AudioPreviewRequest
+):
+  | CommandResultEnvelope<AudioPreviewCommandResponse>
+  | CommandResultEnvelope<AudioPreviewStatusResponse>
+  | CommandResultEnvelope<AudioOutputDeviceSummary[]>
+  | CommandResultEnvelope<WaveformDisplayPeaksResponse>
+  | null {
+  return maybeBuildTestAudioResponse(buildExplicitAudioPreviewEnvelope(command, request));
+}
+
+function buildExplicitAudioPreviewEnvelope(command: AudioPreviewCommandName, request: AudioPreviewRequest): CommandEnvelope {
+  return {
+    command,
+    payload: {
+      ...request,
+      kind: command
+    } as CommandEnvelope["payload"],
+    requestId: `explicit-${command}`
+  };
 }
 
 function maybeBuildTestProjectSessionExportResponse(

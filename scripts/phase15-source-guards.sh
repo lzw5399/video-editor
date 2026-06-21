@@ -150,6 +150,7 @@ RENDERER_AUDIO_FFMPEG_PATTERN='\b(?:ffmpegAudioFilters?|audioFilterGraph|afade|a
 RENDERER_WAVEFORM_ARTIFACT_PATTERN='\b(?:waveformBlobPath|waveformPath|waveformArtifactRoot|artifactRoot|artifactStoreRoot|artifactStorePath|artifact-store\.sqlite|\.sqlite|\.veproj/derived|SQLite|sqlite3?|rusqlite|CREATE TABLE|SELECT .*waveform|INSERT INTO artifact|UPDATE artifact)\b'
 RENDERER_CACHE_TIMELINE_PATTERN='\b(?:cacheKey|previewCacheKey|artifactKey|fingerprint|sourceFingerprint|graphFingerprint|blobFingerprint|RenderGraphNodeId|graphNode|dirtyRange|dirtyRanges|DirtyRange|dirtyDomains?|TimelineState|timelineStateMutation|playbackGeneration\s*(?:=|\+\+|--)|timelineClock\s*(?:=|\.))\b'
 PRODUCTION_FORBIDDEN_COPY_PATTERN='\b(?:AudioGraph|DSP|TimelineClock|PlaybackGeneration|sampleIndex|mixBuffer|ringBuffer|WASAPI|CoreAudio|cpal|rubato|FFmpeg|ffprobe|SQLite|\.sqlite|\.veproj/derived|cacheKey|fingerprint|graphNode|dirtyRange|outputDeviceHandle|deviceHandle|session ID|native backend|raw logs|raw buffer)\b'
+AUDIO_PREVIEW_LEGACY_BUILDER_PATTERN='\bbuild(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command\b'
 
 assert_pattern_rejects \
   "renderer AudioGraph ownership" \
@@ -218,8 +219,14 @@ require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export t
 require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type AudioPreviewCommandPayload = { projectSessionId?: string | null, expectedRevision?: number | null,"
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type AudioPreviewStatusResponse ="
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type WaveformDisplayPeaksResponse ="
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "音频预览 controls send generated command envelopes"
+require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "音频预览 controls call explicit native APIs"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "波形 display uses Rust-shaped peak payloads"
+
+fail_matches \
+  "renderer must not construct audio preview command envelopes; use explicit native APIs" \
+  "$AUDIO_PREVIEW_LEGACY_BUILDER_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts
 
 fail_matches \
   "audio preview command options and generated contract must not expose renderer-owned draft payloads" \

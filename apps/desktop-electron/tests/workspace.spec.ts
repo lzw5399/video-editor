@@ -1240,7 +1240,7 @@ test("预览播放按钮使用实时预览画面而不是连续请求预览帧",
   }
 });
 
-test("音频预览 controls send generated command envelopes and preserve state after rejection", async () => {
+test("音频预览 controls call explicit native APIs and preserve state after rejection", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
