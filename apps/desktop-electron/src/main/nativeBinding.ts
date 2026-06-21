@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import type { CommandEnvelope } from "../generated/CommandEnvelope";
-import type { CommandResultEnvelope } from "../generated/CommandResultEnvelope";
-import type { Draft } from "../generated/Draft";
+import type { CommandEnvelope, CommandState, TimelineSelection } from "../generated/CommandEnvelope";
+import type { CommandDelta, CommandEvent, CommandResultEnvelope } from "../generated/CommandResultEnvelope";
+import type { Draft, MaterialId } from "../generated/Draft";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -13,6 +13,9 @@ type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
+  openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
+  closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
+  executeProjectIntent: (request: ExecuteProjectIntentRequest) => CommandResultEnvelope<ProjectSessionIntentResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   closeRealtimePreviewSession: (request: RealtimePreviewSessionRequest) => RealtimePreviewClosedResponse;
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
@@ -30,6 +33,52 @@ type NativeBinding = {
   getRealtimePreviewPresentationState: (
     request: RealtimePreviewSessionRequest
   ) => RealtimePreviewPresentationStateResponse;
+};
+
+export type OpenProjectSessionRequest = {
+  bundlePath: string;
+  sessionId?: string;
+};
+
+export type ProjectSessionRequest = {
+  sessionId: string;
+};
+
+export type ProjectIntent =
+  | { kind: "addTimelineSegmentIntent"; materialId: MaterialId }
+  | { kind: "undoTimelineEdit" }
+  | { kind: "redoTimelineEdit" };
+
+export type ExecuteProjectIntentRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  intent: ProjectIntent;
+};
+
+export type ProjectSessionOpenResponse = {
+  sessionId: string;
+  revision: number;
+  draft: Draft;
+  bundlePath: string;
+  projectJsonPath: string;
+  warnings: string[];
+};
+
+export type ProjectSessionClosedResponse = {
+  sessionId: string;
+  closed: boolean;
+};
+
+export type ProjectSessionIntentResponse = {
+  sessionId: string;
+  revision: number;
+  draft: Draft;
+  commandState: CommandState;
+  selection: TimelineSelection;
+  events: CommandEvent[];
+  delta: CommandDelta;
+  bundlePath: string;
+  projectJsonPath: string;
 };
 
 export type RealtimePreviewSessionConfig = {
@@ -255,6 +304,32 @@ export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<
     return bindingLoadError(command.command);
   }
   return binding.executeCommand(command);
+}
+
+export function openProjectSession(request: OpenProjectSessionRequest): CommandResultEnvelope<ProjectSessionOpenResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("openProjectSession");
+  }
+  return binding.openProjectSession(request);
+}
+
+export function closeProjectSession(request: ProjectSessionRequest): CommandResultEnvelope<ProjectSessionClosedResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("closeProjectSession");
+  }
+  return binding.closeProjectSession(request);
+}
+
+export function executeProjectIntent(
+  request: ExecuteProjectIntentRequest
+): CommandResultEnvelope<ProjectSessionIntentResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("executeProjectIntent");
+  }
+  return binding.executeProjectIntent(request);
 }
 
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {

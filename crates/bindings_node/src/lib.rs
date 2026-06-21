@@ -51,6 +51,7 @@ pub mod audio_service;
 pub mod material_service;
 pub mod native_preview_presenter;
 pub mod preview_export_service;
+pub mod project_session_service;
 pub mod realtime_preview_service;
 pub mod runtime_capability_service;
 
@@ -287,6 +288,21 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             timeline_command(envelope.command, envelope.payload)
         }
     }
+}
+
+#[napi(js_name = "openProjectSession")]
+pub fn open_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::open_project_session(request)
+}
+
+#[napi(js_name = "closeProjectSession")]
+pub fn close_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::close_project_session(request)
+}
+
+#[napi(js_name = "executeProjectIntent")]
+pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::execute_project_intent(request)
 }
 
 #[napi(js_name = "createRealtimePreviewSession")]

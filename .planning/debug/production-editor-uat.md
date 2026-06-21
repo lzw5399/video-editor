@@ -65,6 +65,9 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "The top-level 字幕 category was a false deferred entry while SRT import was hidden under the 文字 panel. The product route now exposes SRT import directly in 字幕, removes 字幕 from deferred category gates, and product helpers import subtitles from the 字幕 tab."
   data: "corepack pnpm --dir apps/desktop-electron run build -> passed; workspace captions gates -> 3 passed; package:dir -> passed; product combo visible UAT -> 1 passed; product-preview-cadence.spec.ts -> 2 passed with single video presentedDelta=90/droppedDelta=0 and combo presentedDelta=90/droppedDelta=0, combo intervalP95Ms=37, intervalMaxMs=55, firstFrameLatencyMs=323; test:phase3-source-guards -> passed; test:phase10-1-source-guards -> passed."
+- timestamp: 2026-06-21
+  observation: "First Rust-owned project session boundary landed behind bindings_node. openProjectSession loads canonical .veproj/project.json into a Rust registry; executeProjectIntent accepts sessionId + expectedRevision + intent only, rejects renderer draft fields, applies timeline semantics against session state, persists project.json, and increments revision."
+  data: "cargo fmt --all --check -> passed; cargo test -p bindings_node --test project_session -- --nocapture -> 4 passed; cargo test -p bindings_node -- --nocapture -> passed; corepack pnpm --dir apps/desktop-electron run build -> passed; test:phase3-source-guards -> passed; test:phase10-1-source-guards -> passed; package:dir -> passed. The slice includes addTimelineSegmentIntent plus undo/redo across calls using Rust-owned CommandState; renderer main wrapper is available but product UI is not migrated yet."
 
 ## Eliminated
 
