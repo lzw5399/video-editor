@@ -245,10 +245,10 @@ pub fn extract_rgb_frame_at(
         OsString::from("-hide_banner"),
         OsString::from("-v"),
         OsString::from("error"),
-        OsString::from("-ss"),
-        OsString::from(format_seconds(timestamp_microseconds)),
         OsString::from("-i"),
         media_path.as_os_str().to_owned(),
+        OsString::from("-ss"),
+        OsString::from(format_seconds(timestamp_microseconds)),
         OsString::from("-frames:v"),
         OsString::from("1"),
         OsString::from("-f"),
@@ -276,6 +276,69 @@ pub fn extract_rgb_frame_at(
     if output.stdout.len() != expected_len {
         return Err(RenderCompareError::runtime(format!(
             "expected raw RGB frame length {expected_len}, got {} for {}",
+            output.stdout.len(),
+            media_path.display()
+        )));
+    }
+
+    Ok(ComparableFrame {
+        metadata: FrameMetadata {
+            width,
+            height,
+            frame_index,
+            timestamp_microseconds,
+        },
+        rgb24: output.stdout,
+    })
+}
+
+pub fn extract_rgb_frame_index(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+    media_path: impl AsRef<Path>,
+    frame_index: u64,
+    timestamp_microseconds: u64,
+    width: u32,
+    height: u32,
+) -> RenderCompareResult<ComparableFrame> {
+    let media_path = media_path.as_ref();
+    let args = vec![
+        OsString::from("-hide_banner"),
+        OsString::from("-v"),
+        OsString::from("error"),
+        OsString::from("-i"),
+        media_path.as_os_str().to_owned(),
+        OsString::from("-vf"),
+        OsString::from(format!("select=eq(n\\,{frame_index})")),
+        OsString::from("-frames:v"),
+        OsString::from("1"),
+        OsString::from("-vsync"),
+        OsString::from("0"),
+        OsString::from("-f"),
+        OsString::from("rawvideo"),
+        OsString::from("-pix_fmt"),
+        OsString::from("rgb24"),
+        OsString::from("pipe:1"),
+    ];
+    let output = executor.run(&runtime.ffmpeg.path, &args).map_err(|error| {
+        RenderCompareError::runtime(format!(
+            "failed to launch FFmpeg frame-index extraction at {}: {error}",
+            runtime.ffmpeg.path.display()
+        ))
+    })?;
+    if !output.status.success() {
+        return Err(RenderCompareError::runtime(format!(
+            "FFmpeg frame-index extraction failed for {}: stdout=`{}` stderr=`{}`",
+            media_path.display(),
+            bounded_summary(&output.stdout),
+            bounded_summary(&output.stderr)
+        )));
+    }
+
+    let expected_len = frame_byte_len(width, height)?;
+    if output.stdout.len() != expected_len {
+        return Err(RenderCompareError::runtime(format!(
+            "expected raw RGB frame length {expected_len}, got {} for frame {frame_index} in {}",
             output.stdout.len(),
             media_path.display()
         )));

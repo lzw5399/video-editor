@@ -18,6 +18,7 @@ import {
   expectTimelineSnappingStatusVisible,
   expectNoRejectedSurfaceAcquire,
   expectProductPlaybackSuccessEvidence,
+  importSubtitleSrtThroughProductPanel,
   importMaterialsThroughProductPicker,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
@@ -372,6 +373,57 @@ test("product playback UAT plays embedded video audio through native output", as
       call.command === "playAudioPreview" && call.sessionId !== null
     )), { timeout: 10_000 }).toBe(true);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback UAT composites video external audio text and two-cue SRT on the native surface", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_MOVING_VIDEO,
+    USER_JOURNEY_TONE_AUDIO
+  ]);
+  const srtContent =
+    "1\n00:00:00,000 --> 00:00:01,400\n第一条组合字幕\n\n2\n00:00:01,400 --> 00:00:03,000\n第二条组合字幕\n";
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
+    await addTextThroughProductPanel(page, app, "产品级组合文字", 300_000);
+
+    const commandCountBeforeSrt = await readExecuteCommandCalls(app);
+    await importSubtitleSrtThroughProductPanel(page, app, srtContent);
+    const commandCountAfterSrt = await readExecuteCommandCalls(app);
+    expect(commandCountAfterSrt.filter((call) => call.command === "importSubtitleSrt")).toHaveLength(1);
+    expect(
+      commandCountAfterSrt.filter((call) => call.command === "addTextSegment").length,
+      "SRT import must not be faked by renderer-created text segment commands"
+    ).toBe(commandCountBeforeSrt.filter((call) => call.command === "addTextSegment").length);
+
+    await seekTimelinePlayhead(page, app, 0);
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestPreviewFrameCount(await readExecuteCommandCalls(app));
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    await expect
+      .poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+        call.command === "playAudioPreview" && call.sessionId !== null
+      )), { timeout: 10_000 })
+      .toBe(true);
+
+    const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+    expect(after.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+    expect(after.hostState?.telemetry?.presentedFrameCount ?? 0).toBeGreaterThan(
+      before.hostState?.telemetry?.presentedFrameCount ?? 0
+    );
+    await expect(page.locator(".preview-text-overlay"), "product realtime text evidence must not be a DOM overlay").toHaveCount(0);
+    const hostCalls = await readRealtimePreviewHostCalls(app);
+    expectNoProductFallbackCalls(hostCalls);
+    expectNoRejectedSurfaceAcquire(hostCalls);
+    expect(requestPreviewFrameCount(await readExecuteCommandCalls(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
   }

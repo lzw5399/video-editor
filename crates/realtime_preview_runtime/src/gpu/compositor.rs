@@ -27,6 +27,7 @@ use super::{
 };
 
 use super::text::{TextRasterizationError, rasterize_text_overlay};
+use super::texture_cache::RealtimePreviewCachedTextLayer;
 
 pub struct RealtimePreviewCompositor {
     device: RealtimePreviewGpuDevice,
@@ -961,6 +962,7 @@ fn prepare_wgpu_layer_draws(
                     device,
                     queue,
                     resources,
+                    texture_cache,
                     diagnostics,
                     support,
                     &mut draws,
@@ -1077,49 +1079,148 @@ fn push_wgpu_text_layer_draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     resources: &RealtimePreviewWgpuPipelines,
+    texture_cache: &mut RealtimePreviewTextureCache,
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
     draws: &mut Vec<WgpuLayerDraw>,
     text: &RenderTextOverlay,
 ) -> Result<(), RealtimePreviewCompositorError> {
-    let rasterized = match rasterize_text_overlay(
-        text,
-        sampled_text_for(graph, text),
-        target.width(),
-        target.height(),
-    ) {
-        Ok(layer) => layer,
-        Err(error) => {
-            diagnostics.push(text_diagnostic(text, error));
-            *support = RealtimePreviewGraphSupport::Unsupported;
-            return Ok(());
-        }
+    let sampled = sampled_text_for(graph, text);
+    let cache_key = text_texture_cache_key(text, sampled, target.width(), target.height());
+    let cached = if let Some(cached) = texture_cache.cached_text_layer(&cache_key) {
+        cached
+    } else {
+        let rasterized =
+            match rasterize_text_overlay(text, sampled, target.width(), target.height()) {
+                Ok(layer) => layer,
+                Err(error) => {
+                    diagnostics.push(text_diagnostic(text, error));
+                    *support = RealtimePreviewGraphSupport::Unsupported;
+                    return Ok(());
+                }
+            };
+        let texture = Rc::new(create_wgpu_rgba_texture(
+            device,
+            queue,
+            rasterized.width,
+            rasterized.height,
+            rasterized.stride_bytes,
+            &rasterized.pixels,
+            "realtime-preview-text-layer-texture",
+        )?);
+        texture_cache.insert_text_layer(
+            cache_key,
+            RealtimePreviewCachedTextLayer {
+                width: rasterized.width,
+                height: rasterized.height,
+                x: rasterized.x,
+                y: rasterized.y,
+                texture,
+            },
+        )
     };
-    let texture = upload_wgpu_rgba_texture(
-        device,
-        queue,
-        rasterized.width,
-        rasterized.height,
-        rasterized.stride_bytes,
-        &rasterized.pixels,
-        "realtime-preview-text-layer-texture",
-    )?;
     push_wgpu_layer_draw(
         device,
         queue,
         resources,
         draws,
-        texture,
+        WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
         textured_rect_vertices(
             target,
-            rasterized.x,
-            rasterized.y,
-            rasterized.width,
-            rasterized.height,
+            cached.x,
+            cached.y,
+            cached.width,
+            cached.height,
             text.visual.transform.opacity.value_millis.min(1_000) as f32 / 1_000.0,
         ),
     );
     Ok(())
+}
+
+fn text_texture_cache_key(
+    text: &RenderTextOverlay,
+    sampled: Option<&render_graph::graph::RenderSampledTextOverlay>,
+    canvas_width: u32,
+    canvas_height: u32,
+) -> String {
+    let font_size = sampled
+        .map(|sample| sample.font_size)
+        .unwrap_or(text.overlay.font_size);
+    let color = sampled
+        .map(|sample| sample.color.as_str())
+        .unwrap_or(text.overlay.style.color.as_str());
+    let line_height_millis = sampled
+        .map(|sample| sample.line_height_millis)
+        .unwrap_or(text.overlay.line_height_millis);
+    let letter_spacing_millis = sampled
+        .map(|sample| sample.letter_spacing_millis)
+        .unwrap_or(text.overlay.letter_spacing_millis);
+    let alignment = match text.overlay.alignment {
+        draft_model::TextAlignment::Left => "left",
+        draft_model::TextAlignment::Center => "center",
+        draft_model::TextAlignment::Right => "right",
+    };
+    format!(
+        "canvas={canvas_width}x{canvas_height};track={};segment={};material={};content={:?};font_ref={:?};font_size={font_size};color={:?};line_height={line_height_millis};letter_spacing={letter_spacing_millis};alignment={alignment};text_box={}x{};layout={}x{}+{}+{};style={:?}",
+        text.overlay.track_id.as_str(),
+        text.overlay.segment_id.as_str(),
+        text.material_id.as_str(),
+        text.overlay.content,
+        text.overlay.font_ref,
+        color,
+        text.overlay.text_box.width,
+        text.overlay.text_box.height,
+        text.overlay.layout_width,
+        text.overlay.layout_height,
+        text.overlay.layout_region.x,
+        text.overlay.layout_region.y,
+        text.overlay.style,
+    )
+}
+
+fn create_wgpu_rgba_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    width: u32,
+    height: u32,
+    stride_bytes: u32,
+    pixels: &[u8],
+    label: &'static str,
+) -> Result<wgpu::Texture, RealtimePreviewCompositorError> {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(stride_bytes),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+    Ok(texture)
 }
 
 fn push_wgpu_layer_draw(
@@ -1250,51 +1351,6 @@ fn sampled_source_position(
     )
 }
 
-fn upload_wgpu_rgba_texture(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    width: u32,
-    height: u32,
-    stride_bytes: u32,
-    pixels: &[u8],
-    label: &'static str,
-) -> Result<WgpuLayerTexture, RealtimePreviewCompositorError> {
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        pixels,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(stride_bytes),
-            rows_per_image: Some(height),
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-    Ok(WgpuLayerTexture::Owned(texture))
-}
-
 fn upload_wgpu_layer_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -1361,39 +1417,15 @@ fn upload_wgpu_layer_texture(
     frame
         .validate()
         .map_err(|error| RealtimePreviewCompositorError::WgpuFrameUpload(error.to_string()))?;
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("realtime-preview-layer-texture"),
-        size: wgpu::Extent3d {
-            width: frame.width,
-            height: frame.height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
+    let texture = create_wgpu_rgba_texture(
+        device,
+        queue,
+        frame.width,
+        frame.height,
+        frame.stride_bytes,
         &frame.pixels,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(frame.stride_bytes),
-            rows_per_image: Some(frame.height),
-        },
-        wgpu::Extent3d {
-            width: frame.width,
-            height: frame.height,
-            depth_or_array_layers: 1,
-        },
-    );
+        "realtime-preview-layer-texture",
+    )?;
     Ok(WgpuLayerTexture::Owned(texture))
 }
 

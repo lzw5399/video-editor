@@ -20,7 +20,7 @@ updated: 2026-06-21
 - hypothesis: "The immediate P0 surface issue was a native preview placement contract bug: renderer/main used Electron top-left logical pixels while Rust/AppKit reported bottom-left screen coordinates, and old tests accepted heuristic direct/flipped alignment."
 - test: "Verify WGPU native child view placement during real playback by comparing DOM preview host screen rect, Electron-converted native child rect, and visible preview pixel motion."
 - expecting: "Native surface placement telemetry reports a single coordinate contract and Playwright fails if the child view is shifted off the DOM preview host."
-- next_action: "Continue broader production UAT gaps after this committed slice: combination video+audio+text+SRT parity, Rust canonical draft session, and product workbench hierarchy."
+- next_action: "Continue broader production UAT gaps after this slice: Rust canonical draft session, product workbench hierarchy, and permanent preview worker architecture."
 - reasoning_checkpoint: "Use production-architecture-review output shape: Decision, Current chain, Production target, Gap, Required action, Verification gates."
 - tdd_checkpoint: "Before product code edits, add or strengthen gates that would fail the observed bad UI/playback/parity state."
 
@@ -44,12 +44,21 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "Standalone TypeScript type-check remains blocked by pre-existing broad type debt and is not a usable gate for this slice yet."
   data: "corepack pnpm --dir apps/desktop-electron exec tsc --noEmit initially cannot find node types; adding node types exposed generated schema missing symbols, React/global Window declaration conflicts, and existing main/test narrowing errors, so the dependency experiment was not kept in this slice."
+- timestamp: 2026-06-21
+  observation: "Combination video + external audio + normal text + two-cue SRT preview was genuinely stuttery before the fix."
+  data: "New combo cadence gate initially measured presentedDelta=6, droppedDelta=71, accountedFrameDelta=77, targetDeltaMicroseconds=2533308. After text texture cache it improved to presentedDelta=82/droppedDelta=8, proving per-frame text raster/upload was a bottleneck but first-frame cold start still consumed playback window time."
+- timestamp: 2026-06-21
+  observation: "Text preview now caches static GPU text textures and bundled font parsing, and playback worker prewarms the first frame in its own thread-local media pipeline before audio starts."
+  data: "Final combo cadence: presentedDelta=90, droppedDelta=0, accountedFrameDelta=90, targetDeltaMicroseconds=2966637, visibleChanged=true, renderDurationMs=7. Single-video cadence: presentedDelta=90, droppedDelta=0."
+- timestamp: 2026-06-21
+  observation: "Preview/export subtitle parity found and fixed a real ASS timing bug."
+  data: "ASS event times now use centiseconds instead of three-digit milliseconds; preview_export_parity_burns_two_cue_srt_text_into_frames validates two SRT cues burn different pixels and preview/export RGB parity for cue one."
 
 ## Eliminated
 
 ## Resolution
 
 - root_cause: "The preview surface boundary mixed BrowserWindow content-local DOM coordinates, Electron top-left screen coordinates, and raw AppKit bottom-left screen coordinates. Tests then self-validated by choosing the direct/flipped formula closest to native output."
-- fix: "Removed direct/flipped heuristic; declared content-local logical bounds and Electron top-left screen telemetry; converted raw AppKit screen rect deterministically; changed macOS NSView frame placement to use parent_view.isFlipped(); removed scale-based frame math from the legacy AVPlayer bridge; hid product-mode preview/audio diagnostic chips."
-- verification: "cargo fmt --all; cargo test -p realtime_preview_runtime platform::macos::tests -- --nocapture; cargo test -p bindings_node native_preview_presenter -- --nocapture; corepack pnpm --dir apps/desktop-electron run build; package:dir; product surface, audio, cadence, UI reference, and full product-user-journey Playwright gates passed."
-- files_changed: "apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts; crates/realtime_preview_runtime/src/platform/macos.rs; crates/bindings_node/src/native_preview_presenter.rs; apps/desktop-electron/package.json; pnpm-lock.yaml"
+- fix: "Removed direct/flipped heuristic; declared content-local logical bounds and Electron top-left screen telemetry; converted raw AppKit screen rect deterministically; changed macOS NSView frame placement to use parent_view.isFlipped(); removed scale-based frame math from the legacy AVPlayer bridge; hid product-mode preview/audio diagnostic chips; added bounded realtime text texture cache, bundled font parse cache, worker-thread first-frame prewarm, SRT parity fixes, and combination cadence gates."
+- verification: "cargo fmt --all --check; cargo test -p realtime_preview_runtime --lib -- --nocapture; cargo test -p bindings_node -- --nocapture; cargo test -p testkit --test preview_export_parity -- --nocapture; cargo test -p ffmpeg_compiler -- --nocapture; cargo test -p draft_commands --test subtitle_commands -- --nocapture; corepack pnpm --dir apps/desktop-electron run build; corepack pnpm --dir apps/desktop-electron run package:dir; corepack pnpm --dir apps/desktop-electron exec playwright test tests/product-preview-cadence.spec.ts --reporter=line; corepack pnpm --dir apps/desktop-electron exec playwright test tests/product-user-journey.spec.ts --reporter=line."
+- files_changed: "apps/desktop-electron/src/main/realtimePreviewHost.ts; apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx; apps/desktop-electron/tests/product-preview-cadence.spec.ts; apps/desktop-electron/tests/product-user-journey.spec.ts; apps/desktop-electron/tests/helpers/userJourney.ts; crates/realtime_preview_runtime/src/platform/macos.rs; crates/realtime_preview_runtime/src/gpu/compositor.rs; crates/realtime_preview_runtime/src/gpu/text.rs; crates/realtime_preview_runtime/src/gpu/texture_cache.rs; crates/bindings_node/src/native_preview_presenter.rs; crates/bindings_node/src/realtime_preview_service.rs; crates/bindings_node/tests/canvas_commands.rs; crates/ffmpeg_compiler/src/ass.rs; crates/ffmpeg_compiler/src/filters.rs; crates/testkit/src/render_compare.rs; crates/testkit/tests/preview_export_parity.rs; scripts/phase15-3-desktop-gate.sh"

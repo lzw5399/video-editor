@@ -217,7 +217,8 @@ fn default_canvas_config_json() -> Value {
         "width": 1920,
         "height": 1080,
         "frameRate": { "numerator": 30, "denominator": 1 },
-        "background": { "kind": "black" }
+        "background": { "kind": "black" },
+        "adaptationPolicy": "auto"
     })
 }
 
@@ -227,7 +228,8 @@ fn vertical_canvas_config_json() -> Value {
         "width": 1080,
         "height": 1920,
         "frameRate": { "numerator": 25, "denominator": 1 },
-        "background": { "kind": "solidColor", "color": "#101820" }
+        "background": { "kind": "solidColor", "color": "#101820" },
+        "adaptationPolicy": "manual"
     })
 }
 

@@ -36,6 +36,7 @@ run_desktop exec playwright test \
   tests/ui-reference-regression.spec.ts \
   tests/workspace.spec.ts \
   tests/product-user-journey.spec.ts \
+  tests/product-preview-cadence.spec.ts \
   tests/real-workflow.spec.ts \
   --workers=1 \
   --reporter=line

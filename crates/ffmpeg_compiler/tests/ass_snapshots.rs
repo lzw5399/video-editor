@@ -23,7 +23,7 @@ fn ass_text_sidecar_snapshot_contains_deterministic_style_timing_and_escaping() 
             .contains("Style: Default,PingFang SC,48,&H00FFCC33,&H00101010,&H80202020,0,0,0,0,100,100,6,0,3,2,4,2,192,192,108,1")
     );
     assert!(ass.contents.contains(
-        "Dialogue: 2,0:00:00.000,0:00:00.100,Default,text-a,192,192,108,,标题 \\\\{一\\\\}\\\\N第二行"
+        "Dialogue: 2,0:00:00.00,0:00:00.10,Default,text-a,192,192,108,,标题 \\{一\\}\\N第二行"
     ));
     assert!(ass.contents.contains("FontPath: /fonts/PingFang.ttc"));
     assert!(ass.contents.contains("; TextBox: 1152x280"));
@@ -67,7 +67,9 @@ fn ass_text_sidecar_uses_engine_resolved_auto_wrapping() {
         .find(|sidecar| sidecar.kind == FfmpegSidecarKind::AssSubtitle)
         .expect("text overlay should generate an ASS sidecar");
 
-    assert!(ass.contents.contains(
-        "Dialogue: 2,0:00:00.000,0:00:00.100,Default,text-a,192,192,108,,abcde\\\\Nfghij"
-    ));
+    assert!(
+        ass.contents.contains(
+            "Dialogue: 2,0:00:00.00,0:00:00.10,Default,text-a,192,192,108,,abcde\\Nfghij"
+        )
+    );
 }

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use draft_model::{
     MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode,
@@ -62,7 +63,7 @@ pub fn generate_filter_script(
             sidecar
                 .segment_id
                 .as_ref()
-                .map(|segment_id| (sanitize_id(segment_id.as_str()), sidecar.path.clone()))
+                .map(|segment_id| (sanitize_id(segment_id.as_str()), sidecar))
         })
         .collect::<BTreeMap<_, _>>();
 
@@ -119,7 +120,7 @@ pub fn generate_filter_script(
 
     for (text_index, overlay) in plan.graph.text_overlays.iter().enumerate() {
         let segment_key = sanitize_id(overlay.overlay.segment_id.as_str());
-        let ass_path = ass_by_segment.get(&segment_key).ok_or_else(|| {
+        let sidecar = ass_by_segment.get(&segment_key).ok_or_else(|| {
             FfmpegCompileError::new(
                 FfmpegCompileErrorKind::MissingTextFont,
                 format!(
@@ -131,8 +132,8 @@ pub fn generate_filter_script(
         })?;
         let out = format!("vtext{text_index}");
         lines.push(format!(
-            "[{current_video}]subtitles='{}'[{out}]",
-            escape_filter_path(ass_path)
+            "[{current_video}]{}[{out}]",
+            subtitles_filter(sidecar)
         ));
         current_video = out;
     }
@@ -746,4 +747,26 @@ fn volume_arg(level_millis: u32) -> String {
 
 fn escape_filter_path(path: &str) -> String {
     path.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+fn subtitles_filter(sidecar: &FfmpegSidecar) -> String {
+    let filename = escape_filter_path(&sidecar.path);
+    let Some(fonts_dir) = ass_font_dir(&sidecar.contents) else {
+        return format!("subtitles='{filename}'");
+    };
+    format!(
+        "subtitles=filename='{filename}':fontsdir='{}'",
+        escape_filter_path(&fonts_dir)
+    )
+}
+
+fn ass_font_dir(contents: &str) -> Option<String> {
+    let font_path = contents
+        .lines()
+        .find_map(|line| line.strip_prefix("; FontPath: "))?
+        .trim();
+    Path::new(font_path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .filter(|parent| !parent.is_empty())
 }

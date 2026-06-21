@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::job::{
     CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegSidecar, FfmpegSidecarKind,
-    format_seconds, sanitize_id,
+    sanitize_id,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -320,16 +320,12 @@ fn clipped_event_timerange(
 }
 
 fn ass_time(value: Microseconds) -> String {
-    let seconds = format_seconds(value);
-    let (whole, micros) = seconds
-        .split_once('.')
-        .expect("format_seconds always includes decimal point");
-    let whole = whole.parse::<u64>().expect("integer seconds");
+    let whole = value.get() / 1_000_000;
+    let centiseconds = (value.get() % 1_000_000) / 10_000;
     let hours = whole / 3_600;
     let minutes = (whole % 3_600) / 60;
     let secs = whole % 60;
-    let millis = &micros[..3];
-    format!("{hours}:{minutes:02}:{secs:02}.{millis}")
+    format!("{hours}:{minutes:02}:{secs:02}.{centiseconds:02}")
 }
 
 fn ass_alignment(alignment: TextAlignment) -> u8 {
@@ -361,7 +357,7 @@ fn ass_color(value: &str, fallback: &str, alpha: u8) -> String {
 fn escape_ass_text(value: &str) -> String {
     value
         .replace('\\', "\\\\")
-        .replace('{', "\\\\{")
-        .replace('}', "\\\\}")
-        .replace('\n', "\\\\N")
+        .replace('{', "\\{")
+        .replace('}', "\\}")
+        .replace('\n', "\\N")
 }

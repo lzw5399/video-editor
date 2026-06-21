@@ -41,6 +41,7 @@ type ExecuteCommandCall = {
   textContent?: string | null;
   textSource?: string | null;
   textFontRef?: string | null;
+  srtContent?: string | null;
   sessionId?: string | null;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
@@ -492,6 +493,29 @@ export async function addTextThroughProductPanel(
   );
 }
 
+export async function importSubtitleSrtThroughProductPanel(
+  page: Page,
+  app: ProductJourneyAppController,
+  srtContent: string,
+  offsetUs = 0
+): Promise<void> {
+  const nextCount = (await countCommand(app, "importSubtitleSrt")) + 1;
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+  const textPanel = page.getByRole("region", { name: "素材面板" });
+  await textPanel.getByLabel("SRT 内容").fill(srtContent);
+  await textPanel.getByLabel("字幕时间偏移").fill(formatSecondsInput(offsetUs));
+  await textPanel.getByRole("button", { name: "导入字幕", exact: true }).click();
+  await waitForCommandCount(app, "importSubtitleSrt", nextCount);
+  const lastImport = (await readExecuteCommandCalls(app)).findLast((call) => call.command === "importSubtitleSrt");
+  expect(lastImport?.srtContent).toBe(srtContent);
+  const firstCueText = firstSrtCueText(srtContent);
+  if (firstCueText.length > 0) {
+    await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(firstCueText.slice(0, 32))}`) })).toBeVisible({
+      timeout: 10_000
+    });
+  }
+}
+
 export async function addAudioThroughProductPanel(
   page: Page,
   app: ProductJourneyAppController,
@@ -870,6 +894,19 @@ async function captureVisiblePreviewCenter(
   page: Page,
   app?: ProductJourneyAppController
 ): Promise<Buffer> {
+  return captureVisiblePreviewRegion(page, app, {
+    x: 0.28,
+    y: 0.22,
+    width: 0.44,
+    height: 0.42
+  });
+}
+
+async function captureVisiblePreviewRegion(
+  page: Page,
+  app: ProductJourneyAppController | undefined,
+  region: { x: number; y: number; width: number; height: number }
+): Promise<Buffer> {
   const host = page.getByLabel("实时预览宿主", { exact: true });
   await expect(host).toBeVisible();
   const box = await host.boundingBox();
@@ -878,10 +915,10 @@ async function captureVisiblePreviewCenter(
   }
 
   const clip = {
-    x: Math.round(box.x + box.width * 0.28),
-    y: Math.round(box.y + box.height * 0.22),
-    width: Math.max(1, Math.round(box.width * 0.44)),
-    height: Math.max(1, Math.round(box.height * 0.42))
+    x: Math.round(box.x + box.width * clampUnit(region.x)),
+    y: Math.round(box.y + box.height * clampUnit(region.y)),
+    width: Math.max(1, Math.round(box.width * clampUnit(region.width))),
+    height: Math.max(1, Math.round(box.height * clampUnit(region.height)))
   };
 
   if (process.platform === "darwin" && app !== undefined) {
@@ -892,6 +929,13 @@ async function captureVisiblePreviewCenter(
   }
 
   return page.screenshot({ clip });
+}
+
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, value));
 }
 
 async function captureMacosScreenRegion(
@@ -964,10 +1008,18 @@ function parseTimelineTargetLabel(value: string): { startUs: number; durationUs:
   };
 }
 
+function firstSrtCueText(srtContent: string): string {
+  return (
+    srtContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0 && !/^\d+$/.test(line) && !line.includes("-->")) ?? ""
+  );
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
 
 function formatSecondsInput(durationUs: number): string {
   return String(durationUs / 1_000_000);

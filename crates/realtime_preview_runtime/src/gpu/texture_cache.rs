@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
@@ -12,6 +12,8 @@ use crate::{
 };
 
 use super::device::RealtimePreviewGpuDevice;
+
+const MAX_CACHED_TEXT_LAYERS: usize = 128;
 
 pub type NativeTextureImporter =
     dyn Fn(
@@ -124,8 +126,19 @@ pub struct RealtimePreviewTextureCache {
     next_texture_id: u64,
     textures: BTreeMap<RealtimePreviewTextureId, RealtimePreviewTexture>,
     imported_native_nv12: BTreeMap<String, Rc<RealtimePreviewExternalTexturePlanes>>,
+    text_layers: BTreeMap<String, Rc<RealtimePreviewCachedTextLayer>>,
+    text_layer_order: VecDeque<String>,
     native_texture_registry: Option<NativeTextureLeaseRegistry>,
     native_texture_importer: Option<Box<NativeTextureImporter>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct RealtimePreviewCachedTextLayer {
+    pub width: u32,
+    pub height: u32,
+    pub x: i64,
+    pub y: i64,
+    pub texture: Rc<wgpu::Texture>,
 }
 
 impl fmt::Debug for RealtimePreviewTextureCache {
@@ -138,6 +151,7 @@ impl fmt::Debug for RealtimePreviewTextureCache {
                 "imported_native_nv12_count",
                 &self.imported_native_nv12.len(),
             )
+            .field("cached_text_layer_count", &self.text_layers.len())
             .field("native_texture_registry", &self.native_texture_registry)
             .field(
                 "native_texture_importer_attached",
@@ -153,6 +167,8 @@ impl RealtimePreviewTextureCache {
             next_texture_id: 1,
             textures: BTreeMap::new(),
             imported_native_nv12: BTreeMap::new(),
+            text_layers: BTreeMap::new(),
+            text_layer_order: VecDeque::new(),
             native_texture_registry: None,
             native_texture_importer: None,
         }
@@ -268,6 +284,32 @@ impl RealtimePreviewTextureCache {
 
     pub fn evict_native_texture(&mut self, handle_id: &TextureHandleId) {
         self.imported_native_nv12.remove(&handle_id.0);
+    }
+
+    pub(crate) fn cached_text_layer(
+        &self,
+        key: &str,
+    ) -> Option<Rc<RealtimePreviewCachedTextLayer>> {
+        self.text_layers.get(key).map(Rc::clone)
+    }
+
+    pub(crate) fn insert_text_layer(
+        &mut self,
+        key: String,
+        layer: RealtimePreviewCachedTextLayer,
+    ) -> Rc<RealtimePreviewCachedTextLayer> {
+        let cached = Rc::new(layer);
+        if !self.text_layers.contains_key(&key) {
+            self.text_layer_order.push_back(key.clone());
+        }
+        self.text_layers.insert(key, Rc::clone(&cached));
+        while self.text_layers.len() > MAX_CACHED_TEXT_LAYERS {
+            let Some(oldest_key) = self.text_layer_order.pop_front() else {
+                break;
+            };
+            self.text_layers.remove(&oldest_key);
+        }
+        cached
     }
 
     fn next_id(&mut self) -> RealtimePreviewTextureId {

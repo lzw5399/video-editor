@@ -253,7 +253,7 @@ export function PreviewMonitor({
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle =
-    preview.frameDisplayUrl === null || showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
+    preview.frameDisplayUrl === null && !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (selectedSegment === null || !selectedSegment.segment.visual.visible) {

@@ -43,7 +43,7 @@ fn ffmpeg_job_preview_frame_snapshot_contains_structured_args_and_filter_sidecar
     assert!(
         job.sidecars[0]
             .contents
-            .contains("subtitles='/derived/draft-compiler-preview-frame-png-text-text-a.ass'")
+            .contains("subtitles=filename='/derived/draft-compiler-preview-frame-png-text-text-a.ass':fontsdir='/fonts'")
     );
     assert_eq!(job.validation.expect_audio_stream, false);
 }
@@ -84,7 +84,7 @@ fn filters_snapshot_uses_stable_labels_for_video_audio_text_outputs() {
             "color=c=black:s=1920x1080:r=30/1:d=0.100000[vbase0]",
             "[vbase0][v0]overlay=x=0:y=0:enable='between(t,0.000000,0.100000)'[vbase1]",
             "[vbase1][v1]overlay=x=0:y=0:enable='between(t,0.000000,0.100000)'[vbase2]",
-            "[vbase2]subtitles='/derived/draft-compiler-export-mp4-h264-balanced-text-text-a.ass'[vtext0]",
+            "[vbase2]subtitles=filename='/derived/draft-compiler-export-mp4-h264-balanced-text-text-a.ass':fontsdir='/fonts'[vtext0]",
             "[vtext0]format=yuv420p[vout]",
             "[0:a]atrim=start=0.600000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a0]",
             "[2:a]atrim=start=0.700000:duration=0.100000,asetpts=PTS-STARTPTS,volume=1.000[a1]",

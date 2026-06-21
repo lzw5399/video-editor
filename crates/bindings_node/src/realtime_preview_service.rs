@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::sync::{
     Arc, Mutex, MutexGuard,
     atomic::{AtomicBool, AtomicU64, Ordering},
+    mpsc,
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -266,13 +267,12 @@ impl RealtimePreviewBindingRegistry {
             .runtime_lock()?
             .play(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
-        self.stop_playback_worker(session_id);
         self.with_scheduler_mut(session_id, |scheduler| {
             scheduler.validate_playback_ready()?;
-            scheduler.start_playback(target_time, generation);
             Ok(())
         })?;
-        self.start_playback_worker(session_id, runtime_id, generation)?;
+        self.stop_playback_worker(session_id);
+        self.start_playback_worker(session_id, runtime_id, generation, target_time)?;
         Ok(generation_response(generation))
     }
 
@@ -486,11 +486,13 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
         runtime_id: PreviewSessionId,
         playback_generation: PlaybackGeneration,
+        start_time: Microseconds,
     ) -> Result<(), RealtimePreviewBindingError> {
         let scheduler = self.scheduler_handle(session_id)?;
         let runtime = Arc::clone(&self.runtime);
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
+        let (ready_sender, ready_receiver) = mpsc::channel();
         let label = format!("rt-preview-playback-{session_id}");
         let handle = thread::Builder::new()
             .name(label)
@@ -500,6 +502,8 @@ impl RealtimePreviewBindingRegistry {
                     runtime_id,
                     scheduler,
                     playback_generation,
+                    start_time,
+                    ready_sender,
                     worker_stop,
                 );
             })
@@ -516,6 +520,24 @@ impl RealtimePreviewBindingRegistry {
                 handle: Some(handle),
             },
         );
+        let ready = ready_receiver.recv_timeout(Duration::from_secs(5));
+        match ready {
+            Ok(Ok(())) => {}
+            Ok(Err(reason)) => {
+                self.stop_playback_worker(session_id);
+                return Err(RealtimePreviewBindingError::presenter(
+                    NativePreviewPresenterError::new(reason),
+                ));
+            }
+            Err(_) => {
+                self.stop_playback_worker(session_id);
+                return Err(RealtimePreviewBindingError::presenter(
+                    NativePreviewPresenterError::new(
+                        "realtime preview playback worker did not present the first frame in time",
+                    ),
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -534,8 +556,62 @@ fn run_binding_playback_loop(
     runtime_id: PreviewSessionId,
     scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
     playback_generation: PlaybackGeneration,
+    start_time: Microseconds,
+    ready_sender: mpsc::Sender<Result<(), String>>,
     stop: Arc<AtomicBool>,
 ) {
+    let first_frame = {
+        let mut scheduler = match scheduler.lock() {
+            Ok(scheduler) => scheduler,
+            Err(_) => {
+                let _ = ready_sender.send(Err(
+                    "realtime preview scheduler lock poisoned before playback".to_owned(),
+                ));
+                return;
+            }
+        };
+        let frame_started = Instant::now();
+        match scheduler.present_next_tick(start_time, playback_generation) {
+            Ok(evidence) => {
+                scheduler.start_playback_after_prewarm(start_time, playback_generation);
+                Ok((
+                    evidence,
+                    u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ))
+            }
+            Err(error) => {
+                scheduler.publish_snapshot(
+                    scheduler.evidence().cloned(),
+                    scheduler.surface_placement(),
+                    Some(error.to_string()),
+                );
+                Err(error.to_string())
+            }
+        }
+    };
+
+    match first_frame {
+        Ok((evidence, render_duration_ms)) => {
+            if let Ok(mut runtime) = runtime.lock() {
+                let _ = runtime.record_presented_output(
+                    runtime_id,
+                    playback_generation,
+                    Microseconds::new(evidence.target_time_microseconds),
+                    render_duration_ms,
+                    0,
+                );
+            }
+            let _ = ready_sender.send(Ok(()));
+        }
+        Err(reason) => {
+            if let Ok(mut runtime) = runtime.lock() {
+                let _ = runtime.pause(runtime_id);
+            }
+            let _ = ready_sender.send(Err(reason));
+            return;
+        }
+    }
+
     while !stop.load(Ordering::Acquire) {
         let frame = {
             let mut scheduler = match scheduler.lock() {
@@ -839,6 +915,7 @@ impl RealtimePreviewBindingScheduler {
         }
     }
 
+    #[cfg(test)]
     fn start_playback(
         &mut self,
         start_time: Microseconds,
@@ -851,6 +928,26 @@ impl RealtimePreviewBindingScheduler {
             sequence_duration: self.sequence_duration(),
         });
         self.next_tick_time = start_time;
+    }
+
+    fn start_playback_after_prewarm(
+        &mut self,
+        start_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+    ) {
+        let sequence_duration = self.sequence_duration().get();
+        self.playback_anchor = Some(BindingPlaybackAnchor {
+            started_at: Instant::now(),
+            start_time,
+            playback_generation,
+            sequence_duration: Microseconds::new(sequence_duration),
+        });
+        self.next_tick_time = Microseconds::new(
+            start_time
+                .get()
+                .saturating_add(PLAYBACK_FRAME_DURATION_US)
+                .min(sequence_duration),
+        );
     }
 
     fn pause_playback(&mut self) {

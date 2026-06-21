@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -17,6 +18,10 @@ use crate::{
 };
 
 pub const TEXT_PARITY_UNPROVEN_REASON: &str = "gpu text parity has not been proven with repository fonts; realtime preview must use fallback text rasterization";
+
+thread_local! {
+    static BUNDLED_TEXT_FONT: RefCell<Option<Result<Font, TextRasterizationError>>> = const { RefCell::new(None) };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -273,120 +278,141 @@ pub(crate) fn rasterize_text_overlay(
         segment_id: segment_id.clone(),
         font_ref: font_ref.to_owned(),
     })?;
+    with_bundled_text_font(|font| {
+        let font_size = sampled
+            .map(|sample| sample.font_size)
+            .unwrap_or(text.overlay.font_size)
+            .max(1) as f32;
+        let color = parse_text_color(
+            sampled
+                .map(|sample| sample.color.as_str())
+                .unwrap_or(text.overlay.style.color.as_str()),
+        )?;
+        let line_height_millis = sampled
+            .map(|sample| sample.line_height_millis)
+            .unwrap_or(text.overlay.line_height_millis)
+            .max(1);
+        let letter_spacing = font_size
+            * sampled
+                .map(|sample| sample.letter_spacing_millis)
+                .unwrap_or(text.overlay.letter_spacing_millis) as f32
+            / 1_000.0;
+        let line_metrics = font.horizontal_line_metrics(font_size);
+        let ascent = line_metrics
+            .map(|metrics| metrics.ascent)
+            .unwrap_or(font_size)
+            .ceil() as i32;
+        let descent = line_metrics
+            .map(|metrics| metrics.descent)
+            .unwrap_or(-(font_size * 0.25))
+            .floor() as i32;
+        let line_height = ((font_size * line_height_millis as f32) / 1_000.0)
+            .ceil()
+            .max((ascent - descent).max(1) as f32) as i32;
+        let line_count = text.overlay.content.lines().count().max(1) as u32;
+        let min_text_height = u32::try_from(line_height.max(1))
+            .ok()
+            .and_then(|height| height.checked_mul(line_count))
+            .ok_or(TextRasterizationError::TextureOverflow)?;
+        let layer_width = text
+            .overlay
+            .layout_width
+            .max(text.overlay.text_box.width)
+            .min(canvas_width)
+            .max(1);
+        let layer_height = text
+            .overlay
+            .layout_height
+            .max(font_size.ceil() as u32)
+            .max(min_text_height)
+            .min(canvas_height)
+            .max(1);
+        let len = layer_width
+            .checked_mul(layer_height)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .and_then(|bytes| usize::try_from(bytes).ok())
+            .ok_or(TextRasterizationError::TextureOverflow)?;
+        let mut pixels = vec![0_u8; len];
+
+        for (line_index, line) in text.overlay.content.lines().enumerate() {
+            let baseline_y = ascent + line_index as i32 * line_height;
+            if baseline_y >= layer_height as i32 {
+                break;
+            }
+            let line_width = measure_line_width(font, line, font_size, letter_spacing);
+            let mut cursor_x = aligned_line_x(text.overlay.alignment, layer_width, line_width);
+            let mut previous = None;
+            for character in line.chars() {
+                if character.is_control() {
+                    continue;
+                }
+                if !character.is_whitespace() && !font.has_glyph(character) {
+                    return Err(TextRasterizationError::MissingGlyph {
+                        segment_id: segment_id.clone(),
+                        character,
+                    });
+                }
+                if let Some(previous_character) = previous {
+                    cursor_x += font
+                        .horizontal_kern(previous_character, character, font_size)
+                        .unwrap_or(0.0);
+                }
+                let (metrics, bitmap) = font.rasterize(character, font_size);
+                blend_glyph(
+                    &mut pixels,
+                    layer_width,
+                    layer_height,
+                    color,
+                    cursor_x,
+                    baseline_y,
+                    &metrics,
+                    &bitmap,
+                );
+                cursor_x += metrics.advance_width + letter_spacing;
+                previous = Some(character);
+            }
+        }
+
+        if pixels.chunks_exact(4).all(|pixel| pixel[3] == 0) {
+            return Err(TextRasterizationError::EmptyTexture { segment_id });
+        }
+
+        Ok(RasterizedTextLayer {
+            width: layer_width,
+            height: layer_height,
+            stride_bytes: layer_width * 4,
+            x: text.overlay.layout_region.x as i64,
+            y: text.overlay.layout_region.y as i64,
+            pixels,
+        })
+    })
+}
+
+fn with_bundled_text_font<T>(
+    action: impl FnOnce(&Font) -> Result<T, TextRasterizationError>,
+) -> Result<T, TextRasterizationError> {
+    BUNDLED_TEXT_FONT.with(|cached| {
+        let mut cached = cached.borrow_mut();
+        if cached.is_none() {
+            *cached = Some(load_bundled_text_font());
+        }
+        match cached
+            .as_ref()
+            .expect("bundled text font cache initialized")
+        {
+            Ok(font) => action(font),
+            Err(error) => Err(error.clone()),
+        }
+    })
+}
+
+fn load_bundled_text_font() -> Result<Font, TextRasterizationError> {
     validate_bundled_font_registry(&repository_root_from_manifest())
         .map_err(|error| TextRasterizationError::RegistryValidationFailed(error.to_string()))?;
-
     let font_bytes = fs::read(bundled_text_font_path())
         .map_err(|error| TextRasterizationError::FontReadFailed(error.to_string()))?;
-    let font = Font::from_bytes(font_bytes, FontSettings::default())
-        .map_err(|error| TextRasterizationError::FontParseFailed(error.to_owned()))?;
-
-    let font_size = sampled
-        .map(|sample| sample.font_size)
-        .unwrap_or(text.overlay.font_size)
-        .max(1) as f32;
-    let color = parse_text_color(
-        sampled
-            .map(|sample| sample.color.as_str())
-            .unwrap_or(text.overlay.style.color.as_str()),
-    )?;
-    let line_height_millis = sampled
-        .map(|sample| sample.line_height_millis)
-        .unwrap_or(text.overlay.line_height_millis)
-        .max(1);
-    let letter_spacing = font_size
-        * sampled
-            .map(|sample| sample.letter_spacing_millis)
-            .unwrap_or(text.overlay.letter_spacing_millis) as f32
-        / 1_000.0;
-    let line_metrics = font.horizontal_line_metrics(font_size);
-    let ascent = line_metrics
-        .map(|metrics| metrics.ascent)
-        .unwrap_or(font_size)
-        .ceil() as i32;
-    let descent = line_metrics
-        .map(|metrics| metrics.descent)
-        .unwrap_or(-(font_size * 0.25))
-        .floor() as i32;
-    let line_height = ((font_size * line_height_millis as f32) / 1_000.0)
-        .ceil()
-        .max((ascent - descent).max(1) as f32) as i32;
-    let line_count = text.overlay.content.lines().count().max(1) as u32;
-    let min_text_height = u32::try_from(line_height.max(1))
-        .ok()
-        .and_then(|height| height.checked_mul(line_count))
-        .ok_or(TextRasterizationError::TextureOverflow)?;
-    let layer_width = text
-        .overlay
-        .layout_width
-        .max(text.overlay.text_box.width)
-        .min(canvas_width)
-        .max(1);
-    let layer_height = text
-        .overlay
-        .layout_height
-        .max(font_size.ceil() as u32)
-        .max(min_text_height)
-        .min(canvas_height)
-        .max(1);
-    let len = layer_width
-        .checked_mul(layer_height)
-        .and_then(|pixels| pixels.checked_mul(4))
-        .and_then(|bytes| usize::try_from(bytes).ok())
-        .ok_or(TextRasterizationError::TextureOverflow)?;
-    let mut pixels = vec![0_u8; len];
-
-    for (line_index, line) in text.overlay.content.lines().enumerate() {
-        let baseline_y = ascent + line_index as i32 * line_height;
-        if baseline_y >= layer_height as i32 {
-            break;
-        }
-        let line_width = measure_line_width(&font, line, font_size, letter_spacing);
-        let mut cursor_x = aligned_line_x(text.overlay.alignment, layer_width, line_width);
-        let mut previous = None;
-        for character in line.chars() {
-            if character.is_control() {
-                continue;
-            }
-            if !character.is_whitespace() && !font.has_glyph(character) {
-                return Err(TextRasterizationError::MissingGlyph {
-                    segment_id: segment_id.clone(),
-                    character,
-                });
-            }
-            if let Some(previous_character) = previous {
-                cursor_x += font
-                    .horizontal_kern(previous_character, character, font_size)
-                    .unwrap_or(0.0);
-            }
-            let (metrics, bitmap) = font.rasterize(character, font_size);
-            blend_glyph(
-                &mut pixels,
-                layer_width,
-                layer_height,
-                color,
-                cursor_x,
-                baseline_y,
-                &metrics,
-                &bitmap,
-            );
-            cursor_x += metrics.advance_width + letter_spacing;
-            previous = Some(character);
-        }
-    }
-
-    if pixels.chunks_exact(4).all(|pixel| pixel[3] == 0) {
-        return Err(TextRasterizationError::EmptyTexture { segment_id });
-    }
-
-    Ok(RasterizedTextLayer {
-        width: layer_width,
-        height: layer_height,
-        stride_bytes: layer_width * 4,
-        x: text.overlay.layout_region.x as i64,
-        y: text.overlay.layout_region.y as i64,
-        pixels,
-    })
+    Font::from_bytes(font_bytes, FontSettings::default())
+        .map_err(|error| TextRasterizationError::FontParseFailed(error.to_owned()))
 }
 
 fn measure_line_width(font: &Font, line: &str, font_size: f32, letter_spacing: f32) -> f32 {

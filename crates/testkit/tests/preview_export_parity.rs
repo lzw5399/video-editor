@@ -28,9 +28,10 @@ use render_graph::{
     RenderOutputProfile, build_render_graph,
 };
 use testkit::render_compare::{
-    PixelTolerance, RenderCompareError, RenderCompareResult, RenderSetupErrorKind,
+    ComparableFrame, PixelTolerance, RenderCompareError, RenderCompareResult, RenderSetupErrorKind,
     assert_expected_frame_metadata, compare_rgb_frames, compiler_capabilities_from_probe_outputs,
-    extract_rgb_frame_at, probe_phase5_render_capabilities, probe_video_frame_metadata,
+    extract_rgb_frame_at, extract_rgb_frame_index, probe_phase5_render_capabilities,
+    probe_video_frame_metadata,
 };
 
 const WIDTH: u32 = 160;
@@ -39,6 +40,9 @@ const FPS: u32 = 30;
 const TARGET_TIME: u64 = 600_000;
 const EXPORT_DURATION: u64 = 100_000;
 const FRAME_DURATION: u64 = 33_334;
+const SUBTITLE_EXPORT_DURATION: u64 = 3_000_000;
+const SUBTITLE_CUE_ONE_TIME: u64 = 600_000;
+const SUBTITLE_CUE_TWO_TIME: u64 = 1_800_000;
 
 #[test]
 fn preview_export_parity_matches_shared_render_path_for_video_audio_text() -> RenderCompareResult<()>
@@ -142,6 +146,179 @@ fn preview_export_parity_matches_shared_render_path_for_video_audio_text() -> Re
     );
     assert_eq!(comparison.width, WIDTH);
     assert_eq!(comparison.height, HEIGHT);
+
+    Ok(())
+}
+
+#[test]
+fn preview_export_parity_burns_two_cue_srt_text_into_frames() -> RenderCompareResult<()> {
+    let runtime = discover_runtime_config()
+        .map_err(|error| RenderCompareError::Runtime(format!("{error}: {}", error.remediation)))?;
+    let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_secs(20));
+    let capabilities = probe_phase5_render_capabilities(&executor, &runtime)?;
+    let sandbox = tempfile::tempdir()?;
+    let video_path = sandbox.path().join("subtitle-video.mp4");
+    let audio_path = sandbox.path().join("subtitle-audio.wav");
+    generate_golden_video_duration(&executor, &runtime, &video_path, 3)?;
+    generate_golden_audio_duration(&executor, &runtime, &audio_path, 3)?;
+
+    let baseline_draft = subtitle_parity_draft(&video_path, &audio_path, false);
+    let subtitled_draft = subtitle_parity_draft(&video_path, &audio_path, true);
+    let preview_cache = sandbox.path().join("subtitle-preview-cache");
+    let mut preview_config = PreviewServiceConfig::new(&preview_cache, &runtime.ffmpeg.path)
+        .with_compiler_capabilities(capabilities.clone());
+    preview_config.preview_frame_max_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
+
+    let preview = request_preview_frame(
+        &executor,
+        &preview_config,
+        &PreviewFrameRequest {
+            draft: subtitled_draft.clone(),
+            target_time: Microseconds::new(SUBTITLE_CUE_ONE_TIME),
+        },
+    )
+    .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+
+    let baseline_export_path = sandbox.path().join("exports/subtitle-baseline.mp4");
+    let baseline_export_job = compile_export_job_for_range(
+        &baseline_draft,
+        &capabilities,
+        &baseline_export_path,
+        0,
+        SUBTITLE_EXPORT_DURATION,
+    )?;
+    write_sidecars(&baseline_export_job)?;
+    run_export_to_completion(
+        &runtime,
+        &baseline_export_path,
+        &baseline_export_job,
+        "phase5-srt-baseline-export",
+    )?;
+
+    let subtitled_export_path = sandbox.path().join("exports/subtitle-combo.mp4");
+    let subtitled_export_job = compile_export_job_for_range(
+        &subtitled_draft,
+        &capabilities,
+        &subtitled_export_path,
+        0,
+        SUBTITLE_EXPORT_DURATION,
+    )?;
+    write_sidecars(&subtitled_export_job)?;
+    run_export_to_completion(
+        &runtime,
+        &subtitled_export_path,
+        &subtitled_export_job,
+        "phase5-srt-subtitled-export",
+    )?;
+
+    validate_rendered_output(
+        &executor,
+        &runtime,
+        &subtitled_export_path,
+        &OutputValidationExpectation::new()
+            .with_expected_duration_microseconds(SUBTITLE_EXPORT_DURATION, FRAME_DURATION * 2)
+            .with_expected_frame_rate(RuntimeFrameRate {
+                numerator: FPS,
+                denominator: 1,
+            })
+            .with_expected_dimensions(WIDTH, HEIGHT)
+            .with_audio_stream(true),
+    )
+    .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+
+    let preview_frame = extract_rgb_frame_at(
+        &executor,
+        &runtime,
+        &preview.artifact.path,
+        0,
+        0,
+        WIDTH,
+        HEIGHT,
+    )?;
+    let export_cue_one = extract_rgb_frame_index(
+        &executor,
+        &runtime,
+        &subtitled_export_path,
+        18,
+        SUBTITLE_CUE_ONE_TIME,
+        WIDTH,
+        HEIGHT,
+    )?;
+    compare_rgb_frames(&preview_frame, &export_cue_one, PixelTolerance::phase5())?;
+
+    let baseline_cue_one = extract_rgb_frame_index(
+        &executor,
+        &runtime,
+        &baseline_export_path,
+        18,
+        SUBTITLE_CUE_ONE_TIME,
+        WIDTH,
+        HEIGHT,
+    )?;
+    let baseline_cue_two = extract_rgb_frame_index(
+        &executor,
+        &runtime,
+        &baseline_export_path,
+        54,
+        SUBTITLE_CUE_TWO_TIME,
+        WIDTH,
+        HEIGHT,
+    )?;
+    let export_cue_two = extract_rgb_frame_index(
+        &executor,
+        &runtime,
+        &subtitled_export_path,
+        54,
+        SUBTITLE_CUE_TWO_TIME,
+        WIDTH,
+        HEIGHT,
+    )?;
+
+    assert_region_changed(
+        &baseline_cue_one,
+        &export_cue_one,
+        Region {
+            x: 10,
+            y: 50,
+            width: 140,
+            height: 36,
+        },
+        80,
+        "first subtitle cue should alter the exported subtitle band",
+    )?;
+    assert_region_changed(
+        &baseline_cue_two,
+        &export_cue_two,
+        Region {
+            x: 10,
+            y: 50,
+            width: 140,
+            height: 36,
+        },
+        80,
+        "second subtitle cue should alter the exported subtitle band",
+    )?;
+    assert_region_changed(
+        &export_cue_one,
+        &export_cue_two,
+        Region {
+            x: 10,
+            y: 50,
+            width: 140,
+            height: 36,
+        },
+        20,
+        "two subtitle cues should burn different frame pixels",
+    )?;
+
+    assert!(
+        preview.ffmpeg_job.filter_script.contains("subtitles="),
+        "preview SRT parity path should include text sidecar rendering"
+    );
+    assert!(
+        subtitled_export_job.filter_script.contains("subtitles="),
+        "export SRT parity path should include text sidecar rendering"
+    );
 
     Ok(())
 }
@@ -365,6 +542,22 @@ fn compile_export_job(
     capabilities: &ffmpeg_compiler::CompilerCapabilities,
     output_path: &Path,
 ) -> RenderCompareResult<ffmpeg_compiler::FfmpegJob> {
+    compile_export_job_for_range(
+        draft,
+        capabilities,
+        output_path,
+        TARGET_TIME,
+        EXPORT_DURATION,
+    )
+}
+
+fn compile_export_job_for_range(
+    draft: &Draft,
+    capabilities: &ffmpeg_compiler::CompilerCapabilities,
+    output_path: &Path,
+    target_start: u64,
+    target_duration: u64,
+) -> RenderCompareResult<ffmpeg_compiler::FfmpegJob> {
     let profile = EngineProfile::from_draft_canvas(draft)
         .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
     let normalized = normalize_draft(draft, &profile)
@@ -372,8 +565,8 @@ fn compile_export_job(
     let range = resolve_render_range(
         &normalized,
         TargetTimerange::new(
-            Microseconds::new(TARGET_TIME),
-            Microseconds::new(EXPORT_DURATION),
+            Microseconds::new(target_start),
+            Microseconds::new(target_duration),
         ),
     )
     .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
@@ -385,8 +578,8 @@ fn compile_export_job(
             OutputDimensions::new(profile.canvas_width, profile.canvas_height),
             range.frame_rate.clone(),
             TargetTimerange::new(
-                Microseconds::new(TARGET_TIME),
-                Microseconds::new(EXPORT_DURATION),
+                Microseconds::new(target_start),
+                Microseconds::new(target_duration),
             ),
             ExportMp4Preset::h264_aac_balanced(),
         ),
@@ -519,10 +712,100 @@ fn write_sidecars(job: &ffmpeg_compiler::FfmpegJob) -> RenderCompareResult<()> {
     Ok(())
 }
 
+fn run_export_to_completion(
+    runtime: &RuntimeConfig,
+    export_path: &Path,
+    export_job: &ffmpeg_compiler::FfmpegJob,
+    job_id: &str,
+) -> RenderCompareResult<()> {
+    let runtime_job = FfmpegRuntimeJob::new(
+        job_id,
+        runtime.ffmpeg.path.clone(),
+        export_job.args.clone(),
+        export_path,
+    )
+    .with_expected_duration_microseconds(SUBTITLE_EXPORT_DURATION)
+    .with_timeout(Duration::from_secs(20));
+    let export_result = run_export_job(&runtime_job, &CancelToken::new(), |_| {})
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    if export_result.state != FfmpegJobState::Completed {
+        return Err(RenderCompareError::Assertion(format!(
+            "expected export job to complete, got {:?}",
+            export_result.state
+        )));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Region {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+fn assert_region_changed(
+    before: &ComparableFrame,
+    after: &ComparableFrame,
+    region: Region,
+    min_changed_pixels: usize,
+    message: &str,
+) -> RenderCompareResult<()> {
+    if before.metadata.width != after.metadata.width
+        || before.metadata.height != after.metadata.height
+        || before.rgb24.len() != after.rgb24.len()
+    {
+        return Err(RenderCompareError::Assertion(
+            "cannot compare subtitle region for mismatched frames".to_owned(),
+        ));
+    }
+    let frame_width = before.metadata.width;
+    let frame_height = before.metadata.height;
+    if region.x.saturating_add(region.width) > frame_width
+        || region.y.saturating_add(region.height) > frame_height
+    {
+        return Err(RenderCompareError::Assertion(format!(
+            "subtitle evidence region {:?} exceeds frame {}x{}",
+            region, frame_width, frame_height
+        )));
+    }
+
+    let mut changed_pixels = 0_usize;
+    for row in region.y..region.y + region.height {
+        for column in region.x..region.x + region.width {
+            let index = ((row as usize * frame_width as usize + column as usize) * 3)
+                .min(before.rgb24.len().saturating_sub(3));
+            let delta = before.rgb24[index].abs_diff(after.rgb24[index]) as u16
+                + before.rgb24[index + 1].abs_diff(after.rgb24[index + 1]) as u16
+                + before.rgb24[index + 2].abs_diff(after.rgb24[index + 2]) as u16;
+            if delta > 32 {
+                changed_pixels += 1;
+            }
+        }
+    }
+
+    if changed_pixels < min_changed_pixels {
+        return Err(RenderCompareError::Assertion(format!(
+            "{message}: expected at least {min_changed_pixels} changed pixels, got {changed_pixels}"
+        )));
+    }
+    Ok(())
+}
+
 fn generate_golden_video(
     executor: &DesktopFfmpegExecutor,
     runtime: &RuntimeConfig,
     output_path: &Path,
+) -> RenderCompareResult<()> {
+    generate_golden_video_duration(executor, runtime, output_path, 1)
+}
+
+fn generate_golden_video_duration(
+    executor: &DesktopFfmpegExecutor,
+    runtime: &RuntimeConfig,
+    output_path: &Path,
+    duration_seconds: u32,
 ) -> RenderCompareResult<()> {
     run_ffmpeg(
         executor,
@@ -533,7 +816,7 @@ fn generate_golden_video(
             "-f",
             "lavfi",
             "-i",
-            "color=c=0x1f6feb:size=160x90:rate=30:duration=1",
+            &format!("color=c=0x1f6feb:size=160x90:rate=30:duration={duration_seconds}"),
             "-an",
             "-c:v",
             "libx264",
@@ -549,6 +832,15 @@ fn generate_golden_audio(
     runtime: &RuntimeConfig,
     output_path: &Path,
 ) -> RenderCompareResult<()> {
+    generate_golden_audio_duration(executor, runtime, output_path, 1)
+}
+
+fn generate_golden_audio_duration(
+    executor: &DesktopFfmpegExecutor,
+    runtime: &RuntimeConfig,
+    output_path: &Path,
+    duration_seconds: u32,
+) -> RenderCompareResult<()> {
     run_ffmpeg(
         executor,
         runtime,
@@ -558,7 +850,7 @@ fn generate_golden_audio(
             "-f",
             "lavfi",
             "-i",
-            "sine=frequency=660:sample_rate=44100:duration=1",
+            &format!("sine=frequency=660:sample_rate=44100:duration={duration_seconds}"),
             "-ac",
             "1",
         ],
@@ -606,6 +898,86 @@ fn golden_draft(video_path: &Path, audio_path: &Path) -> Draft {
             adaptation_policy: CanvasAdaptationPolicy::Auto,
         },
     )
+}
+
+fn subtitle_parity_draft(video_path: &Path, audio_path: &Path, include_subtitles: bool) -> Draft {
+    let mut draft = Draft::new("draft-phase5-srt-parity", "Phase 5 SRT Parity");
+    draft.canvas_config = DraftCanvasConfig {
+        aspect_ratio: CanvasAspectRatio::custom(WIDTH, HEIGHT),
+        width: WIDTH,
+        height: HEIGHT,
+        frame_rate: RationalFrameRate::new(FPS, 1),
+        background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
+    };
+    draft.materials = vec![
+        video_material_with_duration(video_path, SUBTITLE_EXPORT_DURATION),
+        audio_material_with_duration(audio_path, SUBTITLE_EXPORT_DURATION),
+        text_material_with_id("text-material", "组合文字"),
+    ];
+
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    video_track.segments.push(segment(
+        "video-a",
+        "video-material",
+        0,
+        0,
+        SUBTITLE_EXPORT_DURATION,
+    ));
+
+    let mut audio_track = Track::new("audio-track", TrackKind::Audio, "音频");
+    audio_track.segments.push(segment(
+        "audio-a",
+        "audio-material",
+        0,
+        0,
+        SUBTITLE_EXPORT_DURATION,
+    ));
+
+    let mut text_track = Track::new("text-track", TrackKind::Text, "文字");
+    text_track.segments.push(text_segment(
+        "text-a",
+        "text-material",
+        "产品级组合文字",
+        TextSegmentSource::Text,
+        TargetTimerange::new(0, SUBTITLE_EXPORT_DURATION),
+        TextLayoutRegion {
+            x_millis: 100,
+            y_millis: 100,
+            width_millis: 800,
+            height_millis: 250,
+        },
+    ));
+
+    if include_subtitles {
+        draft.materials.push(text_material_with_id(
+            "subtitle-material-1",
+            "第一条组合字幕",
+        ));
+        draft.materials.push(text_material_with_id(
+            "subtitle-material-2",
+            "第二条完全不同字幕",
+        ));
+        text_track.segments.push(text_segment(
+            "subtitle-a",
+            "subtitle-material-1",
+            "第一条组合字幕",
+            TextSegmentSource::Subtitle,
+            TargetTimerange::new(0, 1_400_000),
+            subtitle_layout_region(),
+        ));
+        text_track.segments.push(text_segment(
+            "subtitle-b",
+            "subtitle-material-2",
+            "第二条完全不同字幕",
+            TextSegmentSource::Subtitle,
+            TargetTimerange::new(1_400_000, 1_600_000),
+            subtitle_layout_region(),
+        ));
+    }
+
+    draft.tracks = vec![video_track, audio_track, text_track];
+    draft
 }
 
 fn draft_with_canvas(
@@ -668,13 +1040,17 @@ fn draft_with_canvas(
 }
 
 fn video_material(path: &Path) -> Material {
+    video_material_with_duration(path, 1_000_000)
+}
+
+fn video_material_with_duration(path: &Path, duration: u64) -> Material {
     let mut material = Material::new(
         "video-material",
         MaterialKind::Video,
         file_uri(path),
         "视频素材",
     );
-    material.metadata.duration = Some(Microseconds::new(1_000_000));
+    material.metadata.duration = Some(Microseconds::new(duration));
     material.metadata.width = Some(WIDTH);
     material.metadata.height = Some(HEIGHT);
     material.metadata.frame_rate = Some(RationalFrameRate::new(FPS, 1));
@@ -683,13 +1059,17 @@ fn video_material(path: &Path) -> Material {
 }
 
 fn audio_material(path: &Path) -> Material {
+    audio_material_with_duration(path, 1_000_000)
+}
+
+fn audio_material_with_duration(path: &Path, duration: u64) -> Material {
     let mut material = Material::new(
         "audio-material",
         MaterialKind::Audio,
         file_uri(path),
         "音频素材",
     );
-    material.metadata.duration = Some(Microseconds::new(1_000_000));
+    material.metadata.duration = Some(Microseconds::new(duration));
     material.metadata.has_audio = true;
     material.metadata.audio_sample_rate = Some(44_100);
     material.metadata.audio_channels = Some(1);
@@ -697,12 +1077,72 @@ fn audio_material(path: &Path) -> Material {
 }
 
 fn text_material() -> Material {
+    text_material_with_id("text-material", "标题文字")
+}
+
+fn text_material_with_id(material_id: &str, display_name: &str) -> Material {
     Material::new(
-        "text-material",
+        material_id,
         MaterialKind::Text,
-        "text://phase5-title",
-        "标题文字",
+        format!("text://{material_id}"),
+        display_name,
     )
+}
+
+fn text_segment(
+    segment_id: &str,
+    material_id: &str,
+    content: &str,
+    source: TextSegmentSource,
+    target_timerange: TargetTimerange,
+    layout_region: TextLayoutRegion,
+) -> Segment {
+    let mut segment = segment(
+        segment_id,
+        material_id,
+        0,
+        target_timerange.start.get(),
+        target_timerange.duration.get(),
+    );
+    segment.text = Some(TextSegment {
+        content: content.to_owned(),
+        source,
+        style: TextStyle {
+            font_size: 20,
+            color: "#ffffff".to_owned(),
+            alignment: TextAlignment::Center,
+            stroke: Some(TextStroke {
+                color: "#000000".to_owned(),
+                width: 2,
+            }),
+            shadow: Some(TextShadow {
+                color: "#000000".to_owned(),
+                offset_x: 1,
+                offset_y: 1,
+                blur: 2,
+            }),
+            background: None,
+            ..TextStyle::default()
+        },
+        text_box: TextBox {
+            width_millis: 850,
+            height_millis: 250,
+        },
+        layout_region,
+        wrapping: TextWrapping::default(),
+        bubble: None,
+        effect: None,
+    });
+    segment
+}
+
+fn subtitle_layout_region() -> TextLayoutRegion {
+    TextLayoutRegion {
+        x_millis: 75,
+        y_millis: 620,
+        width_millis: 850,
+        height_millis: 300,
+    }
 }
 
 fn segment(
