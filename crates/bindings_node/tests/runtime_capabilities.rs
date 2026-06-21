@@ -157,7 +157,8 @@ fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     assert_eq!(envelope["error"]["command"], "probeRuntimeCapabilities");
     let message = envelope["error"]["message"].as_str().unwrap();
     assert!(message.contains("未找到内置 FFmpeg"), "{message}");
-    assert!(message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
+    assert!(message.contains("runtime/ffmpeg"), "{message}");
+    assert!(!message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
     assert!(!message.contains("VE_FFMPEG_PATH"), "{message}");
 }
 
@@ -195,7 +196,8 @@ fi
     assert_eq!(envelope["error"]["command"], "probeRuntimeCapabilities");
     let message = envelope["error"]["message"].as_str().unwrap();
     assert!(message.contains("未找到内置 ffprobe"), "{message}");
-    assert!(message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
+    assert!(message.contains("runtime/ffmpeg"), "{message}");
+    assert!(!message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
     assert!(!message.contains("VE_FFPROBE_PATH"), "{message}");
 }
 

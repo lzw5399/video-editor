@@ -1,6 +1,7 @@
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -9,8 +10,10 @@ use crate::{DEFAULT_PROCESS_TIMEOUT, DiscoveryError, run_process_with_timeout};
 
 /// Maximum bytes retained from external process stdout/stderr summaries.
 pub const MAX_STDERR_SUMMARY_BYTES: usize = 4096;
-/// Directory containing packaged FFmpeg-family resources.
+/// Test/development override for packaged FFmpeg-family resources.
 pub const BUNDLED_FFMPEG_DIR_ENV: &str = "VE_BUNDLED_FFMPEG_DIR";
+
+static CONFIGURED_BUNDLED_RUNTIME_DIRECTORY: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
 /// FFmpeg-family binary kind discovered by the runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +60,11 @@ pub struct RuntimeConfig {
 /// Discover and version-probe both FFmpeg and ffprobe.
 pub fn discover_runtime_config() -> Result<RuntimeConfig, DiscoveryError> {
     discover_bundled_runtime_config()
+}
+
+/// Configure the packaged FFmpeg-family runtime directory from the app shell.
+pub fn configure_bundled_runtime_directory(directory: PathBuf) {
+    *configured_bundled_runtime_directory_slot().lock().unwrap() = Some(directory);
 }
 
 /// Discover only packaged FFmpeg-family resources.
@@ -157,9 +165,36 @@ pub fn probe_binary_version_with_timeout(
 }
 
 fn bundled_runtime_directory() -> PathBuf {
-    env::var_os(BUNDLED_FFMPEG_DIR_ENV)
-        .map(PathBuf::from)
-        .unwrap_or_else(default_development_bundled_runtime_directory)
+    if let Some(directory) = configured_bundled_runtime_directory() {
+        return directory;
+    }
+
+    if let Some(directory) = debug_env_bundled_runtime_directory() {
+        return directory;
+    }
+
+    default_development_bundled_runtime_directory()
+}
+
+fn configured_bundled_runtime_directory() -> Option<PathBuf> {
+    configured_bundled_runtime_directory_slot()
+        .lock()
+        .unwrap()
+        .clone()
+}
+
+fn configured_bundled_runtime_directory_slot() -> &'static Mutex<Option<PathBuf>> {
+    CONFIGURED_BUNDLED_RUNTIME_DIRECTORY.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(debug_assertions)]
+fn debug_env_bundled_runtime_directory() -> Option<PathBuf> {
+    env::var_os(BUNDLED_FFMPEG_DIR_ENV).map(PathBuf::from)
+}
+
+#[cfg(not(debug_assertions))]
+fn debug_env_bundled_runtime_directory() -> Option<PathBuf> {
+    None
 }
 
 fn default_development_bundled_runtime_directory() -> PathBuf {

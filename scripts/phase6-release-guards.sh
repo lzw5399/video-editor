@@ -52,17 +52,27 @@ if (!body.includes('const root = app.isPackaged ? process.resourcesPath : join(_
   console.error("Electron main must derive FFmpeg runtime from packaged resources or app-local dev runtime");
   process.exit(1);
 }
-if (!body.includes("process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir")) {
-  console.error("Electron main must always set VE_BUNDLED_FFMPEG_DIR to the app-local bundled runtime");
+if (!body.includes("configureBundledRuntimeDirectory(bundledRuntimeDir)")) {
+  console.error("Electron main must configure the native binding with the app-local bundled runtime");
   process.exit(1);
 }
-if (body.includes("process.env.VE_BUNDLED_FFMPEG_DIR !== undefined")) {
+if (body.includes("process.env.VE_BUNDLED_FFMPEG_DIR")) {
   console.error("Electron main must not honor external VE_BUNDLED_FFMPEG_DIR overrides");
   process.exit(1);
 }
 if (source.includes("--video-editor-test-ve-bundled-ffmpeg-dir")) {
   console.error("Electron main must not expose a test switch for arbitrary FFmpeg runtime directories");
   process.exit(1);
+}
+
+const discovery = fs.readFileSync("crates/media_runtime/src/discovery.rs", "utf8");
+const envIndex = discovery.indexOf("env::var_os(BUNDLED_FFMPEG_DIR_ENV)");
+if (envIndex >= 0) {
+  const cfgIndex = discovery.lastIndexOf("#[cfg(debug_assertions)]", envIndex);
+  if (cfgIndex < 0 || envIndex - cfgIndex > 240) {
+    console.error("Rust runtime may read VE_BUNDLED_FFMPEG_DIR only inside the debug/test helper branch");
+    process.exit(1);
+  }
 }
 NODE
 }
@@ -102,7 +112,7 @@ test -f docs/third-party-notices.md
 test -f docs/mvp-known-limits.md
 
 require_literal "FFmpeg and ffprobe are bundled application resources" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
-require_literal "VE_BUNDLED_FFMPEG_DIR" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+require_literal "native binding" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
 require_literal "bundledRuntime" docs/release-ffmpeg-manifest.md
 require_literal "legalReviewPending" docs/release-ffmpeg-manifest.md docs/third-party-notices.md
 require_literal "redistributableBuild: false" docs/release-ffmpeg-manifest.md
@@ -110,6 +120,7 @@ forbid_literal "external/user-provided" docs/release-ffmpeg-manifest.md docs/thi
 forbid_literal "No FFmpeg binary is bundled" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
 forbid_literal "VE_FFMPEG_PATH" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
 forbid_literal "VE_FFPROBE_PATH" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+forbid_literal "VE_BUNDLED_FFMPEG_DIR" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
 
 require_literal "signing" docs/mvp-known-limits.md
 require_literal "notarization" docs/mvp-known-limits.md

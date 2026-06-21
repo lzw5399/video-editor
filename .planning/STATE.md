@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg18 session import view model response
-last_updated: "2026-06-21T19:28:17Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg18: session import view model response
+stopped_at: Completed quick task 260622-sg19 bundled ffmpeg product boundary
+last_updated: "2026-06-21T19:43:24Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg19: bundled ffmpeg product boundary
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg18: session import view model response
+Last activity: 2026-06-22 -- Completed quick task 260622-sg19: bundled ffmpeg product boundary
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -212,9 +212,9 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Phase 15.3 Plan 07 completed app-local icon discipline, provisional Jianying reference manifests, screenshot-backed layout regression, default-mode source guards, and the 1120px top-right export layout fix. (URGENT)
 - Phase 15.3 Plan 08 completed aggregate UI convergence verification: source guards, no-product-fallback guards, Electron package/build, 71/71 desktop Playwright E2E, real no-mock dev/packaged preview/export workflow, and `cargo check --workspace --locked` passed; Phase 15.3 is complete and Phase 16 is ready to plan. (URGENT)
 - Product material reads now use Rust project session read APIs for material lists and missing-material diagnostics; product renderer code is guarded against reintroducing legacy full-draft `listMaterials` / `listMissingMaterials` commands. (URGENT)
-- FFmpeg/ffprobe runtime resolution is now bundled-only for product and test gates: Electron packages `runtime/ffmpeg`, packaged app sets `VE_BUNDLED_FFMPEG_DIR` from app resources, and Homebrew/PATH/legacy per-binary lookup is forbidden by release guards. (URGENT)
+- FFmpeg/ffprobe runtime resolution is now bundled-only for product and test gates: Electron packages `runtime/ffmpeg`, product startup configures the native binding with app resources, and Homebrew/PATH/legacy per-binary lookup is forbidden by release guards. (URGENT)
 - macOS packaged FFmpeg runtime now includes app-relative bundled dylibs and a recursive `otool -L` provision gate so `/opt/homebrew`, `/usr/local`, PATH, and local-machine FFmpeg dependencies fail before packaging. (URGENT)
-- Electron desktop startup now always points Rust media runtime at the app-local bundled FFmpeg directory; external `VE_BUNDLED_FFMPEG_DIR` overrides and test switches are not honored by product startup. (URGENT)
+- Electron desktop startup now always points Rust media runtime at the app-local bundled FFmpeg directory through explicit native binding configuration; external runtime-directory env overrides and test switches are not honored by product startup. (URGENT)
 - Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview telemetry fanout is now driven by Rust native playback/control events instead of Electron main-process interval polling; packaged product cadence proves native `framePresented=90`, 90/90 presented frames, and only 13 presentation snapshot reads over each 3s playback window. (URGENT)
@@ -228,6 +228,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Product import-material session responses no longer return full `Draft` payloads; renderer updates its material panel from the returned material record while Rust project session remains the canonical draft/persistence owner, and phase3 guards reject reintroducing import response draft payloads. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
 - Product export start is now sourced from Rust project sessions: Electron sends `sessionId`, `expectedRevision`, output path, and preset through `startProjectSessionExport`; Rust reads the canonical session draft before starting the export registry, and renderer/preload guards reject full-draft `startExport` payloads. (URGENT)
+- Product FFmpeg runtime discovery no longer uses a process env variable as the production resolver: Electron computes the app-local bundled runtime directory and configures the native binding explicitly, Rust release discovery ignores env, and `VE_BUNDLED_FFMPEG_DIR` remains debug/test-only. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -502,6 +503,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg19-bundled-ffmpeg-product-boundary | Replaced product FFmpeg runtime env injection with explicit native binding configuration, kept env only as debug/test helper, removed user-facing env remediation, strengthened release docs/guards, and verified packaged smoke ignores external runtime env overrides. |
 | 2026-06-22 | 260622-sg16-session-opaque-timeline-view-model | Removed raw `Track`/`Segment` from project session timeline and selected-segment view models; renderer now consumes Rust-owned capabilities, action state, segment keys, keyframe markers, visual/audio/text fields, and guards block raw VM exposure or product reads from returning. |
 | 2026-06-22 | 260622-sg15-session-edit-controls-view-model | Added Rust session `viewModel.editControls` for undo/redo, snapping, and selected track/segment availability; renderer timeline/inspector now consume it, guards block product workspace legacy edit-state reads, and session intents reject renderer-supplied `draft`/`commandState`/`selection` fields. |
 | 2026-06-22 | 260622-sg14-session-project-summary-view-model | Added Rust session `viewModel.project` for draft name, canvas config, sequence duration, frame duration, and counts; renderer preview/inspector/playback end detection now consume it, and guards block product views from deriving project summary from `workspace.draft`. |

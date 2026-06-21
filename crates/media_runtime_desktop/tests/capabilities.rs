@@ -37,7 +37,8 @@ fn desktop_capabilities_report_preserves_ffmpeg_fields_and_adds_media_io_domains
     assert!(report.ffmpeg.aac_encoder.available);
     assert!(report.ffmpeg.ass_filter.available);
     assert!(report.ffmpeg.subtitles_filter.available);
-    assert!(report.ffmpeg.license_posture.external_runtime);
+    assert!(!report.ffmpeg.license_posture.external_runtime);
+    assert_eq!(report.ffmpeg.license_posture.source, "bundledRuntime");
 
     assert!(value["mediaIo"]["windows"].is_object());
     assert!(value["mediaIo"]["macos"].is_object());

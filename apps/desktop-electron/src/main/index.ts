@@ -21,6 +21,7 @@ import type {
 import type { SegmentVisual } from "../generated/Draft";
 import {
   closeProjectSession,
+  configureBundledRuntimeDirectory,
   createProjectSession,
   executeCommand,
   executeProjectIntent,
@@ -470,7 +471,7 @@ function hydrateTestEnvironmentFromArguments(): void {
 function configureBundledRuntimeEnvironment(): void {
   const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");
   const bundledRuntimeDir = join(root, "ffmpeg", platformArchSegment());
-  process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir;
+  configureBundledRuntimeDirectory(bundledRuntimeDir);
 }
 
 function platformArchSegment(): string {

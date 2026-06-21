@@ -7,8 +7,8 @@ semantics.
 ## Runtime And Packaging
 
 - FFmpeg and ffprobe are bundled application resources for desktop packages.
-- Runtime discovery is single-source. Electron sets `VE_BUNDLED_FFMPEG_DIR` to
-  the app-local bundled runtime directory; product startup does not honor
+- Runtime discovery is single-source. Electron configures the native binding
+  with the app-local bundled runtime directory; product startup does not honor
   external FFmpeg paths.
 - Packaged tests build and launch local directory packages. They are not signed
   public installers.

@@ -70,6 +70,11 @@ pub fn version() -> Result<serde_json::Value> {
 }
 
 #[napi]
+pub fn configure_bundled_runtime_directory(directory: String) {
+    media_runtime::configure_bundled_runtime_directory(PathBuf::from(directory));
+}
+
+#[napi]
 pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> {
     let command_name = raw_command_name(&command);
 
@@ -1028,12 +1033,10 @@ fn runtime_discovery_message(error: DiscoveryError) -> String {
 fn runtime_capability_message(error: DiscoveryError) -> String {
     let mut message = match error.binary {
         media_runtime::BinaryKind::Ffmpeg => {
-            "未找到内置 FFmpeg，请检查打包的 runtime/ffmpeg 目录或 VE_BUNDLED_FFMPEG_DIR。"
-                .to_owned()
+            "未找到内置 FFmpeg，请检查应用打包的 runtime/ffmpeg 资源。".to_owned()
         }
         media_runtime::BinaryKind::Ffprobe => {
-            "未找到内置 ffprobe，请检查打包的 runtime/ffmpeg 目录或 VE_BUNDLED_FFMPEG_DIR。"
-                .to_owned()
+            "未找到内置 ffprobe，请检查应用打包的 runtime/ffmpeg 资源。".to_owned()
         }
     };
     let checked_paths = error

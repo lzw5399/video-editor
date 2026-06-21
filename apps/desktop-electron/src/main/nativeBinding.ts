@@ -45,6 +45,7 @@ type VersionResponse = { coreVersion: string; contractVersion: string };
 type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
+  configureBundledRuntimeDirectory: (directory: string) => void;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
   createProjectSession: (request: CreateProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
@@ -583,6 +584,10 @@ export function version(): CommandResultEnvelope<VersionResponse> {
   return binding.version();
 }
 
+export function configureBundledRuntimeDirectory(directory: string): void {
+  requireLoadedBinding().configureBundledRuntimeDirectory(directory);
+}
+
 export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<unknown> {
   const binding = loadNativeBinding();
   if (binding === null) {
@@ -762,6 +767,7 @@ function loadNativeBinding(): NativeBinding | null {
     if (
       typeof loaded.ping !== "function" ||
       typeof loaded.version !== "function" ||
+      typeof loaded.configureBundledRuntimeDirectory !== "function" ||
       typeof loaded.executeCommand !== "function" ||
       typeof loaded.createProjectSession !== "function" ||
       typeof loaded.openProjectSession !== "function" ||
@@ -796,6 +802,7 @@ function loadNativeBinding(): NativeBinding | null {
     cachedBinding = {
       ping: loaded.ping,
       version: loaded.version,
+      configureBundledRuntimeDirectory: loaded.configureBundledRuntimeDirectory,
       executeCommand: loaded.executeCommand,
       createProjectSession: loaded.createProjectSession,
       openProjectSession: loaded.openProjectSession,

@@ -8,7 +8,7 @@ FFmpeg and ffprobe are bundled application resources for the desktop package.
 
 Runtime discovery is intentionally single-source:
 
-- Electron sets `VE_BUNDLED_FFMPEG_DIR` internally for the Rust runtime.
+- Electron configures the native binding with the app-local bundled runtime directory.
 - `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>` during local development
 - `process.resourcesPath/ffmpeg/<platform>-<arch>` in packaged Electron builds
 

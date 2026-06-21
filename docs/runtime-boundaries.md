@@ -40,7 +40,7 @@ jobs and report progress or errors.
 
 Desktop builds use a bundled FFmpeg runtime. Discovery is single-source:
 
-- Electron sets `VE_BUNDLED_FFMPEG_DIR` internally for the Rust runtime.
+- Electron configures the native binding with the app-local bundled runtime directory.
 - `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>` during local
   development.
 - `process.resourcesPath/ffmpeg/<platform>-<arch>` in packaged Electron builds.
