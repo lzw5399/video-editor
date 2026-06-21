@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
-import type { Draft, DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
+import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   canvasBackgroundTone,
@@ -162,7 +162,7 @@ type RealtimePreviewHostContentEvidence = {
 export type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
   subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
-  updateDraftSnapshot: (draft: Draft, bundlePath?: string) => Promise<RealtimePreviewHostState>;
+  updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number) => Promise<RealtimePreviewHostState>;
   seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
   play: () => Promise<RealtimePreviewHostState>;
   pause: () => Promise<RealtimePreviewHostState>;

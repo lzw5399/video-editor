@@ -143,6 +143,10 @@ type ProjectSessionClientState = {
   sessionId: string;
   revision: number;
 };
+type RealtimePreviewProjectSessionSnapshotKey = {
+  projectSessionId: string;
+  revision: number;
+};
 type ExportCommandResultApplier = (
   current: WorkspaceState,
   result: CommandResultEnvelope<ExportJobStatusResponse>
@@ -235,8 +239,7 @@ export function App(): React.ReactElement {
   const pendingAutoPreviewTimeRef = useRef<number | null>(null);
   const autoPreviewRetryTimerRef = useRef<number | null>(null);
   const autoPreviewRetryCountRef = useRef(0);
-  const realtimePreviewSnapshotDraftRef = useRef<Draft | null>(null);
-  const realtimePreviewSnapshotBundlePathRef = useRef<string | null>(null);
+  const realtimePreviewSnapshotRef = useRef<RealtimePreviewProjectSessionSnapshotKey | null>(null);
   const realtimePreviewLastSeekTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1900,7 +1903,7 @@ export function App(): React.ReactElement {
         playheadRef.current = 0;
       }
 
-      const snapshotReady = await updateRealtimePreviewDraftSnapshot();
+      const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();
       if (!snapshotReady) {
         return;
       }
@@ -1960,24 +1963,33 @@ export function App(): React.ReactElement {
     }
   }, [playbackRunning]);
 
-  async function updateRealtimePreviewDraftSnapshot(): Promise<boolean> {
+  async function updateRealtimePreviewProjectSessionSnapshot(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
       return applyRealtimePreviewHostError("实时预览宿主不可用");
     }
+    const projectSession = projectSessionRef.current;
+    if (projectSession === null) {
+      return applyRealtimePreviewHostError("项目会话尚未就绪");
+    }
 
+    const currentSnapshot = realtimePreviewSnapshotRef.current;
     if (
-      realtimePreviewSnapshotDraftRef.current === workspaceRef.current.draft &&
-      realtimePreviewSnapshotBundlePathRef.current === bundlePath
+      currentSnapshot?.projectSessionId === projectSession.sessionId &&
+      currentSnapshot.revision === projectSession.revision
     ) {
       return true;
     }
 
     try {
-      const ok = applyRealtimePreviewHostState(await bridge.updateDraftSnapshot(workspaceRef.current.draft, bundlePath));
+      const ok = applyRealtimePreviewHostState(
+        await bridge.updateProjectSessionSnapshot(projectSession.sessionId, projectSession.revision)
+      );
       if (ok) {
-        realtimePreviewSnapshotDraftRef.current = workspaceRef.current.draft;
-        realtimePreviewSnapshotBundlePathRef.current = bundlePath;
+        realtimePreviewSnapshotRef.current = {
+          projectSessionId: projectSession.sessionId,
+          revision: projectSession.revision
+        };
         realtimePreviewLastSeekTargetRef.current = null;
       }
       return ok;
@@ -1993,9 +2005,13 @@ export function App(): React.ReactElement {
     }
 
     const sanitizedTargetTime = Math.max(0, Math.round(targetTime));
+    const currentSnapshot = realtimePreviewSnapshotRef.current;
+    const currentProjectSession = projectSessionRef.current;
     if (
-      realtimePreviewSnapshotDraftRef.current === workspaceRef.current.draft &&
-      realtimePreviewSnapshotBundlePathRef.current === bundlePath &&
+      currentSnapshot !== null &&
+      currentProjectSession !== null &&
+      currentSnapshot.projectSessionId === currentProjectSession.sessionId &&
+      currentSnapshot.revision === currentProjectSession.revision &&
       realtimePreviewLastSeekTargetRef.current === sanitizedTargetTime
     ) {
       return true;
@@ -2238,7 +2254,7 @@ export function App(): React.ReactElement {
   function requestPreviewFrameAt(targetTime: number): void {
     if (!showDeveloperDiagnostics) {
       void (async () => {
-        const snapshotReady = await updateRealtimePreviewDraftSnapshot();
+        const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();
         if (snapshotReady) {
           await seekRealtimePreviewHost(targetTime);
         }

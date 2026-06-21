@@ -56,7 +56,9 @@ type NativeBinding = {
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
   updateRealtimePreviewSurfaceBounds: (request: RealtimePreviewSurfaceBoundsRequest) => RealtimePreviewGenerationResponse;
   detachRealtimePreviewSurface: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
-  updateRealtimePreviewDraftSnapshot: (request: RealtimePreviewDraftSnapshotRequest) => RealtimePreviewGenerationResponse;
+  updateRealtimePreviewProjectSessionSnapshot: (
+    request: RealtimePreviewProjectSessionSnapshotRequest
+  ) => RealtimePreviewGenerationResponse;
   seekRealtimePreview: (request: RealtimePreviewSeekRequest) => RealtimePreviewGenerationResponse;
   playRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
   pauseRealtimePreview: (request: RealtimePreviewSessionRequest) => RealtimePreviewGenerationResponse;
@@ -257,10 +259,10 @@ export type RealtimePreviewGenerationResponse = {
   playbackGeneration: number;
 };
 
-export type RealtimePreviewDraftSnapshotRequest = {
+export type RealtimePreviewProjectSessionSnapshotRequest = {
   sessionId: string;
-  draft: Draft;
-  bundlePath?: string;
+  projectSessionId: string;
+  expectedRevision: number;
 };
 
 export type RealtimePreviewSeekRequest = {
@@ -503,10 +505,10 @@ export function detachRealtimePreviewSurface(request: RealtimePreviewSessionRequ
   return requireLoadedBinding().detachRealtimePreviewSurface(request);
 }
 
-export function updateRealtimePreviewDraftSnapshot(
-  request: RealtimePreviewDraftSnapshotRequest
+export function updateRealtimePreviewProjectSessionSnapshot(
+  request: RealtimePreviewProjectSessionSnapshotRequest
 ): RealtimePreviewGenerationResponse {
-  return requireLoadedBinding().updateRealtimePreviewDraftSnapshot(request);
+  return requireLoadedBinding().updateRealtimePreviewProjectSessionSnapshot(request);
 }
 
 export function seekRealtimePreview(request: RealtimePreviewSeekRequest): RealtimePreviewGenerationResponse {
@@ -570,7 +572,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
       typeof loaded.updateRealtimePreviewSurfaceBounds !== "function" ||
       typeof loaded.detachRealtimePreviewSurface !== "function" ||
-      typeof loaded.updateRealtimePreviewDraftSnapshot !== "function" ||
+      typeof loaded.updateRealtimePreviewProjectSessionSnapshot !== "function" ||
       typeof loaded.seekRealtimePreview !== "function" ||
       typeof loaded.playRealtimePreview !== "function" ||
       typeof loaded.pauseRealtimePreview !== "function" ||
@@ -599,7 +601,7 @@ function loadNativeBinding(): NativeBinding | null {
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,
       updateRealtimePreviewSurfaceBounds: loaded.updateRealtimePreviewSurfaceBounds,
       detachRealtimePreviewSurface: loaded.detachRealtimePreviewSurface,
-      updateRealtimePreviewDraftSnapshot: loaded.updateRealtimePreviewDraftSnapshot,
+      updateRealtimePreviewProjectSessionSnapshot: loaded.updateRealtimePreviewProjectSessionSnapshot,
       seekRealtimePreview: loaded.seekRealtimePreview,
       playRealtimePreview: loaded.playRealtimePreview,
       pauseRealtimePreview: loaded.pauseRealtimePreview,

@@ -1,6 +1,8 @@
 use bindings_node::{
-    close_project_session, create_project_session, execute_project_intent,
-    list_project_session_materials, list_project_session_missing_materials, open_project_session,
+    close_project_session, close_realtime_preview_session, create_project_session,
+    create_realtime_preview_session, execute_project_intent, list_project_session_materials,
+    list_project_session_missing_materials, open_project_session,
+    update_realtime_preview_project_session_snapshot,
 };
 use draft_model::Draft;
 use media_runtime::discover_runtime_config;
@@ -813,6 +815,113 @@ fn project_session_keyframe_intent_rejects_renderer_built_keyframe_payload() {
 
     close_project_session(json!({ "sessionId": "test-session-keyframe-reject" }))
         .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn realtime_preview_updates_from_project_session_snapshot() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-preview.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-preview"
+    }))
+    .expect("openProjectSession should return an envelope");
+    let preview = create_preview_session("project-session-preview-success");
+    let preview_session_id = preview["sessionId"]
+        .as_str()
+        .expect("preview session id should be returned");
+
+    let snapshot = update_realtime_preview_project_session_snapshot(json!({
+        "sessionId": preview_session_id,
+        "projectSessionId": "test-session-preview",
+        "expectedRevision": 0
+    }))
+    .expect("project-session snapshot should update realtime preview");
+
+    assert!(
+        snapshot["playbackGeneration"].as_u64().unwrap_or_default() > 0,
+        "{snapshot:#}"
+    );
+
+    close_realtime_preview_session(json!({ "sessionId": preview_session_id }))
+        .expect("closeRealtimePreviewSession should return a response");
+    close_project_session(json!({ "sessionId": "test-session-preview" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn realtime_preview_project_session_snapshot_rejects_stale_revision() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-preview-stale.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-preview-stale"
+    }))
+    .expect("openProjectSession should return an envelope");
+    let preview = create_preview_session("project-session-preview-stale");
+    let preview_session_id = preview["sessionId"]
+        .as_str()
+        .expect("preview session id should be returned");
+
+    let stale = update_realtime_preview_project_session_snapshot(json!({
+        "sessionId": preview_session_id,
+        "projectSessionId": "test-session-preview-stale",
+        "expectedRevision": 1
+    }));
+
+    assert!(stale.is_err(), "stale project session revision should fail");
+
+    close_realtime_preview_session(json!({ "sessionId": preview_session_id }))
+        .expect("closeRealtimePreviewSession should return a response");
+    close_project_session(json!({ "sessionId": "test-session-preview-stale" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn realtime_preview_project_session_snapshot_rejects_unknown_project_session() {
+    let preview = create_preview_session("project-session-preview-unknown");
+    let preview_session_id = preview["sessionId"]
+        .as_str()
+        .expect("preview session id should be returned");
+
+    let unknown = update_realtime_preview_project_session_snapshot(json!({
+        "sessionId": preview_session_id,
+        "projectSessionId": "missing-project-session",
+        "expectedRevision": 0
+    }));
+
+    assert!(unknown.is_err(), "unknown project session should fail");
+
+    close_realtime_preview_session(json!({ "sessionId": preview_session_id }))
+        .expect("closeRealtimePreviewSession should return a response");
+}
+
+#[test]
+fn realtime_preview_project_session_snapshot_rejects_renderer_draft_payload() {
+    let rejected = update_realtime_preview_project_session_snapshot(json!({
+        "sessionId": "rtprev-session-0000000000000001",
+        "projectSessionId": "test-session-preview",
+        "expectedRevision": 0,
+        "draft": timeline_draft_json()
+    }));
+
+    assert!(
+        rejected.is_err(),
+        "draft field must not be accepted on preview snapshot sync"
+    );
+}
+
+fn create_preview_session(label: &str) -> Value {
+    create_realtime_preview_session(json!({
+        "sessionLabel": label,
+        "frameRateNumerator": 30,
+        "frameRateDenominator": 1,
+        "playbackRateNumerator": 1,
+        "playbackRateDenominator": 1
+    }))
+    .expect("createRealtimePreviewSession should return a response")
 }
 
 fn save_timeline_draft(bundle_path: &std::path::Path) {

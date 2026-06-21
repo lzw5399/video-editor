@@ -1221,8 +1221,8 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
       "seek",
       "stop",
       "subscribeTelemetry",
-      "updateDraftSnapshot",
-      "updateHostRect"
+      "updateHostRect",
+      "updateProjectSessionSnapshot"
     ]);
 
     const updateResult = await page.evaluate(() =>

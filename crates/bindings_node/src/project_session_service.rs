@@ -264,6 +264,12 @@ struct ProjectSession {
     selection: TimelineSelection,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ProjectSessionPreviewSnapshot {
+    pub draft: Draft,
+    pub bundle_path: PathBuf,
+}
+
 pub fn create_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
     let request = match serde_json::from_value::<CreateProjectSessionRequest>(request) {
         Ok(request) => request,
@@ -356,12 +362,39 @@ pub fn list_project_session_missing_materials(
     with_project_session_registry(|registry| registry.list_missing_materials(request))
 }
 
+pub(crate) fn realtime_preview_snapshot(
+    session_id: &str,
+    expected_revision: u64,
+) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
+    let registry = global_project_session_registry();
+    let registry = registry
+        .lock()
+        .map_err(|_| "project session registry lock poisoned".to_string())?;
+    let session = registry
+        .sessions
+        .get(session_id)
+        .ok_or_else(|| format!("Project session not found: {session_id}"))?;
+    if expected_revision != session.revision {
+        return Err(format!(
+            "Stale project session revision: expected {}, current {}",
+            expected_revision, session.revision
+        ));
+    }
+    Ok(ProjectSessionPreviewSnapshot {
+        draft: session.draft.clone(),
+        bundle_path: session.bundle_path.clone(),
+    })
+}
+
+fn global_project_session_registry() -> &'static Mutex<ProjectSessionRegistry> {
+    static REGISTRY: OnceLock<Mutex<ProjectSessionRegistry>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(ProjectSessionRegistry::default()))
+}
+
 fn with_project_session_registry(
     f: impl FnOnce(&mut ProjectSessionRegistry) -> Result<serde_json::Value>,
 ) -> Result<serde_json::Value> {
-    static REGISTRY: OnceLock<Mutex<ProjectSessionRegistry>> = OnceLock::new();
-    let registry = REGISTRY.get_or_init(|| Mutex::new(ProjectSessionRegistry::default()));
-    let mut registry = registry.lock().map_err(|_| {
+    let mut registry = global_project_session_registry().lock().map_err(|_| {
         napi::Error::from_reason("project session registry lock poisoned".to_string())
     })?;
     f(&mut registry)

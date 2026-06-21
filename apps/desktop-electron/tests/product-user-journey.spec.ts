@@ -219,7 +219,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
       .poll(async () => (await readRealtimePreviewHostCalls(app)).map((call) => call.kind), { timeout: 5_000 })
       .toEqual(
         expect.arrayContaining([
-          "updateDraftSnapshot",
+          "updateProjectSessionSnapshot",
           "seek",
           "playRejectedMissingCompositor"
         ])
@@ -293,7 +293,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
     await expect(page.getByLabel("实时预览帧")).toHaveCount(0);
     expect(hostCallKinds).toEqual(
       expect.arrayContaining([
-        "updateDraftSnapshot",
+        "updateProjectSessionSnapshot",
         "seek",
         "schedulerPlaybackWorkerStart",
         "play"

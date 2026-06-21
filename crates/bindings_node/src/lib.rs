@@ -294,16 +294,22 @@ pub fn detach_realtime_preview_surface(request: serde_json::Value) -> Result<ser
     with_realtime_preview_registry(|registry| registry.detach_surface(&request.session_id))
 }
 
-#[napi(js_name = "updateRealtimePreviewDraftSnapshot")]
-pub fn update_realtime_preview_draft_snapshot(
+#[napi(js_name = "updateRealtimePreviewProjectSessionSnapshot")]
+pub fn update_realtime_preview_project_session_snapshot(
     request: serde_json::Value,
 ) -> Result<serde_json::Value> {
-    let request = parse_realtime_preview_payload::<RealtimePreviewDraftSnapshotRequest>(request)?;
+    let request =
+        parse_realtime_preview_payload::<RealtimePreviewProjectSessionSnapshotRequest>(request)?;
+    let snapshot = project_session_service::realtime_preview_snapshot(
+        &request.project_session_id,
+        request.expected_revision,
+    )
+    .map_err(napi::Error::from_reason)?;
     with_realtime_preview_registry(|registry| {
         registry.update_draft_snapshot(
             &request.session_id,
-            request.draft,
-            request.bundle_path.map(PathBuf::from),
+            snapshot.draft,
+            Some(snapshot.bundle_path),
         )
     })
 }
@@ -919,11 +925,10 @@ struct RealtimePreviewSurfaceBoundsRequest {
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct RealtimePreviewDraftSnapshotRequest {
+struct RealtimePreviewProjectSessionSnapshotRequest {
     session_id: String,
-    draft: draft_model::Draft,
-    #[serde(default)]
-    bundle_path: Option<String>,
+    project_session_id: String,
+    expected_revision: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]

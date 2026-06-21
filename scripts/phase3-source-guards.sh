@@ -131,6 +131,16 @@ fail_if_matches \
   apps/desktop-electron/src/preload/index.ts
 
 fail_if_matches \
+  "renderer/main/preload/native binding must sync realtime preview from project session snapshots, not renderer-owned Draft payloads" \
+  'updateDraftSnapshot|updateRealtimePreviewDraftSnapshot|RealtimePreviewDraftSnapshotRequest|realtimePreviewHost:updateDraftSnapshot|bridge\.updateDraftSnapshot' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/src/main/realtimePreviewHost.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  crates/bindings_node/src/lib.rs
+
+fail_if_matches \
   "renderer/preload must not send mutating track intents with renderer-owned track IDs; select the track, then use selected-track intents" \
   'kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload

@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent, type WebContents } from "electron";
 
-import type { Draft } from "../generated/Draft";
 import {
   attachRealtimePreviewSurface,
   cancelRealtimePreviewRequest,
@@ -15,7 +14,7 @@ import {
   requestRealtimePreviewFrame,
   seekRealtimePreview,
   stopRealtimePreview,
-  updateRealtimePreviewDraftSnapshot,
+  updateRealtimePreviewProjectSessionSnapshot,
   updateRealtimePreviewSurfaceBounds,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
@@ -143,9 +142,9 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
     hostForEvent(event).unsubscribeTelemetry(event.sender);
     return { ok: true };
   });
-  ipcMain.handle("realtimePreviewHost:updateDraftSnapshot", (event, draft: Draft, bundlePath?: string) => {
+  ipcMain.handle("realtimePreviewHost:updateProjectSessionSnapshot", (event, projectSessionId: string, expectedRevision: number) => {
     assertAllowedSender(event);
-    return hostForEvent(event).updateDraftSnapshot(draft, bundlePath);
+    return hostForEvent(event).updateProjectSessionSnapshot(projectSessionId, expectedRevision);
   });
   ipcMain.handle("realtimePreviewHost:seek", (event, targetTimeMicroseconds: number) => {
     assertAllowedSender(event);
@@ -185,7 +184,6 @@ export class RealtimePreviewHost {
   private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
-  private bundlePath: string | null = null;
   private closed = false;
   private telemetrySubscribers = new Map<number, WebContents>();
   private telemetryFanoutTimer: NodeJS.Timeout | null = null;
@@ -280,29 +278,28 @@ export class RealtimePreviewHost {
     recordRealtimePreviewHostCall({ kind: "unsubscribeTelemetry" });
   }
 
-  updateDraftSnapshot(draft: Draft, bundlePath?: string): RealtimePreviewHostDisplayState {
+  updateProjectSessionSnapshot(projectSessionId: string, expectedRevision: number): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
       }
-      this.bundlePath = typeof bundlePath === "string" && bundlePath.trim().length > 0 ? bundlePath : null;
       this.lastFrame = null;
       this.lastContentEvidence = null;
       this.telemetry = null;
-      const response = updateRealtimePreviewDraftSnapshot({
+      const response = updateRealtimePreviewProjectSessionSnapshot({
         sessionId: this.sessionId,
-        draft,
-        ...(this.bundlePath === null ? {} : { bundlePath: this.bundlePath })
+        projectSessionId,
+        expectedRevision: sanitizeExpectedRevision(expectedRevision)
       });
       this.playbackGeneration = response.playbackGeneration;
       recordRealtimePreviewHostCall({
-        kind: "updateDraftSnapshot",
+        kind: "updateProjectSessionSnapshot",
         playbackGeneration: response.playbackGeneration
       });
       this.fallbackLabel = null;
       this.refreshPreviewState();
-      return this.state("实时预览草稿已更新");
+      return this.state("实时预览会话快照已更新");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
       return this.state("实时预览不可用");
@@ -721,6 +718,10 @@ export class RealtimePreviewHost {
 }
 
 function sanitizeTargetTimeMicroseconds(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function sanitizeExpectedRevision(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
