@@ -25,6 +25,7 @@ KEYFRAME_CONTRACT_FILES=(
   "apps/desktop-electron/src/generated/CommandEnvelope.ts"
 )
 UI_FILES=(
+  "apps/desktop-electron/src/renderer/viewModel.ts"
   "apps/desktop-electron/src/renderer/workspace/Inspector.tsx"
   "apps/desktop-electron/src/renderer/workspace/Timeline.tsx"
   "apps/desktop-electron/src/renderer/workspace/preview-inspector.css"
@@ -48,6 +49,7 @@ fail_matches() {
       | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
       | rg -v 'formatKeyframeInterpolation|formatKeyframeEasing|KEYFRAME_INTERPOLATIONS|KEYFRAME_EASINGS' \
       | rg -v 'renderGraphFailed' \
+      | rg -v 'renderGraphGpu|renderGraphGpuComposited' \
       || true
   )"
   if [ -n "$matches" ]; then
@@ -68,11 +70,7 @@ for symbol in \
   "KeyframeProperty" \
   "KeyframeValue" \
   "KeyframeInterpolation" \
-  "KeyframeEasing" \
-  "SetSegmentKeyframeCommandPayload" \
-  "RemoveSegmentKeyframeCommandPayload" \
-  "setSegmentKeyframe" \
-  "removeSegmentKeyframe"; do
+  "KeyframeEasing"; do
   found=false
   for file in "${GENERATED_FILES[@]}"; do
     if rg -n --fixed-strings "$symbol" "$file" >/dev/null; then
@@ -83,14 +81,19 @@ for symbol in \
   [ "$found" = "true" ] || fail "generated contracts must contain ${symbol}"
 done
 
+fail_matches \
+  "generated public command contracts must not expose structural keyframe edit payloads" \
+  'SetSegmentKeyframeCommandPayload|RemoveSegmentKeyframeCommandPayload|"\s*(?:setSegmentKeyframe|removeSegmentKeyframe)\s*"' \
+  schemas/command.schema.json apps/desktop-electron/src/generated/CommandEnvelope.ts
+
 for text in \
   "关键帧" \
   "动画" \
   "添加位置 X关键帧" \
-  "删除位置 X关键帧" \
+  '删除${propertyLabel}关键帧' \
   "关键帧标记" \
   "关键帧命令处理中" \
-  "特效动画暂未接入" \
+  "关键帧功能待接入" \
   "还没有关键帧" \
   "缓入缓出"; do
   found=false
@@ -103,11 +106,11 @@ for text in \
   [ "$found" = "true" ] || fail "missing required Chinese keyframe/animation UI copy: ${text}"
 done
 
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildSetSegmentKeyframeCommand"
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildRemoveSegmentKeyframeCommand"
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "command-only keyframe"
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "setSegmentKeyframe"
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "removeSegmentKeyframe"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "setSelectedSegmentKeyframe"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "removeSelectedSegmentKeyframe"
+require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "添加位置 X关键帧"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "setSelectedSegmentKeyframe"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "removeSelectedSegmentKeyframe"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "keyframeAt"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "五大区域"
 

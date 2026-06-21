@@ -6,8 +6,8 @@ use draft_commands::{
 };
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CommandPayload, CommandState, Draft, DraftCanvasConfig, Material, MaterialKind,
-    RationalFrameRate, TimelineSelection, UpdateDraftCanvasConfigCommandPayload,
+    CommandState, Draft, DraftCanvasConfig, Material, MaterialKind, RationalFrameRate,
+    TimelineEditPayload, TimelineSelection, UpdateDraftCanvasConfigCommandPayload,
 };
 
 #[test]
@@ -112,7 +112,7 @@ fn execute_timeline_edit_routes_canvas_command() {
     let selection = selected_canvas_context();
     let canvas_config = square_canvas_config();
 
-    let response = execute_timeline_edit(CommandPayload::UpdateDraftCanvasConfig(
+    let response = execute_timeline_edit(TimelineEditPayload::UpdateDraftCanvasConfig(
         UpdateDraftCanvasConfigCommandPayload {
             draft,
             command_state: state,

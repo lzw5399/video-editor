@@ -1,8 +1,8 @@
 use draft_model::{
-    ChangedEntity, CommandDelta, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
-    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain, DirtyRange,
-    DirtyRangeSource, Draft, InvalidationScope, Microseconds, PingResponse, TargetTimerange,
-    TimelineCommandResponse, TimelineSelection, VersionResponse,
+    ChangedEntity, CommandDelta, CommandDeltaName, CommandEnvelope, CommandError, CommandErrorKind,
+    CommandEvent, CommandName, CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain,
+    DirtyRange, DirtyRangeSource, Draft, InvalidationScope, Microseconds, PingResponse,
+    TargetTimerange, TimelineCommandResponse, TimelineSelection, VersionResponse,
 };
 use serde_json::json;
 
@@ -129,7 +129,7 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
             kind: "phase13HarnessReady".to_owned(),
             message: Some("delta assertions attach here in downstream plans".to_owned()),
         }],
-        delta: CommandDelta::none(CommandName::SelectTimelineSegments, "selection only"),
+        delta: CommandDelta::none(CommandDeltaName::SelectTimelineSegments, "selection only"),
     };
 
     let serialized = serde_json::to_value(&response).expect("timeline response serializes");
@@ -145,7 +145,8 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
                     "width": 1920,
                     "height": 1080,
                     "frameRate": { "numerator": 30, "denominator": 1 },
-                    "background": { "kind": "black" }
+                    "background": { "kind": "black" },
+                    "adaptationPolicy": "auto"
                 },
                 "materials": [],
                 "tracks": []
@@ -195,7 +196,7 @@ fn contract_serializes_timeline_command_response_as_rust_owned_transport() {
 #[test]
 fn contract_serializes_command_delta_as_semantic_change_facts() {
     let delta = CommandDelta {
-        command: CommandName::MoveSegment,
+        command: CommandDeltaName::MoveSegment,
         changed_entities: vec![
             ChangedEntity::Track {
                 track_id: "video-track".into(),

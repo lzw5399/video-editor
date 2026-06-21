@@ -1,11 +1,11 @@
 //! Semantic text/subtitle timeline commands.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandState, Draft, ImportSubtitleSrtCommandPayload,
-    ImportSubtitleSrtIntentCommandPayload, Material, MaterialId, MaterialKind, Microseconds,
-    Segment, SegmentId, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection, Track,
-    TrackId, TrackKind,
+    CommandDelta, CommandDeltaName, CommandEvent, CommandState, Draft,
+    ImportSubtitleSrtCommandPayload, ImportSubtitleSrtIntentCommandPayload, Material, MaterialId,
+    MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange, TextBox,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping,
+    TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
 };
 
 use crate::{
@@ -47,7 +47,7 @@ pub fn add_text_segment(
 
     validate_timeline_rules(&next_draft)?;
     let delta = text_segment_delta(
-        CommandName::AddTextSegment,
+        CommandDeltaName::AddTextSegment,
         &track_id,
         next_draft.tracks[track_index]
             .segments
@@ -67,7 +67,7 @@ pub fn add_text_segment(
         },
         "addTextSegment",
         "textSegmentAdded",
-        CommandName::AddTextSegment,
+        CommandDeltaName::AddTextSegment,
         delta,
     ))
 }
@@ -98,7 +98,7 @@ pub fn edit_text_segment(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = text_segment_delta(
-        CommandName::EditTextSegment,
+        CommandDeltaName::EditTextSegment,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         "text segment edited",
@@ -115,7 +115,7 @@ pub fn edit_text_segment(
         },
         "editTextSegment",
         "textSegmentEdited",
-        CommandName::EditTextSegment,
+        CommandDeltaName::EditTextSegment,
         delta,
     ))
 }
@@ -213,7 +213,7 @@ pub fn import_subtitle_srt(
 
     validate_timeline_rules(&next_draft)?;
     let delta = text_segments_delta(
-        CommandName::ImportSubtitleSrt,
+        CommandDeltaName::ImportSubtitleSrt,
         &payload.track_id,
         added_segments.iter(),
         "subtitle SRT imported",
@@ -230,7 +230,7 @@ pub fn import_subtitle_srt(
         },
         "importSubtitleSrt",
         "subtitleSrtImported",
-        CommandName::ImportSubtitleSrt,
+        CommandDeltaName::ImportSubtitleSrt,
         delta,
     ))
 }
@@ -288,7 +288,7 @@ pub fn import_subtitle_srt_intent(
 
     validate_timeline_rules(&next_draft)?;
     let delta = text_segments_delta(
-        CommandName::ImportSubtitleSrtIntent,
+        CommandDeltaName::ImportSubtitleSrtIntent,
         &track_id,
         added_segments.iter(),
         "subtitle SRT imported from intent",
@@ -305,7 +305,7 @@ pub fn import_subtitle_srt_intent(
         },
         "importSubtitleSrtIntent",
         "subtitleSrtImported",
-        CommandName::ImportSubtitleSrtIntent,
+        CommandDeltaName::ImportSubtitleSrtIntent,
         delta,
     ))
 }
@@ -582,7 +582,7 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    _command: CommandName,
+    _command: CommandDeltaName,
     delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(

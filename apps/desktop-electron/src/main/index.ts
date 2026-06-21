@@ -18,7 +18,7 @@ import type {
   WaveformDisplayPeaksResponse,
   WaveformDisplayStatus
 } from "../generated/CommandResultEnvelope";
-import type { Keyframe, SegmentVisual } from "../generated/Draft";
+import type { SegmentVisual } from "../generated/Draft";
 import {
   closeProjectSession,
   createProjectSession,
@@ -47,7 +47,6 @@ type TestExecuteCommandCall = {
     frameRate: { numerator: number; denominator: number };
   } | null;
   visual: SegmentVisual | null;
-  keyframe: Keyframe | null;
   keyframeProperty: string | null;
   keyframeAt: number | null;
   textContent: string | null;
@@ -407,12 +406,19 @@ function hydrateTestEnvironmentFromArguments(): void {
 }
 
 function configureBundledRuntimeEnvironment(): void {
+  const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");
+  const bundledRuntimeDir = join(root, "ffmpeg", platformArchSegment());
+
+  if (app.isPackaged) {
+    process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir;
+    return;
+  }
+
   if (process.env.VE_BUNDLED_FFMPEG_DIR !== undefined) {
     return;
   }
 
-  const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");
-  process.env.VE_BUNDLED_FFMPEG_DIR = join(root, "ffmpeg", platformArchSegment());
+  process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir;
 }
 
 function platformArchSegment(): string {
@@ -452,41 +458,8 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   }
 
   const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
-  const targetTimerange =
-    command.payload.kind === "requestPreviewSegment" ||
-    command.payload.kind === "addTextSegment" ||
-    command.payload.kind === "addAudioSegment"
-      ? command.payload.targetTimerange
-      : null;
-  const duration =
-    command.payload.kind === "addTextSegmentIntent" || command.payload.kind === "addAudioSegmentIntent"
-      ? command.payload.duration ?? null
-      : targetTimerange?.duration ?? null;
-  const canvasConfig = command.payload.kind === "updateDraftCanvasConfig" ? command.payload.canvasConfig : null;
-  const visual = command.payload.kind === "updateSegmentVisual" ? command.payload.visual : null;
-  const keyframe = command.payload.kind === "setSegmentKeyframe" ? command.payload.keyframe : null;
-  const keyframeProperty =
-    command.payload.kind === "setSegmentKeyframe"
-      ? command.payload.keyframe.property
-      : command.payload.kind === "removeSegmentKeyframe"
-        ? command.payload.property
-        : null;
-  const keyframeAt =
-    command.payload.kind === "setSegmentKeyframe"
-      ? command.payload.keyframe.at
-      : command.payload.kind === "removeSegmentKeyframe"
-        ? command.payload.at
-        : null;
-  const text =
-    command.payload.kind === "addTextSegment" ||
-    command.payload.kind === "addTextSegmentIntent" ||
-    command.payload.kind === "editTextSegment"
-      ? command.payload.text
-      : null;
-  const srtContent =
-    command.payload.kind === "importSubtitleSrt" || command.payload.kind === "importSubtitleSrtIntent"
-      ? command.payload.srtContent
-      : null;
+  const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
+  const duration = targetTimerange?.duration ?? null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const sessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.sessionId ?? null : null;
@@ -509,15 +482,14 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     targetTime,
     targetTimerange,
     duration,
-    canvasConfig,
-    visual,
-    keyframe,
-    keyframeProperty,
-    keyframeAt,
-    textContent: text?.content ?? null,
-    textSource: text?.source ?? null,
-    textFontRef: text?.style.font.fontRef ?? null,
-    srtContent,
+    canvasConfig: null,
+    visual: null,
+    keyframeProperty: null,
+    keyframeAt: null,
+    textContent: null,
+    textSource: null,
+    textFontRef: null,
+    srtContent: null,
     outputPath,
     preset,
     jobId,

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use draft_model::{
-    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, CommandDelta, CommandName,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, CommandDelta, CommandDeltaName,
     DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, InvalidationScope,
     Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity,
     SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion,
@@ -434,7 +434,7 @@ fn preview_export_parity_dirty_facts_match_after_localized_edit_and_undo_redo()
         dirty_range(100_000, 1_000_000, DirtyRangeSource::Current),
     ];
     let delta = CommandDelta::targeted(
-        CommandName::MoveSegment,
+        CommandDeltaName::MoveSegment,
         Vec::new(),
         vec![DirtyDomain::Timing, DirtyDomain::Visual],
         dirty_ranges.clone(),

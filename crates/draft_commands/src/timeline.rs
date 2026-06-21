@@ -1,9 +1,9 @@
 //! Timeline command validation helpers.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandPayload, CommandState, Draft, Material,
-    MaterialId, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange,
-    TextSegment, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
+    CommandDelta, CommandDeltaName, CommandEvent, CommandState, Draft, Material, MaterialId,
+    MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange, TargetTimerange, TextSegment,
+    TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind,
     TrimSegmentDirection, validate_draft,
 };
 
@@ -144,10 +144,10 @@ pub fn main_video_track_id(draft: &Draft) -> Option<TrackId> {
 }
 
 pub fn execute_timeline_edit(
-    payload: CommandPayload,
+    payload: TimelineEditPayload,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
     match payload {
-        CommandPayload::AddSegment(payload) => add_segment(
+        TimelineEditPayload::AddSegment(payload) => add_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -157,20 +157,20 @@ pub fn execute_timeline_edit(
             payload.source_timerange,
             payload.target_timerange,
         ),
-        CommandPayload::AddTimelineSegmentIntent(payload) => add_timeline_segment_intent(
+        TimelineEditPayload::AddTimelineSegmentIntent(payload) => add_timeline_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.material_id,
         ),
-        CommandPayload::SelectTimelineSegments(payload) => select_timeline_segments(
+        TimelineEditPayload::SelectTimelineSegments(payload) => select_timeline_segments(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_ids,
             payload.track_ids,
         ),
-        CommandPayload::MoveSegment(payload) => move_segment(
+        TimelineEditPayload::MoveSegment(payload) => move_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -178,13 +178,13 @@ pub fn execute_timeline_edit(
             payload.target_track_id,
             payload.target_start,
         ),
-        CommandPayload::MoveSelectedSegmentIntent(payload) => move_selected_segment_intent(
+        TimelineEditPayload::MoveSelectedSegmentIntent(payload) => move_selected_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.delta,
         ),
-        CommandPayload::SplitSegment(payload) => split_segment(
+        TimelineEditPayload::SplitSegment(payload) => split_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -192,13 +192,13 @@ pub fn execute_timeline_edit(
             payload.right_segment_id,
             payload.split_at,
         ),
-        CommandPayload::SplitSelectedSegmentIntent(payload) => split_selected_segment_intent(
+        TimelineEditPayload::SplitSelectedSegmentIntent(payload) => split_selected_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.split_at,
         ),
-        CommandPayload::TrimSegment(payload) => trim_segment(
+        TimelineEditPayload::TrimSegment(payload) => trim_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -206,26 +206,26 @@ pub fn execute_timeline_edit(
             payload.direction,
             payload.target_timerange,
         ),
-        CommandPayload::TrimSelectedSegmentIntent(payload) => trim_selected_segment_intent(
+        TimelineEditPayload::TrimSelectedSegmentIntent(payload) => trim_selected_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.direction,
             payload.delta,
         ),
-        CommandPayload::DeleteSegment(payload) => delete_segment(
+        TimelineEditPayload::DeleteSegment(payload) => delete_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
         ),
-        CommandPayload::UndoTimelineEdit(payload) => {
+        TimelineEditPayload::UndoTimelineEdit(payload) => {
             undo_timeline_edit(&payload.draft, &payload.command_state, &payload.selection)
         }
-        CommandPayload::RedoTimelineEdit(payload) => {
+        TimelineEditPayload::RedoTimelineEdit(payload) => {
             redo_timeline_edit(&payload.draft, &payload.command_state, &payload.selection)
         }
-        CommandPayload::AddTextSegment(payload) => add_text_segment(
+        TimelineEditPayload::AddTextSegment(payload) => add_text_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -236,23 +236,25 @@ pub fn execute_timeline_edit(
             payload.target_timerange,
             payload.text,
         ),
-        CommandPayload::AddTextSegmentIntent(payload) => add_text_segment_intent(
+        TimelineEditPayload::AddTextSegmentIntent(payload) => add_text_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.text,
             payload.duration,
         ),
-        CommandPayload::EditTextSegment(payload) => edit_text_segment(
+        TimelineEditPayload::EditTextSegment(payload) => edit_text_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
             payload.text,
         ),
-        CommandPayload::ImportSubtitleSrt(payload) => import_subtitle_srt(payload),
-        CommandPayload::ImportSubtitleSrtIntent(payload) => import_subtitle_srt_intent(payload),
-        CommandPayload::AddAudioSegment(payload) => add_audio_segment(
+        TimelineEditPayload::ImportSubtitleSrt(payload) => import_subtitle_srt(payload),
+        TimelineEditPayload::ImportSubtitleSrtIntent(payload) => {
+            import_subtitle_srt_intent(payload)
+        }
+        TimelineEditPayload::AddAudioSegment(payload) => add_audio_segment(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -262,21 +264,21 @@ pub fn execute_timeline_edit(
             payload.source_timerange,
             payload.target_timerange,
         ),
-        CommandPayload::AddAudioSegmentIntent(payload) => add_audio_segment_intent(
+        TimelineEditPayload::AddAudioSegmentIntent(payload) => add_audio_segment_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.material_id,
             payload.duration,
         ),
-        CommandPayload::SetSegmentVolume(payload) => set_segment_volume(
+        TimelineEditPayload::SetSegmentVolume(payload) => set_segment_volume(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
             payload.volume,
         ),
-        CommandPayload::UpdateSegmentAudio(payload) => update_segment_audio(
+        TimelineEditPayload::UpdateSegmentAudio(payload) => update_segment_audio(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -293,7 +295,7 @@ pub fn execute_timeline_edit(
                 .map(|fade_out_duration| fade_out_duration.duration),
             payload.effect_slots,
         ),
-        CommandPayload::AddTrack(payload) => add_track(
+        TimelineEditPayload::AddTrack(payload) => add_track(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -301,61 +303,61 @@ pub fn execute_timeline_edit(
             payload.track_kind,
             payload.name,
         ),
-        CommandPayload::AddTrackIntent(payload) => add_track_intent(
+        TimelineEditPayload::AddTrackIntent(payload) => add_track_intent(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.track_kind,
         ),
-        CommandPayload::RenameTrack(payload) => rename_track(
+        TimelineEditPayload::RenameTrack(payload) => rename_track(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.track_id,
             payload.name,
         ),
-        CommandPayload::SetTrackLock(payload) => set_track_lock(
+        TimelineEditPayload::SetTrackLock(payload) => set_track_lock(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.track_id,
             payload.locked,
         ),
-        CommandPayload::SetTrackVisibility(payload) => set_track_visibility(
+        TimelineEditPayload::SetTrackVisibility(payload) => set_track_visibility(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.track_id,
             payload.visible,
         ),
-        CommandPayload::SetTrackMute(payload) => set_track_mute(
+        TimelineEditPayload::SetTrackMute(payload) => set_track_mute(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.track_id,
             payload.muted,
         ),
-        CommandPayload::UpdateDraftCanvasConfig(payload) => update_draft_canvas_config(
+        TimelineEditPayload::UpdateDraftCanvasConfig(payload) => update_draft_canvas_config(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.canvas_config,
         ),
-        CommandPayload::UpdateSegmentVisual(payload) => update_segment_visual(
+        TimelineEditPayload::UpdateSegmentVisual(payload) => update_segment_visual(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
             payload.visual,
         ),
-        CommandPayload::SetSegmentKeyframe(payload) => set_segment_keyframe(
+        TimelineEditPayload::SetSegmentKeyframe(payload) => set_segment_keyframe(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
             payload.keyframe,
         ),
-        CommandPayload::RemoveSegmentKeyframe(payload) => remove_segment_keyframe(
+        TimelineEditPayload::RemoveSegmentKeyframe(payload) => remove_segment_keyframe(
             &payload.draft,
             &payload.command_state,
             &payload.selection,
@@ -363,11 +365,6 @@ pub fn execute_timeline_edit(
             payload.property,
             payload.at,
         ),
-        other => Err(TimelineCommandError::new(
-            TimelineCommandErrorKind::UnsupportedCommand {
-                command: format!("{:?}", other.command_name()),
-            },
-        )),
     }
 }
 
@@ -393,7 +390,7 @@ pub fn add_track(
             track_ids: vec![track_id.clone()],
         },
         "trackAdded",
-        track_delta(CommandName::AddTrack, &track_id, "track added"),
+        track_delta(CommandDeltaName::AddTrack, &track_id, "track added"),
     ))
 }
 
@@ -438,7 +435,7 @@ pub fn rename_track(
             track_ids: vec![track_id.clone()],
         },
         "trackRenamed",
-        track_delta(CommandName::RenameTrack, &track_id, "track renamed"),
+        track_delta(CommandDeltaName::RenameTrack, &track_id, "track renamed"),
     ))
 }
 
@@ -462,7 +459,11 @@ pub fn set_track_lock(
             track_ids: vec![track_id.clone()],
         },
         "trackLockChanged",
-        track_delta(CommandName::SetTrackLock, &track_id, "track lock changed"),
+        track_delta(
+            CommandDeltaName::SetTrackLock,
+            &track_id,
+            "track lock changed",
+        ),
     ))
 }
 
@@ -546,7 +547,7 @@ pub fn add_segment(
         )
     } else {
         segment_delta(
-            CommandName::AddSegment,
+            CommandDeltaName::AddSegment,
             &track_id,
             segment,
             vec![current_range(target_timerange)],
@@ -716,7 +717,7 @@ pub fn select_timeline_segments(
             track_ids,
         },
         "timelineSelectionChanged",
-        CommandDelta::none(CommandName::SelectTimelineSegments, "selection only"),
+        CommandDelta::none(CommandDeltaName::SelectTimelineSegments, "selection only"),
     ))
 }
 
@@ -1003,7 +1004,7 @@ pub fn trim_segment(
     next_draft.tracks[track_index].segments[segment_index].target_timerange = target_timerange;
     let current_segment = next_draft.tracks[track_index].segments[segment_index].clone();
     let delta = segment_delta(
-        CommandName::TrimSegment,
+        CommandDeltaName::TrimSegment,
         &track_id,
         &current_segment,
         vec![
@@ -1087,7 +1088,7 @@ pub fn delete_segment(
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let removed_segment = next_draft.tracks[track_index].segments[segment_index].clone();
     let delta = segment_delta(
-        CommandName::DeleteSegment,
+        CommandDeltaName::DeleteSegment,
         &track_id,
         &removed_segment,
         vec![previous_range(removed_segment.target_timerange.clone())],

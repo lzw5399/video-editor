@@ -1,7 +1,7 @@
 use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
     AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload, AudioEffectSlot,
-    AudioFade, AudioPanBalance, CommandDelta, CommandErrorKind, CommandPayload, CommandState,
+    AudioFade, AudioPanBalance, CommandDelta, CommandErrorKind, CommandState,
     DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, EditTextSegmentCommandPayload,
     ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
     KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds,
@@ -11,8 +11,8 @@ use draft_model::{
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload,
     SplitSelectedSegmentIntentCommandPayload, TextBox, TextLayoutRegion, TextSegment, TextStyle,
-    TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
-    TrimSegmentDirection, TrimSelectedSegmentIntentCommandPayload,
+    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
+    TrackKind, TrimSegmentDirection, TrimSelectedSegmentIntentCommandPayload,
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
     UpdateSegmentVisualCommandPayload,
 };
@@ -496,23 +496,28 @@ impl ProjectSessionRegistry {
 }
 
 impl ProjectSession {
-    fn intent_payload(&self, intent: ProjectIntent) -> std::result::Result<CommandPayload, String> {
+    fn intent_payload(
+        &self,
+        intent: ProjectIntent,
+    ) -> std::result::Result<TimelineEditPayload, String> {
         match intent {
             ProjectIntent::ImportMaterial { .. } => {
                 unreachable!("importMaterial is handled before timeline payload conversion")
             }
-            ProjectIntent::AddTimelineSegmentIntent { material_id } => Ok(
-                CommandPayload::AddTimelineSegmentIntent(AddTimelineSegmentIntentCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    material_id,
-                }),
-            ),
+            ProjectIntent::AddTimelineSegmentIntent { material_id } => {
+                Ok(TimelineEditPayload::AddTimelineSegmentIntent(
+                    AddTimelineSegmentIntentCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        material_id,
+                    },
+                ))
+            }
             ProjectIntent::SelectTimelineSegments {
                 segment_ids,
                 track_ids,
-            } => Ok(CommandPayload::SelectTimelineSegments(
+            } => Ok(TimelineEditPayload::SelectTimelineSegments(
                 SelectTimelineSegmentsCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
@@ -522,7 +527,7 @@ impl ProjectSession {
                 },
             )),
             ProjectIntent::MoveSelectedSegmentIntent { delta } => {
-                Ok(CommandPayload::MoveSelectedSegmentIntent(
+                Ok(TimelineEditPayload::MoveSelectedSegmentIntent(
                     MoveSelectedSegmentIntentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
@@ -532,7 +537,7 @@ impl ProjectSession {
                 ))
             }
             ProjectIntent::SplitSelectedSegmentIntent { split_at } => {
-                Ok(CommandPayload::SplitSelectedSegmentIntent(
+                Ok(TimelineEditPayload::SplitSelectedSegmentIntent(
                     SplitSelectedSegmentIntentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
@@ -542,7 +547,7 @@ impl ProjectSession {
                 ))
             }
             ProjectIntent::TrimSelectedSegmentIntent { direction, delta } => {
-                Ok(CommandPayload::TrimSelectedSegmentIntent(
+                Ok(TimelineEditPayload::TrimSelectedSegmentIntent(
                     TrimSelectedSegmentIntentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
@@ -552,16 +557,16 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::DeleteSelectedSegment {} => {
-                Ok(CommandPayload::DeleteSegment(DeleteSegmentCommandPayload {
+            ProjectIntent::DeleteSelectedSegment {} => Ok(TimelineEditPayload::DeleteSegment(
+                DeleteSegmentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     segment_id: self.selected_segment_id("删除片段")?,
-                }))
-            }
+                },
+            )),
             ProjectIntent::AddTextSegmentIntent { text, duration } => Ok(
-                CommandPayload::AddTextSegmentIntent(AddTextSegmentIntentCommandPayload {
+                TimelineEditPayload::AddTextSegmentIntent(AddTextSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
@@ -569,7 +574,7 @@ impl ProjectSession {
                     duration,
                 }),
             ),
-            ProjectIntent::EditSelectedText { text } => Ok(CommandPayload::EditTextSegment(
+            ProjectIntent::EditSelectedText { text } => Ok(TimelineEditPayload::EditTextSegment(
                 EditTextSegmentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
@@ -585,7 +590,7 @@ impl ProjectSession {
                 text_box,
                 layout_region,
                 wrapping,
-            } => Ok(CommandPayload::ImportSubtitleSrtIntent(
+            } => Ok(TimelineEditPayload::ImportSubtitleSrtIntent(
                 ImportSubtitleSrtIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
@@ -601,7 +606,7 @@ impl ProjectSession {
             ProjectIntent::AddAudioSegmentIntent {
                 material_id,
                 duration,
-            } => Ok(CommandPayload::AddAudioSegmentIntent(
+            } => Ok(TimelineEditPayload::AddAudioSegmentIntent(
                 AddAudioSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
@@ -611,7 +616,7 @@ impl ProjectSession {
                 },
             )),
             ProjectIntent::SetSelectedSegmentVolume { volume } => Ok(
-                CommandPayload::SetSegmentVolume(SetSegmentVolumeCommandPayload {
+                TimelineEditPayload::SetSegmentVolume(SetSegmentVolumeCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
@@ -625,7 +630,7 @@ impl ProjectSession {
                 fade_in_duration,
                 fade_out_duration,
                 effect_slots,
-            } => Ok(CommandPayload::UpdateSegmentAudio(
+            } => Ok(TimelineEditPayload::UpdateSegmentAudio(
                 UpdateSegmentAudioCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
@@ -638,34 +643,34 @@ impl ProjectSession {
                     effect_slots,
                 },
             )),
-            ProjectIntent::AddTrackIntent { track_kind } => Ok(CommandPayload::AddTrackIntent(
-                AddTrackIntentCommandPayload {
+            ProjectIntent::AddTrackIntent { track_kind } => Ok(
+                TimelineEditPayload::AddTrackIntent(AddTrackIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     track_kind,
-                },
-            )),
-            ProjectIntent::RenameTrack { track_id, name } => {
-                Ok(CommandPayload::RenameTrack(RenameTrackCommandPayload {
+                }),
+            ),
+            ProjectIntent::RenameTrack { track_id, name } => Ok(TimelineEditPayload::RenameTrack(
+                RenameTrackCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     track_id,
                     name,
-                }))
-            }
-            ProjectIntent::SetTrackLock { track_id, locked } => {
-                Ok(CommandPayload::SetTrackLock(SetTrackLockCommandPayload {
+                },
+            )),
+            ProjectIntent::SetTrackLock { track_id, locked } => Ok(
+                TimelineEditPayload::SetTrackLock(SetTrackLockCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     track_id,
                     locked,
-                }))
-            }
+                }),
+            ),
             ProjectIntent::SetTrackVisibility { track_id, visible } => Ok(
-                CommandPayload::SetTrackVisibility(SetTrackVisibilityCommandPayload {
+                TimelineEditPayload::SetTrackVisibility(SetTrackVisibilityCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
@@ -673,8 +678,8 @@ impl ProjectSession {
                     visible,
                 }),
             ),
-            ProjectIntent::SetTrackMute { track_id, muted } => {
-                Ok(CommandPayload::SetTrackMute(SetTrackMuteCommandPayload {
+            ProjectIntent::SetTrackMute { track_id, muted } => Ok(
+                TimelineEditPayload::SetTrackMute(SetTrackMuteCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
@@ -683,18 +688,20 @@ impl ProjectSession {
                         None => self.selected_track_id("切换轨道静音")?,
                     },
                     muted,
-                }))
-            }
-            ProjectIntent::UpdateDraftCanvasConfig { canvas_config } => Ok(
-                CommandPayload::UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    canvas_config,
                 }),
             ),
+            ProjectIntent::UpdateDraftCanvasConfig { canvas_config } => {
+                Ok(TimelineEditPayload::UpdateDraftCanvasConfig(
+                    UpdateDraftCanvasConfigCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        canvas_config,
+                    },
+                ))
+            }
             ProjectIntent::UpdateSelectedSegmentVisual { visual } => Ok(
-                CommandPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
+                TimelineEditPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
@@ -710,7 +717,7 @@ impl ProjectSession {
             } => {
                 let (segment_id, keyframe) =
                     self.keyframe_for_selected_segment(property, at, interpolation, easing)?;
-                Ok(CommandPayload::SetSegmentKeyframe(
+                Ok(TimelineEditPayload::SetSegmentKeyframe(
                     SetSegmentKeyframeCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
@@ -723,7 +730,7 @@ impl ProjectSession {
             ProjectIntent::RemoveSelectedSegmentKeyframe { property, at } => {
                 let segment = self.selected_segment("删除关键帧")?;
                 let relative_at = relative_keyframe_time(segment, at);
-                Ok(CommandPayload::RemoveSegmentKeyframe(
+                Ok(TimelineEditPayload::RemoveSegmentKeyframe(
                     RemoveSegmentKeyframeCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
@@ -734,14 +741,14 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::UndoTimelineEdit {} => Ok(CommandPayload::UndoTimelineEdit(
+            ProjectIntent::UndoTimelineEdit {} => Ok(TimelineEditPayload::UndoTimelineEdit(
                 draft_model::UndoTimelineEditCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                 },
             )),
-            ProjectIntent::RedoTimelineEdit {} => Ok(CommandPayload::RedoTimelineEdit(
+            ProjectIntent::RedoTimelineEdit {} => Ok(TimelineEditPayload::RedoTimelineEdit(
                 draft_model::RedoTimelineEditCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),

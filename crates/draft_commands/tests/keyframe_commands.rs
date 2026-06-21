@@ -5,10 +5,10 @@ use draft_commands::{
     timeline::execute_timeline_edit,
 };
 use draft_model::{
-    CommandPayload, CommandState, Draft, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, Material, MaterialKind, Microseconds,
-    RemoveSegmentKeyframeCommandPayload, Segment, SetSegmentKeyframeCommandPayload,
-    SourceTimerange, TargetTimerange, TimelineSelection, Track, TrackKind,
+    CommandState, Draft, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, Material, MaterialKind, Microseconds, RemoveSegmentKeyframeCommandPayload,
+    Segment, SetSegmentKeyframeCommandPayload, SourceTimerange, TargetTimerange,
+    TimelineEditPayload, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -226,7 +226,7 @@ fn execute_timeline_edit_routes_keyframe_commands() {
         KeyframeValue::Uint { value: 500 },
     );
 
-    let added = execute_timeline_edit(CommandPayload::SetSegmentKeyframe(
+    let added = execute_timeline_edit(TimelineEditPayload::SetSegmentKeyframe(
         SetSegmentKeyframeCommandPayload {
             draft,
             command_state: state,
@@ -240,7 +240,7 @@ fn execute_timeline_edit_routes_keyframe_commands() {
     assert_eq!(added.draft.tracks[0].segments[0].keyframes, vec![keyframe]);
     assert_eq!(added.events[0].kind, "segmentKeyframeSet");
 
-    let removed = execute_timeline_edit(CommandPayload::RemoveSegmentKeyframe(
+    let removed = execute_timeline_edit(TimelineEditPayload::RemoveSegmentKeyframe(
         RemoveSegmentKeyframeCommandPayload {
             draft: added.draft,
             command_state: added.command_state,

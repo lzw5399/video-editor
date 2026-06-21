@@ -1,7 +1,7 @@
 //! Segment-level keyframe command semantics.
 
 use draft_model::{
-    CommandDelta, CommandEvent, CommandName, CommandState, Draft, Keyframe, KeyframeProperty,
+    CommandDelta, CommandDeltaName, CommandEvent, CommandState, Draft, Keyframe, KeyframeProperty,
     Microseconds, SegmentId, TimelineCommandResponse, TimelineSelection,
 };
 
@@ -38,7 +38,7 @@ pub fn set_segment_keyframe(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = keyframe_delta(
-        CommandName::SetSegmentKeyframe,
+        CommandDeltaName::SetSegmentKeyframe,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         property,
@@ -53,7 +53,7 @@ pub fn set_segment_keyframe(
         selection,
         "setSegmentKeyframe",
         "segmentKeyframeSet",
-        CommandName::SetSegmentKeyframe,
+        CommandDeltaName::SetSegmentKeyframe,
         delta,
     ))
 }
@@ -92,7 +92,7 @@ pub fn remove_segment_keyframe(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = keyframe_delta(
-        CommandName::RemoveSegmentKeyframe,
+        CommandDeltaName::RemoveSegmentKeyframe,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         property.clone(),
@@ -107,7 +107,7 @@ pub fn remove_segment_keyframe(
         selection,
         "removeSegmentKeyframe",
         "segmentKeyframeRemoved",
-        CommandName::RemoveSegmentKeyframe,
+        CommandDeltaName::RemoveSegmentKeyframe,
         delta,
     ))
 }
@@ -127,7 +127,7 @@ fn response(
     previous_selection: &TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    _command: CommandName,
+    _command: CommandDeltaName,
     delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(

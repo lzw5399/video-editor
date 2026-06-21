@@ -6,11 +6,11 @@ use draft_commands::{
     text::{add_text_segment, edit_text_segment},
 };
 use draft_model::{
-    CommandName, CommandState, DirtyDomain, Draft, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, MAX_SEGMENT_VOLUME_MILLIS, Material, MaterialKind,
-    Microseconds, SegmentAudio, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow,
-    TextStroke, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
+    CommandDeltaName, CommandState, DirtyDomain, Draft, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_SEGMENT_VOLUME_MILLIS, Material,
+    MaterialKind, Microseconds, SegmentAudio, SegmentVolume, SourceTimerange, TargetTimerange,
+    TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -309,7 +309,7 @@ fn audio_commands_dirty_domains_cover_gain_pan_fades_keyframes_and_effect_slots(
     assert_audio_dirty_domains(&keyframe.delta);
 
     let direct_delta = audio_property_delta(
-        CommandName::UpdateSegmentAudio,
+        CommandDeltaName::UpdateSegmentAudio,
         &"audio-track".into(),
         &keyframe.draft.tracks[0].segments[0],
         "effect slot classification changed",

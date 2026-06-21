@@ -1,7 +1,7 @@
 //! Session-only bounded undo/redo history for timeline commands.
 
 use draft_model::{
-    CommandEvent, CommandHistorySnapshot, CommandName, CommandState, Draft,
+    CommandDeltaName, CommandEvent, CommandHistorySnapshot, CommandState, Draft,
     TimelineCommandResponse, TimelineSelection,
 };
 
@@ -72,7 +72,7 @@ pub fn undo_timeline_edit(
     let restored_draft = snapshot.draft;
     let restored_selection = snapshot.selection;
     let delta = restored_draft_delta(
-        CommandName::UndoTimelineEdit,
+        CommandDeltaName::UndoTimelineEdit,
         draft,
         &restored_draft,
         "undo restored a prior semantic snapshot",
@@ -116,7 +116,7 @@ pub fn redo_timeline_edit(
     let restored_draft = snapshot.draft;
     let restored_selection = snapshot.selection;
     let delta = restored_draft_delta(
-        CommandName::RedoTimelineEdit,
+        CommandDeltaName::RedoTimelineEdit,
         draft,
         &restored_draft,
         "redo restored a later semantic snapshot",

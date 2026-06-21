@@ -50,6 +50,7 @@ fail_matches() {
     rg -n --pcre2 "$pattern" "$@" 2>/dev/null \
       | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
       | rg -v 'renderGraphFailed' \
+      | rg -v 'renderGraphGpu|renderGraphGpuComposited' \
       || true
   )"
   if [ -n "$matches" ]; then
@@ -73,9 +74,7 @@ for symbol in \
   "TextLayoutRegion" \
   "TextWrapping" \
   "TextBubbleRef" \
-  "TextEffectRef" \
-  "ImportSubtitleSrtCommandPayload" \
-  "importSubtitleSrt"; do
+  "TextEffectRef"; do
   found=false
   for file in "${GENERATED_FILES[@]}"; do
     if rg -n --fixed-strings "$symbol" "$file" >/dev/null; then
@@ -86,10 +85,15 @@ for symbol in \
   [ "$found" = "true" ] || fail "generated contracts must contain ${symbol}"
 done
 
+fail_matches \
+  "generated public command contracts must not expose structural text/subtitle edit payloads" \
+  'AddTextSegmentCommandPayload|AddTextSegmentIntentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|ImportSubtitleSrtIntentCommandPayload|"\s*(?:addTextSegment|addTextSegmentIntent|editTextSegment|importSubtitleSrt|importSubtitleSrtIntent)\s*"' \
+  schemas/command.schema.json apps/desktop-electron/src/generated/CommandEnvelope.ts
+
 for text in \
   "文字" \
-  "字幕 / 导入字幕" \
-  "自动生成字幕片段" \
+  "字幕 导入字幕" \
+  "SRT 字幕" \
   "文本框" \
   "行高" \
   "字间距" \
@@ -118,7 +122,7 @@ require_fixed "crates/draft_commands/src/text.rs" "parse_srt"
 require_fixed "crates/ffmpeg_compiler/src/job.rs" "UnsupportedTextResource"
 require_fixed "crates/ffmpeg_compiler/src/ass.rs" "UnsupportedTextResource"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "command-only text edit"
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "SRT import command path sends raw SRT"
+require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "SRT import intent path sends raw SRT"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "expectNoLeftSecondaryMenu"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "五大区域"
 

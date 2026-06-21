@@ -8,7 +8,7 @@ use draft_commands::{
     },
 };
 use draft_model::{
-    CommandName, CommandState, DirtyDomain, Draft, Material, MaterialKind, Microseconds,
+    CommandDeltaName, CommandState, DirtyDomain, Draft, Material, MaterialKind, Microseconds,
     SourceTimerange, TargetTimerange, TimelineSelection, TrackKind,
 };
 
@@ -26,7 +26,7 @@ fn track_commands_create_rename_lock_visibility_mute_and_undo() {
     )
     .expect("valid video track should be created by Rust command semantics");
     assert_eq!(added_video.events[0].kind, "trackAdded");
-    assert_eq!(added_video.delta.command, CommandName::AddTrack);
+    assert_eq!(added_video.delta.command, CommandDeltaName::AddTrack);
     assert!(
         added_video
             .delta
@@ -77,7 +77,7 @@ fn track_commands_create_rename_lock_visibility_mute_and_undo() {
     .expect("track rename should be a Rust command semantic");
     assert_eq!(renamed.events[0].kind, "trackRenamed");
     assert_eq!(renamed.draft.tracks[0].name, "主画面");
-    assert_eq!(renamed.delta.command, CommandName::RenameTrack);
+    assert_eq!(renamed.delta.command, CommandDeltaName::RenameTrack);
 
     let locked = set_track_lock(
         &renamed.draft,
@@ -138,7 +138,7 @@ fn track_commands_create_rename_lock_visibility_mute_and_undo() {
     .expect("visual track visibility should be command-owned");
     assert_eq!(hidden.events[0].kind, "trackVisibilityChanged");
     assert!(!hidden.draft.tracks[0].visible);
-    assert_eq!(hidden.delta.command, CommandName::SetTrackVisibility);
+    assert_eq!(hidden.delta.command, CommandDeltaName::SetTrackVisibility);
     assert!(hidden.delta.changed_domains.contains(&DirtyDomain::Visual));
     assert_eq!(
         visual_track_stack_order(&hidden.draft),

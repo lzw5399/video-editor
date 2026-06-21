@@ -7,40 +7,34 @@ use std::{
 };
 
 use draft_model::{
-    AddAudioSegmentCommandPayload, AddAudioSegmentIntentCommandPayload, AddSegmentCommandPayload,
-    AddTextSegmentCommandPayload, AddTextSegmentIntentCommandPayload,
-    AddTimelineSegmentIntentCommandPayload, AddTrackCommandPayload, AddTrackIntentCommandPayload,
     ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
     ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceStatus,
     AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
-    CancelExportCommandPayload, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandEnvelope, CommandError,
-    CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName, CommandPayload,
-    CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse, DeleteSegmentCommandPayload,
+    CancelExportCommandPayload, CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset,
+    CanvasBackground, CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandDeltaName,
+    CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
+    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse,
     DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
-    DraftId, DraftMetadata, DraftSchemaVersion, EditTextSegmentCommandPayload, ExportDiagnostic,
-    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts,
-    ExportPreset, ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
+    DraftId, DraftMetadata, DraftSchemaVersion, ExportDiagnostic, ExportDiagnosticKind,
+    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
+    ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
-    ImportMaterialCommandPayload, ImportMaterialResponse, ImportSubtitleSrtCommandPayload,
-    ImportSubtitleSrtIntentCommandPayload, InvalidatePreviewCacheCommandPayload, InvalidationScope,
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
-    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
-    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
-    MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
-    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
-    MoveSegmentCommandPayload, MoveSelectedSegmentIntentCommandPayload,
-    OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingCommandPayload,
-    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
-    PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewFrameReleaseResponse, PreviewFrameStorageKind, PreviewFrameStoragePreference,
-    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
-    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
+    ImportMaterialCommandPayload, ImportMaterialResponse, InvalidatePreviewCacheCommandPayload,
+    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, ListMaterialsCommandPayload, ListMaterialsResponse,
+    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
+    MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata,
+    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MissingMaterialCommandDiagnosticKind, OpenProjectBundleCommandPayload,
+    OpenProjectBundleResponse, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
+    PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
+    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
     RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
-    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload,
     RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
     RunArtifactGarbageCollectionCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
     RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
@@ -55,24 +49,83 @@ use draft_model::{
     SaveProjectBundleResponse, Segment, SegmentAnchor, SegmentAudio, SegmentBackgroundFilling,
     SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentId, SegmentMask, SegmentOpacity,
     SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume,
-    SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
-    SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload, SetTrackMuteCommandPayload,
-    SetTrackVisibilityCommandPayload, SnappingSettings, SourceTimerange,
-    SplitSegmentCommandPayload, SplitSelectedSegmentIntentCommandPayload,
-    StartExportCommandPayload, TargetTimerange, TextAlignment, TextBackground, TextBox,
-    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
-    TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection,
-    Track, TrackId, TrackKind, Transition, TrimSegmentCommandPayload,
-    TrimSelectedSegmentIntentCommandPayload, UndoTimelineEditCommandPayload,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentVisualCommandPayload, VersionCommandPayload, WaveformDisplayPeak,
-    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
+    SnappingSettings, SourceTimerange, StartExportCommandPayload, TargetTimerange, TextAlignment,
+    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
+    TimelineSelection, Track, TrackId, TrackKind, Transition, VersionCommandPayload,
+    WaveformDisplayPeak, WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
 use ts_rs::{Config, TS};
 
 const TEXT_HEX_COLOR_PATTERN: &str = "^#[0-9A-Fa-f]{6}$";
+const PUBLIC_TIMELINE_EDIT_PAYLOAD_CONTRACTS: &[&str] = &[
+    "AddSegmentCommandPayload",
+    "AddTimelineSegmentIntentCommandPayload",
+    "SelectTimelineSegmentsCommandPayload",
+    "MoveSegmentCommandPayload",
+    "MoveSelectedSegmentIntentCommandPayload",
+    "SplitSegmentCommandPayload",
+    "SplitSelectedSegmentIntentCommandPayload",
+    "TrimSegmentCommandPayload",
+    "TrimSelectedSegmentIntentCommandPayload",
+    "DeleteSegmentCommandPayload",
+    "UndoTimelineEditCommandPayload",
+    "RedoTimelineEditCommandPayload",
+    "AddTextSegmentCommandPayload",
+    "AddTextSegmentIntentCommandPayload",
+    "EditTextSegmentCommandPayload",
+    "ImportSubtitleSrtCommandPayload",
+    "ImportSubtitleSrtIntentCommandPayload",
+    "AddAudioSegmentCommandPayload",
+    "AddAudioSegmentIntentCommandPayload",
+    "SetSegmentVolumeCommandPayload",
+    "UpdateSegmentAudioCommandPayload",
+    "AddTrackCommandPayload",
+    "AddTrackIntentCommandPayload",
+    "RenameTrackCommandPayload",
+    "SetTrackLockCommandPayload",
+    "SetTrackVisibilityCommandPayload",
+    "SetTrackMuteCommandPayload",
+    "UpdateDraftCanvasConfigCommandPayload",
+    "UpdateSegmentVisualCommandPayload",
+    "SetSegmentKeyframeCommandPayload",
+    "RemoveSegmentKeyframeCommandPayload",
+];
+const PUBLIC_TIMELINE_EDIT_COMMAND_NAMES: &[&str] = &[
+    "addSegment",
+    "addTimelineSegmentIntent",
+    "selectTimelineSegments",
+    "moveSegment",
+    "moveSelectedSegmentIntent",
+    "splitSegment",
+    "splitSelectedSegmentIntent",
+    "trimSegment",
+    "trimSelectedSegmentIntent",
+    "deleteSegment",
+    "undoTimelineEdit",
+    "redoTimelineEdit",
+    "addTextSegment",
+    "addTextSegmentIntent",
+    "editTextSegment",
+    "importSubtitleSrt",
+    "importSubtitleSrtIntent",
+    "addAudioSegment",
+    "addAudioSegmentIntent",
+    "setSegmentVolume",
+    "updateSegmentAudio",
+    "addTrack",
+    "addTrackIntent",
+    "renameTrack",
+    "setTrackLock",
+    "setTrackVisibility",
+    "setTrackMute",
+    "updateDraftCanvasConfig",
+    "updateSegmentVisual",
+    "setSegmentKeyframe",
+    "removeSegmentKeyframe",
+];
 
 fn project_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -104,7 +157,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     assert_or_update_contract_file(&draft_schema_path, &format!("{draft_schema_json}\n"));
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrackKind, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -116,38 +169,9 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
-            export_decl::<AddSegmentCommandPayload>(),
-            export_decl::<AddTimelineSegmentIntentCommandPayload>(),
-            export_decl::<SelectTimelineSegmentsCommandPayload>(),
-            export_decl::<MoveSegmentCommandPayload>(),
-            export_decl::<MoveSelectedSegmentIntentCommandPayload>(),
-            export_decl::<SplitSegmentCommandPayload>(),
-            export_decl::<SplitSelectedSegmentIntentCommandPayload>(),
-            export_decl::<TrimSegmentCommandPayload>(),
-            export_decl::<TrimSelectedSegmentIntentCommandPayload>(),
-            export_decl::<DeleteSegmentCommandPayload>(),
-            export_decl::<UndoTimelineEditCommandPayload>(),
-            export_decl::<RedoTimelineEditCommandPayload>(),
-            export_decl::<AddTextSegmentCommandPayload>(),
-            export_decl::<AddTextSegmentIntentCommandPayload>(),
-            export_decl::<EditTextSegmentCommandPayload>(),
-            export_decl::<ImportSubtitleSrtCommandPayload>(),
-            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
-            export_decl::<AddAudioSegmentCommandPayload>(),
-            export_decl::<AddAudioSegmentIntentCommandPayload>(),
-            export_decl::<SetSegmentVolumeCommandPayload>(),
-            export_decl::<UpdateSegmentAudioCommandPayload>(),
-            export_decl::<AddTrackCommandPayload>(),
-            export_decl::<AddTrackIntentCommandPayload>(),
-            export_decl::<RenameTrackCommandPayload>(),
-            export_decl::<SetTrackLockCommandPayload>(),
-            export_decl::<SetTrackVisibilityCommandPayload>(),
-            export_decl::<SetTrackMuteCommandPayload>(),
-            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
-            export_decl::<UpdateSegmentVisualCommandPayload>(),
-            export_decl::<SetSegmentKeyframeCommandPayload>(),
-            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
+            export_decl::<RuntimeTextureBackend>(),
+            export_decl::<RuntimeDeviceId>(),
             export_decl::<PreviewDecodeRequest>(),
             export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
@@ -183,7 +207,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
     );
 
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -253,6 +277,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<DirtyRange>(),
             export_decl::<DirtyRangeSource>(),
             export_decl::<InvalidationScope>(),
+            export_decl::<CommandDeltaName>(),
             export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
             export_decl::<ArtifactTaskStatus>(),
@@ -282,6 +307,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
         export_decl::<CanvasAspectRatio>(),
         export_decl::<CanvasBackgroundCapability>(),
         export_decl::<CanvasBackground>(),
+        export_decl::<CanvasAdaptationPolicy>(),
         export_decl::<DraftCanvasConfig>(),
         export_decl::<MaterialKind>(),
         export_decl::<MaterialStatus>(),
@@ -347,21 +373,14 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
 #[test]
 fn schema_exports_include_timeline_command_session_contracts() {
     let schema_json = command_schema_json();
-    for expected_contract in [
-        "TimelineSelection",
-        "CommandState",
-        "CommandHistorySnapshot",
-        "SnappingSettings",
-        "TimelineCommandResponse",
-    ] {
-        assert!(
-            schema_json.contains(expected_contract),
-            "command schema should include {expected_contract}"
-        );
-    }
+    assert!(
+        !schema_json.contains("TimelineCommandResponse")
+            && !schema_json.contains("CommandDeltaName"),
+        "public command schema must not include timeline session response contracts"
+    );
 
     let command_envelope_ts = ts_contract_with_prelude(
-        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrackKind, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -371,34 +390,9 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
-            export_decl::<AddSegmentCommandPayload>(),
-            export_decl::<SelectTimelineSegmentsCommandPayload>(),
-            export_decl::<MoveSegmentCommandPayload>(),
-            export_decl::<SplitSegmentCommandPayload>(),
-            export_decl::<TrimSegmentCommandPayload>(),
-            export_decl::<DeleteSegmentCommandPayload>(),
-            export_decl::<UndoTimelineEditCommandPayload>(),
-            export_decl::<RedoTimelineEditCommandPayload>(),
-            export_decl::<AddTextSegmentCommandPayload>(),
-            export_decl::<AddTextSegmentIntentCommandPayload>(),
-            export_decl::<EditTextSegmentCommandPayload>(),
-            export_decl::<ImportSubtitleSrtCommandPayload>(),
-            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
-            export_decl::<AddAudioSegmentCommandPayload>(),
-            export_decl::<AddAudioSegmentIntentCommandPayload>(),
-            export_decl::<SetSegmentVolumeCommandPayload>(),
-            export_decl::<UpdateSegmentAudioCommandPayload>(),
-            export_decl::<AddTrackCommandPayload>(),
-            export_decl::<AddTrackIntentCommandPayload>(),
-            export_decl::<RenameTrackCommandPayload>(),
-            export_decl::<SetTrackLockCommandPayload>(),
-            export_decl::<SetTrackVisibilityCommandPayload>(),
-            export_decl::<SetTrackMuteCommandPayload>(),
-            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
-            export_decl::<UpdateSegmentVisualCommandPayload>(),
-            export_decl::<SetSegmentKeyframeCommandPayload>(),
-            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
+            export_decl::<RuntimeTextureBackend>(),
+            export_decl::<RuntimeDeviceId>(),
             export_decl::<PreviewDecodeRequest>(),
             export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
@@ -419,7 +413,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
         ],
     );
     let command_result_ts = ts_contract_with_prelude(
-        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -478,6 +472,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<DirtyRange>(),
             export_decl::<DirtyRangeSource>(),
             export_decl::<InvalidationScope>(),
+            export_decl::<CommandDeltaName>(),
             export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
         ],
@@ -488,6 +483,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
         "CommandState",
         "CommandHistorySnapshot",
         "SnappingSettings",
+        "CommandDeltaName",
         "TimelineCommandResponse",
     ] {
         assert!(
@@ -510,16 +506,18 @@ fn schema_exports_include_phase13_incremental_harness_anchors() {
     ]);
 
     for expected_contract in [
-        "TimelineCommandResponse",
         "InvalidatePreviewCacheCommandPayload",
         "PreviewCacheInvalidationResponse",
     ] {
         assert!(
-            command_schema.contains(expected_contract)
-                || command_result_ts.contains(expected_contract),
+            command_schema.contains(expected_contract),
             "Phase 13 downstream contract assertions should attach to {expected_contract}"
         );
     }
+    assert!(
+        command_result_ts.contains("TimelineCommandResponse"),
+        "Phase 13 timeline response contract should be exported from command result TS"
+    );
 
     for expected_contract in ["Microseconds", "TargetTimerange", "MaterialId"] {
         assert!(
@@ -544,46 +542,6 @@ fn schema_exports_include_phase13_incremental_harness_anchors() {
 
 #[test]
 fn schema_exports_include_phase13_delta_contracts() {
-    let command_schema: serde_json::Value =
-        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
-    let defs = command_schema
-        .get("$defs")
-        .and_then(|defs| defs.as_object())
-        .expect("command schema should expose definitions");
-
-    for expected_contract in [
-        "ChangedEntity",
-        "DirtyDomain",
-        "DirtyRange",
-        "DirtyRangeSource",
-        "InvalidationScope",
-        "CommandDelta",
-        "TimelineCommandResponse",
-    ] {
-        assert!(
-            defs.contains_key(expected_contract),
-            "command schema should include Phase 13 delta contract {expected_contract}"
-        );
-    }
-
-    let timeline_response = defs
-        .get("TimelineCommandResponse")
-        .expect("TimelineCommandResponse should be generated");
-    assert_eq!(
-        timeline_response
-            .pointer("/properties/delta/$ref")
-            .and_then(|value| value.as_str()),
-        Some("#/$defs/CommandDelta"),
-        "TimelineCommandResponse.delta must directly reference CommandDelta"
-    );
-    assert!(
-        timeline_response
-            .get("required")
-            .and_then(|value| value.as_array())
-            .is_some_and(|required| required.iter().any(|field| field == "delta")),
-        "TimelineCommandResponse.delta must be required in the generated schema"
-    );
-
     let command_result_ts = command_result_ts_contract();
     for expected_export in [
         "export type ChangedEntity",
@@ -591,7 +549,9 @@ fn schema_exports_include_phase13_delta_contracts() {
         "export type DirtyRange",
         "export type DirtyRangeSource",
         "export type InvalidationScope",
+        "export type CommandDeltaName",
         "export type CommandDelta",
+        "export type TimelineCommandResponse",
         "delta: CommandDelta",
     ] {
         assert!(
@@ -875,52 +835,47 @@ fn schema_exports_include_phase14_artifact_status_and_maintenance_contracts() {
 }
 
 #[test]
-fn schema_exports_include_timeline_edit_command_contracts() {
-    let schema_json = command_schema_json();
+fn schema_exports_exclude_timeline_edit_commands_from_public_envelope_contracts() {
+    let command_schema: serde_json::Value =
+        serde_json::from_str(&command_schema_json()).expect("command schema should parse");
+    let defs = command_schema
+        .get("$defs")
+        .and_then(|defs| defs.as_object())
+        .expect("command schema should expose definitions");
     let command_envelope_ts = command_envelope_ts_contract();
 
-    for expected_contract in [
-        "AddSegmentCommandPayload",
-        "SelectTimelineSegmentsCommandPayload",
-        "MoveSegmentCommandPayload",
-        "SplitSegmentCommandPayload",
-        "TrimSegmentCommandPayload",
-        "DeleteSegmentCommandPayload",
-    ] {
+    for forbidden_contract in PUBLIC_TIMELINE_EDIT_PAYLOAD_CONTRACTS {
         assert!(
-            schema_json.contains(expected_contract),
-            "command schema should include {expected_contract}"
+            !defs.contains_key(*forbidden_contract),
+            "public command schema must not expose internal timeline edit payload {forbidden_contract}"
         );
         assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
+            !command_envelope_ts.contains(&format!("export type {forbidden_contract}")),
+            "generated public CommandEnvelope.ts must not export {forbidden_contract}"
         );
     }
-}
 
-#[test]
-fn schema_exports_include_undo_redo_command_contracts() {
-    let schema_json = command_schema_json();
-    let command_envelope_ts = command_envelope_ts_contract();
-
-    for expected_contract in [
-        "UndoTimelineEditCommandPayload",
-        "RedoTimelineEditCommandPayload",
-    ] {
+    let command_name_enum = defs
+        .get("CommandName")
+        .and_then(|schema| schema.get("enum"))
+        .and_then(|entries| entries.as_array())
+        .expect("CommandName should expose string enum");
+    for forbidden_command in PUBLIC_TIMELINE_EDIT_COMMAND_NAMES {
         assert!(
-            schema_json.contains(expected_contract),
-            "command schema should include {expected_contract}"
+            !command_name_enum
+                .iter()
+                .any(|entry| entry.as_str() == Some(*forbidden_command)),
+            "public CommandName must not expose internal timeline edit command {forbidden_command}"
         );
         assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
+            !command_envelope_ts.contains(&format!("\"{forbidden_command}\"")),
+            "generated public CommandEnvelope.ts must not advertise {forbidden_command}"
         );
     }
 }
 
 #[test]
 fn schema_exports_include_text_command_contracts() {
-    let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
     let draft_ts = ts_contract(&[
         export_decl::<TextAlignment>(),
@@ -949,18 +904,13 @@ fn schema_exports_include_text_command_contracts() {
         "TextEffectRef",
         "TextStyle",
         "TextAlignment",
-        "AddTextSegmentCommandPayload",
-        "AddTextSegmentIntentCommandPayload",
-        "EditTextSegmentCommandPayload",
-        "ImportSubtitleSrtCommandPayload",
-        "ImportSubtitleSrtIntentCommandPayload",
     ] {
         assert!(
-            schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
-            "schema or draft TypeScript should include {expected_contract}"
+            draft_ts.contains(expected_contract),
+            "draft TypeScript should include {expected_contract}"
         );
     }
-    for expected_contract in [
+    for forbidden_contract in [
         "AddTextSegmentCommandPayload",
         "AddTextSegmentIntentCommandPayload",
         "EditTextSegmentCommandPayload",
@@ -968,39 +918,32 @@ fn schema_exports_include_text_command_contracts() {
         "ImportSubtitleSrtIntentCommandPayload",
     ] {
         assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
+            !command_envelope_ts.contains(&format!("export type {forbidden_contract}")),
+            "generated public CommandEnvelope.ts must not export {forbidden_contract}"
         );
     }
 }
 
 #[test]
 fn schema_exports_include_audio_command_contracts() {
-    let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
     let draft_ts = ts_contract(&[export_decl::<SegmentVolume>()]);
 
-    for expected_contract in [
-        "SegmentVolume",
-        "AddAudioSegmentCommandPayload",
-        "AddAudioSegmentIntentCommandPayload",
-        "SetSegmentVolumeCommandPayload",
-        "SetTrackMuteCommandPayload",
-    ] {
+    for expected_contract in ["SegmentVolume"] {
         assert!(
-            schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
-            "schema or draft TypeScript should include {expected_contract}"
+            draft_ts.contains(expected_contract),
+            "draft TypeScript should include {expected_contract}"
         );
     }
-    for expected_contract in [
+    for forbidden_contract in [
         "AddAudioSegmentCommandPayload",
         "AddAudioSegmentIntentCommandPayload",
         "SetSegmentVolumeCommandPayload",
         "SetTrackMuteCommandPayload",
     ] {
         assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
+            !command_envelope_ts.contains(&format!("export type {forbidden_contract}")),
+            "generated public CommandEnvelope.ts must not export {forbidden_contract}"
         );
     }
 }
@@ -1015,10 +958,9 @@ fn schema_exports_include_phase15_audio_semantic_contracts() {
         .expect("command schema should expose definitions");
 
     assert!(
-        defs.contains_key("UpdateSegmentAudioCommandPayload"),
-        "command schema should include UpdateSegmentAudioCommandPayload"
+        !defs.contains_key("UpdateSegmentAudioCommandPayload"),
+        "public command schema must not expose UpdateSegmentAudioCommandPayload"
     );
-    assert_command_pairing_occurs_once(&command_schema, "updateSegmentAudio");
 
     let draft_ts = ts_contract(&[
         export_decl::<SegmentAudio>(),
@@ -1032,14 +974,17 @@ fn schema_exports_include_phase15_audio_semantic_contracts() {
         "export type AudioFade",
         "export type AudioPanBalance",
         "export type AudioEffectSlot",
-        "export type UpdateSegmentAudioCommandPayload",
-        "updateSegmentAudio",
     ] {
         assert!(
-            draft_ts.contains(expected_export) || command_envelope_ts.contains(expected_export),
+            draft_ts.contains(expected_export),
             "generated TypeScript contracts should include {expected_export}"
         );
     }
+    assert!(
+        !command_envelope_ts.contains("UpdateSegmentAudioCommandPayload")
+            && !command_envelope_ts.contains("\"updateSegmentAudio\""),
+        "public CommandEnvelope.ts must not expose updateSegmentAudio"
+    );
 
     for forbidden in [
         "waveformPath",
@@ -1397,13 +1342,13 @@ fn schema_exports_include_phase12_source_guard_script_wiring() {
 
 #[test]
 fn schema_exports_include_canvas_config_and_command_contracts() {
-    let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
     let draft_ts = ts_contract(&[
         export_decl::<CanvasAspectRatioPreset>(),
         export_decl::<CanvasAspectRatio>(),
         export_decl::<CanvasBackgroundCapability>(),
         export_decl::<CanvasBackground>(),
+        export_decl::<CanvasAdaptationPolicy>(),
         export_decl::<DraftCanvasConfig>(),
     ]);
 
@@ -1420,27 +1365,15 @@ fn schema_exports_include_canvas_config_and_command_contracts() {
         );
     }
 
-    for expected_contract in ["UpdateDraftCanvasConfigCommandPayload"] {
-        assert!(
-            schema_json.contains(expected_contract),
-            "command schema should include {expected_contract}"
-        );
-        assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
-        );
-    }
-
     assert!(
-        schema_json.contains("updateDraftCanvasConfig")
-            && command_envelope_ts.contains("updateDraftCanvasConfig"),
-        "draft canvas update command should be generated from Rust contracts"
+        !command_envelope_ts.contains("UpdateDraftCanvasConfigCommandPayload")
+            && !command_envelope_ts.contains("\"updateDraftCanvasConfig\""),
+        "public CommandEnvelope.ts must not expose updateDraftCanvasConfig"
     );
 }
 
 #[test]
 fn schema_exports_include_segment_visual_and_command_contracts() {
-    let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
     let draft_ts = ts_contract(&[
         export_decl::<SegmentPosition>(),
@@ -1478,45 +1411,42 @@ fn schema_exports_include_segment_visual_and_command_contracts() {
     }
 
     assert!(
-        schema_json.contains("UpdateSegmentVisualCommandPayload"),
-        "command schema should include UpdateSegmentVisualCommandPayload"
-    );
-    assert!(
-        command_envelope_ts.contains("export type UpdateSegmentVisualCommandPayload"),
-        "generated TypeScript contracts should export UpdateSegmentVisualCommandPayload"
-    );
-    assert!(
-        schema_json.contains("updateSegmentVisual")
-            && command_envelope_ts.contains("updateSegmentVisual"),
-        "segment visual update command should be generated from Rust contracts"
+        !command_envelope_ts.contains("UpdateSegmentVisualCommandPayload")
+            && !command_envelope_ts.contains("\"updateSegmentVisual\""),
+        "public CommandEnvelope.ts must not expose updateSegmentVisual"
     );
 }
 
 #[test]
 fn schema_exports_include_keyframe_command_contracts() {
-    let schema_json = command_schema_json();
     let command_envelope_ts = command_envelope_ts_contract();
+    let draft_ts = ts_contract(&[
+        export_decl::<KeyframeProperty>(),
+        export_decl::<KeyframeValue>(),
+        export_decl::<KeyframeInterpolation>(),
+        export_decl::<KeyframeEasing>(),
+        export_decl::<Keyframe>(),
+    ]);
 
     for expected_contract in [
-        "SetSegmentKeyframeCommandPayload",
-        "RemoveSegmentKeyframeCommandPayload",
+        "KeyframeProperty",
+        "KeyframeValue",
+        "KeyframeInterpolation",
+        "KeyframeEasing",
+        "Keyframe",
     ] {
         assert!(
-            schema_json.contains(expected_contract),
-            "command schema should include {expected_contract}"
-        );
-        assert!(
-            command_envelope_ts.contains(&format!("export type {expected_contract}")),
-            "generated TypeScript contracts should export {expected_contract}"
+            draft_ts.contains(expected_contract),
+            "draft TypeScript should include {expected_contract}"
         );
     }
 
     assert!(
-        schema_json.contains("setSegmentKeyframe")
-            && schema_json.contains("removeSegmentKeyframe")
-            && command_envelope_ts.contains("setSegmentKeyframe")
-            && command_envelope_ts.contains("removeSegmentKeyframe"),
-        "keyframe commands should be generated from Rust contracts"
+        !command_envelope_ts.contains("SetSegmentKeyframeCommandPayload")
+            && !command_envelope_ts.contains("RemoveSegmentKeyframeCommandPayload")
+            && !command_envelope_ts.contains("\"setSegmentKeyframe\"")
+            && !command_envelope_ts.contains("\"removeSegmentKeyframe\""),
+        "public CommandEnvelope.ts must not expose keyframe edit commands"
     );
 }
 
@@ -1533,7 +1463,7 @@ fn ts_config() -> Config {
 
 fn command_envelope_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { AudioEffectSlot, AudioFade, AudioPanBalance, Draft, DraftCanvasConfig, Keyframe, KeyframeProperty, MaterialId, MaterialKind, Microseconds, SegmentId, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, TrackId, TrackKind, TrimSegmentDirection } from \"./Draft\";\n\n",
+        "import type { Draft, MaterialId, MaterialKind, Microseconds, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\n\n",
         &[
             export_decl::<CommandName>(),
             export_decl::<PingCommandPayload>(),
@@ -1543,33 +1473,6 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<ImportMaterialCommandPayload>(),
             export_decl::<ListMaterialsCommandPayload>(),
             export_decl::<ListMissingMaterialsCommandPayload>(),
-            export_decl::<AddSegmentCommandPayload>(),
-            export_decl::<SelectTimelineSegmentsCommandPayload>(),
-            export_decl::<MoveSegmentCommandPayload>(),
-            export_decl::<SplitSegmentCommandPayload>(),
-            export_decl::<TrimSegmentCommandPayload>(),
-            export_decl::<DeleteSegmentCommandPayload>(),
-            export_decl::<UndoTimelineEditCommandPayload>(),
-            export_decl::<RedoTimelineEditCommandPayload>(),
-            export_decl::<AddTextSegmentCommandPayload>(),
-            export_decl::<AddTextSegmentIntentCommandPayload>(),
-            export_decl::<EditTextSegmentCommandPayload>(),
-            export_decl::<ImportSubtitleSrtCommandPayload>(),
-            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
-            export_decl::<AddAudioSegmentCommandPayload>(),
-            export_decl::<AddAudioSegmentIntentCommandPayload>(),
-            export_decl::<SetSegmentVolumeCommandPayload>(),
-            export_decl::<UpdateSegmentAudioCommandPayload>(),
-            export_decl::<AddTrackCommandPayload>(),
-            export_decl::<AddTrackIntentCommandPayload>(),
-            export_decl::<RenameTrackCommandPayload>(),
-            export_decl::<SetTrackLockCommandPayload>(),
-            export_decl::<SetTrackVisibilityCommandPayload>(),
-            export_decl::<SetTrackMuteCommandPayload>(),
-            export_decl::<UpdateDraftCanvasConfigCommandPayload>(),
-            export_decl::<UpdateSegmentVisualCommandPayload>(),
-            export_decl::<SetSegmentKeyframeCommandPayload>(),
-            export_decl::<RemoveSegmentKeyframeCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
             export_decl::<PreviewDecodeRequest>(),
             export_decl::<ReleasePreviewFrameCommandPayload>(),
@@ -1604,7 +1507,7 @@ fn command_envelope_ts_contract() -> String {
 
 fn command_result_ts_contract() -> String {
     ts_contract_with_prelude(
-        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandName, CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
+        "import type { Draft, DraftId, KeyframeProperty, Material, MaterialId, MaterialStatus, Microseconds, RationalFrameRate, SegmentId, TargetTimerange, TrackId } from \"./Draft\";\nimport type { CommandState, ExportPreset, PreviewOutputProfile, TimelineSelection } from \"./CommandEnvelope\";\n\n",
         &[
             export_decl::<CommandErrorKind>(),
             export_decl::<CommandError>(),
@@ -1672,6 +1575,7 @@ fn command_result_ts_contract() -> String {
             export_decl::<DirtyRange>(),
             export_decl::<DirtyRangeSource>(),
             export_decl::<InvalidationScope>(),
+            export_decl::<CommandDeltaName>(),
             export_decl::<CommandDelta>(),
             export_decl::<TimelineCommandResponse>(),
             export_decl::<ArtifactTaskStatus>(),
@@ -1796,10 +1700,11 @@ fn assert_or_update_contract_file(path: impl AsRef<Path>, expected: &str) {
 fn schema_fixtures_validate_command_contracts() {
     let root = project_root();
     let fixture_dir = root.join("fixtures/draft");
-    let positive = BTreeSet::from(["minimal-command.json", "minimal-timeline-command.json"]);
+    let positive = BTreeSet::from(["minimal-command.json"]);
     let negative = BTreeSet::from([
         "invalid-mismatched-command-payload.json",
         "invalid-timeline-command.json",
+        "minimal-timeline-command.json",
         "invalid-unknown-field.json",
     ]);
 
@@ -1874,125 +1779,6 @@ fn command_schema_json() -> String {
     let schema = schema_for!(CommandEnvelope);
     let mut schema_value =
         serde_json::to_value(schema).expect("command schema should serialize to JSON value");
-    include_command_contract_schema::<TimelineSelection>(&mut schema_value, "TimelineSelection");
-    include_command_contract_schema::<SnappingSettings>(&mut schema_value, "SnappingSettings");
-    include_command_contract_schema::<CommandHistorySnapshot>(
-        &mut schema_value,
-        "CommandHistorySnapshot",
-    );
-    include_command_contract_schema::<CommandState>(&mut schema_value, "CommandState");
-    include_command_contract_schema::<TimelineCommandResponse>(
-        &mut schema_value,
-        "TimelineCommandResponse",
-    );
-    include_command_contract_schema::<AddSegmentCommandPayload>(
-        &mut schema_value,
-        "AddSegmentCommandPayload",
-    );
-    include_command_contract_schema::<SelectTimelineSegmentsCommandPayload>(
-        &mut schema_value,
-        "SelectTimelineSegmentsCommandPayload",
-    );
-    include_command_contract_schema::<MoveSegmentCommandPayload>(
-        &mut schema_value,
-        "MoveSegmentCommandPayload",
-    );
-    include_command_contract_schema::<SplitSegmentCommandPayload>(
-        &mut schema_value,
-        "SplitSegmentCommandPayload",
-    );
-    include_command_contract_schema::<TrimSegmentCommandPayload>(
-        &mut schema_value,
-        "TrimSegmentCommandPayload",
-    );
-    include_command_contract_schema::<DeleteSegmentCommandPayload>(
-        &mut schema_value,
-        "DeleteSegmentCommandPayload",
-    );
-    include_command_contract_schema::<UndoTimelineEditCommandPayload>(
-        &mut schema_value,
-        "UndoTimelineEditCommandPayload",
-    );
-    include_command_contract_schema::<RedoTimelineEditCommandPayload>(
-        &mut schema_value,
-        "RedoTimelineEditCommandPayload",
-    );
-    include_command_contract_schema::<AddTextSegmentCommandPayload>(
-        &mut schema_value,
-        "AddTextSegmentCommandPayload",
-    );
-    include_command_contract_schema::<AddTextSegmentIntentCommandPayload>(
-        &mut schema_value,
-        "AddTextSegmentIntentCommandPayload",
-    );
-    include_command_contract_schema::<EditTextSegmentCommandPayload>(
-        &mut schema_value,
-        "EditTextSegmentCommandPayload",
-    );
-    include_command_contract_schema::<ImportSubtitleSrtCommandPayload>(
-        &mut schema_value,
-        "ImportSubtitleSrtCommandPayload",
-    );
-    include_command_contract_schema::<ImportSubtitleSrtIntentCommandPayload>(
-        &mut schema_value,
-        "ImportSubtitleSrtIntentCommandPayload",
-    );
-    include_command_contract_schema::<AddAudioSegmentCommandPayload>(
-        &mut schema_value,
-        "AddAudioSegmentCommandPayload",
-    );
-    include_command_contract_schema::<AddAudioSegmentIntentCommandPayload>(
-        &mut schema_value,
-        "AddAudioSegmentIntentCommandPayload",
-    );
-    include_command_contract_schema::<SetSegmentVolumeCommandPayload>(
-        &mut schema_value,
-        "SetSegmentVolumeCommandPayload",
-    );
-    include_command_contract_schema::<UpdateSegmentAudioCommandPayload>(
-        &mut schema_value,
-        "UpdateSegmentAudioCommandPayload",
-    );
-    include_command_contract_schema::<AddTrackCommandPayload>(
-        &mut schema_value,
-        "AddTrackCommandPayload",
-    );
-    include_command_contract_schema::<AddTrackIntentCommandPayload>(
-        &mut schema_value,
-        "AddTrackIntentCommandPayload",
-    );
-    include_command_contract_schema::<RenameTrackCommandPayload>(
-        &mut schema_value,
-        "RenameTrackCommandPayload",
-    );
-    include_command_contract_schema::<SetTrackLockCommandPayload>(
-        &mut schema_value,
-        "SetTrackLockCommandPayload",
-    );
-    include_command_contract_schema::<SetTrackVisibilityCommandPayload>(
-        &mut schema_value,
-        "SetTrackVisibilityCommandPayload",
-    );
-    include_command_contract_schema::<SetTrackMuteCommandPayload>(
-        &mut schema_value,
-        "SetTrackMuteCommandPayload",
-    );
-    include_command_contract_schema::<UpdateDraftCanvasConfigCommandPayload>(
-        &mut schema_value,
-        "UpdateDraftCanvasConfigCommandPayload",
-    );
-    include_command_contract_schema::<UpdateSegmentVisualCommandPayload>(
-        &mut schema_value,
-        "UpdateSegmentVisualCommandPayload",
-    );
-    include_command_contract_schema::<SetSegmentKeyframeCommandPayload>(
-        &mut schema_value,
-        "SetSegmentKeyframeCommandPayload",
-    );
-    include_command_contract_schema::<RemoveSegmentKeyframeCommandPayload>(
-        &mut schema_value,
-        "RemoveSegmentKeyframeCommandPayload",
-    );
     include_command_contract_schema::<PreviewFrameStoragePreference>(
         &mut schema_value,
         "PreviewFrameStoragePreference",
@@ -3049,732 +2835,60 @@ fn draft_value_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::
 }
 
 fn command_payload_pairing_constraints() -> serde_json::Value {
-    json!([
-        {
-            "properties": {
-                "command": { "const": "ping" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "ping" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "version" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "version" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "probeMediaRuntime" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "probeMediaRuntime" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "probeRuntimeCapabilities" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "probeRuntimeCapabilities" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "openProjectBundle" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "openProjectBundle" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "saveProjectBundle" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "saveProjectBundle" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "importMaterial" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "importMaterial" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "listMaterials" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "listMaterials" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "listMissingMaterials" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "listMissingMaterials" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addTimelineSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addTimelineSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "selectTimelineSegments" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "selectTimelineSegments" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "moveSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "moveSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "moveSelectedSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "moveSelectedSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "splitSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "splitSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "splitSelectedSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "splitSelectedSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "trimSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "trimSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "trimSelectedSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "trimSelectedSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "deleteSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "deleteSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "undoTimelineEdit" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "undoTimelineEdit" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "redoTimelineEdit" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "redoTimelineEdit" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addTextSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addTextSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addTextSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addTextSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "editTextSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "editTextSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "importSubtitleSrt" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "importSubtitleSrt" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "importSubtitleSrtIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "importSubtitleSrtIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addAudioSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addAudioSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addAudioSegmentIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addAudioSegmentIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "setSegmentVolume" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "setSegmentVolume" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "updateSegmentAudio" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "updateSegmentAudio" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addTrack" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addTrack" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "addTrackIntent" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "addTrackIntent" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "renameTrack" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "renameTrack" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "setTrackLock" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "setTrackLock" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "setTrackVisibility" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "setTrackVisibility" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "setTrackMute" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "setTrackMute" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "updateDraftCanvasConfig" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "updateDraftCanvasConfig" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "updateSegmentVisual" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "updateSegmentVisual" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "setSegmentKeyframe" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "setSegmentKeyframe" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "removeSegmentKeyframe" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "removeSegmentKeyframe" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "requestPreviewDecode" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "requestPreviewDecode" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "releasePreviewFrame" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "releasePreviewFrame" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "requestPreviewFrame" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "requestPreviewFrame" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "requestPreviewSegment" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "requestPreviewSegment" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "invalidatePreviewCache" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "invalidatePreviewCache" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "createAudioPreviewSession" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "createAudioPreviewSession" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "playAudioPreview" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "playAudioPreview" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "pauseAudioPreview" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "pauseAudioPreview" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "stopAudioPreview" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "stopAudioPreview" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "seekAudioPreview" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "seekAudioPreview" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "cancelAudioPreview" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "cancelAudioPreview" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "getAudioPreviewStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "getAudioPreviewStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "listAudioOutputDevices" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "listAudioOutputDevices" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "selectAudioOutputDevice" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "selectAudioOutputDevice" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "getWaveformDisplayPeaks" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "getWaveformDisplayPeaks" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "refreshWaveformStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "refreshWaveformStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "getArtifactStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "getArtifactStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "refreshArtifactStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "refreshArtifactStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "retryArtifactGeneration" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "retryArtifactGeneration" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "resumeArtifactGeneration" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "resumeArtifactGeneration" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "cancelArtifactGeneration" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "cancelArtifactGeneration" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "getArtifactQuotaStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "getArtifactQuotaStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "runArtifactGarbageCollection" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "runArtifactGarbageCollection" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "startExport" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "startExport" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "getExportJobStatus" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "getExportJobStatus" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        },
-        {
-            "properties": {
-                "command": { "const": "cancelExport" },
-                "payload": {
-                    "properties": {
-                        "kind": { "const": "cancelExport" }
-                    },
-                    "required": ["kind"]
-                }
-            }
-        }
-    ])
+    let command_names = [
+        "ping",
+        "version",
+        "probeMediaRuntime",
+        "probeRuntimeCapabilities",
+        "openProjectBundle",
+        "saveProjectBundle",
+        "importMaterial",
+        "listMaterials",
+        "listMissingMaterials",
+        "requestPreviewDecode",
+        "releasePreviewFrame",
+        "requestPreviewFrame",
+        "requestPreviewSegment",
+        "invalidatePreviewCache",
+        "createAudioPreviewSession",
+        "playAudioPreview",
+        "pauseAudioPreview",
+        "stopAudioPreview",
+        "seekAudioPreview",
+        "cancelAudioPreview",
+        "getAudioPreviewStatus",
+        "listAudioOutputDevices",
+        "selectAudioOutputDevice",
+        "getWaveformDisplayPeaks",
+        "refreshWaveformStatus",
+        "getArtifactStatus",
+        "refreshArtifactStatus",
+        "retryArtifactGeneration",
+        "resumeArtifactGeneration",
+        "cancelArtifactGeneration",
+        "getArtifactQuotaStatus",
+        "runArtifactGarbageCollection",
+        "startExport",
+        "getExportJobStatus",
+        "cancelExport",
+    ];
+
+    serde_json::Value::Array(
+        command_names
+            .iter()
+            .map(|name| {
+                json!({
+                    "properties": {
+                        "command": { "const": name },
+                        "payload": {
+                            "properties": {
+                                "kind": { "const": name }
+                            },
+                            "required": ["kind"]
+                        }
+                    }
+                })
+            })
+            .collect(),
+    )
 }

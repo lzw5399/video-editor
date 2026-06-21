@@ -3,9 +3,9 @@ use draft_commands::{
     text::{import_subtitle_srt, import_subtitle_srt_intent},
 };
 use draft_model::{
-    CommandPayload, CommandState, Draft, ImportSubtitleSrtCommandPayload,
-    ImportSubtitleSrtIntentCommandPayload, Microseconds, TextAlignment, TextBox, TextLayoutRegion,
-    TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
+    CommandState, Draft, ImportSubtitleSrtCommandPayload, ImportSubtitleSrtIntentCommandPayload,
+    Microseconds, TextAlignment, TextBox, TextLayoutRegion, TextSegmentSource, TextStyle,
+    TextWrapping, TimelineEditPayload, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -151,9 +151,10 @@ fn import_subtitle_srt_payload_routes_through_timeline_command_executor() {
         TimelineSelection::empty(),
     );
 
-    let routed =
-        draft_commands::timeline::execute_timeline_edit(CommandPayload::ImportSubtitleSrt(payload))
-            .expect("importSubtitleSrt should route through timeline command execution");
+    let routed = draft_commands::timeline::execute_timeline_edit(
+        TimelineEditPayload::ImportSubtitleSrt(payload),
+    )
+    .expect("importSubtitleSrt should route through timeline command execution");
 
     assert_eq!(routed.events[0].kind, "subtitleSrtImported");
     assert_eq!(routed.draft.tracks[0].segments.len(), 2);
@@ -265,7 +266,7 @@ fn import_subtitle_srt_intent_payload_routes_through_timeline_command_executor()
     );
 
     let routed = draft_commands::timeline::execute_timeline_edit(
-        CommandPayload::ImportSubtitleSrtIntent(payload),
+        TimelineEditPayload::ImportSubtitleSrtIntent(payload),
     )
     .expect("importSubtitleSrtIntent should route through timeline command execution");
 

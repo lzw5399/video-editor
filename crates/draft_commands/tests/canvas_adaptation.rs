@@ -3,7 +3,7 @@ use draft_commands::{
 };
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    CommandName, CommandState, DirtyDomain, Draft, DraftCanvasConfig, Material, MaterialKind,
+    CommandDeltaName, CommandState, DirtyDomain, Draft, DraftCanvasConfig, Material, MaterialKind,
     Microseconds, RationalFrameRate, SegmentFitMode, SourceTimerange, TargetTimerange,
     TimelineSelection, Track, TrackKind,
 };
@@ -38,7 +38,7 @@ fn first_portrait_video_adopts_vertical_canvas_and_frame_rate() {
         response.draft.tracks[0].segments[0].visual.fit_mode,
         SegmentFitMode::Fit
     );
-    assert_eq!(response.delta.command, CommandName::AddSegment);
+    assert_eq!(response.delta.command, CommandDeltaName::AddSegment);
     assert!(response.delta.invalidation.full_draft);
     assert!(
         response

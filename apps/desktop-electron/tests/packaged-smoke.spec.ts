@@ -114,7 +114,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
   }
 });
 
-test("packaged app reports classified runtime discovery failures without crashing", async () => {
+test("packaged app ignores external bundled runtime overrides", async () => {
   const { app, page } = await launchPackagedApp({
     VE_BUNDLED_FFMPEG_DIR: "/definitely-missing/video-editor/ffmpeg-runtime"
   });
@@ -122,15 +122,21 @@ test("packaged app reports classified runtime discovery failures without crashin
   try {
     await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
 
+    const resourcesPath = await app.evaluate(() => process.resourcesPath);
     const result = await page.evaluate((command) => {
       return window.videoEditorCore?.executeCommand(command);
-    }, probeMediaRuntimeCommand("packaged-runtime-probe-missing"));
+    }, probeMediaRuntimeCommand("packaged-runtime-probe-ignores-external-env"));
 
-    expect(result?.ok).toBe(false);
-    expect(result?.data).toBeNull();
-    expect(result?.error?.kind).toBe("runtimeDiscoveryFailed");
-    expect(result?.error?.command).toBe("probeMediaRuntime");
-    expect(result?.error?.message).toMatch(/VE_BUNDLED_FFMPEG_DIR/);
+    const runtime = result?.data as {
+      ffmpeg?: { path?: string; source?: { directory?: string } };
+      ffprobe?: { path?: string; source?: { directory?: string } };
+    } | undefined;
+    expect(result?.ok).toBe(true);
+    expect(result?.error).toBeNull();
+    expect(runtime?.ffmpeg?.source?.directory).toContain(resourcesPath);
+    expect(runtime?.ffprobe?.source?.directory).toContain(resourcesPath);
+    expect(runtime?.ffmpeg?.path).not.toContain("/definitely-missing");
+    expect(runtime?.ffprobe?.path).not.toContain("/definitely-missing");
   } finally {
     await app.close();
   }

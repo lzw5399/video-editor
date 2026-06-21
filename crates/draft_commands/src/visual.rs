@@ -1,7 +1,7 @@
 //! Segment-level visual command semantics.
 
 use draft_model::{
-    CommandEvent, CommandName, CommandState, Draft, SegmentId, SegmentVisual,
+    CommandDeltaName, CommandEvent, CommandState, Draft, SegmentId, SegmentVisual,
     TimelineCommandResponse, TimelineSelection,
 };
 
@@ -27,7 +27,7 @@ pub fn update_segment_visual(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = visual_segment_delta(
-        CommandName::UpdateSegmentVisual,
+        CommandDeltaName::UpdateSegmentVisual,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         "segment visual updated",

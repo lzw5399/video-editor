@@ -1,8 +1,8 @@
 //! Semantic command delta builders for accepted draft commands.
 
 use draft_model::{
-    ChangedEntity, CommandDelta, CommandName, DirtyDomain, DirtyRange, DirtyRangeSource, Draft,
-    InvalidationScope, KeyframeProperty, MaterialId, Microseconds, Segment, SegmentId,
+    ChangedEntity, CommandDelta, CommandDeltaName, DirtyDomain, DirtyRange, DirtyRangeSource,
+    Draft, InvalidationScope, KeyframeProperty, MaterialId, Microseconds, Segment, SegmentId,
     TargetTimerange, TrackId,
 };
 
@@ -187,7 +187,7 @@ pub fn previous_and_current_range(target_timerange: TargetTimerange) -> DirtyRan
 }
 
 pub fn segment_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     changed_ranges: Vec<DirtyRange>,
@@ -237,7 +237,7 @@ pub fn segment_with_canvas_delta(
     }
 
     CommandDelta {
-        command: CommandName::AddSegment,
+        command: CommandDeltaName::AddSegment,
         changed_entities,
         changed_domains,
         changed_ranges: vec![DirtyRange {
@@ -254,7 +254,11 @@ pub fn segment_with_canvas_delta(
     }
 }
 
-pub fn track_delta(command: CommandName, track_id: &TrackId, reason: &'static str) -> CommandDelta {
+pub fn track_delta(
+    command: CommandDeltaName,
+    track_id: &TrackId,
+    reason: &'static str,
+) -> CommandDelta {
     CommandDelta::targeted(
         command,
         vec![ChangedEntity::Track {
@@ -297,7 +301,7 @@ pub fn track_visibility_delta(track_id: &TrackId, segments: &[Segment]) -> Comma
     push_domain(&mut consumers, DirtyDomain::Thumbnail);
 
     CommandDelta::targeted(
-        CommandName::SetTrackVisibility,
+        CommandDeltaName::SetTrackVisibility,
         entities,
         domains,
         ranges,
@@ -330,7 +334,7 @@ pub fn moved_segment_delta(
     });
 
     CommandDelta::targeted(
-        CommandName::MoveSegment,
+        CommandDeltaName::MoveSegment,
         entities,
         SEGMENT_DOMAINS.to_vec(),
         vec![
@@ -365,7 +369,7 @@ pub fn split_segment_delta(
     );
 
     CommandDelta::targeted(
-        CommandName::SplitSegment,
+        CommandDeltaName::SplitSegment,
         entities,
         SEGMENT_DOMAINS.to_vec(),
         vec![previous_and_current_range(original_target_timerange)],
@@ -378,7 +382,7 @@ pub fn split_segment_delta(
 }
 
 pub fn text_segment_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     reason: &'static str,
@@ -387,7 +391,7 @@ pub fn text_segment_delta(
 }
 
 pub fn text_segments_delta<'a>(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segments: impl IntoIterator<Item = &'a Segment>,
     reason: &'static str,
@@ -421,7 +425,7 @@ pub fn text_segments_delta<'a>(
 }
 
 pub fn audio_segment_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     reason: &'static str,
@@ -440,7 +444,7 @@ pub fn audio_segment_delta(
 }
 
 pub fn audio_property_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     reason: &'static str,
@@ -478,7 +482,7 @@ pub fn track_mute_delta(track_id: &TrackId, segments: &[Segment]) -> CommandDelt
     }
 
     CommandDelta::targeted(
-        CommandName::SetTrackMute,
+        CommandDeltaName::SetTrackMute,
         entities,
         AUDIO_PROPERTY_DOMAINS.to_vec(),
         ranges,
@@ -488,7 +492,7 @@ pub fn track_mute_delta(track_id: &TrackId, segments: &[Segment]) -> CommandDelt
 }
 
 pub fn visual_segment_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     reason: &'static str,
@@ -507,7 +511,7 @@ pub fn visual_segment_delta(
 }
 
 pub fn keyframe_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &TrackId,
     segment: &Segment,
     property: KeyframeProperty,
@@ -540,7 +544,7 @@ pub fn canvas_delta(draft: &Draft) -> CommandDelta {
         source: DirtyRangeSource::FullDraft,
     };
     CommandDelta {
-        command: CommandName::UpdateDraftCanvasConfig,
+        command: CommandDeltaName::UpdateDraftCanvasConfig,
         changed_entities: vec![
             ChangedEntity::Draft {
                 draft_id: draft.draft_id.clone(),
@@ -562,7 +566,7 @@ pub fn canvas_delta(draft: &Draft) -> CommandDelta {
 }
 
 pub fn material_dependency_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     draft: &Draft,
     changed_material_ids: &[MaterialId],
     reason: &'static str,
@@ -612,7 +616,7 @@ pub fn material_dependency_delta(
 }
 
 pub fn restored_draft_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     previous_draft: &Draft,
     restored_draft: &Draft,
     reason: &'static str,

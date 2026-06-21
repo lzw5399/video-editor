@@ -49,6 +49,7 @@ fail_matches() {
     rg -n --pcre2 "$pattern" "$@" 2>/dev/null \
       | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
       | rg -v 'renderGraphFailed' \
+      | rg -v 'renderGraphGpu|renderGraphGpuComposited' \
       || true
   )"
   if [ -n "$matches" ]; then
@@ -71,9 +72,7 @@ for symbol in \
   "SegmentFitMode" \
   "SegmentBackgroundFilling" \
   "SegmentBlendMode" \
-  "SegmentMask" \
-  "UpdateSegmentVisualCommandPayload" \
-  "updateSegmentVisual"; do
+  "SegmentMask"; do
   found=false
   for file in "${GENERATED_FILES[@]}"; do
     if rg -n --fixed-strings "$symbol" "$file" >/dev/null; then
@@ -83,6 +82,11 @@ for symbol in \
   done
   [ "$found" = "true" ] || fail "generated contracts must contain ${symbol}"
 done
+
+fail_matches \
+  "generated public command contracts must not expose structural visual edit payloads" \
+  'UpdateSegmentVisualCommandPayload|"\s*updateSegmentVisual\s*"' \
+  schemas/command.schema.json apps/desktop-electron/src/generated/CommandEnvelope.ts
 
 for text in \
   "画面基础表单" \

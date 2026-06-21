@@ -14,7 +14,6 @@ draft_model = { path = "../draft_model" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 thiserror = "2.0.18"
-which = "8.0.4"
 
 [dev-dependencies]
 media_runtime_desktop = { path = "../media_runtime_desktop" }

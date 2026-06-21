@@ -223,39 +223,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             CommandPayload::CancelExport(payload) => cancel_export_command(payload),
             _ => unreachable!("command/payload pair was validated during deserialization"),
         },
-        CommandName::AddSegment
-        | CommandName::AddTimelineSegmentIntent
-        | CommandName::SelectTimelineSegments
-        | CommandName::MoveSegment
-        | CommandName::MoveSelectedSegmentIntent
-        | CommandName::SplitSegment
-        | CommandName::SplitSelectedSegmentIntent
-        | CommandName::TrimSegment
-        | CommandName::TrimSelectedSegmentIntent
-        | CommandName::DeleteSegment
-        | CommandName::UndoTimelineEdit
-        | CommandName::RedoTimelineEdit
-        | CommandName::AddTextSegment
-        | CommandName::AddTextSegmentIntent
-        | CommandName::EditTextSegment
-        | CommandName::ImportSubtitleSrt
-        | CommandName::ImportSubtitleSrtIntent
-        | CommandName::AddAudioSegment
-        | CommandName::AddAudioSegmentIntent
-        | CommandName::SetSegmentVolume
-        | CommandName::UpdateSegmentAudio
-        | CommandName::AddTrack
-        | CommandName::AddTrackIntent
-        | CommandName::RenameTrack
-        | CommandName::SetTrackLock
-        | CommandName::SetTrackVisibility
-        | CommandName::SetTrackMute
-        | CommandName::UpdateDraftCanvasConfig
-        | CommandName::UpdateSegmentVisual
-        | CommandName::SetSegmentKeyframe
-        | CommandName::RemoveSegmentKeyframe => {
-            reject_public_timeline_edit_command(envelope.command)
-        }
     }
 }
 
@@ -680,16 +647,6 @@ fn cancel_export_command(payload: CancelExportCommandPayload) -> Result<serde_js
     }
 }
 
-fn reject_public_timeline_edit_command(command: CommandName) -> Result<serde_json::Value> {
-    let command = command_wire_name(&command);
-    to_js_value(error_envelope(
-        CommandErrorKind::UnsupportedCommand,
-        "Timeline edits must use executeProjectIntent with a Rust-owned project session"
-            .to_string(),
-        command,
-    ))
-}
-
 fn preview_error_envelope(
     command: &str,
     error: PreviewCommandError,
@@ -874,12 +831,6 @@ fn runtime_capability_message(error: DiscoveryError) -> String {
     }
 
     message
-}
-
-fn command_wire_name(command: &CommandName) -> Option<String> {
-    serde_json::to_value(command)
-        .ok()
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
 }
 
 fn raw_command_name(command: &serde_json::Value) -> Option<String> {

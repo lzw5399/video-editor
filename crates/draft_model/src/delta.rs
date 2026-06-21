@@ -3,15 +3,86 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    CommandName, DraftId, KeyframeProperty, MaterialId, Microseconds, SegmentId, TargetTimerange,
-    TrackId,
+    DraftId, KeyframeProperty, MaterialId, Microseconds, SegmentId, TargetTimerange, TrackId,
 };
+
+/// Semantic command names used in accepted command deltas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandDeltaName {
+    Ping,
+    Version,
+    ProbeMediaRuntime,
+    ProbeRuntimeCapabilities,
+    OpenProjectBundle,
+    SaveProjectBundle,
+    ImportMaterial,
+    ListMaterials,
+    ListMissingMaterials,
+    AddSegment,
+    AddTimelineSegmentIntent,
+    SelectTimelineSegments,
+    MoveSegment,
+    MoveSelectedSegmentIntent,
+    SplitSegment,
+    SplitSelectedSegmentIntent,
+    TrimSegment,
+    TrimSelectedSegmentIntent,
+    DeleteSegment,
+    UndoTimelineEdit,
+    RedoTimelineEdit,
+    AddTextSegment,
+    AddTextSegmentIntent,
+    EditTextSegment,
+    ImportSubtitleSrt,
+    ImportSubtitleSrtIntent,
+    AddAudioSegment,
+    AddAudioSegmentIntent,
+    SetSegmentVolume,
+    UpdateSegmentAudio,
+    AddTrack,
+    AddTrackIntent,
+    RenameTrack,
+    SetTrackLock,
+    SetTrackVisibility,
+    SetTrackMute,
+    UpdateDraftCanvasConfig,
+    UpdateSegmentVisual,
+    SetSegmentKeyframe,
+    RemoveSegmentKeyframe,
+    RequestPreviewDecode,
+    ReleasePreviewFrame,
+    RequestPreviewFrame,
+    RequestPreviewSegment,
+    InvalidatePreviewCache,
+    CreateAudioPreviewSession,
+    PlayAudioPreview,
+    PauseAudioPreview,
+    StopAudioPreview,
+    SeekAudioPreview,
+    CancelAudioPreview,
+    GetAudioPreviewStatus,
+    ListAudioOutputDevices,
+    SelectAudioOutputDevice,
+    GetWaveformDisplayPeaks,
+    RefreshWaveformStatus,
+    GetArtifactStatus,
+    RefreshArtifactStatus,
+    RetryArtifactGeneration,
+    ResumeArtifactGeneration,
+    CancelArtifactGeneration,
+    GetArtifactQuotaStatus,
+    RunArtifactGarbageCollection,
+    StartExport,
+    GetExportJobStatus,
+    CancelExport,
+}
 
 /// Semantic facts emitted after an accepted Rust-owned command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommandDelta {
-    pub command: CommandName,
+    pub command: CommandDeltaName,
     pub changed_entities: Vec<ChangedEntity>,
     pub changed_domains: Vec<DirtyDomain>,
     pub changed_ranges: Vec<DirtyRange>,
@@ -20,7 +91,7 @@ pub struct CommandDelta {
 }
 
 impl CommandDelta {
-    pub fn none(command: CommandName, reason: impl Into<String>) -> Self {
+    pub fn none(command: CommandDeltaName, reason: impl Into<String>) -> Self {
         Self {
             command,
             changed_entities: Vec::new(),
@@ -32,7 +103,7 @@ impl CommandDelta {
     }
 
     pub fn targeted(
-        command: CommandName,
+        command: CommandDeltaName,
         changed_entities: Vec<ChangedEntity>,
         changed_domains: Vec<DirtyDomain>,
         changed_ranges: Vec<DirtyRange>,
@@ -50,7 +121,7 @@ impl CommandDelta {
     }
 
     pub fn full_draft(
-        command: CommandName,
+        command: CommandDeltaName,
         changed_entities: Vec<ChangedEntity>,
         changed_domains: Vec<DirtyDomain>,
         consumer_domains: Vec<DirtyDomain>,

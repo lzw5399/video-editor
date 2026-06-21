@@ -13,7 +13,7 @@ use draft_commands::timeline::{
 use draft_commands::visual::update_segment_visual;
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    ChangedEntity, CommandDelta, CommandName, CommandState, DirtyDomain, DirtyRange,
+    ChangedEntity, CommandDelta, CommandDeltaName, CommandState, DirtyDomain, DirtyRange,
     DirtyRangeSource, Draft, DraftCanvasConfig, ImportSubtitleSrtCommandPayload, InvalidationScope,
     Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
     MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity,
@@ -42,7 +42,7 @@ fn simple_timeline_add_emits_semantic_delta() {
     assert_delta_eq(
         &added.delta,
         expected_segment_delta(
-            CommandName::AddSegment,
+            CommandDeltaName::AddSegment,
             "video-track",
             "segment-new",
             "video-material",
@@ -74,7 +74,7 @@ fn simple_timeline_move_emits_previous_and_current_ranges() {
     assert_delta_eq(
         &moved.delta,
         expected_segment_delta(
-            CommandName::MoveSegment,
+            CommandDeltaName::MoveSegment,
             "video-track",
             "segment-a",
             "video-material",
@@ -151,7 +151,7 @@ fn simple_timeline_trim_emits_previous_and_current_ranges() {
     assert_delta_eq(
         &trimmed.delta,
         expected_segment_delta(
-            CommandName::TrimSegment,
+            CommandDeltaName::TrimSegment,
             "video-track",
             "segment-a",
             "video-material",
@@ -175,7 +175,7 @@ fn simple_timeline_delete_emits_previous_range() {
     assert_delta_eq(
         &deleted.delta,
         expected_segment_delta(
-            CommandName::DeleteSegment,
+            CommandDeltaName::DeleteSegment,
             "video-track",
             "segment-a",
             "video-material",
@@ -202,7 +202,7 @@ fn simple_timeline_selection_emits_noop_delta() {
     assert_eq!(selected.events[0].kind, "timelineSelectionChanged");
     assert_eq!(
         selected.delta,
-        CommandDelta::none(CommandName::SelectTimelineSegments, "selection only")
+        CommandDelta::none(CommandDeltaName::SelectTimelineSegments, "selection only")
     );
     assert!(
         selected.command_state.undo_stack.is_empty(),
@@ -232,7 +232,7 @@ fn simple_timeline_all_accepted_responses_include_command_delta() {
     );
     assert_eq!(response.command_state.undo_stack.len(), 1);
     assert_eq!(response.selection.segment_ids, vec!["segment-new".into()]);
-    assert_eq!(response.delta.command, CommandName::AddSegment);
+    assert_eq!(response.delta.command, CommandDeltaName::AddSegment);
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("text add should commit");
     assert_delta_has(
         &text_added.delta,
-        CommandName::AddTextSegment,
+        CommandDeltaName::AddTextSegment,
         &[
             DirtyDomain::Text,
             DirtyDomain::Visual,
@@ -298,7 +298,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("text edit should commit");
     assert_delta_has(
         &text_edited.delta,
-        CommandName::EditTextSegment,
+        CommandDeltaName::EditTextSegment,
         &[DirtyDomain::Text, DirtyDomain::Visual],
         &[dirty_range(100_000, 500_000, DirtyRangeSource::Current)],
         &[DirtyDomain::PreviewCache],
@@ -323,7 +323,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("subtitle import should commit");
     assert_delta_has(
         &subtitle.delta,
-        CommandName::ImportSubtitleSrt,
+        CommandDeltaName::ImportSubtitleSrt,
         &[DirtyDomain::Text, DirtyDomain::Visual],
         &[
             dirty_range(150_000, 200_000, DirtyRangeSource::Current),
@@ -363,7 +363,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("audio add should commit");
     assert_delta_has(
         &audio_added.delta,
-        CommandName::AddAudioSegment,
+        CommandDeltaName::AddAudioSegment,
         &[
             DirtyDomain::Timing,
             DirtyDomain::Audio,
@@ -396,7 +396,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("volume change should commit");
     assert_delta_has(
         &volume_changed.delta,
-        CommandName::SetSegmentVolume,
+        CommandDeltaName::SetSegmentVolume,
         &[DirtyDomain::Audio, DirtyDomain::Waveform],
         &[dirty_range(200_000, 800_000, DirtyRangeSource::Current)],
         &[DirtyDomain::Audio, DirtyDomain::Waveform],
@@ -412,7 +412,7 @@ fn text_audio_delta_covers_text_subtitle_audio_volume_and_track_mute() {
     .expect("track mute should commit");
     assert_delta_has(
         &muted.delta,
-        CommandName::SetTrackMute,
+        CommandDeltaName::SetTrackMute,
         &[DirtyDomain::Audio, DirtyDomain::Waveform],
         &[dirty_range(200_000, 800_000, DirtyRangeSource::Current)],
         &[DirtyDomain::Audio, DirtyDomain::Waveform],
@@ -439,7 +439,7 @@ fn visual_keyframe_delta_covers_segment_influence_ranges() {
             .expect("visual update should commit");
     assert_delta_has(
         &visual_updated.delta,
-        CommandName::UpdateSegmentVisual,
+        CommandDeltaName::UpdateSegmentVisual,
         &[DirtyDomain::Visual],
         &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
         &[
@@ -469,7 +469,7 @@ fn visual_keyframe_delta_covers_segment_influence_ranges() {
     .expect("keyframe set should commit");
     assert_delta_has(
         &keyframe_set.delta,
-        CommandName::SetSegmentKeyframe,
+        CommandDeltaName::SetSegmentKeyframe,
         &[DirtyDomain::Visual],
         &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
         &[DirtyDomain::GraphSnapshot, DirtyDomain::PreviewCache],
@@ -497,7 +497,7 @@ fn visual_keyframe_delta_covers_segment_influence_ranges() {
     .expect("keyframe remove should commit");
     assert_delta_has(
         &keyframe_removed.delta,
-        CommandName::RemoveSegmentKeyframe,
+        CommandDeltaName::RemoveSegmentKeyframe,
         &[DirtyDomain::Visual],
         &[dirty_range(300_000, 700_000, DirtyRangeSource::Current)],
         &[DirtyDomain::GraphSnapshot, DirtyDomain::PreviewCache],
@@ -524,7 +524,10 @@ fn canvas_profile_delta_uses_full_draft_scope_and_output_profile_consumers() {
     )
     .expect("canvas update should commit");
 
-    assert_eq!(updated.delta.command, CommandName::UpdateDraftCanvasConfig);
+    assert_eq!(
+        updated.delta.command,
+        CommandDeltaName::UpdateDraftCanvasConfig
+    );
     assert!(updated.delta.invalidation.full_draft);
     assert!(
         updated
@@ -581,7 +584,7 @@ fn material_dependency_delta_maps_materials_to_ranges_or_material_wide_fallback(
     ));
 
     let dependent = material_dependency_delta(
-        CommandName::ImportMaterial,
+        CommandDeltaName::ImportMaterial,
         &draft,
         &[MaterialId::new("video-material")],
         "material dependency changed",
@@ -589,7 +592,7 @@ fn material_dependency_delta_maps_materials_to_ranges_or_material_wide_fallback(
 
     assert_delta_has(
         &dependent,
-        CommandName::ImportMaterial,
+        CommandDeltaName::ImportMaterial,
         &[DirtyDomain::Material, DirtyDomain::Waveform],
         &[
             dirty_range(0, 400_000, DirtyRangeSource::MaterialWide),
@@ -628,7 +631,7 @@ fn material_dependency_delta_maps_materials_to_ranges_or_material_wide_fallback(
     );
 
     let material_wide = material_dependency_delta(
-        CommandName::ImportMaterial,
+        CommandDeltaName::ImportMaterial,
         &draft,
         &[MaterialId::new("unused-material")],
         "material dependency changed",
@@ -636,7 +639,7 @@ fn material_dependency_delta_maps_materials_to_ranges_or_material_wide_fallback(
 
     assert_delta_has(
         &material_wide,
-        CommandName::ImportMaterial,
+        CommandDeltaName::ImportMaterial,
         &[DirtyDomain::Material],
         &[dirty_range(0, 950_000, DirtyRangeSource::MaterialWide)],
         &[DirtyDomain::PreviewCache],
@@ -665,7 +668,7 @@ fn undo_redo_delta_reports_restored_semantic_ranges() {
     assert_eq!(undone.draft, draft);
     assert_delta_has(
         &undone.delta,
-        CommandName::UndoTimelineEdit,
+        CommandDeltaName::UndoTimelineEdit,
         &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
         &[
             dirty_range(600_000, 400_000, DirtyRangeSource::Previous),
@@ -688,7 +691,7 @@ fn undo_redo_delta_reports_restored_semantic_ranges() {
     assert_eq!(redone.draft, moved.draft);
     assert_delta_has(
         &redone.delta,
-        CommandName::RedoTimelineEdit,
+        CommandDeltaName::RedoTimelineEdit,
         &[DirtyDomain::Timing, DirtyDomain::GraphSnapshot],
         &[
             dirty_range(0, 400_000, DirtyRangeSource::Previous),
@@ -707,7 +710,7 @@ fn assert_delta_eq(actual: &CommandDelta, expected: CommandDelta) {
 }
 
 fn expected_segment_delta(
-    command: CommandName,
+    command: CommandDeltaName,
     track_id: &str,
     segment_id: &str,
     material_id: &str,
@@ -764,7 +767,7 @@ fn dirty_range(start: u64, duration: u64, source: DirtyRangeSource) -> DirtyRang
 
 fn assert_delta_has(
     delta: &CommandDelta,
-    command: CommandName,
+    command: CommandDeltaName,
     domains: &[DirtyDomain],
     ranges: &[DirtyRange],
     consumers: &[DirtyDomain],

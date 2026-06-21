@@ -5,10 +5,9 @@ use draft_commands::{
     visual::update_segment_visual,
 };
 use draft_model::{
-    CommandPayload, CommandState, Draft, Material, MaterialKind, Microseconds, Segment,
-    SegmentBackgroundFilling, SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual,
-    SourceTimerange, TargetTimerange, TimelineSelection, Track, TrackKind,
-    UpdateSegmentVisualCommandPayload,
+    CommandState, Draft, Material, MaterialKind, Microseconds, Segment, SegmentBackgroundFilling,
+    SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    TimelineEditPayload, TimelineSelection, Track, TrackKind, UpdateSegmentVisualCommandPayload,
 };
 
 #[test]
@@ -123,7 +122,7 @@ fn execute_timeline_edit_routes_visual_transform_command() {
     let selection = selected_segment_context();
     let visual = edited_visual();
 
-    let response = execute_timeline_edit(CommandPayload::UpdateSegmentVisual(
+    let response = execute_timeline_edit(TimelineEditPayload::UpdateSegmentVisual(
         UpdateSegmentVisualCommandPayload {
             draft,
             command_state: state,

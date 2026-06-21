@@ -75,7 +75,6 @@ for text in \
   [ "$found" = "true" ] || fail "missing required SRT import/edit UI or test coverage text: ${text}"
 done
 
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildImportSubtitleSrtIntentCommand"
 require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "importSubtitleSrtIntent"
 require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "editSelectedText"
 require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "updateSelectedSegmentVisual"

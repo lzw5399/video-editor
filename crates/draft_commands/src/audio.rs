@@ -1,7 +1,7 @@
 //! Semantic audio/BGM timeline commands.
 
 use draft_model::{
-    AudioEffectSlot, AudioFade, AudioPanBalance, CommandDelta, CommandEvent, CommandName,
+    AudioEffectSlot, AudioFade, AudioPanBalance, CommandDelta, CommandDeltaName, CommandEvent,
     CommandState, Draft, MAX_SEGMENT_VOLUME_MILLIS, MaterialId, Microseconds, Segment, SegmentId,
     SegmentVolume, SourceTimerange, TargetTimerange, TimelineCommandResponse, TimelineSelection,
     TrackId,
@@ -36,7 +36,7 @@ pub fn add_audio_segment(
     ));
     validate_timeline_rules(&next_draft)?;
     let delta = audio_segment_delta(
-        CommandName::AddAudioSegment,
+        CommandDeltaName::AddAudioSegment,
         &track_id,
         next_draft.tracks[track_index]
             .segments
@@ -56,7 +56,7 @@ pub fn add_audio_segment(
         },
         "addAudioSegment",
         "audioSegmentAdded",
-        CommandName::AddAudioSegment,
+        CommandDeltaName::AddAudioSegment,
         delta,
     ))
 }
@@ -81,7 +81,7 @@ pub fn set_segment_volume(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = audio_property_delta(
-        CommandName::SetSegmentVolume,
+        CommandDeltaName::SetSegmentVolume,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         "segment volume changed",
@@ -98,7 +98,7 @@ pub fn set_segment_volume(
         },
         "setSegmentVolume",
         "segmentVolumeChanged",
-        CommandName::SetSegmentVolume,
+        CommandDeltaName::SetSegmentVolume,
         delta,
     ))
 }
@@ -147,7 +147,7 @@ pub fn update_segment_audio(
     validate_timeline_rules(&next_draft)?;
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let delta = audio_property_delta(
-        CommandName::UpdateSegmentAudio,
+        CommandDeltaName::UpdateSegmentAudio,
         &track_id,
         &next_draft.tracks[track_index].segments[segment_index],
         "segment audio changed",
@@ -164,7 +164,7 @@ pub fn update_segment_audio(
         },
         "updateSegmentAudio",
         "segmentAudioUpdated",
-        CommandName::UpdateSegmentAudio,
+        CommandDeltaName::UpdateSegmentAudio,
         delta,
     ))
 }
@@ -195,7 +195,7 @@ pub fn set_track_mute(
         },
         "setTrackMute",
         "trackMuteChanged",
-        CommandName::SetTrackMute,
+        CommandDeltaName::SetTrackMute,
         delta,
     ))
 }
@@ -222,7 +222,7 @@ fn response(
     selection: TimelineSelection,
     history_label: &str,
     event_kind: &str,
-    _command: CommandName,
+    _command: CommandDeltaName,
     delta: CommandDelta,
 ) -> TimelineCommandResponse {
     let (command_state, pruned) = push_undo_snapshot(
