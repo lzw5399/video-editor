@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import type { Material, TextSegment } from "../../generated/Draft";
+import type { Material } from "../../generated/Draft";
 import {
   formatMaterialDetail,
   formatMaterialDiagnostic,
@@ -36,8 +36,8 @@ type FeaturePanelProps = {
   onDismissResourceNotice: () => void;
   onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
   onAddTimelineSegment: (materialId: string) => void;
-  onAddTextSegment: (text: TextSegment) => void;
-  onImportSubtitleSrt: (srtContent: string, textTemplate: TextSegment) => void;
+  onAddTextSegment: (content: string) => void;
+  onImportSubtitleSrt: (srtContent: string) => void;
   onAddAudioSegment: (materialId: string) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onUpdateSelectedSegmentAudio: (options: {
@@ -220,8 +220,6 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
   const [content, setContent] = useState("输入文字");
   const hasTextTrack = workspace.viewModel.timeline.capabilities.hasTextTrack;
 
-  const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
-
   return (
     <div className="feature-panel-content">
       <div className="panel-header">
@@ -240,7 +238,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onAddTextSegment(text)}
+          onClick={() => onAddTextSegment(content)}
           disabled={workspace.pendingCommand !== null || !hasTextTrack}
         >
           添加文字
@@ -255,7 +253,6 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
 
 function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
   const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
-  const textTemplate = useMemo(() => createDefaultTextSegment("字幕", "subtitle"), []);
 
   return (
     <div className="feature-panel-content">
@@ -279,7 +276,7 @@ function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): R
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onImportSubtitleSrt(srtContent, textTemplate)}
+          onClick={() => onImportSubtitleSrt(srtContent)}
           disabled={workspace.pendingCommand !== null || srtContent.trim().length === 0}
         >
           导入字幕
@@ -287,40 +284,6 @@ function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): R
       </section>
     </div>
   );
-}
-
-function createDefaultTextSegment(content: string, source: TextSegment["source"]): TextSegment {
-  return {
-    content,
-    source,
-    style: {
-      font: {
-        family: "Noto Sans CJK SC",
-        fontRef: "font://bundled/noto-sans-cjk-sc-regular"
-      },
-      fontSize: 36,
-      color: "#ffffff",
-      alignment: "center",
-      lineHeightMillis: 1200,
-      letterSpacingMillis: 0,
-      stroke: { color: "#000000", width: 2 },
-      shadow: { color: "#222222", offsetX: 2, offsetY: 2, blur: 4 },
-      background: null
-    },
-    textBox: {
-      widthMillis: 800,
-      heightMillis: 200
-    },
-    layoutRegion: {
-      xMillis: 100,
-      yMillis: 100,
-      widthMillis: 800,
-      heightMillis: 800
-    },
-    wrapping: "auto",
-    bubble: null,
-    effect: null
-  };
 }
 
 function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: string }): React.ReactElement {

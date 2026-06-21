@@ -11,9 +11,10 @@ use draft_model::{
     SegmentAudio, SegmentId, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
-    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextBox, TextLayoutRegion,
-    TextSegment, TextStyle, TextWrapping, TimelineCommandResponse, TimelineEditPayload,
-    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
+    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBox,
+    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
+    TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
     UpdateSegmentVisualCommandPayload,
 };
@@ -124,7 +125,7 @@ enum ProjectIntent {
     },
     DeleteSelectedSegment {},
     AddTextSegmentIntent {
-        text: TextSegment,
+        content: String,
     },
     EditSelectedText {
         text: TextSegment,
@@ -132,12 +133,6 @@ enum ProjectIntent {
     ImportSubtitleSrtIntent {
         #[serde(rename = "srtContent")]
         srt_content: String,
-        style: TextStyle,
-        #[serde(rename = "textBox")]
-        text_box: TextBox,
-        #[serde(rename = "layoutRegion")]
-        layout_region: TextLayoutRegion,
-        wrapping: TextWrapping,
     },
     AddAudioSegmentIntent {
         #[serde(default, rename = "materialId")]
@@ -904,12 +899,12 @@ impl ProjectSession {
                     segment_id: self.selected_segment_id("删除片段")?,
                 },
             )),
-            ProjectIntent::AddTextSegmentIntent { text } => Ok(
+            ProjectIntent::AddTextSegmentIntent { content } => Ok(
                 TimelineEditPayload::AddTextSegmentIntent(AddTextSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    text,
+                    text: default_text_segment(content, TextSegmentSource::Text),
                     duration: None,
                     target_start: Some(self.playhead),
                 }),
@@ -923,25 +918,21 @@ impl ProjectSession {
                     text,
                 },
             )),
-            ProjectIntent::ImportSubtitleSrtIntent {
-                srt_content,
-                style,
-                text_box,
-                layout_region,
-                wrapping,
-            } => Ok(TimelineEditPayload::ImportSubtitleSrtIntent(
-                ImportSubtitleSrtIntentCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    srt_content,
-                    time_offset: Some(self.playhead),
-                    style,
-                    text_box,
-                    layout_region,
-                    wrapping,
-                },
-            )),
+            ProjectIntent::ImportSubtitleSrtIntent { srt_content } => {
+                Ok(TimelineEditPayload::ImportSubtitleSrtIntent(
+                    ImportSubtitleSrtIntentCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        srt_content,
+                        time_offset: Some(self.playhead),
+                        style: TextStyle::default(),
+                        text_box: TextBox::default(),
+                        layout_region: TextLayoutRegion::default(),
+                        wrapping: TextWrapping::default(),
+                    },
+                ))
+            }
             ProjectIntent::AddAudioSegmentIntent { material_id } => Ok(
                 TimelineEditPayload::AddAudioSegmentIntent(AddAudioSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
@@ -2009,6 +2000,36 @@ fn text_for_keyframe<'a>(
         .text
         .as_ref()
         .ok_or_else(|| format!("当前片段没有可用于 {property:?} 的文字参数"))
+}
+
+fn default_text_segment(content: String, source: TextSegmentSource) -> TextSegment {
+    TextSegment {
+        content,
+        source,
+        style: TextStyle {
+            font_size: 36,
+            color: "#ffffff".to_owned(),
+            alignment: TextAlignment::Center,
+            line_height_millis: 1_200,
+            letter_spacing_millis: 0,
+            stroke: Some(TextStroke {
+                color: "#000000".to_owned(),
+                width: 2,
+            }),
+            shadow: Some(TextShadow {
+                color: "#222222".to_owned(),
+                offset_x: 2,
+                offset_y: 2,
+                blur: 4,
+            }),
+            ..TextStyle::default()
+        },
+        text_box: TextBox::default(),
+        layout_region: TextLayoutRegion::default(),
+        wrapping: TextWrapping::default(),
+        bubble: None,
+        effect: None,
+    }
 }
 
 fn canonical_project_session_paths(

@@ -1760,7 +1760,7 @@ export function App(): React.ReactElement {
     }
   }
 
-  function handleAddTextSegment(text: TextSegment): void {
+  function handleAddTextSegment(content: string): void {
     void (async () => {
       const playhead = normalizePlayheadTime(playheadUs);
       const synced = await syncProjectSessionPlayhead(playhead, "定位文字播放头");
@@ -1770,14 +1770,14 @@ export function App(): React.ReactElement {
       await executeProjectTimelineIntent(
         {
           kind: "addTextSegmentIntent",
-          text
+          content
         },
         "添加文字"
       );
     })();
   }
 
-  function handleImportSubtitleSrt(srtContent: string, textTemplate: TextSegment): void {
+  function handleImportSubtitleSrt(srtContent: string): void {
     void (async () => {
       const playhead = normalizePlayheadTime(playheadUs);
       const synced = await syncProjectSessionPlayhead(playhead, "定位字幕播放头");
@@ -1787,11 +1787,7 @@ export function App(): React.ReactElement {
       await executeProjectTimelineIntent(
         {
           kind: "importSubtitleSrtIntent",
-          srtContent,
-          style: textTemplate.style,
-          textBox: textTemplate.textBox,
-          layoutRegion: textTemplate.layoutRegion,
-          wrapping: textTemplate.wrapping
+          srtContent
         },
         "导入字幕"
       );

@@ -5,7 +5,7 @@ use bindings_node::{
     request_project_session_preview_frame, request_project_session_preview_segment,
     start_project_session_export, update_realtime_preview_project_session_snapshot,
 };
-use draft_model::Draft;
+use draft_model::{Draft, TextSegmentSource};
 use media_runtime::discover_runtime_config;
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
@@ -314,7 +314,7 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
         "expectedRevision": 0,
         "intent": {
             "kind": "addTextSegmentIntent",
-            "text": text_segment_json("播放头文字", "text")
+            "content": "播放头文字"
         }
     }))
     .expect("text add intent should return an envelope");
@@ -375,17 +375,12 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
     assert_eq!(positioned_subtitle["ok"], true, "{positioned_subtitle:#}");
     assert_eq!(positioned_subtitle["data"]["revision"], 2);
 
-    let subtitle_template = text_segment_json("字幕", "subtitle");
     let subtitle_added = execute_project_intent(json!({
         "sessionId": "test-session-add-media-timing",
         "expectedRevision": 2,
         "intent": {
             "kind": "importSubtitleSrtIntent",
-            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n播放头字幕\n",
-            "style": subtitle_template["style"].clone(),
-            "textBox": subtitle_template["textBox"].clone(),
-            "layoutRegion": subtitle_template["layoutRegion"].clone(),
-            "wrapping": subtitle_template["wrapping"].clone()
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n播放头字幕\n"
         }
     }))
     .expect("subtitle import intent should return an envelope");
@@ -408,6 +403,17 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
         text_track.segments[0].target_timerange.duration.get(),
         3_000_000
     );
+    let text = text_track.segments[0]
+        .text
+        .as_ref()
+        .expect("text segment should include Rust-owned text payload");
+    assert_eq!(text.content, "播放头文字");
+    assert_eq!(text.source, TextSegmentSource::Text);
+    assert_eq!(text.style.font_size, 36);
+    assert_eq!(text.style.color, "#ffffff");
+    assert_eq!(text.style.stroke.as_ref().unwrap().width, 2);
+    assert_eq!(text.text_box.width_millis, 800);
+    assert_eq!(text.layout_region.y_millis, 100);
 
     let audio_track = reopened
         .bundle
@@ -442,6 +448,14 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
         subtitle_track.segments[0].target_timerange.duration.get(),
         1_000_000
     );
+    let subtitle = subtitle_track.segments[0]
+        .text
+        .as_ref()
+        .expect("subtitle segment should include Rust-owned text payload");
+    assert_eq!(subtitle.content, "播放头字幕");
+    assert_eq!(subtitle.source, TextSegmentSource::Subtitle);
+    assert_eq!(subtitle.style.font_size, 36);
+    assert_eq!(subtitle.text_box.height_millis, 200);
 
     close_project_session(json!({ "sessionId": "test-session-add-media-timing" }))
         .expect("closeProjectSession should return an envelope");
@@ -464,12 +478,16 @@ fn project_session_add_media_intents_reject_renderer_timing_fields() {
     let cases = [
         json!({
             "kind": "addTextSegmentIntent",
-            "text": text_segment_json("旧文字时长", "text"),
+            "text": text_segment_json("旧完整文字模板", "text")
+        }),
+        json!({
+            "kind": "addTextSegmentIntent",
+            "content": "旧文字时长",
             "duration": 1_000_000
         }),
         json!({
             "kind": "addTextSegmentIntent",
-            "text": text_segment_json("旧文字位置", "text"),
+            "content": "旧文字位置",
             "targetStart": 1_000_000
         }),
         json!({
@@ -485,7 +503,11 @@ fn project_session_add_media_intents_reject_renderer_timing_fields() {
         json!({
             "kind": "importSubtitleSrtIntent",
             "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n旧偏移\n",
-            "timeOffset": 1_000_000,
+            "timeOffset": 1_000_000
+        }),
+        json!({
+            "kind": "importSubtitleSrtIntent",
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n旧样式\n",
             "style": subtitle_template["style"].clone(),
             "textBox": subtitle_template["textBox"].clone(),
             "layoutRegion": subtitle_template["layoutRegion"].clone(),

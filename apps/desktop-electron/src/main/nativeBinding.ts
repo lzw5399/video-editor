@@ -31,11 +31,7 @@ import type {
   SegmentVisual,
   SegmentVolume,
   TargetTimerange,
-  TextBox,
-  TextLayoutRegion,
   TextSegment,
-  TextStyle,
-  TextWrapping,
   TrackKind
 } from "../generated/Draft";
 
@@ -142,15 +138,11 @@ export type ProjectIntent =
   | { kind: "splitSelectedSegmentIntent" }
   | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; trimAt: Microseconds }
   | { kind: "deleteSelectedSegment" }
-  | { kind: "addTextSegmentIntent"; text: TextSegment }
+  | { kind: "addTextSegmentIntent"; content: string }
   | { kind: "editSelectedText"; text: TextSegment }
   | {
       kind: "importSubtitleSrtIntent";
       srtContent: string;
-      style: TextStyle;
-      textBox: TextBox;
-      layoutRegion: TextLayoutRegion;
-      wrapping: TextWrapping;
     }
   | { kind: "addAudioSegmentIntent"; materialId?: MaterialId | null }
   | { kind: "setSelectedSegmentVolume"; volume: SegmentVolume }

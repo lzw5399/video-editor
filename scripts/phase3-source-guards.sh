@@ -20,6 +20,9 @@ RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\
 ADD_INTENT_LEGACY_PLACEMENT_PATTERN='kind:[[:space:]]*"addTimelineSegmentIntent"(?s:.{0,500})\b(?:targetStart|targetTimerange|sourceTimerange|trackId|segmentId)[[:space:]]*:'
 MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN='kind:[[:space:]]*"(?:addTextSegmentIntent|addAudioSegmentIntent|importSubtitleSrtIntent)"(?s:.{0,700})\b(?:duration|timeOffset|targetStart|targetTimerange|sourceTimerange|trackId|segmentId|segmentIdPrefix|materialIdPrefix)[[:space:]]*:'
 MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN='on(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[^;\n]*\b(?:durationUs|timeOffsetUs)\b|function[[:space:]]+handle(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:durationUs|timeOffsetUs)\b'
+TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent"(?s:.{0,220})\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent"(?s:.{0,420})\b(?:style|textBox|layoutRegion|wrapping|fontRef)[[:space:]]*:'
+TEXT_ADD_NATIVE_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent";[^\n|]*\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent";(?s:.{0,260})\b(?:style|textBox|layoutRegion|wrapping)[[:space:]]*:'
+TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN='\bcreateDefaultTextSegment\b|on(?:AddTextSegment|ImportSubtitleSrt)[^;\n]*\b(?:TextSegment|textTemplate)\b|function[[:space:]]+handle(?:AddTextSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:TextSegment|textTemplate)\b'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -426,6 +429,21 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx
 
 fail_if_matches_multiline \
+  "renderer/native binding must not pass text preset fields for add text/subtitle intents" \
+  "$TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx
+
+fail_if_matches_multiline \
+  "native binding must not type text preset fields for add text/subtitle intents" \
+  "$TEXT_ADD_NATIVE_INTENT_LEGACY_PRESET_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches \
+  "renderer feature callbacks must not construct add-time text presets" \
+  "$TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx
+
+fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
@@ -618,6 +636,33 @@ assert_pattern_rejects \
   "$MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN" \
   'function handleAddTextSegment(text: TextSegment, durationUs: number): void {
     onAddTextSegment(text, durationUs);
+  }'
+
+assert_pattern_rejects \
+  "legacy text add full preset field" \
+  "$TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "addTextSegmentIntent",
+    text: createDefaultTextSegment(content, "text")
+  }, "text");'
+
+assert_pattern_rejects \
+  "legacy subtitle add style fields" \
+  "$TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "importSubtitleSrtIntent",
+    srtContent,
+    style: textTemplate.style,
+    textBox: textTemplate.textBox,
+    layoutRegion: textTemplate.layoutRegion,
+    wrapping: textTemplate.wrapping
+  }, "subtitle");'
+
+assert_pattern_rejects \
+  "legacy renderer add-time text preset helper" \
+  "$TEXT_ADD_CALLBACK_LEGACY_PRESET_PATTERN" \
+  'function createDefaultTextSegment(content: string, source: TextSegment["source"]): TextSegment {
+    return {} as TextSegment;
   }'
 
 assert_pattern_rejects \
