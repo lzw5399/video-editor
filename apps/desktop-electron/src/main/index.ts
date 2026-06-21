@@ -103,6 +103,7 @@ const packagedRendererUrl = pathToFileURL(packagedRendererFile).toString();
 const allowedRendererUrl = isDevelopment && devServerUrl !== undefined ? devServerUrl : packagedRendererUrl;
 const allowedRendererUrlArgument = `--video-editor-allowed-renderer-url=${allowedRendererUrl}`;
 hydrateTestEnvironmentFromArguments();
+configureBundledRuntimeEnvironment();
 const showDeveloperDiagnostics =
   process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
   process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
@@ -402,8 +403,20 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
-  setEnvFromArgument("VE_FFMPEG_PATH", "--video-editor-test-ve-ffmpeg-path=");
-  setEnvFromArgument("VE_FFPROBE_PATH", "--video-editor-test-ve-ffprobe-path=");
+  setEnvFromArgument("VE_BUNDLED_FFMPEG_DIR", "--video-editor-test-ve-bundled-ffmpeg-dir=");
+}
+
+function configureBundledRuntimeEnvironment(): void {
+  if (process.env.VE_BUNDLED_FFMPEG_DIR !== undefined) {
+    return;
+  }
+
+  const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");
+  process.env.VE_BUNDLED_FFMPEG_DIR = join(root, "ffmpeg", platformArchSegment());
+}
+
+function platformArchSegment(): string {
+  return `${process.platform}-${process.arch}`;
 }
 
 function testRendererArgument(envName: string, prefix: string): string[] {
@@ -595,7 +608,7 @@ function maybeBuildTestRuntimeCapabilitiesResponse(
       data: null,
       error: {
         kind: "runtimeDiscoveryFailed",
-        message: "运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。",
+        message: "运行环境检测失败，请检查内置 FFmpeg/ffprobe runtime 后重试。",
         command: "probeRuntimeCapabilities"
       },
       events: []
@@ -617,7 +630,7 @@ function maybeBuildTestRuntimeCapabilitiesResponse(
       ffmpeg: {
         kind: "ffmpeg",
         path: "/tmp/video-editor-test-runtime/ffmpeg",
-        source: "PATH",
+        source: "bundled",
         version: "ffmpeg version test",
         configureSummary: "configuration: test-runtime",
         status: "ready",
@@ -626,7 +639,7 @@ function maybeBuildTestRuntimeCapabilitiesResponse(
       ffprobe: {
         kind: "ffprobe",
         path: "/tmp/video-editor-test-runtime/ffprobe",
-        source: "PATH",
+        source: "bundled",
         version: "ffprobe version test",
         configureSummary: "configuration: test-runtime",
         status: "ready",

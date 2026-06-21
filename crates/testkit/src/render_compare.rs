@@ -485,7 +485,7 @@ fn run_ffmpeg_probe(
         RenderCompareError::Setup(RenderSetupError::new(
             RenderSetupErrorKind::FfmpegProbeFailed,
             format!("failed to launch FFmpeg capability probe: {error}"),
-            "Check VE_FFMPEG_PATH or install FFmpeg on PATH.",
+            "Check the bundled FFmpeg runtime directory or run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime.",
         ))
     })?;
     if !output.status.success() {

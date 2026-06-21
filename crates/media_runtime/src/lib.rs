@@ -37,7 +37,8 @@ pub use decoder::{
     VideoDecoder,
 };
 pub use discovery::{
-    BinaryKind, DiscoveredBinary, DiscoverySource, MAX_STDERR_SUMMARY_BYTES, RuntimeConfig,
+    BUNDLED_FFMPEG_DIR_ENV, BinaryKind, DiscoveredBinary, DiscoverySource,
+    MAX_STDERR_SUMMARY_BYTES, RuntimeConfig, discover_bundled_runtime_config,
     discover_runtime_config, probe_binary_version, probe_binary_version_with_timeout,
     resolve_binary,
 };

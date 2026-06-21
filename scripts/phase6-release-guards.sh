@@ -26,30 +26,37 @@ if (!pkg.scripts || typeof pkg.scripts[scriptName] !== "string" || pkg.scripts[s
 NODE
 }
 
-fail_runtime_resource_entries() {
-  local matches
-  matches="$(
-    rg -n -i "ffmpeg|ffprobe" apps/desktop-electron/electron-builder.yml apps/desktop-electron/package.json 2>/dev/null \
-      | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
-      || true
-  )"
+forbid_literal() {
+  local literal="$1"
+  shift
 
-  if [ -n "$matches" ]; then
-    printf '%s\n' "$matches" >&2
-    echo "Phase 6 package config must not add bundled FFmpeg or ffprobe resource entries" >&2
+  if rg -F -n "$literal" "$@" >/dev/null; then
+    printf 'Forbidden release text still present: %s\n' "$literal" >&2
     exit 1
   fi
+}
+
+require_bundled_runtime_entries() {
+  require_literal "extraResources:" apps/desktop-electron/electron-builder.yml
+  require_literal "runtime/ffmpeg" apps/desktop-electron/electron-builder.yml
+  require_literal "to: \"ffmpeg\"" apps/desktop-electron/electron-builder.yml
+  require_literal "provision:ffmpeg-runtime" apps/desktop-electron/package.json
+  test -f apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
 }
 
 test -f docs/release-ffmpeg-manifest.md
 test -f docs/third-party-notices.md
 test -f docs/mvp-known-limits.md
 
-require_literal "FFmpeg is external/user-provided for the MVP" docs/release-ffmpeg-manifest.md docs/third-party-notices.md
-require_literal "VE_FFMPEG_PATH" docs/release-ffmpeg-manifest.md docs/mvp-known-limits.md
-require_literal "VE_FFPROBE_PATH" docs/release-ffmpeg-manifest.md docs/mvp-known-limits.md
-require_literal "No FFmpeg binary is bundled by Phase 6" docs/release-ffmpeg-manifest.md docs/mvp-known-limits.md
-require_literal "Homebrew --enable-gpl is development/test only" docs/release-ffmpeg-manifest.md
+require_literal "FFmpeg and ffprobe are bundled application resources" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+require_literal "VE_BUNDLED_FFMPEG_DIR" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+require_literal "bundledRuntime" docs/release-ffmpeg-manifest.md
+require_literal "legalReviewPending" docs/release-ffmpeg-manifest.md docs/third-party-notices.md
+require_literal "redistributableBuild: false" docs/release-ffmpeg-manifest.md
+forbid_literal "external/user-provided" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+forbid_literal "No FFmpeg binary is bundled" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+forbid_literal "VE_FFMPEG_PATH" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
+forbid_literal "VE_FFPROBE_PATH" docs/release-ffmpeg-manifest.md docs/third-party-notices.md docs/mvp-known-limits.md
 
 require_literal "signing" docs/mvp-known-limits.md
 require_literal "notarization" docs/mvp-known-limits.md
@@ -72,7 +79,7 @@ require_script package.json test:phase6-runtime
 require_script package.json test:phase6-release-gates
 require_script package.json test:phase6
 
-fail_runtime_resource_entries
+require_bundled_runtime_entries
 
 bash scripts/phase5-source-guards.sh
 git diff --exit-code schemas apps/desktop-electron/src/generated

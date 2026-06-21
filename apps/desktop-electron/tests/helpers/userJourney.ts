@@ -377,19 +377,11 @@ export async function launchProductJourneyApp(
 ): Promise<{ app: ProductJourneyAppController; page: Page }> {
   await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
   const projectBundlePath = env.VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE ?? createProductJourneyProjectPath();
-  const runtimeEnv =
-    process.platform === "darwin"
-      ? {
-          VE_FFMPEG_PATH: process.env.VE_FFMPEG_PATH ?? "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
-          VE_FFPROBE_PATH: process.env.VE_FFPROBE_PATH ?? "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe"
-        }
-      : {};
   const productEnv = {
     VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
     VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
     VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
-    ...runtimeEnv,
     ...env
   };
 

@@ -164,11 +164,8 @@ function testSwitchesFromEnv(env: NodeJS.ProcessEnv): string[] {
       `--video-editor-test-pick-open-project-bundle=${encodeURIComponent(env.VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE)}`
     );
   }
-  if (env.VE_FFMPEG_PATH !== undefined) {
-    switches.push(`--video-editor-test-ve-ffmpeg-path=${encodeURIComponent(env.VE_FFMPEG_PATH)}`);
-  }
-  if (env.VE_FFPROBE_PATH !== undefined) {
-    switches.push(`--video-editor-test-ve-ffprobe-path=${encodeURIComponent(env.VE_FFPROBE_PATH)}`);
+  if (env.VE_BUNDLED_FFMPEG_DIR !== undefined) {
+    switches.push(`--video-editor-test-ve-bundled-ffmpeg-dir=${encodeURIComponent(env.VE_BUNDLED_FFMPEG_DIR)}`);
   }
   return switches;
 }

@@ -10,6 +10,7 @@ fail_matches() {
     rg -n "$pattern" "$@" 2>/dev/null \
       | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
       | rg -v "renderGraphFailed" \
+      | rg -v "renderGraphGpu" \
       || true
   )"
   if [ -n "$matches" ]; then

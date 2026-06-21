@@ -215,7 +215,7 @@ export type RealtimePreviewBackendUsed =
   | "renderGraphGpu"
   | "offscreen"
   | "previewArtifact"
-  | "ffmpegArtifact"
+  | "mediaArtifact"
   | "none";
 
 export type RealtimePreviewFallbackReason =
@@ -228,7 +228,7 @@ export type RealtimePreviewFallbackReason =
   | "nativeChildWindowFailed"
   | "offscreenReadbackRequired"
   | "previewArtifactCacheHit"
-  | "ffmpegArtifactGenerated"
+  | "mediaArtifactGenerated"
   | "canceled"
   | "staleGeneration";
 
@@ -1099,7 +1099,7 @@ export function formatRealtimePreviewBackendLabel(backend: RealtimePreviewBacken
     renderGraphGpu: "实时后端：GPU 合成",
     offscreen: "实时后端：离屏",
     previewArtifact: "备用产物：预览缓存",
-    ffmpegArtifact: "备用产物：媒体运行环境",
+    mediaArtifact: "备用产物：媒体运行环境",
     none: "实时后端：未呈现"
   };
 
@@ -1117,7 +1117,7 @@ export function formatRealtimePreviewFallbackReason(reason: RealtimePreviewFallb
     nativeChildWindowFailed: "原生预览窗口接入失败",
     offscreenReadbackRequired: "需要离屏回读",
     previewArtifactCacheHit: "命中预览缓存",
-    ffmpegArtifactGenerated: "已生成媒体备用产物",
+    mediaArtifactGenerated: "已生成媒体备用产物",
     canceled: "请求已取消",
     staleGeneration: "旧一代请求已拒绝"
   };
@@ -1136,7 +1136,7 @@ export function formatRealtimePreviewProductFallbackReason(reason: RealtimePrevi
     nativeChildWindowFailed: "实时预览受限：预览窗口暂不可用",
     offscreenReadbackRequired: "实时预览受限：当前画面暂不能实时播放",
     previewArtifactCacheHit: "实时预览受限：当前画面需要重新准备",
-    ffmpegArtifactGenerated: "实时预览受限：当前画面暂不能实时播放",
+    mediaArtifactGenerated: "实时预览受限：当前画面暂不能实时播放",
     canceled: "实时预览受限：当前请求已取消",
     staleGeneration: "实时预览受限：旧画面请求已拒绝"
   };
@@ -1186,7 +1186,7 @@ export function summarizeRealtimePreviewProductDisplay(model: RealtimePreviewDis
     return formatRealtimePreviewProductFallbackReason(model.fallbackReason);
   }
 
-  if (model.fallbackArtifactVisible || model.backend === "previewArtifact" || model.backend === "ffmpegArtifact") {
+  if (model.fallbackArtifactVisible || model.backend === "previewArtifact" || model.backend === "mediaArtifact") {
     return "实时预览受限：当前画面暂不能实时播放";
   }
 

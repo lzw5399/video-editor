@@ -32,14 +32,13 @@ pub struct DiscoveryError {
 
 impl DiscoveryError {
     pub(crate) fn missing_binary(binary: BinaryKind, checked_paths: Vec<PathBuf>) -> Self {
-        let env_var = binary.env_var();
         let binary_name = binary.binary_name();
         Self {
             kind: DiscoveryErrorKind::MissingBinary,
             binary,
             checked_paths,
             remediation: format!(
-                "Set {env_var} to a valid {binary_name} binary or install {binary_name} on PATH."
+                "Bundle {binary_name} under VE_BUNDLED_FFMPEG_DIR or apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>."
             ),
             stdout_summary: None,
             stderr_summary: None,
@@ -52,14 +51,13 @@ impl DiscoveryError {
         stdout_summary: Option<String>,
         stderr_summary: Option<String>,
     ) -> Self {
-        let env_var = binary.env_var();
         let binary_name = binary.binary_name();
         Self {
             kind: DiscoveryErrorKind::VersionProbeFailed,
             binary,
             checked_paths,
             remediation: format!(
-                "Verify {env_var} points to a working {binary_name} binary or remove it to use PATH discovery."
+                "Verify the bundled runtime directory contains a working {binary_name} binary."
             ),
             stdout_summary,
             stderr_summary,

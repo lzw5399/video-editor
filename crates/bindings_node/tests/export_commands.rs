@@ -19,10 +19,9 @@ static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 fn export_commands_start_status_and_complete_through_binding_registry() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-complete");
-    let ffmpeg = sandbox.ffmpeg_complete();
-    let ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let output = sandbox.root.join("导出.mp4");
 
     let started = execute_command(json!({
@@ -61,10 +60,9 @@ fn export_commands_start_status_and_complete_through_binding_registry() {
 fn export_commands_transport_export_prep_dirty_facts() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-dirty-facts");
-    let ffmpeg = sandbox.ffmpeg_complete();
-    let ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let output = sandbox.root.join("dirty-facts.mp4");
 
     let started = execute_command(json!({
@@ -119,10 +117,9 @@ fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() 
         (ExportPreset::H264AacBalanced, "balanced-preset"),
     ] {
         let sandbox = Sandbox::new(name);
-        let ffmpeg = sandbox.ffmpeg_complete();
-        let ffprobe = sandbox.ffprobe_success_with_frame_rate(1080, 1920, 24, 1, true);
-        let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-        let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+        let _ffmpeg = sandbox.ffmpeg_complete();
+        let _ffprobe = sandbox.ffprobe_success_with_frame_rate(1080, 1920, 24, 1, true);
+        let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
         let output = sandbox.root.join(format!("{name}.mp4"));
 
         let started = execute_command(json!({
@@ -173,10 +170,9 @@ fn export_commands_validate_against_draft_canvas_instead_of_preset_dimensions() 
 fn export_commands_cancel_running_job_and_report_classified_status() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-cancel");
-    let ffmpeg = sandbox.ffmpeg_slow();
-    let ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.ffmpeg_slow();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let output = sandbox.root.join("cancel.mp4");
 
     let started = execute_command(json!({
@@ -218,10 +214,9 @@ fn export_commands_cancel_running_job_and_report_classified_status() {
 fn export_commands_cancelled_validation_job_stays_cancelled() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-cancel-validation");
-    let ffmpeg = sandbox.ffmpeg_complete();
-    let ffprobe = sandbox.ffprobe_slow_success(1_920, 1_080, true);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_slow_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let output = sandbox.root.join("cancel-validation.mp4");
 
     let started = execute_command(json!({
@@ -271,10 +266,9 @@ fn export_commands_cancelled_validation_job_stays_cancelled() {
 fn export_commands_classify_invalid_output_path_as_export_service_failure() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("export-invalid");
-    let ffmpeg = sandbox.ffmpeg_complete();
-    let ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success(1_920, 1_080, true);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "startExport",

@@ -25,6 +25,14 @@ function probeMediaRuntimeCommand(requestId: string): CommandEnvelope {
   };
 }
 
+function probeRuntimeCapabilitiesCommand(requestId: string): CommandEnvelope {
+  return {
+    command: "probeRuntimeCapabilities",
+    payload: { kind: "probeRuntimeCapabilities" },
+    requestId
+  };
+}
+
 test("packaged app loads file renderer, preload bridge, native binding, and runtime probe", async () => {
   const { app, page, executablePath } = await launchPackagedApp();
 
@@ -43,7 +51,15 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     expect(bridgeShape).toEqual({
       coreType: "object",
       ipcRendererType: "undefined",
-      keys: ["ping", "version", "executeCommand"]
+      keys: [
+        "ping",
+        "version",
+        "executeCommand",
+        "createProjectSession",
+        "openProjectSession",
+        "executeProjectIntent",
+        "closeProjectSession"
+      ]
     });
 
     const ping = await page.evaluate(() => window.videoEditorCore?.ping());
@@ -65,6 +81,34 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     }, probeMediaRuntimeCommand("packaged-runtime-probe"));
     expect(runtime?.ok).toBe(true);
     expect(runtime?.error).toBeNull();
+    const resourcesPath = await app.evaluate(() => process.resourcesPath);
+    const ffmpeg = runtime?.data as {
+      ffmpeg?: { path?: string; source?: { kind?: string; directory?: string } };
+      ffprobe?: { path?: string; source?: { kind?: string; directory?: string } };
+    } | undefined;
+    expect(ffmpeg?.ffmpeg?.source?.kind).toBe("bundled");
+    expect(ffmpeg?.ffprobe?.source?.kind).toBe("bundled");
+    expect(ffmpeg?.ffmpeg?.source?.directory).toContain(resourcesPath);
+    expect(ffmpeg?.ffprobe?.source?.directory).toContain(resourcesPath);
+    expect(ffmpeg?.ffmpeg?.path).toContain(resourcesPath);
+    expect(ffmpeg?.ffprobe?.path).toContain(resourcesPath);
+    expect(ffmpeg?.ffmpeg?.path).not.toContain("/opt/homebrew");
+    expect(ffmpeg?.ffprobe?.path).not.toContain("/opt/homebrew");
+
+    const capabilities = await page.evaluate((command) => {
+      return window.videoEditorCore?.executeCommand(command);
+    }, probeRuntimeCapabilitiesCommand("packaged-runtime-capabilities"));
+    const report = capabilities?.data as {
+      ffmpeg?: { source?: string };
+      ffprobe?: { source?: string };
+      licensePosture?: { externalRuntime?: boolean; source?: string; redistributableBuild?: boolean };
+    } | undefined;
+    expect(capabilities?.ok).toBe(true);
+    expect(report?.ffmpeg?.source).toBe("bundled");
+    expect(report?.ffprobe?.source).toBe("bundled");
+    expect(report?.licensePosture?.externalRuntime).toBe(false);
+    expect(report?.licensePosture?.source).toBe("bundledRuntime");
+    expect(report?.licensePosture?.redistributableBuild).toBe(false);
   } finally {
     await app.close();
   }
@@ -72,8 +116,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
 
 test("packaged app reports classified runtime discovery failures without crashing", async () => {
   const { app, page } = await launchPackagedApp({
-    VE_FFMPEG_PATH: "/definitely-missing/video-editor/ffmpeg",
-    VE_FFPROBE_PATH: "/definitely-missing/video-editor/ffprobe"
+    VE_BUNDLED_FFMPEG_DIR: "/definitely-missing/video-editor/ffmpeg-runtime"
   });
 
   try {
@@ -87,7 +130,7 @@ test("packaged app reports classified runtime discovery failures without crashin
     expect(result?.data).toBeNull();
     expect(result?.error?.kind).toBe("runtimeDiscoveryFailed");
     expect(result?.error?.command).toBe("probeMediaRuntime");
-    expect(result?.error?.message).toMatch(/VE_FFMPEG_PATH|VE_FFPROBE_PATH/);
+    expect(result?.error?.message).toMatch(/VE_BUNDLED_FFMPEG_DIR/);
   } finally {
     await app.close();
   }

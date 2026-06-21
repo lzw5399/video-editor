@@ -9,6 +9,7 @@
 **/out/
 **/.vite/
 **/native/
+**/runtime/ffmpeg/
 **/test-results/
 **/playwright-report/
 

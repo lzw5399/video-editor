@@ -1546,10 +1546,10 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   };
   const fallback: RealtimePreviewDisplayModel = {
     ...supported,
-    backend: "ffmpegArtifact",
+    backend: "mediaArtifact",
     presentedFrameCount: 0,
     currentRequestCanceled: true,
-    fallbackReason: "ffmpegArtifactGenerated",
+    fallbackReason: "mediaArtifactGenerated",
     fallbackCount: 1,
     fallbackArtifactVisible: true
   };
@@ -1858,8 +1858,7 @@ test("预览失败显示中文分类错误且不改草稿", async () => {
     mockPreviewCommands: false,
     showDeveloperDiagnostics: true,
     env: {
-      VE_FFMPEG_PATH: "/tmp/video-editor-missing-ffmpeg",
-      VE_FFPROBE_PATH: "/tmp/video-editor-missing-ffprobe"
+      VE_BUNDLED_FFMPEG_DIR: "/tmp/video-editor-missing-runtime"
     }
   });
 

@@ -9,6 +9,8 @@ use crate::{DEFAULT_PROCESS_TIMEOUT, DiscoveryError, run_process_with_timeout};
 
 /// Maximum bytes retained from external process stdout/stderr summaries.
 pub const MAX_STDERR_SUMMARY_BYTES: usize = 4096;
+/// Directory containing packaged FFmpeg-family resources.
+pub const BUNDLED_FFMPEG_DIR_ENV: &str = "VE_BUNDLED_FFMPEG_DIR";
 
 /// FFmpeg-family binary kind discovered by the runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,21 +27,13 @@ impl BinaryKind {
             Self::Ffprobe => "ffprobe",
         }
     }
-
-    pub fn env_var(self) -> &'static str {
-        match self {
-            Self::Ffmpeg => "VE_FFMPEG_PATH",
-            Self::Ffprobe => "VE_FFPROBE_PATH",
-        }
-    }
 }
 
 /// Source used to resolve an FFmpeg-family binary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum DiscoverySource {
-    Env { variable: String },
-    Path,
+    Bundled { directory: PathBuf },
 }
 
 /// Version-probed binary metadata.
@@ -62,39 +56,35 @@ pub struct RuntimeConfig {
 
 /// Discover and version-probe both FFmpeg and ffprobe.
 pub fn discover_runtime_config() -> Result<RuntimeConfig, DiscoveryError> {
-    let ffmpeg = resolve_binary(BinaryKind::Ffmpeg)?;
-    let ffprobe = resolve_binary(BinaryKind::Ffprobe)?;
+    discover_bundled_runtime_config()
+}
+
+/// Discover only packaged FFmpeg-family resources.
+pub fn discover_bundled_runtime_config() -> Result<RuntimeConfig, DiscoveryError> {
+    let ffmpeg = resolve_bundled_binary(BinaryKind::Ffmpeg)?;
+    let ffprobe = resolve_bundled_binary(BinaryKind::Ffprobe)?;
 
     Ok(RuntimeConfig { ffmpeg, ffprobe })
 }
 
-/// Resolve a binary through its explicit env var first, then PATH.
 pub fn resolve_binary(kind: BinaryKind) -> Result<DiscoveredBinary, DiscoveryError> {
-    let env_var = kind.env_var();
+    resolve_bundled_binary(kind)
+}
 
-    if let Some(explicit_path) = env::var_os(env_var) {
-        let path = PathBuf::from(explicit_path);
-        if !path.is_file() {
-            return Err(DiscoveryError::missing_binary(kind, vec![path]));
-        }
-
-        return probe_binary_version(
-            kind,
-            path.clone(),
-            DiscoverySource::Env {
-                variable: env_var.to_string(),
-            },
-        );
+fn resolve_bundled_binary(kind: BinaryKind) -> Result<DiscoveredBinary, DiscoveryError> {
+    let directory = bundled_runtime_directory();
+    let path = directory.join(platform_binary_filename(kind.binary_name()));
+    if !path.is_file() {
+        return Err(DiscoveryError::missing_binary(kind, vec![path]));
     }
 
-    let binary_name = kind.binary_name();
-    match which::which(binary_name) {
-        Ok(path) => probe_binary_version(kind, path, DiscoverySource::Path),
-        Err(_) => Err(DiscoveryError::missing_binary(
-            kind,
-            checked_path_candidates(binary_name),
-        )),
-    }
+    probe_binary_version(
+        kind,
+        path,
+        DiscoverySource::Bundled {
+            directory: directory.clone(),
+        },
+    )
 }
 
 /// Run a `-version` probe for a resolved binary using process argument arrays.
@@ -166,10 +156,38 @@ pub fn probe_binary_version_with_timeout(
     })
 }
 
-fn checked_path_candidates(binary_name: &str) -> Vec<PathBuf> {
-    env::split_paths(&env::var_os("PATH").unwrap_or_default())
-        .map(|path| path.join(binary_name))
-        .collect()
+fn bundled_runtime_directory() -> PathBuf {
+    env::var_os(BUNDLED_FFMPEG_DIR_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(default_development_bundled_runtime_directory)
+}
+
+fn default_development_bundled_runtime_directory() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../apps/desktop-electron/runtime/ffmpeg")
+        .join(platform_arch_segment())
+}
+
+fn platform_binary_filename(binary_name: &str) -> String {
+    if cfg!(windows) {
+        format!("{binary_name}.exe")
+    } else {
+        binary_name.to_owned()
+    }
+}
+
+fn platform_arch_segment() -> String {
+    let platform = match env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        value => value,
+    };
+    let arch = match env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        value => value,
+    };
+    format!("{platform}-{arch}")
 }
 
 fn optional_summary(bytes: &[u8]) -> Option<String> {

@@ -19,20 +19,23 @@ fn runtime_capability_report_contains_binaries_features_fonts_and_license_postur
     let font_path = sandbox.path().join("PingFang.ttc");
     std::fs::write(&font_path, b"font").unwrap();
     let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", &font_path);
+    let bundled_dir = PathBuf::from("/runtime/bin");
 
     let runtime = RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
-            path: PathBuf::from("/runtime/bin/ffmpeg"),
-            source: DiscoverySource::Env {
-                variable: "VE_FFMPEG_PATH".to_owned(),
+            path: bundled_dir.join("ffmpeg"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
             },
             version: "ffmpeg version test-build".to_owned(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
-            path: PathBuf::from("/runtime/bin/ffprobe"),
-            source: DiscoverySource::Path,
+            path: bundled_dir.join("ffprobe"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
+            },
             version: "ffprobe version test-build".to_owned(),
         },
     };
@@ -54,7 +57,7 @@ fn runtime_capability_report_contains_binaries_features_fonts_and_license_postur
     assert_eq!(report.status, RuntimeCapabilityStatus::Ready);
     assert_eq!(report.executor_name, "fake-executor");
     assert_eq!(report.ffmpeg.path, PathBuf::from("/runtime/bin/ffmpeg"));
-    assert_eq!(report.ffmpeg.source, "VE_FFMPEG_PATH");
+    assert_eq!(report.ffmpeg.source, "bundled");
     assert_eq!(report.ffmpeg.version, "ffmpeg version test-build");
     assert!(
         report
@@ -64,7 +67,7 @@ fn runtime_capability_report_contains_binaries_features_fonts_and_license_postur
             .unwrap()
             .contains("--enable-libx264")
     );
-    assert_eq!(report.ffprobe.source, "PATH");
+    assert_eq!(report.ffprobe.source, "bundled");
     assert!(report.h264_encoder.available);
     assert!(report.aac_encoder.available);
     assert!(report.ass_filter.available);
@@ -98,26 +101,75 @@ fn runtime_capability_report_contains_binaries_features_fonts_and_license_postur
             .available_font_paths
             .contains(&font_path)
     );
-    assert!(report.license_posture.external_runtime);
+    assert!(!report.license_posture.external_runtime);
     assert!(!report.license_posture.redistributable_build);
-    assert_eq!(report.license_posture.source, "externalRuntime");
+    assert_eq!(report.license_posture.source, "bundledRuntime");
+}
+
+#[test]
+fn runtime_capability_report_marks_bundled_runtime_without_redistribution_approval() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", "/missing/font.ttf");
+    let bundled_dir = PathBuf::from("/app/resources/ffmpeg/darwin-arm64");
+    let runtime = RuntimeConfig {
+        ffmpeg: DiscoveredBinary {
+            kind: BinaryKind::Ffmpeg,
+            path: bundled_dir.join("ffmpeg"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
+            },
+            version: "ffmpeg version bundled-build".to_owned(),
+        },
+        ffprobe: DiscoveredBinary {
+            kind: BinaryKind::Ffprobe,
+            path: bundled_dir.join("ffprobe"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
+            },
+            version: "ffprobe version bundled-build".to_owned(),
+        },
+    };
+    let executor = FakeExecutor::new()
+        .with_version("ffmpeg version bundled-build\n")
+        .with_probe(
+            &["-hide_banner", "-encoders"],
+            " V..... libx264 H.264 encoder\n A..... aac AAC encoder\n",
+        )
+        .with_probe(
+            &["-hide_banner", "-filters"],
+            " ... ass Render ASS subtitles\n ... subtitles Render text subtitles\n",
+        );
+
+    let report = probe_runtime_capabilities(&executor, &runtime);
+
+    assert_eq!(report.ffmpeg.source, "bundled");
+    assert_eq!(report.ffprobe.source, "bundled");
+    assert!(!report.license_posture.external_runtime);
+    assert!(!report.license_posture.redistributable_build);
+    assert_eq!(report.license_posture.source, "bundledRuntime");
+    assert!(report.license_posture.message.contains("法律审查"));
 }
 
 #[test]
 fn runtime_capability_report_classifies_missing_optional_capabilities_as_warning() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", "/missing/font.ttf");
+    let bundled_dir = PathBuf::from("/runtime/bin");
     let runtime = RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
-            path: PathBuf::from("/runtime/bin/ffmpeg"),
-            source: DiscoverySource::Path,
+            path: bundled_dir.join("ffmpeg"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
+            },
             version: "ffmpeg version test-build".to_owned(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
-            path: PathBuf::from("/runtime/bin/ffprobe"),
-            source: DiscoverySource::Path,
+            path: bundled_dir.join("ffprobe"),
+            source: DiscoverySource::Bundled {
+                directory: bundled_dir.clone(),
+            },
             version: "ffprobe version test-build".to_owned(),
         },
     };
@@ -145,11 +197,13 @@ fn runtime_capability_report_classifies_missing_optional_capabilities_as_warning
 }
 
 #[test]
-fn runtime_capability_missing_env_path_returns_classified_discovery_error() {
+fn runtime_capability_missing_bundled_dir_returns_classified_discovery_error() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    let missing_ffmpeg = PathBuf::from("/definitely-missing/video-editor/ffmpeg");
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &missing_ffmpeg);
-    let _env_ffprobe = EnvVarGuard::remove("VE_FFPROBE_PATH");
+    let missing_dir = PathBuf::from("/definitely-missing/video-editor/bundled-ffmpeg");
+    let missing_ffmpeg = missing_dir.join("ffmpeg");
+    let _bundled_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &missing_dir);
+    let _legacy_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", "/tmp/ignored-ffmpeg");
+    let _legacy_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", "/tmp/ignored-ffprobe");
     let _path = EnvVarGuard::set_path("PATH", "/definitely-missing/video-editor/bin");
 
     let error = discover_runtime_config().expect_err("missing runtime should be classified");
@@ -157,7 +211,8 @@ fn runtime_capability_missing_env_path_returns_classified_discovery_error() {
     assert_eq!(error.kind, DiscoveryErrorKind::MissingBinary);
     assert_eq!(error.binary, BinaryKind::Ffmpeg);
     assert!(error.checked_paths.contains(&missing_ffmpeg));
-    assert!(error.remediation.contains("VE_FFMPEG_PATH"));
+    assert!(error.remediation.contains("VE_BUNDLED_FFMPEG_DIR"));
+    assert!(!error.remediation.contains("VE_FFMPEG_PATH"));
 }
 
 #[derive(Default)]
@@ -229,14 +284,6 @@ impl EnvVarGuard {
         let previous = std::env::var_os(key);
         unsafe {
             std::env::set_var(key, value.as_ref());
-        }
-        Self { key, previous }
-    }
-
-    fn remove(key: &'static str) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe {
-            std::env::remove_var(key);
         }
         Self { key, previous }
     }

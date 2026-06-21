@@ -145,19 +145,20 @@ fn desktop_capabilities_report_orders_fallback_ladder_from_native_texture_to_pre
 }
 
 fn fake_runtime_config() -> RuntimeConfig {
+    let directory = PathBuf::from("/runtime/bin");
     RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
-            path: PathBuf::from("/runtime/bin/ffmpeg"),
-            source: DiscoverySource::Env {
-                variable: "VE_FFMPEG_PATH".to_owned(),
+            path: directory.join("ffmpeg"),
+            source: DiscoverySource::Bundled {
+                directory: directory.clone(),
             },
             version: "ffmpeg version test-build".to_owned(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
-            path: PathBuf::from("/runtime/bin/ffprobe"),
-            source: DiscoverySource::Path,
+            path: directory.join("ffprobe"),
+            source: DiscoverySource::Bundled { directory },
             version: "ffprobe version test-build".to_owned(),
         },
     }

@@ -36,25 +36,24 @@ Render graph and FFmpeg compiler crates also stay separated from process
 execution: render semantics compile into plans, while runtime crates execute
 jobs and report progress or errors.
 
-## FFmpeg Scope In Phase 1
+## FFmpeg Runtime Scope
 
-Phase 1 discovers local FFmpeg and ffprobe binaries through explicit
-configuration and the host environment only:
+Desktop builds use a bundled FFmpeg runtime. Discovery is single-source:
 
-- `VE_FFMPEG_PATH`
-- `VE_FFPROBE_PATH`
-- `PATH`
+- `VE_BUNDLED_FFMPEG_DIR` when the app shell or tests set an explicit bundled
+  runtime directory.
+- `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>` during local
+  development.
+- `process.resourcesPath/ffmpeg/<platform>-<arch>` in packaged Electron builds.
 
-Phase 1 does not download FFmpeg, does not install FFmpeg, does not bundle
-FFmpeg, and does not redistribute FFmpeg. Because this phase does not ship or
-redistribute FFmpeg binaries, it also does not perform FFmpeg distribution
-license review, third-party notice generation, or LGPL/GPL/nonfree build-option
-selection.
+The runtime crate does not search `PATH` and does not accept separate
+per-binary runtime variables. Electron is responsible for provisioning and
+packaging FFmpeg/ffprobe resources before launch.
 
-If a later packaged desktop app, mobile app, server renderer, or release process
-distributes FFmpeg binaries, that later work must review license posture,
+The bundled runtime engineering manifest records exact versions and checksums.
+Public redistribution still requires legal review of the exact FFmpeg build,
 notices, source-offer obligations, build flags, and commercial product
-constraints before shipping.
+constraints before shipping externally.
 
 ## Desktop Runtime
 

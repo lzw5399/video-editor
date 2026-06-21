@@ -191,14 +191,14 @@ test("运行环境诊断在 1280x800 和 1120x720 内显示就绪状态", async 
 
 test("运行环境错误会禁用预览和导出入口", async () => {
   const { app, page } = await launchDiagnosticsApp({
-    VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "error",
-    VE_FFMPEG_PATH: "/tmp/video-editor-missing-runtime/ffmpeg",
-    VE_FFPROBE_PATH: "/tmp/video-editor-missing-runtime/ffprobe"
+    VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "error"
   });
 
   try {
     await expectCommandCall(app, "probeRuntimeCapabilities");
-    await expect(page.getByLabel("运行环境状态")).toContainText("运行环境检测失败，请检查 FFmpeg/ffprobe 路径后重试。");
+    await expect(page.getByLabel("运行环境状态")).toContainText(
+      "运行环境检测失败，请检查内置 FFmpeg/ffprobe runtime 后重试。"
+    );
     await expect(page.getByRole("button", { name: "预览暂不可用" }).first()).toBeDisabled();
     await expect(page.getByRole("button", { name: "导出暂不可用" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "重新检测运行环境" })).toBeVisible();

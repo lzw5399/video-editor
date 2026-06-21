@@ -1,7 +1,7 @@
 # Third-Party Notices
 
-This notice file summarizes the Phase 6 MVP dependency posture. It is not a
-complete legal review for a future bundled-media-runtime release.
+This notice file summarizes the current engineering dependency posture. It is
+not a complete legal review for a public bundled-media-runtime release.
 
 ## Video Editor
 
@@ -22,15 +22,16 @@ license notices from `Cargo.lock` before any public binary release.
 
 ## FFmpeg And ffprobe
 
-FFmpeg is external/user-provided for the MVP.
+FFmpeg and ffprobe are bundled application resources for desktop packages.
 
-No FFmpeg binary is bundled by Phase 6. Users or CI provide FFmpeg and ffprobe
-through `VE_FFMPEG_PATH`, `VE_FFPROBE_PATH`, or `PATH`.
+The app discovers them only through the bundled runtime directory
+`VE_BUNDLED_FFMPEG_DIR` or the packaged resources path. The engineering manifest
+generated at package time records the exact version, configure line, checksums,
+and `legalReviewPending` status.
 
-Because Phase 6 does not redistribute FFmpeg binaries, this notice does not
-claim a redistributable FFmpeg build, configure line, source offer, or LGPL/GPL
-compliance package. Any later bundled FFmpeg release must add a concrete build
-manifest and corresponding notices before shipping.
+This notice does not claim final redistribution approval. Public distribution
+must complete a license review for the exact FFmpeg build and enabled external
+libraries before `redistributableBuild` can become true.
 
 ## External References
 

@@ -5,7 +5,7 @@ use testkit::generate_material_fixtures;
 #[test]
 fn material_fixtures_generate_temp_media_for_all_supported_kinds() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixtures = generate_material_fixtures(&executor, &runtime)

@@ -11,93 +11,74 @@ use media_runtime::{
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
-fn discovery_runtime_config_prefers_explicit_env_paths_before_path() {
+fn discovery_runtime_config_uses_bundled_runtime_directory() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    let sandbox = Sandbox::new("env-before-path");
-    let env_ffmpeg = sandbox.bin("env", "ffmpeg", "ffmpeg version env-build\n", "", 0);
-    let env_ffprobe = sandbox.bin("env", "ffprobe", "ffprobe version env-build\n", "", 0);
-    let _path_ffmpeg = sandbox.bin("path", "ffmpeg", "ffmpeg version path-build\n", "", 0);
-    let _path_ffprobe = sandbox.bin("path", "ffprobe", "ffprobe version path-build\n", "", 0);
+    let sandbox = Sandbox::new("bundled-success");
+    let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version bundled-build\n", "", 0);
+    let ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _legacy_ffmpeg = EnvVarGuard::remove("VE_FFMPEG_PATH");
+    let _legacy_ffprobe = EnvVarGuard::remove("VE_FFPROBE_PATH");
+    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("poison-path"));
 
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &env_ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &env_ffprobe);
-    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("path"));
-
-    let config = discover_runtime_config().expect("explicit env binaries should probe");
+    let config = discover_runtime_config().expect("bundled binaries should probe");
 
     assert_eq!(config.ffmpeg.kind, BinaryKind::Ffmpeg);
-    assert_eq!(config.ffmpeg.path, env_ffmpeg);
+    assert_eq!(config.ffmpeg.path, ffmpeg);
     assert_eq!(
         config.ffmpeg.source,
-        DiscoverySource::Env {
-            variable: "VE_FFMPEG_PATH".to_string()
+        DiscoverySource::Bundled {
+            directory: sandbox.root.clone()
         }
     );
-    assert_eq!(config.ffmpeg.version, "ffmpeg version env-build");
+    assert_eq!(config.ffmpeg.version, "ffmpeg version bundled-build");
 
     assert_eq!(config.ffprobe.kind, BinaryKind::Ffprobe);
-    assert_eq!(config.ffprobe.path, env_ffprobe);
+    assert_eq!(config.ffprobe.path, ffprobe);
     assert_eq!(
         config.ffprobe.source,
-        DiscoverySource::Env {
-            variable: "VE_FFPROBE_PATH".to_string()
+        DiscoverySource::Bundled {
+            directory: sandbox.root.clone()
         }
     );
-    assert_eq!(config.ffprobe.version, "ffprobe version env-build");
+    assert_eq!(config.ffprobe.version, "ffprobe version bundled-build");
 }
 
 #[test]
-fn discovery_runtime_config_falls_back_to_path_when_env_vars_are_absent() {
+fn discovery_never_falls_back_to_legacy_env_or_path() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    let sandbox = Sandbox::new("path-success");
-    let path_ffmpeg = sandbox.bin("path", "ffmpeg", "ffmpeg version path-build\n", "", 0);
-    let path_ffprobe = sandbox.bin("path", "ffprobe", "ffprobe version path-build\n", "", 0);
+    let sandbox = Sandbox::new("bundled-missing");
+    let legacy = sandbox.dir("legacy");
+    let _legacy_ffmpeg_path = sandbox.bin_at(legacy, "ffmpeg", "ffmpeg version legacy\n", "", 0);
+    let _legacy_ffprobe_path = sandbox.bin_at(legacy, "ffprobe", "ffprobe version legacy\n", "", 0);
+    let missing_bundled_dir = sandbox.root.join("missing-bundled");
 
-    let _env_ffmpeg = EnvVarGuard::remove("VE_FFMPEG_PATH");
-    let _env_ffprobe = EnvVarGuard::remove("VE_FFPROBE_PATH");
-    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("path"));
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &missing_bundled_dir);
+    let _legacy_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", legacy.join("ffmpeg"));
+    let _legacy_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", legacy.join("ffprobe"));
+    let _path = EnvVarGuard::set_path("PATH", legacy);
 
-    let config = discover_runtime_config().expect("PATH binaries should probe");
-
-    assert_eq!(config.ffmpeg.path, path_ffmpeg);
-    assert_eq!(config.ffmpeg.source, DiscoverySource::Path);
-    assert_eq!(config.ffprobe.path, path_ffprobe);
-    assert_eq!(config.ffprobe.source, DiscoverySource::Path);
-}
-
-#[test]
-fn discovery_missing_binary_error_includes_kind_checked_paths_and_remediation() {
-    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    let sandbox = Sandbox::new("missing");
-    let missing_ffmpeg = sandbox.root.join("does-not-exist-ffmpeg");
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &missing_ffmpeg);
-    let _env_ffprobe = EnvVarGuard::remove("VE_FFPROBE_PATH");
-    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("empty-path"));
-
-    let error = discover_runtime_config().expect_err("missing ffmpeg should fail");
+    let error = discover_runtime_config().expect_err("missing bundled runtime should fail");
 
     assert_eq!(error.kind, DiscoveryErrorKind::MissingBinary);
     assert_eq!(error.binary, BinaryKind::Ffmpeg);
-    assert!(error.checked_paths.contains(&missing_ffmpeg));
-    assert!(
-        error
-            .remediation
-            .contains("Set VE_FFMPEG_PATH to a valid ffmpeg binary")
+    assert_eq!(
+        error.checked_paths,
+        vec![missing_bundled_dir.join("ffmpeg")]
     );
-    assert_eq!(error.stdout_summary, None);
-    assert_eq!(error.stderr_summary, None);
+    assert!(error.remediation.contains("VE_BUNDLED_FFMPEG_DIR"));
+    assert!(!error.remediation.contains("VE_FFMPEG_PATH"));
+    assert!(!error.remediation.contains("PATH"));
 }
 
 #[test]
-fn discovery_bad_binary_error_uses_bounded_output_summary() {
+fn discovery_bad_bundled_binary_error_uses_bounded_output_summary() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("bad-binary");
     let long_stderr = "x".repeat(MAX_STDERR_SUMMARY_BYTES + 128);
-    let bad_ffmpeg = sandbox.bin("env", "ffmpeg", "not really ffmpeg\n", &long_stderr, 23);
-    let good_ffprobe = sandbox.bin("env", "ffprobe", "ffprobe version env-build\n", "", 0);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &bad_ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &good_ffprobe);
-    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("empty-path"));
+    let bad_ffmpeg = sandbox.bin("ffmpeg", "not really ffmpeg\n", &long_stderr, 23);
+    let _good_ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
 
     let error = discover_runtime_config().expect_err("bad ffmpeg should fail version probe");
 
@@ -110,22 +91,21 @@ fn discovery_bad_binary_error_uses_bounded_output_summary() {
         "stderr summary should be bounded"
     );
     assert!(
-        error
-            .remediation
-            .contains("Verify VE_FFMPEG_PATH points to a working ffmpeg binary")
+        error.remediation.contains("bundled runtime directory"),
+        "remediation should point at the bundled runtime contract"
     );
 }
 
 #[test]
 fn discovery_version_probe_times_out_for_hung_binary() {
     let sandbox = Sandbox::new("hung-binary");
-    let hung_ffmpeg = sandbox.bin_sleep("env", "ffmpeg", 2);
+    let hung_ffmpeg = sandbox.bin_sleep("ffmpeg", 2);
 
     let error = probe_binary_version_with_timeout(
         BinaryKind::Ffmpeg,
         hung_ffmpeg.clone(),
-        DiscoverySource::Env {
-            variable: "VE_FFMPEG_PATH".to_string(),
+        DiscoverySource::Bundled {
+            directory: sandbox.root.clone(),
         },
         Duration::from_millis(100),
     )
@@ -168,8 +148,20 @@ impl Sandbox {
         Box::leak(dir.into_boxed_path())
     }
 
-    fn bin(&self, dir: &str, name: &str, stdout: &str, stderr: &str, exit_code: i32) -> PathBuf {
-        let path = self.dir(dir).join(name);
+    fn bin(&self, name: &str, stdout: &str, stderr: &str, exit_code: i32) -> PathBuf {
+        let root = self.root.clone();
+        self.bin_at(&root, name, stdout, stderr, exit_code)
+    }
+
+    fn bin_at(
+        &self,
+        dir: impl AsRef<Path>,
+        name: &str,
+        stdout: &str,
+        stderr: &str,
+        exit_code: i32,
+    ) -> PathBuf {
+        let path = dir.as_ref().join(name);
         let script = format!(
             "#!/bin/sh\nprintf '{}'\nprintf '{}' >&2\nexit {exit_code}\n",
             shell_escape_single_quotes(stdout),
@@ -186,8 +178,8 @@ impl Sandbox {
         path
     }
 
-    fn bin_sleep(&self, dir: &str, name: &str, seconds: u64) -> PathBuf {
-        let path = self.dir(dir).join(name);
+    fn bin_sleep(&self, name: &str, seconds: u64) -> PathBuf {
+        let path = self.root.join(name);
         let script = format!("#!/bin/sh\nsleep {seconds}\nprintf 'ffmpeg version late\\n'\n");
         fs::write(&path, script).unwrap();
 

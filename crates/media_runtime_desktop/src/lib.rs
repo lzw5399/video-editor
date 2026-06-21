@@ -1,8 +1,8 @@
 //! Desktop implementation shell for the FFmpeg runtime boundary.
 //!
 //! This crate is the desktop backend for `media_runtime::FfmpegExecutor`.
-//! Electron can inject this service at the app shell boundary. It does not
-//! download, bundle, or redistribute FFmpeg in this plan.
+//! Electron packages FFmpeg/ffprobe as app resources and injects that bundled
+//! runtime directory at the app shell boundary.
 
 use std::ffi::OsString;
 use std::path::Path;

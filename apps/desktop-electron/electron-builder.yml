@@ -12,6 +12,11 @@ files:
   - "package.json"
 asarUnpack:
   - "native/**"
+extraResources:
+  - from: "runtime/ffmpeg"
+    to: "ffmpeg"
+    filter:
+      - "**/*"
 mac:
   identity: null
   target:

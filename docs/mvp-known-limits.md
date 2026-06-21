@@ -1,17 +1,19 @@
 # MVP Known Limits
 
-This document records the Phase 6 desktop MVP limits and the intended
-post-MVP backlog. It describes product and release scope only; it does not add
-new editor semantics.
+This document records the desktop MVP limits and the intended post-MVP backlog.
+It describes product and release scope only; it does not add new editor
+semantics.
 
 ## Runtime And Packaging
 
-- FFmpeg and ffprobe are external/user-provided for the MVP. Configure them with
-  `VE_FFMPEG_PATH`, `VE_FFPROBE_PATH`, or `PATH`.
-- No FFmpeg binary is bundled by Phase 6.
+- FFmpeg and ffprobe are bundled application resources for desktop packages.
+- Runtime discovery is single-source and uses `VE_BUNDLED_FFMPEG_DIR` or the app
+  resources runtime directory.
 - Packaged tests build and launch local directory packages. They are not signed
   public installers.
-- macOS signing and notarization are not configured in Phase 6.
+- macOS signing and notarization are not configured.
+- The bundled FFmpeg engineering manifest is recorded, but public
+  redistribution approval remains pending legal review.
 - Windows signing, Linux package repository publishing, auto-update, and
   installer polish are deferred.
 - App icon polish and branded release assets are deferred.
@@ -55,7 +57,8 @@ Before presenting an MVP build as release-ready, verify:
 
 1. `pnpm run test:phase6` passes.
 2. `pnpm run test:phase6-packaging` passes on the target platform.
-3. External FFmpeg and ffprobe are installed or configured.
+3. `pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime` records the
+   bundled FFmpeg manifest for the target platform.
 4. Signing/notarization status is stated clearly for the distributed artifact.
-5. Any bundled FFmpeg proposal has its own manifest, notices, legal review, and
-   packaged resource tests.
+5. Public redistribution approval for the exact bundled FFmpeg build is recorded
+   before publishing an external release.

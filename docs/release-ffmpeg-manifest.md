@@ -1,55 +1,53 @@
 # Release FFmpeg Manifest
 
-This document records the Phase 6 MVP runtime posture for FFmpeg and ffprobe.
+This document records the desktop runtime packaging posture for FFmpeg and ffprobe.
 
-## Phase 6 Posture
+## Runtime Posture
 
-FFmpeg is external/user-provided for the MVP.
+FFmpeg and ffprobe are bundled application resources for the desktop package.
 
-Runtime discovery uses the existing Rust-owned media runtime boundary:
+Runtime discovery is intentionally single-source:
 
-- `VE_FFMPEG_PATH`
-- `VE_FFPROBE_PATH`
-- `PATH`
+- `VE_BUNDLED_FFMPEG_DIR`
+- `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>` during local development
+- `process.resourcesPath/ffmpeg/<platform>-<arch>` in packaged Electron builds
 
-No FFmpeg binary is bundled by Phase 6.
+The app runtime must not discover FFmpeg or ffprobe through `PATH` or separate
+per-binary environment variables.
 
-Homebrew --enable-gpl is development/test only.
+## Bundled Runtime Layout
 
-The local development machine may use Homebrew, system packages, or another
-user-installed FFmpeg build to satisfy no-mock preview/export tests. That local
-runtime is not a Video Editor redistributable binary and is not evidence that
-the project can ship the same build.
+The build script `apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs`
+copies the build-machine FFmpeg and ffprobe binaries into:
 
-## What Phase 6 Ships
+```text
+apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>/
+  ffmpeg
+  ffprobe
+  manifest.local.json
+```
 
-- Electron desktop directory package support.
-- Rust-owned FFmpeg/ffprobe discovery and capability diagnostics.
-- Dev and packaged no-mock workflow gates that require an external runtime.
-- Documentation and guards that prevent accidental bundled-runtime claims.
+`electron-builder.yml` packages that directory as:
 
-## What Phase 6 Does Not Ship
+```text
+resources/ffmpeg/<platform>-<arch>/
+```
 
-- Downloaded FFmpeg binaries.
-- Bundled FFmpeg or ffprobe resources.
-- A selected redistributable FFmpeg build.
-- LGPL/GPL/nonfree redistribution review for a project-shipped FFmpeg binary.
-- Source-offer, object-file, or build-script obligations for a shipped FFmpeg
-  binary.
-- Packaged resource resolver tests for bundled FFmpeg.
+The generated `manifest.local.json` records the binary file names, source paths,
+`-version` first lines, configure lines, SHA-256 checksums, and review status.
 
-## Future Bundled FFmpeg Checklist
+## Licensing Status
 
-Any later plan that bundles FFmpeg must add all of these artifacts together:
+The current engineering status is `legalReviewPending`.
 
-1. Exact binary source and version.
-2. Full configure line and enabled external libraries.
-3. LGPL/GPL/nonfree review based on that exact build.
-4. Source-offer and relinking obligation review where applicable.
-5. Third-party notices for FFmpeg and enabled libraries.
-6. Packaged resource resolver implementation and tests.
-7. Runtime capability tests that prove packaged-resource discovery works.
-8. Release notes that distinguish bundled, system, and user-configured runtimes.
+The runtime capability report must expose:
 
-Until that work exists, Video Editor releases must continue to describe FFmpeg
-as an external/user-provided runtime for the MVP.
+- `source: "bundled"` for both binaries
+- `licensePosture.source: "bundledRuntime"`
+- `licensePosture.externalRuntime: false`
+- `licensePosture.redistributableBuild: false`
+
+This records that the packaged app has a deterministic bundled runtime. It does
+not claim public redistribution approval. A public redistributable build still
+requires legal review of the exact FFmpeg build, enabled libraries, notices,
+source-offer/relinking obligations where applicable, and release approvals.

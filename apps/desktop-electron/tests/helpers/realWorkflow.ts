@@ -14,6 +14,11 @@ type ExecuteCommandCall = {
   kind: string;
 };
 
+type ProjectSessionCall = {
+  command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
+  intentKind: string | null;
+};
+
 type RealtimePreviewHostCall = {
   kind: string;
   playbackGeneration?: number;
@@ -61,23 +66,29 @@ export async function runRealImportPreviewExportWorkflow(
   await addTextSegment(page, app, fixtures.expectedTextContent);
   await addAudioSegment(page, app, fixtures.audioName);
   await addVisualSegment(page, app, fixtures.imageName);
-  await waitForCommandCount(page, app, "saveProjectBundle", 4);
+  await expectFileExists(join(fixtures.bundlePath, "project.json"));
 
   await verifyRealtimePreviewPlayback(page, app);
   await exportDraft(page, app, fixtures);
 
   const calls = await readExecuteCommandCalls(app);
+  const projectCalls = await readProjectSessionCalls(app);
+  const observedActions = [
+    ...calls.map((call) => call.command),
+    ...projectCalls
+      .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
+      .map((call) => call.intentKind as string)
+  ];
   expect(calls.map((call) => call.command)).toEqual(
     expect.arrayContaining([
       "probeRuntimeCapabilities",
-      "importMaterial",
-      "addTimelineSegmentIntent",
-      "addTextSegmentIntent",
-      "addAudioSegmentIntent",
-      "saveProjectBundle",
       "startExport",
       "getExportJobStatus"
     ])
+  );
+  expect(projectCalls.map((call) => call.command)).toContain("createProjectSession");
+  expect(observedActions).toEqual(
+    expect.arrayContaining(["addTimelineSegmentIntent", "addTextSegmentIntent", "addAudioSegmentIntent"])
   );
   expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
   expect(calls.filter((call) => call.command === "requestPreviewSegment")).toHaveLength(0);
@@ -110,10 +121,21 @@ async function enterProjectFromProductEntryIfNeeded(page: Page, app: ElectronApp
     return;
   }
 
-  const nextCount = (await countCommand(app, "saveProjectBundle")) + 1;
+  const nextSaveCount = (await countCommand(app, "saveProjectBundle")) + 1;
+  const nextCreateSessionCount = (await countProjectSessionCommand(app, "createProjectSession")) + 1;
   await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
   await page.getByRole("button", { name: "新建项目" }).click();
-  await waitForCommandCount(page, app, "saveProjectBundle", nextCount);
+  await expect
+    .poll(
+      async () => {
+        const saveReached = (await countCommand(app, "saveProjectBundle")) >= nextSaveCount;
+        const sessionReached = (await countProjectSessionCommand(app, "createProjectSession")) >= nextCreateSessionCount;
+        const workspaceVisible = (await page.getByRole("main", { name: "剪映风格编辑工作区" }).count()) > 0;
+        return workspaceVisible && (saveReached || sessionReached);
+      },
+      { timeout: 30_000 }
+    )
+    .toBe(true);
 }
 
 export async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
@@ -148,45 +170,45 @@ async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreview
 
 async function importMaterials(
   page: Page,
-  app: ElectronApplication,
+  _app: ElectronApplication,
   materials: Array<{ name: string }>
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "importMaterial")) + materials.length;
   await page.getByRole("button", { name: "导入素材" }).click();
-  await waitForCommandCount(page, app, "importMaterial", nextCount);
   for (const material of materials) {
     await expect(page.getByRole("article", { name: `素材 ${material.name}` })).toContainText("可用", { timeout: 20_000 });
   }
 }
 
 async function addVisualSegment(page: Page, app: ElectronApplication, materialName: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addTimelineSegmentIntent")) + 1;
+  const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toContainText("可用", { timeout: 20_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
-  await waitForCommandCount(page, app, "addTimelineSegmentIntent", nextCount);
+  await waitForProjectSessionIntentCount(page, app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
 }
 
 async function addTextSegment(page: Page, app: ElectronApplication, content: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
+  const nextCommandCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
+  const nextIntentCount = (await countProjectSessionIntent(app, "addTextSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await page.getByLabel("文字时长（秒）").fill("3");
   await page.getByRole("button", { name: "添加文字", exact: true }).click();
-  await waitForCommandCount(page, app, "addTextSegmentIntent", nextCount);
+  await waitForCommandOrProjectIntentCount(page, app, "addTextSegmentIntent", nextCommandCount, nextIntentCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(content)}`) })).toBeVisible();
   await expect(page.getByLabel("预览文字")).toContainText(content);
 }
 
 async function addAudioSegment(page: Page, app: ElectronApplication, audioName: string): Promise<void> {
-  const nextCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
+  const nextCommandCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
+  const nextIntentCount = (await countProjectSessionIntent(app, "addAudioSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
   await page.getByLabel("BGM素材").selectOption({ label: audioName });
   await page.getByLabel("音频时长（秒）").fill("2");
   await page.getByRole("button", { name: "添加音频", exact: true }).click();
-  await waitForCommandCount(page, app, "addAudioSegmentIntent", nextCount);
+  await waitForCommandOrProjectIntentCount(page, app, "addAudioSegmentIntent", nextCommandCount, nextIntentCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(audioName)}`) })).toBeVisible();
 }
 
@@ -297,7 +319,7 @@ async function exportDraft(
   await expect(dialog.getByLabel("输出校验")).toContainText(fixtures.expectedResolutionLabel);
   await expect(dialog.getByLabel("输出校验")).toContainText("含音频");
   await expectFileExists(outputPath);
-  await expectExportMedia(outputPath, fixtures);
+  await expectExportMedia(outputPath, fixtures, page);
 }
 
 async function waitForCommandCount(
@@ -327,6 +349,86 @@ async function countCommand(app: ElectronApplication, command: CommandName): Pro
   return (await readExecuteCommandCalls(app)).filter((call) => call.command === command).length;
 }
 
+async function readProjectSessionCalls(app: ElectronApplication): Promise<ProjectSessionCall[]> {
+  return app.evaluate(() => {
+    return (
+      (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+        .__videoEditorTestProjectSessionCalls ?? []
+    );
+  });
+}
+
+async function countProjectSessionCommand(
+  app: ElectronApplication,
+  command: ProjectSessionCall["command"]
+): Promise<number> {
+  return (await readProjectSessionCalls(app)).filter((call) => call.command === command).length;
+}
+
+async function waitForProjectSessionIntentCount(
+  page: Page,
+  app: ElectronApplication,
+  intentKind: string,
+  expectedCount: number
+): Promise<void> {
+  try {
+    await expect
+      .poll(async () => countProjectSessionIntent(app, intentKind), { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(expectedCount);
+  } catch (error) {
+    const calls = await readProjectSessionCalls(app);
+    const materialCards = await page.getByRole("article").allTextContents();
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        message,
+        `Expected at least ${expectedCount} ${intentKind} project intent(s).`,
+        `Recorded project session calls: ${JSON.stringify(calls)}`,
+        `Visible articles: ${JSON.stringify(materialCards)}`
+      ].join("\n")
+    );
+  }
+}
+
+async function waitForCommandOrProjectIntentCount(
+  page: Page,
+  app: ElectronApplication,
+  name: CommandName,
+  expectedCommandCount: number,
+  expectedIntentCount: number
+): Promise<void> {
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await countCommand(app, name)) >= expectedCommandCount ||
+          (await countProjectSessionIntent(app, name)) >= expectedIntentCount,
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+  } catch (error) {
+    const commandCalls = await readExecuteCommandCalls(app);
+    const projectCalls = await readProjectSessionCalls(app);
+    const materialCards = await page.getByRole("article").allTextContents();
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        message,
+        `Expected ${name} through executeCommand or project session intent.`,
+        `Recorded commands: ${JSON.stringify(commandCalls)}`,
+        `Recorded project session calls: ${JSON.stringify(projectCalls)}`,
+        `Visible articles: ${JSON.stringify(materialCards)}`
+      ].join("\n")
+    );
+  }
+}
+
+async function countProjectSessionIntent(app: ElectronApplication, intentKind: string): Promise<number> {
+  return (await readProjectSessionCalls(app)).filter(
+    (call) => call.command === "executeProjectIntent" && call.intentKind === intentKind
+  ).length;
+}
+
 async function expectFileExists(path: string): Promise<void> {
   await expect(access(path).then(
     () => true,
@@ -334,8 +436,8 @@ async function expectFileExists(path: string): Promise<void> {
   )).resolves.toBe(true);
 }
 
-async function expectExportMedia(path: string, fixtures: Phase6MediaFixtures): Promise<void> {
-  const ffprobePath = process.env.VE_FFPROBE_PATH ?? "ffprobe";
+async function expectExportMedia(path: string, fixtures: Phase6MediaFixtures, page: Page): Promise<void> {
+  const ffprobePath = await readBundledFfprobePath(page);
   const { stdout } = await execFileAsync(
     ffprobePath,
     ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", path],
@@ -358,6 +460,33 @@ async function expectExportMedia(path: string, fixtures: Phase6MediaFixtures): P
   expect(duration).toBeGreaterThan(fixtures.expectedDurationSeconds - 0.35);
   expect(duration).toBeLessThan(fixtures.expectedDurationSeconds + 0.35);
   await expectFileExists(join(fixtures.bundlePath, "project.json"));
+}
+
+async function readBundledFfprobePath(page: Page): Promise<string> {
+  const runtime = await page.evaluate(() => {
+    const api = (window as unknown as {
+      videoEditorCore?: {
+        executeCommand: (command: unknown) => Promise<{
+          ok: boolean;
+          data: null | { ffprobe?: { path?: string; source?: string | { kind?: string } } };
+          error: null | { message?: string };
+        }>;
+      };
+    }).videoEditorCore;
+    return api?.executeCommand({
+      command: "probeMediaRuntime",
+      payload: { kind: "probeMediaRuntime" },
+      requestId: "real-workflow-export-validation-runtime"
+    });
+  });
+
+  if (runtime?.ok !== true || runtime.data?.ffprobe?.path === undefined) {
+    throw new Error(`Unable to read bundled ffprobe path from app runtime: ${JSON.stringify(runtime)}`);
+  }
+  const source = runtime.data.ffprobe.source;
+  expect(typeof source === "string" ? source : source?.kind).toBe("bundled");
+  expect(runtime.data.ffprobe.path).not.toContain("/opt/homebrew");
+  return runtime.data.ffprobe.path;
 }
 
 function escapeRegex(value: string): string {

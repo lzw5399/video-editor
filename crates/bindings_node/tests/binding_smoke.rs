@@ -662,8 +662,7 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     let sandbox = Sandbox::new("binding-probe-ok");
     let ffmpeg = sandbox.bin("ffmpeg", "ffmpeg version binding-test\n", "", 0);
     let ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "probeMediaRuntime",
@@ -677,10 +676,10 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     assert_eq!(envelope["events"], json!([]));
     assert_eq!(envelope["data"]["ffmpeg"]["kind"], "ffmpeg");
     assert_eq!(envelope["data"]["ffmpeg"]["path"], json!(ffmpeg));
-    assert_eq!(envelope["data"]["ffmpeg"]["source"]["kind"], "env");
+    assert_eq!(envelope["data"]["ffmpeg"]["source"]["kind"], "bundled");
     assert_eq!(
-        envelope["data"]["ffmpeg"]["source"]["variable"],
-        "VE_FFMPEG_PATH"
+        envelope["data"]["ffmpeg"]["source"]["directory"],
+        sandbox.root.display().to_string()
     );
     assert_eq!(
         envelope["data"]["ffmpeg"]["version"],
@@ -688,10 +687,10 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
     );
     assert_eq!(envelope["data"]["ffprobe"]["kind"], "ffprobe");
     assert_eq!(envelope["data"]["ffprobe"]["path"], json!(ffprobe));
-    assert_eq!(envelope["data"]["ffprobe"]["source"]["kind"], "env");
+    assert_eq!(envelope["data"]["ffprobe"]["source"]["kind"], "bundled");
     assert_eq!(
-        envelope["data"]["ffprobe"]["source"]["variable"],
-        "VE_FFPROBE_PATH"
+        envelope["data"]["ffprobe"]["source"]["directory"],
+        sandbox.root.display().to_string()
     );
     assert_eq!(
         envelope["data"]["ffprobe"]["version"],
@@ -774,10 +773,9 @@ fn execute_command_probe_media_runtime_maps_discovery_failure_to_stable_error() 
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("binding-probe-error");
     let bad_stderr = "runtime probe failure ".repeat(300);
-    let ffmpeg = sandbox.bin("ffmpeg", "not ffmpeg\n", &bad_stderr, 42);
-    let ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
-    let _env_ffmpeg = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _env_ffprobe = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _ffmpeg = sandbox.bin("ffmpeg", "not ffmpeg\n", &bad_stderr, 42);
+    let _ffprobe = sandbox.bin("ffprobe", "ffprobe version binding-test\n", "", 0);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
 
     let envelope = execute_command(json!({
         "command": "probeMediaRuntime",
@@ -797,7 +795,7 @@ fn execute_command_probe_media_runtime_maps_discovery_failure_to_stable_error() 
 
     let message = envelope["error"]["message"].as_str().unwrap();
     assert!(message.contains("versionProbeFailed"));
-    assert!(message.contains("Verify VE_FFMPEG_PATH"));
+    assert!(message.contains("bundled runtime directory"));
     assert!(message.contains("runtime probe failure"));
     assert!(
         message.len() < 4_800,

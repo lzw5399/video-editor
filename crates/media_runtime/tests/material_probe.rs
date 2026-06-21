@@ -20,7 +20,7 @@ use std::os::unix::process::ExitStatusExt;
 #[test]
 fn material_probe_normalizes_generated_video_metadata() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let media = generate_video_material_fixture(&executor, &runtime)
@@ -37,7 +37,7 @@ fn material_probe_normalizes_generated_video_metadata() {
 #[test]
 fn material_probe_normalizes_generated_image_metadata() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let media = generate_image_material_fixture(&executor, &runtime)
@@ -54,7 +54,7 @@ fn material_probe_normalizes_generated_image_metadata() {
 #[test]
 fn material_probe_normalizes_generated_audio_metadata() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let media = generate_audio_material_fixture(&executor, &runtime)
@@ -71,7 +71,7 @@ fn material_probe_normalizes_generated_audio_metadata() {
 #[test]
 fn material_probe_classifies_missing_and_corrupt_inputs() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let temp_dir = tempfile::tempdir().expect("temp dir should create");
@@ -237,17 +237,23 @@ impl FfmpegExecutor for FakeExecutor {
 }
 
 fn fake_runtime(ffprobe_path: PathBuf) -> RuntimeConfig {
+    let directory = ffprobe_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("/runtime/bin"));
     RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
             path: ffprobe_path.with_file_name("ffmpeg"),
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled {
+                directory: directory.clone(),
+            },
             version: "ffmpeg version fake".to_string(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
             path: ffprobe_path,
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled { directory },
             version: "ffprobe version fake".to_string(),
         },
     }

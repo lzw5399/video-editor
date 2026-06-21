@@ -233,12 +233,7 @@ pub fn probe_runtime_capabilities(
         ass_filter,
         subtitles_filter,
         font_readiness,
-        license_posture: RuntimeLicensePosture {
-            external_runtime: true,
-            redistributable_build: false,
-            source: "externalRuntime".to_owned(),
-            message: "当前使用本机 FFmpeg，仅用于本地测试，不代表可再发行构建。".to_owned(),
-        },
+        license_posture: license_posture(runtime),
         diagnostics,
     }
 }
@@ -291,8 +286,18 @@ fn binary_capability(
 
 fn source_label(binary: &DiscoveredBinary) -> String {
     match &binary.source {
-        crate::DiscoverySource::Env { variable } => variable.clone(),
-        crate::DiscoverySource::Path => "PATH".to_owned(),
+        crate::DiscoverySource::Bundled { .. } => "bundled".to_owned(),
+    }
+}
+
+fn license_posture(_runtime: &RuntimeConfig) -> RuntimeLicensePosture {
+    RuntimeLicensePosture {
+        external_runtime: false,
+        redistributable_build: false,
+        source: "bundledRuntime".to_owned(),
+        message:
+            "当前使用打包内置 FFmpeg/ffprobe；工程已记录运行时清单，但公开再发行仍需完成法律审查。"
+                .to_owned(),
     }
 }
 

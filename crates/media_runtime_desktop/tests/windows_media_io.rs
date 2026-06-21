@@ -111,7 +111,7 @@ fn windows_native_decode_proof_is_explicitly_env_gated() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -172,7 +172,7 @@ fn windows_texture_decode_degrades_when_texture_interop_is_disabled() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -228,7 +228,7 @@ fn windows_native_close_reports_unreleased_media_foundation_leases() {
     }
 
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);

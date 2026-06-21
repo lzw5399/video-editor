@@ -7,9 +7,10 @@
   "main": "dist/main/index.cjs",
   "scripts": {
     "clean:build": "node scripts/clean-build.mjs",
+    "provision:ffmpeg-runtime": "node scripts/provision-ffmpeg-runtime.mjs",
     "dev": "vite --host 127.0.0.1",
     "build:electron": "vite build --mode main && vite build --mode preload && vite build",
-    "build": "pnpm run build:native && pnpm run build:electron",
+    "build": "pnpm run provision:ffmpeg-runtime && pnpm run build:native && pnpm run build:electron",
     "build:native": "napi build --manifest-path ../../crates/bindings_node/Cargo.toml --platform --release --output-dir native --js index.cjs --dts index.d.ts",
     "package:dir": "pnpm run clean:build && pnpm run build && electron-builder --dir --config electron-builder.yml --publish=never",
     "test": "pnpm run build && playwright test --grep-invert \"packaged\"",

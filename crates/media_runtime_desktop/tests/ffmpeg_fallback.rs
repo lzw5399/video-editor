@@ -25,7 +25,7 @@ use std::os::windows::process::ExitStatusExt;
 #[test]
 fn ffmpeg_fallback_decodes_h264_fixture_into_cpu_frame_lease() {
     let runtime = discover_runtime_config().expect(
-        "ffmpeg and ffprobe must be available; set VE_FFMPEG_PATH/VE_FFPROBE_PATH or install them on PATH",
+        "ffmpeg and ffprobe must be available in the bundled runtime directory; run pnpm --dir apps/desktop-electron run provision:ffmpeg-runtime or set VE_BUNDLED_FFMPEG_DIR",
     );
     let executor = DesktopFfmpegExecutor::default();
     let fixture = H264Fixture::generate(&executor, &runtime);
@@ -335,17 +335,23 @@ impl FfmpegExecutor for UnavailableExecutor {
 }
 
 fn fake_runtime(ffmpeg_path: PathBuf, ffprobe_path: PathBuf) -> RuntimeConfig {
+    let directory = ffmpeg_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("/runtime/bin"));
     RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
             path: ffmpeg_path,
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled {
+                directory: directory.clone(),
+            },
             version: "ffmpeg version fake".to_owned(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
             path: ffprobe_path,
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled { directory },
             version: "ffprobe version fake".to_owned(),
         },
     }

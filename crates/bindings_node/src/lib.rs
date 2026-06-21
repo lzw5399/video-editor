@@ -877,10 +877,12 @@ fn runtime_discovery_message(error: DiscoveryError) -> String {
 fn runtime_capability_message(error: DiscoveryError) -> String {
     let mut message = match error.binary {
         media_runtime::BinaryKind::Ffmpeg => {
-            "未找到 FFmpeg，请配置 VE_FFMPEG_PATH 或加入 PATH。".to_owned()
+            "未找到内置 FFmpeg，请检查打包的 runtime/ffmpeg 目录或 VE_BUNDLED_FFMPEG_DIR。"
+                .to_owned()
         }
         media_runtime::BinaryKind::Ffprobe => {
-            "未找到 ffprobe，请配置 VE_FFPROBE_PATH 或加入 PATH。".to_owned()
+            "未找到内置 ffprobe，请检查打包的 runtime/ffmpeg 目录或 VE_BUNDLED_FFMPEG_DIR。"
+                .to_owned()
         }
     };
     let checked_paths = error

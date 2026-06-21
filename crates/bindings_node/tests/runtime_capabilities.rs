@@ -57,8 +57,7 @@ fi
     let font_path = sandbox.root.join("PingFang.ttc");
     fs::write(&font_path, b"font").unwrap();
 
-    let _ffmpeg_env = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _ffprobe_env = EnvVarGuard::set_path("VE_FFPROBE_PATH", &ffprobe);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", &font_path);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
@@ -79,7 +78,7 @@ fi
         envelope["data"]["ffmpeg"]["path"],
         ffmpeg.display().to_string()
     );
-    assert_eq!(envelope["data"]["ffmpeg"]["source"], "VE_FFMPEG_PATH");
+    assert_eq!(envelope["data"]["ffmpeg"]["source"], "bundled");
     assert_eq!(
         envelope["data"]["ffmpeg"]["version"],
         "ffmpeg version test-build"
@@ -94,7 +93,7 @@ fi
         envelope["data"]["ffprobe"]["path"],
         ffprobe.display().to_string()
     );
-    assert_eq!(envelope["data"]["ffprobe"]["source"], "VE_FFPROBE_PATH");
+    assert_eq!(envelope["data"]["ffprobe"]["source"], "bundled");
     assert_eq!(envelope["data"]["h264Encoder"]["available"], true);
     assert_eq!(envelope["data"]["aacEncoder"]["available"], true);
     assert_eq!(envelope["data"]["assFilter"]["available"], true);
@@ -103,7 +102,11 @@ fi
         envelope["data"]["fontReadiness"]["envTextFontPath"],
         font_path.display().to_string()
     );
-    assert_eq!(envelope["data"]["licensePosture"]["externalRuntime"], true);
+    assert_eq!(envelope["data"]["licensePosture"]["externalRuntime"], false);
+    assert_eq!(
+        envelope["data"]["licensePosture"]["source"],
+        "bundledRuntime"
+    );
     assert_eq!(
         envelope["data"]["licensePosture"]["redistributableBuild"],
         false
@@ -135,9 +138,7 @@ fi
 fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("runtime-capabilities-missing-ffmpeg");
-    let missing_ffmpeg = sandbox.root.join("missing-ffmpeg");
-    let _ffmpeg_env = EnvVarGuard::set_path("VE_FFMPEG_PATH", &missing_ffmpeg);
-    let _ffprobe_env = EnvVarGuard::remove("VE_FFPROBE_PATH");
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
     let envelope = execute_command(json!({
@@ -155,9 +156,9 @@ fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     );
     assert_eq!(envelope["error"]["command"], "probeRuntimeCapabilities");
     let message = envelope["error"]["message"].as_str().unwrap();
-    assert!(message.contains("未找到 FFmpeg"), "{message}");
-    assert!(message.contains("VE_FFMPEG_PATH"), "{message}");
-    assert!(message.contains("PATH"), "{message}");
+    assert!(message.contains("未找到内置 FFmpeg"), "{message}");
+    assert!(message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
+    assert!(!message.contains("VE_FFMPEG_PATH"), "{message}");
 }
 
 #[test]
@@ -165,7 +166,7 @@ fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
 fn runtime_capabilities_reports_missing_ffprobe_with_chinese_action() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("runtime-capabilities-missing-ffprobe");
-    let ffmpeg = sandbox.bin(
+    let _ffmpeg = sandbox.bin(
         "ffmpeg",
         r#"
 if [ "$1" = "-version" ]; then
@@ -176,9 +177,7 @@ else
 fi
 "#,
     );
-    let missing_ffprobe = sandbox.root.join("missing-ffprobe");
-    let _ffmpeg_env = EnvVarGuard::set_path("VE_FFMPEG_PATH", &ffmpeg);
-    let _ffprobe_env = EnvVarGuard::set_path("VE_FFPROBE_PATH", &missing_ffprobe);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
     let envelope = execute_command(json!({
@@ -195,9 +194,9 @@ fi
     );
     assert_eq!(envelope["error"]["command"], "probeRuntimeCapabilities");
     let message = envelope["error"]["message"].as_str().unwrap();
-    assert!(message.contains("未找到 ffprobe"), "{message}");
-    assert!(message.contains("VE_FFPROBE_PATH"), "{message}");
-    assert!(message.contains("PATH"), "{message}");
+    assert!(message.contains("未找到内置 ffprobe"), "{message}");
+    assert!(message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
+    assert!(!message.contains("VE_FFPROBE_PATH"), "{message}");
 }
 
 struct Sandbox {
@@ -244,14 +243,6 @@ impl EnvVarGuard {
         let previous = std::env::var_os(key);
         unsafe {
             std::env::set_var(key, value.as_ref());
-        }
-        Self { key, previous }
-    }
-
-    fn remove(key: &'static str) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe {
-            std::env::remove_var(key);
         }
         Self { key, previous }
     }

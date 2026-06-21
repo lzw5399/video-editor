@@ -258,17 +258,23 @@ fn video_probe_json() -> Vec<u8> {
 }
 
 fn fake_runtime(ffprobe_path: PathBuf) -> RuntimeConfig {
+    let directory = ffprobe_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("/runtime/bin"));
     RuntimeConfig {
         ffmpeg: DiscoveredBinary {
             kind: BinaryKind::Ffmpeg,
             path: ffprobe_path.with_file_name("ffmpeg"),
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled {
+                directory: directory.clone(),
+            },
             version: "ffmpeg version fake".to_owned(),
         },
         ffprobe: DiscoveredBinary {
             kind: BinaryKind::Ffprobe,
             path: ffprobe_path,
-            source: DiscoverySource::Path,
+            source: DiscoverySource::Bundled { directory },
             version: "ffprobe version fake".to_owned(),
         },
     }
