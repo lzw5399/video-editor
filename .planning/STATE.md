@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg33 remove Electron generic command IPC
-last_updated: "2026-06-21T22:26:33Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg33: remove Electron generic command IPC
+stopped_at: Completed quick task 260622-sg34 remove native generic command export
+last_updated: "2026-06-21T22:30:47Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg34: remove native generic command export
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg33: remove Electron generic command IPC
+Last activity: 2026-06-22 -- Completed quick task 260622-sg34: remove native generic command export
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -221,6 +221,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Runtime capability probing now uses an explicit native API from renderer through preload/main/nativeBinding into Rust; renderer no longer constructs `probeRuntimeCapabilities` command envelopes, and source guards block reintroduction. (URGENT)
 - Runtime discovery now uses an explicit `probeMediaRuntime` API from renderer through preload/main/nativeBinding into Rust, and the product preload bridge no longer exposes generic `executeCommand`; main/native compatibility remains internal/test-only. (URGENT)
 - Electron main/native no longer expose generic `executeCommand` IPC or wrappers; only the Rust binding compatibility function remains for direct contract tests, guarded against re-entering the desktop shell boundary. (URGENT)
+- The JavaScript-facing native addon no longer exports generic `executeCommand`; Rust direct compatibility tests still call the public Rust function, and phase3 guards prevent generated native JS exports from returning. (URGENT)
 - Product add-material placement is now session-owned: renderer syncs the playhead, sends a material-only add intent, Rust places the segment at the session playhead, and source guards reject renderer placement fields on add intents. (URGENT)
 - Product text/audio/subtitle add timing is now session-owned: renderer syncs the playhead and sends timing-free add intents, Rust places text/audio/subtitle at the session playhead, core defaults text duration/audio material duration/subtitle cue offset, and source guards reject renderer timing fields. (URGENT)
 - Product add-time text/subtitle presets are now session-owned: renderer sends text content or SRT content only, Rust session creates the default `TextSegment` source/style/layout/wrapping preset, and source guards reject renderer full-text/style/layout add payloads. (URGENT)

@@ -93,7 +93,6 @@ pub fn probe_runtime_capabilities() -> Result<serde_json::Value> {
     }
 }
 
-#[napi]
 pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> {
     let command_name = raw_command_name(&command);
 

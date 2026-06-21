@@ -34,6 +34,7 @@ RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN='\b(?:buildProbeRuntimeCapabilitiesCom
 RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*RuntimeCapabilityReport|executeCommand<RuntimeCapabilityReport>'
 PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*\([^)]*CommandEnvelope|core:executeCommand'
 ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN='ipcMain\.handle\([[:space:]]*"core:executeCommand"|executeCommand[[:space:]]*:[[:space:]]*\(command:[[:space:]]*CommandEnvelope|export[[:space:]]+function[[:space:]]+executeCommand[[:space:]]*\('
+NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN='module\.exports\.executeCommand|export[[:space:]]+declare[[:space:]]+function[[:space:]]+executeCommand'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -501,6 +502,11 @@ fail_if_matches \
   "$ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN" \
   apps/desktop-electron/src/main/index.ts apps/desktop-electron/src/main/nativeBinding.ts
 
+fail_if_matches \
+  "generated native JS addon wrapper must not export generic executeCommand" \
+  "$NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN" \
+  apps/desktop-electron/native/index.cjs apps/desktop-electron/native/index.d.ts
+
 require_matches \
   "preload/native binding expose explicit runtime discovery API" \
   '\bprobeMediaRuntime\b' \
@@ -778,6 +784,11 @@ assert_pattern_rejects \
   "nativeBinding generic executeCommand wrapper" \
   "$ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN" \
   'export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<unknown> { return binding.executeCommand(command); }'
+
+assert_pattern_rejects \
+  "generated native JS executeCommand export" \
+  "$NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN" \
+  'module.exports.executeCommand = nativeBinding.executeCommand'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \
