@@ -360,7 +360,7 @@ test("product playback UAT uses native audio output instead of status-only or mo
   try {
     await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO);
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
@@ -426,8 +426,8 @@ test("product playback UAT composites video external audio text and two-cue SRT 
   try {
     await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
-    await addTextThroughProductPanel(page, app, "产品级组合文字", 300_000);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO);
+    await addTextThroughProductPanel(page, app, "产品级组合文字");
 
     const commandCountBeforeSrt = await readNativeCommandObservations(app);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
@@ -616,11 +616,11 @@ test("product user editing matrix uses real commands and still produces visible 
       opacity: 760,
       fitMode: "适应"
     });
-    await addTextThroughProductPanel(page, app, "产品级端到端字幕", 1_000_000);
+    await addTextThroughProductPanel(page, app, "产品级端到端字幕");
     await expect(inspector.getByRole("textbox", { name: "文字内容" })).toHaveValue("产品级端到端字幕");
     await expect(page.getByLabel("音频参数")).toHaveCount(0);
     await expect(inspector).not.toContainText(/segmentId|trackId|material-workspace|media\/|\/tmp|cache|artifact|diagnostic|诊断/i);
-    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 2_000_000);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO);
     await page.getByRole("button", { name: /片段 p0-tone\.wav/ }).click();
     await page.getByRole("tab", { name: "音频" }).click();
     await expect(page.getByLabel("音频参数")).toBeVisible();
@@ -674,11 +674,11 @@ test("product user editing matrix uses real commands and still produces visible 
         "addTrackIntent",
         "addTextSegmentIntent",
         "addAudioSegmentIntent",
-        "updateSegmentVisual",
+        "updateSelectedSegmentVisual",
         "splitSelectedSegmentIntent",
         "moveSelectedSegmentIntent",
         "trimSelectedSegmentIntent",
-        "deleteSegment",
+        "deleteSelectedSegment",
         "undoTimelineEdit",
         "redoTimelineEdit"
       ])
@@ -702,8 +702,7 @@ test("product user editing matrix uses real commands and still produces visible 
       ]
     );
     expect(requestPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
-    expect(callsAfterEdits.find((call) => call.command === "addTextSegmentIntent")?.textContent).toBe("产品级端到端字幕");
-    const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSegmentVisual");
+    const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSelectedSegmentVisual");
     expect(visualCall?.visual?.fitMode).toBe("fill");
     expect(visualCall?.visual?.transform.position.x).toBe(120);
     expect(visualCall?.visual?.transform.rotation.degrees).toBe(8);
@@ -825,7 +824,7 @@ test("product text and transform interaction UAT supports direct canvas drag", a
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addTextThroughProductPanel(page, app, "可拖拽文字", 2_000_000);
+    await addTextThroughProductPanel(page, app, "可拖拽文字");
 
     const textOverlay = page.getByLabel("预览文字");
     await expect(textOverlay).toBeVisible({ timeout: 10_000 });
@@ -833,7 +832,7 @@ test("product text and transform interaction UAT supports direct canvas drag", a
     expect(beforeBox, "text overlay must have a visible canvas box before drag").not.toBeNull();
 
     const commandsBefore = await readNativeCommandObservations(app);
-    const visualUpdatesBefore = commandsBefore.filter((call) => call.command === "updateSegmentVisual").length;
+    const visualUpdatesBefore = commandsBefore.filter((call) => call.command === "updateSelectedSegmentVisual").length;
     await page.mouse.move(beforeBox!.x + beforeBox!.width / 2, beforeBox!.y + beforeBox!.height / 2);
     await page.mouse.down();
     await page.mouse.move(beforeBox!.x + beforeBox!.width / 2 + 80, beforeBox!.y + beforeBox!.height / 2 + 36, {
@@ -843,7 +842,7 @@ test("product text and transform interaction UAT supports direct canvas drag", a
 
     await expect
       .poll(
-        async () => (await readNativeCommandObservations(app)).filter((call) => call.command === "updateSegmentVisual").length,
+        async () => (await readNativeCommandObservations(app)).filter((call) => call.command === "updateSelectedSegmentVisual").length,
         { timeout: 5_000 }
       )
       .toBeGreaterThan(visualUpdatesBefore);

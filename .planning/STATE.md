@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg36 align workspace product contract
-last_updated: "2026-06-21T23:08:31Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg36: align workspace product contract
+stopped_at: Completed quick task 260622-sg37 remove test legacy intent aliases
+last_updated: "2026-06-21T23:20:32Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg37: remove test legacy intent aliases
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg36: align workspace product contract
+Last activity: 2026-06-22 -- Completed quick task 260622-sg37: remove test legacy intent aliases
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -519,6 +519,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg37-remove-test-legacy-intent-aliases | Removed remaining test-side project-session intent alias mappings, updated product journey assertions to raw Rust intent names, guarded against alias mapper reintroduction, and revalidated product user journeys plus cadence at 90/90 accounted frames. |
 | 2026-06-22 | 260622-sg36-align-workspace-product-contract | Aligned workspace E2E assertions with Rust project-session intent ownership, removed legacy command alias expectations, kept product realtime diagnostics hidden by default, and revalidated workspace plus product cadence gates at 90/90 accounted frames. |
 | 2026-06-22 | 260622-sg30-explicit-artifact-control-api | Artifact resource status/task/quota/cleanup controls now call explicit native APIs; renderer artifact command builders and unused preview-cache command helper were removed, Rust `executeCommand` rejects legacy artifact envelopes, and focused resource tests passed. |
 | 2026-06-22 | 260622-sg29-explicit-audio-preview-api | Audio preview, device, and waveform product controls now call explicit native APIs; renderer audio command builders were removed, Rust `executeCommand` rejects legacy audio envelopes, and workspace/product audio UATs passed. |

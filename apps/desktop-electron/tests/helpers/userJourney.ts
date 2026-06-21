@@ -585,7 +585,7 @@ export async function updateSelectedVisualThroughInspector(
   const rotation = edit.rotation ?? 8;
   const opacity = edit.opacity ?? 820;
   const fitMode = edit.fitMode ?? "填充";
-  const nextCount = (await countCommand(app, "updateSegmentVisual")) + 1;
+  const nextCount = (await countCommand(app, "updateSelectedSegmentVisual")) + 1;
   const visualTab = page.getByRole("tab", { name: "画面" });
   if ((await visualTab.count()) > 0) {
     await visualTab.click();
@@ -600,7 +600,7 @@ export async function updateSelectedVisualThroughInspector(
   await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: fitMode }).click();
   await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeEnabled();
   await visualForm.getByRole("button", { name: "应用画面" }).click();
-  await waitForCommandCount(app, "updateSegmentVisual", nextCount);
+  await waitForCommandCount(app, "updateSelectedSegmentVisual", nextCount);
 }
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
@@ -659,10 +659,10 @@ export async function trimSelectedSegmentLeftEdgeRight(
 }
 
 export async function deleteSelectedSegment(page: Page, app: ProductJourneyAppController): Promise<void> {
-  const nextCount = (await countCommand(app, "deleteSegment")) + 1;
+  const nextCount = (await countCommand(app, "deleteSelectedSegment")) + 1;
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "删除所选片段" }).click();
-  await waitForCommandCount(app, "deleteSegment", nextCount);
+  await waitForCommandCount(app, "deleteSelectedSegment", nextCount);
 }
 
 export async function undoTimelineEdit(page: Page, app: ProductJourneyAppController): Promise<void> {
@@ -943,7 +943,7 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
         ? "requestPreviewFrame"
         : call.command === "requestProjectSessionPreviewSegment"
           ? "requestPreviewSegment"
-          : legacyCommandNameForProjectIntent(call.intentKind);
+          : (call.intentKind ?? "executeProjectIntent");
   return {
     command,
     kind: command,
@@ -962,27 +962,6 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
     deviceSelectionId: null,
     maxPeakBins: null
   };
-}
-
-function legacyCommandNameForProjectIntent(intentKind: string | null): string {
-  switch (intentKind) {
-    case "deleteSelectedSegment":
-      return "deleteSegment";
-    case "editSelectedText":
-      return "editTextSegment";
-    case "setSelectedSegmentVolume":
-      return "setSegmentVolume";
-    case "updateSelectedSegmentAudio":
-      return "updateSegmentAudio";
-    case "updateSelectedSegmentVisual":
-      return "updateSegmentVisual";
-    case "setSelectedSegmentKeyframe":
-      return "setSegmentKeyframe";
-    case "removeSelectedSegmentKeyframe":
-      return "removeSegmentKeyframe";
-    default:
-      return intentKind ?? "executeProjectIntent";
-  }
 }
 
 function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController {

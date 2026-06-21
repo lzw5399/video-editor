@@ -80,14 +80,10 @@ async function readNativeCommandObservations(app: ElectronApplication): Promise<
     ...projectCalls
       .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
       .map((call) => ({
-        command: commandNameForProjectIntent(call.intentKind ?? null),
+        command: call.intentKind ?? "executeProjectIntent",
         canvasConfig: call.canvasConfig ?? null
       }))
   ];
-}
-
-function commandNameForProjectIntent(intentKind: string | null): string {
-  return intentKind === "updateDraftCanvasConfig" ? "updateDraftCanvasConfig" : intentKind ?? "executeProjectIntent";
 }
 
 async function openDraftParametersDialog(page: Page) {

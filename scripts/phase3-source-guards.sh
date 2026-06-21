@@ -36,6 +36,7 @@ PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*
 ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN='ipcMain\.handle\([[:space:]]*"core:executeCommand"|executeCommand[[:space:]]*:[[:space:]]*\(command:[[:space:]]*CommandEnvelope|export[[:space:]]+function[[:space:]]+executeCommand[[:space:]]*\('
 NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN='module\.exports\.executeCommand|export[[:space:]]+declare[[:space:]]+function[[:space:]]+executeCommand'
 LEGACY_TEST_EXECUTE_OBSERVATION_PATTERN='\b(?:TestExecuteCommandCall|ExecuteCommandCall|__videoEditorTestExecuteCommandCalls|getExecuteCommandCalls|readExecuteCommandCalls|readLegacyExecuteCommandCalls|readLegacyNativeCommandObservations|spyExecuteCommandCalls|spyNativeCommandObservations)\b|test:getExecuteCommandCalls'
+LEGACY_PROJECT_INTENT_ALIAS_PATTERN='\b(?:legacyCommandNameForProjectIntent|commandNameForProjectIntent)\b|case[[:space:]]*"deleteSelectedSegment"(?s:.{0,160})return[[:space:]]*"deleteSegment"|case[[:space:]]*"editSelectedText"(?s:.{0,160})return[[:space:]]*"editTextSegment"|case[[:space:]]*"updateSelectedSegmentVisual"(?s:.{0,160})return[[:space:]]*"updateSegmentVisual"'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -515,6 +516,11 @@ fail_if_matches \
   apps/desktop-electron/src/preload/index.ts \
   apps/desktop-electron/tests
 
+fail_if_matches_multiline \
+  "tests must assert raw project-session intent names instead of legacy low-level command aliases" \
+  "$LEGACY_PROJECT_INTENT_ALIAS_PATTERN" \
+  apps/desktop-electron/tests
+
 require_matches \
   "preload/native binding expose explicit runtime discovery API" \
   '\bprobeMediaRuntime\b' \
@@ -804,6 +810,20 @@ assert_pattern_rejects \
   'window.videoEditorTestObservations.getExecuteCommandCalls();
 const calls = await readLegacyExecuteCommandCalls(app);
 globalThis.__videoEditorTestExecuteCommandCalls = [];'
+
+assert_pattern_rejects \
+  "legacy project-session intent alias mapper" \
+  "$LEGACY_PROJECT_INTENT_ALIAS_PATTERN" \
+  'function legacyCommandNameForProjectIntent(intentKind: string | null): string {
+  switch (intentKind) {
+    case "deleteSelectedSegment":
+      return "deleteSegment";
+    case "updateSelectedSegmentVisual":
+      return "updateSegmentVisual";
+    default:
+      return intentKind ?? "executeProjectIntent";
+  }
+}'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \
