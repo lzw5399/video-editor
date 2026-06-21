@@ -62,6 +62,9 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "Product SRT import was migrated from renderer-owned structural command data to a Rust-owned intent command. During verification the first intent implementation exposed a real semantic bug: it reused the selected normal text/title track and caused subtitle overlap with the existing text segment. Rust now only reuses subtitle tracks and otherwise creates a dedicated subtitle track."
   data: "Contract and command gates: cargo test -p draft_model schema_exports -- --nocapture -> 19 passed; cargo test -p draft_commands --test subtitle_commands -- --nocapture -> 8 passed; cargo test -p bindings_node --test text_commands -- --nocapture -> 4 passed. Product gates after package:dir: workspace SRT intent path -> 1 passed; product combo visible UAT -> 1 passed; product-preview-cadence.spec.ts -> 2 passed. Final combo cadence: presentedDelta=90, droppedDelta=0, accountedFrameDelta=90, targetDeltaMicroseconds=2966637, intervalP50Ms=34, intervalP95Ms=36, intervalMaxMs=46, scheduleLatenessP95Ms=5, renderDurationMs=8, firstFrameLatencyMs=335."
+- timestamp: 2026-06-21
+  observation: "The top-level 字幕 category was a false deferred entry while SRT import was hidden under the 文字 panel. The product route now exposes SRT import directly in 字幕, removes 字幕 from deferred category gates, and product helpers import subtitles from the 字幕 tab."
+  data: "corepack pnpm --dir apps/desktop-electron run build -> passed; workspace captions gates -> 3 passed; package:dir -> passed; product combo visible UAT -> 1 passed; product-preview-cadence.spec.ts -> 2 passed with single video presentedDelta=90/droppedDelta=0 and combo presentedDelta=90/droppedDelta=0, combo intervalP95Ms=37, intervalMaxMs=55, firstFrameLatencyMs=323; test:phase3-source-guards -> passed; test:phase10-1-source-guards -> passed."
 
 ## Eliminated
 

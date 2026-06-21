@@ -59,10 +59,11 @@ type RegionBox = {
 };
 
 const WORKSPACE_CATEGORIES = ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
-const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
+const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "模板", "数字人"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
+const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const MEDIA_FIXTURE_DIR = join(REPO_ROOT, "apps/desktop-electron/tests/fixtures/media");
 const PORTRAIT_VIDEO_FIXTURE = join(MEDIA_FIXTURE_DIR, "p0-portrait-testsrc.mp4");
 
@@ -599,6 +600,14 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByText("淡入", { exact: true })).toBeVisible();
     await expect(page.getByText("淡出", { exact: true })).toBeVisible();
 
+    await topFeatureNav.getByRole("button", { name: "字幕" }).click();
+    await expect(page.getByRole("heading", { name: "字幕", exact: true })).toBeVisible();
+    await expectNoLeftSecondaryMenu(page);
+    await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
+    await expect(page.getByLabel("字幕 导入字幕")).toContainText("导入字幕");
+    await expect(page.getByLabel("SRT 内容")).toBeVisible();
+    await expect(page.getByLabel("字幕时间偏移")).toBeVisible();
+
     for (const category of DEFERRED_CATEGORIES) {
       await topFeatureNav.getByRole("button", { name: category }).click();
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
@@ -623,15 +632,14 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
     await expectNoLeftSecondaryMenu(page);
     await expectCompactScrollbarBaseline();
     await expect(page.getByLabel("默认文字")).toContainText("默认文字");
-    await expect(page.getByLabel("字幕 导入字幕")).toContainText("字幕 / 导入字幕");
-    await expect(page.getByLabel("字幕 导入字幕")).toContainText("自动生成字幕片段");
+    await expect(page.getByLabel("素材面板")).not.toContainText("SRT 内容");
+    await expect(page.getByLabel("素材面板")).not.toContainText("导入字幕");
     await expect(page.getByLabel("花字")).toContainText("暂未接入");
     await expect(page.getByLabel("气泡")).toContainText("暂未接入");
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "导入字幕" })).toBeVisible();
 
     const resourcePanel = page.getByLabel("素材面板");
-    for (const label of ["默认文字", "字幕 导入字幕", "花字", "气泡"]) {
+    for (const label of ["默认文字", "花字", "气泡"]) {
       await expectLocatorInsideHorizontalContainer(resourcePanel, page.getByLabel(label), `文字面板 ${label}`);
     }
   } finally {
@@ -798,9 +806,14 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
 
   try {
     await spyExecuteCommandCalls(app, page);
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "字幕" }).click();
+    await expect(page.getByRole("heading", { name: "字幕", exact: true })).toBeVisible();
+    await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
+    await expect(page.getByLabel("字幕 导入字幕")).toContainText("SRT 字幕");
     await page.getByLabel("SRT 内容").fill("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n\n2\n00:00:02,000 --> 00:00:04,000\n第二句字幕\n");
     await page.getByLabel("字幕时间偏移").fill("1");
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, "captions-panel-1280x800.png"), fullPage: true });
     await page.getByRole("button", { name: "导入字幕" }).click();
     await expectCommandCall(app, "importSubtitleSrtIntent");
 

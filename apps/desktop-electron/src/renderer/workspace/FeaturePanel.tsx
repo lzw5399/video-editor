@@ -64,6 +64,8 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
     content = <MaterialPanel {...props} />;
   } else if (props.category === "文字") {
     content = <TextPanel {...props} />;
+  } else if (props.category === "字幕") {
+    content = <CaptionsPanel {...props} />;
   } else if (props.category === "音频") {
     content = <AudioPanel {...props} />;
   } else {
@@ -218,47 +220,12 @@ function MaterialPanel({
   );
 }
 
-function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
+function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
   const [durationSeconds, setDurationSeconds] = useState(3);
-  const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
-  const [subtitleOffsetSeconds, setSubtitleOffsetSeconds] = useState(0);
   const textTrack = findTrackByKind(workspace.draft, "text");
 
-  const text: TextSegment = useMemo(
-    () => ({
-      content,
-      source: "text",
-      style: {
-        font: {
-          family: "Noto Sans CJK SC",
-          fontRef: "font://bundled/noto-sans-cjk-sc-regular"
-        },
-        fontSize: 36,
-        color: "#ffffff",
-        alignment: "center",
-        lineHeightMillis: 1200,
-        letterSpacingMillis: 0,
-        stroke: { color: "#000000", width: 2 },
-        shadow: { color: "#222222", offsetX: 2, offsetY: 2, blur: 4 },
-        background: null
-      },
-      textBox: {
-        widthMillis: 800,
-        heightMillis: 200
-      },
-      layoutRegion: {
-        xMillis: 100,
-        yMillis: 100,
-        widthMillis: 800,
-        heightMillis: 800
-      },
-      wrapping: "auto",
-      bubble: null,
-      effect: null
-    }),
-    [content]
-  );
+  const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
 
   return (
     <div className="feature-panel-content">
@@ -296,10 +263,27 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
         </button>
       </section>
 
+      <DeferredTextCapabilityCard title="花字" detail="暂未接入，导入后将以不支持能力报告显示。" />
+      <DeferredTextCapabilityCard title="气泡" detail="暂未接入，导入后将以不支持能力报告显示。" />
+    </div>
+  );
+}
+
+function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
+  const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
+  const [subtitleOffsetSeconds, setSubtitleOffsetSeconds] = useState(0);
+  const textTemplate = useMemo(() => createDefaultTextSegment("字幕", "subtitle"), []);
+
+  return (
+    <div className="feature-panel-content">
+      <div className="panel-header">
+        <h2>字幕</h2>
+      </div>
+
       <section className="function-card field-stack text-feature-card" aria-label="字幕 导入字幕">
         <div className="text-card-header">
-          <h3>字幕 / 导入字幕</h3>
-          <span>自动生成字幕片段</span>
+          <h3>导入字幕</h3>
+          <span>SRT 字幕</span>
         </div>
         <label className="field-row">
           <span>SRT 内容</span>
@@ -324,18 +308,49 @@ function TextPanel({ workspace, onAddTextSegment, onImportSubtitleSrt }: Feature
         </label>
         <button
           type="button"
-          className="secondary-action wide-action"
-          onClick={() => onImportSubtitleSrt(srtContent, secondsToNonNegativeMicroseconds(subtitleOffsetSeconds), { ...text, source: "subtitle" })}
+          className="primary-action wide-action"
+          onClick={() => onImportSubtitleSrt(srtContent, secondsToNonNegativeMicroseconds(subtitleOffsetSeconds), textTemplate)}
           disabled={workspace.pendingCommand !== null || srtContent.trim().length === 0}
         >
           导入字幕
         </button>
       </section>
-
-      <DeferredTextCapabilityCard title="花字" detail="暂未接入，导入后将以不支持能力报告显示。" />
-      <DeferredTextCapabilityCard title="气泡" detail="暂未接入，导入后将以不支持能力报告显示。" />
     </div>
   );
+}
+
+function createDefaultTextSegment(content: string, source: TextSegment["source"]): TextSegment {
+  return {
+    content,
+    source,
+    style: {
+      font: {
+        family: "Noto Sans CJK SC",
+        fontRef: "font://bundled/noto-sans-cjk-sc-regular"
+      },
+      fontSize: 36,
+      color: "#ffffff",
+      alignment: "center",
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 0,
+      stroke: { color: "#000000", width: 2 },
+      shadow: { color: "#222222", offsetX: 2, offsetY: 2, blur: 4 },
+      background: null
+    },
+    textBox: {
+      widthMillis: 800,
+      heightMillis: 200
+    },
+    layoutRegion: {
+      xMillis: 100,
+      yMillis: 100,
+      widthMillis: 800,
+      heightMillis: 800
+    },
+    wrapping: "auto",
+    bubble: null,
+    effect: null
+  };
 }
 
 function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: string }): React.ReactElement {
