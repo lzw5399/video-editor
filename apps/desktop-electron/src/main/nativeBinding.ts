@@ -116,10 +116,10 @@ export type ProjectIntent =
       effectSlots?: AudioEffectSlot[] | null;
     }
   | { kind: "addTrackIntent"; trackKind: TrackKind }
-  | { kind: "renameTrack"; trackId: TrackId; name: string }
-  | { kind: "setTrackLock"; trackId: TrackId; locked: boolean }
-  | { kind: "setTrackVisibility"; trackId: TrackId; visible: boolean }
-  | { kind: "setTrackMute"; trackId?: TrackId | null; muted: boolean }
+  | { kind: "renameSelectedTrack"; name: string }
+  | { kind: "setSelectedTrackLock"; locked: boolean }
+  | { kind: "setSelectedTrackVisibility"; visible: boolean }
+  | { kind: "setSelectedTrackMute"; muted: boolean }
   | { kind: "updateDraftCanvasConfig"; canvasConfig: DraftCanvasConfig }
   | { kind: "updateSelectedSegmentVisual"; visual: SegmentVisual }
   | {

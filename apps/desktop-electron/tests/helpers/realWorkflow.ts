@@ -17,6 +17,7 @@ type ExecuteCommandCall = {
 type ProjectSessionCall = {
   command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
   intentKind: string | null;
+  timelineSemanticKeys?: string[];
 };
 
 type RealtimePreviewHostCall = {

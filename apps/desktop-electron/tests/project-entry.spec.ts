@@ -5,6 +5,7 @@ import { join } from "node:path";
 type ProjectSessionCall = {
   command: "createProjectSession" | "openProjectSession" | "executeProjectIntent" | "closeProjectSession";
   hasDraftField: boolean;
+  timelineSemanticKeys?: string[];
 };
 
 test.describe.configure({ timeout: 60_000 });

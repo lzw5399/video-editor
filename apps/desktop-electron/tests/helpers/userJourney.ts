@@ -59,6 +59,7 @@ type ProjectSessionCall = {
   textSource?: string | null;
   textFontRef?: string | null;
   srtContent?: string | null;
+  timelineSemanticKeys?: string[];
   hasDraftField: boolean;
 };
 

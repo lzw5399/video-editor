@@ -8,6 +8,10 @@ fi
 
 failed=0
 
+LOW_LEVEL_TIMELINE_EDIT_PATTERN='\b(?:AddSegmentCommandPayload|MoveSegmentCommandPayload|SplitSegmentCommandPayload|TrimSegmentCommandPayload|DeleteSegmentCommandPayload|AddTextSegmentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|AddAudioSegmentCommandPayload|AddTrackCommandPayload|build(?:AddSegment|AddAudioSegment|AddTextSegment|MoveSegment|SplitSegment|TrimSegment|ImportSubtitleSrt)Command|AddSegmentOptions|TextCommandOptions|ImportSubtitleSrtOptions|AudioCommandOptions|segmentIdPrefix|materialIdPrefix)\b|"\s*(?:addSegment|moveSegment|splitSegment|trimSegment|deleteSegment|addTextSegment|editTextSegment|importSubtitleSrt|addAudioSegment|addTrack)"'
+LOW_LEVEL_EDIT_OBJECT_PATTERN='kind:[[:space:]]*"(?:addSegment|moveSegment|splitSegment|trimSegment|deleteSegment|addTextSegment|editTextSegment|importSubtitleSrt|addAudioSegment|addTrack)"(?s:.{0,800})\b(?:segmentId|rightSegmentId|trackId|targetTrackId|sourceTimerange|targetTimerange|mainTrackMagnet)[[:space:]]*:'
+MUTATING_TRACK_ID_INTENT_PATTERN='kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"(?s:.{0,400})\btrackId[[:space:]]*(?::|,)'
+
 fail_if_matches() {
   local description="$1"
   local pattern="$2"
@@ -20,6 +24,35 @@ fail_if_matches() {
     echo "$output" >&2
     failed=1
   fi
+}
+
+fail_if_matches_multiline() {
+  local description="$1"
+  local pattern="$2"
+  shift 2
+
+  local output
+  output="$(rg -n -U --pcre2 "$pattern" "$@" 2>/dev/null || true)"
+  if [ -n "$output" ]; then
+    echo "phase3-source-guards: ${description}" >&2
+    echo "$output" >&2
+    failed=1
+  fi
+}
+
+assert_pattern_rejects() {
+  local description="$1"
+  local pattern="$2"
+  local sample="$3"
+  local sample_file
+  sample_file="$(mktemp "${TMPDIR:-/tmp}/phase3-source-guard.XXXXXX")"
+  printf "%s\n" "$sample" > "$sample_file"
+  if ! rg -n -U --pcre2 "$pattern" "$sample_file" >/dev/null 2>&1; then
+    echo "phase3-source-guards: guard self-test failed: ${description}" >&2
+    echo "$sample" >&2
+    failed=1
+  fi
+  rm -f "$sample_file"
 }
 
 fail_if_diff() {
@@ -44,14 +77,53 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts apps/desktop-electron/src/preload
 
 fail_if_matches \
+  "renderer/main/preload must not construct low-level timeline edit commands or payload types" \
+  "$LOW_LEVEL_TIMELINE_EDIT_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/preload \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  apps/desktop-electron/src/main/index.ts
+
+fail_if_matches_multiline \
+  "renderer/main/preload must not construct semantic fields inside low-level timeline edit payloads" \
+  "$LOW_LEVEL_EDIT_OBJECT_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/preload \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  apps/desktop-electron/src/main/index.ts
+
+fail_if_matches \
+  "renderer display/view modules must not bypass App-owned command dispatch" \
+  '\bwindow\.videoEditorCore\b|\bipcRenderer\b|\bexecuteProjectIntent[[:space:]]*\(' \
+  apps/desktop-electron/src/renderer \
+  --glob '!App.tsx'
+
+fail_if_matches \
   "renderer command helpers must not expose legacy low-level timeline command payloads" \
   '\b(?:AddSegmentCommandPayload|MoveSegmentCommandPayload|SplitSegmentCommandPayload|TrimSegmentCommandPayload|DeleteSegmentCommandPayload|AddTextSegmentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|AddAudioSegmentCommandPayload|SetSegmentVolumeCommandPayload|UpdateSegmentAudioCommandPayload|AddTrackCommandPayload|RenameTrackCommandPayload|SetTrackLockCommandPayload|SetTrackVisibilityCommandPayload|UpdateSegmentVisualCommandPayload|SetSegmentKeyframeCommandPayload|RemoveSegmentKeyframeCommandPayload|SourceTimerange|SegmentId|TrackId|AddSegmentOptions|TextCommandOptions|ImportSubtitleSrtOptions|AudioCommandOptions|UpdateSegmentAudioOptions|segmentIdPrefix|materialIdPrefix)\b' \
   apps/desktop-electron/src/renderer/commandHelpers.ts
 
 fail_if_matches \
   "bindings_node public executeCommand must not expose Rust timeline edit routes; use executeProjectIntent sessions instead" \
-  'draft_commands::timeline::execute_timeline_edit|fn[[:space:]]+timeline_command\b|\btimeline_command[[:space:]]*\(|"\s*(?:addSegment|addTimelineSegmentIntent|selectTimelineSegments|moveSegment|moveSelectedSegmentIntent|splitSegment|splitSelectedSegmentIntent|trimSegment|trimSelectedSegmentIntent|deleteSegment|undoTimelineEdit|redoTimelineEdit|addTextSegment|addTextSegmentIntent|editTextSegment|importSubtitleSrt|importSubtitleSrtIntent|addAudioSegment|addAudioSegmentIntent|setSegmentVolume|updateSegmentAudio|addTrack|addTrackIntent|renameTrack|setTrackLock|setTrackVisibility|setTrackMute|updateDraftCanvasConfig|updateSegmentVisual|setSegmentKeyframe|removeSegmentKeyframe)"' \
+  'draft_commands::timeline::execute_timeline_edit|fn[[:space:]]+timeline_command\b|\btimeline_command[[:space:]]*\(|"\s*(?:addSegment|addTimelineSegmentIntent|selectTimelineSegments|moveSegment|moveSelectedSegmentIntent|splitSegment|splitSelectedSegmentIntent|trimSegment|trimSelectedSegmentIntent|deleteSegment|undoTimelineEdit|redoTimelineEdit|addTextSegment|addTextSegmentIntent|editTextSegment|importSubtitleSrt|importSubtitleSrtIntent|addAudioSegment|addAudioSegmentIntent|setSegmentVolume|updateSegmentAudio|addTrack|addTrackIntent|renameTrack|renameSelectedTrack|setTrackLock|setSelectedTrackLock|setTrackVisibility|setSelectedTrackVisibility|setTrackMute|setSelectedTrackMute|updateDraftCanvasConfig|updateSegmentVisual|setSegmentKeyframe|removeSegmentKeyframe)"' \
   crates/bindings_node/src/lib.rs
+
+fail_if_matches \
+  "renderer/preload must not send mutating track intents with renderer-owned track IDs; select the track, then use selected-track intents" \
+  'kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"' \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
+
+fail_if_matches_multiline \
+  "renderer/preload must not send mutating track intents with renderer-owned track IDs; select the track, then use selected-track intents" \
+  "$MUTATING_TRACK_ID_INTENT_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches \
+  "project session intent contract must not accept trackId on mutating track intents" \
+  '\|\s*\{[[:space:]]*kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)";[^}]*trackId' \
+  apps/desktop-electron/src/main/nativeBinding.ts
 
 fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
@@ -97,6 +169,35 @@ fail_if_matches \
   "draft fixtures must not persist command state, undo/redo stacks, history limits, or snapping runtime state" \
   'commandState|undoStack|redoStack|maxHistoryEntries|snapping' \
   fixtures/draft/positive fixtures/draft/negative
+
+assert_pattern_rejects \
+  "low-level addSegment payload with renderer-owned semantic keys" \
+  "$LOW_LEVEL_EDIT_OBJECT_PATTERN" \
+  'const command = {
+    kind: "addSegment",
+    segmentId: "renderer-segment",
+    trackId: "renderer-track",
+    sourceTimerange: { start: 0, duration: 1000 },
+    targetTimerange: { start: 0, duration: 1000 }
+  };'
+
+assert_pattern_rejects \
+  "low-level trimSegment payload with renderer-owned timerange" \
+  "$LOW_LEVEL_EDIT_OBJECT_PATTERN" \
+  'const command = {
+    kind: "trimSegment",
+    segmentId: selectedId,
+    targetTimerange: { start: nextStart, duration: nextDuration }
+  };'
+
+assert_pattern_rejects \
+  "mutating track intent with renderer-owned trackId" \
+  "$MUTATING_TRACK_ID_INTENT_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "setTrackVisibility",
+    trackId,
+    visible: false
+  }, "hide track");'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

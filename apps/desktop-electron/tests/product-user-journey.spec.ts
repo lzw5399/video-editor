@@ -751,18 +751,43 @@ function expectProductEditCommandsAreSessionOwned(
     expect(call.hasDraftField, `session intent ${call.intentKind ?? "<unknown>"} must not carry renderer draft`).toBe(false);
   }
 
-  const forbiddenLegacyCommands = new Set(
-    intentKinds.map((intentKind) => {
-      switch (intentKind) {
-        case "deleteSelectedSegment":
-          return "deleteSegment";
-        case "updateSelectedSegmentVisual":
-          return "updateSegmentVisual";
-        default:
-          return intentKind;
-      }
-    })
-  );
+  const semanticKeyGuardedIntentKinds = new Set([
+    "addTimelineSegmentIntent",
+    "moveSelectedSegmentIntent",
+    "splitSelectedSegmentIntent",
+    "trimSelectedSegmentIntent",
+    "deleteSelectedSegment",
+    "addTextSegmentIntent",
+    "importSubtitleSrtIntent",
+    "addAudioSegmentIntent",
+    "addTrackIntent"
+  ]);
+  for (const call of sessionIntentCalls) {
+    if (call.intentKind !== null && semanticKeyGuardedIntentKinds.has(call.intentKind)) {
+      expect(
+        call.timelineSemanticKeys ?? [],
+        `session intent ${call.intentKind} must not carry renderer-owned segment/track/timerange semantic keys`
+      ).toEqual([]);
+    }
+  }
+
+  const forbiddenLegacyCommands = new Set([
+    "addSegment",
+    "moveSegment",
+    "splitSegment",
+    "trimSegment",
+    "deleteSegment",
+    "addTextSegment",
+    "editTextSegment",
+    "importSubtitleSrt",
+    "addAudioSegment",
+    "addTrack",
+    "renameTrack",
+    "setTrackLock",
+    "setTrackVisibility",
+    "setTrackMute",
+    "updateSegmentVisual"
+  ]);
   const legacyEditCommands = legacyCalls.map((call) => call.command).filter((command) => forbiddenLegacyCommands.has(command));
   expect(legacyEditCommands, "product edits must not fall back to renderer-owned executeCommand").toEqual([]);
 }

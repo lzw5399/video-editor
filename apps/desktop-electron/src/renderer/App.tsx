@@ -632,7 +632,11 @@ export function App(): React.ReactElement {
       commandError: applied.errorMessage
     };
 
-    if (result.ok && result.data !== null && (intentKind === "updateSelectedSegmentVisual" || intentKind === "setTrackVisibility")) {
+    if (
+      result.ok &&
+      result.data !== null &&
+      (intentKind === "updateSelectedSegmentVisual" || intentKind === "setSelectedTrackVisibility")
+    ) {
       return {
         ...next,
         preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
@@ -669,7 +673,7 @@ export function App(): React.ReactElement {
       result.data !== null &&
       (intentKind === "setSelectedSegmentVolume" ||
         intentKind === "updateSelectedSegmentAudio" ||
-        intentKind === "setTrackMute" ||
+        intentKind === "setSelectedTrackMute" ||
         intentKind === "addAudioSegmentIntent")
     ) {
       return {
@@ -1555,17 +1559,6 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSetSelectedTrackMute(trackId: string, muted: boolean): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "setTrackMute",
-        trackId: trackId.length > 0 ? trackId : null,
-        muted
-      },
-      "切换轨道静音"
-    );
-  }
-
   function handleSelectTimelineTrack(trackId: string): void {
     void executeProjectTimelineIntent(
       {
@@ -1574,6 +1567,48 @@ export function App(): React.ReactElement {
         trackIds: [trackId]
       },
       "选择轨道"
+    );
+  }
+
+  async function selectTrackThenExecuteSelectedTrackIntent(
+    trackId: string,
+    intent: Extract<
+      ExecuteProjectIntentRequest["intent"],
+      { kind: "renameSelectedTrack" | "setSelectedTrackLock" | "setSelectedTrackVisibility" | "setSelectedTrackMute" }
+    >,
+    pendingCommand: string
+  ): Promise<void> {
+    if (trackId.length === 0) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("请先选择一个轨道")
+      }));
+      return;
+    }
+
+    const selected = await executeProjectTimelineIntent(
+      {
+        kind: "selectTimelineSegments",
+        segmentIds: [],
+        trackIds: [trackId]
+      },
+      "选择轨道"
+    );
+    if (selected === null || !selected.ok) {
+      return;
+    }
+
+    await executeProjectTimelineIntent(intent, pendingCommand);
+  }
+
+  function handleSetSelectedTrackMute(trackId: string, muted: boolean): void {
+    void selectTrackThenExecuteSelectedTrackIntent(
+      trackId,
+      {
+        kind: "setSelectedTrackMute",
+        muted
+      },
+      "切换轨道静音"
     );
   }
 
@@ -1596,10 +1631,10 @@ export function App(): React.ReactElement {
       }));
       return;
     }
-    void executeProjectTimelineIntent(
+    void selectTrackThenExecuteSelectedTrackIntent(
+      trackId,
       {
-        kind: "renameTrack",
-        trackId,
+        kind: "renameSelectedTrack",
         name: trimmedName
       },
       "重命名轨道"
@@ -1607,10 +1642,10 @@ export function App(): React.ReactElement {
   }
 
   function handleSetTimelineTrackLock(trackId: string, locked: boolean): void {
-    void executeProjectTimelineIntent(
+    void selectTrackThenExecuteSelectedTrackIntent(
+      trackId,
       {
-        kind: "setTrackLock",
-        trackId,
+        kind: "setSelectedTrackLock",
         locked
       },
       "切换轨道锁定"
@@ -1618,10 +1653,10 @@ export function App(): React.ReactElement {
   }
 
   function handleSetTimelineTrackVisibility(trackId: string, visible: boolean): void {
-    void executeProjectTimelineIntent(
+    void selectTrackThenExecuteSelectedTrackIntent(
+      trackId,
       {
-        kind: "setTrackVisibility",
-        trackId,
+        kind: "setSelectedTrackVisibility",
         visible
       },
       "切换轨道显示"

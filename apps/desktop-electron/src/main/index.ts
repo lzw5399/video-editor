@@ -77,6 +77,7 @@ type TestProjectSessionCall = {
   textSource: string | null;
   textFontRef: string | null;
   srtContent: string | null;
+  timelineSemanticKeys: string[];
   hasDraftField: boolean;
 };
 
@@ -530,10 +531,21 @@ function recordTestProjectSessionCall(
     textSource: typeof text?.source === "string" ? text.source : null,
     textFontRef: typeof text?.style?.font?.fontRef === "string" ? text.style.font.fontRef : null,
     srtContent: typeof intentRecord?.srtContent === "string" ? intentRecord.srtContent : null,
+    timelineSemanticKeys: timelineSemanticKeys(intentRecord),
     hasDraftField:
       Object.prototype.hasOwnProperty.call(request, "draft") ||
       (intent !== null && Object.prototype.hasOwnProperty.call(intent, "draft"))
   });
+}
+
+function timelineSemanticKeys(intent: Record<string, unknown> | null): string[] {
+  if (intent === null) {
+    return [];
+  }
+
+  return ["segmentId", "rightSegmentId", "trackId", "targetTrackId", "sourceTimerange", "targetTimerange", "mainTrackMagnet"].filter(
+    (key) => Object.prototype.hasOwnProperty.call(intent, key)
+  );
 }
 
 function isAudioPreviewCommandKind(kind: CommandEnvelope["payload"]["kind"]): kind is

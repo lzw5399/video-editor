@@ -465,6 +465,107 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
 }
 
 #[test]
+fn project_session_track_mutation_intents_use_selected_track() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-selected-track.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-selected-track"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let selected = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "selectTimelineSegments",
+            "segmentIds": [],
+            "trackIds": ["video-track"]
+        }
+    }))
+    .expect("track selection intent should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    assert_eq!(selected["data"]["revision"], 0);
+
+    let renamed = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "renameSelectedTrack",
+            "name": "Primary Video"
+        }
+    }))
+    .expect("rename selected track should return an envelope");
+    assert_eq!(renamed["ok"], true, "{renamed:#}");
+    assert_eq!(renamed["data"]["revision"], 1);
+    assert_eq!(
+        renamed["data"]["draft"]["tracks"][0]["name"],
+        "Primary Video"
+    );
+
+    let locked = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "setSelectedTrackLock",
+            "locked": true
+        }
+    }))
+    .expect("lock selected track should return an envelope");
+    assert_eq!(locked["ok"], true, "{locked:#}");
+    assert_eq!(locked["data"]["revision"], 2);
+    assert_eq!(locked["data"]["draft"]["tracks"][0]["locked"], true);
+
+    let unlocked = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "setSelectedTrackLock",
+            "locked": false
+        }
+    }))
+    .expect("unlock selected track should return an envelope");
+    assert_eq!(unlocked["ok"], true, "{unlocked:#}");
+    assert_eq!(unlocked["data"]["revision"], 3);
+
+    let hidden = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 3,
+        "intent": {
+            "kind": "setSelectedTrackVisibility",
+            "visible": false
+        }
+    }))
+    .expect("hide selected track should return an envelope");
+    assert_eq!(hidden["ok"], true, "{hidden:#}");
+    assert_eq!(hidden["data"]["revision"], 4);
+    assert_eq!(hidden["data"]["draft"]["tracks"][0]["visible"], false);
+
+    let muted = execute_project_intent(json!({
+        "sessionId": "test-session-selected-track",
+        "expectedRevision": 4,
+        "intent": {
+            "kind": "setSelectedTrackMute",
+            "muted": true
+        }
+    }))
+    .expect("mute selected track should return an envelope");
+    assert_eq!(muted["ok"], true, "{muted:#}");
+    assert_eq!(muted["data"]["revision"], 5);
+    assert_eq!(muted["data"]["draft"]["tracks"][0]["muted"], true);
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("selected-track intents should persist canonical project.json");
+    assert_eq!(reopened.bundle.draft.tracks[0].name, "Primary Video");
+    assert!(!reopened.bundle.draft.tracks[0].visible);
+    assert!(reopened.bundle.draft.tracks[0].muted);
+
+    close_project_session(json!({ "sessionId": "test-session-selected-track" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-keyframe.veproj");

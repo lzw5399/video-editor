@@ -486,6 +486,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-21 | 260621-sg1-enforce-renderer-timeline-semantic-guards | Moved product track mutations to Rust selected-track intents, added session semantic-key telemetry assertions, and strengthened Phase 3 source guards with construction-site patterns and negative self-tests. |
 | 2026-06-18 | 260618-w08-capture-jianying-pro-ui-screenshots-as-p | Added provisional Jianying Pro UI screenshot reference docs, defined UI alignment regression expectations, and hid developer diagnostics/path/artifact debug UI behind an explicit diagnostics switch. |
 | 2026-06-18 | 260618-p3v-capture-confirmed-production-editor-arch | Captured confirmed production architecture decisions, research questions, Phase 11 context, and revised Phase 11-18 wording after user review. |
 | 2026-06-18 | 260618-oi7-plan-production-grade-editor-architectur | Added production-grade Phase 11-18 roadmap and requirement traceability after Phase 10.1 while keeping Phase 10.1 as the current in-progress phase. |

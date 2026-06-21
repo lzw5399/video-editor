@@ -153,24 +153,16 @@ enum ProjectIntent {
         #[serde(rename = "trackKind")]
         track_kind: TrackKind,
     },
-    RenameTrack {
-        #[serde(rename = "trackId")]
-        track_id: TrackId,
+    RenameSelectedTrack {
         name: String,
     },
-    SetTrackLock {
-        #[serde(rename = "trackId")]
-        track_id: TrackId,
+    SetSelectedTrackLock {
         locked: bool,
     },
-    SetTrackVisibility {
-        #[serde(rename = "trackId")]
-        track_id: TrackId,
+    SetSelectedTrackVisibility {
         visible: bool,
     },
-    SetTrackMute {
-        #[serde(default, rename = "trackId")]
-        track_id: Option<TrackId>,
+    SetSelectedTrackMute {
         muted: bool,
     },
     UpdateDraftCanvasConfig {
@@ -651,45 +643,42 @@ impl ProjectSession {
                     track_kind,
                 }),
             ),
-            ProjectIntent::RenameTrack { track_id, name } => Ok(TimelineEditPayload::RenameTrack(
+            ProjectIntent::RenameSelectedTrack { name } => Ok(TimelineEditPayload::RenameTrack(
                 RenameTrackCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    track_id,
+                    track_id: self.selected_track_id("重命名轨道")?,
                     name,
                 },
             )),
-            ProjectIntent::SetTrackLock { track_id, locked } => Ok(
+            ProjectIntent::SetSelectedTrackLock { locked } => Ok(
                 TimelineEditPayload::SetTrackLock(SetTrackLockCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    track_id,
+                    track_id: self.selected_track_id("切换轨道锁定")?,
                     locked,
                 }),
             ),
-            ProjectIntent::SetTrackVisibility { track_id, visible } => Ok(
+            ProjectIntent::SetSelectedTrackVisibility { visible } => Ok(
                 TimelineEditPayload::SetTrackVisibility(SetTrackVisibilityCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    track_id,
+                    track_id: self.selected_track_id("切换轨道显示")?,
                     visible,
                 }),
             ),
-            ProjectIntent::SetTrackMute { track_id, muted } => Ok(
-                TimelineEditPayload::SetTrackMute(SetTrackMuteCommandPayload {
+            ProjectIntent::SetSelectedTrackMute { muted } => Ok(TimelineEditPayload::SetTrackMute(
+                SetTrackMuteCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    track_id: match track_id {
-                        Some(track_id) => track_id,
-                        None => self.selected_track_id("切换轨道静音")?,
-                    },
+                    track_id: self.selected_track_id("切换轨道静音")?,
                     muted,
-                }),
-            ),
+                },
+            )),
             ProjectIntent::UpdateDraftCanvasConfig { canvas_config } => {
                 Ok(TimelineEditPayload::UpdateDraftCanvasConfig(
                     UpdateDraftCanvasConfigCommandPayload {
