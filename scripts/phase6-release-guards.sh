@@ -36,7 +36,7 @@ forbid_literal() {
   fi
 }
 
-require_packaged_runtime_forces_resources_path() {
+require_app_local_runtime_only() {
   node - <<'NODE'
 const fs = require("node:fs");
 const source = fs.readFileSync("apps/desktop-electron/src/main/index.ts", "utf8");
@@ -48,11 +48,20 @@ if (start < 0 || end < 0) {
 }
 
 const body = source.slice(start, end);
-const packagedBranch = body.indexOf("if (app.isPackaged)");
-const packagedAssignment = body.indexOf("process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir", packagedBranch);
-const envGuard = body.indexOf("if (process.env.VE_BUNDLED_FFMPEG_DIR !== undefined)");
-if (packagedBranch < 0 || packagedAssignment < 0 || envGuard < 0 || packagedAssignment > envGuard) {
-  console.error("packaged app must force VE_BUNDLED_FFMPEG_DIR to process.resourcesPath before honoring dev/test env overrides");
+if (!body.includes('const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");')) {
+  console.error("Electron main must derive FFmpeg runtime from packaged resources or app-local dev runtime");
+  process.exit(1);
+}
+if (!body.includes("process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir")) {
+  console.error("Electron main must always set VE_BUNDLED_FFMPEG_DIR to the app-local bundled runtime");
+  process.exit(1);
+}
+if (body.includes("process.env.VE_BUNDLED_FFMPEG_DIR !== undefined")) {
+  console.error("Electron main must not honor external VE_BUNDLED_FFMPEG_DIR overrides");
+  process.exit(1);
+}
+if (source.includes("--video-editor-test-ve-bundled-ffmpeg-dir")) {
+  console.error("Electron main must not expose a test switch for arbitrary FFmpeg runtime directories");
   process.exit(1);
 }
 NODE
@@ -121,7 +130,7 @@ require_script package.json test:phase6-release-gates
 require_script package.json test:phase6
 
 require_bundled_runtime_entries
-require_packaged_runtime_forces_resources_path
+require_app_local_runtime_only
 forbid_local_ffmpeg_lookup
 
 bash scripts/phase5-source-guards.sh

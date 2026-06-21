@@ -1873,10 +1873,7 @@ test("selection preview overlay follows accepted visible segment and allows dire
 test("预览失败显示中文分类错误且不改草稿", async () => {
   const { app, page } = await launchWorkspaceApp({
     mockPreviewCommands: false,
-    showDeveloperDiagnostics: true,
-    env: {
-      VE_BUNDLED_FFMPEG_DIR: "/tmp/video-editor-missing-runtime"
-    }
+    showDeveloperDiagnostics: true
   });
 
   try {

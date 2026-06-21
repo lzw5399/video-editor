@@ -422,22 +422,11 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR", "--video-editor-test-disable-render-graph-compositor=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE", "--video-editor-test-workspace-fixture=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES", "--video-editor-test-mock-runtime-capabilities=");
-  setEnvFromArgument("VE_BUNDLED_FFMPEG_DIR", "--video-editor-test-ve-bundled-ffmpeg-dir=");
 }
 
 function configureBundledRuntimeEnvironment(): void {
   const root = app.isPackaged ? process.resourcesPath : join(__dirname, "../../runtime");
   const bundledRuntimeDir = join(root, "ffmpeg", platformArchSegment());
-
-  if (app.isPackaged) {
-    process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir;
-    return;
-  }
-
-  if (process.env.VE_BUNDLED_FFMPEG_DIR !== undefined) {
-    return;
-  }
-
   process.env.VE_BUNDLED_FFMPEG_DIR = bundledRuntimeDir;
 }
 

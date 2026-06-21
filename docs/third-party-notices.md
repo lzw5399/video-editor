@@ -25,9 +25,10 @@ license notices from `Cargo.lock` before any public binary release.
 FFmpeg and ffprobe are bundled application resources for desktop packages.
 
 The app discovers them only through the bundled runtime directory
-`VE_BUNDLED_FFMPEG_DIR` or the packaged resources path. The engineering manifest
-generated at package time records the exact version, configure line, checksums,
-and `legalReviewPending` status.
+set internally as `VE_BUNDLED_FFMPEG_DIR` or the packaged resources path. Product
+startup does not honor external FFmpeg paths. The engineering manifest generated
+at package time records the exact version, configure line, checksums, and
+`legalReviewPending` status.
 
 This notice does not claim final redistribution approval. Public distribution
 must complete a license review for the exact FFmpeg build and enabled external

@@ -38,7 +38,7 @@ impl DiscoveryError {
             binary,
             checked_paths,
             remediation: format!(
-                "Bundle {binary_name} under VE_BUNDLED_FFMPEG_DIR or apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>."
+                "Bundle {binary_name} under the app-local FFmpeg runtime directory apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>."
             ),
             stdout_summary: None,
             stderr_summary: None,

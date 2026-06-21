@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260621-sg6 preview session snapshot boundary
-last_updated: "2026-06-21T14:53:01Z"
-last_activity: 2026-06-21 -- Completed quick task 260621-sg6: preview session snapshot boundary
+stopped_at: Completed quick task 260621-sg7 bundled-only FFmpeg runtime
+last_updated: "2026-06-21T15:01:07Z"
+last_activity: 2026-06-21 -- Completed quick task 260621-sg7: bundled-only FFmpeg runtime
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-21 -- Completed quick task 260621-sg6: preview session snapshot boundary
+Last activity: 2026-06-21 -- Completed quick task 260621-sg7: bundled-only FFmpeg runtime
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -214,6 +214,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Product material reads now use Rust project session read APIs for material lists and missing-material diagnostics; product renderer code is guarded against reintroducing legacy full-draft `listMaterials` / `listMissingMaterials` commands. (URGENT)
 - FFmpeg/ffprobe runtime resolution is now bundled-only for product and test gates: Electron packages `runtime/ffmpeg`, packaged app sets `VE_BUNDLED_FFMPEG_DIR` from app resources, and Homebrew/PATH/legacy per-binary lookup is forbidden by release guards. (URGENT)
 - macOS packaged FFmpeg runtime now includes app-relative bundled dylibs and a recursive `otool -L` provision gate so `/opt/homebrew`, `/usr/local`, PATH, and local-machine FFmpeg dependencies fail before packaging. (URGENT)
+- Electron desktop startup now always points Rust media runtime at the app-local bundled FFmpeg directory; external `VE_BUNDLED_FFMPEG_DIR` overrides and test switches are not honored by product startup. (URGENT)
 - Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview draft sync is now sourced from Rust project sessions: Electron sends `projectSessionId` plus `expectedRevision`, and the renderer/main/preload boundary is guarded against reintroducing full-draft `updateDraftSnapshot` payloads. (URGENT)
@@ -491,6 +492,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-21 | 260621-sg7-bundled-only-ffmpeg-runtime | Simplified Electron FFmpeg runtime selection to app-local bundled resources only, removed external runtime override/test switch paths, tightened Phase 6 release guards, updated docs/remediation, and revalidated packaged smoke/runtime discovery gates. |
 | 2026-06-21 | 260621-sg6-preview-session-snapshot-boundary | Removed renderer-owned realtime preview draft snapshot sync, replaced it with project-session revision sync, added stale/unknown/payload rejection tests, and revalidated product cadence at 90 accounted frames for both single-video and combined video/audio/text/SRT playback. |
 | 2026-06-21 | 260621-sg5-preview-telemetry-subscription-boundary | Removed renderer-visible realtime preview telemetry polling, replaced it with main-process subscription fanout, guarded against `getTelemetry` re-exposure, and revalidated packaged cadence at 90 accounted frames for both single-video and combined video/audio/text/SRT playback. |
 | 2026-06-21 | 260621-sg4-preview-runtime-scheduler-ownership | Moved realtime preview playback cadence, due-frame/drop accounting, and surface in-flight policy into realtime_preview_runtime, leaving bindings_node as the native presenter/resource adapter and adding guards against binding-owned scheduler policy returning. |

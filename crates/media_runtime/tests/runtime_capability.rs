@@ -211,7 +211,11 @@ fn runtime_capability_missing_bundled_dir_returns_classified_discovery_error() {
     assert_eq!(error.kind, DiscoveryErrorKind::MissingBinary);
     assert_eq!(error.binary, BinaryKind::Ffmpeg);
     assert!(error.checked_paths.contains(&missing_ffmpeg));
-    assert!(error.remediation.contains("VE_BUNDLED_FFMPEG_DIR"));
+    assert!(
+        error
+            .remediation
+            .contains("apps/desktop-electron/runtime/ffmpeg")
+    );
     assert!(!error.remediation.contains("VE_FFMPEG_PATH"));
 }
 

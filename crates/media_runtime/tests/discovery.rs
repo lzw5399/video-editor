@@ -66,7 +66,11 @@ fn discovery_never_falls_back_to_legacy_env_or_path() {
         error.checked_paths,
         vec![missing_bundled_dir.join("ffmpeg")]
     );
-    assert!(error.remediation.contains("VE_BUNDLED_FFMPEG_DIR"));
+    assert!(
+        error
+            .remediation
+            .contains("apps/desktop-electron/runtime/ffmpeg")
+    );
     assert!(!error.remediation.contains("VE_FFMPEG_PATH"));
     assert!(!error.remediation.contains("PATH"));
 }
