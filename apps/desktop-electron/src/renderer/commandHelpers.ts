@@ -1,9 +1,4 @@
 import type {
-  CommandEnvelope,
-  ExportPreset,
-  ProbeRuntimeCapabilitiesCommandPayload
-} from "../generated/CommandEnvelope";
-import type {
   CommandResultEnvelope,
   RuntimeBinaryCapability,
   RuntimeCapabilityReport,
@@ -15,14 +10,6 @@ import type {
   RuntimeDiagnosticsRow,
   RuntimeDiagnosticsTone
 } from "./viewModel";
-
-export function buildProbeRuntimeCapabilitiesCommand(): CommandEnvelope {
-  const payload = {
-    kind: "probeRuntimeCapabilities"
-  } satisfies ProbeRuntimeCapabilitiesCommandPayload & { kind: "probeRuntimeCapabilities" };
-
-  return envelope("probeRuntimeCapabilities", payload);
-}
 
 export function commandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string): string {
   const message =
@@ -168,12 +155,4 @@ function statusTone(status: RuntimeBinaryCapability["status"]): RuntimeDiagnosti
   };
 
   return tones[status];
-}
-
-function envelope(command: CommandEnvelope["command"], payload: CommandEnvelope["payload"]): CommandEnvelope {
-  return {
-    command,
-    payload,
-    requestId: `${command}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  };
 }

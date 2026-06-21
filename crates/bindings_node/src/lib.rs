@@ -77,6 +77,14 @@ pub fn configure_bundled_runtime_directory(directory: String) {
     media_runtime::configure_bundled_runtime_directory(PathBuf::from(directory));
 }
 
+#[napi(js_name = "probeRuntimeCapabilities")]
+pub fn probe_runtime_capabilities() -> Result<serde_json::Value> {
+    match probe_runtime_capabilities_command() {
+        Ok(report) => to_js_value(ok_envelope(report)),
+        Err(error) => to_js_value(runtime_capability_error_envelope(error)),
+    }
+}
+
 #[napi]
 pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> {
     let command_name = raw_command_name(&command);
@@ -87,7 +95,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "ping"
                 | "version"
                 | "probeMediaRuntime"
-                | "probeRuntimeCapabilities"
                 | "openProjectBundle"
                 | "saveProjectBundle"
                 | "importMaterial"
@@ -128,10 +135,11 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             Ok(config) => to_js_value(ok_envelope(config)),
             Err(error) => to_js_value(runtime_discovery_error_envelope(error)),
         },
-        CommandName::ProbeRuntimeCapabilities => match probe_runtime_capabilities_command() {
-            Ok(report) => to_js_value(ok_envelope(report)),
-            Err(error) => to_js_value(runtime_capability_error_envelope(error)),
-        },
+        CommandName::ProbeRuntimeCapabilities => to_js_value(error_envelope(
+            CommandErrorKind::UnsupportedCommand,
+            "Runtime capability probing requires the explicit native API".to_string(),
+            Some("probeRuntimeCapabilities".to_string()),
+        )),
         CommandName::OpenProjectBundle => match envelope.payload {
             CommandPayload::OpenProjectBundle(payload) => open_project_bundle_command(payload),
             _ => unreachable!("command/payload pair was validated during deserialization"),

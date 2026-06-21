@@ -41,6 +41,7 @@ import {
   pauseAudioPreview,
   ping,
   playAudioPreview,
+  probeRuntimeCapabilities,
   requestProjectSessionPreviewFrame,
   requestProjectSessionPreviewSegment,
   refreshWaveformStatus,
@@ -196,13 +197,17 @@ ipcMain.handle("core:version", (event) => {
   assertAllowedIpcSender(event);
   return version();
 });
-ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
+ipcMain.handle("core:probeRuntimeCapabilities", (event) => {
   assertAllowedIpcSender(event);
-  recordTestExecuteCommand(command);
-  const testRuntimeCapabilitiesResponse = maybeBuildTestRuntimeCapabilitiesResponse(command);
+  const testRuntimeCapabilitiesResponse = maybeBuildTestRuntimeCapabilitiesResponse();
   if (testRuntimeCapabilitiesResponse !== null) {
     return testRuntimeCapabilitiesResponse;
   }
+  return probeRuntimeCapabilities();
+});
+ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
+  assertAllowedIpcSender(event);
+  recordTestExecuteCommand(command);
   const testPreviewResponse = maybeBuildTestPreviewResponse(command);
   if (testPreviewResponse !== null) {
     return testPreviewResponse;
@@ -895,13 +900,7 @@ function isAudioPreviewCommandKind(kind: CommandEnvelope["payload"]["kind"]): ki
   );
 }
 
-function maybeBuildTestRuntimeCapabilitiesResponse(
-  command: CommandEnvelope
-): CommandResultEnvelope<RuntimeCapabilityReport> | null {
-  if (command.payload.kind !== "probeRuntimeCapabilities") {
-    return null;
-  }
-
+function maybeBuildTestRuntimeCapabilitiesResponse(): CommandResultEnvelope<RuntimeCapabilityReport> | null {
   if (process.env.VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES === "0") {
     return null;
   }

@@ -30,6 +30,8 @@ AUDIO_PREVIEW_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:createAudioPreviewSes
 ARTIFACT_CONTROL_LEGACY_COMMAND_BUILDER_PATTERN='\bbuild(?:GetArtifactStatus|RefreshArtifactStatus|RetryArtifactGeneration|ResumeArtifactGeneration|CancelArtifactGeneration|GetArtifactQuotaStatus|RunArtifactGarbageCollection)Command\b'
 ARTIFACT_CONTROL_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*(?:Artifact|Quota|Maintenance)|executeArtifactCommand<[^>]*>\([[:space:]]*\([^)]*\)[[:space:]]*=>[[:space:]]*build(?:GetArtifactStatus|RefreshArtifactStatus|RetryArtifactGeneration|ResumeArtifactGeneration|CancelArtifactGeneration|GetArtifactQuotaStatus|RunArtifactGarbageCollection)Command'
 ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:getArtifactStatus|refreshArtifactStatus|retryArtifactGeneration|resumeArtifactGeneration|cancelArtifactGeneration|getArtifactQuotaStatus|runArtifactGarbageCollection)"'
+RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN='\b(?:buildProbeRuntimeCapabilitiesCommand|ProbeRuntimeCapabilitiesCommandPayload)\b|command:[[:space:]]*"probeRuntimeCapabilities"|kind:[[:space:]]*"probeRuntimeCapabilities"'
+RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*RuntimeCapabilityReport|executeCommand<RuntimeCapabilityReport>'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -475,6 +477,18 @@ fail_if_matches \
   "$ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN" \
   crates/bindings_node/src/lib.rs
 
+fail_if_matches \
+  "renderer must not construct runtime capability command envelopes; use explicit runtime capability API" \
+  "$RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN|$RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts
+
+require_matches \
+  "renderer/preload/native binding expose explicit runtime capability API" \
+  '\bprobeRuntimeCapabilities\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
 fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
@@ -721,6 +735,16 @@ assert_pattern_rejects \
   "legacy artifact control executeCommand allowlist" \
   "$ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN" \
   '| "getArtifactStatus"'
+
+assert_pattern_rejects \
+  "legacy runtime capability command builder" \
+  "$RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN|$RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN" \
+  'return buildProbeRuntimeCapabilitiesCommand();'
+
+assert_pattern_rejects \
+  "legacy runtime capability generic executeCommand" \
+  "$RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN|$RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN" \
+  'window.videoEditorCore.executeCommand<RuntimeCapabilityReport>(buildProbeRuntimeCapabilitiesCommand())'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type {
   AudioPreviewRequest,
   ArtifactGarbageCollectionRequest,
@@ -49,7 +48,6 @@ import type {
   TrackKind
 } from "../generated/Draft";
 import {
-  buildProbeRuntimeCapabilitiesCommand,
   commandErrorMessage,
   runtimeDiagnosticsFromError,
   runtimeDiagnosticsFromReport
@@ -89,7 +87,7 @@ const SEQUENCE_END_EPSILON_US = 7_000;
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
   version: () => Promise<CommandResultEnvelope<VersionResponse>>;
-  executeCommand: <T = unknown>(command: CommandEnvelope) => Promise<CommandResultEnvelope<T>>;
+  probeRuntimeCapabilities: () => Promise<CommandResultEnvelope<RuntimeCapabilityReport>>;
   createProjectSession: (request: CreateProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionOpenResponse>>;
   openProjectSession: (request: OpenProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionOpenResponse>>;
   executeProjectIntent: <T = ProjectSessionIntentResponse>(
@@ -1297,9 +1295,7 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const result = await window.videoEditorCore.executeCommand<RuntimeCapabilityReport>(
-        buildProbeRuntimeCapabilitiesCommand()
-      );
+      const result = await window.videoEditorCore.probeRuntimeCapabilities();
       setWorkspace((current) => {
         const runtimeDiagnostics =
           result.ok && result.data !== null

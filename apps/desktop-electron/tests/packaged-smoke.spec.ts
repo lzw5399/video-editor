@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 import type { CommandEnvelope } from "../src/generated/CommandEnvelope";
-import type { CommandResultEnvelope } from "../src/generated/CommandResultEnvelope";
+import type { CommandResultEnvelope, RuntimeCapabilityReport } from "../src/generated/CommandResultEnvelope";
 import { launchPackagedApp } from "./helpers/packagedApp";
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<{ pong: boolean }>>;
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
+  probeRuntimeCapabilities: () => Promise<CommandResultEnvelope<RuntimeCapabilityReport>>;
   executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
   startProjectSessionExport?: (request: unknown) => Promise<CommandResultEnvelope<unknown>>;
 };
@@ -22,14 +23,6 @@ function probeMediaRuntimeCommand(requestId: string): CommandEnvelope {
   return {
     command: "probeMediaRuntime",
     payload: { kind: "probeMediaRuntime" },
-    requestId
-  };
-}
-
-function probeRuntimeCapabilitiesCommand(requestId: string): CommandEnvelope {
-  return {
-    command: "probeRuntimeCapabilities",
-    payload: { kind: "probeRuntimeCapabilities" },
     requestId
   };
 }
@@ -55,6 +48,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
       keys: [
         "ping",
         "version",
+        "probeRuntimeCapabilities",
         "executeCommand",
         "createProjectSession",
         "openProjectSession",
@@ -101,9 +95,7 @@ test("packaged app loads file renderer, preload bridge, native binding, and runt
     expect(ffmpeg?.ffmpeg?.path).not.toContain("/opt/homebrew");
     expect(ffmpeg?.ffprobe?.path).not.toContain("/opt/homebrew");
 
-    const capabilities = await page.evaluate((command) => {
-      return window.videoEditorCore?.executeCommand(command);
-    }, probeRuntimeCapabilitiesCommand("packaged-runtime-capabilities"));
+    const capabilities = await page.evaluate(() => window.videoEditorCore?.probeRuntimeCapabilities());
     const report = capabilities?.data as {
       ffmpeg?: { source?: string };
       ffprobe?: { source?: string };

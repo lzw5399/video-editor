@@ -4,11 +4,12 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 
 import type { CommandEnvelope } from "../src/generated/CommandEnvelope";
-import type { CommandResultEnvelope } from "../src/generated/CommandResultEnvelope";
+import type { CommandResultEnvelope, RuntimeCapabilityReport } from "../src/generated/CommandResultEnvelope";
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<{ pong: boolean }>>;
   version: () => Promise<CommandResultEnvelope<{ coreVersion: string; contractVersion: string }>>;
+  probeRuntimeCapabilities: () => Promise<CommandResultEnvelope<RuntimeCapabilityReport>>;
   executeCommand: (command: CommandEnvelope) => Promise<CommandResultEnvelope<unknown>>;
 };
 type VideoEditorPlatformApi = {
@@ -118,6 +119,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     const apiShape = await page.evaluate(() => ({
       ping: typeof window.videoEditorCore?.ping,
       version: typeof window.videoEditorCore?.version,
+      probeRuntimeCapabilities: typeof window.videoEditorCore?.probeRuntimeCapabilities,
       executeCommand: typeof window.videoEditorCore?.executeCommand,
       keys: Object.keys(window.videoEditorCore ?? {}),
       platformKeys: Object.keys(window.videoEditorPlatform ?? {}),
@@ -127,10 +129,12 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
     expect(apiShape).toEqual({
       ping: "function",
       version: "function",
+      probeRuntimeCapabilities: "function",
       executeCommand: "function",
       keys: [
         "ping",
         "version",
+        "probeRuntimeCapabilities",
         "executeCommand",
         "createProjectSession",
         "openProjectSession",

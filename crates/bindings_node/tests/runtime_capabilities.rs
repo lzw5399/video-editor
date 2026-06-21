@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bindings_node::execute_command;
+use bindings_node::{execute_command, probe_runtime_capabilities};
 use draft_model::CommandErrorKind;
 use serde_json::{Value, json};
 
@@ -12,7 +12,7 @@ static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
 #[cfg(unix)]
-fn runtime_capabilities_execute_command_returns_report() {
+fn runtime_capabilities_explicit_api_returns_report() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let sandbox = Sandbox::new("runtime-capabilities-ok");
     let ffmpeg = sandbox.bin(
@@ -61,12 +61,8 @@ fi
     let _font_env = EnvVarGuard::set_path("VE_TEXT_FONT_PATH", &font_path);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
-    let envelope = execute_command(json!({
-        "command": "probeRuntimeCapabilities",
-        "payload": { "kind": "probeRuntimeCapabilities" },
-        "requestId": "req-runtime-capabilities"
-    }))
-    .expect("runtime capabilities command should return a JSON envelope");
+    let envelope =
+        probe_runtime_capabilities().expect("runtime capabilities should return a JSON envelope");
 
     assert_eq!(envelope["ok"], true, "{envelope:#}");
     assert_eq!(envelope["error"], Value::Null);
@@ -141,12 +137,8 @@ fn runtime_capabilities_reports_missing_ffmpeg_with_chinese_action() {
     let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
-    let envelope = execute_command(json!({
-        "command": "probeRuntimeCapabilities",
-        "payload": { "kind": "probeRuntimeCapabilities" },
-        "requestId": "req-missing-ffmpeg"
-    }))
-    .expect("missing runtime should return a JSON envelope");
+    let envelope =
+        probe_runtime_capabilities().expect("missing runtime should return a JSON envelope");
 
     assert_eq!(envelope["ok"], false);
     assert_eq!(envelope["data"], Value::Null);
@@ -181,12 +173,8 @@ fi
     let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
     let _path = EnvVarGuard::set_path("PATH", sandbox.root.join("empty-path"));
 
-    let envelope = execute_command(json!({
-        "command": "probeRuntimeCapabilities",
-        "payload": { "kind": "probeRuntimeCapabilities" },
-        "requestId": "req-missing-ffprobe"
-    }))
-    .expect("missing runtime should return a JSON envelope");
+    let envelope =
+        probe_runtime_capabilities().expect("missing runtime should return a JSON envelope");
 
     assert_eq!(envelope["ok"], false);
     assert_eq!(
@@ -199,6 +187,24 @@ fi
     assert!(message.contains("runtime/ffmpeg"), "{message}");
     assert!(!message.contains("VE_BUNDLED_FFMPEG_DIR"), "{message}");
     assert!(!message.contains("VE_FFPROBE_PATH"), "{message}");
+}
+
+#[test]
+fn runtime_capabilities_legacy_execute_command_is_unsupported() {
+    let envelope = execute_command(json!({
+        "command": "probeRuntimeCapabilities",
+        "payload": { "kind": "probeRuntimeCapabilities" },
+        "requestId": "req-runtime-capabilities-legacy"
+    }))
+    .expect("legacy runtime capabilities command should return a JSON envelope");
+
+    assert_eq!(envelope["ok"], false);
+    assert_eq!(envelope["data"], Value::Null);
+    assert_eq!(
+        envelope["error"]["kind"],
+        serde_json::to_value(CommandErrorKind::UnsupportedCommand).unwrap()
+    );
+    assert_eq!(envelope["error"]["command"], "probeRuntimeCapabilities");
 }
 
 struct Sandbox {

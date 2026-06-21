@@ -18,6 +18,7 @@ import type {
   ListMissingMaterialsResponse,
   MissingMaterialCommandDiagnostic,
   PreviewArtifactResponse,
+  RuntimeCapabilityReport,
   WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
 import type {
@@ -49,6 +50,7 @@ type NativeBinding = {
   ping: () => CommandResultEnvelope<PingResponse>;
   version: () => CommandResultEnvelope<VersionResponse>;
   configureBundledRuntimeDirectory: (directory: string) => void;
+  probeRuntimeCapabilities: () => CommandResultEnvelope<RuntimeCapabilityReport>;
   executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
   createProjectSession: (request: CreateProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
@@ -647,6 +649,14 @@ export function configureBundledRuntimeDirectory(directory: string): void {
   requireLoadedBinding().configureBundledRuntimeDirectory(directory);
 }
 
+export function probeRuntimeCapabilities(): CommandResultEnvelope<RuntimeCapabilityReport> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("probeRuntimeCapabilities");
+  }
+  return binding.probeRuntimeCapabilities();
+}
+
 export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<unknown> {
   const binding = loadNativeBinding();
   if (binding === null) {
@@ -995,6 +1005,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.ping !== "function" ||
       typeof loaded.version !== "function" ||
       typeof loaded.configureBundledRuntimeDirectory !== "function" ||
+      typeof loaded.probeRuntimeCapabilities !== "function" ||
       typeof loaded.executeCommand !== "function" ||
       typeof loaded.createProjectSession !== "function" ||
       typeof loaded.openProjectSession !== "function" ||
@@ -1050,6 +1061,7 @@ function loadNativeBinding(): NativeBinding | null {
       ping: loaded.ping,
       version: loaded.version,
       configureBundledRuntimeDirectory: loaded.configureBundledRuntimeDirectory,
+      probeRuntimeCapabilities: loaded.probeRuntimeCapabilities,
       executeCommand: loaded.executeCommand,
       createProjectSession: loaded.createProjectSession,
       openProjectSession: loaded.openProjectSession,

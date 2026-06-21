@@ -52,6 +52,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorCore", {
     ping: () => ipcRenderer.invoke("core:ping"),
     version: () => ipcRenderer.invoke("core:version"),
+    probeRuntimeCapabilities: () => ipcRenderer.invoke("core:probeRuntimeCapabilities"),
     executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command),
     createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
     openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
