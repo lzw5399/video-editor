@@ -44,6 +44,8 @@ type ExecuteCommandCall = {
 type ProjectSessionCall = {
   command: "startProjectSessionExport" | string;
   intentKind?: string | null;
+  targetTime?: number | null;
+  targetTimerange?: { start: number; duration: number } | null;
   outputPath?: string | null;
   preset?: string | null;
   canvasConfig?: ExecuteCommandCall["canvasConfig"];
@@ -203,16 +205,28 @@ async function readExecuteCommandCalls(app: ElectronApplication): Promise<Execut
   return [
     ...legacyCalls,
     ...projectCalls
-      .filter((call) => call.command === "startProjectSessionExport" || call.intentKind !== null)
+      .filter(
+        (call) =>
+          call.command === "startProjectSessionExport" ||
+          call.command === "requestProjectSessionPreviewFrame" ||
+          call.command === "requestProjectSessionPreviewSegment" ||
+          call.intentKind !== null
+      )
       .map((call) => {
         const command =
-          call.command === "startProjectSessionExport" ? "startExport" : commandNameForProjectIntent(call.intentKind);
+          call.command === "startProjectSessionExport"
+            ? "startExport"
+            : call.command === "requestProjectSessionPreviewFrame"
+              ? "requestPreviewFrame"
+              : call.command === "requestProjectSessionPreviewSegment"
+                ? "requestPreviewSegment"
+                : commandNameForProjectIntent(call.intentKind);
         return {
           command,
           kind: command,
           requestId: null,
-          targetTime: null,
-          targetTimerange: null,
+          targetTime: call.targetTime ?? null,
+          targetTimerange: call.targetTimerange ?? null,
           canvasConfig: call.canvasConfig ?? null,
           visual: call.visual ?? null,
           keyframe: null,

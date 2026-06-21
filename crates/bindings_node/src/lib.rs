@@ -275,6 +275,42 @@ pub fn start_project_session_export(request: serde_json::Value) -> Result<serde_
     start_project_session_export_command(request)
 }
 
+#[napi(js_name = "requestProjectSessionPreviewFrame")]
+pub fn request_project_session_preview_frame(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<RequestProjectSessionPreviewFrameRequest>(request)
+    {
+        Ok(request) => request,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid requestProjectSessionPreviewFrame payload: {error}"),
+                Some("requestProjectSessionPreviewFrame".to_string()),
+            ));
+        }
+    };
+    request_project_session_preview_frame_command(request)
+}
+
+#[napi(js_name = "requestProjectSessionPreviewSegment")]
+pub fn request_project_session_preview_segment(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request =
+        match serde_json::from_value::<RequestProjectSessionPreviewSegmentRequest>(request) {
+            Ok(request) => request,
+            Err(error) => {
+                return to_js_value(error_envelope(
+                    CommandErrorKind::InvalidPayload,
+                    format!("Invalid requestProjectSessionPreviewSegment payload: {error}"),
+                    Some("requestProjectSessionPreviewSegment".to_string()),
+                ));
+            }
+        };
+    request_project_session_preview_segment_command(request)
+}
+
 #[napi(js_name = "createRealtimePreviewSession")]
 pub fn create_realtime_preview_session(config: serde_json::Value) -> Result<serde_json::Value> {
     let config = parse_realtime_preview_payload::<RealtimePreviewSessionBindingConfig>(config)?;
@@ -724,6 +760,104 @@ fn start_project_session_export_command(
     }
 }
 
+fn request_project_session_preview_frame_command(
+    request: RequestProjectSessionPreviewFrameRequest,
+) -> Result<serde_json::Value> {
+    let snapshot = match project_session_service::project_session_snapshot(
+        &request.session_id,
+        request.expected_revision,
+    ) {
+        Ok(snapshot) => snapshot,
+        Err(message) => {
+            let kind = if message.contains("not found") {
+                CommandErrorKind::InvalidProject
+            } else {
+                CommandErrorKind::InvalidPayload
+            };
+            return to_js_value(error_envelope(
+                kind,
+                message,
+                Some("requestProjectSessionPreviewFrame".to_string()),
+            ));
+        }
+    };
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::PreviewServiceFailed,
+                runtime_discovery_message(error),
+                Some("requestProjectSessionPreviewFrame".to_string()),
+            ));
+        }
+    };
+    let bundle_path = snapshot.bundle_path.display().to_string();
+    let config = preview_service_config_from_preview_payload(None, Some(&bundle_path), &runtime);
+    let payload = RequestPreviewFrameCommandPayload {
+        draft: snapshot.draft,
+        cache_root: None,
+        bundle_path: Some(bundle_path),
+        target_time: request.target_time,
+    };
+    let executor = DesktopFfmpegExecutor::default();
+    match request_preview_frame_with_executor(&executor, &config, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope(
+            "requestProjectSessionPreviewFrame",
+            error,
+        )),
+    }
+}
+
+fn request_project_session_preview_segment_command(
+    request: RequestProjectSessionPreviewSegmentRequest,
+) -> Result<serde_json::Value> {
+    let snapshot = match project_session_service::project_session_snapshot(
+        &request.session_id,
+        request.expected_revision,
+    ) {
+        Ok(snapshot) => snapshot,
+        Err(message) => {
+            let kind = if message.contains("not found") {
+                CommandErrorKind::InvalidProject
+            } else {
+                CommandErrorKind::InvalidPayload
+            };
+            return to_js_value(error_envelope(
+                kind,
+                message,
+                Some("requestProjectSessionPreviewSegment".to_string()),
+            ));
+        }
+    };
+    let runtime = match discover_runtime_config() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return to_js_value(error_envelope(
+                CommandErrorKind::PreviewServiceFailed,
+                runtime_discovery_message(error),
+                Some("requestProjectSessionPreviewSegment".to_string()),
+            ));
+        }
+    };
+    let bundle_path = snapshot.bundle_path.display().to_string();
+    let config = preview_service_config_from_preview_payload(None, Some(&bundle_path), &runtime);
+    let payload = RequestPreviewSegmentCommandPayload {
+        draft: snapshot.draft,
+        cache_root: None,
+        bundle_path: Some(bundle_path),
+        target_timerange: request.target_timerange,
+    };
+    let executor = DesktopFfmpegExecutor::default();
+    match request_preview_segment_with_executor(&executor, &config, payload) {
+        Ok(response) => to_js_value(ok_envelope(response)),
+        Err(error) => to_js_value(preview_error_envelope(
+            "requestProjectSessionPreviewSegment",
+            error,
+        )),
+    }
+}
+
 fn get_export_job_status_command(
     payload: GetExportJobStatusCommandPayload,
 ) -> Result<serde_json::Value> {
@@ -1013,6 +1147,22 @@ struct StartProjectSessionExportRequest {
     expected_revision: u64,
     output_path: String,
     preset: draft_model::ExportPreset,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RequestProjectSessionPreviewFrameRequest {
+    session_id: String,
+    expected_revision: u64,
+    target_time: draft_model::Microseconds,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RequestProjectSessionPreviewSegmentRequest {
+    session_id: String,
+    expected_revision: u64,
+    target_timerange: draft_model::TargetTimerange,
 }
 
 #[derive(Debug, serde::Deserialize)]

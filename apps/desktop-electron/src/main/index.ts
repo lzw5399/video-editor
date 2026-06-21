@@ -28,6 +28,8 @@ import {
   listProjectSessionMissingMaterials,
   openProjectSession,
   ping,
+  requestProjectSessionPreviewFrame,
+  requestProjectSessionPreviewSegment,
   startProjectSessionExport,
   version,
   type CreateProjectSessionRequest,
@@ -35,6 +37,8 @@ import {
   type OpenProjectSessionRequest,
   type ProjectSessionReadRequest,
   type ProjectSessionRequest,
+  type RequestProjectSessionPreviewFrameRequest,
+  type RequestProjectSessionPreviewSegmentRequest,
   type StartProjectSessionExportRequest
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
@@ -77,6 +81,8 @@ type TestProjectSessionCall = {
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
     | "startProjectSessionExport"
+    | "requestProjectSessionPreviewFrame"
+    | "requestProjectSessionPreviewSegment"
     | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
@@ -85,6 +91,8 @@ type TestProjectSessionCall = {
   materialPath: string | null;
   outputPath: string | null;
   preset: string | null;
+  targetTime: number | null;
+  targetTimerange: { start: number; duration: number } | null;
   duration: number | null;
   canvasConfig: TestExecuteCommandCall["canvasConfig"];
   visual: SegmentVisual | null;
@@ -199,6 +207,24 @@ ipcMain.handle("core:startProjectSessionExport", (event, request: StartProjectSe
     return testExportResponse;
   }
   return startProjectSessionExport(request);
+});
+ipcMain.handle("core:requestProjectSessionPreviewFrame", (event, request: RequestProjectSessionPreviewFrameRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("requestProjectSessionPreviewFrame", request);
+  const testPreviewResponse = maybeBuildTestProjectSessionPreviewFrameResponse(request);
+  if (testPreviewResponse !== null) {
+    return testPreviewResponse;
+  }
+  return requestProjectSessionPreviewFrame(request);
+});
+ipcMain.handle("core:requestProjectSessionPreviewSegment", (event, request: RequestProjectSessionPreviewSegmentRequest) => {
+  assertAllowedIpcSender(event);
+  recordTestProjectSessionCall("requestProjectSessionPreviewSegment", request);
+  const testPreviewResponse = maybeBuildTestProjectSessionPreviewSegmentResponse(request);
+  if (testPreviewResponse !== null) {
+    return testPreviewResponse;
+  }
+  return requestProjectSessionPreviewSegment(request);
 });
 ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
   assertAllowedIpcSender(event);
@@ -541,6 +567,8 @@ function recordTestProjectSessionCall(
     | ExecuteProjectIntentRequest
     | ProjectSessionRequest
     | ProjectSessionReadRequest
+    | RequestProjectSessionPreviewFrameRequest
+    | RequestProjectSessionPreviewSegmentRequest
     | StartProjectSessionExportRequest
 ): void {
   if (!testObservationEnabled) {
@@ -560,6 +588,8 @@ function recordTestProjectSessionCall(
     materialPath: intent !== null && "materialPath" in intent ? intent.materialPath ?? null : null,
     outputPath: "outputPath" in request ? request.outputPath : null,
     preset: "preset" in request ? request.preset : null,
+    targetTime: "targetTime" in request ? request.targetTime : null,
+    targetTimerange: "targetTimerange" in request ? request.targetTimerange : null,
     duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
     canvasConfig:
       intentRecord?.kind === "updateDraftCanvasConfig"
@@ -859,6 +889,53 @@ function maybeBuildTestProjectSessionExportResponse(
       outTime: 960_000,
       logSummary: "导出任务已启动",
       validation: null,
+      diagnostic: null
+    },
+    error: null,
+    events: []
+  };
+}
+
+function maybeBuildTestProjectSessionPreviewFrameResponse(
+  request: RequestProjectSessionPreviewFrameRequest
+): CommandResultEnvelope<PreviewArtifactResponse> | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS !== "1") {
+    return null;
+  }
+
+  return {
+    ok: true,
+    data: {
+      profile: "framePng",
+      path: `/tmp/video-editor-preview-cache/test-frame-${request.targetTime}.png`,
+      mimeType: "image/png",
+      status: "generated",
+      targetTimerange: {
+        start: request.targetTime,
+        duration: 33_333
+      },
+      diagnostic: null
+    },
+    error: null,
+    events: []
+  };
+}
+
+function maybeBuildTestProjectSessionPreviewSegmentResponse(
+  request: RequestProjectSessionPreviewSegmentRequest
+): CommandResultEnvelope<PreviewArtifactResponse> | null {
+  if (process.env.VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS !== "1") {
+    return null;
+  }
+
+  return {
+    ok: true,
+    data: {
+      profile: "segmentMp4",
+      path: `/tmp/video-editor-preview-cache/test-segment-${request.targetTimerange.start}.mp4`,
+      mimeType: "video/mp4",
+      status: "cached",
+      targetTimerange: request.targetTimerange,
       diagnostic: null
     },
     error: null,

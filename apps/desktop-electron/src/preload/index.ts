@@ -7,6 +7,8 @@ import type {
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
   ProjectSessionRequest,
+  RequestProjectSessionPreviewFrameRequest,
+  RequestProjectSessionPreviewSegmentRequest,
   StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 
@@ -54,6 +56,10 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("core:listProjectSessionMissingMaterials", request),
     startProjectSessionExport: (request: StartProjectSessionExportRequest) =>
       ipcRenderer.invoke("core:startProjectSessionExport", request),
+    requestProjectSessionPreviewFrame: (request: RequestProjectSessionPreviewFrameRequest) =>
+      ipcRenderer.invoke("core:requestProjectSessionPreviewFrame", request),
+    requestProjectSessionPreviewSegment: (request: RequestProjectSessionPreviewSegmentRequest) =>
+      ipcRenderer.invoke("core:requestProjectSessionPreviewSegment", request),
     closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {

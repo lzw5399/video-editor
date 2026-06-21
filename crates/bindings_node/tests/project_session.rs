@@ -2,6 +2,7 @@ use bindings_node::{
     close_project_session, close_realtime_preview_session, create_project_session,
     create_realtime_preview_session, execute_command, execute_project_intent,
     list_project_session_materials, list_project_session_missing_materials, open_project_session,
+    request_project_session_preview_frame, request_project_session_preview_segment,
     start_project_session_export, update_realtime_preview_project_session_snapshot,
 };
 use draft_model::Draft;
@@ -33,11 +34,7 @@ fn project_session_creates_project_without_renderer_draft() {
     assert_eq!(created["ok"], true, "{created:#}");
     assert_eq!(created["data"]["sessionId"], "test-session-create");
     assert_eq!(created["data"]["revision"], 0);
-    assert_eq!(created["data"]["draft"]["draftId"], "session-created-draft");
-    assert_eq!(
-        created["data"]["draft"]["metadata"]["name"],
-        "Session Created Project"
-    );
+    assert_no_renderer_project_state_payload(&created);
     assert_eq!(
         created["data"]["viewModel"]["timeline"]["rows"]
             .as_array()
@@ -119,6 +116,7 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     assert_eq!(opened["ok"], true, "{opened:#}");
     assert_eq!(opened["data"]["sessionId"], "test-session-add");
     assert_eq!(opened["data"]["revision"], 0);
+    assert_no_renderer_project_state_payload(&opened);
     assert_eq!(
         opened["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
         "timeline-track:video-track"
@@ -136,10 +134,7 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
     assert_eq!(added["ok"], true, "{added:#}");
     assert_eq!(added["data"]["revision"], 1);
     assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
-    assert_eq!(
-        added["data"]["draft"]["tracks"][0]["segments"][0]["segmentId"],
-        "segment-1"
-    );
+    assert_no_renderer_project_state_payload(&added);
     assert_eq!(
         added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["selectionHandle"],
         "timeline-segment:video-track:segment-1"
@@ -240,10 +235,7 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
         "session-video-material"
     );
     assert_eq!(imported["data"]["material"]["status"], "available");
-    assert!(
-        imported["data"].get("draft").is_none(),
-        "importMaterial session response must not return renderer-owned draft payloads: {imported:#}"
-    );
+    assert_no_renderer_project_state_payload(&imported);
 
     let added = execute_project_intent(json!({
         "sessionId": "test-session-import-add",
@@ -257,10 +249,7 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
     assert_eq!(added["ok"], true, "{added:#}");
     assert_eq!(added["data"]["revision"], 2);
     assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
-    assert_eq!(
-        added["data"]["draft"]["tracks"][0]["segments"][0]["materialId"],
-        "session-video-material"
-    );
+    assert_no_renderer_project_state_payload(&added);
 
     let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("session import and add should save canonical project.json");
@@ -699,7 +688,7 @@ fn project_session_selection_intent_does_not_persist_or_advance_revision() {
     .expect("selection intent should return an envelope");
     assert_eq!(selected["ok"], true, "{selected:#}");
     assert_eq!(selected["data"]["revision"], 1);
-    assert_eq!(selected["data"]["selection"]["segmentIds"][0], "segment-1");
+    assert_no_renderer_project_state_payload(&selected);
     assert_eq!(
         selected["data"]["viewModel"]["selectedSegment"]["segmentKey"],
         "segment-1"
@@ -829,7 +818,11 @@ fn project_session_rejects_legacy_and_invalid_selection_intents() {
     .expect("valid selection should still use unchanged revision");
     assert_eq!(valid["ok"], true, "{valid:#}");
     assert_eq!(valid["data"]["revision"], 1);
-    assert_eq!(valid["data"]["selection"]["segmentIds"][0], "segment-1");
+    assert_no_renderer_project_state_payload(&valid);
+    assert_eq!(
+        valid["data"]["viewModel"]["selectedSegment"]["segmentKey"],
+        "segment-1"
+    );
 
     close_project_session(json!({ "sessionId": "test-session-selection-rejections" }))
         .expect("closeProjectSession should return an envelope");
@@ -925,8 +918,9 @@ fn project_session_track_mutation_intents_use_selected_track() {
     .expect("rename selected track should return an envelope");
     assert_eq!(renamed["ok"], true, "{renamed:#}");
     assert_eq!(renamed["data"]["revision"], 1);
+    assert_no_renderer_project_state_payload(&renamed);
     assert_eq!(
-        renamed["data"]["draft"]["tracks"][0]["name"],
+        renamed["data"]["viewModel"]["selectedTrack"]["name"],
         "Primary Video"
     );
 
@@ -941,7 +935,8 @@ fn project_session_track_mutation_intents_use_selected_track() {
     .expect("lock selected track should return an envelope");
     assert_eq!(locked["ok"], true, "{locked:#}");
     assert_eq!(locked["data"]["revision"], 2);
-    assert_eq!(locked["data"]["draft"]["tracks"][0]["locked"], true);
+    assert_no_renderer_project_state_payload(&locked);
+    assert_eq!(locked["data"]["viewModel"]["selectedTrack"]["locked"], true);
 
     let unlocked = execute_project_intent(json!({
         "sessionId": "test-session-selected-track",
@@ -966,7 +961,11 @@ fn project_session_track_mutation_intents_use_selected_track() {
     .expect("hide selected track should return an envelope");
     assert_eq!(hidden["ok"], true, "{hidden:#}");
     assert_eq!(hidden["data"]["revision"], 4);
-    assert_eq!(hidden["data"]["draft"]["tracks"][0]["visible"], false);
+    assert_no_renderer_project_state_payload(&hidden);
+    assert_eq!(
+        hidden["data"]["viewModel"]["selectedTrack"]["visible"],
+        false
+    );
 
     let muted = execute_project_intent(json!({
         "sessionId": "test-session-selected-track",
@@ -979,7 +978,8 @@ fn project_session_track_mutation_intents_use_selected_track() {
     .expect("mute selected track should return an envelope");
     assert_eq!(muted["ok"], true, "{muted:#}");
     assert_eq!(muted["data"]["revision"], 5);
-    assert_eq!(muted["data"]["draft"]["tracks"][0]["muted"], true);
+    assert_no_renderer_project_state_payload(&muted);
+    assert_eq!(muted["data"]["viewModel"]["selectedTrack"]["muted"], true);
 
     let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("selected-track intents should persist canonical project.json");
@@ -1049,8 +1049,9 @@ fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
     .expect("keyframe intent should return an envelope");
     assert_eq!(keyed["ok"], true, "{keyed:#}");
     assert_eq!(keyed["data"]["revision"], 4);
+    assert_no_renderer_project_state_payload(&keyed);
 
-    let keyframe = &keyed["data"]["draft"]["tracks"][0]["segments"][0]["keyframes"][0];
+    let keyframe = &keyed["data"]["viewModel"]["selectedSegment"]["keyframes"][0];
     assert_eq!(keyframe["property"], "volume");
     assert_eq!(keyframe["at"], 250_000);
     assert_eq!(keyframe["value"], json!({ "kind": "uint", "value": 750 }));
@@ -1075,8 +1076,9 @@ fn project_session_keyframe_intent_derives_keyframe_from_selected_segment() {
     .expect("remove keyframe intent should return an envelope");
     assert_eq!(removed["ok"], true, "{removed:#}");
     assert_eq!(removed["data"]["revision"], 5);
+    assert_no_renderer_project_state_payload(&removed);
     assert_eq!(
-        removed["data"]["draft"]["tracks"][0]["segments"][0]["keyframes"]
+        removed["data"]["viewModel"]["selectedSegment"]["keyframes"]
             .as_array()
             .expect("keyframes should be an array")
             .len(),
@@ -1225,6 +1227,74 @@ fn project_session_export_rejects_renderer_draft_payload() {
     assert_eq!(rejected["ok"], false, "{rejected:#}");
     assert_eq!(rejected["data"], Value::Null);
     assert_eq!(rejected["error"]["kind"], "invalidPayload");
+}
+
+#[test]
+fn project_session_preview_commands_reject_stale_unknown_and_renderer_draft_payloads() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir
+        .path()
+        .join("session-preview-command-boundary.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-preview-command-boundary"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let stale = request_project_session_preview_frame(json!({
+        "sessionId": "test-session-preview-command-boundary",
+        "expectedRevision": 1,
+        "targetTime": 0
+    }))
+    .expect("stale session preview frame should return an envelope");
+    assert_eq!(stale["ok"], false, "{stale:#}");
+    assert_eq!(stale["error"]["kind"], "invalidPayload");
+    assert_eq!(
+        stale["error"]["command"],
+        "requestProjectSessionPreviewFrame"
+    );
+
+    let unknown = request_project_session_preview_segment(json!({
+        "sessionId": "missing-session-preview-command",
+        "expectedRevision": 0,
+        "targetTimerange": { "start": 0, "duration": 1_000_000 }
+    }))
+    .expect("unknown session preview segment should return an envelope");
+    assert_eq!(unknown["ok"], false, "{unknown:#}");
+    assert_eq!(unknown["error"]["kind"], "invalidProject");
+    assert_eq!(
+        unknown["error"]["command"],
+        "requestProjectSessionPreviewSegment"
+    );
+
+    let draft_bearing_frame = request_project_session_preview_frame(json!({
+        "sessionId": "test-session-preview-command-boundary",
+        "expectedRevision": 0,
+        "targetTime": 0,
+        "draft": timeline_draft_json()
+    }))
+    .expect("draft-bearing session preview frame should return an envelope");
+    assert_eq!(draft_bearing_frame["ok"], false, "{draft_bearing_frame:#}");
+    assert_eq!(draft_bearing_frame["data"], Value::Null);
+    assert_eq!(draft_bearing_frame["error"]["kind"], "invalidPayload");
+
+    let draft_bearing_segment = request_project_session_preview_segment(json!({
+        "sessionId": "test-session-preview-command-boundary",
+        "expectedRevision": 0,
+        "targetTimerange": { "start": 0, "duration": 1_000_000 },
+        "draft": timeline_draft_json()
+    }))
+    .expect("draft-bearing session preview segment should return an envelope");
+    assert_eq!(
+        draft_bearing_segment["ok"], false,
+        "{draft_bearing_segment:#}"
+    );
+    assert_eq!(draft_bearing_segment["data"], Value::Null);
+    assert_eq!(draft_bearing_segment["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-preview-command-boundary" }))
+        .expect("closeProjectSession should return an envelope");
 }
 
 #[test]
@@ -1388,7 +1458,7 @@ fn audio_preview_commands_use_project_session_snapshot_without_renderer_draft() 
         "command": "getAudioPreviewStatus",
         "payload": {
             "kind": "getAudioPreviewStatus",
-            "draft": opened["data"]["draft"],
+            "draft": timeline_draft_json(),
             "sessionId": audio_session_id
         },
         "requestId": "req-audio-renderer-draft"
@@ -1462,6 +1532,21 @@ fn assert_edit_controls(
     assert_eq!(
         edit_controls["hasSelectedTrack"], has_selected_track,
         "{view_model:#}"
+    );
+}
+
+fn assert_no_renderer_project_state_payload(envelope: &Value) {
+    assert!(
+        envelope["data"].get("draft").is_none(),
+        "session response must not expose renderer-owned draft payloads: {envelope:#}"
+    );
+    assert!(
+        envelope["data"].get("commandState").is_none(),
+        "session response must not expose renderer-owned command state: {envelope:#}"
+    );
+    assert!(
+        envelope["data"].get("selection").is_none(),
+        "session response must not expose renderer-owned selection: {envelope:#}"
     );
 }
 

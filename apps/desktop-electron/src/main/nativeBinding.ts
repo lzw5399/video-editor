@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import type { CommandEnvelope, CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
+import type { CommandEnvelope, ExportPreset } from "../generated/CommandEnvelope";
 import type {
   CommandDelta,
   CommandEvent,
@@ -10,13 +10,13 @@ import type {
   ExportJobStatusResponse,
   ListMaterialsResponse,
   ListMissingMaterialsResponse,
-  MissingMaterialCommandDiagnostic
+  MissingMaterialCommandDiagnostic,
+  PreviewArtifactResponse
 } from "../generated/CommandResultEnvelope";
 import type {
   AudioEffectSlot,
   AudioFade,
   AudioPanBalance,
-  Draft,
   DraftCanvasConfig,
   KeyframeEasing,
   KeyframeInterpolation,
@@ -55,6 +55,12 @@ type NativeBinding = {
     request: ProjectSessionReadRequest
   ) => CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>;
   startProjectSessionExport: (request: StartProjectSessionExportRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
+  requestProjectSessionPreviewFrame: (
+    request: RequestProjectSessionPreviewFrameRequest
+  ) => CommandResultEnvelope<PreviewArtifactResponse>;
+  requestProjectSessionPreviewSegment: (
+    request: RequestProjectSessionPreviewSegmentRequest
+  ) => CommandResultEnvelope<PreviewArtifactResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   subscribeRealtimePreviewEvents: (
     callback: (errorOrEventJson: unknown, eventJson?: string) => void
@@ -107,6 +113,18 @@ export type StartProjectSessionExportRequest = {
   expectedRevision: number;
   outputPath: string;
   preset: ExportPreset;
+};
+
+export type RequestProjectSessionPreviewFrameRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  targetTime: Microseconds;
+};
+
+export type RequestProjectSessionPreviewSegmentRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  targetTimerange: TargetTimerange;
 };
 
 export type ProjectIntent =
@@ -171,7 +189,6 @@ export type ExecuteProjectIntentRequest = {
 export type ProjectSessionOpenResponse = {
   sessionId: string;
   revision: number;
-  draft: Draft;
   viewModel: ProjectSessionViewModel;
   bundlePath: string;
   projectJsonPath: string;
@@ -200,9 +217,6 @@ export type ProjectSessionClosedResponse = {
 export type ProjectSessionTimelineIntentResponse = {
   sessionId: string;
   revision: number;
-  draft: Draft;
-  commandState: CommandState;
-  selection: TimelineSelection;
   viewModel: ProjectSessionViewModel;
   events: CommandEvent[];
   delta: CommandDelta;
@@ -637,6 +651,26 @@ export function startProjectSessionExport(
   return binding.startProjectSessionExport(request);
 }
 
+export function requestProjectSessionPreviewFrame(
+  request: RequestProjectSessionPreviewFrameRequest
+): CommandResultEnvelope<PreviewArtifactResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("requestProjectSessionPreviewFrame");
+  }
+  return binding.requestProjectSessionPreviewFrame(request);
+}
+
+export function requestProjectSessionPreviewSegment(
+  request: RequestProjectSessionPreviewSegmentRequest
+): CommandResultEnvelope<PreviewArtifactResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("requestProjectSessionPreviewSegment");
+  }
+  return binding.requestProjectSessionPreviewSegment(request);
+}
+
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
@@ -732,6 +766,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.listProjectSessionMaterials !== "function" ||
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
       typeof loaded.startProjectSessionExport !== "function" ||
+      typeof loaded.requestProjectSessionPreviewFrame !== "function" ||
+      typeof loaded.requestProjectSessionPreviewSegment !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.subscribeRealtimePreviewEvents !== "function" ||
       typeof loaded.unsubscribeRealtimePreviewEvents !== "function" ||
@@ -764,6 +800,8 @@ function loadNativeBinding(): NativeBinding | null {
       listProjectSessionMaterials: loaded.listProjectSessionMaterials,
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
       startProjectSessionExport: loaded.startProjectSessionExport,
+      requestProjectSessionPreviewFrame: loaded.requestProjectSessionPreviewFrame,
+      requestProjectSessionPreviewSegment: loaded.requestProjectSessionPreviewSegment,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       subscribeRealtimePreviewEvents: loaded.subscribeRealtimePreviewEvents,
       unsubscribeRealtimePreviewEvents: loaded.unsubscribeRealtimePreviewEvents,

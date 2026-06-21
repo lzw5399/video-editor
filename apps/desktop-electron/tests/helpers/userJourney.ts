@@ -59,6 +59,8 @@ type ProjectSessionCall = {
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
     | "startProjectSessionExport"
+    | "requestProjectSessionPreviewFrame"
+    | "requestProjectSessionPreviewSegment"
     | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
@@ -67,6 +69,8 @@ type ProjectSessionCall = {
   materialPath: string | null;
   outputPath?: string | null;
   preset?: string | null;
+  targetTime?: number | null;
+  targetTimerange?: { start: number; duration: number } | null;
   duration?: number | null;
   visual?: ExecuteCommandCall["visual"] | null;
   textContent?: string | null;
@@ -814,7 +818,9 @@ export async function readExecuteCommandCalls(app: ProductJourneyAppController):
       .filter(
         (call) =>
           (call.command === "executeProjectIntent" && call.intentKind !== null) ||
-          call.command === "startProjectSessionExport"
+          call.command === "startProjectSessionExport" ||
+          call.command === "requestProjectSessionPreviewFrame" ||
+          call.command === "requestProjectSessionPreviewSegment"
       )
       .map(projectSessionCallToCommandCall)
   ];
@@ -928,13 +934,20 @@ async function countProjectSessionIntent(app: ProductJourneyAppController, inten
 }
 
 function projectSessionCallToCommandCall(call: ProjectSessionCall): ExecuteCommandCall {
-  const command = call.command === "startProjectSessionExport" ? "startExport" : legacyCommandNameForProjectIntent(call.intentKind);
+  const command =
+    call.command === "startProjectSessionExport"
+      ? "startExport"
+      : call.command === "requestProjectSessionPreviewFrame"
+        ? "requestPreviewFrame"
+        : call.command === "requestProjectSessionPreviewSegment"
+          ? "requestPreviewSegment"
+          : legacyCommandNameForProjectIntent(call.intentKind);
   return {
     command,
     kind: command,
     requestId: null,
-    targetTime: null,
-    targetTimerange: null,
+    targetTime: call.targetTime ?? null,
+    targetTimerange: call.targetTimerange ?? null,
     duration: call.duration ?? null,
     visual: call.visual ?? null,
     textContent: call.textContent ?? null,

@@ -63,7 +63,6 @@ enum ProjectSessionFixture {
 struct ProjectSessionOpenResponse {
     session_id: String,
     revision: u64,
-    draft: Draft,
     #[serde(rename = "viewModel")]
     view_model: ProjectSessionViewModel,
     bundle_path: String,
@@ -214,9 +213,6 @@ struct ProjectSessionClosedResponse {
 struct ProjectSessionIntentResponse {
     session_id: String,
     revision: u64,
-    draft: Draft,
-    command_state: CommandState,
-    selection: TimelineSelection,
     #[serde(rename = "viewModel")]
     view_model: ProjectSessionViewModel,
     events: Vec<draft_model::CommandEvent>,
@@ -612,7 +608,6 @@ impl ProjectSessionRegistry {
                 &CommandState::empty(),
                 &TimelineSelection::empty(),
             ),
-            draft: bundle.draft,
             bundle_path: bundle_path.display().to_string(),
             project_json_path: project_json_path.display().to_string(),
             warnings: Vec::new(),
@@ -658,7 +653,6 @@ impl ProjectSessionRegistry {
                 &CommandState::empty(),
                 &TimelineSelection::empty(),
             ),
-            draft: opened.bundle.draft,
             bundle_path: bundle_path.display().to_string(),
             project_json_path: project_json_path.display().to_string(),
             warnings: opened
@@ -1283,9 +1277,6 @@ impl ProjectSession {
             return crate::to_js_value(crate::ok_envelope(ProjectSessionIntentResponse {
                 session_id: self.session_id.clone(),
                 revision: self.revision,
-                draft: self.draft.clone(),
-                command_state: self.command_state.clone(),
-                selection: self.selection.clone(),
                 view_model: project_session_view_model(
                     &self.draft,
                     &self.command_state,
@@ -1315,9 +1306,6 @@ impl ProjectSession {
         crate::to_js_value(crate::ok_envelope(ProjectSessionIntentResponse {
             session_id: self.session_id.clone(),
             revision: self.revision,
-            draft: self.draft.clone(),
-            command_state: self.command_state.clone(),
-            selection: self.selection.clone(),
             view_model: project_session_view_model(
                 &self.draft,
                 &self.command_state,

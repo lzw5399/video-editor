@@ -14,6 +14,8 @@ import type {
   ProjectSessionRequest,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse,
+  RequestProjectSessionPreviewFrameRequest,
+  RequestProjectSessionPreviewSegmentRequest,
   StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 import type {
@@ -31,7 +33,6 @@ import type {
 } from "../generated/CommandResultEnvelope";
 import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
-  Draft,
   DraftCanvasConfig,
   KeyframeEasing,
   KeyframeInterpolation,
@@ -42,7 +43,6 @@ import type {
   TrackKind
 } from "../generated/Draft";
 import {
-  applyTimelineCommandResult,
   buildCancelAudioPreviewCommand,
   buildCancelArtifactGenerationCommand,
   buildCancelExportCommand,
@@ -55,8 +55,6 @@ import {
   buildProbeRuntimeCapabilitiesCommand,
   buildPlayAudioPreviewCommand,
   buildPauseAudioPreviewCommand,
-  buildRequestPreviewFrameCommand,
-  buildRequestPreviewSegmentCommand,
   buildRefreshWaveformStatusCommand,
   buildRefreshArtifactStatusCommand,
   buildResumeArtifactGenerationCommand,
@@ -86,7 +84,6 @@ import {
   resourcePanelWithMaintenanceResult,
   resourcePanelWithQuota,
   waveformDisplayFromResponse,
-  resolveWorkspaceStartupDraft,
   type ExportDisplayState,
   type ProjectEntryState,
   type PreviewDisplayState,
@@ -119,6 +116,12 @@ type VideoEditorCoreApi = {
   startProjectSessionExport: (
     request: StartProjectSessionExportRequest
   ) => Promise<CommandResultEnvelope<ExportJobStatusResponse>>;
+  requestProjectSessionPreviewFrame: (
+    request: RequestProjectSessionPreviewFrameRequest
+  ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
+  requestProjectSessionPreviewSegment: (
+    request: RequestProjectSessionPreviewSegmentRequest
+  ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
   closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {
@@ -136,10 +139,10 @@ type VideoEditorPlatformApi = {
   pathToFileUrl: (path: string) => Promise<string>;
 };
 type CoreCommandBuilder = (current: WorkspaceState) => CommandEnvelope;
-type CoreCommandResultApplier<T> = (
+type PreviewCommandRunner = (session: ProjectSessionClientState) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
+type PreviewCommandResultApplier = (
   current: WorkspaceState,
-  result: CommandResultEnvelope<T>,
-  command: CommandEnvelope
+  result: CommandResultEnvelope<PreviewArtifactResponse>
 ) => WorkspaceState;
 type ProjectSessionClientState = {
   sessionId: string;
@@ -223,7 +226,7 @@ export function App(): React.ReactElement {
   const startupOpenProjectBundlePath = window.videoEditorAppConfig?.openProjectBundlePath;
   const startupProjectState = createStartupProjectState(startupFixture, startupOpenProjectBundlePath);
   const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
-    createInitialWorkspaceState(resolveWorkspaceStartupDraft(startupFixture ?? "blank"), startupProjectState)
+    createInitialWorkspaceState(startupProjectState)
   );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
   const [bundlePath, setBundlePath] = useState(
@@ -403,11 +406,9 @@ export function App(): React.ReactElement {
         return;
       }
 
-      const openedDraft = openedProject?.data?.draft ?? null;
-      const activeDraft = openedDraft ?? workspaceRef.current.draft;
       const materials =
         openedProject?.data === undefined
-          ? activeDraft.materials
+          ? []
           : await listProjectSessionMaterials(openedProject.data.sessionId, openedProject.data.revision);
       if (cancelled) {
         return;
@@ -415,7 +416,7 @@ export function App(): React.ReactElement {
 
       setWorkspace((current) => {
         const activeBundlePath = openedProject?.data?.bundlePath ?? bundlePath;
-        const base = createInitialWorkspaceState(activeDraft, {
+        const base = createInitialWorkspaceState({
           kind: "open",
           bundlePath: activeBundlePath,
           statusLabel: "项目已打开",
@@ -667,24 +668,13 @@ export function App(): React.ReactElement {
     result: CommandResultEnvelope<ProjectSessionTimelineIntentResponse>,
     intentKind: ExecuteProjectIntentRequest["intent"]["kind"]
   ): WorkspaceState {
-    const applied = applyTimelineCommandResult(
-      {
-        draft: current.draft,
-        commandState: current.commandState,
-        selection: current.selection
-      },
-      result
-    );
+    const errorMessage = result.ok && result.data !== null ? null : commandErrorMessage(result);
 
     const next = {
       ...current,
-      draft: applied.state.draft,
-      commandState: applied.state.commandState,
-      selection: applied.state.selection,
       viewModel: result.ok && result.data !== null ? result.data.viewModel : current.viewModel,
-      materials: applied.state.draft.materials,
       pendingCommand: null,
-      commandError: applied.errorMessage
+      commandError: errorMessage
     };
 
     if (
@@ -750,10 +740,27 @@ export function App(): React.ReactElement {
   }
 
   async function executePreviewCommand(
-    buildCommand: CoreCommandBuilder,
+    runCommand: PreviewCommandRunner,
     pendingCommand: string,
-    applyResult: CoreCommandResultApplier<PreviewArtifactResponse>
+    applyResult: PreviewCommandResultApplier
   ): Promise<void> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      setWorkspace((current) => {
+        const message = commandErrorMessage("项目会话未就绪，请先新建或打开项目");
+        const next = {
+          ...current,
+          commandError: message,
+          preview: {
+            ...current.preview,
+            error: message
+          }
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return;
+    }
     if (commandInFlightRef.current) {
       setWorkspace((current) => {
         const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
@@ -791,10 +798,9 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const command = buildCommand(workspaceRef.current);
-      const result = await window.videoEditorCore.executeCommand<PreviewArtifactResponse>(command);
+      const result = await runCommand(session);
       setWorkspace((current) => {
-        const next = applyResult(current, result, command);
+        const next = applyResult(current, result);
         workspaceRef.current = next;
         return next;
       });
@@ -1457,7 +1463,8 @@ export function App(): React.ReactElement {
         return;
       }
 
-      openWorkspaceFromDraft(result.data.draft, result.data.viewModel, result.data.bundlePath, "项目已新建");
+      const materials = await listProjectSessionMaterials(result.data.sessionId, result.data.revision);
+      openWorkspaceFromSession(result.data.viewModel, materials, result.data.bundlePath, "项目已新建");
       void handleGetArtifactStatus();
       void handleProbeRuntimeCapabilities();
     } catch {
@@ -1509,7 +1516,8 @@ export function App(): React.ReactElement {
         return;
       }
 
-      openWorkspaceFromDraft(result.data.draft, result.data.viewModel, result.data.bundlePath, "项目已打开");
+      const materials = await listProjectSessionMaterials(result.data.sessionId, result.data.revision);
+      openWorkspaceFromSession(result.data.viewModel, materials, result.data.bundlePath, "项目已打开");
       setWorkspace((current) => ({
         ...current,
         commandError: result.data?.warnings.length ? commandErrorMessage(result.data.warnings.join("；")) : null
@@ -1526,20 +1534,21 @@ export function App(): React.ReactElement {
     }
   }
 
-  function openWorkspaceFromDraft(
-    draft: Draft,
+  function openWorkspaceFromSession(
     viewModel: ProjectSessionOpenResponse["viewModel"],
+    materials: ProjectSessionMaterialsResponse["materials"],
     nextBundlePath: string,
     statusLabel: string
   ): void {
     const next = {
-      ...createInitialWorkspaceState(draft, {
+      ...createInitialWorkspaceState({
         kind: "open" as const,
         bundlePath: nextBundlePath,
         statusLabel,
         error: null
       }),
       viewModel,
+      materials,
       bindingStatus: workspaceRef.current.bindingStatus,
       pendingCommand: null,
       commandError: null
@@ -2447,10 +2456,10 @@ export function App(): React.ReactElement {
     }
 
     void executePreviewCommand(
-      (current) =>
-        buildRequestPreviewFrameCommand({
-          draft: current.draft,
-          bundlePath,
+      (session) =>
+        window.videoEditorCore.requestProjectSessionPreviewFrame({
+          sessionId: session.sessionId,
+          expectedRevision: session.revision,
           targetTime
         }),
       "请求预览帧",
@@ -2515,10 +2524,10 @@ export function App(): React.ReactElement {
     };
 
     void executePreviewCommand(
-      (current) =>
-        buildRequestPreviewSegmentCommand({
-          draft: current.draft,
-          bundlePath,
+      (session) =>
+        window.videoEditorCore.requestProjectSessionPreviewSegment({
+          sessionId: session.sessionId,
+          expectedRevision: session.revision,
           targetTimerange: previewRange
         }),
       "生成预览片段",

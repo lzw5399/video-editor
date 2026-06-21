@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import type { CommandState, ExportPreset, TimelineSelection } from "../generated/CommandEnvelope";
+import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
   ProjectSessionViewModel,
   SelectedSegmentViewModel,
@@ -32,7 +32,6 @@ import type {
   CanvasAspectRatio,
   CanvasAspectRatioPreset,
   CanvasBackground,
-  Draft,
   DraftCanvasConfig,
   KeyframeEasing,
   KeyframeInterpolation,
@@ -42,8 +41,6 @@ import type {
   MaterialKind,
   MaterialStatus,
   Microseconds,
-  Segment,
-  SegmentVisual,
 } from "../generated/Draft";
 
 export type WorkspaceCategory = "媒体" | "音频" | "文字" | "贴纸" | "特效" | "转场" | "字幕" | "滤镜" | "调节" | "模板" | "数字人";
@@ -93,9 +90,6 @@ export type ProjectEntryState =
 
 export type WorkspaceState = {
   projectState: ProjectEntryState;
-  draft: Draft;
-  commandState: CommandState;
-  selection: TimelineSelection;
   viewModel: ProjectSessionViewModel;
   materials: Material[];
   materialDiagnostics: MissingMaterialCommandDiagnostic[];
@@ -302,286 +296,23 @@ export type TimelineView = TimelineViewModel;
 export type TimelineSegmentVisualKind = TimelineSegmentView["visualKind"];
 export type WorkspaceStartupFixture = "blank" | "demo";
 
-function defaultSegmentVisual(): SegmentVisual {
-  return {
-    visible: true,
-    transform: {
-      position: { x: 0, y: 0 },
-      scale: { xMillis: 1000, yMillis: 1000 },
-      rotation: { degrees: 0 },
-      opacity: { valueMillis: 1000 },
-      crop: { leftMillis: 0, rightMillis: 0, topMillis: 0, bottomMillis: 0 },
-      anchor: { xMillis: 500, yMillis: 500 }
-    },
-    fitMode: "fit",
-    backgroundFilling: { kind: "none" },
-    blendMode: { kind: "normal" },
-    mask: { kind: "none" }
-  };
-}
-
-function defaultSegmentAudio() {
-  return {
-    gainMillis: 1000,
-    panBalanceMillis: 0,
-    fadeInDuration: { duration: 0 },
-    fadeOutDuration: { duration: 0 },
-    effectSlots: []
-  };
-}
-
-export const blankWorkspaceDraft: Draft = {
-  schemaVersion: 1,
-  draftId: "draft-blank-workspace",
-  metadata: {
-    name: "未命名草稿",
-    description: "空白桌面编辑草稿"
+export const DEFAULT_CANVAS_CONFIG: DraftCanvasConfig = {
+  aspectRatio: {
+    kind: "preset",
+    preset: "ratio16x9"
   },
-  canvasConfig: {
-    aspectRatio: {
-      kind: "preset",
-      preset: "ratio16x9"
-    },
-    width: 1920,
-    height: 1080,
-    frameRate: {
-      numerator: 30,
-      denominator: 1
-    },
-    background: {
-      kind: "black"
-    }
+  width: 1920,
+  height: 1080,
+  frameRate: {
+    numerator: 30,
+    denominator: 1
   },
-  materials: [],
-  tracks: [
-    {
-      trackId: "track-main-video",
-      kind: "video",
-      name: "视频轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: []
-    },
-    {
-      trackId: "track-bgm",
-      kind: "audio",
-      name: "音频轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: []
-    },
-    {
-      trackId: "track-title",
-      kind: "text",
-      name: "文字轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: []
-    }
-  ]
-};
-
-export const demoWorkspaceDraft: Draft = {
-  schemaVersion: 1,
-  draftId: "draft-phase-04-workspace",
-  metadata: {
-    name: "未命名草稿",
-    description: "阶段四桌面工作区展示草稿"
-  },
-  canvasConfig: {
-    aspectRatio: {
-      kind: "preset",
-      preset: "ratio16x9"
-    },
-    width: 1920,
-    height: 1080,
-    frameRate: {
-      numerator: 30,
-      denominator: 1
-    },
-    background: {
-      kind: "black"
-    }
-  },
-  materials: [
-    {
-      materialId: "material-workspace-video",
-      kind: "video",
-      uri: "media/workspace-video.mp4",
-      displayName: "城市街景.mp4",
-      metadata: {
-        duration: 12_000_000,
-        width: 1920,
-        height: 1080,
-        frameRate: {
-          numerator: 30,
-          denominator: 1
-        },
-        hasVideo: true,
-        hasAudio: true,
-        audioSampleRate: 48_000,
-        audioChannels: 2
-      },
-      status: "available"
-    },
-    {
-      materialId: "material-workspace-audio",
-      kind: "audio",
-      uri: "media/bgm.wav",
-      displayName: "背景音乐.wav",
-      metadata: {
-        duration: 18_000_000,
-        hasVideo: false,
-        hasAudio: true,
-        audioSampleRate: 44_100,
-        audioChannels: 2
-      },
-      status: "available"
-    },
-    {
-      materialId: "material-workspace-missing",
-      kind: "image",
-      uri: "media/missing-cover.png",
-      displayName: "封面图.png",
-      metadata: {
-        duration: 3_000_000,
-        width: 1280,
-        height: 720,
-        hasVideo: true,
-        hasAudio: false
-      },
-      status: "missing"
-    },
-    {
-      materialId: "material-workspace-sticker-failed",
-      kind: "sticker",
-      uri: "media/sticker.webp",
-      displayName: "贴纸素材.webp",
-      metadata: {
-        hasVideo: true,
-        hasAudio: false,
-        probeError: "无法读取素材头信息"
-      },
-      status: "probeFailed"
-    },
-    {
-      materialId: "material-workspace-title",
-      kind: "text",
-      uri: "text://material-workspace-title",
-      displayName: "标题文字",
-      metadata: {
-        hasVideo: false,
-        hasAudio: false
-      },
-      status: "available"
-    }
-  ],
-  tracks: [
-    {
-      trackId: "track-main-video",
-      kind: "video",
-      name: "视频轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: [
-        {
-          segmentId: "segment-main-video",
-          materialId: "material-workspace-video",
-          sourceTimerange: {
-            start: 0,
-            duration: 8_000_000
-          },
-          targetTimerange: {
-            start: 0,
-            duration: 8_000_000
-          },
-          mainTrackMagnet: {
-            enabled: true
-          },
-          keyframes: [],
-          filters: [],
-          transition: null,
-          volume: {
-            levelMillis: 1000
-          },
-          audio: defaultSegmentAudio(),
-          visual: defaultSegmentVisual()
-        }
-      ]
-    },
-    {
-      trackId: "track-bgm",
-      kind: "audio",
-      name: "音频轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: [
-        {
-          segmentId: "segment-bgm",
-          materialId: "material-workspace-audio",
-          sourceTimerange: {
-            start: 0,
-            duration: 8_000_000
-          },
-          targetTimerange: {
-            start: 0,
-            duration: 8_000_000
-          },
-          mainTrackMagnet: {
-            enabled: false
-          },
-          keyframes: [],
-          filters: [],
-          transition: null,
-          volume: {
-            levelMillis: 800
-          },
-          audio: {
-            ...defaultSegmentAudio(),
-            gainMillis: 800
-          },
-          visual: defaultSegmentVisual()
-        }
-      ]
-    },
-    {
-      trackId: "track-title",
-      kind: "text",
-      name: "文字轨道 1",
-      muted: false,
-      locked: false,
-      visible: true,
-      segments: []
-    }
-  ]
-};
-
-export function resolveWorkspaceStartupDraft(fixture: WorkspaceStartupFixture = "blank"): Draft {
-  return fixture === "demo" ? demoWorkspaceDraft : blankWorkspaceDraft;
-}
-
-export const initialCommandState: CommandState = {
-  undoStack: [],
-  redoStack: [],
-  maxHistoryEntries: 50,
-  snapping: {
-    enabled: true,
-    threshold: 120_000
+  background: {
+    kind: "black"
   }
 };
 
-export const initialTimelineSelection: TimelineSelection = {
-  segmentIds: [],
-  trackIds: []
-};
-
 export function createInitialWorkspaceState(
-  draft: Draft = blankWorkspaceDraft,
   projectState: ProjectEntryState = {
     kind: "entry",
     statusLabel: "先新建或打开项目，再导入素材开始剪辑。",
@@ -590,11 +321,8 @@ export function createInitialWorkspaceState(
 ): WorkspaceState {
   return {
     projectState,
-    draft,
-    commandState: initialCommandState,
-    selection: initialTimelineSelection,
     viewModel: createEmptyProjectSessionViewModel(),
-    materials: draft.materials,
+    materials: [],
     materialDiagnostics: [],
     resourcePanel: createInitialResourcePanelState(),
     preview: {
@@ -642,7 +370,7 @@ export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
   return {
     project: {
       draftName: "未命名草稿",
-      canvasConfig: blankWorkspaceDraft.canvasConfig,
+      canvasConfig: DEFAULT_CANVAS_CONFIG,
       sequenceDuration: 0,
       frameDuration: 33_333,
       trackCount: 0,

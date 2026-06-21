@@ -2,37 +2,27 @@ import type {
   AudioPreviewCommandPayload,
   CancelExportCommandPayload,
   CommandEnvelope,
-  CommandState,
   DirtyRange,
   ExportPreset,
   ArtifactGenerationActionCommandPayload,
   GetArtifactQuotaStatusCommandPayload,
   GetArtifactStatusCommandPayload,
   GetExportJobStatusCommandPayload,
-  ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
-  OpenProjectBundleCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
-  RequestPreviewFrameCommandPayload,
-  RequestPreviewSegmentCommandPayload,
   RefreshArtifactStatusCommandPayload,
-  SaveProjectBundleCommandPayload,
-  RunArtifactGarbageCollectionCommandPayload,
-  TimelineSelection
+  RunArtifactGarbageCollectionCommandPayload
 } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
   RuntimeBinaryCapability,
   RuntimeCapabilityReport,
   RuntimeFeatureCapability,
-  RuntimeFontCapability,
-  TimelineCommandResponse
+  RuntimeFontCapability
 } from "../generated/CommandResultEnvelope";
 import type {
-  Draft,
   MaterialId,
-  MaterialKind,
   Microseconds,
   TargetTimerange
 } from "../generated/Draft";
@@ -42,98 +32,12 @@ import type {
   RuntimeDiagnosticsTone
 } from "./viewModel";
 
-export type CommandContext = {
-  draft: Draft;
-  commandState: CommandState;
-  selection: TimelineSelection;
-};
-
-type ImportMaterialOptions = {
-  draft: Draft;
-  bundlePath: string;
-  materialPath: string;
-  materialId?: MaterialId | null;
-  displayName?: string | null;
-  materialKindHint?: MaterialKind | null;
-};
-
-export function buildOpenProjectBundleCommand(bundlePath: string): CommandEnvelope {
-  const payload = {
-    kind: "openProjectBundle",
-    bundlePath
-  } satisfies OpenProjectBundleCommandPayload & { kind: "openProjectBundle" };
-
-  return envelope("openProjectBundle", payload);
-}
-
-export function buildSaveProjectBundleCommand(draft: Draft, bundlePath: string): CommandEnvelope {
-  const payload = {
-    kind: "saveProjectBundle",
-    draft,
-    bundlePath
-  } satisfies SaveProjectBundleCommandPayload & { kind: "saveProjectBundle" };
-
-  return envelope("saveProjectBundle", payload);
-}
-
-export function buildImportMaterialCommand(options: ImportMaterialOptions): CommandEnvelope {
-  const payload = {
-    kind: "importMaterial",
-    draft: options.draft,
-    bundlePath: options.bundlePath,
-    materialPath: options.materialPath,
-    materialId: options.materialId ?? null,
-    displayName: options.displayName ?? null,
-    materialKindHint: options.materialKindHint ?? null
-  } satisfies ImportMaterialCommandPayload & { kind: "importMaterial" };
-
-  return envelope("importMaterial", payload);
-}
-
 export function buildProbeRuntimeCapabilitiesCommand(): CommandEnvelope {
   const payload = {
     kind: "probeRuntimeCapabilities"
   } satisfies ProbeRuntimeCapabilitiesCommandPayload & { kind: "probeRuntimeCapabilities" };
 
   return envelope("probeRuntimeCapabilities", payload);
-}
-
-type RequestPreviewFrameOptions = {
-  draft: Draft;
-  cacheRoot?: string;
-  bundlePath?: string;
-  targetTime: Microseconds;
-};
-
-export function buildRequestPreviewFrameCommand(options: RequestPreviewFrameOptions): CommandEnvelope {
-  const payload = {
-    kind: "requestPreviewFrame",
-    draft: options.draft,
-    ...(options.cacheRoot === undefined ? {} : { cacheRoot: options.cacheRoot }),
-    ...(options.bundlePath === undefined ? {} : { bundlePath: options.bundlePath }),
-    targetTime: options.targetTime
-  } satisfies RequestPreviewFrameCommandPayload & { kind: "requestPreviewFrame" };
-
-  return envelope("requestPreviewFrame", payload);
-}
-
-type RequestPreviewSegmentOptions = {
-  draft: Draft;
-  cacheRoot?: string;
-  bundlePath?: string;
-  targetTimerange: TargetTimerange;
-};
-
-export function buildRequestPreviewSegmentCommand(options: RequestPreviewSegmentOptions): CommandEnvelope {
-  const payload = {
-    kind: "requestPreviewSegment",
-    draft: options.draft,
-    ...(options.cacheRoot === undefined ? {} : { cacheRoot: options.cacheRoot }),
-    ...(options.bundlePath === undefined ? {} : { bundlePath: options.bundlePath }),
-    targetTimerange: options.targetTimerange
-  } satisfies RequestPreviewSegmentCommandPayload & { kind: "requestPreviewSegment" };
-
-  return envelope("requestPreviewSegment", payload);
 }
 
 type InvalidatePreviewCacheOptions = {
@@ -356,27 +260,6 @@ export function buildCancelExportCommand(jobId: string): CommandEnvelope {
   } satisfies CancelExportCommandPayload & { kind: "cancelExport" };
 
   return envelope("cancelExport", payload);
-}
-
-export function applyTimelineCommandResult(
-  current: CommandContext,
-  result: CommandResultEnvelope<TimelineCommandResponse>
-): { state: CommandContext; errorMessage: string | null } {
-  if (!result.ok || result.data === null) {
-    return {
-      state: current,
-      errorMessage: commandErrorMessage(result)
-    };
-  }
-
-  return {
-    state: {
-      draft: result.data.draft,
-      commandState: result.data.commandState,
-      selection: result.data.selection
-    },
-    errorMessage: null
-  };
 }
 
 export function commandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string): string {

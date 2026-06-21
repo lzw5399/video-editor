@@ -19,6 +19,10 @@ RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasCo
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
 PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN='(?:struct|type)[[:space:]]+(?:SelectedSegmentViewModel|TimelineTrackRowViewModel|TimelineSegmentViewModel)(?s:.{0,900})\b(?:track:[[:space:]]*Track|segment:[[:space:]]*Segment)\b'
 RENDERER_PRODUCT_RAW_TIMELINE_VM_PATTERN='\b(?:row\.track|segment\.segment|selected\.segment|selectedSegment\.segment)\b'
+PROJECT_SESSION_RESPONSE_STATE_PATTERN='(?:struct|type)[[:space:]]+ProjectSession(?:Open|TimelineIntent|Intent)Response(?s:.{0,500})\b(?:draft|commandState|command_state|selection)\b'
+RENDERER_WORKSPACE_STATE_PROJECT_STATE_PATTERN='export[[:space:]]+type[[:space:]]+WorkspaceState[[:space:]]*=[[:space:]]*\{(?s:.{0,800})\b(?:draft|commandState|selection)[[:space:]]*:'
+RENDERER_SESSION_RESPONSE_READ_PATTERN='\b(?:result|openedProject)\.data\.(?:draft|commandState|selection)\b|\b(?:result|openedProject)\?\.data\?\.(?:draft|commandState|selection)\b'
+RENDERER_PREVIEW_DRAFT_COMMAND_HELPER_PATTERN='\b(?:buildRequestPreviewFrameCommand|buildRequestPreviewSegmentCommand|RequestPreviewFrameCommandPayload|RequestPreviewSegmentCommandPayload)\b'
 
 fail_if_matches() {
   local description="$1"
@@ -133,6 +137,22 @@ fail_if_matches_multiline \
   apps/desktop-electron/src/main/nativeBinding.ts
 
 fail_if_matches_multiline \
+  "project session open/edit responses must not expose draft, commandState, or selection" \
+  "$PROJECT_SESSION_RESPONSE_STATE_PATTERN" \
+  crates/bindings_node/src/project_session_service.rs \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+fail_if_matches_multiline \
+  "renderer WorkspaceState must not store canonical draft, commandState, or selection" \
+  "$RENDERER_WORKSPACE_STATE_PROJECT_STATE_PATTERN" \
+  apps/desktop-electron/src/renderer/viewModel.ts
+
+fail_if_matches \
+  "renderer must not read project session draft, commandState, or selection response fields" \
+  "$RENDERER_SESSION_RESPONSE_READ_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx
+
+fail_if_matches_multiline \
   "renderer import material session result must use returned material data, not a returned full Draft" \
   'executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(?s:.{0,1400})result\.data\.draft' \
   apps/desktop-electron/src/renderer/App.tsx
@@ -141,6 +161,27 @@ fail_if_matches \
   "renderer must not start export through renderer-owned draft payloads; use startProjectSessionExport" \
   'buildStartExportCommand|command:[[:space:]]*"startExport"|kind:[[:space:]]*"startExport"' \
   apps/desktop-electron/src/renderer apps/desktop-electron/src/preload
+
+fail_if_matches \
+  "renderer preview commands must use project-session preview APIs, not draft-bearing preview helpers" \
+  "$RENDERER_PREVIEW_DRAFT_COMMAND_HELPER_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/preload
+
+require_matches \
+  "renderer still preview uses project-session preview frame API" \
+  '\brequestProjectSessionPreviewFrame\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts
+
+require_matches \
+  "renderer segment preview uses project-session preview segment API" \
+  '\brequestProjectSessionPreviewSegment\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/preload/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts
 
 fail_if_matches \
   "renderer command helpers must not expose legacy low-level timeline command payloads" \
@@ -406,6 +447,38 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "project session response exposing renderer-owned state" \
+  "$PROJECT_SESSION_RESPONSE_STATE_PATTERN" \
+  'export type ProjectSessionTimelineIntentResponse = {
+  sessionId: string;
+  revision: number;
+  draft: Draft;
+  commandState: CommandState;
+  selection: TimelineSelection;
+};'
+
+assert_pattern_rejects \
+  "renderer workspace storing canonical project state" \
+  "$RENDERER_WORKSPACE_STATE_PROJECT_STATE_PATTERN" \
+  'export type WorkspaceState = {
+  projectState: ProjectEntryState;
+  draft: Draft;
+  commandState: CommandState;
+};'
+
+assert_pattern_rejects \
+  "renderer reading project session draft response" \
+  "$RENDERER_SESSION_RESPONSE_READ_PATTERN" \
+  'const nextDraft = result.data.draft;
+const selected = openedProject?.data?.selection;'
+
+assert_pattern_rejects \
+  "renderer draft-bearing preview helper" \
+  "$RENDERER_PREVIEW_DRAFT_COMMAND_HELPER_PATTERN" \
+  'buildRequestPreviewFrameCommand({ draft: current.draft, targetTime });
+type X = RequestPreviewSegmentCommandPayload;'
 
 assert_pattern_rejects \
   "raw Track/Segment project session view model field" \
