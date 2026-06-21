@@ -520,14 +520,14 @@ async function expectNativePreviewHostLayout(
   options: { requireBoundsUpdate?: boolean } = {}
 ): Promise<RegionBox> {
   await setViewportSizeAndVerifyLayout(app, page, width, height);
-  const host = await expectStableBox(page.locator(".preview-native-host"), `实时预览宿主 ${width}x${height}`);
+  const host = await expectStableBox(page.locator(".preview-native-host"), `实时预览画面 ${width}x${height}`);
   const timeline = await expectStableBox(page.locator('[aria-label="时间线"]'), `时间线 ${width}x${height}`);
   const inspector = await expectStableBox(page.locator('[aria-label="属性检查器"]'), `属性检查器 ${width}x${height}`);
 
-  expect(host.width, `实时预览宿主宽度 ${width}x${height}`).toBeGreaterThan(120);
-  expect(host.height, `实时预览宿主高度 ${width}x${height}`).toBeGreaterThan(80);
-  expectNoOverlap(host, timeline, "实时预览宿主", "时间线");
-  expectNoOverlap(host, inspector, "实时预览宿主", "属性检查器");
+  expect(host.width, `实时预览画面宽度 ${width}x${height}`).toBeGreaterThan(120);
+  expect(host.height, `实时预览画面高度 ${width}x${height}`).toBeGreaterThan(80);
+  expectNoOverlap(host, timeline, "实时预览画面", "时间线");
+  expectNoOverlap(host, inspector, "实时预览画面", "属性检查器");
   if (options.requireBoundsUpdate !== false) {
     await latestRealtimePreviewBounds(app);
   }
@@ -547,7 +547,7 @@ async function latestRealtimePreviewBounds(app: ElectronApplication): Promise<No
   const latestBounds = (await readRealtimePreviewHostCalls(app)).findLast(
     (call) => (call.kind === "updateSurfaceBounds" || call.kind === "attachSurface") && call.bounds !== undefined
   )?.bounds;
-  expect(latestBounds, "实时预览宿主应上报 bounds").toBeDefined();
+  expect(latestBounds, "实时预览画面应上报 bounds").toBeDefined();
   return latestBounds!;
 }
 
@@ -834,7 +834,7 @@ test("command-only text edit routes complete text inspector changes through exec
     await expect(previewText).toHaveCSS("background-color", "rgb(32, 32, 32)");
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
     const exportDialog = await openExportDialog(page);
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("文字已更新，请重新开始导出");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("文字已更新，请重新开始导出");
 
     const calls = await readExecuteCommandCalls(app);
     const addTextCall = calls.find((call) => call.command === "addTextSegment");
@@ -1213,7 +1213,7 @@ test("developer diagnostics preview time input and production frame buttons seek
   }
 });
 
-test("预览播放按钮使用实时预览宿主而不是连续请求预览帧", async () => {
+test("预览播放按钮使用实时预览画面而不是连续请求预览帧", async () => {
   const { app, page } = await launchWorkspaceApp({
     env: {
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([PORTRAIT_VIDEO_FIXTURE])
@@ -1758,7 +1758,7 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   expect(fallback.fallbackArtifactVisible).toBe(true);
 });
 
-test("播放头支持时间线标尺点击和拖动寻帧到实时预览宿主", async () => {
+test("播放头支持时间线标尺点击和拖动寻帧到实时预览画面", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -1910,7 +1910,7 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新请求预览帧");
     await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新生成预览片段");
     exportDialog = await openExportDialog(page);
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("草稿已更新，请重新开始导出");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("草稿已更新，请重新开始导出");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
     await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
     await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
@@ -1983,7 +1983,7 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
     await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
     exportDialog = await openExportDialog(page);
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("画面变换已更新，请重新开始导出");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("画面变换已更新，请重新开始导出");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
     await expect(exportDialog.getByRole("button", { name: "查询导出状态" })).toBeDisabled();
     await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeDisabled();
@@ -2198,20 +2198,20 @@ test("导出命令通过 executeCommand 更新导出状态并保存截图", asyn
     await expectCommandCall(app, "startExport");
     await expect(exportDialog.getByLabel("导出进度")).toContainText("导出中");
     await expect(exportDialog.getByLabel("导出进度")).toContainText("12%");
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出任务已启动");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("导出任务已启动");
     await expect(exportDialog.getByRole("button", { name: "取消导出" })).toBeEnabled();
 
     await exportDialog.getByRole("button", { name: "取消导出" }).click();
     await expectCommandCall(app, "cancelExport");
     await expect(exportDialog.getByLabel("导出进度")).toContainText("已取消");
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出已取消");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("导出已取消");
 
     await exportDialog.getByRole("button", { name: "开始导出" }).click();
     await exportDialog.getByRole("button", { name: "查询导出状态" }).click();
     await expectCommandCall(app, "getExportJobStatus");
     await expect(exportDialog.getByLabel("导出进度")).toContainText("已完成");
     await expect(exportDialog.getByLabel("导出进度")).toContainText("100%");
-    await expect(exportDialog.getByLabel("导出日志")).toContainText("导出完成，输出校验通过");
+    await expect(exportDialog.getByLabel("导出状态")).toContainText("导出完成，输出校验通过");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("1920x1080");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("含音频");
 

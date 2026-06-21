@@ -518,7 +518,7 @@ async function expectedPreviewHostScreenRect(
   if (metrics === null) {
     throw new Error("Window metrics are required to validate native preview surface placement");
   }
-  const hostRect = await page.getByLabel("实时预览宿主", { exact: true }).evaluate((element) => {
+  const hostRect = await page.getByLabel("实时预览画面", { exact: true }).evaluate((element) => {
     const box = element.getBoundingClientRect();
     return {
       x: Math.round(box.x),
@@ -538,7 +538,7 @@ async function expectedPreviewHostScreenRect(
 async function expectPreviewHostCoversCanvas(page: Page): Promise<void> {
   const rects = await page.evaluate(() => {
     const canvas = document.querySelector<HTMLElement>('[aria-label="预览画面"]');
-    const host = document.querySelector<HTMLElement>('[aria-label="实时预览宿主"]');
+    const host = document.querySelector<HTMLElement>('[aria-label="实时预览画面"]');
     if (canvas === null || host === null) {
       return null;
     }

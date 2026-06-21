@@ -7,6 +7,7 @@ import {
   formatExportPhase,
   formatExportPreset,
   formatExportProgress,
+  isProductSafeStatusCopy,
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
@@ -286,6 +287,7 @@ export function WorkspaceShell({
       {exportModalOpen ? (
         <ExportModal
           workspace={workspace}
+          showDeveloperDiagnostics={showDeveloperDiagnostics}
           onClose={() => setExportModalOpen(false)}
           onExportOutputPathChange={onExportOutputPathChange}
           onExportPresetChange={onExportPresetChange}
@@ -300,6 +302,7 @@ export function WorkspaceShell({
 
 type ExportModalProps = {
   workspace: WorkspaceState;
+  showDeveloperDiagnostics: boolean;
   onClose: () => void;
   onExportOutputPathChange: (value: string) => void;
   onExportPresetChange: (value: ExportPreset) => void;
@@ -312,6 +315,7 @@ const EXPORT_SAMPLE_RATES = ["48 kHz", "44.1 kHz", "96 kHz"] as const;
 
 function ExportModal({
   workspace,
+  showDeveloperDiagnostics,
   onClose,
   onExportOutputPathChange,
   onExportPresetChange,
@@ -330,7 +334,9 @@ function ExportModal({
     (exportState.phase === "queued" || exportState.phase === "running" || exportState.phase === "validating");
   const exportCompleted = exportState.phase === "completed";
   const startExportLabel = runtimeDiagnostics.canExport ? "开始导出" : "导出暂不可用";
-  const exportMessage = exportState.error ?? exportState.diagnosticLabel ?? exportState.logSummary;
+  const exportMessage = showDeveloperDiagnostics
+    ? exportState.error ?? exportState.diagnosticLabel ?? exportState.logSummary
+    : productExportStatusMessage(exportState);
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -463,7 +469,7 @@ function ExportModal({
             <progress max={1000} value={exportState.progressPerMille ?? 0} />
             <strong>{formatExportProgress(exportState.progressPerMille)}</strong>
           </div>
-          <div className="export-log" aria-label="导出日志">
+          <div className="export-log" aria-label="导出状态">
             {exportMessage}
           </div>
           <div className="export-validation" aria-label="输出校验">
@@ -510,4 +516,39 @@ function ExportModal({
       </section>
     </div>
   );
+}
+
+function productExportStatusMessage(exportState: WorkspaceState["export"]): string {
+  if (exportState.error !== null || exportState.diagnosticLabel !== null) {
+    if (exportState.phase === "cancelled") {
+      return "导出已取消";
+    }
+    if (exportState.phase === "validationFailed") {
+      return "输出校验未通过，请重新导出";
+    }
+    return "导出失败，请检查输出设置后重试";
+  }
+
+  if (isProductSafeStatusCopy(exportState.logSummary)) {
+    return exportState.logSummary;
+  }
+
+  switch (exportState.phase) {
+    case "queued":
+      return "等待导出";
+    case "running":
+      return "正在导出";
+    case "validating":
+      return "正在校验输出";
+    case "completed":
+      return "导出完成";
+    case "cancelled":
+      return "导出已取消";
+    case "failed":
+      return "导出失败，请重试";
+    case "validationFailed":
+      return "输出校验未通过，请重新导出";
+    case null:
+      return "等待开始导出";
+  }
 }

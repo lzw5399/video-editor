@@ -22,7 +22,7 @@ const REFERENCE_DIR = join(REPO_ROOT, "docs/ui-reference/jianying-pro");
 const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const FORBIDDEN_DEFAULT_COPY =
-  /FFmpeg|ffprobe|backend|Mock|runtime|artifact|cache|requestPreviewFrame|生成预览片段|运行环境诊断|资源维护|草稿包路径|\/tmp\//i;
+  /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -217,6 +217,27 @@ function expectNoOverlap(first: RegionBox, second: RegionBox, firstName: string,
 
 async function expectNoDebugCopy(locator: Locator): Promise<void> {
   await expect(locator).not.toContainText(FORBIDDEN_DEFAULT_COPY);
+  await expect(await collectProductSurfaceCopy(locator)).not.toMatch(FORBIDDEN_DEFAULT_COPY);
+}
+
+async function collectProductSurfaceCopy(locator: Locator): Promise<string> {
+  return locator.evaluateAll((roots) => {
+    const values: string[] = [];
+    for (const root of roots) {
+      const elements = [root, ...Array.from(root.querySelectorAll("[aria-label], [title]"))];
+      for (const element of elements) {
+        const ariaLabel = element.getAttribute("aria-label");
+        if (ariaLabel !== null) {
+          values.push(ariaLabel);
+        }
+        const title = element.getAttribute("title");
+        if (title !== null) {
+          values.push(title);
+        }
+      }
+    }
+    return values.join("\n");
+  });
 }
 
 async function capturePhaseScreenshot(page: Page, filename: string): Promise<void> {

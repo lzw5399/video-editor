@@ -264,7 +264,7 @@ async function addAudioSegment(page: Page, app: ElectronApplication, audioName: 
 
 async function verifyRealtimePreviewPlayback(page: Page, app: ElectronApplication): Promise<void> {
   const previewMonitor = page.getByLabel("预览窗口");
-  await expect(previewMonitor.getByLabel("实时预览宿主")).toBeVisible({ timeout: 20_000 });
+  await expect(previewMonitor.getByLabel("实时预览画面")).toBeVisible({ timeout: 20_000 });
   const frameRequestsBefore = await countCommand(app, "requestPreviewFrame");
   const segmentRequestsBefore = await countCommand(app, "requestPreviewSegment");
   const playCallsBefore = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "play").length;
@@ -324,7 +324,7 @@ async function exportDraft(
   } catch (error) {
     const calls = await readExecuteCommandCalls(app);
     const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
-    const logText = (await dialog.getByLabel("导出日志").textContent()) ?? "";
+    const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
     const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -353,7 +353,7 @@ async function exportDraft(
   const finalProgressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
   if (!finalProgressText.includes("已完成")) {
     const calls = await readExecuteCommandCalls(app);
-    const logText = (await dialog.getByLabel("导出日志").textContent()) ?? "";
+    const logText = (await dialog.getByLabel("导出状态").textContent()) ?? "";
     const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
     throw new Error(
       [

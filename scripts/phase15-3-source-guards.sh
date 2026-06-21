@@ -52,6 +52,7 @@ require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "wor
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "workspace-1120x720.png"
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "export-advanced-dropdown-1280x800.png"
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "expectNoOverlap"
+require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "collectProductSurfaceCopy"
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "项目入口"
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "产品操作"
 require_fixed "apps/desktop-electron/tests/ui-reference-regression.spec.ts" "音频采样率选项"
@@ -73,6 +74,31 @@ fail_if_matches \
   'FFmpeg|ffprobe|Mock|requestPreviewFrame|生成预览片段|资源维护|运行环境诊断|草稿包路径' \
   apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx \
   apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+fail_if_matches \
+  "automatic runtime capability probing must not publish engineering diagnostics through product commandError" \
+  'commandError:[[:space:]]*runtimeDiagnostics\.statusLabel|commandError:[[:space:]]*runtimeDiagnostics\.statusDetail' \
+  apps/desktop-electron/src/renderer/App.tsx
+
+fail_if_matches \
+  "product UI must use user-facing preview/export labels instead of host/log diagnostics copy" \
+  'aria-label="实时预览宿主"|实时预览宿主不可用|导出日志' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
+
+fail_if_matches \
+  "product export modal must not directly surface raw export diagnostics" \
+  'const exportMessage = exportState\.error \?\? exportState\.diagnosticLabel \?\? exportState\.logSummary' \
+  apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx
+
+fail_if_matches \
+  "export diagnostic copy must be product-safe, not render-graph or runtime wording" \
+  '渲染图失败|运行时不可用|运行时失败' \
+  apps/desktop-electron/src/renderer/viewModel.ts
+
+require_fixed "apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx" "productExportStatusMessage(exportState)"
+require_fixed "apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx" "isProductSafeStatusCopy(exportState.logSummary)"
 
 fail_if_matches \
   "product UI must not expose backend/mock selector controls" \

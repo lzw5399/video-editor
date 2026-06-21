@@ -491,7 +491,7 @@ export function PreviewMonitor({
             {selectedSegment.text.content}
           </div>
         ) : null}
-        <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
+        <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览画面">
           {showDeveloperDiagnostics ? (
             <div className="preview-native-host-readout">
               <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>

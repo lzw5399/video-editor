@@ -1202,7 +1202,7 @@ export function App(): React.ReactElement {
         const next = {
           ...current,
           runtimeDiagnostics,
-          commandError: result.ok ? current.commandError : runtimeDiagnostics.statusLabel
+          commandError: result.ok ? current.commandError : null
         };
         workspaceRef.current = next;
         return next;
@@ -1214,7 +1214,7 @@ export function App(): React.ReactElement {
         const next = {
           ...current,
           runtimeDiagnostics,
-          commandError: runtimeDiagnostics.statusLabel
+          commandError: null
         };
         workspaceRef.current = next;
         return next;
@@ -2099,7 +2099,7 @@ export function App(): React.ReactElement {
   async function updateRealtimePreviewProjectSessionSnapshot(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
-      return applyRealtimePreviewHostError("实时预览宿主不可用");
+      return applyRealtimePreviewHostError("预览画面暂不可用");
     }
     const projectSession = projectSessionRef.current;
     if (projectSession === null) {
@@ -2127,14 +2127,16 @@ export function App(): React.ReactElement {
       }
       return ok;
     } catch (error: unknown) {
-      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+      return applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
     }
   }
 
   async function seekRealtimePreviewHost(targetTime: number): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
-      return applyRealtimePreviewHostError("实时预览宿主不可用");
+      return applyRealtimePreviewHostError("预览画面暂不可用");
     }
 
     const sanitizedTargetTime = Math.max(0, Math.round(targetTime));
@@ -2157,40 +2159,46 @@ export function App(): React.ReactElement {
       }
       return ok;
     } catch (error: unknown) {
-      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+      return applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
     }
   }
 
   async function playRealtimePreviewHost(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
-      return applyRealtimePreviewHostError("实时预览宿主不可用");
+      return applyRealtimePreviewHostError("预览画面暂不可用");
     }
 
     try {
       return applyRealtimePreviewHostState(await bridge.play());
     } catch (error: unknown) {
-      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+      return applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
     }
   }
 
   async function pauseRealtimePreviewHost(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
-      return applyRealtimePreviewHostError("实时预览宿主不可用");
+      return applyRealtimePreviewHostError("预览画面暂不可用");
     }
 
     try {
       return applyRealtimePreviewHostState(await bridge.pause());
     } catch (error: unknown) {
-      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+      return applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
     }
   }
 
   async function stopRealtimePreviewHost(): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
-      return applyRealtimePreviewHostError("实时预览宿主不可用");
+      return applyRealtimePreviewHostError("预览画面暂不可用");
     }
 
     try {
@@ -2200,7 +2208,9 @@ export function App(): React.ReactElement {
       }
       return ok;
     } catch (error: unknown) {
-      return applyRealtimePreviewHostError(error instanceof Error ? error.message : String(error));
+      return applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
     }
   }
 
@@ -2208,7 +2218,9 @@ export function App(): React.ReactElement {
     if (hostState.ok) {
       return true;
     }
-    return applyRealtimePreviewHostError(hostState.fallbackLabel ?? hostState.statusLabel);
+    return applyRealtimePreviewHostError(
+      showDeveloperDiagnostics ? hostState.fallbackLabel ?? hostState.statusLabel : "预览画面暂不可用"
+    );
   }
 
   function applyRealtimePreviewHostError(message: string): false {

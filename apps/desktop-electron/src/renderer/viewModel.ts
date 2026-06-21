@@ -1136,16 +1136,23 @@ export function formatExportDiagnostic(kind: ExportDiagnosticKind | null | undef
 
   const labels: Record<ExportDiagnosticKind, string> = {
     invalidOutputPath: "输出路径无效",
-    engineFailed: "剪辑语义失败",
-    renderGraphFailed: "渲染图失败",
-    compileFailed: "导出编译失败",
-    runtimeUnavailable: "运行时不可用",
-    runtimeFailed: "运行时失败",
+    engineFailed: "草稿处理失败",
+    renderGraphFailed: "导出准备失败",
+    compileFailed: "导出准备失败",
+    runtimeUnavailable: "导出环境不可用",
+    runtimeFailed: "导出失败",
     cancelled: "导出已取消",
     validationFailed: "输出校验失败"
   };
 
   return labels[kind];
+}
+
+const PRODUCT_FORBIDDEN_STATUS_COPY =
+  /FFmpeg|ffprobe|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|运行时|运行环境|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
+
+export function isProductSafeStatusCopy(value: string): boolean {
+  return value.length > 0 && !PRODUCT_FORBIDDEN_STATUS_COPY.test(value);
 }
 
 export function formatExportProgress(progressPerMille: number | null | undefined): string {

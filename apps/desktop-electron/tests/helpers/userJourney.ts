@@ -1064,7 +1064,7 @@ async function captureVisiblePreviewRegion(
   app: ProductJourneyAppController | undefined,
   region: { x: number; y: number; width: number; height: number }
 ): Promise<Buffer> {
-  const host = page.getByLabel("实时预览宿主", { exact: true });
+  const host = page.getByLabel("实时预览画面", { exact: true });
   await expect(host).toBeVisible();
   const box = await host.boundingBox();
   if (box === null) {

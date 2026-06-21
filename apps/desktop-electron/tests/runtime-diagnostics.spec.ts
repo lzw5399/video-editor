@@ -194,8 +194,8 @@ test("运行环境诊断在 1280x800 和 1120x720 内显示就绪状态", async 
   try {
     await expectCommandCall(app, "probeRuntimeCapabilities");
     await expect(page.getByLabel("运行环境状态")).toContainText("运行环境就绪");
-    await expect(page.getByLabel("运行能力列表")).toContainText("FFmpeg 状态");
-    await expect(page.getByLabel("运行能力列表")).toContainText("ffprobe 状态");
+    await expect(page.getByLabel("运行能力列表")).toContainText("媒体运行环境");
+    await expect(page.getByLabel("运行能力列表")).toContainText("媒体探测环境");
     await expect(page.getByLabel("运行能力列表")).toContainText("编码能力");
     await expect(page.getByLabel("运行能力列表")).toContainText("字幕能力");
     await expect(page.getByLabel("运行能力列表")).toContainText("字体环境");
@@ -220,7 +220,9 @@ test("运行环境错误会禁用预览和导出入口", async () => {
       "运行环境检测失败，请检查内置 FFmpeg/ffprobe runtime 后重试。"
     );
     await expect(page.getByRole("button", { name: "预览暂不可用" }).first()).toBeDisabled();
-    await expect(page.getByRole("button", { name: "导出暂不可用" })).toBeDisabled();
+    await page.getByRole("button", { name: "导出" }).click();
+    await expect(page.getByRole("dialog", { name: "导出" }).getByRole("button", { name: "导出暂不可用" })).toBeDisabled();
+    await page.getByRole("button", { name: "关闭" }).click();
     await expect(page.getByRole("button", { name: "重新检测运行环境" })).toBeVisible();
 
     await expectWorkspaceLayoutAt(page, app, 1280, 800);
