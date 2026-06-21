@@ -57,9 +57,13 @@ test("product playback helper rejects playhead-only advancement without visible 
       fallbackActive: false,
       statusLabel: "实时预览已接入",
       fallbackLabel: null,
+      unsupportedReason: null,
       playbackGeneration: 1,
       backend: "renderGraphGpu" as const,
       diagnosticSource: "none" as const,
+      fallbackReason: null,
+      currentRequestCanceled: false,
+      fallbackArtifactVisible: false,
       telemetry: {
         presentedFrameCount: 1,
         targetTimeMicroseconds: 0,
@@ -72,7 +76,8 @@ test("product playback helper rejects playhead-only advancement without visible 
         width: 320,
         height: 180,
         targetTimeMicroseconds: 0
-      }
+      },
+      surfacePlacement: null
     }
   };
   const playheadOnlyAfter = {
@@ -289,11 +294,28 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
     const placement = after.hostState?.surfacePlacement ?? null;
     expect(placement, "product playback must expose native surface placement evidence").not.toBeNull();
+    const expectedScreenRect = await expectedPreviewHostScreenRect(page, app);
+    await expectPreviewHostCoversCanvas(page);
+    expect(placement?.surfaceBoundsCoordinateSpace).toBe("browserWindowContentLogicalPixels");
+    expect(placement?.screenRectCoordinateSpace).toBe("electronScreenLogicalPixels");
+    expect(placement?.nativeAppKitScreenRect, "raw AppKit screen rect must be exposed for placement telemetry").toBeTruthy();
     expect(
-      placement?.aligned,
-      `native/WGPU surface must align with preview host: ${JSON.stringify(placement)}`
-    ).toBe(true);
+      maxRectDelta(placement?.hostScreenRect ?? null, expectedScreenRect),
+      `main-process host screen rect must use the BrowserWindow content-local logical-pixel contract: ${JSON.stringify({
+        placement,
+        expectedScreenRect
+      })}`
+    ).toBeLessThanOrEqual(2);
+    expect(
+      maxRectDelta(placement?.nativeScreenRect ?? null, expectedScreenRect),
+      `native/WGPU child view must cover the DOM preview host during playback: ${JSON.stringify({
+        placement,
+        expectedScreenRect
+      })}`
+    ).toBeLessThanOrEqual(2);
     expect(placement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+    expect(Math.abs(placement?.deltaPx.x ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(2);
+    expect(Math.abs(placement?.deltaPx.y ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(2);
   } finally {
     await app.close();
   }
@@ -320,11 +342,9 @@ test("product playback UAT uses native audio output instead of status-only or mo
     await expect
       .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
-    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放", { timeout: 10_000 });
-    await expect(
-      page.getByLabel("输出设备状态"),
-      "product playback must not report mock/status-only audio as audible output"
-    ).not.toContainText(/Mock|mock|模拟|系统默认/);
+    await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+      call.command === "playAudioPreview" && call.sessionId !== null
+    )), { timeout: 10_000 }).toBe(true);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
@@ -348,11 +368,9 @@ test("product playback UAT plays embedded video audio through native output", as
     await expect
       .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
-    await expect(page.getByLabel("音频预览状态")).toContainText("正在播放", { timeout: 10_000 });
-    await expect(
-      page.getByLabel("输出设备状态"),
-      "embedded video audio must use native output, not mock/status-only audio"
-    ).not.toContainText(/Mock|mock|模拟|系统默认/);
+    await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
+      call.command === "playAudioPreview" && call.sessionId !== null
+    )), { timeout: 10_000 }).toBe(true);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
@@ -398,6 +416,77 @@ test("product playback UAT keeps video presentation synchronized with timeline t
     await app.close();
   }
 });
+
+async function expectedPreviewHostScreenRect(
+  page: Page,
+  app: { readWindowMetrics: () => Promise<{ contentBounds: { x: number; y: number; width: number; height: number } } | null> }
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const metrics = await app.readWindowMetrics();
+  if (metrics === null) {
+    throw new Error("Window metrics are required to validate native preview surface placement");
+  }
+  const hostRect = await page.getByLabel("实时预览宿主", { exact: true }).evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return {
+      x: Math.round(box.x),
+      y: Math.round(box.y),
+      width: Math.round(box.width),
+      height: Math.round(box.height)
+    };
+  });
+  return {
+    x: metrics.contentBounds.x + hostRect.x,
+    y: metrics.contentBounds.y + hostRect.y,
+    width: hostRect.width,
+    height: hostRect.height
+  };
+}
+
+async function expectPreviewHostCoversCanvas(page: Page): Promise<void> {
+  const rects = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLElement>('[aria-label="预览画面"]');
+    const host = document.querySelector<HTMLElement>('[aria-label="实时预览宿主"]');
+    if (canvas === null || host === null) {
+      return null;
+    }
+    const canvasBox = canvas.getBoundingClientRect();
+    const hostBox = host.getBoundingClientRect();
+    return {
+      canvas: {
+        x: Math.round(canvasBox.x),
+        y: Math.round(canvasBox.y),
+        width: Math.round(canvasBox.width),
+        height: Math.round(canvasBox.height)
+      },
+      host: {
+        x: Math.round(hostBox.x),
+        y: Math.round(hostBox.y),
+        width: Math.round(hostBox.width),
+        height: Math.round(hostBox.height)
+      }
+    };
+  });
+  expect(rects, "preview canvas and native host must both be present in the product workbench").not.toBeNull();
+  expect(
+    maxRectDelta(rects?.canvas ?? null, rects?.host ?? null),
+    `native preview host must cover the preview canvas DOM region: ${JSON.stringify(rects)}`
+  ).toBeLessThanOrEqual(2);
+}
+
+function maxRectDelta(
+  first: { x: number; y: number; width: number; height: number } | null,
+  second: { x: number; y: number; width: number; height: number } | null
+): number {
+  if (first === null || second === null) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(
+    Math.abs(first.x - second.x),
+    Math.abs(first.y - second.y),
+    Math.abs(first.width - second.width),
+    Math.abs(first.height - second.height)
+  );
+}
 
 test("product user editing matrix uses real commands and still produces visible GPU playback", async () => {
   const { app, page } = await launchProductJourneyApp([

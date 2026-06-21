@@ -76,8 +76,12 @@ export type RealtimePreviewHostContentEvidence = {
 };
 
 export type RealtimePreviewHostSurfacePlacement = {
+  surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";
+  screenRectCoordinateSpace: "electronScreenLogicalPixels";
   hostScreenRect: RealtimePreviewScreenRect;
   nativeScreenRect: RealtimePreviewScreenRect;
+  nativeAppKitScreenRect: RealtimePreviewScreenRect;
+  deltaPx: RealtimePreviewScreenRect;
   maxDeltaPx: number;
   aligned: boolean;
 };
@@ -512,7 +516,7 @@ export class RealtimePreviewHost {
       kind: "getPresentationState",
       durationMs,
       targetTimeMicroseconds: this.presentationState.evidence?.targetTimeMicroseconds,
-      playbackGeneration: this.playbackGeneration,
+      playbackGeneration: this.playbackGeneration ?? undefined,
       presentationAvailable: this.presentationState.available,
       presentationBackend: this.presentationState.backend,
       unsupportedReason: this.presentationState.unsupportedReason ?? null
@@ -709,16 +713,22 @@ export class RealtimePreviewHost {
   }
 
   private surfacePlacement(): RealtimePreviewHostSurfacePlacement | null {
-    const nativeScreenRect = this.presentationState?.surfacePlacement?.nativeScreenRect ?? null;
-    if (nativeScreenRect === null || this.lastBounds === null || this.window.isDestroyed()) {
+    const nativeAppKitScreenRect = this.presentationState?.surfacePlacement?.nativeScreenRect ?? null;
+    if (nativeAppKitScreenRect === null || this.lastBounds === null || this.window.isDestroyed()) {
       return null;
     }
 
-    const hostScreenRect = hostScreenRectForBounds(this.window, this.lastBounds, nativeScreenRect);
+    const hostScreenRect = hostScreenRectForBounds(this.window, this.lastBounds);
+    const nativeScreenRect = appKitScreenRectToElectronScreenRect(this.window, nativeAppKitScreenRect);
+    const deltaPx = rectDelta(hostScreenRect, nativeScreenRect);
     const maxDeltaPx = maxRectDelta(hostScreenRect, nativeScreenRect);
     return {
+      surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels",
+      screenRectCoordinateSpace: "electronScreenLogicalPixels",
       hostScreenRect,
       nativeScreenRect,
+      nativeAppKitScreenRect,
+      deltaPx,
       maxDeltaPx,
       aligned: maxDeltaPx <= 2
     };
@@ -762,27 +772,36 @@ function sameBounds(first: RealtimePreviewSurfaceBounds | null, second: Realtime
   );
 }
 
-function hostScreenRectForBounds(
-  window: BrowserWindow,
-  bounds: RealtimePreviewSurfaceBounds,
-  nativeScreenRect: RealtimePreviewScreenRect
-): RealtimePreviewScreenRect {
+function hostScreenRectForBounds(window: BrowserWindow, bounds: RealtimePreviewSurfaceBounds): RealtimePreviewScreenRect {
   const contentBounds = window.getContentBounds();
-  const directRect = {
+  return {
     x: contentBounds.x + bounds.x,
     y: contentBounds.y + bounds.y,
     width: bounds.width,
     height: bounds.height
   };
-  const display = screen.getDisplayMatching(window.getBounds());
-  const flippedRect = {
-    ...directRect,
-    y: display.bounds.y + display.bounds.height - directRect.y - directRect.height
-  };
+}
 
-  return maxRectDelta(flippedRect, nativeScreenRect) < maxRectDelta(directRect, nativeScreenRect)
-    ? flippedRect
-    : directRect;
+function appKitScreenRectToElectronScreenRect(
+  window: BrowserWindow,
+  rect: RealtimePreviewScreenRect
+): RealtimePreviewScreenRect {
+  const display = screen.getDisplayMatching(window.getBounds());
+  return {
+    x: rect.x,
+    y: display.bounds.y + display.bounds.height - rect.y - rect.height,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
+function rectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewScreenRect): RealtimePreviewScreenRect {
+  return {
+    x: second.x - first.x,
+    y: second.y - first.y,
+    width: second.width - first.width,
+    height: second.height - first.height
+  };
 }
 
 function maxRectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewScreenRect): number {

@@ -476,7 +476,7 @@ mod macos {
                         "macOS preview presenter could not retain parent NSView",
                     )
                 })?;
-            let frame = ns_rect_for_bounds(&parent_view, attach.bounds);
+            let frame = ns_rect_for_content_local_bounds(&parent_view, attach.bounds);
             let child_view = NSView::initWithFrame(mtm.alloc(), frame);
             let player_layer = unsafe { AVPlayerLayer::layer() };
             unsafe {
@@ -507,7 +507,7 @@ mod macos {
             let _mtm = require_main_thread()?;
             self.bounds = bounds;
             self.child_view
-                .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
+                .setFrame(ns_rect_for_content_local_bounds(&self.parent_view, bounds));
             self.player_layer.setFrame(cg_rect_for_child_bounds(bounds));
             Ok(())
         }
@@ -743,15 +743,19 @@ mod macos {
         Ok(NSURL::fileURLWithPath(&path))
     }
 
-    fn ns_rect_for_bounds(parent_view: &NSView, bounds: NativePreviewSurfaceBounds) -> CGRect {
+    fn ns_rect_for_content_local_bounds(
+        parent_view: &NSView,
+        bounds: NativePreviewSurfaceBounds,
+    ) -> CGRect {
         let parent_bounds = parent_view.bounds();
-        let parent_height = parent_bounds.size.height;
-        let scale = scale_factor(bounds);
-        let width = bounds.width as f64 / scale;
-        let height = bounds.height as f64 / scale;
-        let x = bounds.x as f64 / scale;
-        let dom_y = bounds.y as f64 / scale;
-        let y = (parent_height - dom_y - height).max(0.0);
+        let width = bounds.width as f64;
+        let height = bounds.height as f64;
+        let x = bounds.x as f64;
+        let y = if parent_view.isFlipped() {
+            bounds.y as f64
+        } else {
+            parent_bounds.size.height - bounds.y as f64 - height
+        };
         CGRect::new(
             CGPoint::new(x, y),
             CGSize::new(width.max(1.0), height.max(1.0)),
@@ -759,14 +763,9 @@ mod macos {
     }
 
     fn cg_rect_for_child_bounds(bounds: NativePreviewSurfaceBounds) -> CGRect {
-        let scale = scale_factor(bounds);
-        let width = bounds.width as f64 / scale;
-        let height = bounds.height as f64 / scale;
+        let width = bounds.width as f64;
+        let height = bounds.height as f64;
         CGRect::new(CGPoint::ZERO, CGSize::new(width.max(1.0), height.max(1.0)))
-    }
-
-    fn scale_factor(bounds: NativePreviewSurfaceBounds) -> f64 {
-        (bounds.scale_factor_millis.max(1) as f64 / 1000.0).max(0.001)
     }
 
     fn cmtime_from_microseconds(value: Microseconds) -> CMTime {

@@ -66,8 +66,10 @@ impl MacosWgpuSurfaceAttachment {
                 )
             })?;
         let parent_window = ensure_parent_window_visible(&parent_view)?;
-        let child_view =
-            NSView::initWithFrame(mtm.alloc(), ns_rect_for_bounds(&parent_view, bounds));
+        let child_view = NSView::initWithFrame(
+            mtm.alloc(),
+            ns_rect_for_content_local_bounds(&parent_view, bounds),
+        );
         let metal_layer = CAMetalLayer::new();
         child_view.setWantsLayer(true);
         child_view.setLayer(Some(&metal_layer));
@@ -102,7 +104,7 @@ impl MacosWgpuSurfaceAttachment {
         let _mtm = require_main_thread()?;
         ensure_window_visible(&self.parent_window);
         self.child_view
-            .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
+            .setFrame(ns_rect_for_content_local_bounds(&self.parent_view, bounds));
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
         place_child_view_above_parent_content(&self.parent_view, &self.child_view);
@@ -124,7 +126,7 @@ impl MacosWgpuSurfaceAttachment {
         }
         ensure_window_visible(&self.parent_window);
         self.child_view
-            .setFrame(ns_rect_for_bounds(&self.parent_view, bounds));
+            .setFrame(ns_rect_for_content_local_bounds(&self.parent_view, bounds));
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
         place_child_view_above_parent_content(&self.parent_view, &self.child_view);
@@ -159,12 +161,13 @@ impl MacosWgpuSurfaceAttachment {
         let child_view_frame = self.child_view.frame();
         let child_view_bounds = self.child_view.bounds();
         let parent_window_frame = self.parent_window.frame();
+        let parent_view_flipped = self.parent_view.isFlipped();
         let child_view_screen_frame =
             screen_rect_for_child_view(&self.parent_window, &self.child_view);
         let layer_bounds = self.metal_layer.bounds();
         let drawable_size = self.metal_layer.drawableSize();
         format!(
-            "drawableLifecycle{{attachmentStrategy=parentSubview, prepareCount={}, {}, parentWindowNumber={}, parentWindowKey={}, parentWindowMain={}, parentWindowVisible={}, parentWindowOcclusionVisible={}, parentWindowOnActiveSpace={}, childWindowVisible={}, childWindowOcclusionVisible={}, childWindowOnActiveSpace={}, childHasParent={}, childViewHasSuperview={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewScreenFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
+            "drawableLifecycle{{attachmentStrategy=parentSubview, coordinateSpace=browserWindowContentLogicalPixels, prepareCount={}, {}, parentWindowNumber={}, parentWindowKey={}, parentWindowMain={}, parentWindowVisible={}, parentWindowOcclusionVisible={}, parentWindowOnActiveSpace={}, parentViewFlipped={}, childWindowVisible={}, childWindowOcclusionVisible={}, childWindowOnActiveSpace={}, childHasParent={}, childViewHasSuperview={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewScreenFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
             self.prepare_count,
             app,
             parent_window_number,
@@ -173,6 +176,7 @@ impl MacosWgpuSurfaceAttachment {
             parent_window_visible,
             parent_window_occlusion_visible,
             parent_window_on_active_space,
+            parent_view_flipped,
             parent_window_visible,
             parent_window_occlusion_visible,
             parent_window_on_active_space,
@@ -411,16 +415,83 @@ fn screen_rect_for_child_view(
     }
 }
 
-fn ns_rect_for_bounds(parent_view: &NSView, bounds: PreviewSurfaceBounds) -> CGRect {
+fn ns_rect_for_content_local_bounds(parent_view: &NSView, bounds: PreviewSurfaceBounds) -> CGRect {
     let parent_bounds = parent_view.bounds();
-    let parent_height = parent_bounds.size.height;
+    ns_rect_for_content_local_bounds_parts(
+        bounds,
+        parent_bounds.size.height,
+        parent_view.isFlipped(),
+    )
+}
+
+fn ns_rect_for_content_local_bounds_parts(
+    bounds: PreviewSurfaceBounds,
+    parent_height: f64,
+    parent_flipped: bool,
+) -> CGRect {
     let width = bounds.width as f64;
     let height = bounds.height as f64;
     let x = bounds.x as f64;
-    let dom_y = bounds.y as f64;
-    let y = (parent_height - dom_y - height).max(0.0);
+    let y = if parent_flipped {
+        bounds.y as f64
+    } else {
+        parent_height - bounds.y as f64 - height
+    };
     CGRect::new(
         CGPoint::new(x, y),
         CGSize::new(width.max(1.0), height.max(1.0)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bounds(
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        scale_factor_millis: u32,
+    ) -> PreviewSurfaceBounds {
+        PreviewSurfaceBounds {
+            x,
+            y,
+            width,
+            height,
+            scale_factor_millis,
+        }
+    }
+
+    #[test]
+    fn flipped_parent_uses_browser_content_local_y_without_bottom_origin_guess() {
+        let rect =
+            ns_rect_for_content_local_bounds_parts(bounds(24, 80, 640, 360, 2000), 900.0, true);
+
+        assert_eq!(rect.origin.x, 24.0);
+        assert_eq!(rect.origin.y, 80.0);
+        assert_eq!(rect.size.width, 640.0);
+        assert_eq!(rect.size.height, 360.0);
+    }
+
+    #[test]
+    fn non_flipped_parent_uses_appkit_conversion_from_parent_height() {
+        let rect =
+            ns_rect_for_content_local_bounds_parts(bounds(24, 80, 640, 360, 2000), 900.0, false);
+
+        assert_eq!(rect.origin.x, 24.0);
+        assert_eq!(rect.origin.y, 460.0);
+        assert_eq!(rect.size.width, 640.0);
+        assert_eq!(rect.size.height, 360.0);
+    }
+
+    #[test]
+    fn scale_factor_does_not_change_child_view_frame() {
+        let retina =
+            ns_rect_for_content_local_bounds_parts(bounds(24, 80, 640, 360, 2000), 900.0, true);
+        let standard =
+            ns_rect_for_content_local_bounds_parts(bounds(24, 80, 640, 360, 1000), 900.0, true);
+
+        assert_eq!(retina, standard);
+    }
 }

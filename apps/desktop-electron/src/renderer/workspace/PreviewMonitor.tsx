@@ -102,6 +102,25 @@ export type RealtimePreviewHostState = {
   telemetry: RealtimePreviewHostTelemetry | null;
   frameDisplay: RealtimePreviewHostFrameDisplay | null;
   contentEvidence: RealtimePreviewHostContentEvidence | null;
+  surfacePlacement: RealtimePreviewHostSurfacePlacement | null;
+};
+
+type RealtimePreviewScreenRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type RealtimePreviewHostSurfacePlacement = {
+  surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";
+  screenRectCoordinateSpace: "electronScreenLogicalPixels";
+  hostScreenRect: RealtimePreviewScreenRect;
+  nativeScreenRect: RealtimePreviewScreenRect;
+  nativeAppKitScreenRect: RealtimePreviewScreenRect;
+  deltaPx: RealtimePreviewScreenRect;
+  maxDeltaPx: number;
+  aligned: boolean;
 };
 
 type RealtimePreviewHostFrameDisplay = {
@@ -166,7 +185,8 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
   fallbackArtifactVisible: false,
   telemetry: null,
   frameDisplay: null,
-  contentEvidence: null
+  contentEvidence: null,
+  surfacePlacement: null
 };
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
@@ -489,20 +509,19 @@ export function PreviewMonitor({
           </div>
         ) : null}
         <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览宿主">
-          <div className="preview-native-host-readout">
-            <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
-            <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>
-          </div>
-          {nativeHostState.fallbackLabel !== null ? (
+          {showDeveloperDiagnostics ? (
+            <div className="preview-native-host-readout">
+              <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
+              <span aria-label="实时预览数据">{formatRealtimePreviewTelemetry(nativeHostState, showDeveloperDiagnostics)}</span>
+            </div>
+          ) : null}
+          {showDeveloperDiagnostics && nativeHostState.fallbackLabel !== null ? (
             <div className="preview-native-host-fallback" aria-label="实时预览不可用">
               {formatRealtimePreviewUnavailableLabel(nativeHostState, showDeveloperDiagnostics)}
             </div>
           ) : null}
-          {nativeHostState.fallbackArtifactVisible && nativeHostState.fallbackReason !== null ? (
-            <div
-              className="preview-native-host-fallback"
-              aria-label={showDeveloperDiagnostics ? "实时预览备用产物" : "实时预览受限"}
-            >
+          {showDeveloperDiagnostics && nativeHostState.fallbackArtifactVisible && nativeHostState.fallbackReason !== null ? (
+            <div className="preview-native-host-fallback" aria-label="实时预览备用产物">
               {formatRealtimePreviewFallbackArtifact(nativeHostState, showDeveloperDiagnostics)}
             </div>
           ) : null}
@@ -601,35 +620,37 @@ export function PreviewMonitor({
         </>
       ) : null}
 
-      <div className="preview-status-line" aria-live="polite">
-        <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
-        <span aria-label="预览状态">{previewStatusLabel}</span>
-        <span className={`audio-status-chip audio-status-${audioPreview.status}`} aria-label="音频预览状态">
-          {audioStatusChipText(audioPreview, audioParity)}
-        </span>
-        <span className="audio-status-chip" aria-label="输出设备状态">
-          {audioDeviceChipText(audioDevices)}
-        </span>
-        <span className={`audio-status-chip waveform-status-${waveform.status}`} aria-label="波形状态">
-          {waveform.statusLabel}
-        </span>
-        <button
-          type="button"
-          className="audio-retry-button"
-          aria-label="重试音频"
-          title="重试音频"
-          onClick={onRetryAudioPreview}
-          disabled={pending}
-        >
-          重试音频
-        </button>
-        <span className="canvas-readout-chip" title={canvasReadout}>
-          {canvasReadout}
-        </span>
-        <span className={`canvas-background-chip ${backgroundTone}`} title={backgroundStatus}>
-          {backgroundStatus}
-        </span>
-      </div>
+      {showDeveloperDiagnostics ? (
+        <div className="preview-status-line" aria-live="polite">
+          <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
+          <span aria-label="预览状态">{previewStatusLabel}</span>
+          <span className={`audio-status-chip audio-status-${audioPreview.status}`} aria-label="音频预览状态">
+            {audioStatusChipText(audioPreview, audioParity)}
+          </span>
+          <span className="audio-status-chip" aria-label="输出设备状态">
+            {audioDeviceChipText(audioDevices)}
+          </span>
+          <span className={`audio-status-chip waveform-status-${waveform.status}`} aria-label="波形状态">
+            {waveform.statusLabel}
+          </span>
+          <button
+            type="button"
+            className="audio-retry-button"
+            aria-label="重试音频"
+            title="重试音频"
+            onClick={onRetryAudioPreview}
+            disabled={pending}
+          >
+            重试音频
+          </button>
+          <span className="canvas-readout-chip" title={canvasReadout}>
+            {canvasReadout}
+          </span>
+          <span className={`canvas-background-chip ${backgroundTone}`} title={backgroundStatus}>
+            {backgroundStatus}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

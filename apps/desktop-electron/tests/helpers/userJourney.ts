@@ -41,6 +41,9 @@ type ExecuteCommandCall = {
   textContent?: string | null;
   textSource?: string | null;
   textFontRef?: string | null;
+  sessionId?: string | null;
+  deviceSelectionId?: string | null;
+  maxPeakBins?: number | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -93,8 +96,12 @@ type RealtimePreviewHostState = {
     targetTimeMicroseconds: number;
   } | null;
   surfacePlacement?: {
+    surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";
+    screenRectCoordinateSpace: "electronScreenLogicalPixels";
     hostScreenRect: { x: number; y: number; width: number; height: number };
     nativeScreenRect: { x: number; y: number; width: number; height: number };
+    nativeAppKitScreenRect: { x: number; y: number; width: number; height: number };
+    deltaPx: { x: number; y: number; width: number; height: number };
     maxDeltaPx: number;
     aligned: boolean;
   } | null;
