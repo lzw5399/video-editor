@@ -183,7 +183,8 @@ type AudioPreviewCommandKind =
   | "refreshWaveformStatus";
 
 type AudioPreviewCommandOptions = {
-  draft?: Draft | null;
+  projectSessionId?: string | null;
+  expectedRevision?: number | null;
   sessionId?: string | null;
   materialId?: MaterialId | null;
   targetTime?: Microseconds | null;
@@ -240,7 +241,8 @@ export function buildRefreshWaveformStatusCommand(options: AudioPreviewCommandOp
 function buildAudioPreviewCommand(kind: AudioPreviewCommandKind, options: AudioPreviewCommandOptions): CommandEnvelope {
   const payload = {
     kind,
-    draft: options.draft ?? null,
+    projectSessionId: options.projectSessionId ?? null,
+    expectedRevision: options.expectedRevision ?? null,
     sessionId: options.sessionId ?? null,
     materialId: options.materialId ?? null,
     targetTime: options.targetTime ?? null,

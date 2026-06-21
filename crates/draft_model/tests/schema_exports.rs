@@ -1056,6 +1056,8 @@ fn schema_exports_include_phase15_audio_preview_binding_contracts() {
     }
 
     for expected_field in [
+        ("AudioPreviewCommandPayload", "projectSessionId"),
+        ("AudioPreviewCommandPayload", "expectedRevision"),
         ("AudioPreviewCommandPayload", "sessionId"),
         ("AudioPreviewCommandPayload", "targetTime"),
         ("AudioPreviewCommandPayload", "playbackGeneration"),
@@ -1135,6 +1137,8 @@ fn schema_exports_include_phase15_audio_preview_binding_contracts() {
         "sampleBuffer",
         "streamConfig",
         "ffmpegFilter",
+        "draft",
+        "Draft",
     ] {
         assert!(
             !audio_contract_text.contains(forbidden),

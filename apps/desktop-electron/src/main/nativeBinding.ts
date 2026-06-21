@@ -88,6 +88,7 @@ export type CreateProjectSessionRequest = {
   sessionId?: string;
   draftId?: string;
   draftName?: string;
+  fixture?: "demo";
 };
 
 export type ProjectSessionRequest = {

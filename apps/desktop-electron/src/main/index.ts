@@ -62,6 +62,9 @@ type TestExecuteCommandCall = {
   preset: string | null;
   jobId: string | null;
   sessionId: string | null;
+  projectSessionId: string | null;
+  expectedRevision: number | null;
+  hasDraftField: boolean;
   deviceSelectionId: string | null;
   maxPeakBins: number | null;
 };
@@ -486,6 +489,11 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const sessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.sessionId ?? null : null;
+  const projectSessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.projectSessionId ?? null : null;
+  const expectedRevision = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.expectedRevision ?? null : null;
+  const hasDraftField = isAudioPreviewCommandKind(command.payload.kind)
+    ? Object.prototype.hasOwnProperty.call(command.payload, "draft")
+    : false;
   const deviceSelectionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.deviceSelectionId ?? null : null;
   const maxPeakBins = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.maxPeakBins ?? null : null;
   const jobId =
@@ -517,6 +525,9 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     preset,
     jobId,
     sessionId,
+    projectSessionId,
+    expectedRevision,
+    hasDraftField,
     deviceSelectionId,
     maxPeakBins
   });

@@ -377,9 +377,11 @@ export function App(): React.ReactElement {
       }
 
       const openedProject =
-        openBundlePath === undefined || openBundlePath.length === 0
-          ? null
-          : await openProjectSessionForBundle(openBundlePath);
+        openBundlePath !== undefined && openBundlePath.length > 0
+          ? await openProjectSessionForBundle(openBundlePath)
+          : startupFixture !== undefined
+            ? await createProjectSessionForBundle(bundlePath, startupFixture)
+            : null;
       if (cancelled) {
         return;
       }
@@ -538,11 +540,15 @@ export function App(): React.ReactElement {
     }
   }
 
-  async function createProjectSessionForBundle(bundlePath: string): Promise<CommandResultEnvelope<ProjectSessionOpenResponse>> {
+  async function createProjectSessionForBundle(
+    bundlePath: string,
+    fixture?: WorkspaceStartupFixture
+  ): Promise<CommandResultEnvelope<ProjectSessionOpenResponse>> {
     await closeCurrentProjectSession();
     const result = await window.videoEditorCore.createProjectSession({
       bundlePath,
-      draftName: projectNameFromBundlePath(bundlePath)
+      draftName: projectNameFromBundlePath(bundlePath),
+      ...(fixture === "demo" ? { fixture: "demo" as const } : {})
     });
     if (result.ok && result.data !== null) {
       projectSessionRef.current = {
@@ -595,6 +601,16 @@ export function App(): React.ReactElement {
       commandError: commandErrorMessage(`项目会话未就绪，无法${action}`)
     }));
     return null;
+  }
+
+  function currentProjectSessionAudioRequest(action: string): { projectSessionId: string; expectedRevision: number } | null {
+    const request = currentProjectSessionReadRequest(action);
+    return request === null
+      ? null
+      : {
+          projectSessionId: request.sessionId,
+          expectedRevision: request.expectedRevision
+        };
   }
 
   async function listProjectSessionMaterials(sessionId: string, expectedRevision: number) {
@@ -1261,10 +1277,16 @@ export function App(): React.ReactElement {
       return existingSessionId;
     }
 
+    const projectSession = currentProjectSessionAudioRequest("创建音频预览");
+    if (projectSession === null) {
+      return null;
+    }
+
     const result = await executeAudioCommand<AudioPreviewCommandResponse>(
-      (current) =>
+      () =>
         buildCreateAudioPreviewSessionCommand({
-          draft: current.draft,
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           targetTime: playheadRef.current
         }),
       "创建音频预览",
@@ -1275,8 +1297,16 @@ export function App(): React.ReactElement {
   }
 
   async function refreshAudioDevices(): Promise<void> {
+    const projectSession = currentProjectSessionAudioRequest("读取输出设备");
+    if (projectSession === null) {
+      return;
+    }
     await executeAudioCommand<AudioOutputDeviceSummary[]>(
-      () => buildListAudioOutputDevicesCommand(),
+      () =>
+        buildListAudioOutputDevicesCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision
+        }),
       "读取输出设备",
       (current, result) => ({
         ...current,
@@ -1295,10 +1325,16 @@ export function App(): React.ReactElement {
     if (sessionId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("读取音频状态");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<AudioPreviewStatusResponse>(
       () =>
         buildGetAudioPreviewStatusCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime: playheadRef.current
         }),
@@ -1317,11 +1353,16 @@ export function App(): React.ReactElement {
     if (materialId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("读取波形");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<WaveformDisplayPeaksResponse>(
-      (current) =>
+      () =>
         buildGetWaveformDisplayPeaksCommand({
-          draft: current.draft,
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           materialId,
           maxPeakBins: 16
         }),
@@ -1329,9 +1370,10 @@ export function App(): React.ReactElement {
       applyWaveformResult
     );
     await executeAudioCommand<WaveformDisplayPeaksResponse>(
-      (current) =>
+      () =>
         buildRefreshWaveformStatusCommand({
-          draft: current.draft,
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           materialId,
           maxPeakBins: 16
         }),
@@ -2192,10 +2234,15 @@ export function App(): React.ReactElement {
     }
 
     await refreshAudioDevices();
+    const projectSession = currentProjectSessionAudioRequest("播放音频");
+    if (projectSession === null) {
+      return;
+    }
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildPlayAudioPreviewCommand({
-          draft: current.draft,
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime: playheadRef.current,
           playbackGeneration: current.audioPreview.generation
@@ -2210,10 +2257,16 @@ export function App(): React.ReactElement {
     if (sessionId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("暂停音频");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildPauseAudioPreviewCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime: playheadRef.current,
           playbackGeneration: current.audioPreview.generation
@@ -2228,10 +2281,16 @@ export function App(): React.ReactElement {
     if (sessionId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("停止音频");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildStopAudioPreviewCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime: 0,
           playbackGeneration: current.audioPreview.generation
@@ -2246,10 +2305,16 @@ export function App(): React.ReactElement {
     if (sessionId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("定位音频");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildSeekAudioPreviewCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime,
           playbackGeneration: current.audioPreview.generation
@@ -2264,10 +2329,16 @@ export function App(): React.ReactElement {
     if (sessionId === null) {
       return;
     }
+    const projectSession = currentProjectSessionAudioRequest("取消音频请求");
+    if (projectSession === null) {
+      return;
+    }
 
     await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildCancelAudioPreviewCommand({
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
           sessionId,
           targetTime: playheadRef.current,
           playbackGeneration: current.audioPreview.generation
@@ -2279,10 +2350,17 @@ export function App(): React.ReactElement {
   }
 
   function handleSelectAudioOutputDevice(deviceSelectionId: string): void {
+    const projectSession = currentProjectSessionAudioRequest("选择输出设备");
+    const sessionId = workspaceRef.current.audioPreview.sessionId;
+    if (projectSession === null || sessionId === null) {
+      return;
+    }
     void executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         buildSelectAudioOutputDeviceCommand({
-          sessionId: current.audioPreview.sessionId,
+          projectSessionId: projectSession.projectSessionId,
+          expectedRevision: projectSession.expectedRevision,
+          sessionId,
           deviceSelectionId,
           playbackGeneration: current.audioPreview.generation
         }),

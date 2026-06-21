@@ -4,17 +4,18 @@ use draft_model::{
     AudioFade, AudioPanBalance, CommandDelta, CommandErrorKind, CommandState,
     DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, EditTextSegmentCommandPayload,
     ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds,
-    MissingMaterialCommandDiagnostic, MoveSelectedSegmentIntentCommandPayload,
-    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment, SegmentId,
-    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
+    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MoveSelectedSegmentIntentCommandPayload, RationalFrameRate,
+    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
+    SegmentId, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
-    SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload,
-    SplitSelectedSegmentIntentCommandPayload, TextBox, TextLayoutRegion, TextSegment, TextStyle,
-    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
-    TrackKind, TrimSegmentDirection, TrimSelectedSegmentIntentCommandPayload,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentVisualCommandPayload,
+    SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
+    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextBox, TextLayoutRegion,
+    TextSegment, TextStyle, TextWrapping, TimelineCommandResponse, TimelineEditPayload,
+    TimelineSelection, Track, TrackId, TrackKind, TrimSegmentDirection,
+    TrimSelectedSegmentIntentCommandPayload, UpdateDraftCanvasConfigCommandPayload,
+    UpdateSegmentAudioCommandPayload, UpdateSegmentVisualCommandPayload,
 };
 use media_runtime::discover_runtime_config;
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -47,6 +48,14 @@ struct CreateProjectSessionRequest {
     draft_id: Option<String>,
     #[serde(default)]
     draft_name: Option<String>,
+    #[serde(default)]
+    fixture: Option<ProjectSessionFixture>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ProjectSessionFixture {
+    Demo,
 }
 
 #[derive(Debug, Serialize)]
@@ -418,7 +427,10 @@ impl ProjectSessionRegistry {
         let draft_name = request
             .draft_name
             .unwrap_or_else(|| default_draft_name(&bundle_path));
-        let draft = product_default_draft(draft_id, draft_name);
+        let draft = match request.fixture {
+            Some(ProjectSessionFixture::Demo) => product_demo_fixture_draft(),
+            None => product_default_draft(draft_id, draft_name),
+        };
         let bundle = match create_project_bundle(&fs, &bundle_path, &draft) {
             Ok(bundle) => bundle,
             Err(error) => {
@@ -1253,5 +1265,103 @@ fn product_default_draft(
         Track::new("track-bgm", TrackKind::Audio, "音频轨道 1"),
         Track::new("track-title", TrackKind::Text, "文字轨道 1"),
     ];
+    draft
+}
+
+fn product_demo_fixture_draft() -> Draft {
+    let mut draft = product_default_draft("draft-phase-04-workspace", "未命名草稿");
+    draft.metadata.description = Some("阶段四桌面工作区展示草稿".to_owned());
+
+    let mut video = Material::new(
+        "material-workspace-video",
+        MaterialKind::Video,
+        "media/workspace-video.mp4",
+        "城市街景.mp4",
+    );
+    video.metadata.duration = Some(Microseconds::new(12_000_000));
+    video.metadata.width = Some(1920);
+    video.metadata.height = Some(1080);
+    video.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    video.metadata.has_video = true;
+    video.metadata.has_audio = true;
+    video.metadata.audio_sample_rate = Some(48_000);
+    video.metadata.audio_channels = Some(2);
+
+    let mut audio = Material::new(
+        "material-workspace-audio",
+        MaterialKind::Audio,
+        "media/bgm.wav",
+        "背景音乐.wav",
+    );
+    audio.metadata.duration = Some(Microseconds::new(18_000_000));
+    audio.metadata.has_audio = true;
+    audio.metadata.audio_sample_rate = Some(44_100);
+    audio.metadata.audio_channels = Some(2);
+
+    let mut missing = Material::new(
+        "material-workspace-missing",
+        MaterialKind::Image,
+        "media/missing-cover.png",
+        "封面图.png",
+    );
+    missing.metadata.duration = Some(Microseconds::new(3_000_000));
+    missing.metadata.width = Some(1280);
+    missing.metadata.height = Some(720);
+    missing.metadata.has_video = true;
+    missing.status = MaterialStatus::Missing;
+
+    let mut sticker = Material::new(
+        "material-workspace-sticker-failed",
+        MaterialKind::Sticker,
+        "media/sticker.webp",
+        "贴纸素材.webp",
+    );
+    sticker.metadata.has_video = true;
+    sticker.metadata.probe_error = Some("无法读取素材头信息".to_owned());
+    sticker.status = MaterialStatus::ProbeFailed;
+
+    let text = Material::new(
+        "material-workspace-title",
+        MaterialKind::Text,
+        "text://material-workspace-title",
+        "标题文字",
+    );
+
+    draft.materials = vec![video, audio, missing, sticker, text];
+
+    let mut main_segment = Segment::new(
+        "segment-main-video",
+        "material-workspace-video",
+        SourceTimerange::new(0, 8_000_000),
+        TargetTimerange::new(0, 8_000_000),
+    );
+    main_segment.main_track_magnet = MainTrackMagnet::enabled();
+
+    let mut audio_segment = Segment::new(
+        "segment-bgm",
+        "material-workspace-audio",
+        SourceTimerange::new(0, 8_000_000),
+        TargetTimerange::new(0, 8_000_000),
+    );
+    audio_segment.volume = SegmentVolume { level_millis: 800 };
+    audio_segment.audio = SegmentAudio {
+        gain_millis: 800,
+        ..SegmentAudio::default()
+    };
+
+    draft.tracks = vec![
+        {
+            let mut track = Track::new("track-main-video", TrackKind::Video, "视频轨道 1");
+            track.segments.push(main_segment);
+            track
+        },
+        {
+            let mut track = Track::new("track-bgm", TrackKind::Audio, "音频轨道 1");
+            track.segments.push(audio_segment);
+            track
+        },
+        Track::new("track-title", TrackKind::Text, "文字轨道 1"),
+    ];
+
     draft
 }

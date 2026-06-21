@@ -27,7 +27,9 @@ const allowedRendererUrl = readAllowedRendererUrl();
 const realtimePreviewTelemetryChannel = "realtimePreviewHost:telemetryState";
 const realtimePreviewTelemetryListeners = new Set<RealtimePreviewTelemetryListener>();
 let realtimePreviewTelemetrySubscribed = false;
+let realtimePreviewTelemetryState: unknown = null;
 const realtimePreviewTelemetryListener = (_event: IpcRendererEvent, state: unknown) => {
+  realtimePreviewTelemetryState = state;
   for (const listener of realtimePreviewTelemetryListeners) {
     listener(state);
   }
@@ -91,11 +93,17 @@ function subscribeRealtimePreviewTelemetry(listener: RealtimePreviewTelemetryLis
   }
 
   realtimePreviewTelemetryListeners.add(listener);
+  if (realtimePreviewTelemetryState !== null) {
+    queueMicrotask(() => listener(realtimePreviewTelemetryState));
+  }
   if (!realtimePreviewTelemetrySubscribed) {
     realtimePreviewTelemetrySubscribed = true;
     ipcRenderer.on(realtimePreviewTelemetryChannel, realtimePreviewTelemetryListener);
     void ipcRenderer.invoke("realtimePreviewHost:subscribeTelemetry").then((state) => {
-      listener(state);
+      realtimePreviewTelemetryState = state;
+      for (const telemetryListener of realtimePreviewTelemetryListeners) {
+        telemetryListener(state);
+      }
     }).catch(() => undefined);
   }
 

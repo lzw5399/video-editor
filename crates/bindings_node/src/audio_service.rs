@@ -35,9 +35,15 @@ const MAX_WAVEFORM_PEAK_BINS: u16 = 512;
 pub struct AudioPreviewBindingRegistry {
     runtime: AudioPreviewRuntime,
     next_binding_id: u64,
-    sessions: BTreeMap<String, AudioPreviewSessionId>,
+    sessions: BTreeMap<String, AudioPreviewBindingSession>,
     outputs: BTreeMap<String, NativeAudioPreviewOutput>,
     selected_device_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct AudioPreviewBindingSession {
+    runtime_id: AudioPreviewSessionId,
+    project_session_id: String,
 }
 
 struct NativeAudioPreviewOutput {
@@ -59,6 +65,7 @@ impl AudioPreviewBindingRegistry {
     pub fn create_session(
         &mut self,
         config: AudioPreviewSessionBindingConfig,
+        project_session_id: &str,
     ) -> Result<AudioPreviewStatusResponse, AudioPreviewBindingError> {
         let runtime_id = self
             .runtime
@@ -66,18 +73,25 @@ impl AudioPreviewBindingRegistry {
             .map_err(AudioPreviewBindingError::runtime)?;
         let binding_id = format!("{SESSION_PREFIX}{:016x}", self.next_binding_id);
         self.next_binding_id = self.next_binding_id.saturating_add(1);
-        self.sessions.insert(binding_id.clone(), runtime_id);
-        self.status(&binding_id)
+        self.sessions.insert(
+            binding_id.clone(),
+            AudioPreviewBindingSession {
+                runtime_id,
+                project_session_id: project_session_id.to_owned(),
+            },
+        );
+        self.status(&binding_id, project_session_id)
     }
 
     pub fn play(
         &mut self,
         session_id: &str,
-        draft: Option<&Draft>,
+        project_session_id: &str,
+        draft: &Draft,
         target_time: Microseconds,
         playback_generation: u64,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
-        let current = self.status(session_id)?;
+        let current = self.status(session_id, project_session_id)?;
         if playback_generation != current.generation {
             return Ok(command_response(
                 session_id,
@@ -89,14 +103,8 @@ impl AudioPreviewBindingRegistry {
                 vec!["stale playback generation rejected".to_owned()],
             ));
         }
-        let draft = draft.ok_or_else(|| {
-            AudioPreviewBindingError::new(
-                AudioPreviewBindingErrorKind::InvalidPayload,
-                "audio preview playback requires the current draft",
-            )
-        })?;
         let output = self.open_native_output_for_draft(draft, target_time)?;
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
@@ -117,14 +125,15 @@ impl AudioPreviewBindingRegistry {
     pub fn pause(
         &mut self,
         session_id: &str,
+        project_session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
         self.outputs.remove(session_id);
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .pause(runtime_id)
             .map_err(AudioPreviewBindingError::runtime)?;
-        let target_time = self.status(session_id)?.target_time;
+        let target_time = self.status(session_id, project_session_id)?.target_time;
         Ok(command_response(
             session_id,
             generation.get(),
@@ -139,9 +148,10 @@ impl AudioPreviewBindingRegistry {
     pub fn stop(
         &mut self,
         session_id: &str,
+        project_session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
         self.outputs.remove(session_id);
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .stop(runtime_id)
@@ -160,9 +170,10 @@ impl AudioPreviewBindingRegistry {
     pub fn seek(
         &mut self,
         session_id: &str,
+        project_session_id: &str,
         target_time: Microseconds,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
@@ -181,8 +192,9 @@ impl AudioPreviewBindingRegistry {
     pub fn cancel(
         &mut self,
         session_id: &str,
+        project_session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let token = self
             .runtime
             .next_cancellation_token(runtime_id)
@@ -190,7 +202,7 @@ impl AudioPreviewBindingRegistry {
         self.runtime
             .cancel_request(runtime_id, token)
             .map_err(AudioPreviewBindingError::runtime)?;
-        let status = self.status(session_id)?;
+        let status = self.status(session_id, project_session_id)?;
         Ok(command_response(
             session_id,
             status.generation,
@@ -205,8 +217,9 @@ impl AudioPreviewBindingRegistry {
     pub fn status(
         &self,
         session_id: &str,
+        project_session_id: &str,
     ) -> Result<AudioPreviewStatusResponse, AudioPreviewBindingError> {
-        let runtime_id = self.runtime_session_id(session_id)?;
+        let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let status = self
             .runtime
             .status(runtime_id)
@@ -313,9 +326,10 @@ impl AudioPreviewBindingRegistry {
     pub fn select_output_device(
         &mut self,
         session_id: &str,
+        project_session_id: &str,
         selection_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
-        let status = self.status(session_id)?;
+        let status = self.status(session_id, project_session_id)?;
         let devices = self.list_output_devices()?;
         if !devices
             .iter()
@@ -340,14 +354,16 @@ impl AudioPreviewBindingRegistry {
 
     pub fn waveform_display_peaks(
         &self,
+        draft: &Draft,
         material_id: Option<String>,
         target_timerange: Option<TargetTimerange>,
         max_peak_bins: u16,
     ) -> Result<WaveformDisplayPeaksResponse, AudioPreviewBindingError> {
         let requested_peak_bins = max_peak_bins.min(MAX_WAVEFORM_PEAK_BINS);
+        let material_id = material_id.map(draft_model::MaterialId::new);
         if requested_peak_bins == 0 {
             return Ok(WaveformDisplayPeaksResponse {
-                material_id: material_id.map(draft_model::MaterialId::new),
+                material_id,
                 status: WaveformDisplayStatus::Missing,
                 status_label: "暂无波形".to_owned(),
                 target_timerange,
@@ -357,8 +373,29 @@ impl AudioPreviewBindingRegistry {
                 diagnostics: vec!["waveform display request had zero bins".to_owned()],
             });
         }
+        if let Some(material_id) = material_id.as_ref() {
+            let exists = draft
+                .materials
+                .iter()
+                .any(|material| &material.material_id == material_id);
+            if !exists {
+                return Ok(WaveformDisplayPeaksResponse {
+                    material_id: Some(material_id.clone()),
+                    status: WaveformDisplayStatus::Missing,
+                    status_label: "暂无波形".to_owned(),
+                    target_timerange,
+                    requested_peak_bins,
+                    returned_peak_bins: 0,
+                    peaks: Vec::new(),
+                    diagnostics: vec![
+                        "waveform material is not present in the current project session"
+                            .to_owned(),
+                    ],
+                });
+            }
+        }
         Ok(WaveformDisplayPeaksResponse {
-            material_id: material_id.map(draft_model::MaterialId::new),
+            material_id,
             status: WaveformDisplayStatus::Missing,
             status_label: "暂无波形".to_owned(),
             target_timerange,
@@ -372,15 +409,23 @@ impl AudioPreviewBindingRegistry {
         })
     }
 
-    fn runtime_session_id(
+    fn runtime_session_id_for_project(
         &self,
         session_id: &str,
+        project_session_id: &str,
     ) -> Result<AudioPreviewSessionId, AudioPreviewBindingError> {
         validate_binding_session_id(session_id)?;
-        self.sessions
+        let session = self
+            .sessions
             .get(session_id)
-            .copied()
-            .ok_or_else(|| AudioPreviewBindingError::unknown_session(session_id))
+            .ok_or_else(|| AudioPreviewBindingError::unknown_session(session_id))?;
+        if session.project_session_id != project_session_id {
+            return Err(AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::InvalidPayload,
+                "audio preview session does not belong to the requested project session",
+            ));
+        }
+        Ok(session.runtime_id)
     }
 }
 
@@ -505,66 +550,100 @@ fn audio_command_result(
             CommandName::CreateAudioPreviewSession,
             CommandPayload::CreateAudioPreviewSession(payload),
         ) => {
-            let config = session_config_from_payload(&payload)?;
-            serialize(registry.create_session(config)?)
+            let context = project_session_audio_context_from_payload(
+                &payload,
+                "create audio preview session",
+            )?;
+            let config = session_config_from_draft(&context.draft)?;
+            serialize(registry.create_session(config, &context.project_session_id)?)
         }
         (CommandName::PlayAudioPreview, CommandPayload::PlayAudioPreview(payload)) => {
             let session_id = required_session_id(&payload)?;
+            let context =
+                project_session_audio_context_from_payload(&payload, "play audio preview")?;
             serialize(registry.play(
                 session_id,
-                payload.draft.as_ref(),
+                &context.project_session_id,
+                &context.draft,
                 payload.target_time.unwrap_or(Microseconds::ZERO),
                 payload.playback_generation.unwrap_or(0),
             )?)
         }
         (CommandName::PauseAudioPreview, CommandPayload::PauseAudioPreview(payload)) => {
-            serialize(registry.pause(required_session_id(&payload)?)?)
+            let identity = project_session_identity_from_payload(&payload, "pause audio preview")?;
+            serialize(registry.pause(required_session_id(&payload)?, &identity.project_session_id)?)
         }
         (CommandName::StopAudioPreview, CommandPayload::StopAudioPreview(payload)) => {
-            serialize(registry.stop(required_session_id(&payload)?)?)
+            let identity = project_session_identity_from_payload(&payload, "stop audio preview")?;
+            serialize(registry.stop(required_session_id(&payload)?, &identity.project_session_id)?)
         }
         (CommandName::SeekAudioPreview, CommandPayload::SeekAudioPreview(payload)) => {
+            let identity = project_session_identity_from_payload(&payload, "seek audio preview")?;
             serialize(registry.seek(
                 required_session_id(&payload)?,
+                &identity.project_session_id,
                 payload.target_time.unwrap_or(Microseconds::ZERO),
             )?)
         }
         (CommandName::CancelAudioPreview, CommandPayload::CancelAudioPreview(payload)) => {
-            serialize(registry.cancel(required_session_id(&payload)?)?)
+            let identity = project_session_identity_from_payload(&payload, "cancel audio preview")?;
+            serialize(
+                registry.cancel(required_session_id(&payload)?, &identity.project_session_id)?,
+            )
         }
         (CommandName::GetAudioPreviewStatus, CommandPayload::GetAudioPreviewStatus(payload)) => {
-            serialize(registry.status(required_session_id(&payload)?)?)
+            let identity =
+                project_session_identity_from_payload(&payload, "get audio preview status")?;
+            serialize(
+                registry.status(required_session_id(&payload)?, &identity.project_session_id)?,
+            )
         }
-        (CommandName::ListAudioOutputDevices, CommandPayload::ListAudioOutputDevices(_)) => {
+        (CommandName::ListAudioOutputDevices, CommandPayload::ListAudioOutputDevices(payload)) => {
+            let _identity =
+                project_session_identity_from_payload(&payload, "list audio output devices")?;
             serialize(registry.list_output_devices()?)
         }
         (
             CommandName::SelectAudioOutputDevice,
             CommandPayload::SelectAudioOutputDevice(payload),
         ) => {
+            let identity =
+                project_session_identity_from_payload(&payload, "select audio output device")?;
             let device_id = payload.device_selection_id.as_deref().ok_or_else(|| {
                 AudioPreviewBindingError::new(
                     AudioPreviewBindingErrorKind::InvalidPayload,
                     "audio output device selection ID is required",
                 )
             })?;
-            serialize(registry.select_output_device(required_session_id(&payload)?, device_id)?)
+            serialize(registry.select_output_device(
+                required_session_id(&payload)?,
+                &identity.project_session_id,
+                device_id,
+            )?)
         }
         (
             CommandName::GetWaveformDisplayPeaks,
             CommandPayload::GetWaveformDisplayPeaks(payload),
-        ) => serialize(
-            registry.waveform_display_peaks(
-                payload
-                    .material_id
-                    .map(|material_id| material_id.as_str().to_owned()),
-                payload.target_timerange,
-                payload.max_peak_bins.unwrap_or(MAX_WAVEFORM_PEAK_BINS),
-            )?,
-        ),
-        (CommandName::RefreshWaveformStatus, CommandPayload::RefreshWaveformStatus(payload)) => {
+        ) => {
+            let context =
+                project_session_audio_context_from_payload(&payload, "get waveform display peaks")?;
             serialize(
                 registry.waveform_display_peaks(
+                    &context.draft,
+                    payload
+                        .material_id
+                        .map(|material_id| material_id.as_str().to_owned()),
+                    payload.target_timerange,
+                    payload.max_peak_bins.unwrap_or(MAX_WAVEFORM_PEAK_BINS),
+                )?,
+            )
+        }
+        (CommandName::RefreshWaveformStatus, CommandPayload::RefreshWaveformStatus(payload)) => {
+            let context =
+                project_session_audio_context_from_payload(&payload, "refresh waveform status")?;
+            serialize(
+                registry.waveform_display_peaks(
+                    &context.draft,
                     payload
                         .material_id
                         .map(|material_id| material_id.as_str().to_owned()),
@@ -580,27 +659,73 @@ fn audio_command_result(
     }
 }
 
-fn session_config_from_payload(
-    payload: &AudioPreviewCommandPayload,
+fn session_config_from_draft(
+    draft: &Draft,
 ) -> Result<AudioPreviewSessionBindingConfig, AudioPreviewBindingError> {
     Ok(AudioPreviewSessionBindingConfig {
         session_label: "audio-preview".to_owned(),
-        frame_rate_numerator: payload
-            .draft
-            .as_ref()
-            .map(|draft| draft.canvas_config.frame_rate.numerator)
-            .unwrap_or(30),
-        frame_rate_denominator: payload
-            .draft
-            .as_ref()
-            .map(|draft| draft.canvas_config.frame_rate.denominator)
-            .unwrap_or(1),
+        frame_rate_numerator: draft.canvas_config.frame_rate.numerator,
+        frame_rate_denominator: draft.canvas_config.frame_rate.denominator,
         playback_rate_numerator: 1,
         playback_rate_denominator: 1,
         sample_rate_hz: 48_000,
         max_buffer_duration_microseconds: Microseconds::new(50_000),
         max_channel_count: 2,
         max_frame_count: 2_400,
+    })
+}
+
+struct ProjectSessionAudioIdentity {
+    project_session_id: String,
+    expected_revision: u64,
+}
+
+struct ProjectSessionAudioContext {
+    project_session_id: String,
+    draft: Draft,
+}
+
+fn project_session_identity_from_payload(
+    payload: &AudioPreviewCommandPayload,
+    action: &str,
+) -> Result<ProjectSessionAudioIdentity, AudioPreviewBindingError> {
+    let session_id = payload.project_session_id.as_deref().ok_or_else(|| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::InvalidPayload,
+            format!("{action} requires projectSessionId"),
+        )
+    })?;
+    let expected_revision = payload.expected_revision.ok_or_else(|| {
+        AudioPreviewBindingError::new(
+            AudioPreviewBindingErrorKind::InvalidPayload,
+            format!("{action} requires expectedRevision"),
+        )
+    })?;
+    crate::project_session_service::project_session_snapshot(session_id, expected_revision)
+        .map_err(|message| {
+            AudioPreviewBindingError::new(AudioPreviewBindingErrorKind::InvalidPayload, message)
+        })?;
+    Ok(ProjectSessionAudioIdentity {
+        project_session_id: session_id.to_owned(),
+        expected_revision,
+    })
+}
+
+fn project_session_audio_context_from_payload(
+    payload: &AudioPreviewCommandPayload,
+    action: &str,
+) -> Result<ProjectSessionAudioContext, AudioPreviewBindingError> {
+    let identity = project_session_identity_from_payload(payload, action)?;
+    let snapshot = crate::project_session_service::project_session_snapshot(
+        &identity.project_session_id,
+        identity.expected_revision,
+    )
+    .map_err(|message| {
+        AudioPreviewBindingError::new(AudioPreviewBindingErrorKind::InvalidPayload, message)
+    })?;
+    Ok(ProjectSessionAudioContext {
+        project_session_id: identity.project_session_id,
+        draft: snapshot.draft,
     })
 }
 

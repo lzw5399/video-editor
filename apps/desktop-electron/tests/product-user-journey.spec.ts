@@ -373,7 +373,11 @@ test("product playback UAT uses native audio output instead of status-only or mo
       .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
     await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
-      call.command === "playAudioPreview" && call.sessionId !== null
+      call.command === "playAudioPreview" &&
+      call.sessionId !== null &&
+      typeof call.projectSessionId === "string" &&
+      typeof call.expectedRevision === "number" &&
+      call.hasDraftField === false
     )), { timeout: 10_000 }).toBe(true);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
@@ -399,7 +403,11 @@ test("product playback UAT plays embedded video audio through native output", as
       .poll(async () => (await readExecuteCommandCalls(app)).map((call) => call.command), { timeout: 10_000 })
       .toContain("playAudioPreview");
     await expect.poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
-      call.command === "playAudioPreview" && call.sessionId !== null
+      call.command === "playAudioPreview" &&
+      call.sessionId !== null &&
+      typeof call.projectSessionId === "string" &&
+      typeof call.expectedRevision === "number" &&
+      call.hasDraftField === false
     )), { timeout: 10_000 }).toBe(true);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
@@ -438,7 +446,11 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await expect
       .poll(async () => (await readExecuteCommandCalls(app)).some((call) => (
-        call.command === "playAudioPreview" && call.sessionId !== null
+        call.command === "playAudioPreview" &&
+        call.sessionId !== null &&
+        typeof call.projectSessionId === "string" &&
+        typeof call.expectedRevision === "number" &&
+        call.hasDraftField === false
       )), { timeout: 10_000 })
       .toBe(true);
 
@@ -627,7 +639,15 @@ test("product user editing matrix uses real commands and still produces visible 
     movingSegments = sortTimelineSegments(await expectTimelineMaterialSegments(page, /p0-moving-testsrc\.mp4/, 2));
     expectTimelineSegmentRange(movingSegments[0], 0, 1_500_000);
     expectTimelineSegmentRange(movingSegments[1], 1_500_000, 1_500_000);
+    const nextOverlaySelectionCount =
+      (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineSegments").length + 1;
     await page.getByRole("button", { name: /片段 p0-overlay-testsrc\.png/ }).click();
+    await expect
+      .poll(
+        async () => (await readExecuteCommandCalls(app)).filter((call) => call.command === "selectTimelineSegments").length,
+        { timeout: 30_000 }
+      )
+      .toBeGreaterThanOrEqual(nextOverlaySelectionCount);
     await moveSelectedSegmentRight(page, app, 250_000);
     overlaySegments = await expectTimelineMaterialSegments(page, /p0-overlay-testsrc\.png/, 1);
     expectTimelineSegmentRange(overlaySegments[0], 250_000, 3_000_000);

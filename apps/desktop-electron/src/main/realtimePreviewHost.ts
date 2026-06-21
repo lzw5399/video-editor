@@ -445,7 +445,9 @@ export class RealtimePreviewHost {
       } catch {
         this.telemetry = null;
       }
-      return this.state("实时预览不可用");
+      const state = this.state("实时预览不可用");
+      this.publishCachedState(state);
+      return state;
     }
   }
 
@@ -612,6 +614,25 @@ export class RealtimePreviewHost {
       return;
     }
     sender.send(TELEMETRY_STATE_CHANNEL, state);
+  }
+
+  private publishCachedState(state: RealtimePreviewHostDisplayState): void {
+    if (this.closed || this.telemetrySubscribers.size === 0) {
+      return;
+    }
+    for (const [senderId, sender] of this.telemetrySubscribers) {
+      if (sender.isDestroyed()) {
+        this.telemetrySubscribers.delete(senderId);
+        continue;
+      }
+      this.sendTelemetryState(sender, state);
+    }
+    recordRealtimePreviewHostCall({
+      kind: "pushTelemetry",
+      presentedFrameCount: state.telemetry?.presentedFrameCount,
+      playbackGeneration: state.playbackGeneration ?? undefined,
+      presentationAvailable: state.productReady
+    });
   }
 
   private refreshPresentationSnapshot(): void {

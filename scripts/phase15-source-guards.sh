@@ -82,6 +82,68 @@ assert_pattern_rejects() {
   trap - RETURN
 }
 
+audio_preview_draft_payload_matches() {
+  perl -0ne '
+    while (/(build(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command\s*\(\s*\{(?:(?!\}\s*\)).)*?\bdraft\s*:)/sg) {
+      print "$ARGV: audio preview command payload contains draft\n";
+    }
+  ' "$@" 2>/dev/null || true
+}
+
+audio_preview_missing_project_identity_matches() {
+  perl -0ne '
+    while (/(build(?:CreateAudioPreviewSession|PlayAudioPreview|PauseAudioPreview|StopAudioPreview|SeekAudioPreview|CancelAudioPreview|GetAudioPreviewStatus|ListAudioOutputDevices|SelectAudioOutputDevice|GetWaveformDisplayPeaks|RefreshWaveformStatus)Command\s*\((?:(?!\)\s*[,;]).)*\))/sg) {
+      my $call = $&;
+      if ($call !~ /\bprojectSessionId\s*:/ || $call !~ /\bexpectedRevision\s*:/) {
+        $call =~ s/\s+/ /g;
+        print "$ARGV: audio preview command missing project session identity: $call\n";
+      }
+    }
+  ' "$@" 2>/dev/null || true
+}
+
+fail_audio_preview_draft_payloads() {
+  local matches
+  matches="$(audio_preview_draft_payload_matches "$@")"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "renderer audio preview commands must use project session identity, not renderer-owned draft payloads"
+  fi
+}
+
+fail_audio_preview_missing_project_identity() {
+  local matches
+  matches="$(audio_preview_missing_project_identity_matches "$@")"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "renderer audio preview commands must carry projectSessionId and expectedRevision"
+  fi
+}
+
+assert_audio_preview_draft_guard_rejects() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '%s\n' "buildPlayAudioPreviewCommand({ draft: current.draft, sessionId: 'audio-session-1' });" >"$tmp_dir/InjectedAudioDraft.tsx"
+  if [ -z "$(audio_preview_draft_payload_matches "$tmp_dir/InjectedAudioDraft.tsx")" ]; then
+    fail "negative check did not catch injected audio preview draft payload"
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
+assert_audio_preview_identity_guard_rejects() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '%s\n' "buildStopAudioPreviewCommand({ sessionId: 'audio-session-1' });" >"$tmp_dir/InjectedAudioMissingIdentity.tsx"
+  if [ -z "$(audio_preview_missing_project_identity_matches "$tmp_dir/InjectedAudioMissingIdentity.tsx")" ]; then
+    fail "negative check did not catch injected audio preview missing project identity"
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
 RENDERER_AUDIO_GRAPH_PATTERN='\b(?:AudioGraph|audioGraph|DspTimeline|DspTimelinePlan|dspTimeline|AudioMixIntent|audioMixIntent|gainCurve|panLaw|fadeEnvelope|effectGraph|sampleIndex|targetSample|sourceSample|sampleRateToTimeline|TimelineClock|PlaybackGeneration)\b'
 RENDERER_AUDIO_BUFFER_PATTERN='\b(?:mixBuffer|ringBuffer|audioBufferQueue|sampleBuffer|rawAudioBuffer|pcmBuffer|pcmSamples|interleavedSamples|deinterleavedSamples|channelSamples|outputDeviceHandle|nativeDeviceHandle|nativeStreamHandle|outputStreamHandle|CoreAudio|WASAPI|cpal|rubato)\b'
 RENDERER_AUDIO_FFMPEG_PATTERN='\b(?:ffmpegAudioFilters?|audioFilterGraph|afade|adelay|amix|atrim|asetpts|volume=|pan=|filter_complex|filterComplex|ffmpegArgs|ffprobeArgs|FfmpegJob|FfmpegExecutor|FFmpeg|ffprobe)\b'
@@ -113,6 +175,8 @@ assert_pattern_rejects \
   "production UI forbidden copy" \
   "$PRODUCTION_FORBIDDEN_COPY_PATTERN" \
   "return <span>AudioGraph DSP PlaybackGeneration FFmpeg SQLite</span>;"
+assert_audio_preview_draft_guard_rejects
+assert_audio_preview_identity_guard_rejects
 
 for target in "${PHASE15_TARGETS[@]}"; do
   [ -f "$target" ] || fail "missing Phase 15 validation target ${target}"
@@ -151,10 +215,25 @@ require_fixed "crates/audio_output_desktop/src/cpal_output.rs" "CoreAudio"
 require_fixed "crates/audio_output_desktop/src/cpal_output.rs" "WASAPI"
 require_fixed "crates/bindings_node/src/audio_service.rs" "audio-session-"
 require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type AudioPreviewCommandPayload ="
+require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type AudioPreviewCommandPayload = { projectSessionId?: string | null, expectedRevision?: number | null,"
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type AudioPreviewStatusResponse ="
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type WaveformDisplayPeaksResponse ="
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "音频预览 controls send generated command envelopes"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "波形 display uses Rust-shaped peak payloads"
+
+fail_matches \
+  "audio preview command options and generated contract must not expose renderer-owned draft payloads" \
+  '\bdraft\?:[[:space:]]*Draft[[:space:]]*\|[[:space:]]*null|export type AudioPreviewCommandPayload = \{ draft\?' \
+  apps/desktop-electron/src/renderer/commandHelpers.ts \
+  apps/desktop-electron/src/generated/CommandEnvelope.ts
+
+fail_audio_preview_draft_payloads \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/commandHelpers.ts
+
+fail_audio_preview_missing_project_identity \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace
 
 for label in \
   "音频就绪" \

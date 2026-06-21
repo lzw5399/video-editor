@@ -137,14 +137,12 @@
             "null"
           ]
         },
-        "draft": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Draft"
-            },
-            {
-              "type": "null"
-            }
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
           ]
         },
         "materialId": {
@@ -171,6 +169,12 @@
           "minimum": 0,
           "type": [
             "integer",
+            "null"
+          ]
+        },
+        "projectSessionId": {
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -913,14 +917,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -954,6 +956,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -996,14 +1004,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1037,6 +1043,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1079,14 +1091,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1120,6 +1130,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1162,14 +1178,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1203,6 +1217,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1245,14 +1265,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1286,6 +1304,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1328,14 +1352,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1369,6 +1391,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1411,14 +1439,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1452,6 +1478,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1494,14 +1526,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1535,6 +1565,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1577,14 +1613,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1618,6 +1652,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1660,14 +1700,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1701,6 +1739,12 @@
                 "null"
               ]
             },
+            "projectSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "sessionId": {
               "type": [
                 "string",
@@ -1743,14 +1787,12 @@
                 "null"
               ]
             },
-            "draft": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Draft"
-                },
-                {
-                  "type": "null"
-                }
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "kind": {
@@ -1781,6 +1823,12 @@
               "minimum": 0,
               "type": [
                 "integer",
+                "null"
+              ]
+            },
+            "projectSessionId": {
+              "type": [
+                "string",
                 "null"
               ]
             },

@@ -36,6 +36,10 @@ type ExecuteCommandCall = {
   outputPath: string | null;
   preset: string | null;
   jobId: string | null;
+  sessionId?: string | null;
+  projectSessionId?: string | null;
+  expectedRevision?: number | null;
+  hasDraftField?: boolean;
 };
 
 type ProjectSessionCall = {
@@ -1184,7 +1188,7 @@ test("预览播放按钮使用实时预览宿主而不是连续请求预览帧",
 });
 
 test("音频预览 controls send generated command envelopes and preserve state after rejection", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1213,13 +1217,30 @@ test("音频预览 controls send generated command envelopes and preserve state 
         "getAudioPreviewStatus"
       ])
     );
+    const audioCalls = calls.filter((call) =>
+      [
+        "createAudioPreviewSession",
+        "cancelAudioPreview",
+        "getAudioPreviewStatus",
+        "seekAudioPreview",
+        "stopAudioPreview",
+        "listAudioOutputDevices",
+        "selectAudioOutputDevice"
+      ].includes(
+        call.command
+      )
+    );
+    expect(audioCalls.every((call) => call.hasDraftField === false)).toBe(true);
+    expect(
+      audioCalls.every((call) => typeof call.projectSessionId === "string" && typeof call.expectedRevision === "number")
+    ).toBe(true);
   } finally {
     await app.close();
   }
 });
 
-test("音频预览 panel and inspector expose production audio controls through updateSegmentAudio", async () => {
-  const { app, page } = await launchWorkspaceApp();
+test("音频预览 panel and inspector expose production audio controls through updateSelectedSegmentAudio intent", async () => {
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1245,17 +1266,19 @@ test("音频预览 panel and inspector expose production audio controls through 
     await audioInspector.getByRole("spinbutton", { name: "淡入" }).fill("300000");
     await audioInspector.getByRole("spinbutton", { name: "淡出" }).fill("500000");
     await audioInspector.getByRole("button", { name: "应用音频" }).click();
-    await expectCommandCall(app, "updateSegmentAudio");
+    await expect
+      .poll(async () => (await readExecuteCommandCalls(app)).some((call) => call.command === "updateSelectedSegmentAudio"))
+      .toBe(true);
 
     const calls = await readExecuteCommandCalls(app);
-    expect(calls.map((call) => call.command)).toContain("updateSegmentAudio");
+    expect(calls.map((call) => call.command)).toContain("updateSelectedSegmentAudio");
   } finally {
     await app.close();
   }
 });
 
 test("波形 display uses Rust-shaped peak payloads and keeps fallback states stable", async () => {
-  const { app, page } = await launchWorkspaceApp();
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
     await spyExecuteCommandCalls(app, page);
@@ -1266,6 +1289,13 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
     await expect(page.getByText("波形就绪")).toBeVisible();
     await expectCommandCall(app, "getWaveformDisplayPeaks");
     await expectCommandCall(app, "refreshWaveformStatus");
+    const waveformCalls = (await readExecuteCommandCalls(app)).filter(
+      (call) => call.command === "getWaveformDisplayPeaks" || call.command === "refreshWaveformStatus"
+    );
+    expect(waveformCalls.every((call) => call.hasDraftField === false)).toBe(true);
+    expect(
+      waveformCalls.every((call) => typeof call.projectSessionId === "string" && typeof call.expectedRevision === "number")
+    ).toBe(true);
 
     const waveformBox = await expectStableBox(audioSegment.locator('[aria-label="音频波形"]'), "音频波形");
     expect(waveformBox.height, "音频波形固定 14px 高").toBeLessThanOrEqual(14);
@@ -1275,7 +1305,10 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
     await app.close();
   }
 
-  const pending = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "pending" } });
+  const pending = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
+    env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "pending" }
+  });
   try {
     await expect(pending.page.getByLabel("波形状态")).toContainText("波形生成中");
     await expect(pending.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();
@@ -1283,7 +1316,10 @@ test("波形 display uses Rust-shaped peak payloads and keeps fallback states st
     await pending.app.close();
   }
 
-  const failed = await launchWorkspaceApp({ env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "failed" } });
+  const failed = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
+    env: { VIDEO_EDITOR_TEST_AUDIO_WAVEFORM_STATUS: "failed" }
+  });
   try {
     await expect(failed.page.getByLabel("波形状态")).toContainText("波形生成失败");
     await expect(failed.page.getByRole("button", { name: /片段 背景音乐\.wav/ }).first().locator('[aria-label="音频波形占位"]')).toBeVisible();

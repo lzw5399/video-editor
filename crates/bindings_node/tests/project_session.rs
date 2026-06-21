@@ -1023,6 +1023,103 @@ fn realtime_preview_project_session_snapshot_rejects_renderer_draft_payload() {
     );
 }
 
+#[test]
+fn audio_preview_commands_use_project_session_snapshot_without_renderer_draft() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-audio-preview.veproj");
+    save_timeline_draft(&bundle_path);
+
+    let opened = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-audio-preview"
+    }))
+    .expect("openProjectSession should return an envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+
+    let create = execute_command(json!({
+        "command": "createAudioPreviewSession",
+        "payload": {
+            "kind": "createAudioPreviewSession",
+            "projectSessionId": "test-session-audio-preview",
+            "expectedRevision": 0,
+            "targetTime": 0
+        },
+        "requestId": "req-audio-create"
+    }))
+    .expect("audio preview create command should return an envelope");
+    assert_eq!(create["ok"], true, "{create:#}");
+    let audio_session_id = create["data"]["sessionId"]
+        .as_str()
+        .expect("audio session id should be returned");
+    assert!(audio_session_id.starts_with("audio-session-"));
+
+    let status = execute_command(json!({
+        "command": "getAudioPreviewStatus",
+        "payload": {
+            "kind": "getAudioPreviewStatus",
+            "projectSessionId": "test-session-audio-preview",
+            "expectedRevision": 0,
+            "sessionId": audio_session_id,
+            "targetTime": 0
+        },
+        "requestId": "req-audio-status"
+    }))
+    .expect("audio preview status command should return an envelope");
+    assert_eq!(status["ok"], true, "{status:#}");
+    assert_eq!(status["data"]["sessionId"], audio_session_id);
+
+    let seek = execute_command(json!({
+        "command": "seekAudioPreview",
+        "payload": {
+            "kind": "seekAudioPreview",
+            "projectSessionId": "test-session-audio-preview",
+            "expectedRevision": 0,
+            "sessionId": audio_session_id,
+            "targetTime": 500000,
+            "playbackGeneration": create["data"]["generation"]
+        },
+        "requestId": "req-audio-seek"
+    }))
+    .expect("audio preview seek command should return an envelope");
+    assert_eq!(seek["ok"], true, "{seek:#}");
+    assert_eq!(seek["data"]["targetTime"], 500000);
+
+    let renderer_draft_payload = execute_command(json!({
+        "command": "getAudioPreviewStatus",
+        "payload": {
+            "kind": "getAudioPreviewStatus",
+            "draft": opened["data"]["draft"],
+            "sessionId": audio_session_id
+        },
+        "requestId": "req-audio-renderer-draft"
+    }))
+    .expect("audio preview renderer draft payload should return an error envelope");
+    assert_eq!(
+        renderer_draft_payload["ok"], false,
+        "{renderer_draft_payload:#}"
+    );
+
+    let missing_identity = execute_command(json!({
+        "command": "stopAudioPreview",
+        "payload": {
+            "kind": "stopAudioPreview",
+            "sessionId": audio_session_id
+        },
+        "requestId": "req-audio-missing-project"
+    }))
+    .expect("audio preview missing project identity should return an error envelope");
+    assert_eq!(missing_identity["ok"], false, "{missing_identity:#}");
+    assert!(
+        missing_identity["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("projectSessionId")
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-audio-preview" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
 fn create_preview_session(label: &str) -> Value {
     create_realtime_preview_session(json!({
         "sessionLabel": label,

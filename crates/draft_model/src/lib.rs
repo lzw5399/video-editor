@@ -919,7 +919,10 @@ pub struct InvalidatePreviewCacheCommandPayload {
 pub struct AudioPreviewCommandPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub draft: Option<Draft>,
+    pub project_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub expected_revision: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub session_id: Option<String>,

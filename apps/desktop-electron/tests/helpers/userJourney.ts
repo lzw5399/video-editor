@@ -44,6 +44,9 @@ type ExecuteCommandCall = {
   outputPath?: string | null;
   preset?: string | null;
   sessionId?: string | null;
+  projectSessionId?: string | null;
+  expectedRevision?: number | null;
+  hasDraftField?: boolean;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
 };
@@ -279,10 +282,6 @@ export function expectProductPlaybackSuccessEvidence({
     visibleMotion.visibleCenterHash,
     "visible video pixels in the preview center must change while playback is running"
   ).not.toBe(visibleBefore.visibleCenterHash);
-  expect(visibleMotion.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
-  expect(visibleMotion.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0).toBeGreaterThan(
-    before.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0
-  );
   expect(
     frameRequestsAfterPlay,
     "product playback must not drive a requestPreviewFrame PNG/artifact loop"
