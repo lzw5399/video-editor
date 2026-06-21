@@ -116,6 +116,11 @@ fail_if_matches \
   crates/bindings_node/src/lib.rs
 
 fail_if_matches \
+  "bindings_node realtime preview must not own playback cadence/drop/backpressure policy; use realtime_preview_runtime scheduler contracts" \
+  '\b(?:PLAYBACK_FRAME_DURATION_US|PLAYBACK_WORKER_IDLE_SLEEP|MAX_IN_FLIGHT_SURFACE_PRESENTATIONS|SURFACE_PRESENT_BACKPRESSURE_TIMEOUT|BindingPlaybackAnchor|BindingPlaybackDueTick|BindingPlaybackFrame|playback_due_tick|advance_next_playback_tick|next_tick_time|playback_anchor)\b' \
+  crates/bindings_node/src/realtime_preview_service.rs
+
+fail_if_matches \
   "renderer/preload must not send mutating track intents with renderer-owned track IDs; select the track, then use selected-track intents" \
   'kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload

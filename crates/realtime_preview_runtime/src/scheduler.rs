@@ -1,14 +1,20 @@
 use std::error::Error;
 use std::fmt;
+use std::time::{Duration, Instant};
 
 use draft_model::{Draft, Microseconds};
 use render_graph::{OutputDimensions, RenderGraph};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    PlaybackGeneration, RealtimePreviewGraphInput, RealtimePreviewGraphPrepareError,
+    PlaybackGeneration, PlaybackRate, RealtimePreviewGraphInput, RealtimePreviewGraphPrepareError,
     prepare_realtime_preview_graph,
 };
+
+pub const REALTIME_PLAYBACK_IDLE_POLL_INTERVAL: Duration = Duration::from_millis(4);
+pub const REALTIME_PLAYBACK_MAX_IN_FLIGHT_SURFACE_PRESENTATIONS: usize = 4;
+pub const REALTIME_PLAYBACK_SURFACE_PRESENT_BACKPRESSURE_TIMEOUT: Duration =
+    Duration::from_millis(250);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -52,6 +58,269 @@ pub trait RealtimePlaybackSchedulerPresenter {
         target_time: Microseconds,
         playback_generation: PlaybackGeneration,
     ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RealtimePlaybackCadence {
+    frame_duration_us: u64,
+    playback_rate: PlaybackRate,
+}
+
+impl RealtimePlaybackCadence {
+    pub fn new(
+        frame_rate: &draft_model::RationalFrameRate,
+        playback_rate: PlaybackRate,
+    ) -> Result<Self, RealtimePlaybackCadenceError> {
+        if frame_rate.numerator == 0 || frame_rate.denominator == 0 {
+            return Err(RealtimePlaybackCadenceError::InvalidFrameRate);
+        }
+        if playback_rate.numerator <= 0 {
+            return Err(RealtimePlaybackCadenceError::UnsupportedReversePlayback);
+        }
+        let frame_duration_us = u128::from(frame_rate.denominator)
+            .checked_mul(1_000_000)
+            .ok_or(RealtimePlaybackCadenceError::FrameDurationOverflow)?
+            / u128::from(frame_rate.numerator);
+        let frame_duration_us = u64::try_from(frame_duration_us)
+            .map_err(|_| RealtimePlaybackCadenceError::FrameDurationOverflow)?;
+        if frame_duration_us == 0 {
+            return Err(RealtimePlaybackCadenceError::InvalidFrameRate);
+        }
+        Ok(Self {
+            frame_duration_us,
+            playback_rate,
+        })
+    }
+
+    pub const fn frame_duration_us(self) -> u64 {
+        self.frame_duration_us
+    }
+
+    fn media_elapsed_us(self, wall_elapsed_us: u64) -> u64 {
+        let scaled = u128::from(wall_elapsed_us)
+            .saturating_mul(self.playback_rate.numerator as u128)
+            / u128::from(self.playback_rate.denominator);
+        u64::try_from(scaled).unwrap_or(u64::MAX)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealtimePlaybackCadenceError {
+    InvalidFrameRate,
+    UnsupportedReversePlayback,
+    FrameDurationOverflow,
+}
+
+impl fmt::Display for RealtimePlaybackCadenceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidFrameRate => formatter.write_str(
+                "realtime playback frame rate numerator and denominator must be greater than zero",
+            ),
+            Self::UnsupportedReversePlayback => formatter.write_str(
+                "realtime playback scheduler does not support reverse playback cadence yet",
+            ),
+            Self::FrameDurationOverflow => {
+                formatter.write_str("realtime playback frame duration overflowed")
+            }
+        }
+    }
+}
+
+impl Error for RealtimePlaybackCadenceError {}
+
+#[derive(Debug, Clone)]
+pub struct RealtimePlaybackTimeline {
+    next_tick_time: Microseconds,
+    anchor: Option<RealtimePlaybackAnchor>,
+}
+
+impl RealtimePlaybackTimeline {
+    pub fn new() -> Self {
+        Self {
+            next_tick_time: Microseconds::ZERO,
+            anchor: None,
+        }
+    }
+
+    pub fn seek(&mut self, target_time: Microseconds) {
+        self.next_tick_time = target_time;
+        self.anchor = None;
+    }
+
+    pub fn reset(&mut self) {
+        self.next_tick_time = Microseconds::ZERO;
+        self.anchor = None;
+    }
+
+    pub fn pause(&mut self) {
+        self.anchor = None;
+    }
+
+    pub fn stop(&mut self) {
+        self.reset();
+    }
+
+    pub fn start_after_prewarm(
+        &mut self,
+        start_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+        sequence_duration: Microseconds,
+        cadence: RealtimePlaybackCadence,
+    ) {
+        self.anchor = Some(RealtimePlaybackAnchor {
+            started_at: Instant::now(),
+            start_time,
+            playback_generation,
+            sequence_duration,
+            cadence,
+        });
+        self.next_tick_time = Microseconds::new(
+            start_time
+                .get()
+                .saturating_add(cadence.frame_duration_us())
+                .min(sequence_duration.get()),
+        );
+    }
+
+    pub fn due_tick(
+        &self,
+        playback_generation: PlaybackGeneration,
+    ) -> Option<RealtimePlaybackDueTick> {
+        self.due_tick_at(playback_generation, Instant::now())
+    }
+
+    pub fn advance_after_presented(&mut self, presented_time: Microseconds) {
+        let Some(anchor) = self.anchor.as_ref() else {
+            return;
+        };
+        self.next_tick_time = Microseconds::new(
+            presented_time
+                .get()
+                .saturating_add(anchor.cadence.frame_duration_us())
+                .min(anchor.sequence_duration.get()),
+        );
+    }
+
+    #[cfg(test)]
+    fn start_for_test(
+        &mut self,
+        start_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+        sequence_duration: Microseconds,
+        cadence: RealtimePlaybackCadence,
+        started_at: Instant,
+    ) {
+        self.anchor = Some(RealtimePlaybackAnchor {
+            started_at,
+            start_time,
+            playback_generation,
+            sequence_duration,
+            cadence,
+        });
+        self.next_tick_time = start_time;
+    }
+
+    fn due_tick_at(
+        &self,
+        playback_generation: PlaybackGeneration,
+        now: Instant,
+    ) -> Option<RealtimePlaybackDueTick> {
+        let Some(anchor) = self.anchor.as_ref() else {
+            return None;
+        };
+        if anchor.playback_generation != playback_generation {
+            return None;
+        }
+
+        let elapsed_us =
+            u64::try_from(now.duration_since(anchor.started_at).as_micros()).unwrap_or(u64::MAX);
+        let wall_media_time = anchor
+            .start_time
+            .get()
+            .saturating_add(anchor.cadence.media_elapsed_us(elapsed_us))
+            .min(anchor.sequence_duration.get());
+        if wall_media_time < self.next_tick_time.get()
+            && self.next_tick_time.get() < anchor.sequence_duration.get()
+        {
+            return None;
+        }
+
+        let elapsed_frames = wall_media_time.saturating_sub(anchor.start_time.get())
+            / anchor.cadence.frame_duration_us();
+        let wall_aligned_target = anchor
+            .start_time
+            .get()
+            .saturating_add(elapsed_frames.saturating_mul(anchor.cadence.frame_duration_us()))
+            .min(anchor.sequence_duration.get());
+        let target_time = self
+            .next_tick_time
+            .get()
+            .max(wall_aligned_target)
+            .min(anchor.sequence_duration.get());
+        let dropped_frames = target_time.saturating_sub(self.next_tick_time.get())
+            / anchor.cadence.frame_duration_us();
+        let schedule_lateness_ms = wall_media_time.saturating_sub(target_time) / 1_000;
+        Some(RealtimePlaybackDueTick {
+            target_time: Microseconds::new(target_time),
+            dropped_frames,
+            schedule_lateness_ms,
+        })
+    }
+}
+
+impl Default for RealtimePlaybackTimeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RealtimePlaybackAnchor {
+    started_at: Instant,
+    start_time: Microseconds,
+    playback_generation: PlaybackGeneration,
+    sequence_duration: Microseconds,
+    cadence: RealtimePlaybackCadence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RealtimePlaybackDueTick {
+    pub target_time: Microseconds,
+    pub dropped_frames: u64,
+    pub schedule_lateness_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealtimePlaybackPresentedFrame {
+    pub evidence: RealtimePlaybackSchedulerEvidence,
+    pub dropped_frames: u64,
+    pub schedule_lateness_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RealtimePlaybackPresentationQueuePolicy {
+    pub max_in_flight_presentations: usize,
+    pub backpressure_timeout: Duration,
+}
+
+impl RealtimePlaybackPresentationQueuePolicy {
+    pub const fn production() -> Self {
+        Self {
+            max_in_flight_presentations: REALTIME_PLAYBACK_MAX_IN_FLIGHT_SURFACE_PRESENTATIONS,
+            backpressure_timeout: REALTIME_PLAYBACK_SURFACE_PRESENT_BACKPRESSURE_TIMEOUT,
+        }
+    }
+
+    pub const fn has_capacity(self, in_flight_count: usize) -> bool {
+        in_flight_count < self.max_in_flight_presentations
+    }
+}
+
+impl Default for RealtimePlaybackPresentationQueuePolicy {
+    fn default() -> Self {
+        Self::production()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -145,16 +414,19 @@ impl Error for RealtimePlaybackSchedulerError {}
 #[cfg(test)]
 mod tests {
     use super::{
+        RealtimePlaybackCadence, RealtimePlaybackPresentationQueuePolicy,
         RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig,
         RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerPresenter,
+        RealtimePlaybackTimeline,
     };
     use draft_model::{
         Draft, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate, Segment,
         SourceTimerange, TargetTimerange, Track, TrackKind,
     };
     use render_graph::{OutputDimensions, RenderGraph};
+    use std::time::{Duration, Instant};
 
-    use crate::PlaybackGeneration;
+    use crate::{PlaybackGeneration, PlaybackRate};
 
     #[test]
     fn scheduler_builds_render_graph_before_presenting_surface() {
@@ -202,6 +474,111 @@ mod tests {
 
         assert!(error.to_string().contains("accepted draft snapshot"));
         assert_eq!(presenter.present_count, 0);
+    }
+
+    #[test]
+    fn playback_cadence_uses_rational_frame_rate_not_fixed_30fps() {
+        let twenty_four =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(24, 1), PlaybackRate::normal())
+                .expect("24fps cadence is valid");
+        let ntsc = RealtimePlaybackCadence::new(
+            &RationalFrameRate::new(30_000, 1_001),
+            PlaybackRate::normal(),
+        )
+        .expect("29.97fps cadence is valid");
+        let thirty =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(30, 1), PlaybackRate::normal())
+                .expect("30fps cadence is valid");
+
+        assert_eq!(twenty_four.frame_duration_us(), 41_666);
+        assert_eq!(ntsc.frame_duration_us(), 33_366);
+        assert_eq!(thirty.frame_duration_us(), 33_333);
+    }
+
+    #[test]
+    fn playback_timeline_skips_late_frames_without_slowing_media_clock() {
+        let cadence =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(30, 1), PlaybackRate::normal())
+                .expect("30fps cadence is valid");
+        let generation = PlaybackGeneration::new(7);
+        let start_time = Microseconds::new(100_000);
+        let mut timeline = RealtimePlaybackTimeline::new();
+        timeline.start_for_test(
+            start_time,
+            generation,
+            Microseconds::new(2_000_000),
+            cadence,
+            Instant::now()
+                .checked_sub(Duration::from_millis(500))
+                .expect("500ms before now is representable"),
+        );
+
+        let due_tick = timeline
+            .due_tick(generation)
+            .expect("late playback should immediately present the wall-clock frame");
+        let expected_target_time = start_time
+            .get()
+            .saturating_add(15 * cadence.frame_duration_us());
+
+        assert_eq!(due_tick.target_time.get(), expected_target_time);
+        assert_eq!(due_tick.dropped_frames, 15);
+    }
+
+    #[test]
+    fn playback_timeline_respects_non_unit_playback_rate() {
+        let cadence = RealtimePlaybackCadence::new(
+            &RationalFrameRate::new(30, 1),
+            PlaybackRate::new(2, 1).expect("2x playback rate is valid"),
+        )
+        .expect("2x cadence is valid");
+        let generation = PlaybackGeneration::new(11);
+        let start_time = Microseconds::ZERO;
+        let mut timeline = RealtimePlaybackTimeline::new();
+        timeline.start_for_test(
+            start_time,
+            generation,
+            Microseconds::new(2_000_000),
+            cadence,
+            Instant::now()
+                .checked_sub(Duration::from_millis(500))
+                .expect("500ms before now is representable"),
+        );
+
+        let due_tick = timeline
+            .due_tick(generation)
+            .expect("2x playback should choose the media frame for 1s elapsed media time");
+
+        assert_eq!(due_tick.target_time.get(), 30 * cadence.frame_duration_us());
+        assert_eq!(due_tick.dropped_frames, 30);
+    }
+
+    #[test]
+    fn playback_timeline_rejects_stale_generation_ticks() {
+        let cadence =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(24, 1), PlaybackRate::normal())
+                .expect("cadence is valid");
+        let mut timeline = RealtimePlaybackTimeline::new();
+        timeline.start_for_test(
+            Microseconds::ZERO,
+            PlaybackGeneration::new(3),
+            Microseconds::new(1_000_000),
+            cadence,
+            Instant::now()
+                .checked_sub(Duration::from_millis(100))
+                .expect("100ms before now is representable"),
+        );
+
+        assert_eq!(timeline.due_tick(PlaybackGeneration::new(4)), None);
+    }
+
+    #[test]
+    fn playback_queue_policy_is_runtime_owned() {
+        let policy = RealtimePlaybackPresentationQueuePolicy::production();
+
+        assert_eq!(policy.max_in_flight_presentations, 4);
+        assert!(policy.has_capacity(3));
+        assert!(!policy.has_capacity(4));
+        assert_eq!(policy.backpressure_timeout, Duration::from_millis(250));
     }
 
     #[derive(Default)]

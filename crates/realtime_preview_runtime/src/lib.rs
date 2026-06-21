@@ -49,9 +49,12 @@ pub use request::{
     RealtimePreviewBackendUsed, RealtimePreviewFrameRequest, RealtimePreviewFrameResult,
 };
 pub use scheduler::{
-    RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
-    RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerEvidenceSource,
-    RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerPresenter,
+    REALTIME_PLAYBACK_IDLE_POLL_INTERVAL, RealtimePlaybackCadence, RealtimePlaybackCadenceError,
+    RealtimePlaybackDueTick, RealtimePlaybackPresentationQueuePolicy,
+    RealtimePlaybackPresentedFrame, RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig,
+    RealtimePlaybackSchedulerError, RealtimePlaybackSchedulerEvidence,
+    RealtimePlaybackSchedulerEvidenceSource, RealtimePlaybackSchedulerPresentation,
+    RealtimePlaybackSchedulerPresenter, RealtimePlaybackTimeline,
 };
 pub use session::{
     PreviewGpuBackend, PreviewSessionId, RealtimePreviewError, RealtimePreviewRuntime,

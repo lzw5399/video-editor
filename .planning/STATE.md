@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: Completed Phase 15.3 Plan 08 aggregate verification and closeout
-last_updated: "2026-06-20T13:40:02Z"
-last_activity: 2026-06-20 -- Phase 15.3 complete; ready to plan Phase 16 scheduler/job isolation
+last_updated: "2026-06-21T13:59:57Z"
+last_activity: 2026-06-21 -- Completed quick task 260621-sg4: preview runtime scheduler ownership
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; ready to plan Phase 16
-Last activity: 2026-06-20 -- Phase 15.3 Plan 08 aggregate verification and closeout
+Last activity: 2026-06-21 -- Completed quick task 260621-sg4: preview runtime scheduler ownership
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -214,6 +214,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Product material reads now use Rust project session read APIs for material lists and missing-material diagnostics; product renderer code is guarded against reintroducing legacy full-draft `listMaterials` / `listMissingMaterials` commands. (URGENT)
 - FFmpeg/ffprobe runtime resolution is now bundled-only for product and test gates: Electron packages `runtime/ffmpeg`, packaged app sets `VE_BUNDLED_FFMPEG_DIR` from app resources, and Homebrew/PATH/legacy per-binary lookup is forbidden by release guards. (URGENT)
 - macOS packaged FFmpeg runtime now includes app-relative bundled dylibs and a recursive `otool -L` provision gate so `/opt/homebrew`, `/usr/local`, PATH, and local-machine FFmpeg dependencies fail before packaging. (URGENT)
+- Realtime preview playback cadence, rational frame duration, late-frame drop accounting, and surface in-flight queue policy now live in `realtime_preview_runtime`; `bindings_node` remains a native presenter/resource adapter and is guarded against reintroducing binding-owned scheduler policy. (URGENT)
 - Product E2E acceptance is now a project-wide review rule: visible editor features must be proven through normal Playwright/Electron user workflows, and unsupported default controls must be hidden or gated instead of appearing functional. (URGENT)
 - Playback acceptance is now a project-wide review rule: playhead/time advancement without visible preview motion is not a pass; normal user tests must assert real `renderGraphGpuComposited` evidence plus visible preview-region motion. (URGENT)
 - Refactor reviews now apply a no-legacy-compatibility-by-default rule: greenfield product paths should replace obsolete partial implementations and remove/gate old fallback/debug/alias paths rather than preserving them as compatibility. (URGENT)
@@ -488,6 +489,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-21 | 260621-sg4-preview-runtime-scheduler-ownership | Moved realtime preview playback cadence, due-frame/drop accounting, and surface in-flight policy into realtime_preview_runtime, leaving bindings_node as the native presenter/resource adapter and adding guards against binding-owned scheduler policy returning. |
 | 2026-06-21 | 260621-sg1-enforce-renderer-timeline-semantic-guards | Moved product track mutations to Rust selected-track intents, added session semantic-key telemetry assertions, and strengthened Phase 3 source guards with construction-site patterns and negative self-tests. |
 | 2026-06-18 | 260618-w08-capture-jianying-pro-ui-screenshots-as-p | Added provisional Jianying Pro UI screenshot reference docs, defined UI alignment regression expectations, and hid developer diagnostics/path/artifact debug UI behind an explicit diagnostics switch. |
 | 2026-06-18 | 260618-p3v-capture-confirmed-production-editor-arch | Captured confirmed production architecture decisions, research questions, Phase 11 context, and revised Phase 11-18 wording after user review. |
