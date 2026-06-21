@@ -36,9 +36,9 @@ type FeaturePanelProps = {
   onDismissResourceNotice: () => void;
   onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
   onAddTimelineSegment: (materialId: string) => void;
-  onAddTextSegment: (text: TextSegment, durationUs: number) => void;
-  onImportSubtitleSrt: (srtContent: string, timeOffsetUs: number, textTemplate: TextSegment) => void;
-  onAddAudioSegment: (materialId: string, durationUs: number) => void;
+  onAddTextSegment: (text: TextSegment) => void;
+  onImportSubtitleSrt: (srtContent: string, textTemplate: TextSegment) => void;
+  onAddAudioSegment: (materialId: string) => void;
   onSetSelectedSegmentVolume: (levelMillis: number) => void;
   onUpdateSelectedSegmentAudio: (options: {
     gainMillis: number;
@@ -218,7 +218,6 @@ function MaterialPanel({
 
 function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
-  const [textDurationInputSeconds, setTextDurationInputSeconds] = useState(3);
   const hasTextTrack = workspace.viewModel.timeline.capabilities.hasTextTrack;
 
   const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
@@ -238,23 +237,10 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
           <span>文字内容</span>
           <textarea value={content} onChange={(event) => setContent(event.currentTarget.value)} />
         </label>
-        <label className="field-row">
-          <span>时长</span>
-          <input
-            aria-label="文字时长（秒）"
-            type="number"
-            min="0.1"
-            step="0.1"
-            value={textDurationInputSeconds}
-            onChange={(event) =>
-              setTextDurationInputSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, textDurationInputSeconds))
-            }
-          />
-        </label>
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onAddTextSegment(text, secondsToMicroseconds(textDurationInputSeconds))}
+          onClick={() => onAddTextSegment(text)}
           disabled={workspace.pendingCommand !== null || !hasTextTrack}
         >
           添加文字
@@ -269,7 +255,6 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
 
 function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): React.ReactElement {
   const [srtContent, setSrtContent] = useState("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n");
-  const [subtitleOffsetSeconds, setSubtitleOffsetSeconds] = useState(0);
   const textTemplate = useMemo(() => createDefaultTextSegment("字幕", "subtitle"), []);
 
   return (
@@ -291,23 +276,10 @@ function CaptionsPanel({ workspace, onImportSubtitleSrt }: FeaturePanelProps): R
             onChange={(event) => setSrtContent(event.currentTarget.value)}
           />
         </label>
-        <label className="field-row">
-          <span>时间偏移</span>
-          <input
-            aria-label="字幕时间偏移"
-            type="number"
-            min="0"
-            step="0.1"
-            value={subtitleOffsetSeconds}
-            onChange={(event) =>
-              setSubtitleOffsetSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, subtitleOffsetSeconds, 0, 3_600))
-            }
-          />
-        </label>
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onImportSubtitleSrt(srtContent, secondsToNonNegativeMicroseconds(subtitleOffsetSeconds), textTemplate)}
+          onClick={() => onImportSubtitleSrt(srtContent, textTemplate)}
           disabled={workspace.pendingCommand !== null || srtContent.trim().length === 0}
         >
           导入字幕
@@ -373,7 +345,6 @@ function AudioPanel({
 }: FeaturePanelProps): React.ReactElement {
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
   const [materialId, setMaterialId] = useState(audioMaterials[0]?.materialId ?? "");
-  const [audioDurationInputSeconds, setAudioDurationInputSeconds] = useState(4);
   const [volumePercent, setVolumePercent] = useState(100);
   const [panPercent, setPanPercent] = useState(0);
   const [fadeInSeconds, setFadeInSeconds] = useState(0);
@@ -390,7 +361,7 @@ function AudioPanel({
         <button
           type="button"
           className="primary-action"
-          onClick={() => onAddAudioSegment(selectedMaterialId, secondsToMicroseconds(audioDurationInputSeconds))}
+          onClick={() => onAddAudioSegment(selectedMaterialId)}
           disabled={workspace.pendingCommand !== null || !hasAudioTrack || selectedMaterialId.length === 0}
         >
           添加音频
@@ -413,19 +384,6 @@ function AudioPanel({
               </option>
             ))}
           </select>
-        </label>
-        <label className="field-row">
-          <span>时长</span>
-          <input
-            aria-label="音频时长（秒）"
-            type="number"
-            min="0.1"
-            step="0.1"
-            value={audioDurationInputSeconds}
-            onChange={(event) =>
-              setAudioDurationInputSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, audioDurationInputSeconds))
-            }
-          />
         </label>
       </div>
 
@@ -754,14 +712,6 @@ function ResourceProgress({ value, compact = false }: { value: number | null; co
 
 function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
-}
-
-function toPositiveSeconds(value: number, fallback: number): number {
-  return Math.max(0.1, Number.isFinite(value) ? value : fallback);
-}
-
-function secondsToMicroseconds(value: number): number {
-  return toPositiveInteger(value * 1_000_000, 1_000_000);
 }
 
 function secondsToNonNegativeMicroseconds(value: number): number {

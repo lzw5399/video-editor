@@ -142,18 +142,17 @@ export type ProjectIntent =
   | { kind: "splitSelectedSegmentIntent" }
   | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; trimAt: Microseconds }
   | { kind: "deleteSelectedSegment" }
-  | { kind: "addTextSegmentIntent"; text: TextSegment; duration: Microseconds }
+  | { kind: "addTextSegmentIntent"; text: TextSegment }
   | { kind: "editSelectedText"; text: TextSegment }
   | {
       kind: "importSubtitleSrtIntent";
       srtContent: string;
-      timeOffset: Microseconds;
       style: TextStyle;
       textBox: TextBox;
       layoutRegion: TextLayoutRegion;
       wrapping: TextWrapping;
     }
-  | { kind: "addAudioSegmentIntent"; materialId?: MaterialId | null; duration?: Microseconds | null }
+  | { kind: "addAudioSegmentIntent"; materialId?: MaterialId | null }
   | { kind: "setSelectedSegmentVolume"; volume: SegmentVolume }
   | {
       kind: "updateSelectedSegmentAudio";

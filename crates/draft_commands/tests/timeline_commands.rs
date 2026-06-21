@@ -269,7 +269,8 @@ fn intent_timeline_edits_are_rust_owned() {
             track_ids: vec![text_track.track_id.clone()],
         },
         text_segment("Rust owned text"),
-        Microseconds::ZERO,
+        Some(Microseconds::ZERO),
+        None,
     )
     .expect("text intent should allocate text material and clamp duration");
     let text_segment = text_added
@@ -300,6 +301,7 @@ fn intent_timeline_edits_are_rust_owned() {
             segment_ids: Vec::new(),
             track_ids: vec!["audio-track".into()],
         },
+        None,
         None,
         None,
     )

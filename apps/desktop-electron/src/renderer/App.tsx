@@ -1760,44 +1760,59 @@ export function App(): React.ReactElement {
     }
   }
 
-  function handleAddTextSegment(text: TextSegment, durationUs: number): void {
-    const safeDurationUs = toPositiveMicroseconds(durationUs);
-
-    void executeProjectTimelineIntent(
-      {
-        kind: "addTextSegmentIntent",
-        text,
-        duration: safeDurationUs
-      },
-      "添加文字"
-    );
+  function handleAddTextSegment(text: TextSegment): void {
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位文字播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "addTextSegmentIntent",
+          text
+        },
+        "添加文字"
+      );
+    })();
   }
 
-  function handleImportSubtitleSrt(srtContent: string, timeOffsetUs: number, textTemplate: TextSegment): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "importSubtitleSrtIntent",
-        srtContent,
-        timeOffset: Math.max(0, Math.round(timeOffsetUs)),
-        style: textTemplate.style,
-        textBox: textTemplate.textBox,
-        layoutRegion: textTemplate.layoutRegion,
-        wrapping: textTemplate.wrapping
-      },
-      "导入字幕"
-    );
+  function handleImportSubtitleSrt(srtContent: string, textTemplate: TextSegment): void {
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位字幕播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "importSubtitleSrtIntent",
+          srtContent,
+          style: textTemplate.style,
+          textBox: textTemplate.textBox,
+          layoutRegion: textTemplate.layoutRegion,
+          wrapping: textTemplate.wrapping
+        },
+        "导入字幕"
+      );
+    })();
   }
 
-  function handleAddAudioSegment(materialId: string, durationUs: number): void {
-    const safeDurationUs = toPositiveMicroseconds(durationUs);
-    void executeProjectTimelineIntent(
-      {
-        kind: "addAudioSegmentIntent",
-        materialId: materialId.length > 0 ? materialId : null,
-        duration: safeDurationUs
-      },
-      "添加音频"
-    );
+  function handleAddAudioSegment(materialId: string): void {
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位音频播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "addAudioSegmentIntent",
+          materialId: materialId.length > 0 ? materialId : null
+        },
+        "添加音频"
+      );
+    })();
   }
 
   function handleSetSelectedSegmentVolume(levelMillis: number): void {

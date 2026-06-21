@@ -500,7 +500,16 @@ pub struct AddTextSegmentIntentCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub text: TextSegment,
-    pub duration: Microseconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub duration: Option<Microseconds>,
+    #[serde(
+        default,
+        rename = "targetStart",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional = nullable)]
+    pub target_start: Option<Microseconds>,
 }
 
 /// Payload accepted by the Phase 3 text segment edit command.
@@ -541,7 +550,13 @@ pub struct ImportSubtitleSrtIntentCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub srt_content: String,
-    pub time_offset: Microseconds,
+    #[serde(
+        default,
+        rename = "timeOffset",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional = nullable)]
+    pub time_offset: Option<Microseconds>,
     pub style: TextStyle,
     pub text_box: TextBox,
     pub layout_region: TextLayoutRegion,
@@ -575,6 +590,13 @@ pub struct AddAudioSegmentIntentCommandPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub duration: Option<Microseconds>,
+    #[serde(
+        default,
+        rename = "targetStart",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional = nullable)]
+    pub target_start: Option<Microseconds>,
 }
 
 /// Payload accepted by the Phase 3 segment volume command.

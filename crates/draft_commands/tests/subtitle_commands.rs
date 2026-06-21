@@ -326,7 +326,7 @@ fn subtitle_intent_payload(
         selection,
         srt_content: "1\n00:00:00,000 --> 00:00:01,000\n第一行\n继续第一行\n\n2\n00:00:01,500 --> 00:00:02,250\n第二行\n"
             .to_owned(),
-        time_offset: Microseconds::new(500_000),
+        time_offset: Some(Microseconds::new(500_000)),
         style: TextStyle {
             font_size: 32,
             color: "#ffee00".to_owned(),

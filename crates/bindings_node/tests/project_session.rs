@@ -287,6 +287,229 @@ fn project_session_add_intent_rejects_renderer_placement_fields() {
 }
 
 #[test]
+fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-add-media-timing.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-add-media-timing"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let positioned_text = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 450_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned_text["ok"], true, "{positioned_text:#}");
+    assert_eq!(positioned_text["data"]["revision"], 0);
+
+    let text_added = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTextSegmentIntent",
+            "text": text_segment_json("播放头文字", "text")
+        }
+    }))
+    .expect("text add intent should return an envelope");
+    assert_eq!(text_added["ok"], true, "{text_added:#}");
+    assert_eq!(text_added["data"]["revision"], 1);
+    assert_no_renderer_project_state_payload(&text_added);
+    assert_eq!(
+        text_added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        450_000
+    );
+    assert_eq!(
+        text_added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["duration"],
+        3_000_000
+    );
+
+    let positioned_audio = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 550_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned_audio["ok"], true, "{positioned_audio:#}");
+    assert_eq!(positioned_audio["data"]["revision"], 1);
+
+    let audio_added = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "addAudioSegmentIntent",
+            "materialId": "audio-material"
+        }
+    }))
+    .expect("audio add intent should return an envelope");
+    assert_eq!(audio_added["ok"], true, "{audio_added:#}");
+    assert_eq!(audio_added["data"]["revision"], 2);
+    assert_no_renderer_project_state_payload(&audio_added);
+    assert_eq!(
+        audio_added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        550_000
+    );
+    assert_eq!(
+        audio_added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["duration"],
+        2_000_000
+    );
+
+    let positioned_subtitle = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 650_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned_subtitle["ok"], true, "{positioned_subtitle:#}");
+    assert_eq!(positioned_subtitle["data"]["revision"], 2);
+
+    let subtitle_template = text_segment_json("字幕", "subtitle");
+    let subtitle_added = execute_project_intent(json!({
+        "sessionId": "test-session-add-media-timing",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "importSubtitleSrtIntent",
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n播放头字幕\n",
+            "style": subtitle_template["style"].clone(),
+            "textBox": subtitle_template["textBox"].clone(),
+            "layoutRegion": subtitle_template["layoutRegion"].clone(),
+            "wrapping": subtitle_template["wrapping"].clone()
+        }
+    }))
+    .expect("subtitle import intent should return an envelope");
+    assert_eq!(subtitle_added["ok"], true, "{subtitle_added:#}");
+    assert_eq!(subtitle_added["data"]["revision"], 3);
+    assert_no_renderer_project_state_payload(&subtitle_added);
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session add media timing should save canonical project.json");
+    let text_track = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "text-track")
+        .expect("text track should exist");
+    assert_eq!(text_track.segments.len(), 1);
+    assert_eq!(text_track.segments[0].target_timerange.start.get(), 450_000);
+    assert_eq!(
+        text_track.segments[0].target_timerange.duration.get(),
+        3_000_000
+    );
+
+    let audio_track = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "audio-track")
+        .expect("audio track should exist");
+    assert_eq!(audio_track.segments.len(), 1);
+    assert_eq!(
+        audio_track.segments[0].target_timerange.start.get(),
+        550_000
+    );
+    assert_eq!(
+        audio_track.segments[0].target_timerange.duration.get(),
+        2_000_000
+    );
+
+    let subtitle_track = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.name == "字幕")
+        .expect("subtitle track should be created");
+    assert_eq!(subtitle_track.segments.len(), 1);
+    assert_eq!(
+        subtitle_track.segments[0].target_timerange.start.get(),
+        650_000
+    );
+    assert_eq!(
+        subtitle_track.segments[0].target_timerange.duration.get(),
+        1_000_000
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-add-media-timing" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_add_media_intents_reject_renderer_timing_fields() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir
+        .path()
+        .join("session-add-media-timing-reject.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-add-media-timing-reject"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let subtitle_template = text_segment_json("字幕", "subtitle");
+    let cases = [
+        json!({
+            "kind": "addTextSegmentIntent",
+            "text": text_segment_json("旧文字时长", "text"),
+            "duration": 1_000_000
+        }),
+        json!({
+            "kind": "addTextSegmentIntent",
+            "text": text_segment_json("旧文字位置", "text"),
+            "targetStart": 1_000_000
+        }),
+        json!({
+            "kind": "addAudioSegmentIntent",
+            "materialId": "audio-material",
+            "duration": 1_000_000
+        }),
+        json!({
+            "kind": "addAudioSegmentIntent",
+            "materialId": "audio-material",
+            "targetStart": 1_000_000
+        }),
+        json!({
+            "kind": "importSubtitleSrtIntent",
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n旧偏移\n",
+            "timeOffset": 1_000_000,
+            "style": subtitle_template["style"].clone(),
+            "textBox": subtitle_template["textBox"].clone(),
+            "layoutRegion": subtitle_template["layoutRegion"].clone(),
+            "wrapping": subtitle_template["wrapping"].clone()
+        }),
+    ];
+
+    for intent in cases {
+        let rejected = execute_project_intent(json!({
+            "sessionId": "test-session-add-media-timing-reject",
+            "expectedRevision": 0,
+            "intent": intent
+        }))
+        .expect("legacy media timing payload should return an envelope");
+        assert_eq!(rejected["ok"], false, "{rejected:#}");
+        assert_eq!(rejected["data"], Value::Null);
+        assert_eq!(rejected["error"]["kind"], "invalidPayload");
+    }
+
+    close_project_session(json!({ "sessionId": "test-session-add-media-timing-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_move_selected_segment_uses_target_start() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-move.veproj");
@@ -2060,6 +2283,54 @@ fn save_empty_timeline_draft(bundle_path: &std::path::Path) {
         .expect("empty timeline draft fixture should be saved");
 }
 
+fn save_multimedia_timeline_draft(bundle_path: &std::path::Path) {
+    let draft: Draft = serde_json::from_value(multimedia_timeline_draft_json())
+        .expect("multimedia timeline draft fixture should parse");
+    save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
+        .expect("multimedia timeline draft fixture should be saved");
+}
+
+fn multimedia_timeline_draft_json() -> Value {
+    let mut draft = timeline_draft_json();
+    draft["materials"]
+        .as_array_mut()
+        .expect("materials should be an array")
+        .push(json!({
+            "materialId": "audio-material",
+            "kind": "audio",
+            "uri": "media/bgm.wav",
+            "displayName": "bgm.wav",
+            "metadata": {
+                "duration": 2_000_000,
+                "hasVideo": false,
+                "hasAudio": true,
+                "audioSampleRate": 48_000,
+                "audioChannels": 2
+            },
+            "status": "available"
+        }));
+    let tracks = draft["tracks"]
+        .as_array_mut()
+        .expect("tracks should be an array");
+    tracks.push(json!({
+        "trackId": "audio-track",
+        "kind": "audio",
+        "name": "Audio",
+        "muted": false,
+        "locked": false,
+        "segments": []
+    }));
+    tracks.push(json!({
+        "trackId": "text-track",
+        "kind": "text",
+        "name": "Title",
+        "muted": false,
+        "locked": false,
+        "segments": []
+    }));
+    draft
+}
+
 fn timeline_draft_json() -> Value {
     json!({
         "schemaVersion": 1,
@@ -2095,6 +2366,40 @@ fn timeline_draft_json() -> Value {
             "locked": false,
             "segments": []
         }]
+    })
+}
+
+fn text_segment_json(content: &str, source: &str) -> Value {
+    json!({
+        "content": content,
+        "source": source,
+        "style": {
+            "font": {
+                "family": "Noto Sans CJK SC",
+                "fontRef": "font://bundled/noto-sans-cjk-sc-regular"
+            },
+            "fontSize": 36,
+            "color": "#ffffff",
+            "alignment": "center",
+            "lineHeightMillis": 1200,
+            "letterSpacingMillis": 0,
+            "stroke": { "color": "#000000", "width": 2 },
+            "shadow": { "color": "#222222", "offsetX": 2, "offsetY": 2, "blur": 4 },
+            "background": null
+        },
+        "textBox": {
+            "widthMillis": 800,
+            "heightMillis": 200
+        },
+        "layoutRegion": {
+            "xMillis": 100,
+            "yMillis": 100,
+            "widthMillis": 800,
+            "heightMillis": 800
+        },
+        "wrapping": "auto",
+        "bubble": null,
+        "effect": null
     })
 }
 

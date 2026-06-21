@@ -125,7 +125,6 @@ enum ProjectIntent {
     DeleteSelectedSegment {},
     AddTextSegmentIntent {
         text: TextSegment,
-        duration: Microseconds,
     },
     EditSelectedText {
         text: TextSegment,
@@ -133,8 +132,6 @@ enum ProjectIntent {
     ImportSubtitleSrtIntent {
         #[serde(rename = "srtContent")]
         srt_content: String,
-        #[serde(rename = "timeOffset")]
-        time_offset: Microseconds,
         style: TextStyle,
         #[serde(rename = "textBox")]
         text_box: TextBox,
@@ -145,8 +142,6 @@ enum ProjectIntent {
     AddAudioSegmentIntent {
         #[serde(default, rename = "materialId")]
         material_id: Option<MaterialId>,
-        #[serde(default)]
-        duration: Option<Microseconds>,
     },
     SetSelectedSegmentVolume {
         volume: SegmentVolume,
@@ -909,13 +904,14 @@ impl ProjectSession {
                     segment_id: self.selected_segment_id("删除片段")?,
                 },
             )),
-            ProjectIntent::AddTextSegmentIntent { text, duration } => Ok(
+            ProjectIntent::AddTextSegmentIntent { text } => Ok(
                 TimelineEditPayload::AddTextSegmentIntent(AddTextSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     text,
-                    duration,
+                    duration: None,
+                    target_start: Some(self.playhead),
                 }),
             ),
             ProjectIntent::EditSelectedText { text } => Ok(TimelineEditPayload::EditTextSegment(
@@ -929,7 +925,6 @@ impl ProjectSession {
             )),
             ProjectIntent::ImportSubtitleSrtIntent {
                 srt_content,
-                time_offset,
                 style,
                 text_box,
                 layout_region,
@@ -940,25 +935,23 @@ impl ProjectSession {
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     srt_content,
-                    time_offset,
+                    time_offset: Some(self.playhead),
                     style,
                     text_box,
                     layout_region,
                     wrapping,
                 },
             )),
-            ProjectIntent::AddAudioSegmentIntent {
-                material_id,
-                duration,
-            } => Ok(TimelineEditPayload::AddAudioSegmentIntent(
-                AddAudioSegmentIntentCommandPayload {
+            ProjectIntent::AddAudioSegmentIntent { material_id } => Ok(
+                TimelineEditPayload::AddAudioSegmentIntent(AddAudioSegmentIntentCommandPayload {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
                     material_id,
-                    duration,
-                },
-            )),
+                    duration: None,
+                    target_start: Some(self.playhead),
+                }),
+            ),
             ProjectIntent::SetSelectedSegmentVolume { volume } => Ok(
                 TimelineEditPayload::SetSegmentVolume(SetSegmentVolumeCommandPayload {
                     draft: self.draft.clone(),

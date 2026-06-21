@@ -18,6 +18,8 @@ RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
 ADD_INTENT_LEGACY_PLACEMENT_PATTERN='kind:[[:space:]]*"addTimelineSegmentIntent"(?s:.{0,500})\b(?:targetStart|targetTimerange|sourceTimerange|trackId|segmentId)[[:space:]]*:'
+MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN='kind:[[:space:]]*"(?:addTextSegmentIntent|addAudioSegmentIntent|importSubtitleSrtIntent)"(?s:.{0,700})\b(?:duration|timeOffset|targetStart|targetTimerange|sourceTimerange|trackId|segmentId|segmentIdPrefix|materialIdPrefix)[[:space:]]*:'
+MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN='on(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[^;\n]*\b(?:durationUs|timeOffsetUs)\b|function[[:space:]]+handle(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:durationUs|timeOffsetUs)\b'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -414,6 +416,16 @@ fail_if_matches_multiline \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
 
 fail_if_matches_multiline \
+  "renderer/native binding must not pass timing or placement fields for text/audio/subtitle add intents" \
+  "$MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx
+
+fail_if_matches \
+  "renderer feature callbacks must not pass legacy text/audio/subtitle timing values" \
+  "$MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx
+
+fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
@@ -573,6 +585,40 @@ assert_pattern_rejects \
     materialId,
     targetStart: normalizePlayheadTime(playheadUs)
   }, "add");'
+
+assert_pattern_rejects \
+  "legacy text add duration field" \
+  "$MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "addTextSegmentIntent",
+    text,
+    duration: safeDurationUs
+  }, "text");'
+
+assert_pattern_rejects \
+  "legacy audio add duration field" \
+  "$MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "addAudioSegmentIntent",
+    materialId,
+    duration: safeDurationUs
+  }, "audio");'
+
+assert_pattern_rejects \
+  "legacy subtitle import time offset field" \
+  "$MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "importSubtitleSrtIntent",
+    srtContent,
+    timeOffset: Math.max(0, Math.round(timeOffsetUs))
+  }, "subtitle");'
+
+assert_pattern_rejects \
+  "legacy text add timing callback" \
+  "$MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN" \
+  'function handleAddTextSegment(text: TextSegment, durationUs: number): void {
+    onAddTextSegment(text, durationUs);
+  }'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

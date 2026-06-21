@@ -242,6 +242,7 @@ pub fn import_subtitle_srt_intent(
     let mut next_draft = payload.draft.clone();
     let (track_id, track_index) =
         resolve_subtitle_intent_track(&mut next_draft, &payload.selection)?;
+    let time_offset = payload.time_offset.unwrap_or(Microseconds::ZERO);
 
     let mut segment_ids = Vec::with_capacity(cues.len());
     let mut added_segments = Vec::with_capacity(cues.len());
@@ -251,7 +252,7 @@ pub fn import_subtitle_srt_intent(
         let target_start = cue
             .start
             .get()
-            .checked_add(payload.time_offset.get())
+            .checked_add(time_offset.get())
             .ok_or_else(|| {
                 TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
                     field: "subtitle targetTimerange.start".to_owned(),

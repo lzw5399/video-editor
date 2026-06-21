@@ -243,6 +243,7 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.text,
             payload.duration,
+            payload.target_start,
         ),
         TimelineEditPayload::EditTextSegment(payload) => edit_text_segment(
             &payload.draft,
@@ -271,6 +272,7 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.material_id,
             payload.duration,
+            payload.target_start,
         ),
         TimelineEditPayload::SetSegmentVolume(payload) => set_segment_volume(
             &payload.draft,
@@ -617,11 +619,15 @@ pub fn add_text_segment_intent(
     command_state: &CommandState,
     selection: &TimelineSelection,
     text: TextSegment,
-    duration: Microseconds,
+    duration: Option<Microseconds>,
+    target_start: Option<Microseconds>,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
     let track_id = choose_track_by_kind(draft, selection, TrackKind::Text)?;
     let track_index = find_track_index(draft, &track_id)?;
-    let duration = positive_duration(duration);
+    let duration = positive_duration(
+        duration.unwrap_or_else(|| Microseconds::new(DEFAULT_INTENT_SEGMENT_DURATION_US)),
+    );
+    let target_start = target_start.unwrap_or(track_end(&draft.tracks[track_index])?);
     add_text_segment(
         draft,
         command_state,
@@ -634,7 +640,7 @@ pub fn add_text_segment_intent(
             duration,
         },
         TargetTimerange {
-            start: track_end(&draft.tracks[track_index])?,
+            start: target_start,
             duration,
         },
         text,
@@ -647,6 +653,7 @@ pub fn add_audio_segment_intent(
     selection: &TimelineSelection,
     material_id: Option<MaterialId>,
     duration: Option<Microseconds>,
+    target_start: Option<Microseconds>,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
     let material = match material_id {
         Some(material_id) => find_material(draft, &material_id)?,
@@ -679,6 +686,7 @@ pub fn add_audio_segment_intent(
             .or(material.metadata.duration)
             .unwrap_or_else(|| Microseconds::new(DEFAULT_INTENT_SEGMENT_DURATION_US)),
     );
+    let target_start = target_start.unwrap_or(track_end(&draft.tracks[track_index])?);
     add_audio_segment(
         draft,
         command_state,
@@ -691,7 +699,7 @@ pub fn add_audio_segment_intent(
             duration,
         },
         TargetTimerange {
-            start: track_end(&draft.tracks[track_index])?,
+            start: target_start,
             duration,
         },
     )
