@@ -59,6 +59,99 @@ fn text_commands_execute_command_routes_import_subtitle_srt_success() {
 }
 
 #[test]
+fn text_commands_execute_command_routes_import_subtitle_srt_intent_success_without_renderer_ids() {
+    let envelope = execute_command(json!({
+        "command": "importSubtitleSrtIntent",
+        "payload": {
+            "kind": "importSubtitleSrtIntent",
+            "draft": draft_json(),
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n第一行\n\n2\n00:00:01,500 --> 00:00:02,000\n第二行\n",
+            "timeOffset": 250_000,
+            "style": {
+                "font": { "family": "PingFang SC" },
+                "fontSize": 30,
+                "color": "#ffee00",
+                "alignment": "center",
+                "lineHeightMillis": 1_150,
+                "letterSpacingMillis": 20
+            },
+            "textBox": { "widthMillis": 720, "heightMillis": 180 },
+            "layoutRegion": {
+                "xMillis": 140,
+                "yMillis": 680,
+                "widthMillis": 720,
+                "heightMillis": 220
+            },
+            "wrapping": "auto"
+        },
+        "requestId": "req-import-subtitle-srt-intent"
+    }))
+    .expect("importSubtitleSrtIntent should return a standard JSON envelope");
+
+    assert_eq!(envelope["ok"], true, "{envelope:#}");
+    assert_eq!(envelope["error"], Value::Null);
+    assert_eq!(envelope["data"]["events"][0]["kind"], "subtitleSrtImported");
+    assert_eq!(
+        envelope["data"]["draft"]["tracks"][0]["trackId"],
+        "track-subtitle-1"
+    );
+    assert_eq!(
+        envelope["data"]["draft"]["tracks"][0]["segments"][0]["segmentId"],
+        "subtitle-segment-1"
+    );
+    assert_eq!(
+        envelope["data"]["draft"]["tracks"][0]["segments"][0]["materialId"],
+        "subtitle-material-1"
+    );
+    assert_eq!(
+        envelope["data"]["commandState"]["undoStack"][0]["label"],
+        "importSubtitleSrtIntent"
+    );
+}
+
+#[test]
+fn text_commands_execute_command_rejects_import_subtitle_srt_intent_with_renderer_ids() {
+    let envelope = execute_command(json!({
+        "command": "importSubtitleSrtIntent",
+        "payload": {
+            "kind": "importSubtitleSrtIntent",
+            "draft": draft_json(),
+            "commandState": empty_command_state_json(),
+            "selection": empty_selection_json(),
+            "trackId": "renderer-track",
+            "segmentIdPrefix": "renderer-segment",
+            "materialIdPrefix": "renderer-material",
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n第一行\n",
+            "timeOffset": 0,
+            "style": {
+                "font": { "family": "PingFang SC" },
+                "fontSize": 30,
+                "color": "#ffee00",
+                "alignment": "center",
+                "lineHeightMillis": 1_150,
+                "letterSpacingMillis": 20
+            },
+            "textBox": { "widthMillis": 720, "heightMillis": 180 },
+            "layoutRegion": {
+                "xMillis": 140,
+                "yMillis": 680,
+                "widthMillis": 720,
+                "heightMillis": 220
+            },
+            "wrapping": "auto"
+        },
+        "requestId": "req-import-subtitle-srt-intent-renderer-ids"
+    }))
+    .expect("renderer-owned subtitle IDs should be rejected by the intent payload schema");
+
+    assert_eq!(envelope["ok"], false, "{envelope:#}");
+    assert_eq!(envelope["data"], Value::Null);
+    assert_eq!(envelope["error"]["command"], "importSubtitleSrtIntent");
+}
+
+#[test]
 fn text_commands_execute_command_routes_import_subtitle_srt_malformed_failure() {
     let envelope = execute_command(json!({
         "command": "importSubtitleSrt",

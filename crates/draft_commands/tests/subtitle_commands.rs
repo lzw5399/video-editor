@@ -1,11 +1,11 @@
 use draft_commands::{
     history::{redo_timeline_edit, undo_timeline_edit},
-    text::import_subtitle_srt,
+    text::{import_subtitle_srt, import_subtitle_srt_intent},
 };
 use draft_model::{
-    CommandPayload, CommandState, Draft, ImportSubtitleSrtCommandPayload, Microseconds,
-    TextAlignment, TextBox, TextLayoutRegion, TextSegmentSource, TextStyle, TextWrapping,
-    TimelineSelection, Track, TrackKind,
+    CommandPayload, CommandState, Draft, ImportSubtitleSrtCommandPayload,
+    ImportSubtitleSrtIntentCommandPayload, Microseconds, TextAlignment, TextBox, TextLayoutRegion,
+    TextSegmentSource, TextStyle, TextWrapping, TimelineSelection, Track, TrackKind,
 };
 
 #[test]
@@ -159,6 +159,125 @@ fn import_subtitle_srt_payload_routes_through_timeline_command_executor() {
     assert_eq!(routed.draft.tracks[0].segments.len(), 2);
 }
 
+#[test]
+fn import_subtitle_srt_intent_creates_subtitle_track_instead_of_reusing_title_track() {
+    let mut draft = Draft::new("subtitle-intent-draft", "Subtitle Intent");
+    draft
+        .tracks
+        .push(Track::new("video-track", TrackKind::Video, "主视频"));
+    draft
+        .tracks
+        .push(Track::new("existing-title-track", TrackKind::Text, "文字"));
+    let payload = subtitle_intent_payload(
+        draft,
+        CommandState::empty(),
+        TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec!["existing-title-track".into()],
+        },
+    );
+
+    let imported =
+        import_subtitle_srt_intent(payload).expect("intent SRT import should be resolved by Rust");
+
+    assert_eq!(imported.events[0].kind, "subtitleSrtImported");
+    assert_eq!(
+        imported.command_state.undo_stack[0].label.as_deref(),
+        Some("importSubtitleSrtIntent")
+    );
+    assert_eq!(
+        imported.selection.track_ids,
+        vec!["track-subtitle-3".into()]
+    );
+    assert_eq!(
+        imported.selection.segment_ids,
+        vec!["subtitle-segment-1".into(), "subtitle-segment-2".into()]
+    );
+    let track = imported
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "track-subtitle-3")
+        .expect("intent should create a dedicated subtitle track");
+    assert_eq!(track.segments.len(), 2);
+    assert_eq!(track.segments[0].segment_id.as_str(), "subtitle-segment-1");
+    assert_eq!(
+        track.segments[0].material_id.as_str(),
+        "subtitle-material-1"
+    );
+    assert_eq!(
+        track.segments[0].target_timerange.start,
+        Microseconds::new(500_000)
+    );
+    assert_eq!(
+        track.segments[0].text.as_ref().unwrap().source,
+        TextSegmentSource::Subtitle
+    );
+}
+
+#[test]
+fn import_subtitle_srt_intent_reuses_existing_subtitle_track() {
+    let mut draft = Draft::new(
+        "subtitle-intent-existing-track-draft",
+        "Subtitle Intent Existing Track",
+    );
+    draft
+        .tracks
+        .push(Track::new("existing-title-track", TrackKind::Text, "文字"));
+    draft
+        .tracks
+        .push(Track::new("track-subtitle-2", TrackKind::Text, "字幕"));
+    let payload = subtitle_intent_payload(
+        draft,
+        CommandState::empty(),
+        TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec!["existing-title-track".into()],
+        },
+    );
+
+    let imported = import_subtitle_srt_intent(payload)
+        .expect("intent SRT import should reuse the existing subtitle track");
+
+    assert_eq!(
+        imported.selection.track_ids,
+        vec!["track-subtitle-2".into()]
+    );
+    let subtitle_track = imported
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "track-subtitle-2")
+        .expect("existing subtitle track should remain present");
+    assert_eq!(subtitle_track.segments.len(), 2);
+    assert_eq!(
+        imported.command_state.undo_stack[0].label.as_deref(),
+        Some("importSubtitleSrtIntent")
+    );
+}
+
+#[test]
+fn import_subtitle_srt_intent_payload_routes_through_timeline_command_executor() {
+    let payload = subtitle_intent_payload(
+        Draft::new("subtitle-intent-route-draft", "Subtitle Intent Route"),
+        CommandState::empty(),
+        TimelineSelection::empty(),
+    );
+
+    let routed = draft_commands::timeline::execute_timeline_edit(
+        CommandPayload::ImportSubtitleSrtIntent(payload),
+    )
+    .expect("importSubtitleSrtIntent should route through timeline command execution");
+
+    assert_eq!(routed.events[0].kind, "subtitleSrtImported");
+    assert_eq!(routed.draft.tracks[0].track_id.as_str(), "track-subtitle-1");
+    assert_eq!(routed.draft.tracks[0].segments.len(), 2);
+    assert_eq!(
+        routed.command_state.undo_stack[0].label.as_deref(),
+        Some("importSubtitleSrtIntent")
+    );
+}
+
 fn subtitle_payload(
     draft: Draft,
     command_state: CommandState,
@@ -175,6 +294,38 @@ fn subtitle_payload(
         time_offset: Microseconds::new(500_000),
         segment_id_prefix: "subtitle-segment".to_owned(),
         material_id_prefix: "subtitle-material".to_owned(),
+        style: TextStyle {
+            font_size: 32,
+            color: "#ffee00".to_owned(),
+            alignment: TextAlignment::Center,
+            ..TextStyle::default()
+        },
+        text_box: TextBox {
+            width_millis: 700,
+            height_millis: 180,
+        },
+        layout_region: TextLayoutRegion {
+            x_millis: 150,
+            y_millis: 650,
+            width_millis: 700,
+            height_millis: 250,
+        },
+        wrapping: TextWrapping::Auto,
+    }
+}
+
+fn subtitle_intent_payload(
+    draft: Draft,
+    command_state: CommandState,
+    selection: TimelineSelection,
+) -> ImportSubtitleSrtIntentCommandPayload {
+    ImportSubtitleSrtIntentCommandPayload {
+        draft,
+        command_state,
+        selection,
+        srt_content: "1\n00:00:00,000 --> 00:00:01,000\n第一行\n继续第一行\n\n2\n00:00:01,500 --> 00:00:02,250\n第二行\n"
+            .to_owned(),
+        time_offset: Microseconds::new(500_000),
         style: TextStyle {
             font_size: 32,
             color: "#ffee00".to_owned(),

@@ -98,6 +98,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "addTextSegmentIntent"
                 | "editTextSegment"
                 | "importSubtitleSrt"
+                | "importSubtitleSrtIntent"
                 | "addAudioSegment"
                 | "addAudioSegmentIntent"
                 | "setSegmentVolume"
@@ -268,6 +269,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::AddTextSegmentIntent
         | CommandName::EditTextSegment
         | CommandName::ImportSubtitleSrt
+        | CommandName::ImportSubtitleSrtIntent
         | CommandName::AddAudioSegment
         | CommandName::AddAudioSegmentIntent
         | CommandName::SetSegmentVolume

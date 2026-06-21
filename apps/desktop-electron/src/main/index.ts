@@ -439,7 +439,10 @@ function recordTestExecuteCommand(command: CommandEnvelope): void {
     command.payload.kind === "editTextSegment"
       ? command.payload.text
       : null;
-  const srtContent = command.payload.kind === "importSubtitleSrt" ? command.payload.srtContent : null;
+  const srtContent =
+    command.payload.kind === "importSubtitleSrt" || command.payload.kind === "importSubtitleSrtIntent"
+      ? command.payload.srtContent
+      : null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const sessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.sessionId ?? null : null;
@@ -564,7 +567,8 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
   if (
     command.payload.kind !== "addTextSegment" &&
     command.payload.kind !== "editTextSegment" &&
-    command.payload.kind !== "importSubtitleSrt"
+    command.payload.kind !== "importSubtitleSrt" &&
+    command.payload.kind !== "importSubtitleSrtIntent"
   ) {
     return null;
   }
@@ -628,8 +632,15 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
     bubble: null,
     effect: null
   };
-  const materialId = `${command.payload.materialIdPrefix}-1`;
-  const segmentId = `${command.payload.segmentIdPrefix}-1`;
+  const subtitleTrackId =
+    command.payload.kind === "importSubtitleSrt"
+      ? command.payload.trackId
+      : resolveTestSubtitleTrackId(command.payload.draft, command.payload.selection.trackIds);
+  const subtitleTrackName = command.payload.kind === "importSubtitleSrt" ? command.payload.trackName : "字幕";
+  const materialId =
+    command.payload.kind === "importSubtitleSrt" ? `${command.payload.materialIdPrefix}-1` : "subtitle-material-1";
+  const segmentId =
+    command.payload.kind === "importSubtitleSrt" ? `${command.payload.segmentIdPrefix}-1` : "subtitle-segment-1";
   const segment: Segment = {
     segmentId,
     materialId,
@@ -645,16 +656,16 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
     visual: defaultTestSegmentVisual(command.payload.draft)
   };
   const draftWithMaterial = ensureTestTextMaterial(command.payload.draft, materialId, "导入字幕");
-  const tracks = draftWithMaterial.tracks.some((track) => track.trackId === command.payload.trackId)
+  const tracks = draftWithMaterial.tracks.some((track) => track.trackId === subtitleTrackId)
     ? draftWithMaterial.tracks.map((track) =>
-        track.trackId === command.payload.trackId ? { ...track, segments: [...track.segments, segment] } : track
+        track.trackId === subtitleTrackId ? { ...track, segments: [...track.segments, segment] } : track
       )
     : [
         ...draftWithMaterial.tracks,
         {
-          trackId: command.payload.trackId,
+          trackId: subtitleTrackId,
           kind: "text",
-          name: command.payload.trackName,
+          name: subtitleTrackName,
           muted: false,
           locked: false,
           visible: true,
@@ -666,7 +677,36 @@ function maybeBuildTestTextCommandResponse(command: CommandEnvelope): CommandRes
     tracks
   };
 
-  return buildTestTimelineCommandResponse(command, draft, command.payload.trackId, [segmentId], "subtitleSrtImported");
+  return buildTestTimelineCommandResponse(command, draft, subtitleTrackId, [segmentId], "subtitleSrtImported");
+}
+
+function resolveTestSubtitleTrackId(draft: Draft, selectedTrackIds: string[]): string {
+  const selectedSubtitleTrack = selectedTrackIds.find((trackId) =>
+    draft.tracks.some((track) => track.trackId === trackId && isTestSubtitleTrack(track) && !track.locked)
+  );
+  if (selectedSubtitleTrack !== undefined) {
+    return selectedSubtitleTrack;
+  }
+  const existingSubtitleTrack = draft.tracks.find((track) => isTestSubtitleTrack(track) && !track.locked);
+  if (existingSubtitleTrack !== undefined) {
+    return existingSubtitleTrack.trackId;
+  }
+
+  let ordinal = draft.tracks.length + 1;
+  for (;;) {
+    const candidate = `track-subtitle-${ordinal}`;
+    if (!draft.tracks.some((track) => track.trackId === candidate)) {
+      return candidate;
+    }
+    ordinal += 1;
+  }
+}
+
+function isTestSubtitleTrack(track: Track): boolean {
+  return (
+    track.kind === "text" &&
+    (track.trackId.startsWith("track-subtitle") || track.name.includes("字幕") || track.name.toLowerCase().includes("subtitle"))
+  );
 }
 
 function maybeBuildTestTimelineAudioCommandResponse(command: CommandEnvelope): CommandResultEnvelope<TimelineCommandResponse> | null {

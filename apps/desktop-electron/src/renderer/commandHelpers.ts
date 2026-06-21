@@ -20,6 +20,7 @@ import type {
   GetArtifactStatusCommandPayload,
   GetExportJobStatusCommandPayload,
   ImportSubtitleSrtCommandPayload,
+  ImportSubtitleSrtIntentCommandPayload,
   ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
@@ -441,6 +442,28 @@ export function buildImportSubtitleSrtCommand(options: ImportSubtitleSrtOptions)
   } satisfies ImportSubtitleSrtCommandPayload & { kind: "importSubtitleSrt" };
 
   return envelope("importSubtitleSrt", payload);
+}
+
+export function buildImportSubtitleSrtIntentCommand(
+  context: CommandContext,
+  srtContent: string,
+  timeOffset: Microseconds,
+  textTemplate: TextSegment
+): CommandEnvelope {
+  const payload = {
+    kind: "importSubtitleSrtIntent",
+    draft: context.draft,
+    commandState: context.commandState,
+    selection: context.selection,
+    srtContent,
+    timeOffset,
+    style: textTemplate.style,
+    textBox: textTemplate.textBox,
+    layoutRegion: textTemplate.layoutRegion,
+    wrapping: textTemplate.wrapping
+  } satisfies ImportSubtitleSrtIntentCommandPayload & { kind: "importSubtitleSrtIntent" };
+
+  return envelope("importSubtitleSrtIntent", payload);
 }
 
 type AudioCommandOptions = {

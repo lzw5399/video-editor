@@ -25,26 +25,27 @@ use draft_model::{
     ExportPreset, ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
     ImportMaterialCommandPayload, ImportMaterialResponse, ImportSubtitleSrtCommandPayload,
-    InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, ListMaterialsCommandPayload,
-    ListMaterialsResponse, ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
-    MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS,
-    MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId,
-    MaterialKind, MaterialMetadata, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MissingMaterialCommandDiagnosticKind, MoveSegmentCommandPayload,
-    MoveSelectedSegmentIntentCommandPayload, OpenProjectBundleCommandPayload,
-    OpenProjectBundleResponse, PingCommandPayload, PreviewArtifactResponse, PreviewCacheEntryRef,
-    PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic, PreviewDecodeRequest,
-    PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse, PreviewFrameStorageKind,
-    PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
-    ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RedoTimelineEditCommandPayload, RefreshArtifactStatusCommandPayload,
-    ReleasePreviewFrameCommandPayload, RemoveSegmentKeyframeCommandPayload,
-    RenameTrackCommandPayload, RequestPreviewFrameCommandPayload,
-    RequestPreviewSegmentCommandPayload, RunArtifactGarbageCollectionCommandPayload,
-    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
-    RuntimeColorRange, RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
+    ImportSubtitleSrtIntentCommandPayload, InvalidatePreviewCacheCommandPayload, InvalidationScope,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    ListMaterialsCommandPayload, ListMaterialsResponse, ListMissingMaterialsCommandPayload,
+    ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS,
+    MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Material,
+    MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata, MaterialStatus,
+    Microseconds, MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind,
+    MoveSegmentCommandPayload, MoveSelectedSegmentIntentCommandPayload,
+    OpenProjectBundleCommandPayload, OpenProjectBundleResponse, PingCommandPayload,
+    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
+    PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
+    PreviewFrameReleaseResponse, PreviewFrameStorageKind, PreviewFrameStoragePreference,
+    PreviewOutputProfile, PreviewStatus, ProbeMediaRuntimeCommandPayload,
+    ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate, RedoTimelineEditCommandPayload,
+    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
+    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload,
+    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    RunArtifactGarbageCollectionCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
+    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
+    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
+    RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
     RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
     RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
     RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
@@ -131,6 +132,7 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
+            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
@@ -381,6 +383,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
+            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
@@ -950,6 +953,7 @@ fn schema_exports_include_text_command_contracts() {
         "AddTextSegmentIntentCommandPayload",
         "EditTextSegmentCommandPayload",
         "ImportSubtitleSrtCommandPayload",
+        "ImportSubtitleSrtIntentCommandPayload",
     ] {
         assert!(
             schema_json.contains(expected_contract) || draft_ts.contains(expected_contract),
@@ -961,6 +965,7 @@ fn schema_exports_include_text_command_contracts() {
         "AddTextSegmentIntentCommandPayload",
         "EditTextSegmentCommandPayload",
         "ImportSubtitleSrtCommandPayload",
+        "ImportSubtitleSrtIntentCommandPayload",
     ] {
         assert!(
             command_envelope_ts.contains(&format!("export type {expected_contract}")),
@@ -1550,6 +1555,7 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<AddTextSegmentIntentCommandPayload>(),
             export_decl::<EditTextSegmentCommandPayload>(),
             export_decl::<ImportSubtitleSrtCommandPayload>(),
+            export_decl::<ImportSubtitleSrtIntentCommandPayload>(),
             export_decl::<AddAudioSegmentCommandPayload>(),
             export_decl::<AddAudioSegmentIntentCommandPayload>(),
             export_decl::<SetSegmentVolumeCommandPayload>(),
@@ -1926,6 +1932,10 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<ImportSubtitleSrtCommandPayload>(
         &mut schema_value,
         "ImportSubtitleSrtCommandPayload",
+    );
+    include_command_contract_schema::<ImportSubtitleSrtIntentCommandPayload>(
+        &mut schema_value,
+        "ImportSubtitleSrtIntentCommandPayload",
     );
     include_command_contract_schema::<AddAudioSegmentCommandPayload>(
         &mut schema_value,
@@ -3310,6 +3320,17 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
                 "payload": {
                     "properties": {
                         "kind": { "const": "importSubtitleSrt" }
+                    },
+                    "required": ["kind"]
+                }
+            }
+        },
+        {
+            "properties": {
+                "command": { "const": "importSubtitleSrtIntent" },
+                "payload": {
+                    "properties": {
+                        "kind": { "const": "importSubtitleSrtIntent" }
                     },
                     "required": ["kind"]
                 }

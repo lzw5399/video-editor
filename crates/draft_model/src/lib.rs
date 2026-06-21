@@ -102,6 +102,7 @@ pub enum CommandName {
     AddTextSegmentIntent,
     EditTextSegment,
     ImportSubtitleSrt,
+    ImportSubtitleSrtIntent,
     AddAudioSegment,
     AddAudioSegmentIntent,
     SetSegmentVolume,
@@ -173,6 +174,7 @@ pub enum CommandPayload {
     AddTextSegmentIntent(AddTextSegmentIntentCommandPayload),
     EditTextSegment(EditTextSegmentCommandPayload),
     ImportSubtitleSrt(ImportSubtitleSrtCommandPayload),
+    ImportSubtitleSrtIntent(ImportSubtitleSrtIntentCommandPayload),
     AddAudioSegment(AddAudioSegmentCommandPayload),
     AddAudioSegmentIntent(AddAudioSegmentIntentCommandPayload),
     SetSegmentVolume(SetSegmentVolumeCommandPayload),
@@ -244,6 +246,7 @@ impl CommandPayload {
             Self::AddTextSegmentIntent(_) => CommandName::AddTextSegmentIntent,
             Self::EditTextSegment(_) => CommandName::EditTextSegment,
             Self::ImportSubtitleSrt(_) => CommandName::ImportSubtitleSrt,
+            Self::ImportSubtitleSrtIntent(_) => CommandName::ImportSubtitleSrtIntent,
             Self::AddAudioSegment(_) => CommandName::AddAudioSegment,
             Self::AddAudioSegmentIntent(_) => CommandName::AddAudioSegmentIntent,
             Self::SetSegmentVolume(_) => CommandName::SetSegmentVolume,
@@ -573,6 +576,21 @@ pub struct ImportSubtitleSrtCommandPayload {
     pub time_offset: Microseconds,
     pub segment_id_prefix: String,
     pub material_id_prefix: String,
+    pub style: TextStyle,
+    pub text_box: TextBox,
+    pub layout_region: TextLayoutRegion,
+    pub wrapping: TextWrapping,
+}
+
+/// Intent-level command for importing SRT subtitles at the current timeline context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportSubtitleSrtIntentCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub srt_content: String,
+    pub time_offset: Microseconds,
     pub style: TextStyle,
     pub text_box: TextBox,
     pub layout_region: TextLayoutRegion,

@@ -395,7 +395,7 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     const commandCountBeforeSrt = await readExecuteCommandCalls(app);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
     const commandCountAfterSrt = await readExecuteCommandCalls(app);
-    expect(commandCountAfterSrt.filter((call) => call.command === "importSubtitleSrt")).toHaveLength(1);
+    expect(commandCountAfterSrt.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(1);
     expect(
       commandCountAfterSrt.filter((call) => call.command === "addTextSegment").length,
       "SRT import must not be faked by renderer-created text segment commands"

@@ -52,7 +52,7 @@ import {
   buildGetExportJobStatusCommand,
   buildGetWaveformDisplayPeaksCommand,
   buildImportMaterialCommand,
-  buildImportSubtitleSrtCommand,
+  buildImportSubtitleSrtIntentCommand,
   buildListMaterialsCommand,
   buildListMissingMaterialsCommand,
   buildMoveSelectedSegmentIntentCommand,
@@ -573,7 +573,8 @@ export function App(): React.ReactElement {
         result.data !== null &&
         (command.payload.kind === "addTextSegment" ||
           command.payload.kind === "editTextSegment" ||
-          command.payload.kind === "importSubtitleSrt")
+          command.payload.kind === "importSubtitleSrt" ||
+          command.payload.kind === "importSubtitleSrtIntent")
       ) {
         return {
           ...next,
@@ -1470,23 +1471,14 @@ export function App(): React.ReactElement {
   }
 
   function handleImportSubtitleSrt(srtContent: string, timeOffsetUs: number, textTemplate: TextSegment): void {
-    const batchId = Date.now().toString(36);
-
     void executeTimelineCommand(
       (current) =>
-        buildImportSubtitleSrtCommand({
-          context: current,
-          trackId: "track-subtitle",
-          trackName: "字幕",
+        buildImportSubtitleSrtIntentCommand(
+          current,
           srtContent,
-          timeOffset: Math.max(0, Math.round(timeOffsetUs)),
-          segmentIdPrefix: `subtitle-segment-${batchId}`,
-          materialIdPrefix: `subtitle-material-${batchId}`,
-          style: textTemplate.style,
-          textBox: textTemplate.textBox,
-          layoutRegion: textTemplate.layoutRegion,
-          wrapping: textTemplate.wrapping
-        }),
+          Math.max(0, Math.round(timeOffsetUs)),
+          textTemplate
+        ),
       "导入字幕"
     );
   }

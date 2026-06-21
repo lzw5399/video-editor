@@ -44,6 +44,11 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
 fail_if_matches \
+  "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
+  '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
+
+fail_if_matches \
   "renderer/preload must not allocate segment/track IDs for primary timeline edits" \
   '\bconst[[:space:]]+(?:segmentId|rightSegmentId|trackId)[[:space:]]*=' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload

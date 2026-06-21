@@ -18,7 +18,7 @@ use crate::{
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
-    text::{add_text_segment, edit_text_segment, import_subtitle_srt},
+    text::{add_text_segment, edit_text_segment, import_subtitle_srt, import_subtitle_srt_intent},
     visual::update_segment_visual,
 };
 
@@ -251,6 +251,7 @@ pub fn execute_timeline_edit(
             payload.text,
         ),
         CommandPayload::ImportSubtitleSrt(payload) => import_subtitle_srt(payload),
+        CommandPayload::ImportSubtitleSrtIntent(payload) => import_subtitle_srt_intent(payload),
         CommandPayload::AddAudioSegment(payload) => add_audio_segment(
             &payload.draft,
             &payload.command_state,

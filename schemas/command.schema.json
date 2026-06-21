@@ -958,6 +958,7 @@
         "addTextSegmentIntent",
         "editTextSegment",
         "importSubtitleSrt",
+        "importSubtitleSrtIntent",
         "addAudioSegment",
         "addAudioSegmentIntent",
         "setSegmentVolume",
@@ -1775,6 +1776,56 @@
             "timeOffset",
             "segmentIdPrefix",
             "materialIdPrefix",
+            "style",
+            "textBox",
+            "layoutRegion",
+            "wrapping"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Intent-level command for importing SRT subtitles at the current timeline context.",
+          "properties": {
+            "commandState": {
+              "$ref": "#/$defs/CommandState"
+            },
+            "draft": {
+              "$ref": "#/$defs/Draft"
+            },
+            "kind": {
+              "const": "importSubtitleSrtIntent",
+              "type": "string"
+            },
+            "layoutRegion": {
+              "$ref": "#/$defs/TextLayoutRegion"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineSelection"
+            },
+            "srtContent": {
+              "type": "string"
+            },
+            "style": {
+              "$ref": "#/$defs/TextStyle"
+            },
+            "textBox": {
+              "$ref": "#/$defs/TextBox"
+            },
+            "timeOffset": {
+              "$ref": "#/$defs/Microseconds"
+            },
+            "wrapping": {
+              "$ref": "#/$defs/TextWrapping"
+            }
+          },
+          "required": [
+            "kind",
+            "draft",
+            "commandState",
+            "selection",
+            "srtContent",
+            "timeOffset",
             "style",
             "textBox",
             "layoutRegion",
@@ -4387,6 +4438,52 @@
         "wrapping"
       ],
       "title": "ImportSubtitleSrtCommandPayload",
+      "type": "object"
+    },
+    "ImportSubtitleSrtIntentCommandPayload": {
+      "additionalProperties": false,
+      "description": "Intent-level command for importing SRT subtitles at the current timeline context.",
+      "properties": {
+        "commandState": {
+          "$ref": "#/$defs/CommandState"
+        },
+        "draft": {
+          "$ref": "#/$defs/Draft"
+        },
+        "layoutRegion": {
+          "$ref": "#/$defs/TextLayoutRegion"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineSelection"
+        },
+        "srtContent": {
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "textBox": {
+          "$ref": "#/$defs/TextBox"
+        },
+        "timeOffset": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "wrapping": {
+          "$ref": "#/$defs/TextWrapping"
+        }
+      },
+      "required": [
+        "draft",
+        "commandState",
+        "selection",
+        "srtContent",
+        "timeOffset",
+        "style",
+        "textBox",
+        "layoutRegion",
+        "wrapping"
+      ],
+      "title": "ImportSubtitleSrtIntentCommandPayload",
       "type": "object"
     },
     "InvalidatePreviewCacheCommandPayload": {
@@ -28175,6 +28272,23 @@
           "properties": {
             "kind": {
               "const": "importSubtitleSrt"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      }
+    },
+    {
+      "properties": {
+        "command": {
+          "const": "importSubtitleSrtIntent"
+        },
+        "payload": {
+          "properties": {
+            "kind": {
+              "const": "importSubtitleSrtIntent"
             }
           },
           "required": [

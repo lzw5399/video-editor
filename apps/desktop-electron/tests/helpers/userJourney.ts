@@ -517,14 +517,14 @@ export async function importSubtitleSrtThroughProductPanel(
   srtContent: string,
   offsetUs = 0
 ): Promise<void> {
-  const nextCount = (await countCommand(app, "importSubtitleSrt")) + 1;
+  const nextCount = (await countCommand(app, "importSubtitleSrtIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("SRT 内容").fill(srtContent);
   await textPanel.getByLabel("字幕时间偏移").fill(formatSecondsInput(offsetUs));
   await textPanel.getByRole("button", { name: "导入字幕", exact: true }).click();
-  await waitForCommandCount(app, "importSubtitleSrt", nextCount);
-  const lastImport = (await readExecuteCommandCalls(app)).findLast((call) => call.command === "importSubtitleSrt");
+  await waitForCommandCount(app, "importSubtitleSrtIntent", nextCount);
+  const lastImport = (await readExecuteCommandCalls(app)).findLast((call) => call.command === "importSubtitleSrtIntent");
   expect(lastImport?.srtContent).toBe(srtContent);
   const firstCueText = firstSrtCueText(srtContent);
   if (firstCueText.length > 0) {

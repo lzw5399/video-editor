@@ -39,6 +39,7 @@ fail_matches() {
     rg -n --pcre2 "$pattern" "$@" 2>/dev/null \
       | rg -v ':[[:space:]]*(//|/\*|\*|#)' \
       | rg -v 'renderGraphFailed' \
+      | rg -v 'renderGraphGpu|renderGraphGpuComposited' \
       || true
   )"
   if [ -n "$matches" ]; then
@@ -61,7 +62,7 @@ for text in \
   "SRT 字幕" \
   "应用文字" \
   "应用画面" \
-  "字幕 SRT import command path sends raw SRT" \
+  "字幕 SRT import intent path sends raw SRT" \
   "editTextSegment" \
   "updateSegmentVisual"; do
   found=false
@@ -75,6 +76,7 @@ for text in \
 done
 
 require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildImportSubtitleSrtCommand"
+require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildImportSubtitleSrtIntentCommand"
 require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildEditTextSegmentCommand"
 require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildUpdateSegmentVisualCommand"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "srtContent"

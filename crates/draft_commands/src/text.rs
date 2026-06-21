@@ -2,9 +2,10 @@
 
 use draft_model::{
     CommandDelta, CommandEvent, CommandName, CommandState, Draft, ImportSubtitleSrtCommandPayload,
-    Material, MaterialId, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange,
-    TargetTimerange, TextSegment, TextSegmentSource, TimelineCommandResponse, TimelineSelection,
-    Track, TrackId, TrackKind,
+    ImportSubtitleSrtIntentCommandPayload, Material, MaterialId, MaterialKind, Microseconds,
+    Segment, SegmentId, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection, Track,
+    TrackId, TrackKind,
 };
 
 use crate::{
@@ -234,6 +235,151 @@ pub fn import_subtitle_srt(
     ))
 }
 
+pub fn import_subtitle_srt_intent(
+    payload: ImportSubtitleSrtIntentCommandPayload,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let cues = parse_srt(&payload.srt_content)?;
+    let mut next_draft = payload.draft.clone();
+    let (track_id, track_index) =
+        resolve_subtitle_intent_track(&mut next_draft, &payload.selection)?;
+
+    let mut segment_ids = Vec::with_capacity(cues.len());
+    let mut added_segments = Vec::with_capacity(cues.len());
+    for cue in cues {
+        let segment_id = next_segment_id(&next_draft, "subtitle-segment");
+        let material_id = next_material_id(&next_draft, "subtitle-material");
+        let target_start = cue
+            .start
+            .get()
+            .checked_add(payload.time_offset.get())
+            .ok_or_else(|| {
+                TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
+                    field: "subtitle targetTimerange.start".to_owned(),
+                })
+            })?;
+
+        let segment = subtitle_segment_from_cue(
+            cue,
+            segment_id.clone(),
+            material_id.clone(),
+            target_start,
+            payload.style.clone(),
+            payload.text_box.clone(),
+            payload.layout_region.clone(),
+            payload.wrapping,
+        );
+        ensure_text_material(
+            &mut next_draft,
+            &material_id,
+            text_material_display_name(
+                segment
+                    .text
+                    .as_ref()
+                    .expect("subtitle segment has text")
+                    .content
+                    .as_str(),
+            ),
+        );
+
+        added_segments.push(segment.clone());
+        next_draft.tracks[track_index].segments.push(segment);
+        segment_ids.push(segment_id);
+    }
+
+    validate_timeline_rules(&next_draft)?;
+    let delta = text_segments_delta(
+        CommandName::ImportSubtitleSrtIntent,
+        &track_id,
+        added_segments.iter(),
+        "subtitle SRT imported from intent",
+    );
+
+    Ok(response(
+        next_draft,
+        &payload.command_state,
+        &payload.draft,
+        &payload.selection,
+        TimelineSelection {
+            segment_ids,
+            track_ids: vec![track_id],
+        },
+        "importSubtitleSrtIntent",
+        "subtitleSrtImported",
+        CommandName::ImportSubtitleSrtIntent,
+        delta,
+    ))
+}
+
+fn resolve_subtitle_intent_track(
+    draft: &mut Draft,
+    selection: &TimelineSelection,
+) -> Result<(TrackId, usize), TimelineCommandError> {
+    if let Some(index) = selection
+        .track_ids
+        .iter()
+        .filter_map(|track_id| {
+            draft
+                .tracks
+                .iter()
+                .position(|track| &track.track_id == track_id)
+        })
+        .find(|index| is_subtitle_track(&draft.tracks[*index]))
+    {
+        validate_track_unlocked(&draft.tracks[index])?;
+        return Ok((draft.tracks[index].track_id.clone(), index));
+    }
+
+    if let Some(index) = draft
+        .tracks
+        .iter()
+        .position(|track| is_subtitle_track(track) && !track.locked)
+    {
+        return Ok((draft.tracks[index].track_id.clone(), index));
+    }
+
+    let track_id = next_track_id(draft, "track-subtitle");
+    draft
+        .tracks
+        .push(Track::new(track_id.clone(), TrackKind::Text, "字幕"));
+    Ok((track_id, draft.tracks.len() - 1))
+}
+
+fn is_subtitle_track(track: &Track) -> bool {
+    track.kind == TrackKind::Text
+        && (track.track_id.as_str().starts_with("track-subtitle")
+            || track.name.contains("字幕")
+            || track.name.to_ascii_lowercase().contains("subtitle"))
+}
+
+fn subtitle_segment_from_cue(
+    cue: SrtCue,
+    segment_id: SegmentId,
+    material_id: MaterialId,
+    target_start: u64,
+    style: TextStyle,
+    text_box: TextBox,
+    layout_region: TextLayoutRegion,
+    wrapping: TextWrapping,
+) -> Segment {
+    let mut segment = Segment::new(
+        segment_id,
+        material_id,
+        SourceTimerange::new(0, cue.duration),
+        TargetTimerange::new(target_start, cue.duration),
+    );
+    segment.text = Some(TextSegment {
+        content: cue.content,
+        source: TextSegmentSource::Subtitle,
+        style,
+        text_box,
+        layout_region,
+        wrapping,
+        bubble: None,
+        effect: None,
+    });
+    segment
+}
+
 fn ensure_text_material(draft: &mut Draft, material_id: &MaterialId, display_name: String) {
     if draft
         .materials
@@ -257,6 +403,53 @@ fn text_material_display_name(content: &str) -> String {
         "默认文字".to_owned()
     } else {
         trimmed.chars().take(32).collect()
+    }
+}
+
+fn next_segment_id(draft: &Draft, prefix: &str) -> SegmentId {
+    let mut ordinal = draft
+        .tracks
+        .iter()
+        .map(|track| track.segments.len())
+        .sum::<usize>()
+        .saturating_add(1);
+    loop {
+        let candidate = SegmentId::from(format!("{prefix}-{ordinal}"));
+        if !draft.tracks.iter().any(|track| {
+            track
+                .segments
+                .iter()
+                .any(|segment| segment.segment_id == candidate)
+        }) {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
+    }
+}
+
+fn next_material_id(draft: &Draft, prefix: &str) -> MaterialId {
+    let mut ordinal = draft.materials.len().saturating_add(1);
+    loop {
+        let candidate = MaterialId::from(format!("{prefix}-{ordinal}"));
+        if !draft
+            .materials
+            .iter()
+            .any(|material| material.material_id == candidate)
+        {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
+    }
+}
+
+fn next_track_id(draft: &Draft, prefix: &str) -> TrackId {
+    let mut ordinal = draft.tracks.len().saturating_add(1);
+    loop {
+        let candidate = TrackId::from(format!("{prefix}-{ordinal}"));
+        if !draft.tracks.iter().any(|track| track.track_id == candidate) {
+            return candidate;
+        }
+        ordinal = ordinal.saturating_add(1);
     }
 }
 

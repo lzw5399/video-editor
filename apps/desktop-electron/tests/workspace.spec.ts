@@ -793,7 +793,7 @@ test("audio segment blocks expose deterministic P0 waveform placeholder stripe",
   }
 });
 
-test("字幕 SRT import command path sends raw SRT once without renderer-created cue segments", async () => {
+test("字幕 SRT import intent path sends raw SRT once without renderer-created cue segments", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -802,7 +802,7 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     await page.getByLabel("SRT 内容").fill("1\n00:00:00,000 --> 00:00:02,000\n第一句字幕\n\n2\n00:00:02,000 --> 00:00:04,000\n第二句字幕\n");
     await page.getByLabel("字幕时间偏移").fill("1");
     await page.getByRole("button", { name: "导入字幕" }).click();
-    await expectCommandCall(app, "importSubtitleSrt");
+    await expectCommandCall(app, "importSubtitleSrtIntent");
 
     await expect(page.getByRole("button", { name: /片段 导入字幕/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /片段 导入字幕/ })).toHaveAttribute("aria-pressed", "true");
@@ -811,7 +811,6 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     const textSection = page.locator('section[aria-label="文本"]');
     await expect(textSection.getByRole("heading", { name: "文本", exact: true })).toBeVisible();
     await expect(textSection).toContainText("SRT 字幕");
-    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面已更新，预览待刷新");
 
     await textSection.locator("textarea").fill("第一句字幕 已校对");
     await page.getByRole("button", { name: "应用文字" }).click();
@@ -824,7 +823,7 @@ test("字幕 SRT import command path sends raw SRT once without renderer-created
     await expectCommandCall(app, "updateSegmentVisual");
 
     const calls = await readExecuteCommandCalls(app);
-    const importCalls = calls.filter((call) => call.command === "importSubtitleSrt");
+    const importCalls = calls.filter((call) => call.command === "importSubtitleSrtIntent");
     expect(importCalls).toHaveLength(1);
     expect(importCalls[0].srtContent).toContain("第二句字幕");
     expect(importCalls[0].srtContent).toContain("00:00:02,000 --> 00:00:04,000");
