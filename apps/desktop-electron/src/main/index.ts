@@ -27,7 +27,6 @@ import {
   createAudioPreviewSession,
   createProjectSession,
   cancelExport,
-  executeCommand,
   executeProjectIntent,
   getAudioPreviewStatus,
   getArtifactQuotaStatus,
@@ -209,27 +208,6 @@ ipcMain.handle("core:probeRuntimeCapabilities", (event) => {
     return testRuntimeCapabilitiesResponse;
   }
   return probeRuntimeCapabilities();
-});
-ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => {
-  assertAllowedIpcSender(event);
-  recordTestExecuteCommand(command);
-  const testPreviewResponse = maybeBuildTestPreviewResponse(command);
-  if (testPreviewResponse !== null) {
-    return testPreviewResponse;
-  }
-  const testExportResponse = maybeBuildTestExportResponse(command);
-  if (testExportResponse !== null) {
-    return testExportResponse;
-  }
-  const testArtifactResponse = maybeBuildTestArtifactResponse(command);
-  if (testArtifactResponse !== null) {
-    return testArtifactResponse;
-  }
-  const testAudioResponse = maybeBuildTestAudioResponse(command);
-  if (testAudioResponse !== null) {
-    return testAudioResponse;
-  }
-  return executeCommand(command);
 });
 ipcMain.handle("core:createProjectSession", (event, request: CreateProjectSessionRequest) => {
   assertAllowedIpcSender(event);
@@ -1001,49 +979,6 @@ function maybeBuildTestRuntimeCapabilitiesResponse(): CommandResultEnvelope<Runt
     error: null,
     events: []
   };
-}
-
-function maybeBuildTestPreviewResponse(command: CommandEnvelope): CommandResultEnvelope<PreviewArtifactResponse> | null {
-  if (process.env.VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS !== "1") {
-    return null;
-  }
-
-  if (command.payload.kind === "requestPreviewFrame") {
-    return {
-      ok: true,
-      data: {
-        profile: "framePng",
-        path: `/tmp/video-editor-preview-cache/test-frame-${command.payload.targetTime}.png`,
-        mimeType: "image/png",
-        status: "generated",
-        targetTimerange: {
-          start: command.payload.targetTime,
-          duration: 33_333
-        },
-        diagnostic: null
-      },
-      error: null,
-      events: []
-    };
-  }
-
-  if (command.payload.kind === "requestPreviewSegment") {
-    return {
-      ok: true,
-      data: {
-        profile: "segmentMp4",
-        path: `/tmp/video-editor-preview-cache/test-segment-${command.payload.targetTimerange.start}.mp4`,
-        mimeType: "video/mp4",
-        status: "cached",
-        targetTimerange: command.payload.targetTimerange,
-        diagnostic: null
-      },
-      error: null,
-      events: []
-    };
-  }
-
-  return null;
 }
 
 function maybeBuildTestExportResponse(command: CommandEnvelope): CommandResultEnvelope<ExportJobStatusResponse> | null {

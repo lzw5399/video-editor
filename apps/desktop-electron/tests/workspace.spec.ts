@@ -773,7 +773,7 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
   }
 });
 
-test("command-only text edit routes complete text inspector changes through executeCommand", async () => {
+test("text edit routes complete text inspector changes through project session intent observations", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -1094,7 +1094,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
   }
 });
 
-test("material import routes through the same executeCommand bridge", async () => {
+test("material import routes through project session intent observations", async () => {
   const { app, page } = await launchWorkspaceApp();
 
   try {
@@ -1138,7 +1138,7 @@ test("auto canvas adopts the first imported portrait material without renderer-o
   }
 });
 
-test("预览命令通过 executeCommand 更新帧和片段状态", async () => {
+test("预览控制通过实时预览和会话预览 API 更新帧和片段状态", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
@@ -2177,7 +2177,7 @@ test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async 
   }
 });
 
-test("导出命令通过 executeCommand 更新导出状态并保存截图", async () => {
+test("导出控制通过显式导出 API 更新导出状态并保存截图", async () => {
   const { app, page } = await launchWorkspaceApp({ startup: "newProject" });
 
   try {

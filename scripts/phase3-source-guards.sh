@@ -33,6 +33,7 @@ ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:getArtifactStatus|
 RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN='\b(?:buildProbeRuntimeCapabilitiesCommand|ProbeRuntimeCapabilitiesCommandPayload)\b|command:[[:space:]]*"probeRuntimeCapabilities"|kind:[[:space:]]*"probeRuntimeCapabilities"'
 RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*RuntimeCapabilityReport|executeCommand<RuntimeCapabilityReport>'
 PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*\([^)]*CommandEnvelope|core:executeCommand'
+ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN='ipcMain\.handle\([[:space:]]*"core:executeCommand"|executeCommand[[:space:]]*:[[:space:]]*\(command:[[:space:]]*CommandEnvelope|export[[:space:]]+function[[:space:]]+executeCommand[[:space:]]*\('
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -495,6 +496,11 @@ fail_if_matches \
   "$PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN" \
   apps/desktop-electron/src/preload/index.ts
 
+fail_if_matches \
+  "Electron main/native binding must not expose generic executeCommand IPC or wrappers" \
+  "$ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN" \
+  apps/desktop-electron/src/main/index.ts apps/desktop-electron/src/main/nativeBinding.ts
+
 require_matches \
   "preload/native binding expose explicit runtime discovery API" \
   '\bprobeMediaRuntime\b' \
@@ -762,6 +768,16 @@ assert_pattern_rejects \
   "preload generic executeCommand exposure" \
   "$PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN" \
   'executeCommand: (command: CommandEnvelope) => ipcRenderer.invoke("core:executeCommand", command)'
+
+assert_pattern_rejects \
+  "Electron generic executeCommand IPC" \
+  "$ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN" \
+  'ipcMain.handle("core:executeCommand", (event, command: CommandEnvelope) => executeCommand(command));'
+
+assert_pattern_rejects \
+  "nativeBinding generic executeCommand wrapper" \
+  "$ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN" \
+  'export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<unknown> { return binding.executeCommand(command); }'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

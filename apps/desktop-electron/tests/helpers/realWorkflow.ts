@@ -463,7 +463,7 @@ async function waitForCommandOrProjectIntentCount(
     throw new Error(
       [
         message,
-        `Expected ${name} through executeCommand or project session intent.`,
+        `Expected ${name} through explicit test observation or project session intent.`,
         `Recorded commands: ${JSON.stringify(commandCalls)}`,
         `Recorded project session calls: ${JSON.stringify(projectCalls)}`,
         `Visible articles: ${JSON.stringify(materialCards)}`

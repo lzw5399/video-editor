@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import type { CommandEnvelope, ExportPreset } from "../generated/CommandEnvelope";
+import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
   AudioOutputDeviceSummary,
   AudioPreviewCommandResponse,
@@ -63,7 +63,6 @@ type NativeBinding = {
   configureBundledRuntimeDirectory: (directory: string) => void;
   probeMediaRuntime: () => CommandResultEnvelope<RuntimeConfigResponse>;
   probeRuntimeCapabilities: () => CommandResultEnvelope<RuntimeCapabilityReport>;
-  executeCommand: (command: CommandEnvelope) => CommandResultEnvelope<unknown>;
   createProjectSession: (request: CreateProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
@@ -677,14 +676,6 @@ export function probeRuntimeCapabilities(): CommandResultEnvelope<RuntimeCapabil
   return binding.probeRuntimeCapabilities();
 }
 
-export function executeCommand(command: CommandEnvelope): CommandResultEnvelope<unknown> {
-  const binding = loadNativeBinding();
-  if (binding === null) {
-    return bindingLoadError(command.command);
-  }
-  return binding.executeCommand(command);
-}
-
 export function createProjectSession(request: CreateProjectSessionRequest): CommandResultEnvelope<ProjectSessionOpenResponse> {
   const binding = loadNativeBinding();
   if (binding === null) {
@@ -1027,7 +1018,6 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.configureBundledRuntimeDirectory !== "function" ||
       typeof loaded.probeMediaRuntime !== "function" ||
       typeof loaded.probeRuntimeCapabilities !== "function" ||
-      typeof loaded.executeCommand !== "function" ||
       typeof loaded.createProjectSession !== "function" ||
       typeof loaded.openProjectSession !== "function" ||
       typeof loaded.closeProjectSession !== "function" ||
@@ -1084,7 +1074,6 @@ function loadNativeBinding(): NativeBinding | null {
       configureBundledRuntimeDirectory: loaded.configureBundledRuntimeDirectory,
       probeMediaRuntime: loaded.probeMediaRuntime,
       probeRuntimeCapabilities: loaded.probeRuntimeCapabilities,
-      executeCommand: loaded.executeCommand,
       createProjectSession: loaded.createProjectSession,
       openProjectSession: loaded.openProjectSession,
       closeProjectSession: loaded.closeProjectSession,
