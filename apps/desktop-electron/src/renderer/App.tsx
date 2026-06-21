@@ -1975,14 +1975,20 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleSplitSelectedSegment(splitAt: number): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "splitSelectedSegmentIntent",
-        splitAt: Math.max(0, Math.round(splitAt))
-      },
-      "分割片段"
-    );
+  function handleSplitSelectedSegment(): void {
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位分割播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "splitSelectedSegmentIntent"
+        },
+        "分割片段"
+      );
+    })();
   }
 
   function handleTrimSelectedSegment(direction: "left" | "right", deltaUs: number): void {

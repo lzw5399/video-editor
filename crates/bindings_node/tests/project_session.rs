@@ -200,6 +200,141 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
 }
 
 #[test]
+fn project_session_split_selected_segment_uses_session_playhead() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-split.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-split"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-split",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+
+    let moved = execute_project_intent(json!({
+        "sessionId": "test-session-split",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "delta": 200_000
+        }
+    }))
+    .expect("move intent should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+
+    let positioned = execute_project_intent(json!({
+        "sessionId": "test-session-split",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 450_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned["ok"], true, "{positioned:#}");
+    assert_eq!(positioned["data"]["revision"], 2);
+    assert_no_renderer_project_state_payload(&positioned);
+
+    let split = execute_project_intent(json!({
+        "sessionId": "test-session-split",
+        "expectedRevision": 2,
+        "intent": {
+            "kind": "splitSelectedSegmentIntent"
+        }
+    }))
+    .expect("split intent should return an envelope");
+    assert_eq!(split["ok"], true, "{split:#}");
+    assert_eq!(split["data"]["revision"], 3);
+    assert_eq!(split["data"]["events"][0]["kind"], "segmentSplit");
+    assert_no_renderer_project_state_payload(&split);
+
+    let rows = split["data"]["viewModel"]["timeline"]["rows"]
+        .as_array()
+        .expect("timeline rows should be an array");
+    let segments = rows[0]["segments"]
+        .as_array()
+        .expect("timeline row segments should be an array");
+    assert_eq!(segments.len(), 2, "{split:#}");
+    assert_eq!(segments[0]["start"], 200_000);
+    assert_eq!(segments[0]["duration"], 250_000);
+    assert_eq!(segments[1]["start"], 450_000);
+    assert_eq!(segments[1]["duration"], 750_000);
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session split should save canonical project.json");
+    assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 2);
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .target_timerange
+            .start
+            .get(),
+        200_000
+    );
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .target_timerange
+            .duration
+            .get(),
+        250_000
+    );
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[1]
+            .target_timerange
+            .start
+            .get(),
+        450_000
+    );
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[1]
+            .target_timerange
+            .duration
+            .get(),
+        750_000
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-split" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_split_intent_rejects_renderer_built_split_at() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-split-reject.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-split-reject"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-split-reject",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "splitSelectedSegmentIntent",
+            "splitAt": 450_000
+        }
+    }))
+    .expect("legacy splitAt payload should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-split-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
     let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     let runtime = discover_runtime_config().expect("ffmpeg runtime should be discoverable");

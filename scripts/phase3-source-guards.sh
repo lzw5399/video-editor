@@ -17,6 +17,8 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
+SPLIT_INTENT_LEGACY_SPLIT_AT_PATTERN='kind:[[:space:]]*"splitSelectedSegmentIntent"(?s:.{0,300})\bsplitAt[[:space:]]*:'
+SPLIT_CALLBACK_PLAYHEAD_PATTERN='onSplitSelectedSegment\?\.\([[:space:]]*playheadUs[[:space:]]*\)'
 KEYFRAME_INTENT_LEGACY_AT_PATTERN='kind:[[:space:]]*"(?:setSelectedSegmentKeyframe|removeSelectedSegmentKeyframe)"(?s:.{0,500})\bat[[:space:]]*:'
 KEYFRAME_REMOVE_CALLBACK_AT_PATTERN='onRemoveKeyframe[[:space:]]*\((?s:.{0,160})\bkeyframe\.at\b'
 PROJECT_SESSION_RAW_VIEW_MODEL_PATTERN='(?:struct|type)[[:space:]]+(?:SelectedSegmentViewModel|TimelineTrackRowViewModel|TimelineSegmentViewModel)(?s:.{0,900})\b(?:track:[[:space:]]*Track|segment:[[:space:]]*Segment)\b'
@@ -401,6 +403,16 @@ fail_if_matches \
   'targetTimerange[[:space:]]*=|command\.payload\.(?:targetTimerange|sourceTimerange)|\.tracks[[:space:]]*=|tracks\.(push|splice|sort)|\.segments[[:space:]]*=|segments\.(push|splice|sort)' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
+fail_if_matches_multiline \
+  "renderer/native binding must not pass legacy splitAt timestamps for selected-segment split" \
+  "$SPLIT_INTENT_LEGACY_SPLIT_AT_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+fail_if_matches \
+  "timeline UI must not pass renderer playhead as split command payload" \
+  "$SPLIT_CALLBACK_PLAYHEAD_PATTERN" \
+  apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
 fail_if_matches \
   "renderer must not derive selected-segment keyframe time/value for product session intents" \
   '\b(?:keyframeValueForSegmentProperty|resolveSegmentRelativePlayhead)\b|kind:[[:space:]]*"setSelectedSegmentKeyframe",[[:space:]]*keyframe\b|onRemoveKeyframe\(keyframe\.property,[[:space:]]*keyframe\.at\)' \
@@ -522,6 +534,19 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "legacy selected-segment splitAt timestamp" \
+  "$SPLIT_INTENT_LEGACY_SPLIT_AT_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "splitSelectedSegmentIntent",
+    splitAt: Math.max(0, Math.round(playheadUs))
+  }, "split");'
+
+assert_pattern_rejects \
+  "renderer playhead passed through split callback" \
+  "$SPLIT_CALLBACK_PLAYHEAD_PATTERN" \
+  'onClick={() => onSplitSelectedSegment?.(playheadUs)}'
 
 assert_pattern_rejects \
   "legacy selected-segment keyframe at timestamp" \

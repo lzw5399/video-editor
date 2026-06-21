@@ -116,10 +116,7 @@ enum ProjectIntent {
     MoveSelectedSegmentIntent {
         delta: Microseconds,
     },
-    SplitSelectedSegmentIntent {
-        #[serde(rename = "splitAt")]
-        split_at: Microseconds,
-    },
+    SplitSelectedSegmentIntent {},
     TrimSelectedSegmentIntent {
         direction: TrimSegmentDirection,
         delta: Microseconds,
@@ -875,13 +872,13 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::SplitSelectedSegmentIntent { split_at } => {
+            ProjectIntent::SplitSelectedSegmentIntent {} => {
                 Ok(TimelineEditPayload::SplitSelectedSegmentIntent(
                     SplitSelectedSegmentIntentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
-                        split_at,
+                        split_at: self.playhead,
                     },
                 ))
             }

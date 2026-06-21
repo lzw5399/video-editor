@@ -45,7 +45,7 @@ type TimelineProps = {
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onMoveSelectedSegment?: (deltaUs: number) => void;
-  onSplitSelectedSegment?: (splitAt: number) => void;
+  onSplitSelectedSegment?: () => void;
   onTrimSelectedSegment?: (direction: "left" | "right", deltaUs: number) => void;
   onDeleteSelectedSegment?: () => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
@@ -230,7 +230,7 @@ function TransportStrip({
   onTogglePlayback: () => void;
   onAddSegment?: (materialId: string) => void;
   onAddTrack?: (trackKind: TrackKind) => void;
-  onSplitSelectedSegment?: (splitAt: number) => void;
+  onSplitSelectedSegment?: () => void;
   onDeleteSelectedSegment?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -304,7 +304,7 @@ function TransportStrip({
       <TimelineIconButton
         label="分割所选片段"
         icon="split"
-        onClick={() => onSplitSelectedSegment?.(playheadUs)}
+        onClick={() => onSplitSelectedSegment?.()}
         disabled={pending || !editControls.hasSelectedSegment}
       />
       <TimelineIconButton
