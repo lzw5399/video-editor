@@ -97,6 +97,25 @@ fn discovery_bad_bundled_binary_error_uses_bounded_output_summary() {
 }
 
 #[test]
+fn discovery_unsupported_bundled_binary_does_not_suggest_system_install() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = Sandbox::new("unsupported-binary");
+    let bad_ffmpeg = sandbox.bin("ffmpeg", "custom tool 1.0\n", "", 0);
+    let _good_ffprobe = sandbox.bin("ffprobe", "ffprobe version bundled-build\n", "", 0);
+    let _runtime_dir = EnvVarGuard::set_path("VE_BUNDLED_FFMPEG_DIR", &sandbox.root);
+    let _path = EnvVarGuard::set_path("PATH", sandbox.dir("poison-path"));
+
+    let error = discover_runtime_config().expect_err("unsupported bundled ffmpeg should fail");
+
+    assert_eq!(error.kind, DiscoveryErrorKind::UnsupportedVersion);
+    assert_eq!(error.binary, BinaryKind::Ffmpeg);
+    assert_eq!(error.checked_paths, vec![bad_ffmpeg]);
+    assert!(error.remediation.contains("bundled ffmpeg"));
+    assert!(!error.remediation.contains("Install"));
+    assert!(!error.remediation.contains("PATH"));
+}
+
+#[test]
 fn discovery_version_probe_times_out_for_hung_binary() {
     let sandbox = Sandbox::new("hung-binary");
     let hung_ffmpeg = sandbox.bin_sleep("ffmpeg", 2);

@@ -76,7 +76,7 @@ impl DiscoveryError {
             binary,
             checked_paths,
             remediation: format!(
-                "Install a supported {binary_name} binary whose -version output starts with `{binary_name} version`."
+                "Replace the bundled {binary_name} binary with one whose -version output starts with `{binary_name} version`."
             ),
             stdout_summary,
             stderr_summary,
