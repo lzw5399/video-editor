@@ -83,37 +83,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
                 | "importMaterial"
                 | "listMaterials"
                 | "listMissingMaterials"
-                | "addSegment"
-                | "addTimelineSegmentIntent"
-                | "selectTimelineSegments"
-                | "moveSegment"
-                | "moveSelectedSegmentIntent"
-                | "splitSegment"
-                | "splitSelectedSegmentIntent"
-                | "trimSegment"
-                | "trimSelectedSegmentIntent"
-                | "deleteSegment"
-                | "undoTimelineEdit"
-                | "redoTimelineEdit"
-                | "addTextSegment"
-                | "addTextSegmentIntent"
-                | "editTextSegment"
-                | "importSubtitleSrt"
-                | "importSubtitleSrtIntent"
-                | "addAudioSegment"
-                | "addAudioSegmentIntent"
-                | "setSegmentVolume"
-                | "updateSegmentAudio"
-                | "addTrack"
-                | "addTrackIntent"
-                | "renameTrack"
-                | "setTrackLock"
-                | "setTrackVisibility"
-                | "setTrackMute"
-                | "updateDraftCanvasConfig"
-                | "updateSegmentVisual"
-                | "setSegmentKeyframe"
-                | "removeSegmentKeyframe"
                 | "requestPreviewDecode"
                 | "releasePreviewFrame"
                 | "requestPreviewFrame"
@@ -285,7 +254,7 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
         | CommandName::UpdateSegmentVisual
         | CommandName::SetSegmentKeyframe
         | CommandName::RemoveSegmentKeyframe => {
-            timeline_command(envelope.command, envelope.payload)
+            reject_public_timeline_edit_command(envelope.command)
         }
     }
 }
@@ -711,16 +680,14 @@ fn cancel_export_command(payload: CancelExportCommandPayload) -> Result<serde_js
     }
 }
 
-fn timeline_command(command: CommandName, payload: CommandPayload) -> Result<serde_json::Value> {
+fn reject_public_timeline_edit_command(command: CommandName) -> Result<serde_json::Value> {
     let command = command_wire_name(&command);
-    match draft_commands::timeline::execute_timeline_edit(payload) {
-        Ok(response) => to_js_value(ok_envelope(response)),
-        Err(error) => to_js_value(error_envelope(
-            CommandErrorKind::InvalidTimelineEdit,
-            error.to_string(),
-            command,
-        )),
-    }
+    to_js_value(error_envelope(
+        CommandErrorKind::UnsupportedCommand,
+        "Timeline edits must use executeProjectIntent with a Rust-owned project session"
+            .to_string(),
+        command,
+    ))
 }
 
 fn preview_error_envelope(

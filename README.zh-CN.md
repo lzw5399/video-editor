@@ -73,8 +73,9 @@ docs/                       架构与运行时边界文档
 - Node.js `24.12.0`
 - pnpm `10.32.1`
 - `just`，仅用于可选的根命令 recipe
-- 运行时和渲染冒烟测试需要 `PATH` 里有 FFmpeg/ffprobe，或配置
-  `VE_FFMPEG_PATH` 和 `VE_FFPROBE_PATH`
+- 需要将 FFmpeg/ffprobe 放在
+  `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>`；运行时不会查找
+  `PATH`，也不接受单独的 FFmpeg 二进制覆盖变量
 
 ```bash
 corepack pnpm run desktop:open

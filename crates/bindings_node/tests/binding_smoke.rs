@@ -274,386 +274,60 @@ fn execute_command_rejects_mismatched_command_payload_kind() {
 }
 
 #[test]
-fn execute_command_routes_timeline_add_move_and_selection() {
-    let draft = timeline_draft_json();
+fn execute_command_rejects_public_timeline_edit_commands() {
+    for command in [
+        "addSegment",
+        "addTimelineSegmentIntent",
+        "selectTimelineSegments",
+        "moveSegment",
+        "moveSelectedSegmentIntent",
+        "splitSegment",
+        "splitSelectedSegmentIntent",
+        "trimSegment",
+        "trimSelectedSegmentIntent",
+        "deleteSegment",
+        "undoTimelineEdit",
+        "redoTimelineEdit",
+        "addTextSegment",
+        "addTextSegmentIntent",
+        "editTextSegment",
+        "importSubtitleSrt",
+        "importSubtitleSrtIntent",
+        "addAudioSegment",
+        "addAudioSegmentIntent",
+        "setSegmentVolume",
+        "updateSegmentAudio",
+        "addTrack",
+        "addTrackIntent",
+        "renameTrack",
+        "setTrackLock",
+        "setTrackVisibility",
+        "setTrackMute",
+        "updateDraftCanvasConfig",
+        "updateSegmentVisual",
+        "setSegmentKeyframe",
+        "removeSegmentKeyframe",
+    ] {
+        let envelope = execute_command(json!({
+            "command": command,
+            "payload": { "kind": command },
+            "requestId": format!("req-reject-{command}")
+        }))
+        .expect("timeline edit command should return a structured error envelope");
 
-    let added = execute_command(json!({
-        "command": "addSegment",
-        "payload": {
-            "kind": "addSegment",
-            "draft": draft,
-            "commandState": empty_command_state_json(),
-            "selection": empty_selection_json(),
-            "trackId": "video-track",
-            "segmentId": "segment-a",
-            "materialId": "video-material",
-            "sourceTimerange": { "start": 100_000, "duration": 400_000 },
-            "targetTimerange": { "start": 0, "duration": 400_000 }
-        },
-        "requestId": "req-add-segment"
-    }))
-    .expect("add segment command should return a JSON envelope");
-
-    assert_eq!(added["ok"], true, "{added:#}");
-    assert_eq!(added["error"], Value::Null);
-    assert_eq!(added["data"]["events"][0]["kind"], "segmentAdded");
-    assert_eq!(
-        added["data"]["draft"]["tracks"][0]["segments"][0]["segmentId"],
-        "segment-a"
-    );
-
-    let moved = execute_command(json!({
-        "command": "moveSegment",
-        "payload": {
-            "kind": "moveSegment",
-            "draft": added["data"]["draft"].clone(),
-            "commandState": added["data"]["commandState"].clone(),
-            "selection": added["data"]["selection"].clone(),
-            "segmentId": "segment-a",
-            "targetTrackId": "video-track",
-            "targetStart": 500_000
-        },
-        "requestId": "req-move-segment"
-    }))
-    .expect("move segment command should return a JSON envelope");
-
-    assert_eq!(moved["ok"], true, "{moved:#}");
-    assert_eq!(moved["data"]["events"][0]["kind"], "segmentMoved");
-    assert_eq!(
-        moved["data"]["draft"]["tracks"][0]["segments"][0]["targetTimerange"]["start"],
-        500_000
-    );
-    assert_eq!(
-        moved["data"]["draft"]["tracks"][0]["segments"][0]["sourceTimerange"],
-        json!({ "start": 100_000, "duration": 400_000 })
-    );
-
-    let selected = execute_command(json!({
-        "command": "selectTimelineSegments",
-        "payload": {
-            "kind": "selectTimelineSegments",
-            "draft": moved["data"]["draft"].clone(),
-            "commandState": moved["data"]["commandState"].clone(),
-            "selection": moved["data"]["selection"].clone(),
-            "segmentIds": ["segment-a"],
-            "trackIds": ["video-track"]
-        },
-        "requestId": "req-select-segment"
-    }))
-    .expect("select timeline segments command should return a JSON envelope");
-
-    assert_eq!(selected["ok"], true, "{selected:#}");
-    assert_eq!(
-        selected["data"]["selection"],
-        json!({ "segmentIds": ["segment-a"], "trackIds": ["video-track"] })
-    );
-    assert_eq!(
-        selected["data"]["draft"], moved["data"]["draft"],
-        "selection command must not mutate draft"
-    );
-}
-
-#[test]
-fn execute_command_routes_timeline_snapping_undo_and_redo_events() {
-    let draft = timeline_draft_json();
-
-    let first_added = execute_command(json!({
-        "command": "addSegment",
-        "payload": {
-            "kind": "addSegment",
-            "draft": draft,
-            "commandState": empty_command_state_json(),
-            "selection": empty_selection_json(),
-            "trackId": "video-track",
-            "segmentId": "segment-a",
-            "materialId": "video-material",
-            "sourceTimerange": { "start": 0, "duration": 400_000 },
-            "targetTimerange": { "start": 0, "duration": 400_000 }
-        },
-        "requestId": "req-add-first-segment"
-    }))
-    .expect("first add segment command should return a JSON envelope");
-    assert_eq!(first_added["ok"], true, "{first_added:#}");
-
-    let second_added = execute_command(json!({
-        "command": "addSegment",
-        "payload": {
-            "kind": "addSegment",
-            "draft": first_added["data"]["draft"].clone(),
-            "commandState": first_added["data"]["commandState"].clone(),
-            "selection": first_added["data"]["selection"].clone(),
-            "trackId": "video-track",
-            "segmentId": "segment-b",
-            "materialId": "video-material",
-            "sourceTimerange": { "start": 700_000, "duration": 200_000 },
-            "targetTimerange": { "start": 700_000, "duration": 200_000 }
-        },
-        "requestId": "req-add-second-segment"
-    }))
-    .expect("second add segment command should return a JSON envelope");
-    assert_eq!(second_added["ok"], true, "{second_added:#}");
-
-    let snapped = execute_command(json!({
-        "command": "moveSegment",
-        "payload": {
-            "kind": "moveSegment",
-            "draft": second_added["data"]["draft"].clone(),
-            "commandState": second_added["data"]["commandState"].clone(),
-            "selection": second_added["data"]["selection"].clone(),
-            "segmentId": "segment-b",
-            "targetTrackId": "video-track",
-            "targetStart": 410_000
-        },
-        "requestId": "req-snap-second-segment"
-    }))
-    .expect("move with snapping should return a JSON envelope");
-
-    assert_eq!(snapped["ok"], true, "{snapped:#}");
-    assert_eq!(snapped["data"]["events"][0]["kind"], "segmentMoved");
-    assert!(
-        event_kinds(&snapped).contains(&"snapped"),
-        "binding response should preserve the Rust snapping event"
-    );
-    assert_eq!(
-        snapped["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
-        400_000
-    );
-    assert_eq!(
-        snapped["data"]["commandState"]["undoStack"]
-            .as_array()
-            .unwrap()
-            .len(),
-        3
-    );
-
-    let undone = execute_command(json!({
-        "command": "undoTimelineEdit",
-        "payload": {
-            "kind": "undoTimelineEdit",
-            "draft": snapped["data"]["draft"].clone(),
-            "commandState": snapped["data"]["commandState"].clone(),
-            "selection": snapped["data"]["selection"].clone()
-        },
-        "requestId": "req-undo-snapped-move"
-    }))
-    .expect("undo timeline edit should return a JSON envelope");
-
-    assert_eq!(undone["ok"], true, "{undone:#}");
-    assert_eq!(undone["data"]["events"][0]["kind"], "undoCommitted");
-    assert_eq!(
-        undone["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
-        700_000
-    );
-    assert_eq!(
-        undone["data"]["commandState"]["redoStack"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-
-    let redone = execute_command(json!({
-        "command": "redoTimelineEdit",
-        "payload": {
-            "kind": "redoTimelineEdit",
-            "draft": undone["data"]["draft"].clone(),
-            "commandState": undone["data"]["commandState"].clone(),
-            "selection": undone["data"]["selection"].clone()
-        },
-        "requestId": "req-redo-snapped-move"
-    }))
-    .expect("redo timeline edit should return a JSON envelope");
-
-    assert_eq!(redone["ok"], true, "{redone:#}");
-    assert_eq!(redone["data"]["events"][0]["kind"], "redoCommitted");
-    assert_eq!(
-        redone["data"]["draft"]["tracks"][0]["segments"][1]["targetTimerange"]["start"],
-        400_000
-    );
-    assert!(
-        redone["data"]["commandState"]["redoStack"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
-}
-
-#[test]
-fn execute_command_routes_timeline_text_segment_events() {
-    let mut draft = timeline_draft_json();
-    draft["tracks"].as_array_mut().unwrap().push(json!({
-        "trackId": "text-track",
-        "kind": "text",
-        "name": "Text",
-        "muted": false,
-        "locked": false,
-        "segments": []
-    }));
-
-    let added = execute_command(json!({
-        "command": "addTextSegment",
-        "payload": {
-            "kind": "addTextSegment",
-            "draft": draft,
-            "commandState": empty_command_state_json(),
-            "selection": empty_selection_json(),
-            "trackId": "text-track",
-            "segmentId": "text-segment",
-            "materialId": "text-material",
-            "sourceTimerange": { "start": 0, "duration": 1_000_000 },
-            "targetTimerange": { "start": 0, "duration": 1_000_000 },
-            "text": {
-                "content": "Caption",
-                "style": {
-                    "fontSize": 36,
-                    "color": "#ffffff",
-                    "alignment": "center",
-                    "stroke": { "color": "#000000", "width": 2 },
-                    "shadow": { "color": "#222222", "offsetX": 2, "offsetY": 2, "blur": 4 },
-                    "background": { "color": "#101010" }
-                }
-            }
-        },
-        "requestId": "req-add-text-segment"
-    }))
-    .expect("add text segment command should return a JSON envelope");
-
-    assert_eq!(added["ok"], true, "{added:#}");
-    assert_eq!(added["data"]["events"][0]["kind"], "textSegmentAdded");
-    assert_eq!(
-        added["data"]["draft"]["tracks"][1]["segments"][0]["text"]["content"],
-        "Caption"
-    );
-    assert_eq!(added["data"]["draft"]["materials"][1]["kind"], "text");
-}
-
-#[test]
-fn execute_command_routes_timeline_audio_volume_and_mute_events() {
-    let mut draft = timeline_draft_json();
-    draft["materials"].as_array_mut().unwrap().push(json!({
-        "materialId": "audio-material",
-        "kind": "audio",
-        "uri": "media/audio.wav",
-        "displayName": "audio.wav",
-        "metadata": {
-            "duration": 2_000_000,
-            "hasVideo": false,
-            "hasAudio": true,
-            "audioSampleRate": 48_000,
-            "audioChannels": 2
-        },
-        "status": "available"
-    }));
-    draft["tracks"].as_array_mut().unwrap().push(json!({
-        "trackId": "audio-track",
-        "kind": "audio",
-        "name": "Audio",
-        "muted": false,
-        "locked": false,
-        "segments": []
-    }));
-
-    let added = execute_command(json!({
-        "command": "addAudioSegment",
-        "payload": {
-            "kind": "addAudioSegment",
-            "draft": draft,
-            "commandState": empty_command_state_json(),
-            "selection": empty_selection_json(),
-            "trackId": "audio-track",
-            "segmentId": "audio-segment",
-            "materialId": "audio-material",
-            "sourceTimerange": { "start": 0, "duration": 1_000_000 },
-            "targetTimerange": { "start": 0, "duration": 1_000_000 }
-        },
-        "requestId": "req-add-audio-segment"
-    }))
-    .expect("add audio segment command should return a JSON envelope");
-
-    assert_eq!(added["ok"], true, "{added:#}");
-    assert_eq!(added["data"]["events"][0]["kind"], "audioSegmentAdded");
-    assert_eq!(
-        added["data"]["draft"]["tracks"][1]["segments"][0]["volume"]["levelMillis"],
-        1_000
-    );
-
-    let volume = execute_command(json!({
-        "command": "setSegmentVolume",
-        "payload": {
-            "kind": "setSegmentVolume",
-            "draft": added["data"]["draft"].clone(),
-            "commandState": added["data"]["commandState"].clone(),
-            "selection": added["data"]["selection"].clone(),
-            "segmentId": "audio-segment",
-            "volume": { "levelMillis": 1_500 }
-        },
-        "requestId": "req-set-segment-volume"
-    }))
-    .expect("set segment volume command should return a JSON envelope");
-
-    assert_eq!(volume["ok"], true, "{volume:#}");
-    assert_eq!(volume["data"]["events"][0]["kind"], "segmentVolumeChanged");
-    assert_eq!(
-        volume["data"]["draft"]["tracks"][1]["segments"][0]["volume"]["levelMillis"],
-        1_500
-    );
-
-    let muted = execute_command(json!({
-        "command": "setTrackMute",
-        "payload": {
-            "kind": "setTrackMute",
-            "draft": volume["data"]["draft"].clone(),
-            "commandState": volume["data"]["commandState"].clone(),
-            "selection": volume["data"]["selection"].clone(),
-            "trackId": "audio-track",
-            "muted": true
-        },
-        "requestId": "req-set-track-mute"
-    }))
-    .expect("set track mute command should return a JSON envelope");
-
-    assert_eq!(muted["ok"], true, "{muted:#}");
-    assert_eq!(muted["data"]["events"][0]["kind"], "trackMuteChanged");
-    assert_eq!(muted["data"]["draft"]["tracks"][1]["muted"], true);
-}
-
-#[test]
-fn execute_command_rejects_invalid_timeline_edit_with_standard_error() {
-    let mut draft = timeline_draft_json();
-    draft["tracks"][0]["segments"] = json!([{
-        "segmentId": "segment-a",
-        "materialId": "video-material",
-        "sourceTimerange": { "start": 0, "duration": 400_000 },
-        "targetTimerange": { "start": 0, "duration": 400_000 },
-        "mainTrackMagnet": { "enabled": false },
-        "keyframes": [],
-        "filters": []
-    }]);
-
-    let envelope = execute_command(json!({
-        "command": "addSegment",
-        "payload": {
-            "kind": "addSegment",
-            "draft": draft,
-            "commandState": empty_command_state_json(),
-            "selection": empty_selection_json(),
-            "trackId": "video-track",
-            "segmentId": "overlap",
-            "materialId": "video-material",
-            "sourceTimerange": { "start": 400_000, "duration": 200_000 },
-            "targetTimerange": { "start": 100_000, "duration": 200_000 }
-        },
-        "requestId": "req-invalid-add-segment"
-    }))
-    .expect("invalid timeline command should return a JSON envelope");
-
-    assert_eq!(envelope["ok"], false);
-    assert_eq!(envelope["data"], Value::Null);
-    assert_eq!(
-        envelope["error"]["kind"],
-        serde_json::to_value(CommandErrorKind::InvalidTimelineEdit).unwrap()
-    );
-    assert_eq!(envelope["error"]["command"], "addSegment");
+        assert_eq!(envelope["ok"], false, "{command}: {envelope:#}");
+        assert_eq!(envelope["data"], Value::Null, "{command}: {envelope:#}");
+        assert_eq!(
+            envelope["error"]["kind"],
+            serde_json::to_value(CommandErrorKind::UnsupportedCommand).unwrap(),
+            "{command}: {envelope:#}"
+        );
+        assert_eq!(
+            envelope["error"]["command"], command,
+            "{command}: {envelope:#}"
+        );
+        assert_eq!(envelope["events"], json!([]), "{command}: {envelope:#}");
+    }
 }
 
 #[test]
@@ -696,76 +370,6 @@ fn execute_command_probe_media_runtime_returns_standard_ok_envelope() {
         envelope["data"]["ffprobe"]["version"],
         "ffprobe version binding-test"
     );
-}
-
-fn empty_command_state_json() -> Value {
-    json!({
-        "undoStack": [],
-        "redoStack": [],
-        "maxHistoryEntries": 100,
-        "snapping": {
-            "enabled": true,
-            "threshold": 100_000
-        }
-    })
-}
-
-fn empty_selection_json() -> Value {
-    json!({
-        "segmentIds": [],
-        "trackIds": []
-    })
-}
-
-fn event_kinds(envelope: &Value) -> Vec<&str> {
-    envelope["data"]["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|event| event["kind"].as_str().unwrap())
-        .collect()
-}
-
-fn timeline_draft_json() -> Value {
-    json!({
-        "schemaVersion": 1,
-        "draftId": "binding-timeline-draft",
-        "metadata": { "name": "Binding Timeline Draft" },
-        "canvasConfig": default_canvas_config_json(),
-        "materials": [{
-            "materialId": "video-material",
-            "kind": "video",
-            "uri": "media/video.mp4",
-            "displayName": "video.mp4",
-            "metadata": {
-                "duration": 1_000_000,
-                "width": 160,
-                "height": 90,
-                "frameRate": { "numerator": 24, "denominator": 1 },
-                "hasVideo": true,
-                "hasAudio": false
-            },
-            "status": "available"
-        }],
-        "tracks": [{
-            "trackId": "video-track",
-            "kind": "video",
-            "name": "Video",
-            "muted": false,
-            "locked": false,
-            "segments": []
-        }]
-    })
-}
-
-fn default_canvas_config_json() -> Value {
-    json!({
-        "aspectRatio": { "kind": "preset", "preset": "ratio16x9" },
-        "width": 1920,
-        "height": 1080,
-        "frameRate": { "numerator": 30, "denominator": 1 },
-        "background": { "kind": "black" }
-    })
 }
 
 #[test]

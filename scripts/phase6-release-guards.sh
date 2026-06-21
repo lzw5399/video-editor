@@ -42,6 +42,9 @@ require_bundled_runtime_entries() {
   require_literal "to: \"ffmpeg\"" apps/desktop-electron/electron-builder.yml
   require_literal "provision:ffmpeg-runtime" apps/desktop-electron/package.json
   test -f apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
+  forbid_literal "command -v" apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
+  forbid_literal "VE_FFMPEG_SOURCE" apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
+  forbid_literal "VE_FFPROBE_SOURCE" apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs
 }
 
 test -f docs/release-ffmpeg-manifest.md

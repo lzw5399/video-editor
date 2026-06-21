@@ -1,4 +1,4 @@
-import { chmod, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { chmod, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -10,43 +10,31 @@ const platform = process.platform;
 const arch = process.arch;
 const runtimeId = `${platform}-${arch}`;
 const targetDir = join(projectRoot, "runtime", "ffmpeg", runtimeId);
+const ffmpegPath = join(targetDir, binaryName("ffmpeg"));
+const ffprobePath = join(targetDir, binaryName("ffprobe"));
 
-const ffmpegSource = process.env.VE_FFMPEG_SOURCE ?? findBuildTool("ffmpeg");
-const ffprobeSource = process.env.VE_FFPROBE_SOURCE ?? findBuildTool("ffprobe");
-
-await mkdir(targetDir, { recursive: true });
-await copyRuntimeBinary(ffmpegSource, join(targetDir, binaryName("ffmpeg")));
-await copyRuntimeBinary(ffprobeSource, join(targetDir, binaryName("ffprobe")));
+await validateRuntimeBinary(ffmpegPath);
+await validateRuntimeBinary(ffprobePath);
 
 const manifest = {
   runtimeId,
-  source: "buildMachineProvisioned",
+  source: "bundledRuntimeDirectory",
   reviewStatus: "legalReviewPending",
-  ffmpeg: binaryManifest(ffmpegSource, join(targetDir, binaryName("ffmpeg"))),
-  ffprobe: binaryManifest(ffprobeSource, join(targetDir, binaryName("ffprobe")))
+  ffmpeg: binaryManifest(ffmpegPath),
+  ffprobe: binaryManifest(ffprobePath)
 };
 
 await writeFile(join(targetDir, "manifest.local.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
-console.log(`Provisioned bundled FFmpeg runtime at ${targetDir}`);
+console.log(`Validated bundled FFmpeg runtime at ${targetDir}`);
 
-function findBuildTool(name) {
-  const output = execFileSync("sh", ["-lc", `command -v ${name}`], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  }).trim();
-  if (output.length === 0) {
-    throw new Error(`Cannot provision bundled runtime: ${name} is not installed for the build machine.`);
-  }
-  return output;
-}
-
-async function copyRuntimeBinary(source, target) {
-  const info = await stat(source).catch(() => null);
+async function validateRuntimeBinary(target) {
+  const info = await stat(target).catch(() => null);
   if (info === null || !info.isFile()) {
-    throw new Error(`Cannot provision bundled runtime: ${source} is not a file.`);
+    throw new Error(
+      `Missing bundled FFmpeg runtime binary: ${target}. Place ffmpeg and ffprobe in apps/desktop-electron/runtime/ffmpeg/${runtimeId} before building.`
+    );
   }
-  await copyFile(source, target);
   if (process.platform !== "win32") {
     await chmod(target, 0o755);
   }
@@ -56,8 +44,8 @@ function binaryName(name) {
   return process.platform === "win32" ? `${name}.exe` : name;
 }
 
-function binaryManifest(source, target) {
-  const versionOutput = execFileSync(source, ["-version"], {
+function binaryManifest(target) {
+  const versionOutput = execFileSync(target, ["-version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 1024 * 1024
@@ -67,7 +55,6 @@ function binaryManifest(source, target) {
   return {
     fileName: basename(target),
     bundlePath: `ffmpeg/${runtimeId}/${basename(target)}`,
-    sourcePath: source,
     version: firstLine,
     configureLine,
     sha256: sha256(target)

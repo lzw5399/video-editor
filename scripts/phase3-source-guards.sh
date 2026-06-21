@@ -49,6 +49,11 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/commandHelpers.ts
 
 fail_if_matches \
+  "bindings_node public executeCommand must not expose Rust timeline edit routes; use executeProjectIntent sessions instead" \
+  'draft_commands::timeline::execute_timeline_edit|fn[[:space:]]+timeline_command\b|\btimeline_command[[:space:]]*\(|"\s*(?:addSegment|addTimelineSegmentIntent|selectTimelineSegments|moveSegment|moveSelectedSegmentIntent|splitSegment|splitSelectedSegmentIntent|trimSegment|trimSelectedSegmentIntent|deleteSegment|undoTimelineEdit|redoTimelineEdit|addTextSegment|addTextSegmentIntent|editTextSegment|importSubtitleSrt|importSubtitleSrtIntent|addAudioSegment|addAudioSegmentIntent|setSegmentVolume|updateSegmentAudio|addTrack|addTrackIntent|renameTrack|setTrackLock|setTrackVisibility|setTrackMute|updateDraftCanvasConfig|updateSegmentVisual|setSegmentKeyframe|removeSegmentKeyframe)"' \
+  crates/bindings_node/src/lib.rs
+
+fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload

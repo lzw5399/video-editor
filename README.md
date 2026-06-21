@@ -84,8 +84,9 @@ Prerequisites:
 - Node.js `24.12.0`
 - pnpm `10.32.1`
 - `just` for optional root recipes
-- FFmpeg/ffprobe on `PATH`, or `VE_FFMPEG_PATH` and `VE_FFPROBE_PATH`, for
-  runtime and render smoke tests
+- Bundled FFmpeg/ffprobe in
+  `apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>`; runtime code does
+  not search `PATH` or accept per-binary FFmpeg overrides
 
 ```bash
 corepack pnpm run desktop:open

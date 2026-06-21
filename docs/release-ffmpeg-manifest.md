@@ -18,7 +18,7 @@ per-binary environment variables.
 ## Bundled Runtime Layout
 
 The build script `apps/desktop-electron/scripts/provision-ffmpeg-runtime.mjs`
-copies the build-machine FFmpeg and ffprobe binaries into:
+validates the already-bundled FFmpeg and ffprobe binaries in:
 
 ```text
 apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>/
@@ -33,8 +33,8 @@ apps/desktop-electron/runtime/ffmpeg/<platform>-<arch>/
 resources/ffmpeg/<platform>-<arch>/
 ```
 
-The generated `manifest.local.json` records the binary file names, source paths,
-`-version` first lines, configure lines, SHA-256 checksums, and review status.
+The generated `manifest.local.json` records the binary file names, `-version`
+first lines, configure lines, SHA-256 checksums, and review status.
 
 ## Licensing Status
 
