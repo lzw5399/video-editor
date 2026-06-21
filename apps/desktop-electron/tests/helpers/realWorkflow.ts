@@ -75,8 +75,12 @@ export async function runRealImportPreviewExportWorkflow(
   ]);
 
   await addVisualSegment(page, app, fixtures.videoName);
+  await seekTimelinePlayhead(page, app, 3_000_000);
+  await addVisualSegment(page, app, fixtures.videoName);
+  await seekTimelinePlayhead(page, app, 0);
   await addTextSegment(page, app, fixtures.expectedTextContent);
   await addAudioSegment(page, app, fixtures.audioName);
+  await addOverlayVideoTrack(page, app);
   await addVisualSegment(page, app, fixtures.imageName);
   await expectFileExists(join(fixtures.bundlePath, "project.json"));
 
@@ -116,7 +120,7 @@ export async function assertReopenedProjectState(page: Page, fixtures: Phase6Med
   await expect(page.getByRole("article", { name: `素材 ${fixtures.videoName}` })).toContainText("可用", { timeout: 20_000 });
   await expect(page.getByRole("article", { name: `素材 ${fixtures.imageName}` })).toContainText("可用", { timeout: 20_000 });
   await expect(page.getByRole("article", { name: `素材 ${fixtures.audioName}` })).toContainText("可用", { timeout: 20_000 });
-  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.videoName)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.videoName)}`) })).toHaveCount(2);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.imageName)}`) })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.audioName)}`) })).toBeVisible();
   const textSegment = page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.expectedTextContent)}`) });
@@ -132,17 +136,15 @@ async function enterProjectFromProductEntryIfNeeded(page: Page, app: ElectronApp
     return;
   }
 
-  const nextSaveCount = (await countCommand(app, "saveProjectBundle")) + 1;
   const nextCreateSessionCount = (await countProjectSessionCommand(app, "createProjectSession")) + 1;
   await expect(page.getByRole("button", { name: "导入素材" })).toHaveCount(0);
   await page.getByRole("button", { name: "新建项目" }).click();
   await expect
     .poll(
       async () => {
-        const saveReached = (await countCommand(app, "saveProjectBundle")) >= nextSaveCount;
         const sessionReached = (await countProjectSessionCommand(app, "createProjectSession")) >= nextCreateSessionCount;
         const workspaceVisible = (await page.getByRole("main", { name: "剪映风格编辑工作区" }).count()) > 0;
-        return workspaceVisible && (saveReached || sessionReached);
+        return workspaceVisible && sessionReached;
       },
       { timeout: 30_000 }
     )
@@ -236,6 +238,30 @@ async function addVisualSegment(page: Page, app: ElectronApplication, materialNa
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForProjectSessionIntentCount(page, app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
+}
+
+async function addOverlayVideoTrack(page: Page, app: ElectronApplication): Promise<void> {
+  const nextAddTrackCount = (await countProjectSessionIntent(app, "addTrackIntent")) + 1;
+  const nextSelectionCount = (await countProjectSessionIntent(app, "selectTimelineItemIntent")) + 1;
+  await page.getByRole("button", { name: "添加视频轨道" }).click();
+  await waitForProjectSessionIntentCount(page, app, "addTrackIntent", nextAddTrackCount);
+  const overlayTrack = page.getByRole("button", { name: "选择轨道 视频轨道 2" });
+  await expect(overlayTrack).toBeVisible();
+  await overlayTrack.click();
+  await waitForProjectSessionIntentCount(page, app, "selectTimelineItemIntent", nextSelectionCount);
+  await expect(overlayTrack).toHaveAttribute("aria-pressed", "true");
+}
+
+async function seekTimelinePlayhead(page: Page, app: ElectronApplication, targetTimeUs: number): Promise<void> {
+  const nextSeekCount = (await countProjectSessionIntent(app, "setSessionPlayhead")) + 1;
+  const ruler = page.locator(".ruler-track");
+  const rulerBox = await ruler.boundingBox();
+  if (rulerBox === null) {
+    throw new Error("Timeline ruler is not visible for real workflow seek");
+  }
+  const ratio = Math.max(0, Math.min(1, targetTimeUs / 10_000_000));
+  await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height / 2);
+  await waitForProjectSessionIntentCount(page, app, "setSessionPlayhead", nextSeekCount);
 }
 
 async function addTextSegment(page: Page, app: ElectronApplication, content: string): Promise<void> {

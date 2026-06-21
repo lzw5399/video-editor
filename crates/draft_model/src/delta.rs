@@ -14,8 +14,6 @@ pub enum CommandDeltaName {
     Version,
     ProbeMediaRuntime,
     ProbeRuntimeCapabilities,
-    OpenProjectBundle,
-    SaveProjectBundle,
     ImportMaterial,
     ListMaterials,
     ListMissingMaterials,

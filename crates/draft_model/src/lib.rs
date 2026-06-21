@@ -82,8 +82,6 @@ pub enum CommandName {
     Version,
     ProbeMediaRuntime,
     ProbeRuntimeCapabilities,
-    OpenProjectBundle,
-    SaveProjectBundle,
     ImportMaterial,
     ListMaterials,
     ListMissingMaterials,
@@ -123,8 +121,6 @@ pub enum CommandPayload {
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
     ProbeRuntimeCapabilities(ProbeRuntimeCapabilitiesCommandPayload),
-    OpenProjectBundle(OpenProjectBundleCommandPayload),
-    SaveProjectBundle(SaveProjectBundleCommandPayload),
     ImportMaterial(ImportMaterialCommandPayload),
     ListMaterials(ListMaterialsCommandPayload),
     ListMissingMaterials(ListMissingMaterialsCommandPayload),
@@ -200,8 +196,6 @@ impl CommandPayload {
             Self::Version(_) => CommandName::Version,
             Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
             Self::ProbeRuntimeCapabilities(_) => CommandName::ProbeRuntimeCapabilities,
-            Self::OpenProjectBundle(_) => CommandName::OpenProjectBundle,
-            Self::SaveProjectBundle(_) => CommandName::SaveProjectBundle,
             Self::ImportMaterial(_) => CommandName::ImportMaterial,
             Self::ListMaterials(_) => CommandName::ListMaterials,
             Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
@@ -283,21 +277,6 @@ pub struct ProbeMediaRuntimeCommandPayload {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProbeRuntimeCapabilitiesCommandPayload {}
-
-/// Payload accepted by the project bundle open command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct OpenProjectBundleCommandPayload {
-    pub bundle_path: String,
-}
-
-/// Payload accepted by the project bundle save command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SaveProjectBundleCommandPayload {
-    pub draft: Draft,
-    pub bundle_path: String,
-}
 
 /// Payload accepted by the Phase 2 material import command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -1354,25 +1333,6 @@ pub struct TimelineCommandResponse {
     pub selection: TimelineSelection,
     pub events: Vec<CommandEvent>,
     pub delta: CommandDelta,
-}
-
-/// Response data returned by opening a project bundle.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct OpenProjectBundleResponse {
-    pub draft: Draft,
-    pub bundle_path: String,
-    pub project_json_path: String,
-    pub warnings: Vec<String>,
-}
-
-/// Response data returned by saving a project bundle.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SaveProjectBundleResponse {
-    pub draft: Draft,
-    pub bundle_path: String,
-    pub project_json_path: String,
 }
 
 /// Response data returned by the Phase 2 material import command.

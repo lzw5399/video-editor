@@ -462,8 +462,6 @@
         "version",
         "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "openProjectBundle",
-        "saveProjectBundle",
         "importMaterial",
         "listMaterials",
         "listMissingMaterials",
@@ -552,46 +550,6 @@
           },
           "required": [
             "kind"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Payload accepted by the project bundle open command.",
-          "properties": {
-            "bundlePath": {
-              "type": "string"
-            },
-            "kind": {
-              "const": "openProjectBundle",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "bundlePath"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Payload accepted by the project bundle save command.",
-          "properties": {
-            "bundlePath": {
-              "type": "string"
-            },
-            "draft": {
-              "$ref": "#/$defs/Draft"
-            },
-            "kind": {
-              "const": "saveProjectBundle",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "draft",
-            "bundlePath"
           ],
           "type": "object"
         },
@@ -25433,40 +25391,6 @@
           "properties": {
             "kind": {
               "const": "probeRuntimeCapabilities"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        }
-      }
-    },
-    {
-      "properties": {
-        "command": {
-          "const": "openProjectBundle"
-        },
-        "payload": {
-          "properties": {
-            "kind": {
-              "const": "openProjectBundle"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        }
-      }
-    },
-    {
-      "properties": {
-        "command": {
-          "const": "saveProjectBundle"
-        },
-        "payload": {
-          "properties": {
-            "kind": {
-              "const": "saveProjectBundle"
             }
           },
           "required": [
