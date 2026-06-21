@@ -17,7 +17,9 @@ use draft_model::{
 };
 use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
+use napi::Env;
 use napi::bindgen_prelude::Result;
+use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
 use project_store::{
     ProjectStoreError, ProjectStoreWarning, StdPlatformFileSystem, open_project_bundle,
@@ -277,6 +279,21 @@ pub fn start_project_session_export(request: serde_json::Value) -> Result<serde_
 pub fn create_realtime_preview_session(config: serde_json::Value) -> Result<serde_json::Value> {
     let config = parse_realtime_preview_payload::<RealtimePreviewSessionBindingConfig>(config)?;
     with_realtime_preview_registry(|registry| registry.create_session(config))
+}
+
+#[napi(js_name = "subscribeRealtimePreviewEvents")]
+pub fn subscribe_realtime_preview_events(
+    env: Env,
+    mut callback: ThreadsafeFunction<String>,
+) -> Result<serde_json::Value> {
+    #[allow(deprecated)]
+    callback.unref(&env)?;
+    with_realtime_preview_registry(|registry| registry.subscribe_events(callback))
+}
+
+#[napi(js_name = "unsubscribeRealtimePreviewEvents")]
+pub fn unsubscribe_realtime_preview_events() -> Result<serde_json::Value> {
+    with_realtime_preview_registry(|registry| registry.unsubscribe_events())
 }
 
 #[napi(js_name = "closeRealtimePreviewSession")]

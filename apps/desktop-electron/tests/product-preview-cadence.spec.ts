@@ -70,6 +70,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
     const before = await readHostState(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const nativeHostCallCountBeforePlay = (await readRealtimePreviewHostCalls(app)).length;
 
     await activateProductJourneyApp(app, page);
     await playButton.click();
@@ -83,6 +84,9 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       .filter((call) => call.kind === "getPresentationState" && typeof call.durationMs === "number")
       .map((call) => call.durationMs as number)
       .sort((first, second) => first - second);
+    const nativeEvents = (await readRealtimePreviewHostCalls(app))
+      .slice(nativeHostCallCountBeforePlay)
+      .filter((call) => call.kind === "nativePreviewEvent");
     const durationPercentile = (percentile: number) =>
       presentationDurations[Math.min(presentationDurations.length - 1, Math.floor(presentationDurations.length * percentile))] ??
       null;
@@ -117,6 +121,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       targetDeltaMicroseconds: targetAfter - targetBefore,
       evidenceDigestChanged,
       visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
+      nativePreviewEvents: summarizeNativePreviewEvents(nativeEvents),
       presentationSnapshotReads: {
         count: presentationDurations.length,
         min: presentationDurations[0] ?? null,
@@ -155,6 +160,14 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
       30
     );
+    expect(
+      metrics.nativePreviewEvents.framePresented,
+      "Rust playback worker must drive telemetry fanout through framePresented native events"
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      metrics.nativePreviewEvents.controlChanged,
+      "Rust control changes should be visible through native preview events"
+    ).toBeGreaterThanOrEqual(1);
     expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
     expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
       16
@@ -218,6 +231,7 @@ async function expectCadencePlayback(
   const frameRequestsBefore = requestPreviewFrameCount(await readExecuteCommandCalls(app));
   const before = await readHostState(page);
   const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+  const nativeHostCallCountBeforePlay = (await readRealtimePreviewHostCalls(app)).length;
 
   await activateProductJourneyApp(app, page);
   await playButton.click();
@@ -231,6 +245,9 @@ async function expectCadencePlayback(
     .filter((call) => call.kind === "getPresentationState" && typeof call.durationMs === "number")
     .map((call) => call.durationMs as number)
     .sort((first, second) => first - second);
+  const nativeEvents = (await readRealtimePreviewHostCalls(app))
+    .slice(nativeHostCallCountBeforePlay)
+    .filter((call) => call.kind === "nativePreviewEvent");
   const durationPercentile = (percentile: number) =>
     presentationDurations[Math.min(presentationDurations.length - 1, Math.floor(presentationDurations.length * percentile))] ??
     null;
@@ -265,6 +282,7 @@ async function expectCadencePlayback(
     targetDeltaMicroseconds: targetAfter - targetBefore,
     evidenceDigestChanged,
     visibleChanged: visibleAfter.visibleCenterHash !== visibleBefore.visibleCenterHash,
+    nativePreviewEvents: summarizeNativePreviewEvents(nativeEvents),
     presentationSnapshotReads: {
       count: presentationDurations.length,
       min: presentationDurations[0] ?? null,
@@ -303,6 +321,13 @@ async function expectCadencePlayback(
   expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
     30
   );
+  expect(
+    metrics.nativePreviewEvents.framePresented,
+    "Rust playback worker must drive telemetry fanout through framePresented native events"
+  ).toBeGreaterThanOrEqual(1);
+  expect(metrics.nativePreviewEvents.controlChanged, "Rust control changes should be visible through native preview events").toBeGreaterThanOrEqual(
+    1
+  );
   expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
   expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
     16
@@ -328,6 +353,16 @@ async function expectCadencePlayback(
   expect(framePacing?.scheduleLatenessP95Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(12);
   expect(metrics.evidenceDigestChanged, "rendered content evidence should change during playback").toBe(true);
   expect(metrics.visibleChanged, "visible preview pixels should change during playback").toBe(true);
+}
+
+function summarizeNativePreviewEvents(events: Array<{ nativeEventKind?: string }>) {
+  return {
+    total: events.length,
+    controlChanged: events.filter((event) => event.nativeEventKind === "controlChanged").length,
+    framePresented: events.filter((event) => event.nativeEventKind === "framePresented").length,
+    playbackEnded: events.filter((event) => event.nativeEventKind === "playbackEnded").length,
+    playbackError: events.filter((event) => event.nativeEventKind === "playbackError").length
+  };
 }
 
 function summarizeFramePacing(framePacing: NonNullable<HostState["telemetry"]>["framePacing"] | null) {

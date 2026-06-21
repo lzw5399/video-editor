@@ -54,6 +54,10 @@ type NativeBinding = {
   ) => CommandResultEnvelope<ProjectSessionMissingMaterialsResponse>;
   startProjectSessionExport: (request: StartProjectSessionExportRequest) => CommandResultEnvelope<ExportJobStatusResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
+  subscribeRealtimePreviewEvents: (
+    callback: (errorOrEventJson: unknown, eventJson?: string) => void
+  ) => RealtimePreviewEventSubscriptionResponse;
+  unsubscribeRealtimePreviewEvents: () => RealtimePreviewEventSubscriptionResponse;
   closeRealtimePreviewSession: (request: RealtimePreviewSessionRequest) => RealtimePreviewClosedResponse;
   attachRealtimePreviewSurface: (request: RealtimePreviewSurfaceRequest) => RealtimePreviewGenerationResponse;
   updateRealtimePreviewSurfaceBounds: (request: RealtimePreviewSurfaceBoundsRequest) => RealtimePreviewGenerationResponse;
@@ -228,6 +232,19 @@ export type RealtimePreviewSessionRequest = {
 export type RealtimePreviewSessionResponse = {
   sessionId: string;
   playbackGeneration: number;
+};
+
+export type RealtimePreviewEventSubscriptionResponse = {
+  subscribed: boolean;
+};
+
+export type RealtimePreviewBindingEvent = {
+  sessionId: string;
+  kind: "sessionCreated" | "sessionClosed" | "controlChanged" | "framePresented" | "playbackEnded" | "playbackError";
+  playbackGeneration: number;
+  targetTimeMicroseconds?: number | null;
+  droppedFrameCount?: number | null;
+  errorMessage?: string | null;
 };
 
 export type RealtimePreviewClosedResponse = {
@@ -506,6 +523,16 @@ export function createRealtimePreviewSession(config: RealtimePreviewSessionConfi
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
 
+export function subscribeRealtimePreviewEvents(
+  callback: (errorOrEventJson: unknown, eventJson?: string) => void
+): RealtimePreviewEventSubscriptionResponse {
+  return requireLoadedBinding().subscribeRealtimePreviewEvents(callback);
+}
+
+export function unsubscribeRealtimePreviewEvents(): RealtimePreviewEventSubscriptionResponse {
+  return requireLoadedBinding().unsubscribeRealtimePreviewEvents();
+}
+
 export function closeRealtimePreviewSession(request: RealtimePreviewSessionRequest): RealtimePreviewClosedResponse {
   return requireLoadedBinding().closeRealtimePreviewSession(request);
 }
@@ -588,6 +615,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
       typeof loaded.startProjectSessionExport !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
+      typeof loaded.subscribeRealtimePreviewEvents !== "function" ||
+      typeof loaded.unsubscribeRealtimePreviewEvents !== "function" ||
       typeof loaded.closeRealtimePreviewSession !== "function" ||
       typeof loaded.attachRealtimePreviewSurface !== "function" ||
       typeof loaded.updateRealtimePreviewSurfaceBounds !== "function" ||
@@ -618,6 +647,8 @@ function loadNativeBinding(): NativeBinding | null {
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
       startProjectSessionExport: loaded.startProjectSessionExport,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
+      subscribeRealtimePreviewEvents: loaded.subscribeRealtimePreviewEvents,
+      unsubscribeRealtimePreviewEvents: loaded.unsubscribeRealtimePreviewEvents,
       closeRealtimePreviewSession: loaded.closeRealtimePreviewSession,
       attachRealtimePreviewSurface: loaded.attachRealtimePreviewSurface,
       updateRealtimePreviewSurfaceBounds: loaded.updateRealtimePreviewSurfaceBounds,

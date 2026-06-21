@@ -135,6 +135,14 @@ fail_matches \
   apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
 
 fail_matches \
+  "Electron realtime preview host must subscribe to Rust native events instead of interval telemetry fanout" \
+  'setInterval\(|TELEMETRY_FANOUT_INTERVAL|startTelemetryFanout|telemetryFanoutTimer' \
+  apps/desktop-electron/src/main/realtimePreviewHost.ts
+
+require_fixed "apps/desktop-electron/src/main/realtimePreviewHost.ts" "subscribeRealtimePreviewEvents"
+require_fixed "apps/desktop-electron/src/main/realtimePreviewHost.ts" "nativePreviewEventBridgeInstalled"
+
+fail_matches \
   "preload realtime preview host must not expose a renderer getTelemetry polling API" \
   'getTelemetry|realtimePreviewHost:getTelemetry' \
   apps/desktop-electron/src/preload/index.ts

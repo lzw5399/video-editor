@@ -14,8 +14,10 @@ import {
   requestRealtimePreviewFrame,
   seekRealtimePreview,
   stopRealtimePreview,
+  subscribeRealtimePreviewEvents,
   updateRealtimePreviewProjectSessionSnapshot,
   updateRealtimePreviewSurfaceBounds,
+  type RealtimePreviewBindingEvent,
   type RealtimePreviewFallbackReason,
   type RealtimePreviewFrameResponse,
   type RealtimePreviewPresentationStateResponse,
@@ -95,6 +97,8 @@ type RealtimePreviewHostRecord = {
   appFocused?: boolean;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  nativeEventKind?: string;
+  droppedFrameCount?: number;
   durationMs?: number;
   presentedFrameCount?: number;
   errorMessage?: string;
@@ -110,9 +114,11 @@ declare global {
 type SenderAssertion = (event: IpcMainInvokeEvent) => void;
 
 const hostsByWindowId = new Map<number, RealtimePreviewHost>();
+const hostsBySessionId = new Map<string, RealtimePreviewHost>();
 let realtimePreviewHostIpcInstalled = false;
+let nativePreviewEventBridgeInstalled = false;
 const TELEMETRY_STATE_CHANNEL = "realtimePreviewHost:telemetryState";
-const TELEMETRY_FANOUT_INTERVAL_MS = 250;
+const PRESENTATION_EVENT_REFRESH_INTERVAL_MS = 250;
 
 export function registerRealtimePreviewHost(window: BrowserWindow, assertAllowedSender: SenderAssertion): RealtimePreviewHost {
   installRealtimePreviewHostIpc(assertAllowedSender);
@@ -174,6 +180,66 @@ function hostForEvent(event: IpcMainInvokeEvent): RealtimePreviewHost {
   return host;
 }
 
+function ensureNativePreviewEventBridge(): void {
+  if (nativePreviewEventBridgeInstalled) {
+    return;
+  }
+  subscribeRealtimePreviewEvents((errorOrEventJson: unknown, maybeEventJson?: string) => {
+    const eventJson = readRealtimePreviewEventJson(errorOrEventJson, maybeEventJson);
+    if (eventJson === null) {
+      const errorMessage = errorOrEventJson instanceof Error ? errorOrEventJson.message : String(errorOrEventJson);
+      recordRealtimePreviewHostCall({
+        kind: "nativePreviewEventInvalid",
+        errorMessage: errorMessage.slice(0, 200)
+      });
+      return;
+    }
+    const event = parseRealtimePreviewBindingEvent(eventJson);
+    if (event === null) {
+      recordRealtimePreviewHostCall({
+        kind: "nativePreviewEventInvalid",
+        errorMessage: eventJson.slice(0, 200)
+      });
+      return;
+    }
+    const host = hostsBySessionId.get(event.sessionId);
+    if (host === undefined) {
+      recordRealtimePreviewHostCall({
+        kind: "nativePreviewEventDropped",
+        nativeEventKind: event.kind,
+        playbackGeneration: event.playbackGeneration,
+        targetTimeMicroseconds: event.targetTimeMicroseconds ?? undefined
+      });
+      return;
+    }
+    host.handleNativePreviewEvent(event);
+  });
+  nativePreviewEventBridgeInstalled = true;
+  recordRealtimePreviewHostCall({ kind: "nativePreviewEventBridgeInstalled" });
+}
+
+function readRealtimePreviewEventJson(errorOrEventJson: unknown, maybeEventJson?: string): string | null {
+  if (typeof maybeEventJson === "string") {
+    return maybeEventJson;
+  }
+  if (typeof errorOrEventJson === "string") {
+    return errorOrEventJson;
+  }
+  return null;
+}
+
+function parseRealtimePreviewBindingEvent(eventJson: string): RealtimePreviewBindingEvent | null {
+  try {
+    const value = JSON.parse(eventJson) as Partial<RealtimePreviewBindingEvent>;
+    if (typeof value.sessionId !== "string" || typeof value.kind !== "string" || typeof value.playbackGeneration !== "number") {
+      return null;
+    }
+    return value as RealtimePreviewBindingEvent;
+  } catch {
+    return null;
+  }
+}
+
 export class RealtimePreviewHost {
   private sessionId: string | null = null;
   private playbackGeneration: number | null = null;
@@ -184,9 +250,9 @@ export class RealtimePreviewHost {
   private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
+  private lastPresentationSnapshotRefreshAt = 0;
   private closed = false;
   private telemetrySubscribers = new Map<number, WebContents>();
-  private telemetryFanoutTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly window: BrowserWindow) {
     window.on("close", () => {
@@ -248,11 +314,11 @@ export class RealtimePreviewHost {
     }
   }
 
-  getTelemetryState(): RealtimePreviewHostDisplayState {
+  getTelemetryState(refreshPresentation = true): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
       this.mockRealtimeFrameForTest();
-      this.refreshPreviewState();
+      this.refreshPreviewState(refreshPresentation);
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
     }
@@ -261,12 +327,11 @@ export class RealtimePreviewHost {
   }
 
   subscribeTelemetry(sender: WebContents): RealtimePreviewHostDisplayState {
+    ensureNativePreviewEventBridge();
     this.telemetrySubscribers.set(sender.id, sender);
     sender.once("destroyed", () => {
       this.telemetrySubscribers.delete(sender.id);
-      this.stopTelemetryFanoutIfIdle();
     });
-    this.startTelemetryFanout();
     const state = this.getTelemetryState();
     recordRealtimePreviewHostCall({ kind: "subscribeTelemetry" });
     return state;
@@ -274,8 +339,24 @@ export class RealtimePreviewHost {
 
   unsubscribeTelemetry(sender: WebContents): void {
     this.telemetrySubscribers.delete(sender.id);
-    this.stopTelemetryFanoutIfIdle();
     recordRealtimePreviewHostCall({ kind: "unsubscribeTelemetry" });
+  }
+
+  handleNativePreviewEvent(event: RealtimePreviewBindingEvent): void {
+    if (this.closed || this.sessionId !== event.sessionId) {
+      return;
+    }
+    this.playbackGeneration = event.playbackGeneration;
+    recordRealtimePreviewHostCall({
+      kind: "nativePreviewEvent",
+      nativeEventKind: event.kind,
+      targetTimeMicroseconds: event.targetTimeMicroseconds ?? undefined,
+      playbackGeneration: event.playbackGeneration,
+      errorMessage: event.errorMessage ?? undefined,
+      droppedFrameCount: event.droppedFrameCount ?? undefined
+    });
+    this.applyNativeEventToCachedEvidence(event);
+    this.publishTelemetryState(this.shouldRefreshPresentationForNativeEvent(event));
   }
 
   updateProjectSessionSnapshot(projectSessionId: string, expectedRevision: number): RealtimePreviewHostDisplayState {
@@ -392,11 +473,11 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
-    this.stopTelemetryFanout();
     if (this.sessionId === null) {
       return;
     }
 
+    hostsBySessionId.delete(this.sessionId);
     if (this.attached) {
       try {
         detachRealtimePreviewSurface({ sessionId: this.sessionId });
@@ -428,6 +509,7 @@ export class RealtimePreviewHost {
       playbackRateDenominator: 1
     });
     this.sessionId = response.sessionId;
+    hostsBySessionId.set(response.sessionId, this);
     this.playbackGeneration = response.playbackGeneration;
     recordRealtimePreviewHostCall({ kind: "createSession" });
   }
@@ -492,46 +574,24 @@ export class RealtimePreviewHost {
     });
   }
 
-  private refreshPreviewState(): void {
+  private refreshPreviewState(refreshPresentation = true): void {
     if (this.sessionId === null) {
       return;
     }
 
-    this.refreshPresentationSnapshot();
+    if (refreshPresentation) {
+      this.refreshPresentationSnapshot();
+    }
     this.telemetry = getRealtimePreviewTelemetry({ sessionId: this.sessionId });
     recordRealtimePreviewHostCall({ kind: "refreshTelemetrySnapshot" });
   }
 
-  private startTelemetryFanout(): void {
-    if (this.telemetryFanoutTimer !== null) {
-      return;
-    }
-    this.telemetryFanoutTimer = setInterval(() => {
-      this.publishTelemetryState();
-    }, TELEMETRY_FANOUT_INTERVAL_MS);
-  }
-
-  private stopTelemetryFanoutIfIdle(): void {
-    if (this.telemetrySubscribers.size === 0) {
-      this.stopTelemetryFanout();
-    }
-  }
-
-  private stopTelemetryFanout(): void {
-    if (this.telemetryFanoutTimer === null) {
-      return;
-    }
-    clearInterval(this.telemetryFanoutTimer);
-    this.telemetryFanoutTimer = null;
-  }
-
-  private publishTelemetryState(): void {
+  private publishTelemetryState(refreshPresentation = true): void {
     if (this.closed || this.telemetrySubscribers.size === 0) {
-      this.stopTelemetryFanoutIfIdle();
       return;
     }
 
-    const state = this.getTelemetryState();
+    const state = this.getTelemetryState(refreshPresentation);
     for (const [senderId, sender] of this.telemetrySubscribers) {
       if (sender.isDestroyed()) {
         this.telemetrySubscribers.delete(senderId);
@@ -545,7 +605,6 @@ export class RealtimePreviewHost {
       playbackGeneration: state.playbackGeneration ?? undefined,
       presentationAvailable: state.productReady
     });
-    this.stopTelemetryFanoutIfIdle();
   }
 
   private sendTelemetryState(sender: WebContents, state: RealtimePreviewHostDisplayState): void {
@@ -563,6 +622,7 @@ export class RealtimePreviewHost {
     const startedAt = performance.now();
     this.presentationState = getRealtimePreviewPresentationState({ sessionId: this.sessionId });
     const durationMs = Math.round(performance.now() - startedAt);
+    this.lastPresentationSnapshotRefreshAt = performance.now();
     this.lastContentEvidence = this.presentationState.evidence ?? null;
     recordRealtimePreviewHostCall({
       kind: "getPresentationState",
@@ -573,6 +633,26 @@ export class RealtimePreviewHost {
       presentationBackend: this.presentationState.backend,
       unsupportedReason: this.presentationState.unsupportedReason ?? null
     });
+  }
+
+  private shouldRefreshPresentationForNativeEvent(event: RealtimePreviewBindingEvent): boolean {
+    if (event.kind !== "framePresented") {
+      return true;
+    }
+    if (this.presentationState === null || !this.hasProductionCompositedPresenter()) {
+      return true;
+    }
+    return performance.now() - this.lastPresentationSnapshotRefreshAt >= PRESENTATION_EVENT_REFRESH_INTERVAL_MS;
+  }
+
+  private applyNativeEventToCachedEvidence(event: RealtimePreviewBindingEvent): void {
+    if (event.kind !== "framePresented" || event.targetTimeMicroseconds === undefined || this.lastContentEvidence === null) {
+      return;
+    }
+    this.lastContentEvidence = {
+      ...this.lastContentEvidence,
+      targetTimeMicroseconds: event.targetTimeMicroseconds
+    };
   }
 
   private applySessionPlaybackCommand(

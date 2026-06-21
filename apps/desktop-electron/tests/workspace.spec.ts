@@ -55,6 +55,7 @@ type ProjectSessionCall = {
 
 type RealtimePreviewHostCall = {
   kind: string;
+  nativeEventKind?: string;
   parentHandleByteLength?: number;
   surfaceKind?: string;
   bounds?: {
@@ -1345,7 +1346,7 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
       .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "subscribeTelemetry"))
       .toBe(true);
     await expect
-      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "pushTelemetry"))
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "nativePreviewEventBridgeInstalled"))
       .toBe(true);
 
     await expect

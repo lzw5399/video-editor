@@ -76,6 +76,7 @@ type ProjectSessionCall = {
 
 type RealtimePreviewHostCall = {
   kind: string;
+  nativeEventKind?: string;
   parentHandleByteLength?: number;
   bounds?: {
     x: number;
@@ -88,6 +89,7 @@ type RealtimePreviewHostCall = {
   playbackGeneration?: number;
   durationMs?: number;
   presentedFrameCount?: number;
+  droppedFrameCount?: number;
   errorMessage?: string;
   presentationAvailable?: boolean;
   presentationBackend?: string;

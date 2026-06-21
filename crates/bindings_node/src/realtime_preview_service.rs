@@ -53,6 +53,7 @@ use crate::native_preview_presenter::{
     NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
     NativePreviewScreenRect, NativePreviewSurfacePlacementEvidence,
 };
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 static NEXT_SCHEDULER_MEDIA_PIPELINE_ID: AtomicU64 = AtomicU64::new(1);
@@ -62,8 +63,131 @@ thread_local! {
         RefCell::new(BTreeMap::new());
 }
 
+#[derive(Clone)]
+struct RealtimePreviewEventSink {
+    callback: Arc<Mutex<Option<ThreadsafeFunction<String>>>>,
+}
+
+impl RealtimePreviewEventSink {
+    fn new() -> Self {
+        Self {
+            callback: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn subscribe(
+        &self,
+        callback: ThreadsafeFunction<String>,
+    ) -> Result<(), RealtimePreviewBindingError> {
+        let mut sink = self.callback.lock().map_err(|_| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                "realtime preview event sink lock poisoned",
+            )
+        })?;
+        *sink = Some(callback);
+        Ok(())
+    }
+
+    fn unsubscribe(&self) -> Result<(), RealtimePreviewBindingError> {
+        let mut sink = self.callback.lock().map_err(|_| {
+            RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                "realtime preview event sink lock poisoned",
+            )
+        })?;
+        *sink = None;
+        Ok(())
+    }
+
+    fn emit(&self, event: RealtimePreviewBindingEvent) {
+        let Ok(payload) = serde_json::to_string(&event) else {
+            return;
+        };
+        if let Ok(sink) = self.callback.lock() {
+            if let Some(callback) = sink.as_ref() {
+                let _ = callback.call(Ok(payload), ThreadsafeFunctionCallMode::NonBlocking);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RealtimePreviewBindingEvent {
+    pub session_id: String,
+    pub kind: RealtimePreviewBindingEventKind,
+    pub playback_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_time_microseconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_frame_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+}
+
+impl RealtimePreviewBindingEvent {
+    fn new(
+        session_id: &str,
+        kind: RealtimePreviewBindingEventKind,
+        playback_generation: u64,
+    ) -> Self {
+        Self {
+            session_id: session_id.to_owned(),
+            kind,
+            playback_generation,
+            target_time_microseconds: None,
+            dropped_frame_count: None,
+            error_message: None,
+        }
+    }
+
+    fn presented(
+        session_id: &str,
+        playback_generation: PlaybackGeneration,
+        target_time_microseconds: u64,
+        dropped_frame_count: u64,
+    ) -> Self {
+        Self {
+            session_id: session_id.to_owned(),
+            kind: RealtimePreviewBindingEventKind::FramePresented,
+            playback_generation: playback_generation.get(),
+            target_time_microseconds: Some(target_time_microseconds),
+            dropped_frame_count: Some(dropped_frame_count),
+            error_message: None,
+        }
+    }
+
+    fn error(
+        session_id: &str,
+        playback_generation: PlaybackGeneration,
+        error_message: String,
+    ) -> Self {
+        Self {
+            session_id: session_id.to_owned(),
+            kind: RealtimePreviewBindingEventKind::PlaybackError,
+            playback_generation: playback_generation.get(),
+            target_time_microseconds: None,
+            dropped_frame_count: None,
+            error_message: Some(error_message),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RealtimePreviewBindingEventKind {
+    SessionCreated,
+    SessionClosed,
+    ControlChanged,
+    FramePresented,
+    PlaybackEnded,
+    PlaybackError,
+}
+
 pub struct RealtimePreviewBindingRegistry {
     runtime: Arc<Mutex<RealtimePreviewRuntime>>,
+    event_sink: RealtimePreviewEventSink,
     next_binding_id: u64,
     sessions: BTreeMap<String, PreviewSessionId>,
     presenters: BTreeMap<String, NativePreviewPresenter>,
@@ -75,12 +199,28 @@ impl RealtimePreviewBindingRegistry {
     pub fn new() -> Self {
         Self {
             runtime: Arc::new(Mutex::new(RealtimePreviewRuntime::new())),
+            event_sink: RealtimePreviewEventSink::new(),
             next_binding_id: 1,
             sessions: BTreeMap::new(),
             presenters: BTreeMap::new(),
             schedulers: BTreeMap::new(),
             playback_workers: BTreeMap::new(),
         }
+    }
+
+    pub fn subscribe_events(
+        &mut self,
+        callback: ThreadsafeFunction<String>,
+    ) -> Result<RealtimePreviewEventSubscriptionResponse, RealtimePreviewBindingError> {
+        self.event_sink.subscribe(callback)?;
+        Ok(RealtimePreviewEventSubscriptionResponse { subscribed: true })
+    }
+
+    pub fn unsubscribe_events(
+        &mut self,
+    ) -> Result<RealtimePreviewEventSubscriptionResponse, RealtimePreviewBindingError> {
+        self.event_sink.unsubscribe()?;
+        Ok(RealtimePreviewEventSubscriptionResponse { subscribed: false })
     }
 
     pub fn create_session(
@@ -128,6 +268,11 @@ impl RealtimePreviewBindingRegistry {
             .map_err(RealtimePreviewBindingError::runtime)?
             .generation()
             .get();
+        self.event_sink.emit(RealtimePreviewBindingEvent::new(
+            &binding_id,
+            RealtimePreviewBindingEventKind::SessionCreated,
+            generation,
+        ));
 
         Ok(RealtimePreviewSessionBindingResponse {
             session_id: binding_id,
@@ -150,6 +295,11 @@ impl RealtimePreviewBindingRegistry {
         }
         self.schedulers.remove(session_id);
         let closed = self.runtime_lock()?.close_session(runtime_id);
+        self.event_sink.emit(RealtimePreviewBindingEvent::new(
+            session_id,
+            RealtimePreviewBindingEventKind::SessionClosed,
+            0,
+        ));
         Ok(RealtimePreviewClosedBindingResponse {
             session_id: session_id.to_owned(),
             closed,
@@ -175,6 +325,7 @@ impl RealtimePreviewBindingRegistry {
                 return Err(RealtimePreviewBindingError::runtime(error));
             }
         };
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -210,6 +361,7 @@ impl RealtimePreviewBindingRegistry {
         if was_playing {
             self.start_playback_worker(session_id, runtime_id, generation, resume_time, cadence)?;
         }
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -228,6 +380,7 @@ impl RealtimePreviewBindingRegistry {
             scheduler.detach_surface();
             Ok(())
         })?;
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -247,6 +400,7 @@ impl RealtimePreviewBindingRegistry {
             .runtime_lock()?
             .update_draft_snapshot(runtime_id, draft)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -266,6 +420,13 @@ impl RealtimePreviewBindingRegistry {
             .runtime_lock()?
             .seek(runtime_id, target_time)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        let mut event = RealtimePreviewBindingEvent::new(
+            session_id,
+            RealtimePreviewBindingEventKind::ControlChanged,
+            generation.get(),
+        );
+        event.target_time_microseconds = Some(target_time.get());
+        self.event_sink.emit(event);
         Ok(generation_response(generation))
     }
 
@@ -293,6 +454,7 @@ impl RealtimePreviewBindingRegistry {
             .play(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
         self.start_playback_worker(session_id, runtime_id, generation, target_time, cadence)?;
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -310,6 +472,7 @@ impl RealtimePreviewBindingRegistry {
             .runtime_lock()?
             .pause(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -327,6 +490,7 @@ impl RealtimePreviewBindingRegistry {
             .runtime_lock()?
             .stop(runtime_id)
             .map_err(RealtimePreviewBindingError::runtime)?;
+        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -411,6 +575,14 @@ impl RealtimePreviewBindingRegistry {
                 }),
             )),
         }
+    }
+
+    fn emit_control_event(&self, session_id: &str, generation: PlaybackGeneration) {
+        self.event_sink.emit(RealtimePreviewBindingEvent::new(
+            session_id,
+            RealtimePreviewBindingEventKind::ControlChanged,
+            generation.get(),
+        ));
     }
 
     fn runtime_session_id(
@@ -517,6 +689,8 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<(), RealtimePreviewBindingError> {
         let scheduler = self.scheduler_handle(session_id)?;
         let runtime = Arc::clone(&self.runtime);
+        let event_sink = self.event_sink.clone();
+        let event_session_id = session_id.to_owned();
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let label = format!("rt-preview-playback-{session_id}");
@@ -530,6 +704,8 @@ impl RealtimePreviewBindingRegistry {
                     playback_generation,
                     start_time,
                     cadence,
+                    event_session_id,
+                    event_sink,
                     worker_stop,
                 );
             })
@@ -566,6 +742,8 @@ fn run_binding_playback_loop(
     playback_generation: PlaybackGeneration,
     start_time: Microseconds,
     cadence: RealtimePlaybackCadence,
+    event_session_id: String,
+    event_sink: RealtimePreviewEventSink,
     stop: Arc<AtomicBool>,
 ) {
     let first_frame = {
@@ -590,6 +768,11 @@ fn run_binding_playback_loop(
                     scheduler.surface_placement(),
                     Some(error.to_string()),
                 );
+                event_sink.emit(RealtimePreviewBindingEvent::error(
+                    &event_session_id,
+                    playback_generation,
+                    error.to_string(),
+                ));
                 Err(error.to_string())
             }
         }
@@ -613,6 +796,12 @@ fn run_binding_playback_loop(
                     },
                 );
             }
+            event_sink.emit(RealtimePreviewBindingEvent::presented(
+                &event_session_id,
+                playback_generation,
+                evidence.target_time_microseconds,
+                0,
+            ));
             presented_at
         }
         Err(_) => {
@@ -655,6 +844,13 @@ fn run_binding_playback_loop(
                         scheduler.surface_placement(),
                         Some(error.to_string()),
                     );
+                    if !transient {
+                        event_sink.emit(RealtimePreviewBindingEvent::error(
+                            &event_session_id,
+                            playback_generation,
+                            error.to_string(),
+                        ));
+                    }
                     if transient { Ok(None) } else { Err(error) }
                 }
             }
@@ -685,12 +881,25 @@ fn run_binding_playback_loop(
                             let _ = runtime.pause(runtime_id);
                         }
                     }
+                    event_sink.emit(RealtimePreviewBindingEvent::presented(
+                        &event_session_id,
+                        playback_generation,
+                        frame.evidence.target_time_microseconds,
+                        frame.dropped_frames,
+                    ));
                     last_presented_at = presented_at;
                 }
                 if reached_end {
                     if let Ok(mut scheduler) = scheduler.lock() {
                         scheduler.pause_playback();
                     }
+                    let mut event = RealtimePreviewBindingEvent::new(
+                        &event_session_id,
+                        RealtimePreviewBindingEventKind::PlaybackEnded,
+                        playback_generation.get(),
+                    );
+                    event.target_time_microseconds = Some(frame.evidence.target_time_microseconds);
+                    event_sink.emit(event);
                     break;
                 }
             }
@@ -1879,6 +2088,12 @@ impl RealtimePreviewSurfaceBoundsBindingRequest {
             scale_factor_millis: self.scale_factor_millis,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewEventSubscriptionResponse {
+    pub subscribed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

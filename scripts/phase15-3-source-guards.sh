@@ -85,6 +85,14 @@ fail_if_matches \
   apps/desktop-electron/src/main/realtimePreviewHost.ts
 
 fail_if_matches \
+  "Electron realtime preview host must subscribe to native playback events instead of interval fanout" \
+  'setInterval\(|TELEMETRY_FANOUT_INTERVAL|startTelemetryFanout|telemetryFanoutTimer' \
+  apps/desktop-electron/src/main/realtimePreviewHost.ts
+
+require_fixed "apps/desktop-electron/src/main/realtimePreviewHost.ts" "subscribeRealtimePreviewEvents"
+require_fixed "apps/desktop-electron/src/main/realtimePreviewHost.ts" "nativePreviewEventBridgeInstalled"
+
+fail_if_matches \
   "PreviewMonitor must subscribe to realtime telemetry instead of polling getTelemetry on a renderer interval" \
   'playbackRunning\s*\?\s*33|setInterval\(|bridge\.getTelemetry\(' \
   apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
