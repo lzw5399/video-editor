@@ -162,6 +162,7 @@ pub fn execute_timeline_edit(
             &payload.command_state,
             &payload.selection,
             payload.material_id,
+            payload.target_start,
         ),
         TimelineEditPayload::SelectTimelineSegments(payload) => select_timeline_segments(
             &payload.draft,
@@ -581,6 +582,7 @@ pub fn add_timeline_segment_intent(
     command_state: &CommandState,
     selection: &TimelineSelection,
     material_id: MaterialId,
+    target_start: Option<Microseconds>,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
     let material = find_material(draft, &material_id)?.clone();
     let track_id = choose_compatible_track(draft, selection, &material)?;
@@ -589,7 +591,7 @@ pub fn add_timeline_segment_intent(
         .metadata
         .duration
         .unwrap_or_else(|| Microseconds::new(DEFAULT_INTENT_SEGMENT_DURATION_US));
-    let target_start = track_end(&draft.tracks[track_index])?;
+    let target_start = target_start.unwrap_or(track_end(&draft.tracks[track_index])?);
     let segment_id = next_segment_id(draft, "segment");
 
     add_segment(

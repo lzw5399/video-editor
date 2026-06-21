@@ -200,6 +200,93 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
 }
 
 #[test]
+fn project_session_add_timeline_segment_uses_session_playhead() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-add-playhead.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-add-playhead"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let positioned = execute_project_intent(json!({
+        "sessionId": "test-session-add-playhead",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 450_000
+        }
+    }))
+    .expect("session playhead intent should return an envelope");
+    assert_eq!(positioned["ok"], true, "{positioned:#}");
+    assert_eq!(positioned["data"]["revision"], 0);
+
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-add-playhead",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material"
+        }
+    }))
+    .expect("add intent should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_eq!(added["data"]["revision"], 1);
+    assert_no_renderer_project_state_payload(&added);
+    assert_eq!(
+        added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        450_000
+    );
+    assert_eq!(
+        added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["duration"],
+        1_000_000
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("session add at playhead should save canonical project.json");
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .target_timerange
+            .start
+            .get(),
+        450_000
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-add-playhead" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_add_intent_rejects_renderer_placement_fields() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-add-reject-placement.veproj");
+    save_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-add-reject-placement"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-add-reject-placement",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material",
+            "targetStart": 450_000
+        }
+    }))
+    .expect("legacy add placement payload should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["data"], Value::Null);
+    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+
+    close_project_session(json!({ "sessionId": "test-session-add-reject-placement" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_move_selected_segment_uses_target_start() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-move.veproj");

@@ -17,6 +17,7 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
+ADD_INTENT_LEGACY_PLACEMENT_PATTERN='kind:[[:space:]]*"addTimelineSegmentIntent"(?s:.{0,500})\b(?:targetStart|targetTimerange|sourceTimerange|trackId|segmentId)[[:space:]]*:'
 MOVE_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"moveSelectedSegmentIntent"(?s:.{0,300})\bdelta[[:space:]]*:'
 MOVE_CALLBACK_DELTA_PATTERN='onMoveSelectedSegment\?\.\([[:space:]]*deltaUs[[:space:]]*\)'
 TRIM_INTENT_LEGACY_DELTA_PATTERN='kind:[[:space:]]*"trimSelectedSegmentIntent"(?s:.{0,400})\bdelta[[:space:]]*:'
@@ -408,6 +409,11 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
 fail_if_matches_multiline \
+  "renderer/native binding must not pass placement fields for addTimelineSegmentIntent" \
+  "$ADD_INTENT_LEGACY_PLACEMENT_PATTERN" \
+  apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
+
+fail_if_matches_multiline \
   "renderer/native binding must not pass legacy move delta for selected-segment move" \
   "$MOVE_INTENT_LEGACY_DELTA_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
@@ -558,6 +564,15 @@ assert_pattern_rejects \
   'const canUndo = workspace.commandState.undoStack.length > 0;
 const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
+
+assert_pattern_rejects \
+  "legacy addTimelineSegment placement field" \
+  "$ADD_INTENT_LEGACY_PLACEMENT_PATTERN" \
+  'void executeProjectTimelineIntent({
+    kind: "addTimelineSegmentIntent",
+    materialId,
+    targetStart: normalizePlayheadTime(playheadUs)
+  }, "add");'
 
 assert_pattern_rejects \
   "legacy selected-segment move delta" \

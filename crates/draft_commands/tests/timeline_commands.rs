@@ -171,9 +171,14 @@ fn intent_timeline_edits_are_rust_owned() {
         track_ids: vec!["video-overlay".into()],
     };
 
-    let added =
-        add_timeline_segment_intent(&draft, &state, &selected_overlay, "video-material".into())
-            .expect("add intent should resolve selected compatible track and allocate segment ID");
+    let added = add_timeline_segment_intent(
+        &draft,
+        &state,
+        &selected_overlay,
+        "video-material".into(),
+        None,
+    )
+    .expect("add intent should resolve selected compatible track and allocate segment ID");
     assert_eq!(added.selection.track_ids, vec!["video-overlay".into()]);
     assert_eq!(added.selection.segment_ids, vec!["segment-1".into()]);
     let added_segment = &added.draft.tracks[2].segments[0];

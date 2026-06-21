@@ -1956,13 +1956,20 @@ export function App(): React.ReactElement {
   }
 
   function handleAddTimelineSegment(materialId: string): void {
-    void executeProjectTimelineIntent(
-      {
-        kind: "addTimelineSegmentIntent",
-        materialId
-      },
-      "添加片段"
-    );
+    void (async () => {
+      const playhead = normalizePlayheadTime(playheadUs);
+      const synced = await syncProjectSessionPlayhead(playhead, "定位添加播放头");
+      if (!synced) {
+        return;
+      }
+      await executeProjectTimelineIntent(
+        {
+          kind: "addTimelineSegmentIntent",
+          materialId
+        },
+        "添加片段"
+      );
+    })();
   }
 
   function handleMoveSelectedSegment(startAt: number): void {

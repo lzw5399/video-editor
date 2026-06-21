@@ -848,6 +848,7 @@ impl ProjectSession {
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
                         material_id,
+                        target_start: Some(self.playhead),
                     },
                 ))
             }

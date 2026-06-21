@@ -354,6 +354,13 @@ pub struct AddTimelineSegmentIntentCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub material_id: MaterialId,
+    #[serde(
+        default,
+        rename = "targetStart",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional = nullable)]
+    pub target_start: Option<Microseconds>,
 }
 
 /// Payload accepted by the Phase 3 timeline selection command.
