@@ -4,12 +4,18 @@ import { join } from "node:path";
 import type { CommandName } from "../src/generated/CommandEnvelope";
 
 type ExecuteCommandCall = {
-  command: CommandName;
+  command: CommandName | string;
   canvasConfig: {
     width: number;
     height: number;
     frameRate: { numerator: number; denominator: number };
   } | null;
+};
+
+type ProjectSessionCall = {
+  command: "executeProjectIntent" | string;
+  intentKind?: string | null;
+  canvasConfig?: ExecuteCommandCall["canvasConfig"];
 };
 
 declare global {
@@ -49,16 +55,39 @@ async function spyExecuteCommandCalls(app: ElectronApplication, page: Page): Pro
   await app.evaluate(() => {
     (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
       .__videoEditorTestExecuteCommandCalls = [];
+    (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+      .__videoEditorTestProjectSessionCalls = [];
   });
 }
 
 async function readExecuteCommandCalls(app: ElectronApplication): Promise<ExecuteCommandCall[]> {
-  return app.evaluate(() => {
-    return (
-      (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
-        .__videoEditorTestExecuteCommandCalls ?? []
-    );
-  });
+  const [legacyCalls, projectCalls] = await Promise.all([
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestExecuteCommandCalls?: ExecuteCommandCall[] })
+          .__videoEditorTestExecuteCommandCalls ?? []
+      );
+    }),
+    app.evaluate(() => {
+      return (
+        (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
+          .__videoEditorTestProjectSessionCalls ?? []
+      );
+    })
+  ]);
+  return [
+    ...legacyCalls,
+    ...projectCalls
+      .filter((call) => call.command === "executeProjectIntent" && call.intentKind !== null)
+      .map((call) => ({
+        command: commandNameForProjectIntent(call.intentKind ?? null),
+        canvasConfig: call.canvasConfig ?? null
+      }))
+  ];
+}
+
+function commandNameForProjectIntent(intentKind: string | null): string {
+  return intentKind === "updateDraftCanvasConfig" ? "updateDraftCanvasConfig" : intentKind ?? "executeProjectIntent";
 }
 
 async function openDraftParametersDialog(page: Page) {

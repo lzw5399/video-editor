@@ -447,7 +447,7 @@ export function PreviewMonitor({
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
       <div className="preview-titlebar">
         <strong>{draftName}</strong>
-        <span title={canvasReadout}>{canvasRatio}</span>
+        <span title={canvasReadout}>{canvasReadout}</span>
       </div>
 
       <div

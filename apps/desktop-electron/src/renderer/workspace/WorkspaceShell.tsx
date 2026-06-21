@@ -215,8 +215,8 @@ export function WorkspaceShell({
 
       <section className="preview-monitor" aria-label="预览窗口">
         <PreviewMonitor
-          draftName={workspace.draft.metadata.name}
-          canvasConfig={workspace.draft.canvasConfig}
+          draftName={workspace.viewModel.project.draftName}
+          canvasConfig={workspace.viewModel.project.canvasConfig}
           bindingStatus={workspace.bindingStatus}
           preview={workspace.preview}
           resourcePreviewStatusLabel={artifactPreviewStatusLabel(workspace.resourcePanel)}

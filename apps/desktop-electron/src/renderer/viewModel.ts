@@ -640,6 +640,14 @@ export function createInitialWorkspaceState(
 
 export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
   return {
+    project: {
+      draftName: "未命名草稿",
+      canvasConfig: blankWorkspaceDraft.canvasConfig,
+      sequenceDuration: 0,
+      frameDuration: 33_333,
+      trackCount: 0,
+      materialCount: 0
+    },
     timeline: {
       rows: [],
       duration: 10_000_000,
@@ -1433,16 +1441,6 @@ export function segmentBlockStyle(segment: TimelineSegmentView, timelineDuration
   };
 }
 
-export function findFirstMaterialByKind(draft: Draft, kind: MaterialKind) {
-  return draft.materials.find((material) => material.kind === kind && material.status === "available") ?? null;
-}
-
-export function nextTrackStart(track: { segments: Segment[] }): Microseconds {
-  return track.segments.reduce(
-    (latest, segment) => Math.max(latest, segment.targetTimerange.start + segment.targetTimerange.duration),
-    0
-  );
-}
 
 function padTime(value: number): string {
   return value.toString().padStart(2, "0");

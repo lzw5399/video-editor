@@ -220,9 +220,19 @@ export type ProjectSessionImportMaterialResponse = {
 export type ProjectSessionIntentResponse = ProjectSessionTimelineIntentResponse | ProjectSessionImportMaterialResponse;
 
 export type ProjectSessionViewModel = {
+  project: ProjectSummaryViewModel;
   timeline: TimelineViewModel;
   selectedTrack: SelectedTrackViewModel | null;
   selectedSegment: SelectedSegmentViewModel | null;
+};
+
+export type ProjectSummaryViewModel = {
+  draftName: string;
+  canvasConfig: DraftCanvasConfig;
+  sequenceDuration: Microseconds;
+  frameDuration: Microseconds;
+  trackCount: number;
+  materialCount: number;
 };
 
 export type SelectedTrackViewModel = {

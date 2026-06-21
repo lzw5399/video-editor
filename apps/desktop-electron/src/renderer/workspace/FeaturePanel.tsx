@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 
 import type { Material, TextSegment } from "../../generated/Draft";
 import {
-  findFirstMaterialByKind,
   formatMaterialDetail,
   formatMaterialDiagnostic,
   formatMaterialKind,
@@ -373,8 +372,7 @@ function AudioPanel({
   onSetSelectedTrackMute
 }: FeaturePanelProps): React.ReactElement {
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
-  const firstAudioMaterial = findFirstMaterialByKind(workspace.draft, "audio");
-  const [materialId, setMaterialId] = useState(firstAudioMaterial?.materialId ?? "");
+  const [materialId, setMaterialId] = useState(audioMaterials[0]?.materialId ?? "");
   const [audioDurationInputSeconds, setAudioDurationInputSeconds] = useState(4);
   const [volumePercent, setVolumePercent] = useState(100);
   const [panPercent, setPanPercent] = useState(0);

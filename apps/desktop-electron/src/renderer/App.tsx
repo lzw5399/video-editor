@@ -2021,7 +2021,7 @@ export function App(): React.ReactElement {
         return;
       }
 
-      const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+      const sequenceDurationUs = workspaceRef.current.viewModel.project.sequenceDuration;
       if (sequenceDurationUs <= 0) {
         return;
       }
@@ -2063,7 +2063,7 @@ export function App(): React.ReactElement {
       return;
     }
 
-    const sequenceDurationUs = getSequenceDurationUs(workspaceRef.current);
+    const sequenceDurationUs = workspaceRef.current.viewModel.project.sequenceDuration;
     if (sequenceDurationUs <= 0) {
       return;
     }
@@ -2975,21 +2975,6 @@ function normalizePlayheadTime(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
-function frameDurationUs(canvasConfig: DraftCanvasConfig): number {
-  const numerator = Math.max(1, Math.round(canvasConfig.frameRate.numerator));
-  const denominator = Math.max(1, Math.round(canvasConfig.frameRate.denominator));
-  return Math.max(1, Math.round((denominator * 1_000_000) / numerator));
-}
-
-function getSequenceDurationUs(workspace: WorkspaceState): number {
-  return workspace.draft.tracks.reduce((duration, track) => {
-    const trackEnd = track.segments.reduce((end, segment) => {
-      return Math.max(end, segment.targetTimerange.start + segment.targetTimerange.duration);
-    }, 0);
-    return Math.max(duration, trackEnd);
-  }, 0);
-}
-
 function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
   return response.viewModel.selectedSegment?.segment.targetTimerange.start ?? null;
 }
@@ -3002,7 +2987,7 @@ function isFrameAlignedSequenceEnd(
   if (sequenceDurationUs <= 0) {
     return false;
   }
-  const endToleranceUs = frameDurationUs(workspace.draft.canvasConfig) + SEQUENCE_END_EPSILON_US;
+  const endToleranceUs = workspace.viewModel.project.frameDuration + SEQUENCE_END_EPSILON_US;
   return normalizePlayheadTime(presentedTimeUs) >= Math.max(0, sequenceDurationUs - endToleranceUs);
 }
 

@@ -227,7 +227,7 @@ export function Inspector({
   const [panPercent, setPanPercent] = useState(0);
   const [fadeInUs, setFadeInUs] = useState(0);
   const [fadeOutUs, setFadeOutUs] = useState(0);
-  const sequenceDuration = getSequenceDuration(workspace);
+  const sequenceDuration = workspace.viewModel.project.sequenceDuration;
   const hasText = selected?.segment.text !== null && selected?.segment.text !== undefined;
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
   const visibleTabs = useMemo(() => inspectorTabsForSelection(selected), [selected]);
@@ -835,7 +835,8 @@ function CanvasDraftSettings({
   sequenceDuration: number;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
 }): React.ReactElement {
-  const acceptedConfig = workspace.draft.canvasConfig;
+  const project = workspace.viewModel.project;
+  const acceptedConfig = project.canvasConfig;
   const acceptedConfigKey = useMemo(() => JSON.stringify(acceptedConfig), [acceptedConfig]);
   const [canvasState, setCanvasState] = useState<CanvasFormState>(() => canvasFormFromConfig(acceptedConfig));
   const [modalOpen, setModalOpen] = useState(false);
@@ -917,14 +918,14 @@ function CanvasDraftSettings({
       </div>
 
       <dl className="inspector-list compact">
-        <InspectorDatum label="草稿名称" value={workspace.draft.metadata.name} />
+        <InspectorDatum label="草稿名称" value={project.draftName} />
         <InspectorDatum label="画布比例" value={formatCanvasAspectRatio(acceptedConfig)} />
         <InspectorDatum label="画布尺寸" value={formatCanvasSize(acceptedConfig)} />
         <InspectorDatum label="帧率" value={formatCanvasFrameRate(acceptedConfig)} />
         <InspectorDatum label="画布背景" value={formatCanvasBackgroundStatus(acceptedConfig)} />
         <InspectorDatum label="序列时长" value={formatMicroseconds(sequenceDuration)} />
-        <InspectorDatum label="轨道数量" value={`${workspace.draft.tracks.length} 条`} />
-        <InspectorDatum label="素材数量" value={`${workspace.draft.materials.length} 个`} />
+        <InspectorDatum label="轨道数量" value={`${project.trackCount} 条`} />
+        <InspectorDatum label="素材数量" value={`${project.materialCount} 个`} />
         <InspectorDatum label="吸附状态" value={workspace.commandState.snapping.enabled ? "开启" : "关闭"} />
       </dl>
 
@@ -1933,15 +1934,6 @@ function VisualCompactNumber({
         disabled={disabled}
       />
     </label>
-  );
-}
-
-function getSequenceDuration(workspace: WorkspaceState): number {
-  return Math.max(
-    0,
-    ...workspace.draft.tracks.flatMap((track) =>
-      track.segments.map((segment) => segment.targetTimerange.start + segment.targetTimerange.duration)
-    )
   );
 }
 

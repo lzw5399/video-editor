@@ -46,6 +46,24 @@ fn project_session_creates_project_without_renderer_draft() {
         3
     );
     assert_eq!(
+        created["data"]["viewModel"]["project"]["draftName"],
+        "Session Created Project"
+    );
+    assert_eq!(
+        created["data"]["viewModel"]["project"]["canvasConfig"]["width"],
+        1920
+    );
+    assert_eq!(created["data"]["viewModel"]["project"]["trackCount"], 3);
+    assert_eq!(created["data"]["viewModel"]["project"]["materialCount"], 0);
+    assert_eq!(
+        created["data"]["viewModel"]["project"]["sequenceDuration"],
+        0
+    );
+    assert_eq!(
+        created["data"]["viewModel"]["project"]["frameDuration"],
+        33333
+    );
+    assert_eq!(
         created["data"]["viewModel"]["timeline"]["rows"][0]["selectionHandle"],
         "timeline-track:track-main-video"
     );
@@ -122,6 +140,12 @@ fn project_session_add_timeline_segment_intent_persists_without_renderer_draft()
         added["data"]["viewModel"]["timeline"]["rows"][0]["segments"][0]["targetLabel"],
         "目标 00:00:00.000 / 00:00:01.000"
     );
+    assert_eq!(
+        added["data"]["viewModel"]["project"]["sequenceDuration"],
+        1_000_000
+    );
+    assert_eq!(added["data"]["viewModel"]["project"]["trackCount"], 1);
+    assert_eq!(added["data"]["viewModel"]["project"]["materialCount"], 1);
     assert_eq!(
         added["data"]["viewModel"]["selectedSegment"]["segment"]["segmentId"],
         "segment-1"

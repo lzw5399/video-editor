@@ -15,6 +15,7 @@ LEGACY_SELECTION_INTENT_PATTERN='\bselectTimelineSegments\b|kind:[[:space:]]*"se
 SELECTION_INTENT_LEGACY_FIELD_PATTERN='kind:[[:space:]]*"selectTimelineItemIntent"(?s:.{0,500})\b(?:segmentIds|trackIds)[[:space:]]*:'
 RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSegmentView|getSelectedTrackView|timelineTrackSelectionHandle|timelineSegmentSelectionHandle)\b'
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
+RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 
 fail_if_matches() {
   local description="$1"
@@ -242,6 +243,19 @@ require_matches \
   apps/desktop-electron/src/renderer/workspace/Inspector.tsx
 
 fail_if_matches \
+  "renderer product views must not derive project summary, canvas, or sequence duration from workspace.draft" \
+  "$RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN" \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace
+
+require_matches \
+  "renderer product views consume Rust session project summary view model" \
+  '\bworkspace\.viewModel\.project\b' \
+  apps/desktop-electron/src/renderer/App.tsx \
+  apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx \
+  apps/desktop-electron/src/renderer/workspace/Inspector.tsx
+
+fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
   '\bbuildImportSubtitleSrtCommand\b|segmentIdPrefix[[:space:]]*:|materialIdPrefix[[:space:]]*:|trackId[[:space:]]*:[[:space:]]*"track-subtitle"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
@@ -345,6 +359,11 @@ assert_pattern_rejects \
   "renderer-owned timeline selection handle encoding" \
   "$RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN" \
   'const handle = `segment:${encodeURIComponent(trackId)}:${encodeURIComponent(segmentId)}`;'
+
+assert_pattern_rejects \
+  "renderer-owned project summary derivation from workspace draft" \
+  "$RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN" \
+  'const sequenceDuration = workspace.draft.tracks.reduce((duration, track) => duration + track.segments.length, 0);'
 
 fail_if_diff schemas apps/desktop-electron/src/generated
 

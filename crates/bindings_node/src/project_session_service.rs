@@ -260,9 +260,21 @@ struct ProjectSessionMissingMaterialsResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProjectSessionViewModel {
+    project: ProjectSummaryViewModel,
     timeline: TimelineViewModel,
     selected_track: Option<SelectedTrackViewModel>,
     selected_segment: Option<SelectedSegmentViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectSummaryViewModel {
+    draft_name: String,
+    canvas_config: DraftCanvasConfig,
+    sequence_duration: Microseconds,
+    frame_duration: Microseconds,
+    track_count: usize,
+    material_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1256,14 +1268,27 @@ fn project_session_view_model(
     draft: &Draft,
     selection: &TimelineSelection,
 ) -> ProjectSessionViewModel {
+    let project = project_summary_view_model(draft);
     let timeline = timeline_view_model(draft, selection);
     let selected_track = selected_track_view_model(draft, selection);
     let selected_segment = selected_segment_view_model(draft, selection);
 
     ProjectSessionViewModel {
+        project,
         timeline,
         selected_track,
         selected_segment,
+    }
+}
+
+fn project_summary_view_model(draft: &Draft) -> ProjectSummaryViewModel {
+    ProjectSummaryViewModel {
+        draft_name: draft.metadata.name.clone(),
+        canvas_config: draft.canvas_config.clone(),
+        sequence_duration: Microseconds::new(sequence_duration(draft)),
+        frame_duration: Microseconds::new(frame_duration_us(&draft.canvas_config)),
+        track_count: draft.tracks.len(),
+        material_count: draft.materials.len(),
     }
 }
 
@@ -1424,11 +1449,15 @@ fn timeline_segment_view_model(
 }
 
 fn timeline_duration(draft: &Draft) -> u64 {
+    sequence_duration(draft).max(10_000_000)
+}
+
+fn sequence_duration(draft: &Draft) -> u64 {
     draft
         .tracks
         .iter()
         .flat_map(|track| track.segments.iter())
-        .fold(10_000_000, |duration, segment| {
+        .fold(0, |duration, segment| {
             duration.max(
                 segment
                     .target_timerange
@@ -1437,6 +1466,12 @@ fn timeline_duration(draft: &Draft) -> u64 {
                     .saturating_add(segment.target_timerange.duration.get()),
             )
         })
+}
+
+fn frame_duration_us(canvas_config: &DraftCanvasConfig) -> u64 {
+    let numerator = u64::from(canvas_config.frame_rate.numerator).max(1);
+    let denominator = u64::from(canvas_config.frame_rate.denominator).max(1);
+    ((denominator * 1_000_000) / numerator).max(1)
 }
 
 fn build_ruler_ticks(duration: u64) -> Vec<u64> {
