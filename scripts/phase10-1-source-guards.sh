@@ -75,12 +75,20 @@ for text in \
   [ "$found" = "true" ] || fail "missing required SRT import/edit UI or test coverage text: ${text}"
 done
 
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildImportSubtitleSrtCommand"
 require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildImportSubtitleSrtIntentCommand"
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildEditTextSegmentCommand"
-require_fixed "apps/desktop-electron/src/renderer/commandHelpers.ts" "buildUpdateSegmentVisualCommand"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "importSubtitleSrtIntent"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "editSelectedText"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "updateSelectedSegmentVisual"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "importSubtitleSrtIntent"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "editSelectedText"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "updateSelectedSegmentVisual"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "srtContent"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "textSource"
+
+fail_matches \
+  "renderer command helpers must not expose legacy structural text/subtitle/visual commands" \
+  '\b(?:buildImportSubtitleSrtCommand|buildEditTextSegmentCommand|buildUpdateSegmentVisualCommand|ImportSubtitleSrtCommandPayload|EditTextSegmentCommandPayload|UpdateSegmentVisualCommandPayload|segmentIdPrefix|materialIdPrefix)\b' \
+  "apps/desktop-electron/src/renderer/commandHelpers.ts"
 
 fail_matches \
   "renderer must not import Node, Electron, process, or platform modules" \

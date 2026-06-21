@@ -1,56 +1,39 @@
 import type {
   AddTimelineSegmentIntentCommandPayload,
   AddAudioSegmentIntentCommandPayload,
-  AddSegmentCommandPayload,
-  AddAudioSegmentCommandPayload,
-  AddTextSegmentCommandPayload,
   AddTextSegmentIntentCommandPayload,
-  AddTrackCommandPayload,
   AddTrackIntentCommandPayload,
   AudioPreviewCommandPayload,
   CancelExportCommandPayload,
   CommandEnvelope,
   CommandState,
-  DeleteSegmentCommandPayload,
   DirtyRange,
-  EditTextSegmentCommandPayload,
   ExportPreset,
   ArtifactGenerationActionCommandPayload,
   GetArtifactQuotaStatusCommandPayload,
   GetArtifactStatusCommandPayload,
   GetExportJobStatusCommandPayload,
-  ImportSubtitleSrtCommandPayload,
   ImportSubtitleSrtIntentCommandPayload,
   ImportMaterialCommandPayload,
   InvalidatePreviewCacheCommandPayload,
   ListMissingMaterialsCommandPayload,
-  MoveSegmentCommandPayload,
   MoveSelectedSegmentIntentCommandPayload,
   OpenProjectBundleCommandPayload,
   ProbeRuntimeCapabilitiesCommandPayload,
   PreviewCacheEntryRef,
   RedoTimelineEditCommandPayload,
-  RenameTrackCommandPayload,
-  RemoveSegmentKeyframeCommandPayload,
   RequestPreviewFrameCommandPayload,
   RequestPreviewSegmentCommandPayload,
   RefreshArtifactStatusCommandPayload,
   SelectTimelineSegmentsCommandPayload,
   SaveProjectBundleCommandPayload,
-  SetSegmentKeyframeCommandPayload,
-  SetTrackLockCommandPayload,
-  SetTrackVisibilityCommandPayload,
-  SplitSegmentCommandPayload,
   SplitSelectedSegmentIntentCommandPayload,
   StartExportCommandPayload,
   RunArtifactGarbageCollectionCommandPayload,
   TimelineSelection,
-  TrimSegmentCommandPayload,
   TrimSelectedSegmentIntentCommandPayload,
   UndoTimelineEditCommandPayload,
-  UpdateDraftCanvasConfigCommandPayload,
-  UpdateSegmentAudioCommandPayload,
-  UpdateSegmentVisualCommandPayload
+  UpdateDraftCanvasConfigCommandPayload
 } from "../generated/CommandEnvelope";
 import type {
   CommandResultEnvelope,
@@ -61,26 +44,13 @@ import type {
   TimelineCommandResponse
 } from "../generated/CommandResultEnvelope";
 import type {
-  AudioFade,
-  AudioPanBalance,
   Draft,
   DraftCanvasConfig,
-  Keyframe,
-  KeyframeProperty,
   MaterialId,
   MaterialKind,
   Microseconds,
-  SegmentId,
-  SegmentVisual,
-  SegmentVolume,
-  SourceTimerange,
   TargetTimerange,
-  TextBox,
-  TextLayoutRegion,
   TextSegment,
-  TextStyle,
-  TextWrapping,
-  TrackId,
   TrackKind
 } from "../generated/Draft";
 import type {
@@ -162,31 +132,6 @@ export function buildProbeRuntimeCapabilitiesCommand(): CommandEnvelope {
   return envelope("probeRuntimeCapabilities", payload);
 }
 
-type AddSegmentOptions = {
-  context: CommandContext;
-  trackId: TrackId;
-  segmentId: SegmentId;
-  materialId: MaterialId;
-  sourceTimerange: SourceTimerange;
-  targetTimerange: TargetTimerange;
-};
-
-export function buildAddSegmentCommand(options: AddSegmentOptions): CommandEnvelope {
-  const payload = {
-    kind: "addSegment",
-    draft: options.context.draft,
-    commandState: options.context.commandState,
-    selection: options.context.selection,
-    trackId: options.trackId,
-    segmentId: options.segmentId,
-    materialId: options.materialId,
-    sourceTimerange: options.sourceTimerange,
-    targetTimerange: options.targetTimerange
-  } satisfies AddSegmentCommandPayload & { kind: "addSegment" };
-
-  return envelope("addSegment", payload);
-}
-
 export function buildAddTimelineSegmentIntentCommand(context: CommandContext, materialId: MaterialId): CommandEnvelope {
   const payload = {
     kind: "addTimelineSegmentIntent",
@@ -201,8 +146,8 @@ export function buildAddTimelineSegmentIntentCommand(context: CommandContext, ma
 
 export function buildSelectTimelineSegmentsCommand(
   context: CommandContext,
-  segmentIds: SegmentId[],
-  trackIds: TrackId[]
+  segmentIds: string[],
+  trackIds: string[]
 ): CommandEnvelope {
   const payload = {
     kind: "selectTimelineSegments",
@@ -214,25 +159,6 @@ export function buildSelectTimelineSegmentsCommand(
   } satisfies SelectTimelineSegmentsCommandPayload & { kind: "selectTimelineSegments" };
 
   return envelope("selectTimelineSegments", payload);
-}
-
-export function buildMoveSegmentCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  targetTrackId: TrackId,
-  targetStart: Microseconds
-): CommandEnvelope {
-  const payload = {
-    kind: "moveSegment",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    targetTrackId,
-    targetStart
-  } satisfies MoveSegmentCommandPayload & { kind: "moveSegment" };
-
-  return envelope("moveSegment", payload);
 }
 
 export function buildMoveSelectedSegmentIntentCommand(context: CommandContext, delta: Microseconds): CommandEnvelope {
@@ -247,25 +173,6 @@ export function buildMoveSelectedSegmentIntentCommand(context: CommandContext, d
   return envelope("moveSelectedSegmentIntent", payload);
 }
 
-export function buildSplitSegmentCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  rightSegmentId: SegmentId,
-  splitAt: Microseconds
-): CommandEnvelope {
-  const payload = {
-    kind: "splitSegment",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    rightSegmentId,
-    splitAt
-  } satisfies SplitSegmentCommandPayload & { kind: "splitSegment" };
-
-  return envelope("splitSegment", payload);
-}
-
 export function buildSplitSelectedSegmentIntentCommand(context: CommandContext, splitAt: Microseconds): CommandEnvelope {
   const payload = {
     kind: "splitSelectedSegmentIntent",
@@ -276,25 +183,6 @@ export function buildSplitSelectedSegmentIntentCommand(context: CommandContext, 
   } satisfies SplitSelectedSegmentIntentCommandPayload & { kind: "splitSelectedSegmentIntent" };
 
   return envelope("splitSelectedSegmentIntent", payload);
-}
-
-export function buildTrimSegmentCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  direction: "left" | "right",
-  targetTimerange: TargetTimerange
-): CommandEnvelope {
-  const payload = {
-    kind: "trimSegment",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    direction,
-    targetTimerange
-  } satisfies TrimSegmentCommandPayload & { kind: "trimSegment" };
-
-  return envelope("trimSegment", payload);
 }
 
 export function buildTrimSelectedSegmentIntentCommand(
@@ -312,18 +200,6 @@ export function buildTrimSelectedSegmentIntentCommand(
   } satisfies TrimSelectedSegmentIntentCommandPayload & { kind: "trimSelectedSegmentIntent" };
 
   return envelope("trimSelectedSegmentIntent", payload);
-}
-
-export function buildDeleteSegmentCommand(context: CommandContext, segmentId: SegmentId): CommandEnvelope {
-  const payload = {
-    kind: "deleteSegment",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId
-  } satisfies DeleteSegmentCommandPayload & { kind: "deleteSegment" };
-
-  return envelope("deleteSegment", payload);
 }
 
 export function buildUndoTimelineEditCommand(context: CommandContext): CommandEnvelope {
@@ -348,33 +224,6 @@ export function buildRedoTimelineEditCommand(context: CommandContext): CommandEn
   return envelope("redoTimelineEdit", payload);
 }
 
-type TextCommandOptions = {
-  context: CommandContext;
-  trackId: TrackId;
-  segmentId: SegmentId;
-  materialId: MaterialId;
-  sourceTimerange: SourceTimerange;
-  targetTimerange: TargetTimerange;
-  text: TextSegment;
-};
-
-export function buildAddTextSegmentCommand(options: TextCommandOptions): CommandEnvelope {
-  const payload = {
-    kind: "addTextSegment",
-    draft: options.context.draft,
-    commandState: options.context.commandState,
-    selection: options.context.selection,
-    trackId: options.trackId,
-    segmentId: options.segmentId,
-    materialId: options.materialId,
-    sourceTimerange: options.sourceTimerange,
-    targetTimerange: options.targetTimerange,
-    text: options.text
-  } satisfies AddTextSegmentCommandPayload & { kind: "addTextSegment" };
-
-  return envelope("addTextSegment", payload);
-}
-
 export function buildAddTextSegmentIntentCommand(
   context: CommandContext,
   text: TextSegment,
@@ -390,58 +239,6 @@ export function buildAddTextSegmentIntentCommand(
   } satisfies AddTextSegmentIntentCommandPayload & { kind: "addTextSegmentIntent" };
 
   return envelope("addTextSegmentIntent", payload);
-}
-
-export function buildEditTextSegmentCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  text: TextSegment
-): CommandEnvelope {
-  const payload = {
-    kind: "editTextSegment",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    text
-  } satisfies EditTextSegmentCommandPayload & { kind: "editTextSegment" };
-
-  return envelope("editTextSegment", payload);
-}
-
-type ImportSubtitleSrtOptions = {
-  context: CommandContext;
-  trackId: TrackId;
-  trackName: string;
-  srtContent: string;
-  timeOffset: Microseconds;
-  segmentIdPrefix: string;
-  materialIdPrefix: string;
-  style: TextStyle;
-  textBox: TextBox;
-  layoutRegion: TextLayoutRegion;
-  wrapping: TextWrapping;
-};
-
-export function buildImportSubtitleSrtCommand(options: ImportSubtitleSrtOptions): CommandEnvelope {
-  const payload = {
-    kind: "importSubtitleSrt",
-    draft: options.context.draft,
-    commandState: options.context.commandState,
-    selection: options.context.selection,
-    trackId: options.trackId,
-    trackName: options.trackName,
-    srtContent: options.srtContent,
-    timeOffset: options.timeOffset,
-    segmentIdPrefix: options.segmentIdPrefix,
-    materialIdPrefix: options.materialIdPrefix,
-    style: options.style,
-    textBox: options.textBox,
-    layoutRegion: options.layoutRegion,
-    wrapping: options.wrapping
-  } satisfies ImportSubtitleSrtCommandPayload & { kind: "importSubtitleSrt" };
-
-  return envelope("importSubtitleSrt", payload);
 }
 
 export function buildImportSubtitleSrtIntentCommand(
@@ -466,31 +263,6 @@ export function buildImportSubtitleSrtIntentCommand(
   return envelope("importSubtitleSrtIntent", payload);
 }
 
-type AudioCommandOptions = {
-  context: CommandContext;
-  trackId: TrackId;
-  segmentId: SegmentId;
-  materialId: MaterialId;
-  sourceTimerange: SourceTimerange;
-  targetTimerange: TargetTimerange;
-};
-
-export function buildAddAudioSegmentCommand(options: AudioCommandOptions): CommandEnvelope {
-  const payload = {
-    kind: "addAudioSegment",
-    draft: options.context.draft,
-    commandState: options.context.commandState,
-    selection: options.context.selection,
-    trackId: options.trackId,
-    segmentId: options.segmentId,
-    materialId: options.materialId,
-    sourceTimerange: options.sourceTimerange,
-    targetTimerange: options.targetTimerange
-  } satisfies AddAudioSegmentCommandPayload & { kind: "addAudioSegment" };
-
-  return envelope("addAudioSegment", payload);
-}
-
 export function buildAddAudioSegmentIntentCommand(
   context: CommandContext,
   materialId: MaterialId | null,
@@ -508,51 +280,6 @@ export function buildAddAudioSegmentIntentCommand(
   return envelope("addAudioSegmentIntent", payload);
 }
 
-export function buildSetSegmentVolumeCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  volume: SegmentVolume
-): CommandEnvelope {
-  return envelope("setSegmentVolume", {
-    kind: "setSegmentVolume",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    volume
-  });
-}
-
-export function buildSetTrackMuteCommand(context: CommandContext, trackId: TrackId, muted: boolean): CommandEnvelope {
-  return envelope("setTrackMute", {
-    kind: "setTrackMute",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    trackId,
-    muted
-  });
-}
-
-export function buildAddTrackCommand(
-  context: CommandContext,
-  trackId: TrackId,
-  trackKind: TrackKind,
-  name: string
-): CommandEnvelope {
-  const payload = {
-    kind: "addTrack",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    trackId,
-    trackKind,
-    name
-  } satisfies AddTrackCommandPayload & { kind: "addTrack" };
-
-  return envelope("addTrack", payload);
-}
-
 export function buildAddTrackIntentCommand(context: CommandContext, trackKind: TrackKind): CommandEnvelope {
   const payload = {
     kind: "addTrackIntent",
@@ -563,76 +290,6 @@ export function buildAddTrackIntentCommand(context: CommandContext, trackKind: T
   } satisfies AddTrackIntentCommandPayload & { kind: "addTrackIntent" };
 
   return envelope("addTrackIntent", payload);
-}
-
-export function buildRenameTrackCommand(context: CommandContext, trackId: TrackId, name: string): CommandEnvelope {
-  const payload = {
-    kind: "renameTrack",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    trackId,
-    name
-  } satisfies RenameTrackCommandPayload & { kind: "renameTrack" };
-
-  return envelope("renameTrack", payload);
-}
-
-export function buildSetTrackLockCommand(context: CommandContext, trackId: TrackId, locked: boolean): CommandEnvelope {
-  const payload = {
-    kind: "setTrackLock",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    trackId,
-    locked
-  } satisfies SetTrackLockCommandPayload & { kind: "setTrackLock" };
-
-  return envelope("setTrackLock", payload);
-}
-
-export function buildSetTrackVisibilityCommand(
-  context: CommandContext,
-  trackId: TrackId,
-  visible: boolean
-): CommandEnvelope {
-  const payload = {
-    kind: "setTrackVisibility",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    trackId,
-    visible
-  } satisfies SetTrackVisibilityCommandPayload & { kind: "setTrackVisibility" };
-
-  return envelope("setTrackVisibility", payload);
-}
-
-type UpdateSegmentAudioOptions = {
-  context: CommandContext;
-  segmentId: SegmentId;
-  gainMillis?: number | null;
-  panBalanceMillis?: AudioPanBalance | null;
-  fadeInDuration?: AudioFade | null;
-  fadeOutDuration?: AudioFade | null;
-  effectSlots?: UpdateSegmentAudioCommandPayload["effectSlots"];
-};
-
-export function buildUpdateSegmentAudioCommand(options: UpdateSegmentAudioOptions): CommandEnvelope {
-  const payload = {
-    kind: "updateSegmentAudio",
-    draft: options.context.draft,
-    commandState: options.context.commandState,
-    selection: options.context.selection,
-    segmentId: options.segmentId,
-    gainMillis: options.gainMillis ?? null,
-    panBalanceMillis: options.panBalanceMillis ?? null,
-    fadeInDuration: options.fadeInDuration ?? null,
-    fadeOutDuration: options.fadeOutDuration ?? null,
-    effectSlots: options.effectSlots ?? null
-  } satisfies UpdateSegmentAudioCommandPayload & { kind: "updateSegmentAudio" };
-
-  return envelope("updateSegmentAudio", payload);
 }
 
 export function buildUpdateDraftCanvasConfigCommand(
@@ -648,59 +305,6 @@ export function buildUpdateDraftCanvasConfigCommand(
   } satisfies UpdateDraftCanvasConfigCommandPayload & { kind: "updateDraftCanvasConfig" };
 
   return envelope("updateDraftCanvasConfig", payload);
-}
-
-export function buildUpdateSegmentVisualCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  visual: SegmentVisual
-): CommandEnvelope {
-  const payload = {
-    kind: "updateSegmentVisual",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    visual
-  } satisfies UpdateSegmentVisualCommandPayload & { kind: "updateSegmentVisual" };
-
-  return envelope("updateSegmentVisual", payload);
-}
-
-export function buildSetSegmentKeyframeCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  keyframe: Keyframe
-): CommandEnvelope {
-  const payload = {
-    kind: "setSegmentKeyframe",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    keyframe
-  } satisfies SetSegmentKeyframeCommandPayload & { kind: "setSegmentKeyframe" };
-
-  return envelope("setSegmentKeyframe", payload);
-}
-
-export function buildRemoveSegmentKeyframeCommand(
-  context: CommandContext,
-  segmentId: SegmentId,
-  property: KeyframeProperty,
-  at: Microseconds
-): CommandEnvelope {
-  const payload = {
-    kind: "removeSegmentKeyframe",
-    draft: context.draft,
-    commandState: context.commandState,
-    selection: context.selection,
-    segmentId,
-    property,
-    at
-  } satisfies RemoveSegmentKeyframeCommandPayload & { kind: "removeSegmentKeyframe" };
-
-  return envelope("removeSegmentKeyframe", payload);
 }
 
 type RequestPreviewFrameOptions = {

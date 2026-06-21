@@ -41,7 +41,12 @@ fail_if_matches \
 fail_if_matches \
   "renderer/preload must not drive primary editing through low-level segment command builders" \
   '\bbuild(?:AddSegment|AddAudioSegment|AddTextSegment|MoveSegment|SplitSegment|TrimSegment)Command\b' \
-  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
+  apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/commandHelpers.ts apps/desktop-electron/src/preload
+
+fail_if_matches \
+  "renderer command helpers must not expose legacy low-level timeline command payloads" \
+  '\b(?:AddSegmentCommandPayload|MoveSegmentCommandPayload|SplitSegmentCommandPayload|TrimSegmentCommandPayload|DeleteSegmentCommandPayload|AddTextSegmentCommandPayload|EditTextSegmentCommandPayload|ImportSubtitleSrtCommandPayload|AddAudioSegmentCommandPayload|SetSegmentVolumeCommandPayload|UpdateSegmentAudioCommandPayload|AddTrackCommandPayload|RenameTrackCommandPayload|SetTrackLockCommandPayload|SetTrackVisibilityCommandPayload|UpdateSegmentVisualCommandPayload|SetSegmentKeyframeCommandPayload|RemoveSegmentKeyframeCommandPayload|SourceTimerange|SegmentId|TrackId|AddSegmentOptions|TextCommandOptions|ImportSubtitleSrtOptions|AudioCommandOptions|UpdateSegmentAudioOptions|segmentIdPrefix|materialIdPrefix)\b' \
+  apps/desktop-electron/src/renderer/commandHelpers.ts
 
 fail_if_matches \
   "renderer/preload product path must import SRT through Rust-owned intent, not renderer-owned subtitle IDs" \
