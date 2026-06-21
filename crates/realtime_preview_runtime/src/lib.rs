@@ -58,4 +58,6 @@ pub use session::{
     RealtimePreviewSessionConfig,
 };
 pub use software_video_provider::{DecodedVideoFrameCache, SoftwareVideoFrameProvider};
-pub use telemetry::RealtimePreviewTelemetry;
+pub use telemetry::{
+    RealtimePreviewFramePacingSample, RealtimePreviewFramePacingTelemetry, RealtimePreviewTelemetry,
+};

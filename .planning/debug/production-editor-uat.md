@@ -53,6 +53,9 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "Preview/export subtitle parity found and fixed a real ASS timing bug."
   data: "ASS event times now use centiseconds instead of three-digit milliseconds; preview_export_parity_burns_two_cue_srt_text_into_frames validates two SRT cues burn different pixels and preview/export RGB parity for cue one."
+- timestamp: 2026-06-21
+  observation: "Combination preview no longer relies only on total presented-frame count; Rust worker telemetry now exposes frame pacing samples and the product cadence gate fails if interval p95/max or scheduler lateness regresses."
+  data: "corepack pnpm --dir apps/desktop-electron exec playwright test tests/product-preview-cadence.spec.ts --reporter=line -> 2 passed. Single video: presentedDelta=90, droppedDelta=0, intervalP50Ms=34, intervalP95Ms=35, intervalMaxMs=38. Video+external audio+text+two-cue SRT: presentedDelta=90, droppedDelta=0, intervalP50Ms=34, intervalP95Ms=36, intervalMaxMs=45, scheduleLatenessP95Ms=4."
 
 ## Eliminated
 

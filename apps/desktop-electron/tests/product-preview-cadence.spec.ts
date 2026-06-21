@@ -25,10 +25,27 @@ type HostState = {
   unsupportedReason: string | null;
   backend: "renderGraphGpu" | "none";
   telemetry: {
+    firstFrameLatencyMs: number | null;
+    renderDurationMs: number;
     presentedFrameCount: number;
     droppedFrameCount: number;
     targetTimeMicroseconds: number;
     playbackGeneration: number;
+    framePacing: {
+      sampleCount: number;
+      intervalP50Ms: number | null;
+      intervalP95Ms: number | null;
+      intervalMaxMs: number | null;
+      scheduleLatenessP95Ms: number | null;
+      scheduleLatenessMaxMs: number | null;
+      samples: Array<{
+        targetTimeMicroseconds: number;
+        intervalMs?: number | null;
+        scheduleLatenessMs: number;
+        renderDurationMs: number;
+        droppedFrameCount: number;
+      }>;
+    };
   } | null;
   contentEvidence: {
     source: "nativeVideoBridge" | "renderGraphGpuComposited";
@@ -86,6 +103,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       after.contentEvidence.digest.length > 0 &&
       (typeof before?.contentEvidence?.digest !== "string" ||
         before.contentEvidence.digest !== after.contentEvidence.digest);
+    const framePacing = after?.telemetry?.framePacing ?? null;
     const metrics = {
       renderGraphActive,
       unsupportedReason: after?.unsupportedReason ?? null,
@@ -105,6 +123,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
         p95: durationPercentile(0.95),
         max: presentationDurations.at(-1) ?? null
       },
+      framePacing: summarizeFramePacing(framePacing),
       renderDurationMs: after?.telemetry?.renderDurationMs ?? null,
       firstFrameLatencyMs: after?.telemetry?.firstFrameLatencyMs ?? null,
       frameRequestsBefore,
@@ -143,6 +162,21 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
       50
     );
+    expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
+    expect(
+      framePacing?.sampleCount ?? 0,
+      "3s playback should include one pacing sample per presented frame"
+    ).toBeGreaterThanOrEqual(90);
+    expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the 3s window").toBeGreaterThanOrEqual(90);
+    expect(framePacing?.intervalP50Ms, "frame pacing p50 must be reported").not.toBeNull();
+    expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(25);
+    expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(42);
+    expect(framePacing?.intervalP95Ms, "frame pacing p95 must be reported").not.toBeNull();
+    expect(framePacing?.intervalP95Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(50);
+    expect(framePacing?.intervalMaxMs, "frame pacing max interval must be reported").not.toBeNull();
+    expect(framePacing?.intervalMaxMs ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(75);
+    expect(framePacing?.scheduleLatenessP95Ms, "scheduler lateness p95 must be reported").not.toBeNull();
+    expect(framePacing?.scheduleLatenessP95Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(12);
     expect(metrics.evidenceDigestChanged, "rendered content evidence should change during playback").toBe(true);
     expect(metrics.visibleChanged, "visible preview pixels should change during playback").toBe(true);
   } finally {
@@ -216,6 +250,7 @@ async function expectCadencePlayback(
     after.contentEvidence.digest.length > 0 &&
     (typeof before?.contentEvidence?.digest !== "string" ||
       before.contentEvidence.digest !== after.contentEvidence.digest);
+  const framePacing = after?.telemetry?.framePacing ?? null;
   const metrics = {
     renderGraphActive,
     unsupportedReason: after?.unsupportedReason ?? null,
@@ -235,6 +270,7 @@ async function expectCadencePlayback(
       p95: durationPercentile(0.95),
       max: presentationDurations.at(-1) ?? null
     },
+    framePacing: summarizeFramePacing(framePacing),
     renderDurationMs: after?.telemetry?.renderDurationMs ?? null,
     firstFrameLatencyMs: after?.telemetry?.firstFrameLatencyMs ?? null,
     frameRequestsBefore,
@@ -273,8 +309,38 @@ async function expectCadencePlayback(
   expect(metrics.presentationDurationMs.p95, "presentation state p95 should stay below frame budget tail latency").toBeLessThanOrEqual(
     50
   );
+  expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
+  expect(
+    framePacing?.sampleCount ?? 0,
+    "3s playback should include one pacing sample per presented frame"
+  ).toBeGreaterThanOrEqual(90);
+  expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the 3s window").toBeGreaterThanOrEqual(90);
+  expect(framePacing?.intervalP50Ms, "frame pacing p50 must be reported").not.toBeNull();
+  expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(25);
+  expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(42);
+  expect(framePacing?.intervalP95Ms, "frame pacing p95 must be reported").not.toBeNull();
+  expect(framePacing?.intervalP95Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(50);
+  expect(framePacing?.intervalMaxMs, "frame pacing max interval must be reported").not.toBeNull();
+  expect(framePacing?.intervalMaxMs ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(75);
+  expect(framePacing?.scheduleLatenessP95Ms, "scheduler lateness p95 must be reported").not.toBeNull();
+  expect(framePacing?.scheduleLatenessP95Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(12);
   expect(metrics.evidenceDigestChanged, "rendered content evidence should change during playback").toBe(true);
   expect(metrics.visibleChanged, "visible preview pixels should change during playback").toBe(true);
+}
+
+function summarizeFramePacing(framePacing: NonNullable<HostState["telemetry"]>["framePacing"] | null) {
+  if (framePacing === null) {
+    return null;
+  }
+  return {
+    sampleCount: framePacing.sampleCount,
+    sampleBufferLength: framePacing.samples.length,
+    intervalP50Ms: framePacing.intervalP50Ms,
+    intervalP95Ms: framePacing.intervalP95Ms,
+    intervalMaxMs: framePacing.intervalMaxMs,
+    scheduleLatenessP95Ms: framePacing.scheduleLatenessP95Ms,
+    scheduleLatenessMaxMs: framePacing.scheduleLatenessMaxMs
+  };
 }
 
 async function readHostState(page: import("@playwright/test").Page): Promise<HostState | null> {

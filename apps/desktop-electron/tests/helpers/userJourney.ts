@@ -79,9 +79,27 @@ type RealtimePreviewHostState = {
   backend: "renderGraphGpu" | "none";
   diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
   telemetry: {
+    firstFrameLatencyMs?: number | null;
+    renderDurationMs?: number;
     presentedFrameCount: number;
+    droppedFrameCount?: number;
     targetTimeMicroseconds: number;
     playbackGeneration: number;
+    framePacing?: {
+      sampleCount: number;
+      intervalP50Ms: number | null;
+      intervalP95Ms: number | null;
+      intervalMaxMs: number | null;
+      scheduleLatenessP95Ms: number | null;
+      scheduleLatenessMaxMs: number | null;
+      samples: Array<{
+        targetTimeMicroseconds: number;
+        intervalMs?: number | null;
+        scheduleLatenessMs: number;
+        renderDurationMs: number;
+        droppedFrameCount: number;
+      }>;
+    };
   } | null;
   frameDisplay: {
     frameToken: string;

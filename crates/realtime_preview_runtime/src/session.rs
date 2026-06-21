@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
-    RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
-    RealtimePreviewFrameResult, RealtimePreviewSupport, RealtimePreviewTelemetry, TimelineClock,
+    RealtimePreviewDiagnostic, RealtimePreviewFallbackReason, RealtimePreviewFramePacingSample,
+    RealtimePreviewFrameRequest, RealtimePreviewFrameResult, RealtimePreviewSupport,
+    RealtimePreviewTelemetry, TimelineClock,
     gpu::surface::{
         PreviewSurfaceBounds, PreviewSurfaceDescriptor, PreviewSurfaceError, PreviewSurfaceHost,
     },
@@ -225,6 +226,7 @@ impl RealtimePreviewRuntime {
         target_time: Microseconds,
         render_duration_ms: u64,
         dropped_frame_count: u64,
+        pacing_sample: RealtimePreviewFramePacingSample,
     ) -> Result<(), RealtimePreviewError> {
         let session = self.session_mut(session_id)?;
         if session.clock.generation() != playback_generation {
@@ -236,6 +238,7 @@ impl RealtimePreviewRuntime {
             playback_generation,
             render_duration_ms,
             dropped_frame_count,
+            pacing_sample,
         );
         Ok(())
     }

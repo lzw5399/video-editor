@@ -31,9 +31,9 @@ use realtime_preview_runtime::{
     RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerPresentation,
     RealtimePlaybackSchedulerPresenter, RealtimePreviewAudioSyncState, RealtimePreviewBackendUsed,
     RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor, RealtimePreviewDiagnostic,
-    RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFrameRequest,
-    RealtimePreviewRuntime, RealtimePreviewSessionConfig, RealtimePreviewTelemetry,
-    TextureHandleDescriptor,
+    RealtimePreviewError, RealtimePreviewFallbackReason, RealtimePreviewFramePacingSample,
+    RealtimePreviewFramePacingTelemetry, RealtimePreviewFrameRequest, RealtimePreviewRuntime,
+    RealtimePreviewSessionConfig, RealtimePreviewTelemetry, TextureHandleDescriptor,
     gpu::PreviewSurfaceScreenRect,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
@@ -574,9 +574,11 @@ fn run_binding_playback_loop(
         match scheduler.present_next_tick(start_time, playback_generation) {
             Ok(evidence) => {
                 scheduler.start_playback_after_prewarm(start_time, playback_generation);
+                let presented_at = Instant::now();
                 Ok((
                     evidence,
                     u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    presented_at,
                 ))
             }
             Err(error) => {
@@ -590,8 +592,8 @@ fn run_binding_playback_loop(
         }
     };
 
-    match first_frame {
-        Ok((evidence, render_duration_ms)) => {
+    let mut last_presented_at = match first_frame {
+        Ok((evidence, render_duration_ms, presented_at)) => {
             if let Ok(mut runtime) = runtime.lock() {
                 let _ = runtime.record_presented_output(
                     runtime_id,
@@ -599,9 +601,17 @@ fn run_binding_playback_loop(
                     Microseconds::new(evidence.target_time_microseconds),
                     render_duration_ms,
                     0,
+                    RealtimePreviewFramePacingSample {
+                        target_time_microseconds: evidence.target_time_microseconds,
+                        interval_ms: None,
+                        schedule_lateness_ms: 0,
+                        render_duration_ms,
+                        dropped_frame_count: 0,
+                    },
                 );
             }
             let _ = ready_sender.send(Ok(()));
+            presented_at
         }
         Err(reason) => {
             if let Ok(mut runtime) = runtime.lock() {
@@ -610,7 +620,7 @@ fn run_binding_playback_loop(
             let _ = ready_sender.send(Err(reason));
             return;
         }
-    }
+    };
 
     while !stop.load(Ordering::Acquire) {
         let frame = {
@@ -629,11 +639,10 @@ fn run_binding_playback_loop(
                 Ok(frame) => {
                     let reached_end = frame.evidence.target_time_microseconds
                         >= scheduler.sequence_duration().get();
-                    Ok(Some((
-                        frame,
-                        reached_end,
-                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX),
-                    )))
+                    let render_duration_ms =
+                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                    let presented_at = Instant::now();
+                    Ok(Some((frame, reached_end, render_duration_ms, presented_at)))
                 }
                 Err(error) => {
                     let transient = is_transient_playback_presentation_error(&error);
@@ -651,8 +660,11 @@ fn run_binding_playback_loop(
         };
 
         match frame {
-            Ok(Some((frame, reached_end, render_duration_ms))) => {
+            Ok(Some((frame, reached_end, render_duration_ms, presented_at))) => {
                 if frame.evidence.presented_frames > 0 {
+                    let interval_ms =
+                        u64::try_from(presented_at.duration_since(last_presented_at).as_millis())
+                            .unwrap_or(u64::MAX);
                     if let Ok(mut runtime) = runtime.lock() {
                         let _ = runtime.record_presented_output(
                             runtime_id,
@@ -660,11 +672,19 @@ fn run_binding_playback_loop(
                             Microseconds::new(frame.evidence.target_time_microseconds),
                             render_duration_ms,
                             frame.dropped_frames,
+                            RealtimePreviewFramePacingSample {
+                                target_time_microseconds: frame.evidence.target_time_microseconds,
+                                interval_ms: Some(interval_ms),
+                                schedule_lateness_ms: frame.schedule_lateness_ms,
+                                render_duration_ms,
+                                dropped_frame_count: frame.dropped_frames,
+                            },
                         );
                         if reached_end {
                             let _ = runtime.pause(runtime_id);
                         }
                     }
+                    last_presented_at = presented_at;
                 }
                 if reached_end {
                     if let Ok(mut scheduler) = scheduler.lock() {
@@ -751,12 +771,14 @@ struct BindingPlaybackAnchor {
 struct BindingPlaybackDueTick {
     target_time: Microseconds,
     dropped_frames: u64,
+    schedule_lateness_ms: u64,
 }
 
 #[derive(Debug, Clone)]
 struct BindingPlaybackFrame {
     evidence: RealtimePlaybackSchedulerEvidence,
     dropped_frames: u64,
+    schedule_lateness_ms: u64,
 }
 
 impl RealtimePreviewBindingScheduler {
@@ -1084,6 +1106,7 @@ impl RealtimePreviewBindingScheduler {
         Ok(BindingPlaybackFrame {
             evidence,
             dropped_frames: due_tick.dropped_frames,
+            schedule_lateness_ms: due_tick.schedule_lateness_ms,
         })
     }
 
@@ -1124,9 +1147,11 @@ impl RealtimePreviewBindingScheduler {
             .min(anchor.sequence_duration.get());
         let dropped_frames =
             target_time.saturating_sub(self.next_tick_time.get()) / PLAYBACK_FRAME_DURATION_US;
+        let schedule_lateness_ms = wall_media_time.saturating_sub(target_time) / 1_000;
         Some(BindingPlaybackDueTick {
             target_time: Microseconds::new(target_time),
             dropped_frames,
+            schedule_lateness_ms,
         })
     }
 
@@ -2038,6 +2063,7 @@ pub struct RealtimePreviewTelemetryBindingResponse {
     pub cache_hit_count: u64,
     pub target_time_microseconds: u64,
     pub playback_generation: u64,
+    pub frame_pacing: RealtimePreviewFramePacingTelemetry,
 }
 
 impl RealtimePreviewTelemetryBindingResponse {
@@ -2056,6 +2082,7 @@ impl RealtimePreviewTelemetryBindingResponse {
             cache_hit_count: telemetry.cache_hit_count,
             target_time_microseconds: telemetry.target_time.get(),
             playback_generation: telemetry.generation.get(),
+            frame_pacing: telemetry.frame_pacing.clone(),
         }
     }
 }

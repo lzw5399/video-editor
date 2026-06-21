@@ -178,6 +178,25 @@ export type RealtimePreviewTelemetryResponse = {
   cacheHitCount: number;
   targetTimeMicroseconds: number;
   playbackGeneration: number;
+  framePacing: RealtimePreviewFramePacingTelemetry;
+};
+
+export type RealtimePreviewFramePacingTelemetry = {
+  sampleCount: number;
+  intervalP50Ms: number | null;
+  intervalP95Ms: number | null;
+  intervalMaxMs: number | null;
+  scheduleLatenessP95Ms: number | null;
+  scheduleLatenessMaxMs: number | null;
+  samples: RealtimePreviewFramePacingSample[];
+};
+
+export type RealtimePreviewFramePacingSample = {
+  targetTimeMicroseconds: number;
+  intervalMs?: number | null;
+  scheduleLatenessMs: number;
+  renderDurationMs: number;
+  droppedFrameCount: number;
 };
 
 export type RealtimePreviewPresentationStateResponse = {
