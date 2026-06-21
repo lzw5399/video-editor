@@ -376,11 +376,28 @@ async function waitForPlaybackProgress(
 }
 
 async function readHostState(page: import("@playwright/test").Page): Promise<HostState | null> {
-  return page.evaluate(async () => {
-    const bridge = window.videoEditorRealtimePreviewHost;
-    if (bridge === undefined) {
-      return null;
+  await page.evaluate(() => {
+    const target = window as typeof window & {
+      __videoEditorRealtimePreviewHostState?: HostState | null;
+      __videoEditorRealtimePreviewHostObserverInstalled?: boolean;
+      videoEditorRealtimePreviewHost?: {
+        subscribeTelemetry: (listener: (state: HostState) => void) => () => void;
+      };
+    };
+    if (target.__videoEditorRealtimePreviewHostObserverInstalled) {
+      return;
     }
-    return (await bridge.getTelemetry()) as HostState;
+    target.__videoEditorRealtimePreviewHostObserverInstalled = true;
+    target.__videoEditorRealtimePreviewHostState = null;
+    target.videoEditorRealtimePreviewHost?.subscribeTelemetry((state) => {
+      target.__videoEditorRealtimePreviewHostState = state;
+    });
+  });
+  return page.evaluate(() => {
+    return (
+      (window as typeof window & {
+        __videoEditorRealtimePreviewHostState?: HostState | null;
+      }).__videoEditorRealtimePreviewHostState ?? null
+    );
   });
 }

@@ -11,6 +11,7 @@ import {
   summarizeRealtimePreviewProductDisplay,
   type RealtimePreviewDisplayModel
 } from "../src/renderer/viewModel";
+import type { RealtimePreviewHostApi } from "../src/renderer/workspace/PreviewMonitor";
 
 type ExecuteCommandCall = {
   command: CommandName;
@@ -71,26 +72,10 @@ type VideoEditorCoreApi = {
   executeCommand: (command: unknown) => Promise<unknown>;
 };
 
-type VideoEditorRealtimePreviewHostApi = {
-  updateHostRect: (rect: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    scaleFactorMillis: number;
-  }) => Promise<unknown>;
-  getTelemetry: () => Promise<unknown>;
-  updateDraftSnapshot: (draft: unknown) => Promise<unknown>;
-  seek: (targetTimeMicroseconds: number) => Promise<unknown>;
-  play: () => Promise<unknown>;
-  pause: () => Promise<unknown>;
-  stop: () => Promise<unknown>;
-};
-
 declare global {
   interface Window {
     videoEditorCore?: VideoEditorCoreApi;
-    videoEditorRealtimePreviewHost?: VideoEditorRealtimePreviewHostApi;
+    videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
   }
 }
 
@@ -1230,7 +1215,15 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
       return bridge === undefined ? [] : Object.keys(bridge).sort();
     });
 
-    expect(bridgeShape).toEqual(["getTelemetry", "pause", "play", "seek", "stop", "updateDraftSnapshot", "updateHostRect"]);
+    expect(bridgeShape).toEqual([
+      "pause",
+      "play",
+      "seek",
+      "stop",
+      "subscribeTelemetry",
+      "updateDraftSnapshot",
+      "updateHostRect"
+    ]);
 
     const updateResult = await page.evaluate(() =>
       window.videoEditorRealtimePreviewHost?.updateHostRect({
@@ -1243,8 +1236,32 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
     );
     expect(JSON.stringify(updateResult)).not.toMatch(/parentHandle|parentHandleHex|hwnd|nsview|commandEncoder|cacheKey/i);
 
-    const telemetry = await page.evaluate(() => window.videoEditorRealtimePreviewHost?.getTelemetry());
+    const telemetry = await page.evaluate(() => {
+      return new Promise<unknown>((resolve) => {
+        const bridge = window.videoEditorRealtimePreviewHost;
+        if (bridge === undefined) {
+          resolve(null);
+          return;
+        }
+        let unsubscribe = () => undefined;
+        const timer = window.setTimeout(() => {
+          unsubscribe();
+          resolve(null);
+        }, 5_000);
+        unsubscribe = bridge.subscribeTelemetry((state) => {
+          window.clearTimeout(timer);
+          unsubscribe();
+          resolve(state);
+        });
+      });
+    });
     expect(JSON.stringify(telemetry)).not.toMatch(/parentHandle|parentHandleHex|hwnd|nsview|commandEncoder|cacheKey/i);
+    await expect
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "subscribeTelemetry"))
+      .toBe(true);
+    await expect
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "pushTelemetry"))
+      .toBe(true);
 
     await expect
       .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "attachSurface"))

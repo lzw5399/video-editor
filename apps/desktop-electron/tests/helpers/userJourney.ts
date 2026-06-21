@@ -158,14 +158,6 @@ export type ProductJourneyAppController = {
   readWindowMetrics: () => Promise<ProductWindowMetrics | null>;
 };
 
-declare global {
-  interface Window {
-    videoEditorRealtimePreviewHost?: {
-      getTelemetry: () => Promise<RealtimePreviewHostState>;
-    };
-  }
-}
-
 export type PreviewEvidence = {
   regionHash: string;
   visibleCenterHash: string;
@@ -867,12 +859,29 @@ export async function readTimelineSegments(
 }
 
 async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreviewHostState | null> {
-  return page.evaluate(async () => {
-    const bridge = window.videoEditorRealtimePreviewHost;
-    if (bridge === undefined) {
-      return null;
+  await page.evaluate(() => {
+    const target = window as typeof window & {
+      __videoEditorRealtimePreviewHostState?: RealtimePreviewHostState | null;
+      __videoEditorRealtimePreviewHostObserverInstalled?: boolean;
+      videoEditorRealtimePreviewHost?: {
+        subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
+      };
+    };
+    if (target.__videoEditorRealtimePreviewHostObserverInstalled) {
+      return;
     }
-    return (await bridge.getTelemetry()) as RealtimePreviewHostState;
+    target.__videoEditorRealtimePreviewHostObserverInstalled = true;
+    target.__videoEditorRealtimePreviewHostState = null;
+    target.videoEditorRealtimePreviewHost?.subscribeTelemetry((state) => {
+      target.__videoEditorRealtimePreviewHostState = state;
+    });
+  });
+  return page.evaluate(() => {
+    return (
+      (window as typeof window & {
+        __videoEditorRealtimePreviewHostState?: RealtimePreviewHostState | null;
+      }).__videoEditorRealtimePreviewHostState ?? null
+    );
   });
 }
 

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
 import type { Draft } from "../generated/Draft";
@@ -17,12 +17,21 @@ type RealtimePreviewHostRect = {
   height: number;
   scaleFactorMillis: number;
 };
+type RealtimePreviewTelemetryListener = (state: unknown) => void;
 type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
 };
 
 const allowedRendererUrl = readAllowedRendererUrl();
+const realtimePreviewTelemetryChannel = "realtimePreviewHost:telemetryState";
+const realtimePreviewTelemetryListeners = new Set<RealtimePreviewTelemetryListener>();
+let realtimePreviewTelemetrySubscribed = false;
+const realtimePreviewTelemetryListener = (_event: IpcRendererEvent, state: unknown) => {
+  for (const listener of realtimePreviewTelemetryListeners) {
+    listener(state);
+  }
+};
 
 if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.location.href, allowedRendererUrl)) {
   contextBridge.exposeInMainWorld("videoEditorAppConfig", {
@@ -51,7 +60,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   });
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
-    getTelemetry: () => ipcRenderer.invoke("realtimePreviewHost:getTelemetry"),
+    subscribeTelemetry: subscribeRealtimePreviewTelemetry,
     updateDraftSnapshot: (draft: Draft, bundlePath?: string) =>
       ipcRenderer.invoke("realtimePreviewHost:updateDraftSnapshot", draft, bundlePath),
     seek: (targetTimeMicroseconds: number) =>
@@ -68,6 +77,31 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       getWindowMetrics: () => ipcRenderer.invoke("test:getWindowMetrics")
     });
   }
+}
+
+function subscribeRealtimePreviewTelemetry(listener: RealtimePreviewTelemetryListener): () => void {
+  if (typeof listener !== "function") {
+    throw new TypeError("realtime preview telemetry listener must be a function");
+  }
+
+  realtimePreviewTelemetryListeners.add(listener);
+  if (!realtimePreviewTelemetrySubscribed) {
+    realtimePreviewTelemetrySubscribed = true;
+    ipcRenderer.on(realtimePreviewTelemetryChannel, realtimePreviewTelemetryListener);
+    void ipcRenderer.invoke("realtimePreviewHost:subscribeTelemetry").then((state) => {
+      listener(state);
+    }).catch(() => undefined);
+  }
+
+  return () => {
+    realtimePreviewTelemetryListeners.delete(listener);
+    if (realtimePreviewTelemetryListeners.size > 0 || !realtimePreviewTelemetrySubscribed) {
+      return;
+    }
+    realtimePreviewTelemetrySubscribed = false;
+    ipcRenderer.removeListener(realtimePreviewTelemetryChannel, realtimePreviewTelemetryListener);
+    void ipcRenderer.invoke("realtimePreviewHost:unsubscribeTelemetry");
+  };
 }
 
 function readAllowedRendererUrl(): string | undefined {

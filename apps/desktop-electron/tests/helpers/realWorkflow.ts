@@ -164,14 +164,29 @@ async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<R
 }
 
 async function readRealtimePreviewHostState(page: Page): Promise<RealtimePreviewHostState | null> {
-  return page.evaluate(async () => {
-    const bridge = (window as typeof window & {
-      videoEditorRealtimePreviewHost?: { getTelemetry: () => Promise<RealtimePreviewHostState> };
-    }).videoEditorRealtimePreviewHost;
-    if (bridge === undefined) {
-      return null;
+  await page.evaluate(() => {
+    const target = window as typeof window & {
+      __videoEditorRealtimePreviewHostState?: RealtimePreviewHostState | null;
+      __videoEditorRealtimePreviewHostObserverInstalled?: boolean;
+      videoEditorRealtimePreviewHost?: {
+        subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
+      };
+    };
+    if (target.__videoEditorRealtimePreviewHostObserverInstalled) {
+      return;
     }
-    return bridge.getTelemetry();
+    target.__videoEditorRealtimePreviewHostObserverInstalled = true;
+    target.__videoEditorRealtimePreviewHostState = null;
+    target.videoEditorRealtimePreviewHost?.subscribeTelemetry((state) => {
+      target.__videoEditorRealtimePreviewHostState = state;
+    });
+  });
+  return page.evaluate(() => {
+    return (
+      (window as typeof window & {
+        __videoEditorRealtimePreviewHostState?: RealtimePreviewHostState | null;
+      }).__videoEditorRealtimePreviewHostState ?? null
+    );
   });
 }
 

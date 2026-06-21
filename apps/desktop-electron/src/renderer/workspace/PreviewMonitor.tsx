@@ -159,9 +159,9 @@ type RealtimePreviewHostContentEvidence = {
   targetTimeMicroseconds: number;
 };
 
-type RealtimePreviewHostApi = {
+export type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
-  getTelemetry: () => Promise<RealtimePreviewHostState>;
+  subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
   updateDraftSnapshot: (draft: Draft, bundlePath?: string) => Promise<RealtimePreviewHostState>;
   seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
   play: () => Promise<RealtimePreviewHostState>;
@@ -388,13 +388,6 @@ export function PreviewMonitor({
             setNativeHostState(state);
             onRealtimePreviewHostStateChange(state);
           }
-          return bridge.getTelemetry();
-        })
-        .then((state) => {
-          if (!cancelled) {
-            setNativeHostState(state);
-            onRealtimePreviewHostStateChange(state);
-          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -437,41 +430,18 @@ export function PreviewMonitor({
     }
 
     let cancelled = false;
-    let inFlight = false;
-    const refresh = () => {
-      if (inFlight) {
+    const unsubscribe = bridge.subscribeTelemetry((state) => {
+      if (cancelled) {
         return;
       }
-      inFlight = true;
-      void bridge.getTelemetry().then(
-        (state) => {
-          if (!cancelled) {
-            setNativeHostState(state);
-            onRealtimePreviewHostStateChange(state);
-          }
-        },
-        () => {
-          if (!cancelled) {
-            setNativeHostState((current) => ({
-              ...current,
-              fallbackActive: true,
-              statusLabel: "实时预览不可用",
-              fallbackLabel: "实时预览不可用：状态暂不可用"
-            }));
-          }
-        }
-      ).finally(() => {
-        inFlight = false;
-      });
-    };
-
-    refresh();
-    const timer = window.setInterval(refresh, 250);
+      setNativeHostState(state);
+      onRealtimePreviewHostStateChange(state);
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      unsubscribe();
     };
-  }, [onRealtimePreviewHostStateChange, playbackRunning]);
+  }, [onRealtimePreviewHostStateChange]);
 
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>

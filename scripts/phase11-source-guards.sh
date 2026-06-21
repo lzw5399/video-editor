@@ -76,7 +76,7 @@ assert_pattern_rejects() {
 GPU_OWNERSHIP_PATTERN='\b(?:GPUDevice|GPUCanvasContext|GPUCommandEncoder|GPURenderPassEncoder|navigator\.gpu|wgpu)\b|createCommandEncoder|beginRenderPass|\bdraw\s*\('
 RENDER_FFMPEG_PATTERN='\b(?:build_render_graph|RenderGraph|compile_ffmpeg_job|FfmpegExecutor|FfmpegJob|filter_complex|filterComplex|ffmpegArgs|ffmpegScripts|exportScript|AssSidecar|generateAss|assContents|child_process|execFile|exec\s*\(|spawn\s*\()\b'
 CACHE_DIRTY_PATTERN='\b(?:previewCacheKey|semanticFingerprint|materialDependencies|dirtyRanges?|changedRanges|changedMaterialIds|dirtyRangePropagation|invalidateDirtyRange)\b'
-FALLBACK_SEMANTICS_PATTERN='\b(?:fallbackLadder|chooseFallback|selectFallback|routeFallback|classifyFallback)\b|fallbackReason\s*='
+FALLBACK_SEMANTICS_PATTERN='\b(?:fallbackLadder|chooseFallback|selectFallback|routeFallback|classifyFallback)\b|fallbackReason\s*(?<![=!<>])=(?!=)'
 TIMELINE_MUTATION_PATTERN='(?:draft|current|nextDraft|workspace\.draft)\.tracks\s*=|\.tracks\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\(|(?:track|candidate|selectedTrack)\.segments\s*=|\.segments\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\(|(?:draft|current|nextDraft|workspace\.draft)(?:\.tracks|\["tracks"\])\s*\[[^]]+\]\s*=|(?:track|candidate|selectedTrack)(?:\.segments|\["segments"\])\s*\[[^]]+\]\s*=|\.(?:sourceTimerange|targetTimerange)\s*=|(?:sourceTimerange|targetTimerange)\.(?:start|duration)\s*=|(?:segment|selectedSegment|currentSegment|candidate)\.(?:keyframes|text|visual|volume)\s*(?<![=!<>])=(?!=)|\.(?:keyframes|segments|tracks)\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\(|\.text\.(?:content|source|style|textBox|layoutRegion|wrapping|bubble|effect)\s*(?<![=!<>])=(?!=)|\.visual\.(?:transform|fitMode|backgroundFilling|blendMode|mask|visible)\s*(?<![=!<>])=(?!=)|\.volume\.levelMillis\s*(?<![=!<>])=(?!=)|\.(?:undoStack|redoStack)\s*(?<![=!<>])=(?!=)|\.(?:undoStack|redoStack)\.(?:push|pop|shift|unshift|splice|sort|reverse)\s*\('
 KEYFRAME_EVALUATION_PATTERN='\b(?:evaluateKeyframes?|resolveKeyframes?|sampleAnimation|sampleAnimated|interpolateKeyframes?|interpolateAnimation|evaluateEasing|applyEasing|frameTimeAnimation)\b|(?:Math\.(?:sin|cos|pow|sqrt)|progressPerMille).*(?:keyframe|easing|animation)|(?:keyframe|easing|animation).*(?:Math\.(?:sin|cos|pow|sqrt)|progressPerMille)'
 FLOAT_TIMELINE_PATTERN='\b(?:targetTimeSeconds|target_time_seconds|timelineSeconds|timeline_seconds|durationSeconds|duration_seconds|sourceTimeSeconds|source_time_seconds|targetTimerangeSeconds|target_timerange_seconds|sourceTimerangeSeconds|source_timerange_seconds|seconds\s*:\s*f32|seconds\s*:\s*f64)\b'
@@ -123,6 +123,16 @@ fail_matches \
   "renderer must not choose realtime preview fallback semantics or assign fallback reasons" \
   "$FALLBACK_SEMANTICS_PATTERN" \
   "$RENDERER_WORKSPACE_DIR"
+
+fail_matches \
+  "renderer realtime preview monitor must subscribe to host telemetry instead of polling telemetry snapshots" \
+  'setInterval\(|bridge\.getTelemetry\(' \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
+
+fail_matches \
+  "preload realtime preview host must not expose a renderer getTelemetry polling API" \
+  'getTelemetry|realtimePreviewHost:getTelemetry' \
+  apps/desktop-electron/src/preload/index.ts
 
 fail_matches \
   "renderer must not directly mutate draft tracks, track segments, timeranges, keyframes, visual/text/audio semantics, or undo/redo stacks" \

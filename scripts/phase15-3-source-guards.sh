@@ -85,9 +85,14 @@ fail_if_matches \
   apps/desktop-electron/src/main/realtimePreviewHost.ts
 
 fail_if_matches \
-  "PreviewMonitor telemetry polling must stay coarse and must not switch to 33ms while playing" \
-  'playbackRunning\s*\?\s*33|setInterval\(\s*refresh\s*,\s*33\s*\)' \
+  "PreviewMonitor must subscribe to realtime telemetry instead of polling getTelemetry on a renderer interval" \
+  'playbackRunning\s*\?\s*33|setInterval\(|bridge\.getTelemetry\(' \
   apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
+
+fail_if_matches \
+  "preload realtime preview host must not expose renderer getTelemetry polling APIs" \
+  'getTelemetry|realtimePreviewHost:getTelemetry' \
+  apps/desktop-electron/src/preload/index.ts
 
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "waitForVisiblePreviewCenterChange"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "renderGraphGpuComposited"

@@ -222,7 +222,7 @@ function MaterialPanel({
 
 function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
-  const [durationSeconds, setDurationSeconds] = useState(3);
+  const [textDurationInputSeconds, setTextDurationInputSeconds] = useState(3);
   const textTrack = findTrackByKind(workspace.draft, "text");
 
   const text: TextSegment = useMemo(() => createDefaultTextSegment(content, "text"), [content]);
@@ -249,14 +249,16 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
             type="number"
             min="0.1"
             step="0.1"
-            value={durationSeconds}
-            onChange={(event) => setDurationSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, durationSeconds))}
+            value={textDurationInputSeconds}
+            onChange={(event) =>
+              setTextDurationInputSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, textDurationInputSeconds))
+            }
           />
         </label>
         <button
           type="button"
           className="primary-action wide-action"
-          onClick={() => onAddTextSegment(text, secondsToMicroseconds(durationSeconds))}
+          onClick={() => onAddTextSegment(text, secondsToMicroseconds(textDurationInputSeconds))}
           disabled={workspace.pendingCommand !== null || textTrack === null}
         >
           添加文字
@@ -376,7 +378,7 @@ function AudioPanel({
   const audioMaterials = workspace.materials.filter((material) => material.kind === "audio" && material.status === "available");
   const firstAudioMaterial = findFirstMaterialByKind(workspace.draft, "audio");
   const [materialId, setMaterialId] = useState(firstAudioMaterial?.materialId ?? "");
-  const [durationSeconds, setDurationSeconds] = useState(4);
+  const [audioDurationInputSeconds, setAudioDurationInputSeconds] = useState(4);
   const [volumePercent, setVolumePercent] = useState(100);
   const [panPercent, setPanPercent] = useState(0);
   const [fadeInSeconds, setFadeInSeconds] = useState(0);
@@ -393,7 +395,7 @@ function AudioPanel({
         <button
           type="button"
           className="primary-action"
-          onClick={() => onAddAudioSegment(selectedMaterialId, secondsToMicroseconds(durationSeconds))}
+          onClick={() => onAddAudioSegment(selectedMaterialId, secondsToMicroseconds(audioDurationInputSeconds))}
           disabled={workspace.pendingCommand !== null || audioTrack === null || selectedMaterialId.length === 0}
         >
           添加音频
@@ -424,8 +426,10 @@ function AudioPanel({
             type="number"
             min="0.1"
             step="0.1"
-            value={durationSeconds}
-            onChange={(event) => setDurationSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, durationSeconds))}
+            value={audioDurationInputSeconds}
+            onChange={(event) =>
+              setAudioDurationInputSeconds(toPositiveSeconds(event.currentTarget.valueAsNumber, audioDurationInputSeconds))
+            }
           />
         </label>
       </div>

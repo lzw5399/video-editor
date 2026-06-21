@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent, type WebContents } from "electron";
 
 import type { Draft } from "../generated/Draft";
 import {
@@ -112,6 +112,8 @@ type SenderAssertion = (event: IpcMainInvokeEvent) => void;
 
 const hostsByWindowId = new Map<number, RealtimePreviewHost>();
 let realtimePreviewHostIpcInstalled = false;
+const TELEMETRY_STATE_CHANNEL = "realtimePreviewHost:telemetryState";
+const TELEMETRY_FANOUT_INTERVAL_MS = 250;
 
 export function registerRealtimePreviewHost(window: BrowserWindow, assertAllowedSender: SenderAssertion): RealtimePreviewHost {
   installRealtimePreviewHostIpc(assertAllowedSender);
@@ -132,9 +134,14 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
     assertAllowedSender(event);
     return hostForEvent(event).updateHostRect(rect);
   });
-  ipcMain.handle("realtimePreviewHost:getTelemetry", (event) => {
+  ipcMain.handle("realtimePreviewHost:subscribeTelemetry", (event) => {
     assertAllowedSender(event);
-    return hostForEvent(event).getTelemetryState();
+    return hostForEvent(event).subscribeTelemetry(event.sender);
+  });
+  ipcMain.handle("realtimePreviewHost:unsubscribeTelemetry", (event) => {
+    assertAllowedSender(event);
+    hostForEvent(event).unsubscribeTelemetry(event.sender);
+    return { ok: true };
   });
   ipcMain.handle("realtimePreviewHost:updateDraftSnapshot", (event, draft: Draft, bundlePath?: string) => {
     assertAllowedSender(event);
@@ -180,6 +187,8 @@ export class RealtimePreviewHost {
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private bundlePath: string | null = null;
   private closed = false;
+  private telemetrySubscribers = new Map<number, WebContents>();
+  private telemetryFanoutTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly window: BrowserWindow) {
     window.on("close", () => {
@@ -251,6 +260,24 @@ export class RealtimePreviewHost {
     }
 
     return this.state(this.fallbackLabel === null ? "实时预览数据已更新" : "实时预览不可用");
+  }
+
+  subscribeTelemetry(sender: WebContents): RealtimePreviewHostDisplayState {
+    this.telemetrySubscribers.set(sender.id, sender);
+    sender.once("destroyed", () => {
+      this.telemetrySubscribers.delete(sender.id);
+      this.stopTelemetryFanoutIfIdle();
+    });
+    this.startTelemetryFanout();
+    const state = this.getTelemetryState();
+    recordRealtimePreviewHostCall({ kind: "subscribeTelemetry" });
+    return state;
+  }
+
+  unsubscribeTelemetry(sender: WebContents): void {
+    this.telemetrySubscribers.delete(sender.id);
+    this.stopTelemetryFanoutIfIdle();
+    recordRealtimePreviewHostCall({ kind: "unsubscribeTelemetry" });
   }
 
   updateDraftSnapshot(draft: Draft, bundlePath?: string): RealtimePreviewHostDisplayState {
@@ -368,6 +395,7 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
+    this.stopTelemetryFanout();
     if (this.sessionId === null) {
       return;
     }
@@ -474,7 +502,60 @@ export class RealtimePreviewHost {
 
     this.refreshPresentationSnapshot();
     this.telemetry = getRealtimePreviewTelemetry({ sessionId: this.sessionId });
-    recordRealtimePreviewHostCall({ kind: "getTelemetry" });
+    recordRealtimePreviewHostCall({ kind: "refreshTelemetrySnapshot" });
+  }
+
+  private startTelemetryFanout(): void {
+    if (this.telemetryFanoutTimer !== null) {
+      return;
+    }
+    this.telemetryFanoutTimer = setInterval(() => {
+      this.publishTelemetryState();
+    }, TELEMETRY_FANOUT_INTERVAL_MS);
+  }
+
+  private stopTelemetryFanoutIfIdle(): void {
+    if (this.telemetrySubscribers.size === 0) {
+      this.stopTelemetryFanout();
+    }
+  }
+
+  private stopTelemetryFanout(): void {
+    if (this.telemetryFanoutTimer === null) {
+      return;
+    }
+    clearInterval(this.telemetryFanoutTimer);
+    this.telemetryFanoutTimer = null;
+  }
+
+  private publishTelemetryState(): void {
+    if (this.closed || this.telemetrySubscribers.size === 0) {
+      this.stopTelemetryFanoutIfIdle();
+      return;
+    }
+
+    const state = this.getTelemetryState();
+    for (const [senderId, sender] of this.telemetrySubscribers) {
+      if (sender.isDestroyed()) {
+        this.telemetrySubscribers.delete(senderId);
+        continue;
+      }
+      this.sendTelemetryState(sender, state);
+    }
+    recordRealtimePreviewHostCall({
+      kind: "pushTelemetry",
+      presentedFrameCount: state.telemetry?.presentedFrameCount,
+      playbackGeneration: state.playbackGeneration ?? undefined,
+      presentationAvailable: state.productReady
+    });
+    this.stopTelemetryFanoutIfIdle();
+  }
+
+  private sendTelemetryState(sender: WebContents, state: RealtimePreviewHostDisplayState): void {
+    if (sender.isDestroyed()) {
+      return;
+    }
+    sender.send(TELEMETRY_STATE_CHANNEL, state);
   }
 
   private refreshPresentationSnapshot(): void {

@@ -121,6 +121,16 @@ fail_if_matches \
   crates/bindings_node/src/realtime_preview_service.rs
 
 fail_if_matches \
+  "renderer realtime preview monitor must subscribe to host telemetry instead of polling getTelemetry on an interval" \
+  'setInterval\(|bridge\.getTelemetry\(' \
+  apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx
+
+fail_if_matches \
+  "preload realtime preview host must not expose renderer getTelemetry polling APIs" \
+  'getTelemetry|realtimePreviewHost:getTelemetry' \
+  apps/desktop-electron/src/preload/index.ts
+
+fail_if_matches \
   "renderer/preload must not send mutating track intents with renderer-owned track IDs; select the track, then use selected-track intents" \
   'kind:[[:space:]]*"(?:renameTrack|setTrackLock|setTrackVisibility|setTrackMute)"' \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
