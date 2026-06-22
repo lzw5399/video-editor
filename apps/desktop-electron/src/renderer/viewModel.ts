@@ -54,9 +54,10 @@ export const WORKSPACE_CATEGORIES: readonly WorkspaceCategory[] = [
   "特效",
   "转场",
   "字幕",
+  "模板",
   "滤镜",
   "调节",
-  "模板"
+  "数字人"
 ];
 
 export type WorkspaceCategoryMetadata = {

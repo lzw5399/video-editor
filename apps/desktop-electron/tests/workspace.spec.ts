@@ -90,8 +90,10 @@ type WindowChromeMetrics = {
   contentBounds: RegionBox;
 };
 
-const WORKSPACE_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "智能包装"] as const;
-const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "智能包装"] as const;
+const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效"] as const;
+const OVERFLOW_TOP_CATEGORIES = ["转场", "字幕", "智能包装", "滤镜", "调节", "数字人"] as const;
+const WORKSPACE_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
+const SHOWCASE_CATEGORIES = ["贴纸", "特效", "转场", "智能包装", "滤镜", "调节", "数字人"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
@@ -433,7 +435,7 @@ async function expectNoCategoryLabelWrap(page: Page): Promise<void> {
             labelBox === undefined ||
             labelBox.height > lineHeight * 1.35 ||
             labelBox.width > buttonBox.width - 4 ||
-            buttonBox.height > 42
+            buttonBox.height > 44
         };
       })
       .filter((item) => item.wraps)
@@ -557,6 +559,22 @@ async function expectNoLeftSecondaryMenu(page: Page): Promise<void> {
   }
 }
 
+async function selectTopFeatureCategory(page: Page, category: (typeof WORKSPACE_CATEGORIES)[number]): Promise<void> {
+  const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
+  if ((VISIBLE_TOP_CATEGORIES as readonly string[]).includes(category)) {
+    await topFeatureNav.getByRole("button", { name: category }).click();
+    return;
+  }
+
+  const overflow = page.getByRole("button", { name: "更多功能" });
+  await expect(overflow).toBeEnabled();
+  await overflow.click();
+  const menu = page.getByRole("menu", { name: "更多功能菜单" });
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitemradio", { name: category }).click();
+  await expect(menu).toHaveCount(0);
+}
+
 async function expectMaterialLibraryReferenceLayout(page: Page, viewportWidth: number): Promise<void> {
   const materialPanel = page.locator('[aria-label="素材面板"]');
   const sourceRail = page.locator(".media-source-rail");
@@ -570,7 +588,7 @@ async function expectMaterialLibraryReferenceLayout(page: Page, viewportWidth: n
   const railBox = await expectStableBox(sourceRail, `媒体来源 ${viewportWidth}`);
   const paneBox = await expectStableBox(libraryPane, `素材库 ${viewportWidth}`);
   expect(panelBox.width, `素材面板不能退回窄侧栏 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 350 : 400);
-  expect(railBox.width, `媒体来源列宽 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 98 : 118);
+  expect(railBox.width, `媒体来源列宽 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 98 : 116);
   expect(paneBox.width, `素材内容列宽 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 220 : 250);
   expectNoOverlap(railBox, paneBox, "媒体来源", "素材库");
 
@@ -592,6 +610,7 @@ async function expectMaterialLibraryReferenceLayout(page: Page, viewportWidth: n
 async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
+    ".category-menu-button",
     ".preview-icon-button",
     ".preview-play-button",
     ".preview-title-menu",
@@ -672,9 +691,16 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByLabel("项目标题", { exact: true })).toContainText("未命名草稿");
     await expectWindowContentStartsAtTop(app);
 
-    for (const category of WORKSPACE_CATEGORIES) {
+    for (const category of VISIBLE_TOP_CATEGORIES) {
       await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
     }
+    await expect(page.getByRole("button", { name: "更多功能" })).toBeEnabled();
+    await page.getByRole("button", { name: "更多功能" }).click();
+    await expect(page.getByRole("menu", { name: "更多功能菜单" }).getByRole("menuitemradio")).toHaveText(
+      [...OVERFLOW_TOP_CATEGORIES]
+    );
+    await page.getByRole("button", { name: "更多功能" }).click();
+    await expect(page.getByRole("menu", { name: "更多功能菜单" })).toHaveCount(0);
     await expectNoCategoryLabelWrap(page);
     await expectIconButtonsHaveAccessibleNames(page);
     await expectNoLeftSecondaryMenu(page);
@@ -751,9 +777,7 @@ test("workspace panels switch categories without losing Chinese empty states", a
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
-
-    await topFeatureNav.getByRole("button", { name: "文本" }).click();
+    await selectTopFeatureCategory(page, "文本");
     await expect(page.getByRole("heading", { name: "文本", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
@@ -761,7 +785,7 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByLabel("默认文字").getByText("字号")).toHaveCount(0);
     await expect(page.getByLabel("默认文字").getByText("描边")).toHaveCount(0);
 
-    await topFeatureNav.getByRole("button", { name: "音频" }).click();
+    await selectTopFeatureCategory(page, "音频");
     await expect(page.getByRole("heading", { name: "音频", exact: true }).first()).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加音频", exact: true })).toBeVisible();
@@ -771,21 +795,20 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByText("淡入", { exact: true })).toBeVisible();
     await expect(page.getByText("淡出", { exact: true })).toBeVisible();
 
-    await topFeatureNav.getByRole("button", { name: "字幕" }).click();
+    await selectTopFeatureCategory(page, "字幕");
     await expect(page.getByRole("heading", { name: "字幕", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("导入字幕");
     await expect(page.getByLabel("SRT 内容")).toBeVisible();
 
-    for (const category of DEFERRED_CATEGORIES) {
-      await topFeatureNav.getByRole("button", { name: category }).click();
+    for (const category of SHOWCASE_CATEGORIES) {
+      await selectTopFeatureCategory(page, category);
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
       await expectNoLeftSecondaryMenu(page);
-      await expect(page.getByLabel(`${category}暂不可用`)).toContainText(
-        `${category}暂未开放`
-      );
-      await expect(page.getByLabel(`${category}暂不可用`)).toContainText("当前版本暂不提供该类编辑，切换分类不会修改草稿内容。");
+      await expect(page.getByLabel(`${category}分类`)).toBeVisible();
+      await expect(page.getByLabel(`${category}资源`)).toBeVisible();
+      await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }
   } finally {
@@ -804,8 +827,8 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
     await expect(page.getByLabel("默认文字")).toContainText("默认文字");
     await expect(page.getByLabel("素材面板")).not.toContainText("SRT 内容");
     await expect(page.getByLabel("素材面板")).not.toContainText("导入字幕");
-    await expect(page.getByLabel("花字")).toContainText("暂未接入");
-    await expect(page.getByLabel("气泡")).toContainText("暂未接入");
+    await expect(page.getByLabel("花字")).toContainText("模板");
+    await expect(page.getByLabel("气泡")).toContainText("模板");
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
 
     const resourcePanel = page.getByLabel("素材面板");

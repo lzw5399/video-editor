@@ -99,6 +99,10 @@ const CATEGORY_ICON_NAMES: Record<WorkspaceCategory, AppIconName> = {
   数字人: "categoryDigitalHuman"
 };
 
+const PRIMARY_CATEGORY_COUNT = 5;
+const PRIMARY_WORKSPACE_CATEGORIES = WORKSPACE_CATEGORIES.slice(0, PRIMARY_CATEGORY_COUNT);
+const OVERFLOW_WORKSPACE_CATEGORIES = WORKSPACE_CATEGORIES.slice(PRIMARY_CATEGORY_COUNT);
+
 export function WorkspaceShell({
   workspace,
   activeCategory,
@@ -162,6 +166,8 @@ export function WorkspaceShell({
 }: WorkspaceShellProps): React.ReactElement {
   const selectedSegment = workspace.viewModel.selectedSegment;
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [topFeatureOverflowOpen, setTopFeatureOverflowOpen] = useState(false);
+  const overflowActive = OVERFLOW_WORKSPACE_CATEGORIES.includes(activeCategory);
   const openExportModal = (): void => {
     void (async () => {
       try {
@@ -191,28 +197,47 @@ export function WorkspaceShell({
       </header>
       <header className="top-feature-bar" aria-label="顶部功能区">
         <nav className="category-nav" aria-label="顶部功能区">
-          {WORKSPACE_CATEGORIES.map((category) => {
-            const metadata = WORKSPACE_CATEGORY_META[category];
-
-            return (
-              <button
-                key={category}
-                type="button"
-                className={category === activeCategory ? "category-button active" : "category-button"}
-                aria-label={metadata.label}
-                aria-pressed={category === activeCategory}
-                title={metadata.label}
-                onClick={() => onCategoryChange(category)}
-              >
-                <span className="category-symbol app-icon-mask" style={iconMaskStyle(CATEGORY_ICON_NAMES[category])} aria-hidden="true" />
-                <span className="category-label">{metadata.label}</span>
-              </button>
-            );
-          })}
+          {PRIMARY_WORKSPACE_CATEGORIES.map((category) => (
+            <CategoryButton
+              key={category}
+              category={category}
+              active={category === activeCategory}
+              onSelect={(nextCategory) => {
+                setTopFeatureOverflowOpen(false);
+                onCategoryChange(nextCategory);
+              }}
+            />
+          ))}
         </nav>
-        <button type="button" className="top-feature-overflow" aria-label="更多功能" title="更多功能" disabled>
-          <span className="app-icon-mask" style={iconMaskStyle("titlebarMenu")} aria-hidden="true" />
-        </button>
+        <div className="top-feature-overflow-wrap">
+          <button
+            type="button"
+            className={overflowActive ? "top-feature-overflow active" : "top-feature-overflow"}
+            aria-label="更多功能"
+            aria-haspopup="menu"
+            aria-expanded={topFeatureOverflowOpen}
+            title="更多功能"
+            onClick={() => setTopFeatureOverflowOpen((current) => !current)}
+          >
+            <span className="app-icon-mask" style={iconMaskStyle("titlebarMenu")} aria-hidden="true" />
+          </button>
+          {topFeatureOverflowOpen ? (
+            <div className="top-feature-overflow-menu" role="menu" aria-label="更多功能菜单">
+              {OVERFLOW_WORKSPACE_CATEGORIES.map((category) => (
+                <CategoryButton
+                  key={category}
+                  category={category}
+                  active={category === activeCategory}
+                  menuItem
+                  onSelect={(nextCategory) => {
+                    setTopFeatureOverflowOpen(false);
+                    onCategoryChange(nextCategory);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <section className="material-panel" aria-label="素材面板">
@@ -331,6 +356,37 @@ export function WorkspaceShell({
         />
       ) : null}
     </main>
+  );
+}
+
+function CategoryButton({
+  category,
+  active,
+  menuItem = false,
+  onSelect
+}: {
+  category: WorkspaceCategory;
+  active: boolean;
+  menuItem?: boolean;
+  onSelect: (category: WorkspaceCategory) => void;
+}): React.ReactElement {
+  const metadata = WORKSPACE_CATEGORY_META[category];
+
+  return (
+    <button
+      key={category}
+      type="button"
+      role={menuItem ? "menuitemradio" : undefined}
+      className={`${menuItem ? "category-menu-button" : "category-button"}${active ? " active" : ""}`}
+      aria-label={metadata.label}
+      aria-pressed={menuItem ? undefined : active}
+      aria-checked={menuItem ? active : undefined}
+      title={metadata.label}
+      onClick={() => onSelect(category)}
+    >
+      <span className="category-symbol app-icon-mask" style={iconMaskStyle(CATEGORY_ICON_NAMES[category])} aria-hidden="true" />
+      <span className="category-label">{metadata.label}</span>
+    </button>
   );
 }
 

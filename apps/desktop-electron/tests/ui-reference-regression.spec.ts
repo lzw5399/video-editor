@@ -23,6 +23,9 @@ const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const FORBIDDEN_DEFAULT_COPY =
   /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
+const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效"] as const;
+const OVERFLOW_TOP_CATEGORIES = ["转场", "字幕", "智能包装", "滤镜", "调节", "数字人"] as const;
+const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -63,6 +66,8 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
   try {
     await expectWorkspaceHierarchy(app, page, 1280, 800);
     await capturePhaseScreenshot(page, "workspace-1280x800.png");
+    await captureTopFeatureOverflowScreenshot(page, "top-feature-overflow-1280x800.png");
+    await expectTopFeatureCategoriesReachable(page);
     await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png");
     await capturePreviewMonitorScreenshot(page, "preview-monitor-1280x800.png");
 
@@ -195,6 +200,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
   await expectMaterialLibraryGeometry(page, width);
   await expectPreviewMonitorChrome(page, boxes.preview, width);
+  await expectTopFeatureNavigationChrome(page);
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
   expect(previewCanvas.x, `预览画布左侧不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.x);
@@ -213,6 +219,53 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   const exportButtonBox = await stableBox(page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }), "顶部导出");
   expect(exportButtonBox.x, "export action is top-right").toBeGreaterThan(width - 180);
   await expectNoDebugCopy(page.locator("body"));
+}
+
+async function expectTopFeatureNavigationChrome(page: Page): Promise<void> {
+  const nav = page.getByRole("navigation", { name: "顶部功能区" });
+  await expect(nav.locator(".category-button .category-label")).toHaveText([...VISIBLE_TOP_CATEGORIES]);
+  const overflow = page.getByRole("button", { name: "更多功能" });
+  await expect(overflow).toBeEnabled();
+  await overflow.click();
+  const menu = page.getByRole("menu", { name: "更多功能菜单" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitemradio")).toHaveText([...OVERFLOW_TOP_CATEGORIES]);
+  await overflow.click();
+  await expect(menu).toHaveCount(0);
+}
+
+async function captureTopFeatureOverflowScreenshot(page: Page, filename: string): Promise<void> {
+  const overflow = page.getByRole("button", { name: "更多功能" });
+  await overflow.click();
+  await expect(page.getByRole("menu", { name: "更多功能菜单" })).toBeVisible();
+  await capturePhaseScreenshot(page, filename);
+  await overflow.click();
+  await expect(page.getByRole("menu", { name: "更多功能菜单" })).toHaveCount(0);
+}
+
+async function expectTopFeatureCategoriesReachable(page: Page): Promise<void> {
+  for (const category of ALL_TOP_CATEGORIES) {
+    await selectTopFeatureCategory(page, category);
+    if (category === "素材") {
+      await expect(page.getByRole("navigation", { name: "媒体来源" })).toBeVisible();
+      await expect(page.getByRole("group", { name: "媒体工具" })).toBeVisible();
+    } else {
+      await expect(page.getByLabel("素材面板").getByRole("heading", { name: category, exact: true }).first()).toBeVisible();
+    }
+    await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
+  }
+  await selectTopFeatureCategory(page, "素材");
+}
+
+async function selectTopFeatureCategory(page: Page, category: (typeof ALL_TOP_CATEGORIES)[number]): Promise<void> {
+  const nav = page.getByRole("navigation", { name: "顶部功能区" });
+  if ((VISIBLE_TOP_CATEGORIES as readonly string[]).includes(category)) {
+    await nav.getByRole("button", { name: category }).click();
+    return;
+  }
+  const overflow = page.getByRole("button", { name: "更多功能" });
+  await overflow.click();
+  await page.getByRole("menu", { name: "更多功能菜单" }).getByRole("menuitemradio", { name: category }).click();
 }
 
 async function setViewport(app: ElectronApplication, page: Page, width: number, height: number): Promise<void> {

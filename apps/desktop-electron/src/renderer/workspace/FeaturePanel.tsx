@@ -58,6 +58,11 @@ type MediaSourceSection = {
   active: boolean;
   disabled: boolean;
 };
+type ShowcaseCategory = Exclude<WorkspaceCategory, "媒体" | "音频" | "文字" | "字幕">;
+type ShowcasePanelSpec = {
+  rail: readonly string[];
+  cards: readonly string[];
+};
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
 const MEDIA_SOURCE_SECTIONS: readonly MediaSourceSection[] = [
@@ -68,6 +73,36 @@ const MEDIA_SOURCE_SECTIONS: readonly MediaSourceSection[] = [
   { label: "官方素材", active: false, disabled: true },
   { label: "即梦AI", active: false, disabled: true }
 ];
+const SHOWCASE_PANEL_SPECS: Record<ShowcaseCategory, ShowcasePanelSpec> = {
+  贴纸: {
+    rail: ["热门", "表情", "装饰", "收藏"],
+    cards: ["基础贴纸", "情绪符号", "指示箭头", "动态装饰"]
+  },
+  特效: {
+    rail: ["热门", "画面", "氛围", "收藏"],
+    cards: ["基础光效", "速度感", "复古颗粒", "镜头闪白"]
+  },
+  转场: {
+    rail: ["基础", "运镜", "遮罩", "收藏"],
+    cards: ["叠化", "推拉", "闪白", "模糊转场"]
+  },
+  滤镜: {
+    rail: ["人像", "风景", "电影", "收藏"],
+    cards: ["自然", "清透", "胶片", "冷调"]
+  },
+  调节: {
+    rail: ["基础", "HSL", "曲线", "LUT"],
+    cards: ["自定义调节", "亮度", "对比度", "饱和度"]
+  },
+  模板: {
+    rail: ["推荐", "我的", "口播", "收藏"],
+    cards: ["智能成片", "包装片头", "节奏卡点", "字幕包装"]
+  },
+  数字人: {
+    rail: ["形象", "声音", "口型", "收藏"],
+    cards: ["数字人形象", "声音配置", "口型驱动", "场景模板"]
+  }
+};
 
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   let content: React.ReactElement;
@@ -81,7 +116,7 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   } else if (props.category === "音频") {
     content = <AudioPanel {...props} />;
   } else {
-    content = <DeferredCategoryPanel category={props.category} />;
+    content = <ShowcaseCategoryPanel category={props.category as ShowcaseCategory} />;
   }
 
   return (
@@ -293,8 +328,8 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
         </button>
       </section>
 
-      <DeferredTextCapabilityCard title="花字" detail="暂未接入，导入后将以不支持能力报告显示。" />
-      <DeferredTextCapabilityCard title="气泡" detail="暂未接入，导入后将以不支持能力报告显示。" />
+      <DeferredTextCapabilityCard title="花字" detail="标题、强调词和口播包装常用样式。" />
+      <DeferredTextCapabilityCard title="气泡" detail="对白、标注和画面说明常用样式。" />
     </div>
   );
 }
@@ -339,7 +374,7 @@ function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: 
     <section className="function-card text-feature-card deferred-text-card" aria-label={title}>
       <div className="text-card-header">
         <h3>{title}</h3>
-        <span>暂未接入</span>
+        <span>模板</span>
       </div>
       <p>{detail}</p>
     </section>
@@ -494,18 +529,31 @@ function AudioPanel({
   );
 }
 
-function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): React.ReactElement {
+function ShowcaseCategoryPanel({ category }: { category: ShowcaseCategory }): React.ReactElement {
   const label = WORKSPACE_CATEGORY_META[category].label;
-  const title = category === "数字人" ? "能力暂未开放" : `${label}暂未开放`;
+  const spec = SHOWCASE_PANEL_SPECS[category];
 
   return (
-    <div className="feature-panel-content">
-      <div className="panel-header">
+    <div className="feature-panel-content showcase-feature-panel">
+      <div className="panel-header showcase-panel-header">
         <h2>{label}</h2>
       </div>
-      <div className="empty-state deferred-category-state" aria-label={`${label}暂不可用`}>
-        <strong>{title}</strong>
-        <span>当前版本暂不提供该类编辑，切换分类不会修改草稿内容。</span>
+      <div className="showcase-panel-layout">
+        <nav className="showcase-rail" aria-label={`${label}分类`}>
+          {spec.rail.map((item, index) => (
+            <button key={item} type="button" className={index === 0 ? "active" : ""} aria-current={index === 0 ? "page" : undefined}>
+              {item}
+            </button>
+          ))}
+        </nav>
+        <div className="showcase-card-grid" aria-label={`${label}资源`}>
+          {spec.cards.map((item) => (
+            <article key={item} className="showcase-card" aria-label={`${label} ${item}`}>
+              <span className="showcase-card-preview" aria-hidden="true" />
+              <strong>{item}</strong>
+            </article>
+          ))}
+        </div>
       </div>
     </div>
   );
