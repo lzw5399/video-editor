@@ -60,26 +60,26 @@
   aspect-ratio: 16 / 9;
   min-height: 0;
   max-height: 100%;
-  border: 1px solid #3a3a36;
-  border-radius: 6px;
-  background: #070707;
+  border: 0;
+  border-radius: 2px;
+  background: #050505;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
 .preview-canvas.canvas-background-ready {
-  border-color: #4b5d49;
+  box-shadow: inset 0 0 0 1px rgba(95, 159, 115, 0.32);
 }
 
 .preview-canvas.canvas-background-warning {
-  border-color: #6a552e;
+  box-shadow: inset 0 0 0 1px rgba(214, 162, 63, 0.32);
 }
 
 .preview-placeholder {
   display: grid;
-  gap: 8px;
   place-items: center;
   max-width: 100%;
-  padding: 16px;
+  padding: 0 18px;
   color: #d8d6cf;
   text-align: center;
 }
@@ -88,7 +88,7 @@
 .preview-placeholder code {
   max-width: 100%;
   overflow: hidden;
-  color: #9b9890;
+  color: #77746d;
   font-size: 12px;
   line-height: 1.4;
   text-overflow: ellipsis;
