@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import type { ProductWindowMetrics } from "./helpers/foregroundProductApp";
 import {
@@ -61,6 +64,7 @@ const SEQUENCE_END_FRAME_ALIGNED_MIN_US =
   USER_JOURNEY_SEQUENCE_DURATION_US - THIRTY_FPS_FRAME_DURATION_US - 7_000;
 const BUNDLED_SANS_FONT_REF = "font://bundled/noto-sans-cjk-sc-regular";
 const BUNDLED_SERIF_FONT_REF = "font://bundled/noto-serif-cjk-sc-regular";
+const execFileAsync = promisify(execFile);
 const P0_USER_PORTRAIT_MATERIAL =
   process.env.VIDEO_EDITOR_P0_USER_MATERIAL ??
   join(process.env.HOME ?? "", "Downloads", "5300d8457cc6d4692ff5b922c089f823_raw.mp4");
@@ -1756,6 +1760,125 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
   }
 });
 
+test("product text/subtitle export frame matches native preview text pixels", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_LONG_AV_VIDEO,
+    USER_JOURNEY_LONG_TONE_AUDIO
+  ]);
+  const paritySrt =
+    "1\n00:00:00,000 --> 00:00:01,800\n导出同屏字幕 初稿\n\n2\n00:00:01,800 --> 00:00:03,000\n导出后半字幕 初稿\n";
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_AV_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
+
+    await addTextThroughProductPanel(page, app, "导出Parity标题 初稿");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "导出Parity标题\nSans Native",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 44,
+      color: "#31ff94",
+      alignment: "left",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 170,
+      layoutXMillis: 80,
+      layoutYMillis: 100,
+      layoutWidthMillis: 790,
+      layoutHeightMillis: 210,
+      lineHeightMillis: 1140,
+      letterSpacingMillis: 40
+    });
+    const titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "导出Parity标题\nSans Native", 48, 26);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: titleDragVisual.transform.position.x,
+      positionY: titleDragVisual.transform.position.y,
+      scaleX: 1050,
+      scaleY: 1020,
+      rotation: -9,
+      opacity: 930,
+      fitMode: "适应"
+    });
+
+    await addRenamedSubtitleTrack(page, app, "导出字幕轨道");
+    await importSubtitleSrtThroughProductPanel(page, app, paritySrt);
+    await page.getByRole("button", { name: /片段 导出同屏字幕/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "导出同屏字幕 初稿",
+      content: "导出同屏字幕\nSerif Export",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 34,
+      color: "#ffca35",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 110,
+      layoutYMillis: 650,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1210,
+      letterSpacingMillis: 70
+    });
+    await page.getByRole("button", { name: /片段 导出后半字幕/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "导出后半字幕 初稿",
+      content: "导出后半字幕\nSans Later",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 34,
+      color: "#ffffff",
+      alignment: "right",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 130,
+      layoutYMillis: 710,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 80
+    });
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.locator(".preview-text-overlay"), "export parity preview evidence must not use DOM text overlays").toHaveCount(0);
+    await seekTimelinePlayhead(page, app, 600_000);
+    const previewEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["导出Parity标题\nSans Native", "导出同屏字幕\nSerif Export"],
+      0,
+      {
+        maxTargetTimeUs: 1_700_000,
+        exactOverlayCount: 2,
+        forbiddenContents: ["导出后半字幕\nSans Later"]
+      }
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-export-parity-native-host.png"),
+      previewEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, previewEvidence, "text export parity native preview");
+
+    const outputPath = join(PHASE15_3_SCREENSHOT_DIR, "text-export-parity.mp4");
+    await exportProductProject(page, app, outputPath);
+    const exportFrame = await extractBundledExportFramePng(page, outputPath, previewEvidence.targetTimeMicroseconds);
+    writeFileSync(join(PHASE15_3_SCREENSHOT_DIR, "text-export-parity-export-frame.png"), exportFrame);
+    await expectExportFrameContainsTextOverlays(page, exportFrame, previewEvidence);
+
+    const calls = await readNativeCommandObservations(app);
+    expect(calls.filter((call) => call.command === "startExport")).toHaveLength(1);
+    expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(3);
+    expect(requestProjectSessionPreviewFrameCount(calls), "text export parity must not request artifact preview frames").toBe(0);
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readDirectNativeCommandObservations(app),
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+    );
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
 type ActiveTextOverlayEvidence = {
   source: "text" | "subtitle";
   content: string;
@@ -2055,6 +2178,128 @@ async function expectTextEditingNativeEvidence(
   for (const overlay of evidence.activeTextOverlays) {
     await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, overlay, `${label} ${overlay.content}`);
   }
+}
+
+async function exportProductProject(page: Page, app: ProductJourneyAppController, outputPath: string): Promise<void> {
+  await unlink(outputPath).catch(() => undefined);
+  const nextStartCount = (await commandCount(app, "startExport")) + 1;
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("输出路径").fill(outputPath);
+  await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
+  await dialog.getByRole("button", { name: "开始导出" }).click();
+  await waitForCommandCountAtLeast(app, "startExport", nextStartCount);
+
+  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
+  await expect(statusButton).toBeEnabled({ timeout: 20_000 });
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+    if (progressText.includes("已完成")) {
+      break;
+    }
+    if (await statusButton.isEnabled()) {
+      await statusButton.click();
+    }
+    await page.waitForTimeout(500);
+  }
+
+  const finalProgressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+  const exportLogText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
+  const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+  expect(
+    finalProgressText,
+    `product export must complete before parity extraction: ${JSON.stringify({ finalProgressText, exportLogText, validationText })}`
+  ).toContain("已完成");
+  expect(validationText, "product export parity output must keep audio stream").toContain("含音频");
+  expect(existsSync(outputPath), `product export should create ${outputPath}`).toBe(true);
+}
+
+async function extractBundledExportFramePng(page: Page, outputPath: string, targetTimeUs: number): Promise<Buffer> {
+  const runtime = await readBundledRuntimePaths(page);
+  const framePath = join(PHASE15_3_SCREENSHOT_DIR, "text-export-parity-export-frame.png");
+  await unlink(framePath).catch(() => undefined);
+  await execFileAsync(
+    runtime.ffmpegPath,
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      outputPath,
+      "-ss",
+      microsecondsToFfmpegTimestamp(targetTimeUs),
+      "-frames:v",
+      "1",
+      "-y",
+      framePath
+    ],
+    {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024
+    }
+  );
+  return readFile(framePath);
+}
+
+async function expectExportFrameContainsTextOverlays(
+  page: Page,
+  exportFrame: Buffer,
+  evidence: Awaited<ReturnType<typeof waitForActiveTextOverlaySetEvidence>>
+): Promise<void> {
+  const contentEvidence = evidence.previewEvidence.hostState?.contentEvidence;
+  for (const overlay of evidence.activeTextOverlays) {
+    const textPixelCount = await countTextColorPixelsInOverlay(page, exportFrame, contentEvidence, transformedTextOverlayBox(contentEvidence, overlay), overlay.color);
+    expect(
+      textPixelCount,
+      `export frame must contain real burned-in pixels for ${overlay.content}: ${JSON.stringify({ overlay, contentEvidence })}`
+    ).toBeGreaterThan(40);
+  }
+}
+
+async function readBundledRuntimePaths(page: Page): Promise<{ ffmpegPath: string; ffprobePath: string }> {
+  const runtime = await page.evaluate(() => {
+    const api = (window as unknown as {
+      videoEditorCore?: {
+        probeMediaRuntime: () => Promise<{
+          ok: boolean;
+          data: null | {
+            ffmpeg?: RuntimeBinaryProbe;
+            ffprobe?: RuntimeBinaryProbe;
+          };
+          error: null | { message?: string };
+        }>;
+      };
+    }).videoEditorCore;
+    return api?.probeMediaRuntime();
+  });
+
+  if (runtime?.ok !== true || runtime.data?.ffmpeg?.path === undefined || runtime.data.ffprobe?.path === undefined) {
+    throw new Error(`Unable to read bundled FFmpeg runtime from app: ${JSON.stringify(runtime)}`);
+  }
+  expectBundledRuntimeBinary(runtime.data.ffmpeg, "ffmpeg");
+  expectBundledRuntimeBinary(runtime.data.ffprobe, "ffprobe");
+  return {
+    ffmpegPath: runtime.data.ffmpeg.path,
+    ffprobePath: runtime.data.ffprobe.path
+  };
+}
+
+type RuntimeBinaryProbe = {
+  path?: string;
+  source?: { kind?: string; directory?: string } | string;
+};
+
+function expectBundledRuntimeBinary(binary: RuntimeBinaryProbe, name: "ffmpeg" | "ffprobe"): void {
+  const sourceKind = typeof binary.source === "string" ? binary.source : binary.source?.kind;
+  expect(sourceKind, `${name} must come from the app-local bundled runtime`).toBe("bundled");
+  expect(binary.path, `${name} path must be present`).toBeTruthy();
+  expect(binary.path, `${name} must not resolve through Homebrew`).not.toContain("/opt/homebrew");
+  expect(binary.path, `${name} must not resolve through /usr/local`).not.toContain("/usr/local");
+}
+
+function microsecondsToFfmpegTimestamp(timeUs: number): string {
+  return (Math.max(0, timeUs) / 1_000_000).toFixed(6);
 }
 
 function overlayByContent(overlays: ActiveTextOverlayEvidence[], content: string): ActiveTextOverlayEvidence {
