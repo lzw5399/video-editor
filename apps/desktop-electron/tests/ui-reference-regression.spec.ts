@@ -320,27 +320,41 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   const materialPanel = page.locator('[aria-label="素材面板"]');
   const sourceRail = page.locator(".media-source-rail");
   const libraryPane = page.locator(".media-library-pane");
+  const toolbar = page.locator(".media-toolbar");
+  const importButton = toolbar.getByRole("button", { name: "导入素材" });
+  const searchBox = page.getByLabel("搜索素材");
+  const listButton = toolbar.getByRole("button", { name: "列表视图" });
   const materialCard = page.locator(".material-row").first();
   const thumbnail = materialCard.locator(".material-thumb");
   const copy = materialCard.locator(".material-copy");
   const panelBox = await stableBox(materialPanel, `素材面板 ${width}`);
   const railBox = await stableBox(sourceRail, `媒体来源 ${width}`);
   const paneBox = await stableBox(libraryPane, `素材库 ${width}`);
+  const toolbarBox = await stableBox(toolbar, `素材工具栏 ${width}`);
+  const importBox = await stableBox(importButton, `导入按钮 ${width}`);
+  const searchBoxRect = await stableBox(searchBox, `素材搜索 ${width}`);
+  const listBox = await stableBox(listButton, `素材视图按钮 ${width}`);
 
   expect(panelBox.width, `left material panel should keep Jianying-like workspace width ${width}`).toBeGreaterThanOrEqual(
     width <= 1199 ? 350 : 400
   );
-  expect(railBox.width, `source rail should remain a real source column ${width}`).toBeGreaterThanOrEqual(width <= 1199 ? 98 : 118);
+  expect(railBox.width, `source rail should remain a compact source column ${width}`).toBeGreaterThanOrEqual(width <= 1199 ? 96 : 108);
+  expect(railBox.width, `source rail should not dominate the material bin ${width}`).toBeLessThanOrEqual(width <= 1199 ? 116 : 128);
   expect(paneBox.width, `material library pane should not collapse ${width}`).toBeGreaterThanOrEqual(width <= 1199 ? 220 : 250);
   expectNoOverlap(railBox, paneBox, "媒体来源", "素材库");
+  await expect(page.locator(".media-library-title-row")).toHaveCount(0);
   await expect(sourceRail.locator("button")).toHaveText(["导入", "我的", "AI生成", "云素材", "官方素材", "即梦AI"]);
   await expect(sourceRail.locator(".media-source-chevron")).toHaveCount(5);
-  await expect(page.getByLabel("搜索素材")).toHaveAttribute("placeholder", "搜索文件名");
+  await expect(searchBox).toHaveAttribute("placeholder", "搜索文件名");
+  expect(toolbarBox.y, `material toolbar should start the library pane ${width}`).toBeLessThanOrEqual(paneBox.y + 10);
+  expect(Math.abs(importBox.y - searchBoxRect.y), `import and search should share one compact row ${width}`).toBeLessThanOrEqual(2);
+  expect(Math.abs(listBox.y - searchBoxRect.y), `view action should align with search row ${width}`).toBeLessThanOrEqual(2);
 
   const cardBox = await stableBox(materialCard, `素材卡片 ${width}`);
   const thumbBox = await stableBox(thumbnail, `素材缩略图 ${width}`);
   const copyBox = await stableBox(copy, `素材标题 ${width}`);
-  expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(120);
+  expect(cardBox.width, `material card should stay as a dense bin tile ${width}`).toBeLessThanOrEqual(122);
+  expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(112);
   expect(thumbBox.y, `thumbnail must stay above title ${width}`).toBeLessThan(copyBox.y);
   expect(Math.abs(thumbBox.x - cardBox.x), `thumbnail should align with card left edge ${width}`).toBeLessThanOrEqual(1);
 }

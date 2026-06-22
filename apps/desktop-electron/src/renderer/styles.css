@@ -687,8 +687,8 @@ h2 {
 
 .media-panel-layout {
   display: grid;
-  grid-template-columns: 124px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -697,10 +697,10 @@ h2 {
 .media-source-rail {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
-  padding: 10px 10px 0 0;
+  padding: 8px 8px 0 0;
   border-right: 1px solid #151515;
 }
 
@@ -711,16 +711,16 @@ h2 {
   gap: 6px;
   width: 100%;
   min-width: 0;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   overflow: hidden;
   color: #aaa79f;
   background: #333331;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 40px;
+  line-height: 34px;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -755,22 +755,18 @@ h2 {
 .media-library-pane {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 10px 4px 0 0;
-}
-
-.media-library-title-row {
-  min-height: 24px;
+  padding: 8px 4px 0 0;
 }
 
 .media-toolbar {
   display: grid;
-  grid-template-columns: minmax(120px, 148px) 34px 34px;
+  grid-template-columns: minmax(72px, 104px) minmax(72px, 1fr) 30px 30px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -778,18 +774,18 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
-  height: 36px;
-  padding: 0 14px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid #20c7d9;
-  border-radius: 7px;
+  border-radius: 6px;
   overflow: hidden;
   color: #061314;
   background: #20c7d9;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 34px;
+  line-height: 30px;
   white-space: nowrap;
 }
 
@@ -814,11 +810,11 @@ h2 {
 .media-tool-icon-button {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid #3d3d39;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #c7c4bd;
   background: #252522;
 }
@@ -980,10 +976,10 @@ h2 {
 .media-search-row input {
   width: 100%;
   min-width: 0;
-  height: 36px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid #353531;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #f0eee8;
   background: #181816;
   font: inherit;
@@ -998,16 +994,16 @@ h2 {
 .material-filter-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .material-filter-bar button {
-  height: 28px;
+  height: 26px;
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid #383835;
-  border-radius: 6px;
+  border-radius: 5px;
   color: #cbc8c1;
   background: #252522;
   font-size: 12px;
@@ -1302,9 +1298,10 @@ h2 {
 
 .material-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(104px, 118px));
   align-content: start;
-  gap: 14px 12px;
+  justify-content: start;
+  gap: 10px;
   min-height: 0;
 }
 
@@ -1312,11 +1309,11 @@ h2 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
-  min-height: 150px;
+  gap: 6px;
+  min-height: 120px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #cbc8c1;
   background: transparent;
 }
@@ -1336,7 +1333,7 @@ h2 {
   width: 100%;
   aspect-ratio: 16 / 10;
   height: auto;
-  border-radius: 9px;
+  border-radius: 6px;
   color: #f0eee8;
   background: #151515;
   font-size: 12px;
@@ -1363,11 +1360,11 @@ h2 {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+  border-radius: 5px;
   color: #f0eee8;
   background: rgba(24, 24, 22, 0.86);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.26);
@@ -1547,11 +1544,11 @@ h2 {
   }
 
   .media-source-rail button {
-    min-height: 36px;
+    min-height: 34px;
     padding-right: 10px;
     padding-left: 10px;
     font-size: 13px;
-    line-height: 36px;
+    line-height: 34px;
   }
 
   .material-filter-bar button {
@@ -1560,7 +1557,7 @@ h2 {
   }
 
   .material-list {
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(104px, 118px));
   }
 }
 

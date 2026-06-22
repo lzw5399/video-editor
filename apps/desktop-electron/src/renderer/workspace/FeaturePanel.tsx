@@ -151,10 +151,6 @@ function MaterialPanel({
         </nav>
 
         <div className="media-library-pane">
-          <div className="panel-header media-library-title-row">
-            <h2>{WORKSPACE_CATEGORY_META["媒体"].label}</h2>
-          </div>
-
           {showDeveloperDiagnostics ? (
             <div className="field-stack advanced-import-fields">
               <label className="field-row">
@@ -188,27 +184,27 @@ function MaterialPanel({
             <button
               type="button"
               className="media-import-button"
+              aria-label="导入素材"
               onClick={onImportMaterial}
               disabled={workspace.pendingCommand !== null}
             >
               <span className="app-icon-mask" style={iconMaskStyle("mediaImport")} aria-hidden="true" />
-              <span>导入素材</span>
+              <span>导入</span>
             </button>
+            <div className="media-search-row">
+              <input
+                aria-label="搜索素材"
+                placeholder="搜索文件名"
+                value={search}
+                onChange={(event) => setSearch(event.currentTarget.value)}
+              />
+            </div>
             <button type="button" className="media-tool-icon-button active" aria-label="列表视图" aria-pressed="true">
               <span className="app-icon-mask" style={iconMaskStyle("mediaList")} aria-hidden="true" />
             </button>
             <button type="button" className="media-tool-icon-button" aria-label="高级筛选" disabled>
               <span className="app-icon-mask" style={iconMaskStyle("mediaFilter")} aria-hidden="true" />
             </button>
-          </div>
-
-          <div className="media-search-row">
-            <input
-              aria-label="搜索素材"
-              placeholder="搜索文件名"
-              value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
-            />
           </div>
 
           <div className="material-filter-bar" role="group" aria-label="素材筛选">
