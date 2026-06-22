@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -57,6 +57,9 @@ const USER_JOURNEY_SEQUENCE_DURATION_US = 3_000_000;
 const THIRTY_FPS_FRAME_DURATION_US = 33_333;
 const SEQUENCE_END_FRAME_ALIGNED_MIN_US =
   USER_JOURNEY_SEQUENCE_DURATION_US - THIRTY_FPS_FRAME_DURATION_US - 7_000;
+const P0_USER_PORTRAIT_MATERIAL =
+  process.env.VIDEO_EDITOR_P0_USER_MATERIAL ??
+  join(process.env.HOME ?? "", "Downloads", "5300d8457cc6d4692ff5b922c089f823_raw.mp4");
 
 test("product playback helper rejects playhead-only advancement without visible compositor motion", () => {
   const before = {
@@ -321,6 +324,49 @@ test("product user can import a repo video, add it to the timeline, and see rend
       ])
     );
     expect(hostCallKinds).not.toContain("playRejectedMissingCompositor");
+  } finally {
+    await app.close();
+  }
+});
+
+test("P0 user portrait material imports, drags to timeline, presents first frame, and plays on native surface", async () => {
+  test.skip(
+    !existsSync(P0_USER_PORTRAIT_MATERIAL),
+    `P0 user material not present at ${P0_USER_PORTRAIT_MATERIAL}; set VIDEO_EDITOR_P0_USER_MATERIAL to run this local regression`
+  );
+
+  const { app, page } = await launchProductJourneyApp([P0_USER_PORTRAIT_MATERIAL]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, P0_USER_PORTRAIT_MATERIAL);
+    await dragMaterialToTimeline(app, page, P0_USER_PORTRAIT_MATERIAL);
+
+    const firstFrame = await waitForCompositedPreviewEvidence(page, app, 12_000, -1);
+    expect(firstFrame.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+    expect(firstFrame.hostState?.fallbackActive).toBe(false);
+    expect(
+      firstFrame.hostState?.contentEvidence?.targetTimeMicroseconds ?? Number.POSITIVE_INFINITY,
+      "dragging the P0 material must present a first preview frame before playback starts"
+    ).toBeLessThanOrEqual(100_000);
+
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    const { after } = await waitForProductPlaybackSuccess(page, app, firstFrame, visibleBefore, frameRequestsBeforePlay, 15_000);
+
+    expect(after.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+    expect(after.hostState?.contentEvidence?.width).toBeGreaterThan(0);
+    expect(after.hostState?.contentEvidence?.height).toBeGreaterThan(0);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-native-preview.png"),
+      await captureVisiblePreviewHostImage(page, app)
+    );
+    const hostCalls = await readRealtimePreviewHostCalls(app);
+    expectNoProductFallbackCalls(hostCalls);
+    expectNoRejectedSurfaceAcquire(hostCalls);
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
   }

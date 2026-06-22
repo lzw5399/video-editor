@@ -565,7 +565,9 @@ export async function addMaterialToTimeline(
   const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toBeVisible({ timeout: 10_000 });
-  await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
+  const addButton = materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` });
+  await expect(addButton).toBeEnabled({ timeout: 60_000 });
+  await addButton.click();
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
@@ -582,6 +584,7 @@ export async function dragMaterialToTimeline(
   const timelineDropTarget = page.locator('[data-material-drop-target="true"]');
 
   await expect(materialRow).toBeVisible({ timeout: 10_000 });
+  await expect(materialRow).toHaveAttribute("draggable", "true", { timeout: 60_000 });
   await expect(timelineDropTarget).toBeVisible();
   await materialRow.dragTo(timelineDropTarget);
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
