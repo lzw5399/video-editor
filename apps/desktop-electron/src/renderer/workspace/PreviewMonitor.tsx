@@ -301,7 +301,7 @@ export function PreviewMonitor({
     : productPreviewStatusLabel === "画面已更新，预览待刷新"
       ? productPreviewStatusLabel
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
-  const selectionOverlayStyle = showRealtimeSurface ? null : buildSelectionOverlayStyle(selectedSegment);
+  const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {

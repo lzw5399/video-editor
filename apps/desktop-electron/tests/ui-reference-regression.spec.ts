@@ -167,6 +167,15 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
 
   expect(boxes.titlebar.y, "project titlebar starts at viewport top").toBeLessThanOrEqual(1);
   expect(boxes.top.y, "feature bar below project titlebar").toBeGreaterThanOrEqual(boxes.titlebar.y + boxes.titlebar.height - 1);
+  expect(Math.abs(boxes.preview.y - boxes.top.y), `preview title row must align with feature tabs ${width}x${height}`).toBeLessThanOrEqual(
+    1
+  );
+  expect(Math.abs(boxes.inspector.y - boxes.top.y), `inspector header row must align with feature tabs ${width}x${height}`).toBeLessThanOrEqual(
+    1
+  );
+  expect(boxes.left.y, `material library must start below feature tabs ${width}x${height}`).toBeGreaterThanOrEqual(
+    boxes.top.y + boxes.top.height - 1
+  );
   expect(boxes.left.x, "left panel before preview").toBeLessThan(boxes.preview.x);
   expect(boxes.preview.x + boxes.preview.width, "preview before inspector").toBeLessThanOrEqual(boxes.inspector.x + 1);
   expect(boxes.timeline.y, "timeline below editor body").toBeGreaterThan(boxes.top.y + boxes.top.height);

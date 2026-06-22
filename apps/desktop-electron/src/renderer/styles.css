@@ -180,7 +180,7 @@ button {
 }
 
 .top-feature-bar {
-  grid-column: 1 / 4;
+  grid-column: 1;
   grid-row: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
@@ -368,12 +368,12 @@ h2 {
 
 .preview-monitor {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 2 / 4;
 }
 
 .inspector-panel {
   grid-column: 3;
-  grid-row: 3;
+  grid-row: 2 / 4;
 }
 
 .top-export-button:hover {
