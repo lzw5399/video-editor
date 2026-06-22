@@ -156,6 +156,10 @@ type RealtimePreviewHostState = {
     activeTextOverlays?: Array<{
       source: "text" | "subtitle";
       content: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
     }>;
   } | null;
   surfacePlacement?: {

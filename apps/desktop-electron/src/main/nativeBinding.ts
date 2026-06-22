@@ -610,6 +610,10 @@ export type RealtimePreviewPresentationEvidence = {
 export type RealtimePreviewTextOverlayEvidence = {
   source: "text" | "subtitle";
   content: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 export type RealtimePreviewScreenRect = {

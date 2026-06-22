@@ -2142,6 +2142,10 @@ fn native_evidence_from_scheduler(
                 |text| crate::native_preview_presenter::NativePreviewTextOverlayEvidence {
                     source: text.source,
                     content: text.content,
+                    x: text.x,
+                    y: text.y,
+                    width: text.width,
+                    height: text.height,
                 },
             )
             .collect(),

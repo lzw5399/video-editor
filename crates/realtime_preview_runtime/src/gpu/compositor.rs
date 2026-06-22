@@ -1123,6 +1123,16 @@ fn push_wgpu_text_layer_draw(
             },
         )
     };
+    let target_rect = graph_canvas_rect_to_target(
+        graph.canvas.width,
+        graph.canvas.height,
+        target.width(),
+        target.height(),
+        cached.x,
+        cached.y,
+        cached.width,
+        cached.height,
+    );
     push_wgpu_layer_draw(
         device,
         queue,
@@ -1131,10 +1141,10 @@ fn push_wgpu_text_layer_draw(
         WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
         textured_rect_vertices(
             target,
-            cached.x,
-            cached.y,
-            cached.width,
-            cached.height,
+            i64::from(target_rect.x),
+            i64::from(target_rect.y),
+            target_rect.width,
+            target_rect.height,
             text.visual.transform.opacity.value_millis.min(1_000) as f32 / 1_000.0,
         ),
     );
@@ -1963,6 +1973,68 @@ struct Dimensions {
 struct Placement {
     x: i64,
     y: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TargetRect {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+fn graph_canvas_rect_to_target(
+    canvas_width: u32,
+    canvas_height: u32,
+    target_width: u32,
+    target_height: u32,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+) -> TargetRect {
+    let canvas_width = canvas_width.max(1);
+    let canvas_height = canvas_height.max(1);
+    let output = Dimensions {
+        width: target_width.max(1),
+        height: target_height.max(1),
+    };
+    let fitted = fit_dimensions(
+        Dimensions {
+            width: canvas_width,
+            height: canvas_height,
+        },
+        output,
+        SegmentFitMode::Fit,
+    );
+    let offset_x = (output.width.saturating_sub(fitted.width)) / 2;
+    let offset_y = (output.height.saturating_sub(fitted.height)) / 2;
+    TargetRect {
+        x: offset_x.saturating_add(scale_canvas_i64(x, fitted.width, canvas_width)),
+        y: offset_y.saturating_add(scale_canvas_i64(y, fitted.height, canvas_height)),
+        width: scale_canvas_u32(width, fitted.width, canvas_width).max(1),
+        height: scale_canvas_u32(height, fitted.height, canvas_height).max(1),
+    }
+}
+
+fn scale_canvas_u32(span: u32, target_span: u32, canvas_span: u32) -> u32 {
+    round_div_u64(
+        u64::from(span) * u64::from(target_span),
+        u64::from(canvas_span.max(1)),
+    )
+    .max(1)
+    .min(u64::from(u32::MAX)) as u32
+}
+
+fn scale_canvas_i64(position: i64, target_span: u32, canvas_span: u32) -> u32 {
+    if position <= 0 {
+        return 0;
+    }
+    round_div_u64(
+        u64::try_from(position).unwrap_or(u64::MAX) * u64::from(target_span),
+        u64::from(canvas_span.max(1)),
+    )
+    .min(u64::from(u32::MAX)) as u32
 }
 
 fn fit_dimensions(source: Dimensions, output: Dimensions, fit_mode: SegmentFitMode) -> Dimensions {

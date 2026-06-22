@@ -927,8 +927,8 @@ impl ProjectSession {
                         srt_content,
                         time_offset: Some(self.playhead),
                         style: TextStyle::default(),
-                        text_box: TextBox::default(),
-                        layout_region: TextLayoutRegion::default(),
+                        text_box: default_subtitle_text_box(),
+                        layout_region: default_subtitle_layout_region(),
                         wrapping: TextWrapping::default(),
                     },
                 ))
@@ -2025,10 +2025,33 @@ fn default_text_segment(content: String, source: TextSegmentSource) -> TextSegme
             ..TextStyle::default()
         },
         text_box: TextBox::default(),
-        layout_region: TextLayoutRegion::default(),
+        layout_region: default_text_layout_region(source),
         wrapping: TextWrapping::default(),
         bubble: None,
         effect: None,
+    }
+}
+
+fn default_text_layout_region(source: TextSegmentSource) -> TextLayoutRegion {
+    match source {
+        TextSegmentSource::Text => TextLayoutRegion::safe_area(),
+        TextSegmentSource::Subtitle => default_subtitle_layout_region(),
+    }
+}
+
+fn default_subtitle_text_box() -> TextBox {
+    TextBox {
+        width_millis: 800,
+        height_millis: 180,
+    }
+}
+
+fn default_subtitle_layout_region() -> TextLayoutRegion {
+    TextLayoutRegion {
+        x_millis: 100,
+        y_millis: 720,
+        width_millis: 800,
+        height_millis: 180,
     }
 }
 

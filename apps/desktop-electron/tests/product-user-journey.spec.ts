@@ -633,6 +633,8 @@ test("product playback UAT composites video external audio text and two-cue SRT 
       "SRT import must not be faked by renderer-created text segment commands"
     ).toBe(commandCountBeforeSrt.filter((call) => call.command === "addTextSegment").length);
 
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.getByLabel("预览选中框"), "combo native host screenshots must not be satisfied by edit overlay chrome").toHaveCount(0);
     await seekTimelinePlayhead(page, app, 0);
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
@@ -651,16 +653,26 @@ test("product playback UAT composites video external audio text and two-cue SRT 
 
     const firstSubtitleEvidence = await waitForActiveSubtitleEvidence(page, app, "第一条组合字幕", 0, 1_900_000);
     mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-first-subtitle-workspace.png"),
+      fullPage: true
+    });
     writeFileSync(
       join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-first-subtitle.png"),
       firstSubtitleEvidence.hostImage
     );
+    await expectComboSubtitleNativeEvidence(page, app, firstSubtitleEvidence, "first subtitle");
     const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
     const secondSubtitleEvidence = await waitForActiveSubtitleEvidence(page, app, "第二条组合字幕", 2_000_000);
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-second-subtitle-workspace.png"),
+      fullPage: true
+    });
     writeFileSync(
       join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-second-subtitle.png"),
       secondSubtitleEvidence.hostImage
     );
+    await expectComboSubtitleNativeEvidence(page, app, secondSubtitleEvidence, "second subtitle");
 
     expect(firstSubtitleEvidence.activeTextOverlays).toEqual(
       expect.arrayContaining([
@@ -675,6 +687,10 @@ test("product playback UAT composites video external audio text and two-cue SRT 
       ])
     );
     expect(firstSubtitleEvidence.activeTextOverlays).not.toEqual(secondSubtitleEvidence.activeTextOverlays);
+    expect(
+      firstSubtitleEvidence.hostImage.equals(secondSubtitleEvidence.hostImage),
+      "native host pixels must change between the first and second subtitle cues"
+    ).toBe(false);
     expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
     expect(after.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
     expect(after.hostState?.telemetry?.presentedFrameCount ?? 0).toBeGreaterThan(
@@ -701,7 +717,8 @@ async function waitForActiveSubtitleEvidence(
   let lastEvidence: unknown = null;
 
   while (Date.now() < deadline) {
-    const evidence = (await capturePreviewEvidence(page)).hostState?.contentEvidence;
+    const previewEvidence = await capturePreviewEvidence(page);
+    const evidence = previewEvidence.hostState?.contentEvidence;
     const activeTextOverlays = evidence?.activeTextOverlays ?? [];
     const activeSubtitle = activeTextOverlays.find((text) => text.source === "subtitle")?.content ?? null;
     lastEvidence = {
@@ -717,6 +734,7 @@ async function waitForActiveSubtitleEvidence(
       activeSubtitle === subtitle
     ) {
       return {
+        previewEvidence,
         activeTextOverlays,
         targetTimeMicroseconds: evidence.targetTimeMicroseconds,
         hostImage: await captureVisiblePreviewHostImage(page, app)
@@ -726,6 +744,119 @@ async function waitForActiveSubtitleEvidence(
   }
 
   throw new Error(`Timed out waiting for active subtitle ${subtitle}: ${JSON.stringify(lastEvidence)}`);
+}
+
+async function expectComboSubtitleNativeEvidence(
+  page: Page,
+  app: Awaited<ReturnType<typeof launchProductJourneyApp>>["app"],
+  evidence: Awaited<ReturnType<typeof waitForActiveSubtitleEvidence>>,
+  label: string
+): Promise<void> {
+  expect(evidence.previewEvidence.hostState?.productReady, `${label} must use product-ready native preview`).toBe(true);
+  expect(evidence.previewEvidence.hostState?.fallbackActive, `${label} must not use fallback preview`).toBe(false);
+  expect(evidence.previewEvidence.hostState?.backend, `${label} backend`).toBe("renderGraphGpu");
+  expect(evidence.previewEvidence.hostState?.contentEvidence?.source, `${label} content source`).toBe("renderGraphGpuComposited");
+  expect(evidence.previewEvidence.hostState?.surfacePlacement, `${label} must expose native surface placement`).not.toBeNull();
+  const expectedScreenRect = await expectedPreviewHostScreenRect(page, app);
+  const placement = evidence.previewEvidence.hostState?.surfacePlacement ?? null;
+  expect(
+    maxRectDelta(placement?.hostScreenRect ?? null, expectedScreenRect),
+    `${label} host rect must match DOM preview host: ${JSON.stringify({ placement, expectedScreenRect })}`
+  ).toBeLessThanOrEqual(2);
+  expect(
+    maxRectDelta(placement?.nativeScreenRect ?? null, expectedScreenRect),
+    `${label} native rect must match DOM preview host: ${JSON.stringify({ placement, expectedScreenRect })}`
+  ).toBeLessThanOrEqual(2);
+  expect(placement?.maxDeltaPx ?? Number.POSITIVE_INFINITY, `${label} native placement delta`).toBeLessThanOrEqual(2);
+  await expectPreviewHostCoversCanvas(page);
+  const metrics = await measurePngPreviewPlacement(page, evidence.hostImage);
+  expectLandscapeNativePreviewPlacement(metrics, `combo ${label} native preview`);
+  const contentEvidence = evidence.previewEvidence.hostState?.contentEvidence;
+  const title = evidence.activeTextOverlays.find((text) => text.source === "text" && text.content === "组合标题");
+  const subtitle = evidence.activeTextOverlays.find((text) => text.source === "subtitle");
+  expect(title, `${label} must include title bbox evidence`).toBeDefined();
+  expect(subtitle, `${label} must include subtitle bbox evidence`).toBeDefined();
+  expect(contentEvidence?.height ?? 0, `${label} must expose render target height`).toBeGreaterThan(0);
+  if (title !== undefined && subtitle !== undefined) {
+    expect(
+      subtitle.y,
+      `${label} subtitle must render below title text: ${JSON.stringify({ title, subtitle })}`
+    ).toBeGreaterThan(title.y + title.height);
+    expect(
+      subtitle.y,
+      `${label} subtitle must use the lower subtitle-safe region: ${JSON.stringify({ contentEvidence, subtitle })}`
+    ).toBeGreaterThanOrEqual(Math.round((contentEvidence?.height ?? 0) * 0.55));
+    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, title, `${label} title`);
+    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, subtitle, `${label} subtitle`);
+  }
+}
+
+async function expectTextOverlayPixelsInNativeHost(
+  page: Page,
+  image: Buffer,
+  contentEvidence: { width: number; height: number } | null | undefined,
+  overlay: { x: number; y: number; width: number; height: number; content: string },
+  label: string
+): Promise<void> {
+  expect(contentEvidence?.width ?? 0, `${label} render target width`).toBeGreaterThan(0);
+  expect(contentEvidence?.height ?? 0, `${label} render target height`).toBeGreaterThan(0);
+  const whitePixelCount = await countWhiteTextPixelsInOverlay(page, image, contentEvidence, overlay);
+  expect(
+    whitePixelCount,
+    `${label} bbox must contain real white text pixels in the native host PNG: ${JSON.stringify({ overlay, contentEvidence })}`
+  ).toBeGreaterThan(80);
+}
+
+async function countWhiteTextPixelsInOverlay(
+  page: Page,
+  image: Buffer,
+  contentEvidence: { width: number; height: number } | null | undefined,
+  overlay: { x: number; y: number; width: number; height: number }
+): Promise<number> {
+  const base64 = image.toString("base64");
+  return page.evaluate(
+    async ({ pngBase64, evidenceWidth, evidenceHeight, box }) => {
+      const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (context === null) {
+        throw new Error("Canvas 2D context unavailable for text pixel measurement");
+      }
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const scaleX = evidenceWidth > 0 ? canvas.width / evidenceWidth : 1;
+      const scaleY = evidenceHeight > 0 ? canvas.height / evidenceHeight : 1;
+      const left = Math.max(0, Math.floor(box.x * scaleX));
+      const top = Math.max(0, Math.floor(box.y * scaleY));
+      const right = Math.min(canvas.width, Math.ceil((box.x + box.width) * scaleX));
+      const bottom = Math.min(canvas.height, Math.ceil((box.y + box.height) * scaleY));
+      if (right <= left || bottom <= top) {
+        return 0;
+      }
+      const data = context.getImageData(left, top, right - left, bottom - top).data;
+      let whitePixels = 0;
+      for (let index = 0; index < data.length; index += 4) {
+        const red = data[index];
+        const green = data[index + 1];
+        const blue = data[index + 2];
+        const max = Math.max(red, green, blue);
+        const min = Math.min(red, green, blue);
+        if (min >= 180 && max - min <= 90) {
+          whitePixels += 1;
+        }
+      }
+      return whitePixels;
+    },
+    {
+      pngBase64: base64,
+      evidenceWidth: contentEvidence?.width ?? 0,
+      evidenceHeight: contentEvidence?.height ?? 0,
+      box: overlay
+    }
+  );
 }
 
 type PngPreviewPlacementMetrics = {

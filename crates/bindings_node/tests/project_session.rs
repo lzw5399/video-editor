@@ -458,7 +458,12 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
     assert_eq!(subtitle.content, "播放头字幕");
     assert_eq!(subtitle.source, TextSegmentSource::Subtitle);
     assert_eq!(subtitle.style.font_size, 36);
-    assert_eq!(subtitle.text_box.height_millis, 200);
+    assert_eq!(subtitle.text_box.height_millis, 180);
+    assert_eq!(subtitle.layout_region.y_millis, 720);
+    assert!(
+        subtitle.layout_region.y_millis > text.layout_region.y_millis,
+        "project-session default subtitles must render below title text instead of overlapping it"
+    );
 
     close_project_session(json!({ "sessionId": "test-session-add-media-timing" }))
         .expect("closeProjectSession should return an envelope");

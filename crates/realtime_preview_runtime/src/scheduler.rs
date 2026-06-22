@@ -48,6 +48,10 @@ pub enum RealtimePlaybackSchedulerEvidenceSource {
 pub struct RealtimePlaybackTextOverlayEvidence {
     pub source: TextSegmentSource,
     pub content: String,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -396,7 +400,8 @@ impl RealtimePlaybackScheduler {
             preview_dimensions: self.config.preview_dimensions,
         })
         .map_err(RealtimePlaybackSchedulerError::GraphPrepare)?;
-        let active_text_overlays = active_text_overlay_evidence(&prepared.graph);
+        let active_text_overlays =
+            active_text_overlay_evidence(&prepared.graph, self.config.preview_dimensions);
         let presentation =
             presenter.present_render_graph(&prepared.graph, target_time, playback_generation)?;
         if presentation.presented_frames == 0 {
@@ -420,15 +425,99 @@ impl RealtimePlaybackScheduler {
     }
 }
 
-fn active_text_overlay_evidence(graph: &RenderGraph) -> Vec<RealtimePlaybackTextOverlayEvidence> {
+fn active_text_overlay_evidence(
+    graph: &RenderGraph,
+    target: OutputDimensions,
+) -> Vec<RealtimePlaybackTextOverlayEvidence> {
     graph
         .text_overlays
         .iter()
-        .map(|text| RealtimePlaybackTextOverlayEvidence {
-            source: text.overlay.source,
-            content: text.overlay.content.clone(),
+        .map(|text| {
+            let rect = graph_canvas_rect_to_target(
+                graph.canvas.width,
+                graph.canvas.height,
+                target.width,
+                target.height,
+                text.overlay.layout_region.x,
+                text.overlay.layout_region.y,
+                text.overlay.layout_width,
+                text.overlay.layout_height,
+            );
+            RealtimePlaybackTextOverlayEvidence {
+                source: text.overlay.source,
+                content: text.overlay.content.clone(),
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+            }
         })
         .collect()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TargetRect {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+fn graph_canvas_rect_to_target(
+    canvas_width: u32,
+    canvas_height: u32,
+    target_width: u32,
+    target_height: u32,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+) -> TargetRect {
+    let canvas_width = canvas_width.max(1);
+    let canvas_height = canvas_height.max(1);
+    let target_width = target_width.max(1);
+    let target_height = target_height.max(1);
+    let (fitted_width, fitted_height) =
+        fit_canvas_to_target(canvas_width, canvas_height, target_width, target_height);
+    let offset_x = (target_width.saturating_sub(fitted_width)) / 2;
+    let offset_y = (target_height.saturating_sub(fitted_height)) / 2;
+    TargetRect {
+        x: offset_x.saturating_add(scale_canvas_distance(x, fitted_width, canvas_width)),
+        y: offset_y.saturating_add(scale_canvas_distance(y, fitted_height, canvas_height)),
+        width: scale_canvas_span(width, fitted_width, canvas_width).max(1),
+        height: scale_canvas_span(height, fitted_height, canvas_height).max(1),
+    }
+}
+
+fn fit_canvas_to_target(
+    canvas_width: u32,
+    canvas_height: u32,
+    target_width: u32,
+    target_height: u32,
+) -> (u32, u32) {
+    if u64::from(target_width) * u64::from(canvas_height)
+        <= u64::from(target_height) * u64::from(canvas_width)
+    {
+        (
+            target_width,
+            scale_canvas_span(canvas_height, target_width, canvas_width),
+        )
+    } else {
+        (
+            scale_canvas_span(canvas_width, target_height, canvas_height),
+            target_height,
+        )
+    }
+}
+
+fn scale_canvas_span(span: u32, target_span: u32, canvas_span: u32) -> u32 {
+    scale_canvas_distance(span, target_span, canvas_span).max(1)
+}
+
+fn scale_canvas_distance(span: u32, target_span: u32, canvas_span: u32) -> u32 {
+    ((u64::from(span) * u64::from(target_span) + u64::from(canvas_span.max(1)) / 2)
+        / u64::from(canvas_span.max(1)))
+    .min(u64::from(u32::MAX)) as u32
 }
 
 #[derive(Debug)]
@@ -459,8 +548,9 @@ mod tests {
         RealtimePlaybackTimeline,
     };
     use draft_model::{
-        Draft, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate, Segment,
-        SourceTimerange, TargetTimerange, Track, TrackKind,
+        Draft, DraftCanvasConfig, Material, MaterialKind, MaterialMetadata, Microseconds,
+        RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextBox, TextLayoutRegion,
+        TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
     };
     use render_graph::{OutputDimensions, RenderGraph};
     use std::time::{Duration, Instant};
@@ -513,6 +603,41 @@ mod tests {
 
         assert!(error.to_string().contains("accepted draft snapshot"));
         assert_eq!(presenter.present_count, 0);
+    }
+
+    #[test]
+    fn scheduler_text_overlay_evidence_uses_presentation_target_coordinates() {
+        let mut scheduler = RealtimePlaybackScheduler::new(RealtimePlaybackSchedulerConfig {
+            preview_dimensions: OutputDimensions {
+                width: 1280,
+                height: 720,
+            },
+        });
+        scheduler.update_draft_snapshot(text_draft_with_low_resolution_canvas());
+        let mut presenter = RecordingPresenter::default();
+
+        let evidence = scheduler
+            .present_tick(
+                Microseconds::new(500_000),
+                PlaybackGeneration::new(7),
+                &mut presenter,
+            )
+            .expect("scheduler presents text render graph frame");
+        let text = evidence
+            .active_text_overlays
+            .first()
+            .expect("active text evidence is present");
+
+        assert_eq!(text.source, TextSegmentSource::Subtitle);
+        assert_eq!(text.content, "字幕位置证据");
+        assert!(
+            text.y >= 396,
+            "subtitle evidence must be scaled into the lower presentation target: {text:?}"
+        );
+        assert!(
+            text.width >= 1_000,
+            "text width must be scaled from the 320px draft canvas into the 1280px target: {text:?}"
+        );
     }
 
     #[test]
@@ -703,6 +828,50 @@ mod tests {
             TargetTimerange::new(0, 2_000_000),
         );
         let mut track = Track::new("track-video-001", TrackKind::Video, "视频");
+        track.segments.push(segment);
+        draft.tracks.push(track);
+        draft
+    }
+
+    fn text_draft_with_low_resolution_canvas() -> Draft {
+        let mut draft = Draft::new("draft-scheduler-text-001", "Scheduler text");
+        draft.canvas_config = DraftCanvasConfig {
+            width: 320,
+            height: 180,
+            ..DraftCanvasConfig::mvp_default()
+        };
+        let material = Material::new(
+            "material-text-001",
+            MaterialKind::Text,
+            "text://subtitle",
+            "字幕位置证据",
+        );
+        draft.materials.push(material);
+        let mut segment = Segment::new(
+            "segment-text-001",
+            "material-text-001",
+            SourceTimerange::new(0, 2_000_000),
+            TargetTimerange::new(0, 2_000_000),
+        );
+        segment.text = Some(TextSegment {
+            content: "字幕位置证据".to_owned(),
+            source: TextSegmentSource::Subtitle,
+            style: TextStyle::default(),
+            text_box: TextBox {
+                width_millis: 800,
+                height_millis: 180,
+            },
+            layout_region: TextLayoutRegion {
+                x_millis: 100,
+                y_millis: 720,
+                width_millis: 800,
+                height_millis: 180,
+            },
+            wrapping: TextWrapping::default(),
+            bubble: None,
+            effect: None,
+        });
+        let mut track = Track::new("track-text-001", TrackKind::Text, "字幕");
         track.segments.push(segment);
         draft.tracks.push(track);
         draft
