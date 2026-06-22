@@ -37,6 +37,7 @@ type WorkspaceShellProps = {
   onProbeRuntimeCapabilities: () => void;
   onExportOutputPathChange: (value: string) => void;
   onExportPresetChange: (value: ExportPreset) => void;
+  onSuspendRealtimePreviewSurface: () => Promise<void>;
   onStartExport: () => void;
   onRefreshExportStatus: () => void;
   onCancelExport: () => void;
@@ -116,6 +117,7 @@ export function WorkspaceShell({
   onProbeRuntimeCapabilities,
   onExportOutputPathChange,
   onExportPresetChange,
+  onSuspendRealtimePreviewSurface,
   onStartExport,
   onRefreshExportStatus,
   onCancelExport,
@@ -160,6 +162,15 @@ export function WorkspaceShell({
 }: WorkspaceShellProps): React.ReactElement {
   const selectedSegment = workspace.viewModel.selectedSegment;
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const openExportModal = (): void => {
+    void (async () => {
+      try {
+        await onSuspendRealtimePreviewSurface();
+      } finally {
+        setExportModalOpen(true);
+      }
+    })();
+  };
 
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
@@ -172,7 +183,7 @@ export function WorkspaceShell({
           {workspace.viewModel.project.draftName}
         </div>
         <div className="product-action-bar" aria-label="产品操作">
-          <button type="button" className="top-export-button" aria-label="导出" onClick={() => setExportModalOpen(true)}>
+          <button type="button" className="top-export-button" aria-label="导出" onClick={openExportModal}>
             <span className="app-icon-mask" style={iconMaskStyle("topExport")} aria-hidden="true" />
             <span>导出</span>
           </button>

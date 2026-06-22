@@ -348,10 +348,22 @@ test("P0 user portrait material imports, drags to timeline, presents first frame
       firstFrame.hostState?.contentEvidence?.targetTimeMicroseconds ?? Number.POSITIVE_INFINITY,
       "dragging the P0 material must present a first preview frame before playback starts"
     ).toBeLessThanOrEqual(100_000);
+    await activateProductJourneyApp(app, page);
+    const firstFrameHostImage = await captureVisiblePreviewHostImage(page, app);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-first-frame-before-play.png"),
+      firstFrameHostImage
+    );
+    const firstFrameMetrics = await measurePngLuma(page, firstFrameHostImage);
+    expect(firstFrameMetrics.width).toBeGreaterThan(100);
+    expect(firstFrameMetrics.height).toBeGreaterThan(100);
+    expect(firstFrameMetrics.mean, "first native preview frame must not be an empty black surface").toBeGreaterThan(5);
+    expect(firstFrameMetrics.mean, "first native preview frame must not be an empty white surface").toBeLessThan(250);
+    expect(firstFrameMetrics.stddev, "first native preview frame must contain visible image detail before playback").toBeGreaterThan(3);
 
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
     const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
-    await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     const { after } = await waitForProductPlaybackSuccess(page, app, firstFrame, visibleBefore, frameRequestsBeforePlay, 15_000);
 
@@ -435,10 +447,49 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     expect(Math.abs(placement?.deltaPx.y ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(2);
 
     await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "导出" })).toBeVisible();
     await expect
-      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "detachSurface"), { timeout: 5_000 })
-      .toBe(true);
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).findIndex((call) => call.kind === "detachSurface"), { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(0);
+    await expect(page.getByRole("dialog", { name: "导出" })).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback keeps native preview synced while maximizing the window", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_LONG_AV_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await activateProductJourneyApp(app, page);
+    await controls.getByRole("button", { name: "播放预览" }).click();
+
+    const { after: playing } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    const generationBeforeResize = playing.hostState?.playbackGeneration;
+    const presentedBeforeResize = playing.hostState?.telemetry?.presentedFrameCount ?? 0;
+    expect(generationBeforeResize, "playback must expose a generation before maximize").not.toBeNull();
+    const metricsBeforeResize = await app.readWindowMetrics();
+    const hostCallCountBeforeResize = (await readRealtimePreviewHostCalls(app)).length;
+
+    await app.maximizeMainWindow();
+    if (metricsBeforeResize !== null) {
+      await expect
+        .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? 0, { timeout: 5_000 })
+        .toBeGreaterThanOrEqual(metricsBeforeResize.bounds.width);
+    }
+
+    await waitForNativePreviewResizeSync(page, app, presentedBeforeResize);
+    expectRealtimePreviewResizeDidNotRestartPlayback(
+      (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeResize)
+    );
+
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
   }
@@ -637,6 +688,42 @@ async function waitForActiveSubtitleEvidence(
   throw new Error(`Timed out waiting for active subtitle ${subtitle}: ${JSON.stringify(lastEvidence)}`);
 }
 
+async function measurePngLuma(page: Page, image: Buffer): Promise<{ width: number; height: number; mean: number; stddev: number }> {
+  const base64 = image.toString("base64");
+  return page.evaluate(async (pngBase64) => {
+    const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      throw new Error("Canvas 2D context unavailable for PNG luma measurement");
+    }
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    let sum = 0;
+    let sumSquares = 0;
+    const pixelStride = 4 * 4;
+    for (let index = 0; index < data.length; index += pixelStride) {
+      const luma = 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2];
+      count += 1;
+      sum += luma;
+      sumSquares += luma * luma;
+    }
+    const mean = count === 0 ? 0 : sum / count;
+    const variance = count === 0 ? 0 : Math.max(0, sumSquares / count - mean * mean);
+    return {
+      width: canvas.width,
+      height: canvas.height,
+      mean,
+      stddev: Math.sqrt(variance)
+    };
+  }, base64);
+}
+
 test("product playback UAT keeps video presentation synchronized with timeline through sequence end", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
 
@@ -700,6 +787,74 @@ async function expectedPreviewHostScreenRect(
     width: hostRect.width,
     height: hostRect.height
   };
+}
+
+async function waitForNativePreviewResizeSync(
+  page: Page,
+  app: Awaited<ReturnType<typeof launchProductJourneyApp>>["app"],
+  presentedBeforeResize: number
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  let lastResizeEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const evidence = await capturePreviewEvidence(page);
+    const expectedScreenRect = await expectedPreviewHostScreenRect(page, app);
+    const placement = evidence.hostState?.surfacePlacement ?? null;
+    const renderedTime = evidence.hostState?.contentEvidence?.targetTimeMicroseconds ?? -1;
+    const telemetryTime = evidence.hostState?.telemetry?.targetTimeMicroseconds ?? -1;
+    const mediaClockDelta = Math.abs(renderedTime - telemetryTime);
+    const playheadDelta = Math.abs(renderedTime - evidence.timecodeUs);
+    lastResizeEvidence = {
+      generationAfterResize: evidence.hostState?.playbackGeneration ?? null,
+      presentedBeforeResize,
+      presentedAfterResize: evidence.hostState?.telemetry?.presentedFrameCount ?? 0,
+      renderedTime,
+      telemetryTime,
+      timecodeUs: evidence.timecodeUs,
+      mediaClockDelta,
+      playheadDelta,
+      placement,
+      expectedScreenRect
+    };
+    if (
+      (evidence.hostState?.telemetry?.presentedFrameCount ?? 0) > presentedBeforeResize &&
+      placement !== null &&
+      maxRectDelta(placement.hostScreenRect, expectedScreenRect) <= 2 &&
+      maxRectDelta(placement.nativeScreenRect, expectedScreenRect) <= 2 &&
+      (placement.maxDeltaPx ?? Number.POSITIVE_INFINITY) <= 2 &&
+      mediaClockDelta <= 50_000 &&
+      playheadDelta <= 300_000
+    ) {
+      return;
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`native preview must stay attached and time-synced after maximize: ${JSON.stringify(lastResizeEvidence)}`);
+}
+
+function expectRealtimePreviewResizeDidNotRestartPlayback(hostCallsAfterResize: RealtimePreviewHostCall[]): void {
+  const forbiddenRestartCommands = new Set([
+    "attachSurface",
+    "detachSurface",
+    "updateProjectSessionSnapshot",
+    "seek",
+    "play",
+    "pause",
+    "stop",
+    "schedulerPlaybackWorkerStart"
+  ]);
+  const restartCalls = hostCallsAfterResize.filter((call) => forbiddenRestartCommands.has(call.kind));
+
+  expect(
+    hostCallsAfterResize.some((call) => call.kind === "updateSurfaceBounds"),
+    `maximizing the product window must update native surface bounds: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
+  ).toBe(true);
+  expect(
+    restartCalls,
+    `surface resize must not restart playback or resync the project snapshot: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
+  ).toEqual([]);
 }
 
 async function expectPreviewHostCoversCanvas(page: Page): Promise<void> {

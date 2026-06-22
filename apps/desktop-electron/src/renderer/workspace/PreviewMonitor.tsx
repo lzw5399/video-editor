@@ -71,6 +71,11 @@ type RealtimePreviewHostRect = {
   scaleFactorMillis: number;
 };
 
+type PendingRealtimePreviewHostRect = {
+  key: string;
+  rect: RealtimePreviewHostRect;
+};
+
 type RealtimePreviewHostTelemetry = {
   firstFrameLatencyMs: number | null;
   seekLatencyMs: number | null;
@@ -423,6 +428,39 @@ export function PreviewMonitor({
 
     let cancelled = false;
     let animationFrame: number | null = null;
+    let updateInFlight = false;
+    let pendingRect: PendingRealtimePreviewHostRect | null = null;
+
+    const flushPendingRect = () => {
+      if (cancelled || updateInFlight || pendingRect === null) {
+        return;
+      }
+      const next = pendingRect;
+      pendingRect = null;
+      updateInFlight = true;
+      void bridge
+        .updateHostRect(next.rect)
+        .then((state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setNativeHostState({
+              ...INITIAL_REALTIME_PREVIEW_HOST_STATE,
+              fallbackActive: true,
+              statusLabel: "实时预览不可用",
+              fallbackLabel: "实时预览不可用：宿主通信暂不可用"
+            });
+          }
+        })
+        .finally(() => {
+          updateInFlight = false;
+          flushPendingRect();
+        });
+    };
 
     if (nativeSurfaceSuspended) {
       lastSentHostRectRef.current = null;
@@ -459,25 +497,8 @@ export function PreviewMonitor({
         return;
       }
       lastSentHostRectRef.current = rectKey;
-
-      void bridge
-        .updateHostRect(rect)
-        .then((state) => {
-          if (!cancelled) {
-            setNativeHostState(state);
-            onRealtimePreviewHostStateChange(state);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setNativeHostState({
-              ...INITIAL_REALTIME_PREVIEW_HOST_STATE,
-              fallbackActive: true,
-              statusLabel: "实时预览不可用",
-              fallbackLabel: "实时预览不可用：宿主通信暂不可用"
-            });
-          }
-        });
+      pendingRect = { key: rectKey, rect };
+      flushPendingRect();
     };
 
     const schedulePublish = () => {

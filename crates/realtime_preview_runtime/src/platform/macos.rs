@@ -9,7 +9,6 @@ use objc2_app_kit::{
     NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-use objc2_foundation::{NSDate, NSRunLoop};
 use objc2_quartz_core::{CAMetalLayer, CATransaction};
 
 use crate::gpu::surface::{
@@ -425,10 +424,6 @@ fn commit_appkit_core_animation(parent_window: &NSWindow) {
     {
         parent_window.flushWindowIfNeeded();
     }
-    CATransaction::flush();
-    let run_loop = NSRunLoop::currentRunLoop();
-    let limit = NSDate::dateWithTimeIntervalSinceNow(0.05);
-    run_loop.runUntilDate(&limit);
     CATransaction::flush();
 }
 

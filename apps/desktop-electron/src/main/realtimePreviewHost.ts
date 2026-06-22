@@ -128,6 +128,15 @@ let realtimePreviewHostIpcInstalled = false;
 let nativePreviewEventBridgeInstalled = false;
 const TELEMETRY_STATE_CHANNEL = "realtimePreviewHost:telemetryState";
 const PRESENTATION_EVENT_REFRESH_INTERVAL_MS = 250;
+const STILL_FRAME_PRESENTATION_WAIT_TIMEOUT_MS = 3_000;
+const PRESENTATION_TARGET_TOLERANCE_US = 5_000;
+
+type PendingPresentationWaiter = {
+  playbackGeneration: number;
+  targetTimeMicroseconds: number;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve: (presented: boolean) => void;
+};
 
 export function registerRealtimePreviewHost(window: BrowserWindow, assertAllowedSender: SenderAssertion): RealtimePreviewHost {
   installRealtimePreviewHostIpc(assertAllowedSender);
@@ -266,6 +275,7 @@ export class RealtimePreviewHost {
   private lastPresentationSnapshotRefreshAt = 0;
   private closed = false;
   private telemetrySubscribers = new Map<number, WebContents>();
+  private pendingPresentationWaiters = new Set<PendingPresentationWaiter>();
 
   constructor(private readonly window: BrowserWindow) {
     window.on("close", () => {
@@ -369,6 +379,7 @@ export class RealtimePreviewHost {
       droppedFrameCount: event.droppedFrameCount ?? undefined
     });
     this.applyNativeEventToCachedEvidence(event);
+    this.resolvePresentationWaiters(event);
     this.publishTelemetryState(this.shouldRefreshPresentationForNativeEvent(event));
   }
 
@@ -400,7 +411,7 @@ export class RealtimePreviewHost {
     }
   }
 
-  seek(targetTimeMicroseconds: number): RealtimePreviewHostDisplayState {
+  async seek(targetTimeMicroseconds: number): Promise<RealtimePreviewHostDisplayState> {
     try {
       this.ensureSession();
       if (this.sessionId === null) {
@@ -419,6 +430,21 @@ export class RealtimePreviewHost {
       });
       this.fallbackLabel = null;
       this.refreshPreviewState();
+      if (!this.hasPresentedTarget(response.playbackGeneration, targetTime)) {
+        const presented = await this.waitForPresentedTarget(
+          response.playbackGeneration,
+          targetTime,
+          STILL_FRAME_PRESENTATION_WAIT_TIMEOUT_MS
+        );
+        recordRealtimePreviewHostCall({
+          kind: presented ? "seekStillFramePresented" : "seekStillFrameTimeout",
+          targetTimeMicroseconds: targetTime,
+          playbackGeneration: response.playbackGeneration
+        });
+        if (presented) {
+          this.refreshPreviewState();
+        }
+      }
       return this.state("实时预览已寻帧");
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
@@ -504,6 +530,9 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
+    for (const waiter of [...this.pendingPresentationWaiters]) {
+      this.finishPresentationWaiter(waiter, false);
+    }
     if (this.sessionId === null) {
       return;
     }
@@ -703,6 +732,63 @@ export class RealtimePreviewHost {
       ...this.lastContentEvidence,
       targetTimeMicroseconds: event.targetTimeMicroseconds
     };
+  }
+
+  private hasPresentedTarget(playbackGeneration: number, targetTimeMicroseconds: number): boolean {
+    if (this.playbackGeneration !== playbackGeneration || !this.hasProductionCompositedPresenter()) {
+      return false;
+    }
+    return presentationTargetMatches(this.lastContentEvidence?.targetTimeMicroseconds, targetTimeMicroseconds);
+  }
+
+  private waitForPresentedTarget(
+    playbackGeneration: number,
+    targetTimeMicroseconds: number,
+    timeoutMs: number
+  ): Promise<boolean> {
+    if (this.hasPresentedTarget(playbackGeneration, targetTimeMicroseconds)) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      const waiter: PendingPresentationWaiter = {
+        playbackGeneration,
+        targetTimeMicroseconds,
+        timeout: setTimeout(() => {
+          this.finishPresentationWaiter(waiter, false);
+        }, timeoutMs),
+        resolve
+      };
+      this.pendingPresentationWaiters.add(waiter);
+    });
+  }
+
+  private resolvePresentationWaiters(event: RealtimePreviewBindingEvent): void {
+    if (this.pendingPresentationWaiters.size === 0) {
+      return;
+    }
+
+    for (const waiter of [...this.pendingPresentationWaiters]) {
+      if (waiter.playbackGeneration !== this.playbackGeneration) {
+        this.finishPresentationWaiter(waiter, false);
+        continue;
+      }
+      if (
+        event.kind === "framePresented" &&
+        event.playbackGeneration === waiter.playbackGeneration &&
+        presentationTargetMatches(event.targetTimeMicroseconds, waiter.targetTimeMicroseconds)
+      ) {
+        this.finishPresentationWaiter(waiter, true);
+      }
+    }
+  }
+
+  private finishPresentationWaiter(waiter: PendingPresentationWaiter, presented: boolean): void {
+    if (!this.pendingPresentationWaiters.delete(waiter)) {
+      return;
+    }
+    clearTimeout(waiter.timeout);
+    waiter.resolve(presented);
   }
 
   private applySessionPlaybackCommand(
@@ -930,6 +1016,10 @@ function maxRectDelta(first: RealtimePreviewScreenRect, second: RealtimePreviewS
     Math.abs(first.width - second.width),
     Math.abs(first.height - second.height)
   );
+}
+
+function presentationTargetMatches(actual: number | null | undefined, expected: number): boolean {
+  return typeof actual === "number" && Math.abs(actual - expected) <= PRESENTATION_TARGET_TOLERANCE_US;
 }
 
 function nativeSurfaceKind(): RealtimePreviewSurfaceDescriptor["kind"] {

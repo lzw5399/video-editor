@@ -342,37 +342,24 @@ impl RealtimePreviewBindingRegistry {
         bounds: RealtimePreviewSurfaceBoundsBindingRequest,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        let (was_playing, resume_time, cadence) = {
+        let (playback_state, target_time) = {
             let runtime = self.runtime_lock()?;
             let clock = runtime
                 .clock(runtime_id)
                 .map_err(RealtimePreviewBindingError::runtime)?;
-            let cadence = RealtimePlaybackCadence::new(clock.frame_rate(), clock.playback_rate())
-                .map_err(playback_cadence_error)?;
-            (
-                clock.state() == PlaybackState::Playing,
-                clock.position(),
-                cadence,
-            )
+            (clock.state(), clock.position())
         };
-        self.cancel_still_frame_worker(session_id);
-        if was_playing {
-            self.cancel_playback_worker(session_id);
-        }
         let generation = self
             .runtime_lock()?
             .update_surface_bounds(runtime_id, bounds.to_runtime_bounds())
             .map_err(RealtimePreviewBindingError::runtime)?;
         self.with_scheduler_mut(session_id, |scheduler| {
-            scheduler.set_active_generation(generation);
             scheduler.update_surface_bounds(bounds.to_runtime_bounds())
         })?;
-        if was_playing {
-            self.start_playback_worker(session_id, runtime_id, generation, resume_time, cadence)?;
-        } else {
-            self.start_still_frame_worker(session_id, runtime_id, generation, resume_time)?;
+        if playback_state != PlaybackState::Playing {
+            self.cancel_still_frame_worker(session_id);
+            self.start_still_frame_worker(session_id, runtime_id, generation, target_time)?;
         }
-        self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
 
@@ -3024,7 +3011,7 @@ mod realtime_preview_bindings {
     }
 
     #[test]
-    fn scheduler_surface_resize_during_playback_resumes_on_new_generation() {
+    fn scheduler_surface_resize_during_playback_keeps_generation_and_worker() {
         let (mut registry, session_id) = registry_with_session();
         registry
             .attach_surface(
@@ -3080,16 +3067,16 @@ mod realtime_preview_bindings {
                 },
             )
             .expect("surface bounds update should not stop playback");
-        assert!(
-            resized.playback_generation > play.playback_generation,
-            "surface resize advances the runtime generation"
+        assert_eq!(
+            resized.playback_generation, play.playback_generation,
+            "surface resize must not advance playback generation or restart the frame pump"
         );
 
         let mut after_resize = registry
             .telemetry(&session_id)
             .expect("scheduler telemetry is queryable after resize");
         for _ in 0..60 {
-            if after_resize.playback_generation == resized.playback_generation
+            if after_resize.playback_generation == play.playback_generation
                 && after_resize.presented_frame_count > before_resize.presented_frame_count
             {
                 break;
@@ -3101,8 +3088,8 @@ mod realtime_preview_bindings {
         }
 
         assert_eq!(
-            after_resize.playback_generation, resized.playback_generation,
-            "resize continuation should present frames under the current generation"
+            after_resize.playback_generation, play.playback_generation,
+            "resize continuation should present frames under the existing playback generation"
         );
         assert!(
             after_resize.presented_frame_count > before_resize.presented_frame_count,

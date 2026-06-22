@@ -10,7 +10,7 @@ use std::sync::{
 use std::time::Duration;
 
 use draft_model::{MaterialId, SegmentFitMode, SegmentVisual};
-use media_runtime::{ColorMatrix, ColorRange, VideoColorMetadata};
+use media_runtime::{ColorMatrix, ColorRange, ColorTransfer, VideoColorMetadata};
 use render_graph::{
     RenderCanvasBackgroundMode, RenderGraph, RenderMaterial, RenderTextOverlay, RenderVideoLayer,
 };
@@ -1249,7 +1249,7 @@ fn push_wgpu_layer_draw(
                     format: wgpu::ExternalTextureFormat::Nv12,
                     yuv_conversion_matrix: nv12_yuv_conversion_matrix(&color),
                     gamut_conversion_matrix: IDENTITY_3X3,
-                    src_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
+                    src_transfer_function: nv12_src_transfer_function(&color),
                     dst_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
                     sample_transform: IDENTITY_3X2,
                     load_transform: IDENTITY_3X2,
@@ -1652,6 +1652,33 @@ fn nv12_yuv_conversion_matrix(color: &VideoColorMetadata) -> [f32; 16] {
         ColorRange::Limited | ColorRange::Unknown => Nv12Range::Limited,
     };
     yuv_to_rgba_matrix(kr, kb, range)
+}
+
+fn nv12_src_transfer_function(color: &VideoColorMetadata) -> wgpu::ExternalTextureTransferFunction {
+    match color.transfer {
+        ColorTransfer::Srgb => srgb_transfer_function(),
+        ColorTransfer::Bt709 | ColorTransfer::Unknown | ColorTransfer::Pq | ColorTransfer::Hlg => {
+            bt709_transfer_function()
+        }
+    }
+}
+
+fn bt709_transfer_function() -> wgpu::ExternalTextureTransferFunction {
+    wgpu::ExternalTextureTransferFunction {
+        a: 1.099,
+        b: 0.018,
+        g: 1.0 / 0.45,
+        k: 4.5,
+    }
+}
+
+fn srgb_transfer_function() -> wgpu::ExternalTextureTransferFunction {
+    wgpu::ExternalTextureTransferFunction {
+        a: 1.055,
+        b: 0.003_130_8,
+        g: 2.4,
+        k: 12.92,
+    }
 }
 
 fn yuv_to_rgba_matrix(kr: f32, kb: f32, range: Nv12Range) -> [f32; 16] {
@@ -2133,6 +2160,34 @@ mod tests {
         let limited = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Limited));
 
         assert_eq!(unknown, limited);
+    }
+
+    #[test]
+    fn nv12_unknown_transfer_defaults_to_bt709_linear_sampling_contract() {
+        let transfer = nv12_src_transfer_function(&VideoColorMetadata::unknown_with_diagnostic(
+            "container omitted color metadata",
+        ));
+
+        assert_close(transfer.a, 1.099);
+        assert_close(transfer.b, 0.018);
+        assert_close(transfer.g, 1.0 / 0.45);
+        assert_close(transfer.k, 4.5);
+    }
+
+    #[test]
+    fn nv12_srgb_transfer_uses_srgb_linear_sampling_contract() {
+        let transfer = nv12_src_transfer_function(&VideoColorMetadata {
+            primaries: ColorPrimaries::Bt709,
+            transfer: ColorTransfer::Srgb,
+            matrix: ColorMatrix::Bt709,
+            range: ColorRange::Limited,
+            diagnostics: Vec::new(),
+        });
+
+        assert_close(transfer.a, 1.055);
+        assert_close(transfer.b, 0.003_130_8);
+        assert_close(transfer.g, 2.4);
+        assert_close(transfer.k, 12.92);
     }
 
     #[test]

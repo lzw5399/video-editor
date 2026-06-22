@@ -77,6 +77,7 @@ type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
 
 const SEQUENCE_END_EPSILON_US = 7_000;
+const REALTIME_PREVIEW_TARGET_TOLERANCE_US = 5_000;
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
@@ -2005,8 +2006,13 @@ export function App(): React.ReactElement {
         setPlaybackRunning(false);
         return;
       }
+      const audioReady = await handlePlayAudioPreview();
+      if (!audioReady) {
+        await pauseRealtimePreviewHost();
+        setPlaybackRunning(false);
+        return;
+      }
       setPlaybackRunning(true);
-      void handlePlayAudioPreview();
     })();
   }
 
@@ -2040,7 +2046,11 @@ export function App(): React.ReactElement {
       rawPresentedTime,
       sequenceDurationUs
     );
-    const nextPlayhead = frameAlignedAtEnd ? sequenceDurationUs : normalizePlayheadTime(rawPresentedTime);
+    const presentedPlayhead = frameAlignedAtEnd ? sequenceDurationUs : normalizePlayheadTime(rawPresentedTime);
+    const nextPlayhead =
+      playbackRunning && !frameAlignedAtEnd
+        ? Math.max(playheadRef.current, presentedPlayhead)
+        : presentedPlayhead;
     setPlayheadUs(nextPlayhead);
     playheadRef.current = nextPlayhead;
 
@@ -2108,8 +2118,9 @@ export function App(): React.ReactElement {
     }
 
     try {
-      const ok = applyRealtimePreviewHostState(await bridge.seek(sanitizedTargetTime));
-      if (ok) {
+      const hostState = await bridge.seek(sanitizedTargetTime);
+      const ok = applyRealtimePreviewHostState(hostState);
+      if (ok && realtimePreviewHostPresentedTarget(hostState, sanitizedTargetTime)) {
         realtimePreviewLastSeekTargetRef.current = sanitizedTargetTime;
       }
       return ok;
@@ -2169,6 +2180,24 @@ export function App(): React.ReactElement {
     }
   }
 
+  async function suspendRealtimePreviewSurface(): Promise<void> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    if (bridge === undefined) {
+      return;
+    }
+
+    try {
+      const ok = applyRealtimePreviewHostState(await bridge.detachSurface());
+      if (ok) {
+        realtimePreviewLastSeekTargetRef.current = null;
+      }
+    } catch (error: unknown) {
+      applyRealtimePreviewHostError(
+        showDeveloperDiagnostics ? (error instanceof Error ? error.message : String(error)) : "预览画面暂不可用"
+      );
+    }
+  }
+
   function applyRealtimePreviewHostState(hostState: RealtimePreviewHostState): boolean {
     if (hostState.ok) {
       return true;
@@ -2195,18 +2224,23 @@ export function App(): React.ReactElement {
     return false;
   }
 
-  async function handlePlayAudioPreview(): Promise<void> {
+  async function handlePlayAudioPreview(): Promise<boolean> {
+    const audioExpected = timelineHasAudibleMediaFrom(workspaceRef.current, playheadRef.current);
+    if (!audioExpected) {
+      return true;
+    }
+
     const sessionId = await ensureAudioPreviewSession();
     if (sessionId === null) {
-      return;
+      return false;
     }
 
     await refreshAudioDevices();
     const projectSession = currentProjectSessionAudioRequest("播放音频");
     if (projectSession === null) {
-      return;
+      return false;
     }
-    await executeAudioCommand<AudioPreviewCommandResponse>(
+    const result = await executeAudioCommand<AudioPreviewCommandResponse>(
       (current) =>
         window.videoEditorCore.playAudioPreview({
           projectSessionId: projectSession.projectSessionId,
@@ -2218,6 +2252,7 @@ export function App(): React.ReactElement {
       "播放音频",
       applyAudioPreviewCommandResult
     );
+    return result?.ok === true && result.data?.accepted === true && result.data.status === "playing";
   }
 
   async function handlePauseAudioPreview(): Promise<void> {
@@ -2448,6 +2483,7 @@ export function App(): React.ReactElement {
       onProbeRuntimeCapabilities={handleProbeRuntimeCapabilities}
       onExportOutputPathChange={handleExportOutputPathChange}
       onExportPresetChange={handleExportPresetChange}
+      onSuspendRealtimePreviewSurface={suspendRealtimePreviewSurface}
       onStartExport={handleStartExport}
       onRefreshExportStatus={handleRefreshExportStatus}
       onCancelExport={handleCancelExport}
@@ -2741,6 +2777,30 @@ function isFrameAlignedSequenceEnd(
   }
   const endToleranceUs = workspace.viewModel.project.frameDuration + SEQUENCE_END_EPSILON_US;
   return normalizePlayheadTime(presentedTimeUs) >= Math.max(0, sequenceDurationUs - endToleranceUs);
+}
+
+function realtimePreviewHostPresentedTarget(hostState: RealtimePreviewHostState, targetTime: number): boolean {
+  return (
+    hostState.productReady &&
+    hostState.contentEvidence !== null &&
+    Math.abs(hostState.contentEvidence.targetTimeMicroseconds - targetTime) <= REALTIME_PREVIEW_TARGET_TOLERANCE_US
+  );
+}
+
+function timelineHasAudibleMediaFrom(workspace: WorkspaceState, targetTime: number): boolean {
+  const normalizedTarget = normalizePlayheadTime(targetTime);
+  return workspace.viewModel.timeline.rows.some((row) => {
+    if (row.muteActive) {
+      return false;
+    }
+    return row.segments.some((segment) => {
+      const material = segment.material;
+      if (material === null || material.status !== "available" || !material.metadata.hasAudio) {
+        return false;
+      }
+      return segment.start + segment.duration > normalizedTarget;
+    });
+  });
 }
 
 function firstAudioMaterialId(workspace: WorkspaceState): string | null {

@@ -179,6 +179,7 @@ export type ProductJourneyAppController = {
   readRealtimePreviewHostCalls: () => Promise<RealtimePreviewHostCall[]>;
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
   readWindowMetrics: () => Promise<ProductWindowMetrics | null>;
+  maximizeMainWindow: () => Promise<ProductWindowMetrics | null>;
 };
 
 export type PreviewEvidence = {
@@ -1087,6 +1088,19 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
           contentBounds: window.getContentBounds(),
           displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
         };
+      }),
+    maximizeMainWindow: async () =>
+      app.evaluate(({ BrowserWindow, screen }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (window === undefined) {
+          return null;
+        }
+        window.maximize();
+        return {
+          bounds: window.getBounds(),
+          contentBounds: window.getContentBounds(),
+          displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+        };
       })
   };
 }
@@ -1099,7 +1113,8 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
     readNativeCommandObservations: async () => (await app.readNativeCommandObservations()) as NativeCommandObservation[],
     readProjectSessionCalls: async () => (await app.readProjectSessionCalls()) as ProjectSessionCall[],
     readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[],
-    readWindowMetrics: () => app.readWindowMetrics()
+    readWindowMetrics: () => app.readWindowMetrics(),
+    maximizeMainWindow: () => app.maximizeMainWindow()
   };
 }
 

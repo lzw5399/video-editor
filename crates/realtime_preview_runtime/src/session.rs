@@ -195,7 +195,6 @@ impl RealtimePreviewRuntime {
             .surface
             .update_bounds(bounds)
             .map_err(|source| RealtimePreviewError::Surface { session_id, source })?;
-        session.clock.accepted_edit();
         Ok(session.clock.generation())
     }
 
@@ -504,3 +503,70 @@ impl fmt::Display for RealtimePreviewError {
 }
 
 impl Error for RealtimePreviewError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{PlaybackState, gpu::NativeParentWindowHandle};
+
+    fn runtime_with_surface() -> (RealtimePreviewRuntime, PreviewSessionId) {
+        let mut runtime = RealtimePreviewRuntime::new();
+        let session_id = runtime
+            .create_session(RealtimePreviewSessionConfig {
+                session_label: "runtime-session-test".to_owned(),
+                preferred_backend: PreviewGpuBackend::Mock,
+                frame_rate: RationalFrameRate {
+                    numerator: 30,
+                    denominator: 1,
+                },
+                playback_rate: PlaybackRate::normal(),
+            })
+            .expect("session can be created");
+        runtime
+            .attach_surface(
+                session_id,
+                PreviewSurfaceDescriptor::NativeChild {
+                    parent_window_handle: NativeParentWindowHandle::Mock(42),
+                    bounds: PreviewSurfaceBounds {
+                        x: 0,
+                        y: 0,
+                        width: 640,
+                        height: 360,
+                        scale_factor_millis: 1000,
+                    },
+                },
+            )
+            .expect("mock surface can be attached");
+        (runtime, session_id)
+    }
+
+    #[test]
+    fn update_surface_bounds_keeps_playback_generation_and_state() {
+        let (mut runtime, session_id) = runtime_with_surface();
+        let play_generation = runtime.play(session_id).expect("session can play");
+
+        let resize_generation = runtime
+            .update_surface_bounds(
+                session_id,
+                PreviewSurfaceBounds {
+                    x: 10,
+                    y: 12,
+                    width: 800,
+                    height: 450,
+                    scale_factor_millis: 1000,
+                },
+            )
+            .expect("surface bounds can be updated");
+        let clock = runtime.clock(session_id).expect("clock is queryable");
+
+        assert_eq!(
+            resize_generation, play_generation,
+            "surface geometry changes must not cancel or replace the active playback generation"
+        );
+        assert_eq!(
+            clock.state(),
+            PlaybackState::Playing,
+            "surface geometry changes must not pause playback"
+        );
+    }
+}

@@ -518,6 +518,19 @@ if (testObservationEnabled) {
       displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
     };
   });
+  ipcMain.handle("test:maximizeMainWindow", (event): TestWindowMetrics => {
+    assertAllowedIpcSender(event);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window === null) {
+      throw new Error("No BrowserWindow is associated with the test observation sender");
+    }
+    window.maximize();
+    return {
+      bounds: window.getBounds(),
+      contentBounds: window.getContentBounds(),
+      displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+    };
+  });
 }
 
 async function createWindow(): Promise<void> {
