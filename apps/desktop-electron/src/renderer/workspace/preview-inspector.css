@@ -1,6 +1,6 @@
 .preview-shell {
   display: grid;
-  grid-template-rows: 26px minmax(170px, 1fr) 32px 58px 20px;
+  grid-template-rows: 26px minmax(0, 1fr) 32px;
   gap: 4px;
   width: min(100%, 840px);
   min-width: 0;
@@ -54,9 +54,8 @@
   display: grid;
   justify-self: center;
   place-items: center;
-  width: auto;
-  height: 100%;
-  max-width: min(100%, 560px);
+  width: min(100%, 560px);
+  height: auto;
   aspect-ratio: 16 / 9;
   min-height: 0;
   max-height: 100%;

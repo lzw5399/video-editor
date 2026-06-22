@@ -179,6 +179,9 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.preview, boxes.timeline, "预览窗口", "时间线");
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
 
+  const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
+  expect(previewCanvas.width / boxes.preview.width, `预览画布应填充预览窗口 ${width}x${height}`).toBeGreaterThanOrEqual(0.7);
+
   const exportButtonBox = await stableBox(page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }), "顶部导出");
   expect(exportButtonBox.x, "export action is top-right").toBeGreaterThan(width - 180);
   await expectNoDebugCopy(page.locator("body"));

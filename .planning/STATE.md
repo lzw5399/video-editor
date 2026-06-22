@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-mt49 hide timeline material quick add
-last_updated: "2026-06-22T06:11:49Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-mt49: hide timeline material quick add
+stopped_at: Completed quick task 260622-mp50 preview canvas fill
+last_updated: "2026-06-22T06:21:19Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-mp50: preview canvas fill
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-mt49: hide timeline material quick add
+Last activity: 2026-06-22 -- Completed quick task 260622-mp50: preview canvas fill
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-mp50-preview-canvas-fill | Fixed product preview canvas sizing by removing unused product grid rows, making the monitor width-driven, adding a fill-ratio UI gate, and revalidating static, narrow, packaged, and playing native-surface screenshots. |
 | 2026-06-22 | 260622-mt49-hide-timeline-material-quick-add | Hid the product timeline material select and quick-add shortcut so drag from the media grid remains the primary material-to-timeline path, kept the diagnostic-only material-id intent fallback, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-mr48-preview-empty-monitor | Reduced the product preview empty state from a bordered instruction-card feel to a quiet monitor surface while preserving canvas geometry, realtime host DOM, product copy, and build/workspace/UI/source guard gates. |
 | 2026-06-22 | 260622-mh47-material-card-icon-action | Replaced the dominant material-card `添加到时间线` text button with a compact thumbnail-corner SVG add action, kept drag-to-timeline visually primary, preserved the material-id-only Rust intent path, and revalidated build, workspace, UI reference, and source guards. |
