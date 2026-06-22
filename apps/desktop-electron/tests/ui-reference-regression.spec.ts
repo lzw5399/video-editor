@@ -23,8 +23,8 @@ const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const FORBIDDEN_DEFAULT_COPY =
   /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
-const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效"] as const;
-const OVERFLOW_TOP_CATEGORIES = ["转场", "字幕", "智能包装", "滤镜", "调节", "数字人"] as const;
+const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
+const OVERFLOW_TOP_CATEGORIES = ["智能包装", "滤镜", "调节", "数字人"] as const;
 const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
 
 test.describe.configure({ timeout: 90_000 });
@@ -227,6 +227,14 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
 async function expectTopFeatureNavigationChrome(page: Page): Promise<void> {
   const nav = page.getByRole("navigation", { name: "顶部功能区" });
   await expect(nav.locator(".category-button .category-label")).toHaveText([...VISIBLE_TOP_CATEGORIES]);
+  const navBox = await stableBox(nav, "顶部功能区导航");
+  for (const category of VISIBLE_TOP_CATEGORIES) {
+    const buttonBox = await stableBox(nav.getByRole("button", { name: category }), `顶部功能 ${category}`);
+    expect(buttonBox.x, `${category} must not be clipped by the nav left edge`).toBeGreaterThanOrEqual(navBox.x - 1);
+    expect(buttonBox.x + buttonBox.width, `${category} must not be clipped by the nav right edge`).toBeLessThanOrEqual(
+      navBox.x + navBox.width + 1
+    );
+  }
   const overflow = page.getByRole("button", { name: "更多功能" });
   await expect(overflow).toBeEnabled();
   await overflow.click();

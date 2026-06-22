@@ -253,12 +253,12 @@ h2 {
 .category-button {
   position: relative;
   display: grid;
-  flex: 0 0 54px;
+  flex: 0 0 40px;
   grid-template-rows: 19px 15px;
   align-items: center;
   justify-items: center;
   height: 43px;
-  padding: 4px 2px 3px;
+  padding: 4px 1px 3px;
   border: 1px solid transparent;
   border-radius: 5px;
   color: #bfbdb6;
@@ -278,9 +278,9 @@ h2 {
 
 .category-button.active::after {
   position: absolute;
-  right: 9px;
+  right: 7px;
   bottom: 1px;
-  left: 9px;
+  left: 7px;
   height: 2px;
   border-radius: 2px;
   background: #20c7d9;
@@ -1851,13 +1851,13 @@ h2 {
   }
 
   .category-nav {
-    gap: 4px;
+    gap: 1px;
   }
 
   .category-button {
-    flex-basis: 56px;
-    padding-right: 2px;
-    padding-left: 2px;
+    flex-basis: 40px;
+    padding-right: 1px;
+    padding-left: 1px;
   }
 
 }
