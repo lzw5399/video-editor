@@ -10,6 +10,9 @@ import categoryTemplateIconUrl from "./category-template.svg";
 import categoryTextIconUrl from "./category-text.svg";
 import categoryTransitionIconUrl from "./category-transition.svg";
 import deleteIconUrl from "./delete.svg";
+import mediaFilterIconUrl from "./media-filter.svg";
+import mediaImportIconUrl from "./media-import.svg";
+import mediaListIconUrl from "./media-list.svg";
 import pauseIconUrl from "./pause.svg";
 import playIconUrl from "./play.svg";
 import previewFitIconUrl from "./preview-fit.svg";
@@ -44,6 +47,9 @@ export const appIconUrls = {
   categoryText: categoryTextIconUrl,
   categoryTransition: categoryTransitionIconUrl,
   delete: deleteIconUrl,
+  mediaFilter: mediaFilterIconUrl,
+  mediaImport: mediaImportIconUrl,
+  mediaList: mediaListIconUrl,
   pause: pauseIconUrl,
   play: playIconUrl,
   previewFit: previewFitIconUrl,

@@ -161,6 +161,21 @@
       "name": "zoomOut",
       "source": "icons/ToolBar/btnZoomOutN.svg",
       "target": "apps/desktop-electron/src/renderer/assets/icons/zoom-out.svg"
+    },
+    {
+      "name": "mediaImport",
+      "source": "icons/ToolBar/addTimeline.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/media-import.svg"
+    },
+    {
+      "name": "mediaList",
+      "source": "icons/ToolBar/more_timeline_4.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/media-list.svg"
+    },
+    {
+      "name": "mediaFilter",
+      "source": "icons/Canvas/TrackHeader/filter.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/media-filter.svg"
     }
   ]
 }

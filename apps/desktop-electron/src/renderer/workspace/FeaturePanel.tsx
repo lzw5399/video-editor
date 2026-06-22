@@ -148,11 +148,8 @@ function MaterialPanel({
         </nav>
 
         <div className="media-library-pane">
-          <div className="panel-header">
+          <div className="panel-header media-library-title-row">
             <h2>媒体</h2>
-            <button type="button" className="primary-action" onClick={onImportMaterial} disabled={workspace.pendingCommand !== null}>
-              导入素材
-            </button>
           </div>
 
           {showDeveloperDiagnostics ? (
@@ -184,7 +181,25 @@ function MaterialPanel({
             </div>
           ) : null}
 
-          <div className="media-tool-row">
+          <div className="media-toolbar" role="group" aria-label="媒体工具">
+            <button
+              type="button"
+              className="media-import-button"
+              onClick={onImportMaterial}
+              disabled={workspace.pendingCommand !== null}
+            >
+              <span className="app-icon-mask" style={iconMaskStyle("mediaImport")} aria-hidden="true" />
+              <span>导入素材</span>
+            </button>
+            <button type="button" className="media-tool-icon-button active" aria-label="列表视图" aria-pressed="true">
+              <span className="app-icon-mask" style={iconMaskStyle("mediaList")} aria-hidden="true" />
+            </button>
+            <button type="button" className="media-tool-icon-button" aria-label="高级筛选" disabled>
+              <span className="app-icon-mask" style={iconMaskStyle("mediaFilter")} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="media-search-row">
             <input
               aria-label="搜索素材"
               placeholder="搜索素材"
