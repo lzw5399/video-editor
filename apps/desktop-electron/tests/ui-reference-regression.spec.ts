@@ -63,9 +63,11 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
   try {
     await expectWorkspaceHierarchy(app, page, 1280, 800);
     await capturePhaseScreenshot(page, "workspace-1280x800.png");
+    await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png");
 
     await expectWorkspaceHierarchy(app, page, 1120, 720);
     await capturePhaseScreenshot(page, "workspace-1120x720.png");
+    await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png");
   } finally {
     await app.close();
   }
@@ -180,6 +182,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.left, boxes.timeline, "素材面板", "时间线");
   expectNoOverlap(boxes.preview, boxes.timeline, "预览窗口", "时间线");
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
+  await expectMaterialLibraryGeometry(page, width);
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
   expect(previewCanvas.x, `预览画布左侧不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.x);
@@ -259,6 +262,40 @@ async function collectProductSurfaceCopy(locator: Locator): Promise<string> {
 async function capturePhaseScreenshot(page: Page, filename: string): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
   await page.screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename), fullPage: true });
+}
+
+async function captureMaterialLibraryScreenshot(page: Page, filename: string): Promise<void> {
+  mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  await page.locator('[aria-label="素材面板"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function expectMaterialLibraryGeometry(page: Page, width: number): Promise<void> {
+  const materialPanel = page.locator('[aria-label="素材面板"]');
+  const sourceRail = page.locator(".media-source-rail");
+  const libraryPane = page.locator(".media-library-pane");
+  const materialCard = page.locator(".material-row").first();
+  const thumbnail = materialCard.locator(".material-thumb");
+  const copy = materialCard.locator(".material-copy");
+  const panelBox = await stableBox(materialPanel, `素材面板 ${width}`);
+  const railBox = await stableBox(sourceRail, `媒体来源 ${width}`);
+  const paneBox = await stableBox(libraryPane, `素材库 ${width}`);
+
+  expect(panelBox.width, `left material panel should keep Jianying-like workspace width ${width}`).toBeGreaterThanOrEqual(
+    width <= 1199 ? 350 : 400
+  );
+  expect(railBox.width, `source rail should remain a real source column ${width}`).toBeGreaterThanOrEqual(width <= 1199 ? 98 : 118);
+  expect(paneBox.width, `material library pane should not collapse ${width}`).toBeGreaterThanOrEqual(width <= 1199 ? 220 : 250);
+  expectNoOverlap(railBox, paneBox, "媒体来源", "素材库");
+  await expect(sourceRail.locator("button")).toHaveText(["导入", "我的", "AI生成", "云素材", "官方素材", "即梦AI"]);
+  await expect(sourceRail.locator(".media-source-chevron")).toHaveCount(5);
+  await expect(page.getByLabel("搜索素材")).toHaveAttribute("placeholder", "搜索文件名");
+
+  const cardBox = await stableBox(materialCard, `素材卡片 ${width}`);
+  const thumbBox = await stableBox(thumbnail, `素材缩略图 ${width}`);
+  const copyBox = await stableBox(copy, `素材标题 ${width}`);
+  expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(120);
+  expect(thumbBox.y, `thumbnail must stay above title ${width}`).toBeLessThan(copyBox.y);
+  expect(Math.abs(thumbBox.x - cardBox.x), `thumbnail should align with card left edge ${width}`).toBeLessThanOrEqual(1);
 }
 
 function readReferenceManifest(): ReferenceManifest {

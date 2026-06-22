@@ -65,7 +65,8 @@ const MEDIA_SOURCE_SECTIONS: readonly MediaSourceSection[] = [
   { label: "我的", active: false, disabled: true },
   { label: "AI生成", active: false, disabled: true },
   { label: "云素材", active: false, disabled: true },
-  { label: "官方素材", active: false, disabled: true }
+  { label: "官方素材", active: false, disabled: true },
+  { label: "即梦AI", active: false, disabled: true }
 ];
 
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
@@ -143,7 +144,8 @@ function MaterialPanel({
               aria-current={section.active ? "page" : undefined}
               disabled={section.disabled}
             >
-              {section.label}
+              <span className="media-source-label">{section.label}</span>
+              {section.label === "即梦AI" ? null : <span className="media-source-chevron" aria-hidden="true" />}
             </button>
           ))}
         </nav>
@@ -203,7 +205,7 @@ function MaterialPanel({
           <div className="media-search-row">
             <input
               aria-label="搜索素材"
-              placeholder="搜索素材"
+              placeholder="搜索文件名"
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}
             />

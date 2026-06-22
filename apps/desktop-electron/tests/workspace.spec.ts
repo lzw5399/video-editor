@@ -345,6 +345,7 @@ async function expectProfessionalWorkspaceAtViewport(
   height: number
 ): Promise<void> {
   await setViewportSizeAndVerifyLayout(app, page, width, height);
+  await expectMaterialLibraryReferenceLayout(page, width);
   await expectNoCategoryLabelWrap(page);
   await expectPreviewCanvasAspectRatio(page);
   await expectIconButtonsHaveAccessibleNames(page);
@@ -556,6 +557,38 @@ async function expectNoLeftSecondaryMenu(page: Page): Promise<void> {
   }
 }
 
+async function expectMaterialLibraryReferenceLayout(page: Page, viewportWidth: number): Promise<void> {
+  const materialPanel = page.locator('[aria-label="素材面板"]');
+  const sourceRail = page.locator(".media-source-rail");
+  const libraryPane = page.locator(".media-library-pane");
+  const sourceButtons = sourceRail.locator("button");
+  const firstMaterial = page.locator(".material-row").first();
+  const firstThumb = firstMaterial.locator(".material-thumb");
+  const firstCopy = firstMaterial.locator(".material-copy");
+
+  const panelBox = await expectStableBox(materialPanel, `素材面板 ${viewportWidth}`);
+  const railBox = await expectStableBox(sourceRail, `媒体来源 ${viewportWidth}`);
+  const paneBox = await expectStableBox(libraryPane, `素材库 ${viewportWidth}`);
+  expect(panelBox.width, `素材面板不能退回窄侧栏 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 350 : 400);
+  expect(railBox.width, `媒体来源列宽 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 98 : 118);
+  expect(paneBox.width, `素材内容列宽 ${viewportWidth}`).toBeGreaterThanOrEqual(viewportWidth <= 1199 ? 220 : 250);
+  expectNoOverlap(railBox, paneBox, "媒体来源", "素材库");
+
+  await expect(sourceButtons).toHaveText(["导入", "我的", "AI生成", "云素材", "官方素材", "即梦AI"]);
+  await expect(sourceRail.locator(".media-source-chevron")).toHaveCount(5);
+  await expect(sourceButtons.nth(5).locator(".media-source-chevron")).toHaveCount(0);
+
+  const rowBox = await expectStableBox(firstMaterial, `素材卡片 ${viewportWidth}`);
+  const thumbBox = await expectStableBox(firstThumb, `素材缩略图 ${viewportWidth}`);
+  const copyBox = await expectStableBox(firstCopy, `素材标题区 ${viewportWidth}`);
+  expect(rowBox.height, `素材卡片必须保持卡片形态 ${viewportWidth}`).toBeGreaterThanOrEqual(120);
+  expect(thumbBox.y, `缩略图应位于标题上方 ${viewportWidth}`).toBeLessThan(copyBox.y);
+  expect(Math.abs(thumbBox.x - rowBox.x), `缩略图不应退回横向列表 ${viewportWidth}`).toBeLessThanOrEqual(1);
+
+  const overflow = await materialPanel.evaluate((node) => node.scrollWidth - node.clientWidth);
+  expect(overflow, `素材面板不能水平溢出 ${viewportWidth}`).toBeLessThanOrEqual(2);
+}
+
 async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
@@ -653,9 +686,10 @@ test("Chinese editor workspace opens with required regions and material states",
     const mediaSourceRail = page.getByRole("navigation", { name: "媒体来源" });
     await expect(mediaSourceRail).toBeVisible();
     await expect(mediaSourceRail.getByRole("button", { name: "导入" })).toHaveAttribute("aria-current", "page");
-    for (const source of ["我的", "AI生成", "云素材", "官方素材"]) {
+    for (const source of ["我的", "AI生成", "云素材", "官方素材", "即梦AI"]) {
       await expect(mediaSourceRail.getByRole("button", { name: source })).toBeDisabled();
     }
+    await expectMaterialLibraryReferenceLayout(page, 1280);
     await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
     await expect(page.getByLabel("素材路径")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "导入路径" })).toHaveCount(0);
@@ -667,7 +701,7 @@ test("Chinese editor workspace opens with required regions and material states",
       await expect(materialPanel.getByText(label, { exact: true })).toHaveCount(0);
       await expect(materialPanel.getByRole("button", { name: label })).toHaveCount(0);
     }
-    await expect(page.getByPlaceholder("搜索素材")).toBeVisible();
+    await expect(page.getByLabel("搜索素材")).toHaveAttribute("placeholder", "搜索文件名");
     const materialFilters = page.getByRole("group", { name: "素材筛选" });
     for (const filter of ["全部", "视频", "图片", "音频", "丢失"]) {
       await expect(materialFilters.getByRole("button", { name: filter })).toBeVisible();
