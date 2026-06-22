@@ -2592,9 +2592,9 @@ mod realtime_preview_bindings {
         RealtimePreviewBindingRegistry, RealtimePreviewBindingScheduler,
         RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
         RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
-        RealtimePreviewSurfaceBoundsBindingRequest, RealtimePreviewTextureCache,
-        SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider, SchedulerMediaPipeline,
-        StaticImageFrame,
+        RealtimePreviewSurfaceBoundsBindingRequest, RealtimePreviewTelemetryBindingResponse,
+        RealtimePreviewTextureCache, SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider,
+        SchedulerMediaPipeline, StaticImageFrame,
     };
     use crate::native_preview_presenter::{
         NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
@@ -3011,7 +3011,7 @@ mod realtime_preview_bindings {
     }
 
     #[test]
-    fn scheduler_surface_resize_during_playback_keeps_generation_and_worker() {
+    fn scheduler_surface_resize_during_playback_grow_and_shrink_keeps_generation_and_worker() {
         let (mut registry, session_id) = registry_with_session();
         registry
             .attach_surface(
@@ -3055,46 +3055,79 @@ mod realtime_preview_bindings {
             "playback should present at least one frame before resize"
         );
 
-        let resized = registry
-            .update_surface_bounds(
-                &session_id,
-                RealtimePreviewSurfaceBoundsBindingRequest {
-                    x: 4,
-                    y: 6,
-                    width: 800,
-                    height: 450,
-                    scale_factor_millis: 1000,
-                },
-            )
-            .expect("surface bounds update should not stop playback");
-        assert_eq!(
-            resized.playback_generation, play.playback_generation,
-            "surface resize must not advance playback generation or restart the frame pump"
+        let after_grow = assert_resize_continues_playback(
+            &mut registry,
+            &session_id,
+            RealtimePreviewSurfaceBoundsBindingRequest {
+                x: 4,
+                y: 6,
+                width: 800,
+                height: 450,
+                scale_factor_millis: 1000,
+            },
+            play.playback_generation,
+            before_resize.presented_frame_count,
+            "grow",
         );
 
-        let mut after_resize = registry
-            .telemetry(&session_id)
-            .expect("scheduler telemetry is queryable after resize");
+        assert_resize_continues_playback(
+            &mut registry,
+            &session_id,
+            RealtimePreviewSurfaceBoundsBindingRequest {
+                x: 2,
+                y: 3,
+                width: 320,
+                height: 180,
+                scale_factor_millis: 1000,
+            },
+            play.playback_generation,
+            after_grow.presented_frame_count,
+            "shrink",
+        );
+    }
+
+    fn assert_resize_continues_playback(
+        registry: &mut RealtimePreviewBindingRegistry,
+        session_id: &str,
+        bounds: RealtimePreviewSurfaceBoundsBindingRequest,
+        expected_generation: u64,
+        presented_before_resize: u64,
+        direction: &str,
+    ) -> RealtimePreviewTelemetryBindingResponse {
+        let resized = registry
+            .update_surface_bounds(session_id, bounds)
+            .unwrap_or_else(|error| {
+                panic!("surface {direction} should not stop playback: {error}")
+            });
+        assert_eq!(
+            resized.playback_generation, expected_generation,
+            "surface {direction} must not advance playback generation or restart the frame pump"
+        );
+
+        let mut after_resize = registry.telemetry(session_id).unwrap_or_else(|error| {
+            panic!("scheduler telemetry is queryable after {direction}: {error}")
+        });
         for _ in 0..60 {
-            if after_resize.playback_generation == play.playback_generation
-                && after_resize.presented_frame_count > before_resize.presented_frame_count
+            if after_resize.playback_generation == expected_generation
+                && after_resize.presented_frame_count > presented_before_resize
             {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
-            after_resize = registry
-                .telemetry(&session_id)
-                .expect("scheduler telemetry is queryable after resize");
+            after_resize = registry.telemetry(session_id).unwrap_or_else(|error| {
+                panic!("scheduler telemetry is queryable after {direction}: {error}")
+            });
         }
 
         assert_eq!(
-            after_resize.playback_generation, play.playback_generation,
-            "resize continuation should present frames under the existing playback generation"
+            after_resize.playback_generation, expected_generation,
+            "{direction} continuation should present frames under the existing playback generation"
         );
         assert!(
-            after_resize.presented_frame_count > before_resize.presented_frame_count,
-            "playback should continue presenting after a surface resize"
+            after_resize.presented_frame_count > presented_before_resize,
+            "playback should continue presenting after a surface {direction}"
         );
+        after_resize
     }
 
     #[test]
