@@ -87,6 +87,7 @@ type RealtimePreviewHostCall = {
   kind: string;
   nativeEventKind?: string;
   parentHandleByteLength?: number;
+  reflowReason?: string;
   bounds?: {
     x: number;
     y: number;
@@ -197,6 +198,7 @@ export type ProductJourneyAppController = {
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics | null>;
   readWindowMetrics: () => Promise<ProductWindowMetrics | null>;
   maximizeMainWindow: () => Promise<ProductWindowMetrics | null>;
+  moveMainWindow: (x: number, y: number) => Promise<ProductWindowMetrics | null>;
   resizeMainWindow: (width: number, height: number) => Promise<ProductWindowMetrics | null>;
 };
 
@@ -1137,6 +1139,19 @@ function wrapElectronApp(app: ElectronApplication): ProductJourneyAppController 
           displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
         };
       }),
+    moveMainWindow: async (x, y) =>
+      app.evaluate(({ BrowserWindow, screen }, position) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (window === undefined) {
+          return null;
+        }
+        window.setPosition(position.x, position.y);
+        return {
+          bounds: window.getBounds(),
+          contentBounds: window.getContentBounds(),
+          displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+        };
+      }, { x, y }),
     resizeMainWindow: async (width, height) =>
       app.evaluate(({ BrowserWindow, screen }, size) => {
         const window = BrowserWindow.getAllWindows()[0];
@@ -1164,6 +1179,7 @@ function wrapForegroundController(app: ForegroundProductAppController): ProductJ
     readRealtimePreviewHostCalls: async () => (await app.readRealtimePreviewHostCalls()) as RealtimePreviewHostCall[],
     readWindowMetrics: () => app.readWindowMetrics(),
     maximizeMainWindow: () => app.maximizeMainWindow(),
+    moveMainWindow: (x, y) => app.moveMainWindow(x, y),
     resizeMainWindow: (width, height) => app.resizeMainWindow(width, height)
   };
 }

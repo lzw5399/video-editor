@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-23 | 260623-native-surface-window-reflow | Added main-process BrowserWindow geometry reflow for the native realtime preview surface, covered playing move/maximize/restore without playback restart, and revalidated packaged native-surface placement, resize, source guard, and diff gates. |
 | 2026-06-23 | 260622-timeline-jianying-chrome | Reworked the bottom timeline into a denser Jianying-style chrome with compact track headers, grouped toolbar controls, filmstrip/waveform/text segment beds, single-owner timeline CSS, cropped timeline screenshot gates, and layout assertions for clipping, overlap, row density, and product diagnostic cleanup. |
 | 2026-06-22 | 260622-preview-monitor-jianying-chrome | Reworked the product preview monitor into a Jianying-style player header and transport with left timecode, centered playback, and right view controls; regenerated packaged playback evidence after `package:dir` and revalidated UI reference, workspace, native-surface, and diff gates. |
 | 2026-06-22 | 260622-ms54-hide-available-material-status | Removed default `可用` chips from product material cards, kept actionable missing/probe-failed states visible, moved old add coverage to drag-to-timeline, and revalidated workspace, smoke, real workflow, packaged, source guard, and playing native-surface gates. |

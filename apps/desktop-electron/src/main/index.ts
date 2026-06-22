@@ -536,6 +536,15 @@ if (testObservationEnabled) {
     window.maximize();
     return testWindowMetrics(window);
   });
+  ipcMain.handle("test:moveMainWindow", (event, x: unknown, y: unknown): TestWindowMetrics => {
+    assertAllowedIpcSender(event);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window === null) {
+      throw new Error("No BrowserWindow is associated with the test observation sender");
+    }
+    window.setPosition(sanitizeTestWindowDimension(x, window.getBounds().x), sanitizeTestWindowDimension(y, window.getBounds().y));
+    return testWindowMetrics(window);
+  });
   ipcMain.handle("test:resizeMainWindow", (event, width: unknown, height: unknown): TestWindowMetrics => {
     assertAllowedIpcSender(event);
     const window = BrowserWindow.fromWebContents(event.sender);

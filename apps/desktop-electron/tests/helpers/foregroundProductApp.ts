@@ -27,6 +27,7 @@ export type ForegroundProductAppController = {
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
   readWindowMetrics: () => Promise<ProductWindowMetrics>;
   maximizeMainWindow: () => Promise<ProductWindowMetrics>;
+  moveMainWindow: (x: number, y: number) => Promise<ProductWindowMetrics>;
   resizeMainWindow: (width: number, height: number) => Promise<ProductWindowMetrics>;
 };
 
@@ -65,6 +66,7 @@ declare global {
       getRealtimePreviewHostCalls: () => Promise<unknown[]>;
       getWindowMetrics: () => Promise<ProductWindowMetrics>;
       maximizeMainWindow: () => Promise<ProductWindowMetrics>;
+      moveMainWindow: (x: number, y: number) => Promise<ProductWindowMetrics>;
       resizeMainWindow: (width: number, height: number) => Promise<ProductWindowMetrics>;
     };
   }
@@ -116,6 +118,7 @@ export async function launchForegroundProductApp(
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
     readWindowMetrics: async () => readTestWindowMetrics(page, diagnostics),
     maximizeMainWindow: async () => maximizeTestWindow(page, diagnostics),
+    moveMainWindow: async (x, y) => moveTestWindow(page, diagnostics, x, y),
     resizeMainWindow: async (width, height) => resizeTestWindow(page, diagnostics, width, height),
     readForegroundDiagnostics: async () =>
       readForegroundDiagnostics({
@@ -417,6 +420,21 @@ async function maximizeTestWindow(
     }
     return bridge.maximizeMainWindow();
   }, diagnostics);
+}
+
+async function moveTestWindow(
+  page: Page,
+  diagnostics: ForegroundProductAppDiagnostics,
+  x: number,
+  y: number
+): Promise<ProductWindowMetrics> {
+  return page.evaluate(async ({ launchDiagnostics, targetX, targetY }) => {
+    const bridge = window.videoEditorTestObservations;
+    if (bridge === undefined) {
+      throw new Error(`Packaged product CDP test observation bridge is unavailable: ${JSON.stringify(launchDiagnostics)}`);
+    }
+    return bridge.moveMainWindow(targetX, targetY);
+  }, { launchDiagnostics: diagnostics, targetX: x, targetY: y });
 }
 
 async function resizeTestWindow(

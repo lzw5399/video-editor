@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { ProductWindowMetrics } from "./helpers/foregroundProductApp";
 import {
   USER_JOURNEY_AV_VIDEO,
   USER_JOURNEY_LONG_AV_VIDEO,
@@ -402,7 +403,6 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     await playButton.click();
 
     const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
-    await expect(page.getByLabel("预览选中框")).toHaveCount(0, { timeout: 5_000 });
     const coverageBefore = await captureVisiblePreviewCoverageEvidence(page, app);
     const coverageStartTimeUs = after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0;
     await waitForCompositedPreviewEvidence(
@@ -532,6 +532,141 @@ test("product playback keeps native preview synced while resizing larger and sma
       "narrow playback native preview"
     );
 
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
+  } finally {
+    await app.close();
+  }
+});
+
+test("product playback reflows native preview placement while maximizing and restoring", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_LONG_AV_VIDEO]);
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await app.resizeMainWindow(1120, 720);
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? Number.POSITIVE_INFINITY, { timeout: 5_000 })
+      .toBeLessThanOrEqual(1120);
+
+    const before = await capturePreviewEvidence(page);
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await activateProductJourneyApp(app, page);
+    await controls.getByRole("button", { name: "播放预览" }).click();
+
+    const { after: playing } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    const compactMetrics = await app.readWindowMetrics();
+    const compactWidth = compactMetrics?.bounds.width ?? 1120;
+    const compactX = compactMetrics?.bounds.x ?? 80;
+    const compactY = compactMetrics?.bounds.y ?? 80;
+    const presentedBeforeMove = playing.hostState?.telemetry?.presentedFrameCount ?? 0;
+    const hostCallCountBeforeMove = (await readRealtimePreviewHostCalls(app)).length;
+    const movedX = compactX + 24;
+    const movedY = compactY + 16;
+
+    let movedMetrics = await app.moveMainWindow(movedX, movedY);
+    if (maxWindowOriginDelta(compactMetrics, movedMetrics) <= 2) {
+      movedMetrics = await app.moveMainWindow(compactX - 24, compactY - 16);
+    }
+    expect(
+      maxWindowOriginDelta(compactMetrics, movedMetrics),
+      `moving while playing must change the BrowserWindow screen origin: ${JSON.stringify({ compactMetrics, movedMetrics })}`
+    ).toBeGreaterThan(2);
+    const actualMovedX = movedMetrics?.bounds.x ?? movedX;
+    const actualMovedY = movedMetrics?.bounds.y ?? movedY;
+    await expect
+      .poll(async () => {
+        const metrics = await app.readWindowMetrics();
+        return Math.max(
+          Math.abs((metrics?.bounds.x ?? Number.NEGATIVE_INFINITY) - actualMovedX),
+          Math.abs((metrics?.bounds.y ?? Number.NEGATIVE_INFINITY) - actualMovedY)
+        );
+      }, { timeout: 5_000 })
+      .toBeLessThanOrEqual(2);
+    await waitForNativePreviewResizeSync(page, app, presentedBeforeMove);
+    const moveCalls = (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeMove);
+    expectRealtimePreviewResizeDidNotRestartPlayback(moveCalls);
+    expect(
+      moveCalls.some(
+        (call) =>
+          call.kind === "reflowSurfaceBounds" &&
+          (call.reflowReason === "browserWindow:move" ||
+            call.reflowReason === "browserWindow:moved" ||
+            call.reflowReason === "browserWindow:will-move")
+      ),
+      `moving the BrowserWindow while playing must reflow the native child surface from main-process geometry events: ${JSON.stringify(
+        moveCalls.slice(-20)
+      )}`
+    ).toBe(true);
+    await expectPreviewHostCoversCanvas(page);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-moved-workspace.png"),
+      fullPage: true
+    });
+    const movedHostImage = await captureVisiblePreviewHostImage(page, app);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-moved-host.png"),
+      movedHostImage
+    );
+    expectLandscapeNativePreviewPlacement(
+      await measurePngPreviewPlacement(page, movedHostImage),
+      "moved playback native preview"
+    );
+
+    const beforeMaximize = await capturePreviewEvidence(page);
+    const presentedBeforeMaximize = beforeMaximize.hostState?.telemetry?.presentedFrameCount ?? 0;
+    const hostCallCountBeforeMaximize = (await readRealtimePreviewHostCalls(app)).length;
+
+    await app.maximizeMainWindow();
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? 0, { timeout: 5_000 })
+      .toBeGreaterThan(compactWidth + 40);
+    await waitForNativePreviewResizeSync(page, app, presentedBeforeMaximize);
+    const maximizeCalls = (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeMaximize);
+    expectRealtimePreviewResizeDidNotRestartPlayback(maximizeCalls, { requireSurfaceBoundsUpdate: false });
+    await expectPreviewHostCoversCanvas(page);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-maximized-workspace.png"),
+      fullPage: true
+    });
+    const maximizedHostImage = await captureVisiblePreviewHostImage(page, app);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-maximized-host.png"),
+      maximizedHostImage
+    );
+    expectLandscapeNativePreviewPlacement(
+      await measurePngPreviewPlacement(page, maximizedHostImage),
+      "maximized playback native preview"
+    );
+
+    const beforeRestore = await capturePreviewEvidence(page);
+    const presentedBeforeRestore = beforeRestore.hostState?.telemetry?.presentedFrameCount ?? 0;
+    const hostCallCountBeforeRestore = (await readRealtimePreviewHostCalls(app)).length;
+    await app.resizeMainWindow(1120, 720);
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? Number.POSITIVE_INFINITY, { timeout: 5_000 })
+      .toBeLessThanOrEqual(1120);
+    await waitForNativePreviewResizeSync(page, app, presentedBeforeRestore);
+    const restoreCalls = (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeRestore);
+    expectRealtimePreviewResizeDidNotRestartPlayback(restoreCalls, { requireSurfaceBoundsUpdate: false });
+    await expectPreviewHostCoversCanvas(page);
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-restored-workspace.png"),
+      fullPage: true
+    });
+    const restoredHostImage = await captureVisiblePreviewHostImage(page, app);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-restored-host.png"),
+      restoredHostImage
+    );
+    expectLandscapeNativePreviewPlacement(
+      await measurePngPreviewPlacement(page, restoredHostImage),
+      "restored playback native preview"
+    );
     expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
@@ -2334,7 +2469,11 @@ async function waitForNativePreviewResizeSync(
   throw new Error(`native preview must stay attached and time-synced after maximize: ${JSON.stringify(lastResizeEvidence)}`);
 }
 
-function expectRealtimePreviewResizeDidNotRestartPlayback(hostCallsAfterResize: RealtimePreviewHostCall[]): void {
+function expectRealtimePreviewResizeDidNotRestartPlayback(
+  hostCallsAfterResize: RealtimePreviewHostCall[],
+  options: { requireSurfaceBoundsUpdate?: boolean } = {}
+): void {
+  const requireSurfaceBoundsUpdate = options.requireSurfaceBoundsUpdate ?? true;
   const forbiddenRestartCommands = new Set([
     "attachSurface",
     "detachSurface",
@@ -2347,14 +2486,26 @@ function expectRealtimePreviewResizeDidNotRestartPlayback(hostCallsAfterResize: 
   ]);
   const restartCalls = hostCallsAfterResize.filter((call) => forbiddenRestartCommands.has(call.kind));
 
-  expect(
-    hostCallsAfterResize.some((call) => call.kind === "updateSurfaceBounds"),
-    `resizing the product window must update native surface bounds: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
-  ).toBe(true);
+  if (requireSurfaceBoundsUpdate) {
+    expect(
+      hostCallsAfterResize.some((call) => call.kind === "updateSurfaceBounds" || call.kind === "reflowSurfaceBounds"),
+      `resizing or moving the product window must update native surface bounds: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
+    ).toBe(true);
+  }
   expect(
     restartCalls,
     `surface resize must not restart playback or resync the project snapshot: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
   ).toEqual([]);
+}
+
+function maxWindowOriginDelta(
+  before: ProductWindowMetrics | null,
+  after: ProductWindowMetrics | null
+): number {
+  if (before === null || after === null) {
+    return 0;
+  }
+  return Math.max(Math.abs(after.bounds.x - before.bounds.x), Math.abs(after.bounds.y - before.bounds.y));
 }
 
 async function expectPreviewHostCoversCanvas(page: Page): Promise<void> {

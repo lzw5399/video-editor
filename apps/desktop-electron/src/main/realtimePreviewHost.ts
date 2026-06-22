@@ -118,6 +118,7 @@ type RealtimePreviewHostRecord = {
   parentHandleByteLength?: number;
   surfaceKind?: string;
   bounds?: RealtimePreviewSurfaceBounds;
+  reflowReason?: string;
   windowVisible?: boolean;
   windowFocused?: boolean;
   appFocused?: boolean;
@@ -147,6 +148,21 @@ const TELEMETRY_STATE_CHANNEL = "realtimePreviewHost:telemetryState";
 const PRESENTATION_EVENT_REFRESH_INTERVAL_MS = 250;
 const STILL_FRAME_PRESENTATION_WAIT_TIMEOUT_MS = 3_000;
 const PRESENTATION_TARGET_TOLERANCE_US = 5_000;
+const WINDOW_SURFACE_REFLOW_DELAY_MS = 80;
+const WINDOW_SURFACE_REFLOW_EVENTS = [
+  "will-move",
+  "move",
+  "moved",
+  "will-resize",
+  "resize",
+  "resized",
+  "maximize",
+  "unmaximize",
+  "restore",
+  "enter-full-screen",
+  "leave-full-screen",
+  "show"
+] as const;
 
 type PendingPresentationWaiter = {
   playbackGeneration: number;
@@ -293,8 +309,16 @@ export class RealtimePreviewHost {
   private closed = false;
   private telemetrySubscribers = new Map<number, WebContents>();
   private pendingPresentationWaiters = new Set<PendingPresentationWaiter>();
+  private pendingGeometryReflow: ReturnType<typeof setTimeout> | null = null;
+  private pendingGeometryReflowReason: string | null = null;
+  private readonly windowGeometryListeners: Array<{ eventName: string; listener: () => void }> = [];
 
   constructor(private readonly window: BrowserWindow) {
+    for (const eventName of WINDOW_SURFACE_REFLOW_EVENTS) {
+      const listener = () => this.scheduleSurfaceReflow(`browserWindow:${eventName}`);
+      window.on(eventName, listener);
+      this.windowGeometryListeners.push({ eventName, listener });
+    }
     window.on("close", () => {
       this.close();
     });
@@ -547,6 +571,15 @@ export class RealtimePreviewHost {
     }
 
     this.closed = true;
+    for (const { eventName, listener } of this.windowGeometryListeners) {
+      this.window.off(eventName, listener);
+    }
+    this.windowGeometryListeners.length = 0;
+    if (this.pendingGeometryReflow !== null) {
+      clearTimeout(this.pendingGeometryReflow);
+      this.pendingGeometryReflow = null;
+    }
+    this.pendingGeometryReflowReason = null;
     for (const waiter of [...this.pendingPresentationWaiters]) {
       this.finishPresentationWaiter(waiter, false);
     }
@@ -589,6 +622,60 @@ export class RealtimePreviewHost {
     hostsBySessionId.set(response.sessionId, this);
     this.playbackGeneration = response.playbackGeneration;
     recordRealtimePreviewHostCall({ kind: "createSession" });
+  }
+
+  private scheduleSurfaceReflow(reason: string): void {
+    if (this.closed || !this.attached || this.sessionId === null || this.lastBounds === null) {
+      return;
+    }
+
+    this.pendingGeometryReflowReason = reason;
+    if (this.pendingGeometryReflow !== null) {
+      return;
+    }
+
+    this.pendingGeometryReflow = setTimeout(() => {
+      const reflowReason = this.pendingGeometryReflowReason ?? reason;
+      this.pendingGeometryReflow = null;
+      this.pendingGeometryReflowReason = null;
+      this.reflowSurfacePlacement(reflowReason);
+    }, WINDOW_SURFACE_REFLOW_DELAY_MS);
+  }
+
+  private reflowSurfacePlacement(reason: string): void {
+    if (this.closed || !this.attached || this.sessionId === null || this.lastBounds === null || this.window.isDestroyed()) {
+      return;
+    }
+
+    try {
+      const startedAt = performance.now();
+      const response = updateRealtimePreviewSurfaceBounds({
+        sessionId: this.sessionId,
+        bounds: this.lastBounds
+      });
+      const durationMs = Math.round(performance.now() - startedAt);
+      this.playbackGeneration = response.playbackGeneration;
+      recordRealtimePreviewHostCall({
+        kind: "reflowSurfaceBounds",
+        bounds: this.lastBounds,
+        reflowReason: reason,
+        durationMs,
+        playbackGeneration: response.playbackGeneration
+      });
+      this.fallbackLabel = null;
+      this.refreshPreviewState();
+      this.publishCachedState(this.state("实时预览表面已对齐"));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.fallbackLabel = attachFailureLabel(error);
+      recordRealtimePreviewHostCall({
+        kind: "reflowSurfaceBoundsFailed",
+        bounds: this.lastBounds,
+        reflowReason: reason,
+        errorMessage
+      });
+      this.publishCachedState(this.state("实时预览不可用"));
+    }
   }
 
   private buildSurfaceDescriptor(bounds: RealtimePreviewSurfaceBounds): RealtimePreviewSurfaceDescriptor {
