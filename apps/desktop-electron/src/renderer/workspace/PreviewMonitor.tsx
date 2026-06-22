@@ -136,6 +136,7 @@ type RealtimePreviewHostSurfacePlacement = {
   hostScreenRect: RealtimePreviewScreenRect;
   nativeScreenRect: RealtimePreviewScreenRect;
   nativeAppKitScreenRect: RealtimePreviewScreenRect;
+  nativeDrawableLifecycleDiagnostic: string | null;
   deltaPx: RealtimePreviewScreenRect;
   maxDeltaPx: number;
   aligned: boolean;
@@ -156,6 +157,8 @@ type RealtimePreviewHostContentEvidence = {
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
+  presentedFrames: number;
+  submittedDraws: number;
 };
 
 export type RealtimePreviewHostApi = {
@@ -265,7 +268,7 @@ export function PreviewMonitor({
     : productPreviewStatusLabel === "画面已更新，预览待刷新"
       ? productPreviewStatusLabel
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
-  const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
+  const selectionOverlayStyle = showRealtimeSurface ? null : buildSelectionOverlayStyle(selectedSegment);
   const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {

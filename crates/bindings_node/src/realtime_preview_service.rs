@@ -36,7 +36,6 @@ use realtime_preview_runtime::{
     RealtimePreviewFramePacingSample, RealtimePreviewFramePacingTelemetry,
     RealtimePreviewFrameRequest, RealtimePreviewRuntime, RealtimePreviewSessionConfig,
     RealtimePreviewTelemetry, TextureHandleDescriptor,
-    gpu::PreviewSurfaceScreenRect,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
@@ -997,11 +996,7 @@ impl RealtimePreviewBindingScheduler {
         &mut self,
         descriptor: PreviewSurfaceDescriptor,
     ) -> Result<(), RealtimePreviewBindingError> {
-        let bounds = descriptor.bounds();
-        self.scheduler.update_preview_dimensions(OutputDimensions {
-            width: bounds.width,
-            height: bounds.height,
-        });
+        self.update_scheduler_preview_dimensions_for_surface(descriptor);
         #[cfg(test)]
         if matches!(
             descriptor,
@@ -1052,9 +1047,7 @@ impl RealtimePreviewBindingScheduler {
                     format!("render graph GPU presentation target unavailable: {error}"),
                 )
             })?;
-        self.surface_placement = target
-            .screen_rect()
-            .map(native_surface_placement_from_runtime);
+        self.surface_placement = native_surface_placement_from_runtime(&target);
         self.gpu_device = Some(device);
         self.surface_target = Some(target);
         self.reset_media_pipeline();
@@ -1070,10 +1063,6 @@ impl RealtimePreviewBindingScheduler {
         &mut self,
         bounds: PreviewSurfaceBounds,
     ) -> Result<(), RealtimePreviewBindingError> {
-        self.scheduler.update_preview_dimensions(OutputDimensions {
-            width: bounds.width,
-            height: bounds.height,
-        });
         if let (Some(device), Some(target)) =
             (self.gpu_device.as_ref(), self.surface_target.as_mut())
         {
@@ -1085,15 +1074,28 @@ impl RealtimePreviewBindingScheduler {
                         format!("render graph GPU presentation target resize failed: {error}"),
                     )
                 })?;
-            self.surface_placement = target
-                .screen_rect()
-                .map(native_surface_placement_from_runtime);
+            self.surface_placement = native_surface_placement_from_runtime(target);
+            let descriptor = target.descriptor();
+            self.update_scheduler_preview_dimensions_for_surface(descriptor);
         } else {
             self.surface_placement = None;
+            self.scheduler.update_preview_dimensions(OutputDimensions {
+                width: bounds.width,
+                height: bounds.height,
+            });
         }
         self.last_evidence = None;
         self.publish_snapshot(None, self.surface_placement(), None);
         Ok(())
+    }
+
+    fn update_scheduler_preview_dimensions_for_surface(
+        &mut self,
+        descriptor: PreviewSurfaceDescriptor,
+    ) {
+        let (width, height) = descriptor.presentation_size();
+        self.scheduler
+            .update_preview_dimensions(OutputDimensions { width, height });
     }
 
     fn update_draft_snapshot(&mut self, draft: Draft, bundle_path: Option<PathBuf>) {
@@ -1908,20 +1910,25 @@ fn native_evidence_from_scheduler(
         height: evidence.height,
         byte_count: evidence.byte_count,
         target_time_microseconds: evidence.target_time_microseconds,
+        presented_frames: evidence.presented_frames,
+        submitted_draws: evidence.submitted_draws,
     }
 }
 
 fn native_surface_placement_from_runtime(
-    rect: PreviewSurfaceScreenRect,
-) -> NativePreviewSurfacePlacementEvidence {
-    NativePreviewSurfacePlacementEvidence {
-        native_screen_rect: NativePreviewScreenRect {
-            x: rect.x.round() as i32,
-            y: rect.y.round() as i32,
-            width: rect.width.round() as i32,
-            height: rect.height.round() as i32,
-        },
-    }
+    target: &RealtimePreviewGpuPresentationTarget,
+) -> Option<NativePreviewSurfacePlacementEvidence> {
+    target
+        .screen_rect()
+        .map(|rect| NativePreviewSurfacePlacementEvidence {
+            native_screen_rect: NativePreviewScreenRect {
+                x: rect.x.round() as i32,
+                y: rect.y.round() as i32,
+                width: rect.width.round() as i32,
+                height: rect.height.round() as i32,
+            },
+            drawable_lifecycle_diagnostic: target.drawable_lifecycle_diagnostic(),
+        })
 }
 
 fn sequence_duration(draft: &Draft) -> Microseconds {

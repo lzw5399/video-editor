@@ -4,8 +4,9 @@ use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationOptions, NSApplicationActivationPolicy,
-    NSApplicationOcclusionState, NSRunningApplication, NSView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowOcclusionState, NSWindowOrderingMode,
+    NSApplicationOcclusionState, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor,
+    NSRunningApplication, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState,
+    NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSDate, NSRunLoop};
@@ -30,6 +31,7 @@ pub fn parent_ns_view(value: u64) -> Result<NativeParentWindowHandle, PreviewSur
 pub struct MacosWgpuSurfaceAttachment {
     parent_view: Retained<NSView>,
     parent_window: Retained<NSWindow>,
+    child_window: Retained<NSWindow>,
     child_view: Retained<NSView>,
     metal_layer: Retained<CAMetalLayer>,
     screen_rect: PreviewSurfaceScreenRect,
@@ -66,26 +68,58 @@ impl MacosWgpuSurfaceAttachment {
                 )
             })?;
         let parent_window = ensure_parent_window_visible(&parent_view)?;
+        let screen_frame =
+            screen_rect_for_content_local_bounds(&parent_window, &parent_view, bounds);
         let child_view = NSView::initWithFrame(
             mtm.alloc(),
-            ns_rect_for_content_local_bounds(&parent_view, bounds),
+            CGRect::new(
+                CGPoint::ZERO,
+                CGSize::new(
+                    screen_frame.size.width.max(1.0),
+                    screen_frame.size.height.max(1.0),
+                ),
+            ),
         );
+        let child_window = unsafe {
+            NSWindow::initWithContentRect_styleMask_backing_defer(
+                mtm.alloc(),
+                screen_frame,
+                NSWindowStyleMask::Borderless,
+                NSBackingStoreType::Buffered,
+                false,
+            )
+        };
+        unsafe {
+            child_window.setReleasedWhenClosed(false);
+        }
+        child_window.setContentView(Some(&child_view));
+        child_window.setIgnoresMouseEvents(true);
+        child_window.setHasShadow(false);
+        child_window.setOpaque(false);
+        child_window.setBackgroundColor(Some(&NSColor::clearColor()));
+        child_window.setLevel(parent_window.level());
+        prepare_window_for_preview(&child_window);
         let metal_layer = CAMetalLayer::new();
         child_view.setWantsLayer(true);
         child_view.setLayer(Some(&metal_layer));
         child_view.setHidden(false);
         child_view.setAlphaValue(1.0);
         child_view.setPostsFrameChangedNotifications(true);
-        place_child_view_above_parent_content(&parent_view, &child_view);
+        child_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewNotSizable);
         configure_metal_layer(&metal_layer, bounds);
+        unsafe {
+            parent_window.addChildWindow_ordered(&child_window, NSWindowOrderingMode::Above);
+        }
+        child_window.orderFrontRegardless();
         child_view.setNeedsDisplay(true);
         child_view.displayIfNeededIgnoringOpacity();
-        parent_view.layoutSubtreeIfNeeded();
+        child_window.displayIfNeeded();
         commit_appkit_core_animation(&parent_window);
-        let screen_rect = screen_rect_for_child_view(&parent_window, &child_view);
+        let screen_rect = preview_screen_rect_from_cg(screen_frame);
         Ok(Self {
             parent_view,
             parent_window,
+            child_window,
             child_view,
             metal_layer,
             screen_rect,
@@ -103,17 +137,22 @@ impl MacosWgpuSurfaceAttachment {
     ) -> Result<(), PreviewSurfaceError> {
         let _mtm = require_main_thread()?;
         ensure_window_visible(&self.parent_window);
-        self.child_view
-            .setFrame(ns_rect_for_content_local_bounds(&self.parent_view, bounds));
+        update_child_window_frame(
+            &self.parent_window,
+            &self.parent_view,
+            &self.child_window,
+            &self.child_view,
+            bounds,
+        );
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
-        place_child_view_above_parent_content(&self.parent_view, &self.child_view);
         configure_metal_layer(&self.metal_layer, bounds);
         self.child_view.setNeedsDisplay(true);
         self.child_view.displayIfNeededIgnoringOpacity();
-        self.parent_view.layoutSubtreeIfNeeded();
+        self.child_window.orderFrontRegardless();
+        self.child_window.displayIfNeeded();
         commit_appkit_core_animation(&self.parent_window);
-        self.screen_rect = screen_rect_for_child_view(&self.parent_window, &self.child_view);
+        self.screen_rect = screen_rect_for_child_window(&self.child_window);
         Ok(())
     }
 
@@ -125,24 +164,29 @@ impl MacosWgpuSurfaceAttachment {
             return Ok(());
         }
         ensure_window_visible(&self.parent_window);
-        self.child_view
-            .setFrame(ns_rect_for_content_local_bounds(&self.parent_view, bounds));
+        update_child_window_frame(
+            &self.parent_window,
+            &self.parent_view,
+            &self.child_window,
+            &self.child_view,
+            bounds,
+        );
         self.child_view.setHidden(false);
         self.child_view.setAlphaValue(1.0);
-        place_child_view_above_parent_content(&self.parent_view, &self.child_view);
         configure_metal_layer(&self.metal_layer, bounds);
         self.child_view.displayIfNeededIgnoringOpacity();
         self.prepare_count = self.prepare_count.saturating_add(1);
-        self.parent_view.layoutSubtreeIfNeeded();
+        self.child_window.orderFrontRegardless();
+        self.child_window.displayIfNeeded();
         commit_appkit_core_animation(&self.parent_window);
-        self.screen_rect = screen_rect_for_child_view(&self.parent_window, &self.child_view);
+        self.screen_rect = screen_rect_for_child_window(&self.child_window);
         Ok(())
     }
 
     pub fn drawable_lifecycle_diagnostic(&self) -> String {
         if MainThreadMarker::new().is_none() {
             return format!(
-                "drawableLifecycle{{mainThread=false, attachmentStrategy=parentSubview, prepareCount={}, cachedScreenRect={} }}",
+                "drawableLifecycle{{mainThread=false, attachmentStrategy=childWindowOverlay, prepareCount={}, cachedScreenRect={} }}",
                 self.prepare_count,
                 format_screen_rect(self.screen_rect),
             );
@@ -158,16 +202,22 @@ impl MacosWgpuSurfaceAttachment {
         let parent_window_is_key = self.parent_window.isKeyWindow();
         let parent_window_is_main = self.parent_window.isMainWindow();
         let parent_view_bounds = self.parent_view.bounds();
+        let child_window_visible = self.child_window.isVisible();
+        let child_window_occlusion_visible = self
+            .child_window
+            .occlusionState()
+            .contains(NSWindowOcclusionState::Visible);
+        let child_window_on_active_space = self.child_window.isOnActiveSpace();
+        let child_window_frame = self.child_window.frame();
         let child_view_frame = self.child_view.frame();
         let child_view_bounds = self.child_view.bounds();
         let parent_window_frame = self.parent_window.frame();
         let parent_view_flipped = self.parent_view.isFlipped();
-        let child_view_screen_frame =
-            screen_rect_for_child_view(&self.parent_window, &self.child_view);
+        let child_view_screen_frame = screen_rect_for_child_window(&self.child_window);
         let layer_bounds = self.metal_layer.bounds();
         let drawable_size = self.metal_layer.drawableSize();
         format!(
-            "drawableLifecycle{{attachmentStrategy=parentSubview, coordinateSpace=browserWindowContentLogicalPixels, prepareCount={}, {}, parentWindowNumber={}, parentWindowKey={}, parentWindowMain={}, parentWindowVisible={}, parentWindowOcclusionVisible={}, parentWindowOnActiveSpace={}, parentViewFlipped={}, childWindowVisible={}, childWindowOcclusionVisible={}, childWindowOnActiveSpace={}, childHasParent={}, childViewHasSuperview={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewScreenFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
+            "drawableLifecycle{{attachmentStrategy=childWindowOverlay, coordinateSpace=browserWindowContentLogicalPixels, prepareCount={}, {}, parentWindowNumber={}, parentWindowKey={}, parentWindowMain={}, parentWindowVisible={}, parentWindowOcclusionVisible={}, parentWindowOnActiveSpace={}, childWindowVisible={}, childWindowOcclusionVisible={}, childWindowOnActiveSpace={}, childHasParent={}, parentViewFlipped={}, childViewWindowAttached={}, childViewHasSuperview={}, parentViewHidden={}, parentViewHiddenOrAncestor={}, childViewHidden={}, childViewHiddenOrAncestor={}, childViewAlpha={:.3}, parentWindowAlpha={:.3}, childWindowAlpha={:.3}, layerHidden={}, parentWindowFrame={}, parentViewBounds={}, childWindowFrame={}, childViewScreenFrame={}, childViewFrame={}, childViewBounds={}, layerBounds={}, drawableSize={} }}",
             self.prepare_count,
             app,
             parent_window_number,
@@ -176,11 +226,12 @@ impl MacosWgpuSurfaceAttachment {
             parent_window_visible,
             parent_window_occlusion_visible,
             parent_window_on_active_space,
+            child_window_visible,
+            child_window_occlusion_visible,
+            child_window_on_active_space,
+            self.child_window.parentWindow().is_some(),
             parent_view_flipped,
-            parent_window_visible,
-            parent_window_occlusion_visible,
-            parent_window_on_active_space,
-            false,
+            self.child_view.window().is_some(),
             unsafe { self.child_view.superview() }.is_some(),
             self.parent_view.isHidden(),
             self.parent_view.isHiddenOrHasHiddenAncestor(),
@@ -188,10 +239,11 @@ impl MacosWgpuSurfaceAttachment {
             self.child_view.isHiddenOrHasHiddenAncestor(),
             self.child_view.alphaValue(),
             self.parent_window.alphaValue(),
+            self.child_window.alphaValue(),
             self.metal_layer.isHidden(),
             format_rect(parent_window_frame),
             format_rect(parent_view_bounds),
-            format_screen_rect(child_view_screen_frame),
+            format_rect(child_window_frame),
             format_screen_rect(child_view_screen_frame),
             format_rect(child_view_frame),
             format_rect(child_view_bounds),
@@ -208,7 +260,8 @@ impl MacosWgpuSurfaceAttachment {
         if MainThreadMarker::new().is_none() {
             return;
         }
-        self.child_view.removeFromSuperview();
+        self.parent_window.removeChildWindow(&self.child_window);
+        self.child_window.orderOut(None);
     }
 }
 
@@ -351,23 +404,19 @@ fn configure_metal_layer(metal_layer: &CAMetalLayer, bounds: PreviewSurfaceBound
         (bounds.width as f64 * scale).round().max(1.0),
         (bounds.height as f64 * scale).round().max(1.0),
     );
-    metal_layer.setBounds(CGRect::new(CGPoint::new(0.0, 0.0), logical_size));
-    metal_layer.setPosition(CGPoint::new(
-        logical_size.width / 2.0,
-        logical_size.height / 2.0,
-    ));
+    let layer_frame = CGRect::new(CGPoint::ZERO, logical_size);
+    metal_layer.setAnchorPoint(CGPoint::ZERO);
+    metal_layer.setFrame(layer_frame);
+    metal_layer.setBounds(layer_frame);
     metal_layer.setContentsScale(scale);
     metal_layer.setDrawableSize(drawable_size);
     metal_layer.setPresentsWithTransaction(false);
     metal_layer.setFramebufferOnly(true);
+    metal_layer.setOpaque(true);
     metal_layer.setHidden(false);
     metal_layer.setZPosition(1.0);
     metal_layer.setNeedsDisplayOnBoundsChange(true);
     metal_layer.setNeedsDisplay();
-}
-
-fn place_child_view_above_parent_content(parent_view: &NSView, child_view: &NSView) {
-    parent_view.addSubview_positioned_relativeTo(child_view, NSWindowOrderingMode::Above, None);
 }
 
 fn commit_appkit_core_animation(parent_window: &NSWindow) {
@@ -401,12 +450,39 @@ fn format_screen_rect(rect: PreviewSurfaceScreenRect) -> String {
     )
 }
 
-fn screen_rect_for_child_view(
+fn update_child_window_frame(
     parent_window: &NSWindow,
+    parent_view: &NSView,
+    child_window: &NSWindow,
     child_view: &NSView,
-) -> PreviewSurfaceScreenRect {
-    let window_rect = child_view.convertRect_toView(child_view.bounds(), None);
-    let child_view_screen_frame = parent_window.convertRectToScreen(window_rect);
+    bounds: PreviewSurfaceBounds,
+) {
+    let screen_frame = screen_rect_for_content_local_bounds(parent_window, parent_view, bounds);
+    child_window.setFrame_display(screen_frame, true);
+    child_view.setFrame(CGRect::new(
+        CGPoint::ZERO,
+        CGSize::new(
+            screen_frame.size.width.max(1.0),
+            screen_frame.size.height.max(1.0),
+        ),
+    ));
+}
+
+fn screen_rect_for_content_local_bounds(
+    parent_window: &NSWindow,
+    parent_view: &NSView,
+    bounds: PreviewSurfaceBounds,
+) -> CGRect {
+    let local_rect = ns_rect_for_content_local_bounds(parent_view, bounds);
+    let window_rect = parent_view.convertRect_toView(local_rect, None);
+    parent_window.convertRectToScreen(window_rect)
+}
+
+fn screen_rect_for_child_window(child_window: &NSWindow) -> PreviewSurfaceScreenRect {
+    preview_screen_rect_from_cg(child_window.frame())
+}
+
+fn preview_screen_rect_from_cg(child_view_screen_frame: CGRect) -> PreviewSurfaceScreenRect {
     PreviewSurfaceScreenRect {
         x: child_view_screen_frame.origin.x,
         y: child_view_screen_frame.origin.y,

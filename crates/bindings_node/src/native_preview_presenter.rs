@@ -104,6 +104,8 @@ pub struct NativePreviewContentEvidence {
     pub height: u32,
     pub byte_count: usize,
     pub target_time_microseconds: u64,
+    pub presented_frames: u32,
+    pub submitted_draws: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,6 +119,8 @@ pub enum NativePreviewContentEvidenceSource {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativePreviewSurfacePlacementEvidence {
     pub native_screen_rect: NativePreviewScreenRect,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drawable_lifecycle_diagnostic: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -692,6 +696,8 @@ mod macos {
                 height,
                 byte_count,
                 target_time_microseconds: target_time.get(),
+                presented_frames: 0,
+                submitted_draws: 0,
             })
         }
     }
@@ -810,6 +816,8 @@ mod tests {
                 height: 9,
                 byte_count: 16 * 9 * 4,
                 target_time_microseconds: 123_000,
+                presented_frames: 0,
+                submitted_draws: 0,
             },
         ));
 

@@ -148,6 +148,8 @@ type RealtimePreviewHostState = {
     width: number;
     height: number;
     targetTimeMicroseconds: number;
+    presentedFrames: number;
+    submittedDraws: number;
   } | null;
   surfacePlacement?: {
     surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";
@@ -155,6 +157,7 @@ type RealtimePreviewHostState = {
     hostScreenRect: { x: number; y: number; width: number; height: number };
     nativeScreenRect: { x: number; y: number; width: number; height: number };
     nativeAppKitScreenRect: { x: number; y: number; width: number; height: number };
+    nativeDrawableLifecycleDiagnostic: string | null;
     deltaPx: { x: number; y: number; width: number; height: number };
     maxDeltaPx: number;
     aligned: boolean;
@@ -177,6 +180,23 @@ export type PreviewEvidence = {
   timecodeUs: number;
   placeholderText: string;
   imageSrc: string | null;
+  hostState: RealtimePreviewHostState | null;
+};
+
+const PREVIEW_COVERAGE_REGIONS = [
+  { name: "topLeft", region: { x: 0.08, y: 0.08, width: 0.2, height: 0.2 } },
+  { name: "topRight", region: { x: 0.72, y: 0.08, width: 0.2, height: 0.2 } },
+  { name: "center", region: { x: 0.38, y: 0.36, width: 0.24, height: 0.24 } },
+  { name: "bottomLeft", region: { x: 0.08, y: 0.72, width: 0.2, height: 0.2 } },
+  { name: "bottomRight", region: { x: 0.72, y: 0.72, width: 0.2, height: 0.2 } }
+] as const;
+
+export type PreviewCoverageRegionName = (typeof PREVIEW_COVERAGE_REGIONS)[number]["name"];
+
+export type PreviewCoverageEvidence = {
+  visibleRegionHashes: Record<PreviewCoverageRegionName, string>;
+  hostBox: { x: number; y: number; width: number; height: number } | null;
+  canvasBox: { x: number; y: number; width: number; height: number } | null;
   hostState: RealtimePreviewHostState | null;
 };
 
@@ -330,6 +350,54 @@ export async function captureVisiblePreviewEvidence(
   };
 }
 
+export async function captureVisiblePreviewCoverageEvidence(
+  page: Page,
+  app: ProductJourneyAppController | undefined
+): Promise<PreviewCoverageEvidence> {
+  const host = page.getByLabel("实时预览画面", { exact: true });
+  const canvas = page.getByLabel("预览画面", { exact: true });
+  const visibleRegionHashes = Object.fromEntries(
+    await Promise.all(
+      PREVIEW_COVERAGE_REGIONS.map(async ({ name, region }) => [
+        name,
+        hashBuffer(await captureVisiblePreviewRegion(page, app, region))
+      ])
+    )
+  ) as Record<PreviewCoverageRegionName, string>;
+
+  return {
+    visibleRegionHashes,
+    hostBox: await host.boundingBox(),
+    canvasBox: await canvas.boundingBox(),
+    hostState: await readRealtimePreviewHostState(page)
+  };
+}
+
+export async function captureVisiblePreviewHostImage(
+  page: Page,
+  app: ProductJourneyAppController | undefined
+): Promise<Buffer> {
+  return captureVisiblePreviewRegion(page, app, {
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1
+  });
+}
+
+export function expectVisiblePreviewCoverageChanged(before: PreviewCoverageEvidence, after: PreviewCoverageEvidence): void {
+  const unchangedRegions = PREVIEW_COVERAGE_REGIONS.map(({ name }) => name).filter(
+    (name) => before.visibleRegionHashes[name] === after.visibleRegionHashes[name]
+  );
+  expect(
+    unchangedRegions,
+    `native preview pixels must change across the full host, not only a lower-left drawable subsection: ${JSON.stringify({
+      before,
+      after
+    })}`
+  ).toEqual([]);
+}
+
 export function expectNoRejectedSurfaceAcquire(calls: RealtimePreviewHostCall[]): void {
   expect(
     calls,
@@ -356,10 +424,8 @@ export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
     "parentWindowVisible=",
     "parentWindowOcclusionVisible=",
     "parentWindowOnActiveSpace=",
-    "childWindowVisible=",
-    "childWindowOcclusionVisible=",
-    "childWindowOnActiveSpace=",
-    "childHasParent=",
+    "childViewWindowAttached=",
+    "childViewHasSuperview=",
     "appActive=",
     "appHidden=",
     "runningAppActive=",
@@ -370,7 +436,7 @@ export function expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics(
     "childViewHiddenOrAncestor=",
     "layerHidden=",
     "parentViewBounds=",
-    "childWindowFrame=",
+    "childViewScreenFrame=",
     "childViewFrame=",
     "layerBounds=",
     "drawableSize="

@@ -602,6 +602,8 @@ export type RealtimePreviewPresentationEvidence = {
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
+  presentedFrames: number;
+  submittedDraws: number;
 };
 
 export type RealtimePreviewScreenRect = {
@@ -613,6 +615,7 @@ export type RealtimePreviewScreenRect = {
 
 export type RealtimePreviewSurfacePlacementEvidence = {
   nativeScreenRect: RealtimePreviewScreenRect;
+  drawableLifecycleDiagnostic?: string | null;
 };
 
 const requireNative = createRequire(__filename);

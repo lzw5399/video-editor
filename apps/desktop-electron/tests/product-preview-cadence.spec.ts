@@ -15,7 +15,8 @@ import {
   type ProductJourneyAppController,
   readNativeCommandObservations,
   readRealtimePreviewHostCalls,
-  requestProjectSessionPreviewFrameCount
+  requestProjectSessionPreviewFrameCount,
+  seekTimelinePlayhead
 } from "./helpers/userJourney";
 
 type HostState = {
@@ -62,6 +63,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await seekTimelinePlayhead(page, app, 0);
 
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });

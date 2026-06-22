@@ -208,12 +208,13 @@ impl RealtimePreviewGpuDevice {
         })?;
 
         let bounds = descriptor.bounds();
+        let (presentation_width, presentation_height) = descriptor.presentation_size();
         let native_surface = create_native_surface(instance, parent_window_handle, bounds)?;
         let surface = native_surface.surface;
         #[cfg(target_os = "macos")]
         let macos_attachment = native_surface.macos_attachment;
         let mut config = surface
-            .get_default_config(adapter, bounds.width, bounds.height)
+            .get_default_config(adapter, presentation_width, presentation_height)
             .ok_or_else(|| {
                 PreviewSurfaceError::new(
                     PreviewSurfaceDiagnosticKind::PlatformUnavailable,
@@ -238,8 +239,8 @@ impl RealtimePreviewGpuDevice {
                 })?
         };
         config.format = configured_format.wgpu_format();
-        config.width = bounds.width;
-        config.height = bounds.height;
+        config.width = presentation_width;
+        config.height = presentation_height;
         config.usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
         surface.configure(device, &config);
 

@@ -74,6 +74,8 @@ export type RealtimePreviewHostContentEvidence = {
   height: number;
   byteCount: number;
   targetTimeMicroseconds: number;
+  presentedFrames: number;
+  submittedDraws: number;
 };
 
 export type RealtimePreviewHostSurfacePlacement = {
@@ -82,6 +84,7 @@ export type RealtimePreviewHostSurfacePlacement = {
   hostScreenRect: RealtimePreviewScreenRect;
   nativeScreenRect: RealtimePreviewScreenRect;
   nativeAppKitScreenRect: RealtimePreviewScreenRect;
+  nativeDrawableLifecycleDiagnostic: string | null;
   deltaPx: RealtimePreviewScreenRect;
   maxDeltaPx: number;
   aligned: boolean;
@@ -527,7 +530,6 @@ export class RealtimePreviewHost {
       throw new Error("实时预览测试不可用");
     }
 
-    const parentHandle = nativeParentHandleToNumber(nativeHandle);
     const kind = nativeSurfaceKind();
     if (kind === "offscreen") {
       return {
@@ -543,6 +545,7 @@ export class RealtimePreviewHost {
       };
     }
 
+    const parentHandle = nativeParentHandleToNumber(nativeHandle);
     return {
       kind,
       parentHandle,
@@ -797,6 +800,8 @@ export class RealtimePreviewHost {
 
   private surfacePlacement(): RealtimePreviewHostSurfacePlacement | null {
     const nativeAppKitScreenRect = this.presentationState?.surfacePlacement?.nativeScreenRect ?? null;
+    const nativeDrawableLifecycleDiagnostic =
+      this.presentationState?.surfacePlacement?.drawableLifecycleDiagnostic ?? null;
     if (nativeAppKitScreenRect === null || this.lastBounds === null || this.window.isDestroyed()) {
       return null;
     }
@@ -811,6 +816,7 @@ export class RealtimePreviewHost {
       hostScreenRect,
       nativeScreenRect,
       nativeAppKitScreenRect,
+      nativeDrawableLifecycleDiagnostic,
       deltaPx,
       maxDeltaPx,
       aligned: maxDeltaPx <= 2

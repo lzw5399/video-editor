@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   USER_JOURNEY_AV_VIDEO,
@@ -11,13 +13,16 @@ import {
   addVideoTrack,
   activateProductJourneyApp,
   capturePreviewEvidence,
+  captureVisiblePreviewCoverageEvidence,
   captureVisiblePreviewEvidence,
+  captureVisiblePreviewHostImage,
   deleteSelectedSegment,
   expectOccludedSurfaceAcquireHasDrawableLifecycleDiagnostics,
   expectNoProductFallbackCalls,
   expectTimelineSnappingStatusVisible,
   expectNoRejectedSurfaceAcquire,
   expectProductPlaybackSuccessEvidence,
+  expectVisiblePreviewCoverageChanged,
   importSubtitleSrtThroughProductPanel,
   importMaterialsThroughProductPicker,
   importMaterialThroughProductPicker,
@@ -35,12 +40,15 @@ import {
   trimSelectedSegmentLeftEdgeRight,
   undoTimelineEdit,
   updateSelectedVisualThroughInspector,
+  waitForCompositedPreviewEvidence,
   waitForProductPlaybackSuccess,
   zoomTimelineIn
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
 
+const REPO_ROOT = join(process.cwd(), "../..");
+const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const USER_JOURNEY_SEQUENCE_DURATION_US = 3_000_000;
 const THIRTY_FPS_FRAME_DURATION_US = 33_333;
 const SEQUENCE_END_FRAME_ALIGNED_MIN_US =
@@ -78,7 +86,10 @@ test("product playback helper rejects playhead-only advancement without visible 
         digest: "digest-before",
         width: 320,
         height: 180,
-        targetTimeMicroseconds: 0
+        byteCount: 0,
+        targetTimeMicroseconds: 0,
+        presentedFrames: 1,
+        submittedDraws: 1
       },
       surfacePlacement: null
     }
@@ -322,10 +333,26 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     await playButton.click();
 
     const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    await expect(page.getByLabel("预览选中框")).toHaveCount(0, { timeout: 5_000 });
+    const coverageBefore = await captureVisiblePreviewCoverageEvidence(page, app);
+    const coverageStartTimeUs = after.hostState?.contentEvidence?.targetTimeMicroseconds ?? 0;
+    await waitForCompositedPreviewEvidence(
+      page,
+      app,
+      8_000,
+      Math.min(coverageStartTimeUs + 500_000, SEQUENCE_END_FRAME_ALIGNED_MIN_US)
+    );
+    const coverageAfter = await captureVisiblePreviewCoverageEvidence(page, app);
     const placement = after.hostState?.surfacePlacement ?? null;
     expect(placement, "product playback must expose native surface placement evidence").not.toBeNull();
     const expectedScreenRect = await expectedPreviewHostScreenRect(page, app);
     await expectPreviewHostCoversCanvas(page);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-coverage.png"),
+      await captureVisiblePreviewHostImage(page, app)
+    );
+    expectVisiblePreviewCoverageChanged(coverageBefore, coverageAfter);
     expect(placement?.surfaceBoundsCoordinateSpace).toBe("browserWindowContentLogicalPixels");
     expect(placement?.screenRectCoordinateSpace).toBe("electronScreenLogicalPixels");
     expect(placement?.nativeAppKitScreenRect, "raw AppKit screen rect must be exposed for placement telemetry").toBeTruthy();

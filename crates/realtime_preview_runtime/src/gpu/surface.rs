@@ -26,6 +26,22 @@ impl PreviewSurfaceBounds {
         }
         Ok(self)
     }
+
+    pub fn physical_width(self) -> u32 {
+        scaled_physical_dimension(self.width, self.scale_factor_millis)
+    }
+
+    pub fn physical_height(self) -> u32 {
+        scaled_physical_dimension(self.height, self.scale_factor_millis)
+    }
+}
+
+fn scaled_physical_dimension(logical: u32, scale_factor_millis: u32) -> u32 {
+    let scaled = u64::from(logical)
+        .saturating_mul(u64::from(scale_factor_millis))
+        .saturating_add(500)
+        / 1000;
+    u32::try_from(scaled.max(1)).unwrap_or(u32::MAX)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,6 +131,30 @@ impl PreviewSurfaceDescriptor {
                 width,
                 height,
                 scale_factor_millis,
+            },
+        }
+    }
+
+    pub fn presentation_size(self) -> (u32, u32) {
+        match self {
+            Self::NativeChild { bounds, .. } => (bounds.physical_width(), bounds.physical_height()),
+            Self::Offscreen { width, height, .. } => (width, height),
+        }
+    }
+
+    pub const fn with_bounds(self, bounds: PreviewSurfaceBounds) -> Self {
+        match self {
+            Self::NativeChild {
+                parent_window_handle,
+                ..
+            } => Self::NativeChild {
+                parent_window_handle,
+                bounds,
+            },
+            Self::Offscreen { .. } => Self::Offscreen {
+                width: bounds.width,
+                height: bounds.height,
+                scale_factor_millis: bounds.scale_factor_millis,
             },
         }
     }
@@ -388,12 +428,12 @@ impl RealtimePreviewGpuPresentationTarget {
         self.bounds
     }
 
-    pub const fn width(&self) -> u32 {
-        self.bounds.width
+    pub fn width(&self) -> u32 {
+        self.config.width
     }
 
-    pub const fn height(&self) -> u32 {
-        self.bounds.height
+    pub fn height(&self) -> u32 {
+        self.config.height
     }
 
     pub const fn scale_factor_millis(&self) -> u32 {
@@ -416,13 +456,23 @@ impl RealtimePreviewGpuPresentationTarget {
         Ok(())
     }
 
-    pub(crate) fn drawable_lifecycle_diagnostic(&self) -> Option<String> {
+    pub fn drawable_lifecycle_diagnostic(&self) -> Option<String> {
         #[cfg(target_os = "macos")]
         {
             return self
                 .macos_attachment
                 .as_ref()
-                .map(|attachment| attachment.drawable_lifecycle_diagnostic());
+                .map(|attachment| {
+                    format!(
+                        "surfaceConfig{{width={},height={},logicalWidth={},logicalHeight={},scaleFactorMillis={}}}; {}",
+                        self.config.width,
+                        self.config.height,
+                        self.bounds.width,
+                        self.bounds.height,
+                        self.bounds.scale_factor_millis,
+                        attachment.drawable_lifecycle_diagnostic()
+                    )
+                });
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -455,8 +505,10 @@ impl RealtimePreviewGpuPresentationTarget {
             attachment.update_bounds(bounds)?;
         }
         self.bounds = bounds;
-        self.config.width = bounds.width;
-        self.config.height = bounds.height;
+        let (presentation_width, presentation_height) =
+            self.descriptor.with_bounds(bounds).presentation_size();
+        self.config.width = presentation_width;
+        self.config.height = presentation_height;
         self.surface.configure(device, &self.config);
         self.descriptor = match self.descriptor {
             PreviewSurfaceDescriptor::NativeChild {
@@ -622,6 +674,49 @@ mod native_surface_contracts {
             error.kind(),
             PreviewSurfaceDiagnosticKind::MissingParentHandle
         );
+    }
+
+    #[test]
+    fn native_child_presentation_size_uses_physical_drawable_pixels() {
+        let descriptor = PreviewSurfaceDescriptor::NativeChild {
+            parent_window_handle: NativeParentWindowHandle::Mock(42),
+            bounds: PreviewSurfaceBounds {
+                x: 10,
+                y: 20,
+                width: 641,
+                height: 359,
+                scale_factor_millis: 2000,
+            },
+        };
+
+        assert_eq!(descriptor.presentation_size(), (1282, 718));
+    }
+
+    #[test]
+    fn native_child_physical_size_rounds_fractional_backing_scale() {
+        let bounds = PreviewSurfaceBounds {
+            x: 0,
+            y: 0,
+            width: 101,
+            height: 99,
+            scale_factor_millis: 1500,
+        };
+
+        assert_eq!(
+            (bounds.physical_width(), bounds.physical_height()),
+            (152, 149)
+        );
+    }
+
+    #[test]
+    fn offscreen_presentation_size_uses_requested_pixel_size() {
+        let descriptor = PreviewSurfaceDescriptor::Offscreen {
+            width: 640,
+            height: 360,
+            scale_factor_millis: 2000,
+        };
+
+        assert_eq!(descriptor.presentation_size(), (640, 360));
     }
 
     #[test]
