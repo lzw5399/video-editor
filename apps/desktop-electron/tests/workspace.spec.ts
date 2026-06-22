@@ -607,6 +607,12 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByRole("button", { name: "导入素材" })).toBeVisible();
     const materialPanel = page.locator('[aria-label="素材面板"]');
     await expect(page.getByRole("navigation", { name: "资源分类" })).toHaveCount(0);
+    const mediaSourceRail = page.getByRole("navigation", { name: "媒体来源" });
+    await expect(mediaSourceRail).toBeVisible();
+    await expect(mediaSourceRail.getByRole("button", { name: "导入" })).toHaveAttribute("aria-current", "page");
+    for (const source of ["我的", "AI生成", "云素材", "官方素材"]) {
+      await expect(mediaSourceRail.getByRole("button", { name: source })).toBeDisabled();
+    }
     await expect(page.getByLabel("草稿包路径")).toHaveCount(0);
     await expect(page.getByLabel("素材路径")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "导入路径" })).toHaveCount(0);

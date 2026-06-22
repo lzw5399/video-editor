@@ -52,8 +52,20 @@ type FeaturePanelProps = {
 };
 
 type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
+type MediaSourceSection = {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+};
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
+const MEDIA_SOURCE_SECTIONS: readonly MediaSourceSection[] = [
+  { label: "导入", active: true, disabled: false },
+  { label: "我的", active: false, disabled: true },
+  { label: "AI生成", active: false, disabled: true },
+  { label: "云素材", active: false, disabled: true },
+  { label: "官方素材", active: false, disabled: true }
+];
 
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   let content: React.ReactElement;
@@ -119,103 +131,121 @@ function MaterialPanel({
   );
 
   return (
-    <div className="feature-panel-content">
-      <div className="panel-header">
-        <h2>媒体</h2>
-        <button type="button" className="primary-action" onClick={onImportMaterial} disabled={workspace.pendingCommand !== null}>
-          导入素材
-        </button>
-      </div>
-
-      {showDeveloperDiagnostics ? (
-        <div className="field-stack advanced-import-fields">
-          <label className="field-row">
-            <span>草稿包路径</span>
-            <input value={bundlePath} onChange={(event) => onBundlePathChange(event.currentTarget.value)} />
-          </label>
-          <label className="field-row">
-            <span>素材路径</span>
-            <input value={materialPath} onChange={(event) => onMaterialPathChange(event.currentTarget.value)} />
-          </label>
-          <div className="button-row">
+    <div className="feature-panel-content media-feature-panel">
+      <div className="media-panel-layout">
+        <nav className="media-source-rail" aria-label="媒体来源">
+          {MEDIA_SOURCE_SECTIONS.map((section) => (
             <button
+              key={section.label}
               type="button"
-              className="secondary-action"
-              onClick={onImportMaterialFromPath}
-              disabled={workspace.pendingCommand !== null || materialPath.trim().length === 0}
+              className={section.active ? "active" : ""}
+              aria-current={section.active ? "page" : undefined}
+              disabled={section.disabled}
             >
-              导入路径
+              {section.label}
             </button>
-            <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
-              刷新
-            </button>
-            <button type="button" className="secondary-action" onClick={onListMissingMaterials}>
-              检查丢失
+          ))}
+        </nav>
+
+        <div className="media-library-pane">
+          <div className="panel-header">
+            <h2>媒体</h2>
+            <button type="button" className="primary-action" onClick={onImportMaterial} disabled={workspace.pendingCommand !== null}>
+              导入素材
             </button>
           </div>
+
+          {showDeveloperDiagnostics ? (
+            <div className="field-stack advanced-import-fields">
+              <label className="field-row">
+                <span>草稿包路径</span>
+                <input value={bundlePath} onChange={(event) => onBundlePathChange(event.currentTarget.value)} />
+              </label>
+              <label className="field-row">
+                <span>素材路径</span>
+                <input value={materialPath} onChange={(event) => onMaterialPathChange(event.currentTarget.value)} />
+              </label>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={onImportMaterialFromPath}
+                  disabled={workspace.pendingCommand !== null || materialPath.trim().length === 0}
+                >
+                  导入路径
+                </button>
+                <button type="button" className="secondary-action" onClick={onRefreshMaterials}>
+                  刷新
+                </button>
+                <button type="button" className="secondary-action" onClick={onListMissingMaterials}>
+                  检查丢失
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="media-tool-row">
+            <input
+              aria-label="搜索素材"
+              placeholder="搜索素材"
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
+            />
+          </div>
+
+          <div className="material-filter-bar" role="group" aria-label="素材筛选">
+            {MATERIAL_FILTERS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={filter === value ? "active" : ""}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+
+          {showDeveloperDiagnostics && workspace.materialDiagnostics.length > 0 ? (
+            <div className="diagnostic-list" aria-label="素材诊断">
+              {workspace.materialDiagnostics.map((diagnostic) => (
+                <p key={`${diagnostic.materialId}-${diagnostic.kind}`}>{formatMaterialDiagnostic(diagnostic)}</p>
+              ))}
+            </div>
+          ) : null}
+
+          {showDeveloperDiagnostics ? (
+            <ResourceTaskStrip
+              resourcePanel={workspace.resourcePanel}
+              pending={workspace.pendingCommand !== null}
+              onRefresh={onRefreshArtifactStatus}
+              onCancel={onCancelArtifactGeneration}
+              onRetry={onRetryArtifactGeneration}
+              onResume={onResumeArtifactGeneration}
+            />
+          ) : null}
+
+          {showDeveloperDiagnostics ? (
+            <ResourceMaintenance
+              resourcePanel={workspace.resourcePanel}
+              pending={workspace.pendingCommand !== null}
+              onPrepareCleanup={onPrepareArtifactCleanup}
+              onConfirmCleanup={onConfirmArtifactCleanup}
+              onDismiss={onDismissResourceNotice}
+            />
+          ) : null}
+
+          <MaterialList
+            bundlePath={bundlePath}
+            materials={filteredMaterials}
+            resourceStatuses={workspace.resourcePanel.materials}
+            pending={workspace.pendingCommand !== null}
+            showResourceDiagnostics={showDeveloperDiagnostics}
+            onAddTimelineSegment={onAddTimelineSegment}
+          />
         </div>
-      ) : null}
-
-      <div className="media-tool-row">
-        <input
-          aria-label="搜索素材"
-          placeholder="搜索素材"
-          value={search}
-          onChange={(event) => setSearch(event.currentTarget.value)}
-        />
       </div>
-
-      <div className="material-filter-bar" role="group" aria-label="素材筛选">
-        {MATERIAL_FILTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={filter === value ? "active" : ""}
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-
-      {showDeveloperDiagnostics && workspace.materialDiagnostics.length > 0 ? (
-        <div className="diagnostic-list" aria-label="素材诊断">
-          {workspace.materialDiagnostics.map((diagnostic) => (
-            <p key={`${diagnostic.materialId}-${diagnostic.kind}`}>{formatMaterialDiagnostic(diagnostic)}</p>
-          ))}
-        </div>
-      ) : null}
-
-      {showDeveloperDiagnostics ? (
-        <ResourceTaskStrip
-          resourcePanel={workspace.resourcePanel}
-          pending={workspace.pendingCommand !== null}
-          onRefresh={onRefreshArtifactStatus}
-          onCancel={onCancelArtifactGeneration}
-          onRetry={onRetryArtifactGeneration}
-          onResume={onResumeArtifactGeneration}
-        />
-      ) : null}
-
-      {showDeveloperDiagnostics ? (
-        <ResourceMaintenance
-          resourcePanel={workspace.resourcePanel}
-          pending={workspace.pendingCommand !== null}
-          onPrepareCleanup={onPrepareArtifactCleanup}
-          onConfirmCleanup={onConfirmArtifactCleanup}
-          onDismiss={onDismissResourceNotice}
-        />
-      ) : null}
-
-      <MaterialList
-        bundlePath={bundlePath}
-        materials={filteredMaterials}
-        resourceStatuses={workspace.resourcePanel.materials}
-        pending={workspace.pendingCommand !== null}
-        showResourceDiagnostics={showDeveloperDiagnostics}
-        onAddTimelineSegment={onAddTimelineSegment}
-      />
     </div>
   );
 }
