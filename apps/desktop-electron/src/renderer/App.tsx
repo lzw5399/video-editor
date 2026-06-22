@@ -215,6 +215,7 @@ export function App(): React.ReactElement {
   const playheadRef = useRef(playheadUs);
   const projectSessionRef = useRef<ProjectSessionClientState | null>(null);
   const commandInFlightRef = useRef(false);
+  const artifactCommandInFlightRef = useRef(false);
   const audioCommandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
   const realtimePreviewSnapshotRef = useRef<RealtimePreviewProjectSessionSnapshotKey | null>(null);
@@ -587,6 +588,10 @@ export function App(): React.ReactElement {
     return null;
   }
 
+  function artifactSessionId(current: WorkspaceState): string {
+    return projectSessionRef.current?.sessionId ?? current.resourcePanel.sessionId;
+  }
+
   function currentProjectSessionAudioRequest(action: string): { projectSessionId: string; expectedRevision: number } | null {
     const request = currentProjectSessionReadRequest(action);
     return request === null
@@ -908,12 +913,11 @@ export function App(): React.ReactElement {
     pendingCommand: string,
     applyResult: ArtifactCommandResultApplier<T>
   ): Promise<void> {
-    if (commandInFlightRef.current) {
+    if (artifactCommandInFlightRef.current) {
       setWorkspace((current) => {
-        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
+        const message = commandErrorMessage("资源任务仍在执行，请等待当前资源操作完成");
         const next = {
           ...current,
-          commandError: message,
           resourcePanel: resourcePanelWithError(current.resourcePanel, message)
         };
         workspaceRef.current = next;
@@ -922,11 +926,11 @@ export function App(): React.ReactElement {
       return;
     }
 
-    commandInFlightRef.current = true;
+    artifactCommandInFlightRef.current = true;
     setWorkspace((current) => {
       const next = {
         ...current,
-        pendingCommand,
+        pendingCommand: current.pendingCommand ?? pendingCommand,
         commandError: null,
         resourcePanel: {
           ...current.resourcePanel,
@@ -941,24 +945,38 @@ export function App(): React.ReactElement {
     try {
       const result = await runCommand(workspaceRef.current);
       setWorkspace((current) => {
-        const next = applyResult(current, result);
+        const applied = applyResult(current, result);
+        const next =
+          current.pendingCommand === pendingCommand
+            ? applied
+            : {
+                ...applied,
+                pendingCommand: current.pendingCommand
+              };
         workspaceRef.current = next;
         return next;
       });
     } catch (error: unknown) {
       const message = commandErrorMessage(error instanceof Error ? error.message : String(error));
       setWorkspace((current) => {
-        const next = {
+        const applied = {
           ...current,
           pendingCommand: null,
           commandError: message,
           resourcePanel: resourcePanelWithError(current.resourcePanel, message)
         };
+        const next =
+          current.pendingCommand === pendingCommand
+            ? applied
+            : {
+                ...applied,
+                pendingCommand: current.pendingCommand
+              };
         workspaceRef.current = next;
         return next;
       });
     } finally {
-      commandInFlightRef.current = false;
+      artifactCommandInFlightRef.current = false;
     }
   }
 
@@ -966,7 +984,7 @@ export function App(): React.ReactElement {
     void executeArtifactCommand<ArtifactStatusSummary>(
       (current) =>
         window.videoEditorCore.getArtifactStatus({
-          sessionId: current.resourcePanel.sessionId,
+          sessionId: artifactSessionId(current),
           bundlePath
         }),
       "读取资源状态",
@@ -979,7 +997,7 @@ export function App(): React.ReactElement {
       await executeArtifactCommand<ArtifactStatusSummary>(
         (current) =>
           window.videoEditorCore.getArtifactStatus({
-            sessionId: current.resourcePanel.sessionId,
+            sessionId: artifactSessionId(current),
             bundlePath
           }),
         "读取资源状态",
@@ -988,7 +1006,7 @@ export function App(): React.ReactElement {
       await executeArtifactCommand<ArtifactStatusSummary>(
         (current) =>
           window.videoEditorCore.refreshArtifactStatus({
-            sessionId: current.resourcePanel.sessionId,
+            sessionId: artifactSessionId(current),
             bundlePath
           }),
         "刷新状态",
@@ -1020,18 +1038,18 @@ export function App(): React.ReactElement {
       (current) =>
         action === "cancel"
           ? window.videoEditorCore.cancelArtifactGeneration({
-              sessionId: current.resourcePanel.sessionId,
+              sessionId: artifactSessionId(current),
               bundlePath,
               jobId
             })
           : action === "retry"
             ? window.videoEditorCore.retryArtifactGeneration({
-                sessionId: current.resourcePanel.sessionId,
+                sessionId: artifactSessionId(current),
                 bundlePath,
                 jobId
               })
             : window.videoEditorCore.resumeArtifactGeneration({
-                sessionId: current.resourcePanel.sessionId,
+                sessionId: artifactSessionId(current),
                 bundlePath,
                 jobId
               }),
@@ -1044,7 +1062,7 @@ export function App(): React.ReactElement {
     void executeArtifactCommand<ArtifactQuotaStatus>(
       (current) =>
         window.videoEditorCore.getArtifactQuotaStatus({
-          sessionId: current.resourcePanel.sessionId,
+          sessionId: artifactSessionId(current),
           bundlePath
         }),
       "检查缓存空间",
@@ -1067,7 +1085,7 @@ export function App(): React.ReactElement {
     void executeArtifactCommand<ArtifactMaintenanceResult>(
       (current) =>
         window.videoEditorCore.runArtifactGarbageCollection({
-          sessionId: current.resourcePanel.sessionId,
+          sessionId: artifactSessionId(current),
           bundlePath,
           dryRun: false
         }),
@@ -1316,8 +1334,8 @@ export function App(): React.ReactElement {
     );
   }
 
-  async function importMaterialPath(path: string): Promise<void> {
-    await executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(
+  async function importMaterialPath(path: string): Promise<boolean> {
+    const result = await executeProjectSessionIntent<ProjectSessionImportMaterialResponse>(
       {
         kind: "importMaterial",
         materialPath: path
@@ -1342,6 +1360,7 @@ export function App(): React.ReactElement {
         };
       }
     );
+    return result !== null && result.ok && result.data !== null;
   }
 
   async function handleCreateProject(): Promise<void> {
@@ -1517,7 +1536,9 @@ export function App(): React.ReactElement {
         }));
         return;
       }
-      await importMaterialPath(fallbackPath);
+      if (await importMaterialPath(fallbackPath)) {
+        handleRefreshArtifactStatus();
+      }
       return;
     }
 
@@ -1528,8 +1549,12 @@ export function App(): React.ReactElement {
       }
 
       setMaterialPath(result.filePaths[0] ?? "");
+      let importedAny = false;
       for (const selectedPath of result.filePaths) {
-        await importMaterialPath(selectedPath);
+        importedAny = (await importMaterialPath(selectedPath)) || importedAny;
+      }
+      if (importedAny) {
+        handleRefreshArtifactStatus();
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1550,7 +1575,9 @@ export function App(): React.ReactElement {
       }));
       return;
     }
-    await importMaterialPath(fallbackPath);
+    if (await importMaterialPath(fallbackPath)) {
+      handleRefreshArtifactStatus();
+    }
   }
 
   async function handleRefreshMaterials(): Promise<void> {

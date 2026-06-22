@@ -415,6 +415,12 @@ pub(crate) struct ProjectSessionPreviewSnapshot {
     pub bundle_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ProjectSessionArtifactSnapshot {
+    pub draft: Draft,
+    pub bundle_path: PathBuf,
+}
+
 pub fn create_project_session(request: serde_json::Value) -> Result<serde_json::Value> {
     let request = match serde_json::from_value::<CreateProjectSessionRequest>(request) {
         Ok(request) => request,
@@ -536,6 +542,31 @@ pub(crate) fn project_session_snapshot(
         draft: session.draft.clone(),
         bundle_path: session.bundle_path.clone(),
     })
+}
+
+pub(crate) fn project_session_artifact_snapshot(
+    session_id: &str,
+    bundle_path: &Path,
+) -> std::result::Result<Option<ProjectSessionArtifactSnapshot>, String> {
+    let registry = global_project_session_registry();
+    let registry = registry
+        .lock()
+        .map_err(|_| "project session registry lock poisoned".to_string())?;
+    let Some(session) = registry.sessions.get(session_id) else {
+        return Ok(None);
+    };
+    if session.bundle_path != bundle_path {
+        return Err(format!(
+            "Artifact session bundle mismatch: session {} is bound to {} but request used {}",
+            session_id,
+            session.bundle_path.display(),
+            bundle_path.display()
+        ));
+    }
+    Ok(Some(ProjectSessionArtifactSnapshot {
+        draft: session.draft.clone(),
+        bundle_path: session.bundle_path.clone(),
+    }))
 }
 
 fn global_project_session_registry() -> &'static Mutex<ProjectSessionRegistry> {

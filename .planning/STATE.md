@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260623-ui-reference-playing-state-gate
-last_updated: "2026-06-22T18:06:04Z"
-last_activity: 2026-06-23 -- Completed quick task 260623-ui-reference-playing-state-gate: UI reference regression now captures playing-state native render-graph workspace and preview monitor screenshots alongside static and narrow evidence
+stopped_at: Completed quick task 260623-ui-reference-material-thumbnails
+last_updated: "2026-06-22T18:34:09Z"
+last_activity: 2026-06-23 -- Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-23 -- Completed quick task 260623-ui-reference-playing-state-gate: UI reference regression now captures playing-state native render-graph workspace and preview monitor screenshots alongside static and narrow evidence
+Last activity: 2026-06-23 -- Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 

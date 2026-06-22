@@ -160,6 +160,7 @@ dependencies = [
  "project_store",
  "realtime_preview_runtime",
  "render_graph",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

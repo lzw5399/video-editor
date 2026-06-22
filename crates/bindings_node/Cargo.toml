@@ -28,6 +28,7 @@ preview_service = { path = "../preview_service" }
 project_store = { path = "../project_store" }
 realtime_preview_runtime = { path = "../realtime_preview_runtime" }
 render_graph = { path = "../render_graph" }
+rusqlite = "0.40.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 wgpu = "29.0.3"

@@ -1,13 +1,16 @@
+use artifact_store::blob_store::{BlobStore, BlobWriteIntent};
 use artifact_store::jobs::{
     ArtifactGenerationRequest, ArtifactKind, GenerationProgress, acknowledge_generation_cancelled,
     cancel_generation_job, create_generation_job, fail_generation_chunk, start_generation_chunk,
 };
 use artifact_store::schema::open_artifact_store;
 use bindings_node::{
-    cancel_artifact_generation, execute_command, get_artifact_quota_status, get_artifact_status,
-    refresh_artifact_status, resume_artifact_generation, retry_artifact_generation,
-    run_artifact_garbage_collection,
+    cancel_artifact_generation, close_project_session, execute_command, get_artifact_quota_status,
+    get_artifact_status, open_project_session, refresh_artifact_status, resume_artifact_generation,
+    retry_artifact_generation, run_artifact_garbage_collection,
 };
+use draft_model::{Draft, Material, MaterialKind, Microseconds};
+use project_store::{StdPlatformFileSystem, create_project_bundle};
 use serde_json::{Value, json};
 
 #[test]
@@ -139,6 +142,80 @@ fn artifact_store_commands_retry_and_resume_restart_terminal_jobs() {
 
     assert_ui_safe(&retry);
     assert_ui_safe(&resume);
+}
+
+#[test]
+fn artifact_status_uses_project_session_materials_and_ready_thumbnail_refs() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let bundle_path = temp.path().join("draft.veproj");
+    let mut draft = Draft::new("draft-artifact-session", "Artifact Session");
+    let mut material = Material::new(
+        "material-video",
+        MaterialKind::Video,
+        "media/source.mp4",
+        "source.mp4",
+    );
+    material.metadata.duration = Some(Microseconds::new(3_000_000));
+    material.metadata.width = Some(1280);
+    material.metadata.height = Some(720);
+    material.metadata.has_video = true;
+    draft.materials.push(material);
+    create_project_bundle(&StdPlatformFileSystem, &bundle_path, &draft)
+        .expect("project bundle should be created");
+
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "artifact-project-session"
+    }))
+    .expect("project session should open");
+
+    let mut blobs = BlobStore::open(&bundle_path).expect("blob store should open");
+    let record = blobs
+        .write_blob_atomic(
+            BlobWriteIntent {
+                artifact_id: "thumbnail-material-video".to_owned(),
+                artifact_kind: "thumbnail".to_owned(),
+                stable_key: "thumbnail-material-video".to_owned(),
+                schema_fingerprint: "artifact-store-schema:v1".to_owned(),
+                generator_fingerprint: "test-generator:v1".to_owned(),
+                runtime_capability_fingerprint: Some("runtime:v1".to_owned()),
+                source_fingerprint: Some("source:v1".to_owned()),
+                graph_fingerprint: None,
+                output_profile_fingerprint: Some("thumbnail-png-320w:v1".to_owned()),
+                generation_parameters_json: json!({ "kind": "materialThumbnail" }),
+                expected_fingerprint: None,
+            },
+            b"thumbnail bytes",
+        )
+        .expect("ready thumbnail blob should be written");
+
+    let status = get_artifact_status(json!({
+        "sessionId": "artifact-project-session",
+        "bundlePath": bundle_path.display().to_string()
+    }))
+    .expect("artifact status should return envelope");
+
+    assert_eq!(status["ok"], true, "{status:#}");
+    let materials = status["data"]["materials"].as_array().unwrap();
+    assert_eq!(materials.len(), 1, "{status:#}");
+    assert_eq!(materials[0]["materialId"], "material-video");
+    assert_eq!(materials[0]["artifactKind"], "thumbnail");
+    assert_eq!(materials[0]["status"], "ready");
+    assert_eq!(materials[0]["displayRef"]["artifactKind"], "thumbnail");
+    assert_eq!(
+        materials[0]["displayRef"]["projectRelativeRef"],
+        format!("derived/{}", record.blob_relative_path)
+    );
+    assert!(
+        bundle_path
+            .join("derived")
+            .join(record.blob_relative_path)
+            .is_file()
+    );
+    assert_ui_safe(&status);
+
+    close_project_session(json!({ "sessionId": "artifact-project-session" }))
+        .expect("project session should close");
 }
 
 #[test]

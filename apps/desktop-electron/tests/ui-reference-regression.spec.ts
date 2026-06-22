@@ -183,7 +183,6 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
       VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: referenceProjectBundlePath(),
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(REFERENCE_MEDIA_FILES)
@@ -787,6 +786,7 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   const listButton = toolbar.getByRole("button", { name: "列表视图" });
   const materialCard = page.locator(".material-row").first();
   const thumbnail = materialCard.locator(".material-thumb");
+  const thumbnailImage = thumbnail.locator("img");
   const copy = materialCard.locator(".material-copy");
   const addButton = materialCard.getByRole("button", { name: /添加 .+ 到时间线/ });
   const panelBox = await stableBox(materialPanel, `素材面板 ${width}`);
@@ -819,6 +819,23 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(112);
   expect(thumbBox.y, `thumbnail must stay above title ${width}`).toBeLessThan(copyBox.y);
   expect(Math.abs(thumbBox.x - cardBox.x), `thumbnail should align with card left edge ${width}`).toBeLessThanOrEqual(1);
+  await expect(thumbnailImage, `material card must render a real thumbnail image ${width}`).toBeVisible();
+  await expect.poll(
+    () =>
+      thumbnailImage.evaluate((image) => {
+        if (!(image instanceof HTMLImageElement)) {
+          return false;
+        }
+        return image.naturalWidth > 0 && image.naturalHeight > 0 && /\/derived\/blobs\//.test(image.currentSrc);
+      }),
+    { message: `material thumbnail image must load from project derived artifacts ${width}` }
+  ).toBe(true);
+  const thumbnailImageMetrics = await thumbnailImage.evaluate((image) => ({
+    naturalWidth: image instanceof HTMLImageElement ? image.naturalWidth : 0,
+    naturalHeight: image instanceof HTMLImageElement ? image.naturalHeight : 0
+  }));
+  expect(thumbnailImageMetrics.naturalWidth, `material thumbnail natural width ${width}`).toBeGreaterThan(0);
+  expect(thumbnailImageMetrics.naturalHeight, `material thumbnail natural height ${width}`).toBeGreaterThan(0);
   await expect(materialCard).toHaveAttribute("draggable", "true");
   await expect.poll(() => materialAddButtonOpacity(addButton), {
     message: `material add affordance must be hidden by default so dragging is visually primary ${width}`
