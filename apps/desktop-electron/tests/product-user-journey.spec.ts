@@ -355,12 +355,8 @@ test("P0 user portrait material imports, drags to timeline, presents first frame
       join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-first-frame-before-play.png"),
       firstFrameHostImage
     );
-    const firstFrameMetrics = await measurePngLuma(page, firstFrameHostImage);
-    expect(firstFrameMetrics.width).toBeGreaterThan(100);
-    expect(firstFrameMetrics.height).toBeGreaterThan(100);
-    expect(firstFrameMetrics.mean, "first native preview frame must not be an empty black surface").toBeGreaterThan(5);
-    expect(firstFrameMetrics.mean, "first native preview frame must not be an empty white surface").toBeLessThan(250);
-    expect(firstFrameMetrics.stddev, "first native preview frame must contain visible image detail before playback").toBeGreaterThan(3);
+    const firstFrameMetrics = await measurePngPreviewPlacement(page, firstFrameHostImage);
+    expectP0NativePreviewPlacement(firstFrameMetrics, "first native preview frame");
 
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
     const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
@@ -371,10 +367,12 @@ test("P0 user portrait material imports, drags to timeline, presents first frame
     expect(after.hostState?.contentEvidence?.width).toBeGreaterThan(0);
     expect(after.hostState?.contentEvidence?.height).toBeGreaterThan(0);
     mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    const playingHostImage = await captureVisiblePreviewHostImage(page, app);
     writeFileSync(
       join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-native-preview.png"),
-      await captureVisiblePreviewHostImage(page, app)
+      playingHostImage
     );
+    expectP0NativePreviewPlacement(await measurePngPreviewPlacement(page, playingHostImage), "playing native preview frame");
     const hostCalls = await readRealtimePreviewHostCalls(app);
     expectNoProductFallbackCalls(hostCalls);
     expectNoRejectedSurfaceAcquire(hostCalls);
@@ -456,12 +454,16 @@ test("product playback UAT keeps the native surface aligned with the preview mon
   }
 });
 
-test("product playback keeps native preview synced while maximizing the window", async () => {
+test("product playback keeps native preview synced while resizing larger and smaller", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_LONG_AV_VIDEO]);
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_LONG_AV_VIDEO);
     await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await app.resizeMainWindow(1120, 720);
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? Number.POSITIVE_INFINITY, { timeout: 5_000 })
+      .toBeLessThanOrEqual(1120);
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
@@ -473,20 +475,58 @@ test("product playback keeps native preview synced while maximizing the window",
     const { after: playing } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
     const generationBeforeResize = playing.hostState?.playbackGeneration;
     const presentedBeforeResize = playing.hostState?.telemetry?.presentedFrameCount ?? 0;
-    expect(generationBeforeResize, "playback must expose a generation before maximize").not.toBeNull();
-    const metricsBeforeResize = await app.readWindowMetrics();
+    expect(generationBeforeResize, "playback must expose a generation before resize").not.toBeNull();
     const hostCallCountBeforeResize = (await readRealtimePreviewHostCalls(app)).length;
 
-    await app.maximizeMainWindow();
-    if (metricsBeforeResize !== null) {
-      await expect
-        .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? 0, { timeout: 5_000 })
-        .toBeGreaterThanOrEqual(metricsBeforeResize.bounds.width);
-    }
-
+    await app.resizeMainWindow(1500, 900);
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? 0, { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(1400);
     await waitForNativePreviewResizeSync(page, app, presentedBeforeResize);
     expectRealtimePreviewResizeDidNotRestartPlayback(
       (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeResize)
+    );
+    await expectPreviewHostCoversCanvas(page);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-expanded-workspace.png"),
+      fullPage: true
+    });
+    const expandedHostImage = await captureVisiblePreviewHostImage(page, app);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-expanded-host.png"),
+      expandedHostImage
+    );
+    expectLandscapeNativePreviewPlacement(
+      await measurePngPreviewPlacement(page, expandedHostImage),
+      "expanded playback native preview"
+    );
+
+    const beforeNarrow = await capturePreviewEvidence(page);
+    const presentedBeforeNarrow = beforeNarrow.hostState?.telemetry?.presentedFrameCount ?? 0;
+    const hostCallCountBeforeNarrow = (await readRealtimePreviewHostCalls(app)).length;
+    await app.resizeMainWindow(1120, 720);
+    await expect
+      .poll(async () => (await app.readWindowMetrics())?.bounds.width ?? Number.POSITIVE_INFINITY, { timeout: 5_000 })
+      .toBeLessThanOrEqual(1120);
+    await waitForNativePreviewResizeSync(page, app, presentedBeforeNarrow);
+    expectRealtimePreviewResizeDidNotRestartPlayback(
+      (await readRealtimePreviewHostCalls(app)).slice(hostCallCountBeforeNarrow)
+    );
+    await expectPreviewHostCoversCanvas(page);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-narrow-workspace.png"),
+      fullPage: true
+    });
+    const narrowHostImage = await captureVisiblePreviewHostImage(page, app);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-narrow-host.png"),
+      narrowHostImage
+    );
+    expectLandscapeNativePreviewPlacement(
+      await measurePngPreviewPlacement(page, narrowHostImage),
+      "narrow playback native preview"
     );
 
     expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
@@ -688,7 +728,20 @@ async function waitForActiveSubtitleEvidence(
   throw new Error(`Timed out waiting for active subtitle ${subtitle}: ${JSON.stringify(lastEvidence)}`);
 }
 
-async function measurePngLuma(page: Page, image: Buffer): Promise<{ width: number; height: number; mean: number; stddev: number }> {
+type PngPreviewPlacementMetrics = {
+  width: number;
+  height: number;
+  mean: number;
+  stddev: number;
+  aspectRatio: number;
+  foregroundCoverage: number;
+  foregroundCenterOffsetX: number;
+  foregroundCenterOffsetY: number;
+  horizontalMarginDeltaRatio: number;
+  verticalMarginDeltaRatio: number;
+};
+
+async function measurePngPreviewPlacement(page: Page, image: Buffer): Promise<PngPreviewPlacementMetrics> {
   const base64 = image.toString("base64");
   return page.evaluate(async (pngBase64) => {
     const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
@@ -706,22 +759,78 @@ async function measurePngLuma(page: Page, image: Buffer): Promise<{ width: numbe
     let count = 0;
     let sum = 0;
     let sumSquares = 0;
-    const pixelStride = 4 * 4;
-    for (let index = 0; index < data.length; index += pixelStride) {
+    let foregroundCount = 0;
+    let minX = canvas.width;
+    let minY = canvas.height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let index = 0; index < data.length; index += 4) {
       const luma = 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2];
+      const pixelIndex = index / 4;
+      const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
       count += 1;
       sum += luma;
       sumSquares += luma * luma;
+      if (luma > 12) {
+        foregroundCount += 1;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
     }
     const mean = count === 0 ? 0 : sum / count;
     const variance = count === 0 ? 0 : Math.max(0, sumSquares / count - mean * mean);
+    const hasForeground = foregroundCount > 0;
+    const foregroundCenterX = hasForeground ? (minX + maxX + 1) / 2 : canvas.width / 2;
+    const foregroundCenterY = hasForeground ? (minY + maxY + 1) / 2 : canvas.height / 2;
+    const leftMargin = hasForeground ? minX : canvas.width;
+    const rightMargin = hasForeground ? canvas.width - maxX - 1 : canvas.width;
+    const topMargin = hasForeground ? minY : canvas.height;
+    const bottomMargin = hasForeground ? canvas.height - maxY - 1 : canvas.height;
     return {
       width: canvas.width,
       height: canvas.height,
       mean,
-      stddev: Math.sqrt(variance)
+      stddev: Math.sqrt(variance),
+      aspectRatio: canvas.height === 0 ? 0 : canvas.width / canvas.height,
+      foregroundCoverage: count === 0 ? 0 : foregroundCount / count,
+      foregroundCenterOffsetX: canvas.width === 0 ? 0 : Math.abs(foregroundCenterX - canvas.width / 2) / canvas.width,
+      foregroundCenterOffsetY: canvas.height === 0 ? 0 : Math.abs(foregroundCenterY - canvas.height / 2) / canvas.height,
+      horizontalMarginDeltaRatio: canvas.width === 0 ? 0 : Math.abs(leftMargin - rightMargin) / canvas.width,
+      verticalMarginDeltaRatio: canvas.height === 0 ? 0 : Math.abs(topMargin - bottomMargin) / canvas.height
     };
   }, base64);
+}
+
+function expectP0NativePreviewPlacement(metrics: PngPreviewPlacementMetrics, label: string): void {
+  expect(metrics.width, `${label} width`).toBeGreaterThan(100);
+  expect(metrics.height, `${label} height`).toBeGreaterThan(100);
+  expect(metrics.aspectRatio, `${label} must keep the portrait material aspect ratio`).toBeGreaterThan(0.54);
+  expect(metrics.aspectRatio, `${label} must keep the portrait material aspect ratio`).toBeLessThan(0.59);
+  expect(metrics.mean, `${label} must not be an empty black surface`).toBeGreaterThan(5);
+  expect(metrics.mean, `${label} must not be an empty white surface`).toBeLessThan(250);
+  expect(metrics.stddev, `${label} must contain visible image detail`).toBeGreaterThan(3);
+  expect(metrics.foregroundCoverage, `${label} must not be mostly black padding`).toBeGreaterThan(0.7);
+  expect(metrics.foregroundCenterOffsetX, `${label} foreground must not be shifted toward the left or right edge`).toBeLessThanOrEqual(0.06);
+  expect(metrics.foregroundCenterOffsetY, `${label} foreground must not be shifted toward the top or bottom edge`).toBeLessThanOrEqual(0.06);
+  expect(metrics.horizontalMarginDeltaRatio, `${label} black side margins must be balanced`).toBeLessThanOrEqual(0.08);
+  expect(metrics.verticalMarginDeltaRatio, `${label} black top/bottom margins must be balanced`).toBeLessThanOrEqual(0.08);
+}
+
+function expectLandscapeNativePreviewPlacement(metrics: PngPreviewPlacementMetrics, label: string): void {
+  expect(metrics.width, `${label} width`).toBeGreaterThan(100);
+  expect(metrics.height, `${label} height`).toBeGreaterThan(100);
+  expect(metrics.aspectRatio, `${label} must keep a landscape preview shape`).toBeGreaterThan(1.6);
+  expect(metrics.aspectRatio, `${label} must keep a landscape preview shape`).toBeLessThan(1.9);
+  expect(metrics.mean, `${label} must not be an empty black surface`).toBeGreaterThan(5);
+  expect(metrics.stddev, `${label} must contain visible image detail`).toBeGreaterThan(3);
+  expect(metrics.foregroundCoverage, `${label} must not render into only a lower-left subsection`).toBeGreaterThan(0.7);
+  expect(metrics.foregroundCenterOffsetX, `${label} foreground must not be shifted toward the left or right edge`).toBeLessThanOrEqual(0.06);
+  expect(metrics.foregroundCenterOffsetY, `${label} foreground must not be shifted toward the top or bottom edge`).toBeLessThanOrEqual(0.06);
+  expect(metrics.horizontalMarginDeltaRatio, `${label} side margins must be balanced`).toBeLessThanOrEqual(0.08);
+  expect(metrics.verticalMarginDeltaRatio, `${label} top/bottom margins must be balanced`).toBeLessThanOrEqual(0.08);
 }
 
 test("product playback UAT keeps video presentation synchronized with timeline through sequence end", async () => {
@@ -849,7 +958,7 @@ function expectRealtimePreviewResizeDidNotRestartPlayback(hostCallsAfterResize: 
 
   expect(
     hostCallsAfterResize.some((call) => call.kind === "updateSurfaceBounds"),
-    `maximizing the product window must update native surface bounds: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
+    `resizing the product window must update native surface bounds: ${JSON.stringify(hostCallsAfterResize.slice(-20))}`
   ).toBe(true);
   expect(
     restartCalls,

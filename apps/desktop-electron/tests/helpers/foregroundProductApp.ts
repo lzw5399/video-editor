@@ -27,6 +27,7 @@ export type ForegroundProductAppController = {
   readForegroundDiagnostics: () => Promise<ForegroundProductAppDiagnostics>;
   readWindowMetrics: () => Promise<ProductWindowMetrics>;
   maximizeMainWindow: () => Promise<ProductWindowMetrics>;
+  resizeMainWindow: (width: number, height: number) => Promise<ProductWindowMetrics>;
 };
 
 export type ProductWindowMetrics = {
@@ -64,6 +65,7 @@ declare global {
       getRealtimePreviewHostCalls: () => Promise<unknown[]>;
       getWindowMetrics: () => Promise<ProductWindowMetrics>;
       maximizeMainWindow: () => Promise<ProductWindowMetrics>;
+      resizeMainWindow: (width: number, height: number) => Promise<ProductWindowMetrics>;
     };
   }
 }
@@ -114,6 +116,7 @@ export async function launchForegroundProductApp(
     readRealtimePreviewHostCalls: async () => readTestObservation(page, "getRealtimePreviewHostCalls", diagnostics),
     readWindowMetrics: async () => readTestWindowMetrics(page, diagnostics),
     maximizeMainWindow: async () => maximizeTestWindow(page, diagnostics),
+    resizeMainWindow: async (width, height) => resizeTestWindow(page, diagnostics, width, height),
     readForegroundDiagnostics: async () =>
       readForegroundDiagnostics({
         appBundlePath,
@@ -414,4 +417,19 @@ async function maximizeTestWindow(
     }
     return bridge.maximizeMainWindow();
   }, diagnostics);
+}
+
+async function resizeTestWindow(
+  page: Page,
+  diagnostics: ForegroundProductAppDiagnostics,
+  width: number,
+  height: number
+): Promise<ProductWindowMetrics> {
+  return page.evaluate(async ({ launchDiagnostics, targetWidth, targetHeight }) => {
+    const bridge = window.videoEditorTestObservations;
+    if (bridge === undefined) {
+      throw new Error(`Packaged product CDP test observation bridge is unavailable: ${JSON.stringify(launchDiagnostics)}`);
+    }
+    return bridge.resizeMainWindow(targetWidth, targetHeight);
+  }, { launchDiagnostics: diagnostics, targetWidth: width, targetHeight: height });
 }

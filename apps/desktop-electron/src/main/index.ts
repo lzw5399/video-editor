@@ -132,6 +132,19 @@ type TestWindowMetrics = {
   contentBounds: Rectangle;
   displayScaleFactor: number;
 };
+
+function testWindowMetrics(window: BrowserWindow): TestWindowMetrics {
+  return {
+    bounds: window.getBounds(),
+    contentBounds: window.getContentBounds(),
+    displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+  };
+}
+
+function sanitizeTestWindowDimension(value: unknown, fallback: number): number {
+  return Math.max(320, Math.min(4096, Math.round(typeof value === "number" && Number.isFinite(value) ? value : fallback)));
+}
+
 type AudioPreviewCommandName =
   | "createAudioPreviewSession"
   | "playAudioPreview"
@@ -512,11 +525,7 @@ if (testObservationEnabled) {
     if (window === null) {
       throw new Error("No BrowserWindow is associated with the test observation sender");
     }
-    return {
-      bounds: window.getBounds(),
-      contentBounds: window.getContentBounds(),
-      displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
-    };
+    return testWindowMetrics(window);
   });
   ipcMain.handle("test:maximizeMainWindow", (event): TestWindowMetrics => {
     assertAllowedIpcSender(event);
@@ -525,11 +534,17 @@ if (testObservationEnabled) {
       throw new Error("No BrowserWindow is associated with the test observation sender");
     }
     window.maximize();
-    return {
-      bounds: window.getBounds(),
-      contentBounds: window.getContentBounds(),
-      displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
-    };
+    return testWindowMetrics(window);
+  });
+  ipcMain.handle("test:resizeMainWindow", (event, width: unknown, height: unknown): TestWindowMetrics => {
+    assertAllowedIpcSender(event);
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window === null) {
+      throw new Error("No BrowserWindow is associated with the test observation sender");
+    }
+    window.unmaximize();
+    window.setSize(sanitizeTestWindowDimension(width, 1120), sanitizeTestWindowDimension(height, 720));
+    return testWindowMetrics(window);
   });
 }
 

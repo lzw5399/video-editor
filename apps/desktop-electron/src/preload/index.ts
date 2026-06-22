@@ -115,7 +115,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       getProjectSessionCalls: () => ipcRenderer.invoke("test:getProjectSessionCalls"),
       getRealtimePreviewHostCalls: () => ipcRenderer.invoke("test:getRealtimePreviewHostCalls"),
       getWindowMetrics: () => ipcRenderer.invoke("test:getWindowMetrics"),
-      maximizeMainWindow: () => ipcRenderer.invoke("test:maximizeMainWindow")
+      maximizeMainWindow: () => ipcRenderer.invoke("test:maximizeMainWindow"),
+      resizeMainWindow: (width: number, height: number) => ipcRenderer.invoke("test:resizeMainWindow", width, height)
     });
   }
 }
