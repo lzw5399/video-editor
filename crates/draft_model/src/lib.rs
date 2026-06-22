@@ -31,11 +31,14 @@ pub use delta::{
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
 pub use font_registry::{
+    BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH,
+    BUNDLED_SERIF_TEXT_FONT_REF, BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH,
+    BUNDLED_SERIF_TEXT_FONT_STYLE, BUNDLED_SERIF_TEXT_FONT_WEIGHT,
     BUNDLED_TEXT_FONT_COVERAGE_SAMPLE, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_PATH,
     BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
     BUNDLED_TEXT_FONT_STYLE, BUNDLED_TEXT_FONT_WEIGHT, BundledFontRegistryEntry,
-    BundledFontValidation, FontRegistryError, bundled_font_registry, bundled_text_font,
-    bundled_text_font_path, repository_root_from_manifest, resolve_bundled_font,
+    BundledFontValidation, FontRegistryError, bundled_font_path, bundled_font_registry,
+    bundled_text_font, bundled_text_font_path, repository_root_from_manifest, resolve_bundled_font,
     validate_bundled_font_registry,
 };
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};

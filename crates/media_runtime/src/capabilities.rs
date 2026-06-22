@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use draft_model::{
     BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
-    bundled_text_font_path, repository_root_from_manifest, validate_bundled_font_registry,
+    bundled_font_registry, bundled_text_font_path, repository_root_from_manifest,
+    validate_bundled_font_registry,
 };
 use serde::{Deserialize, Serialize};
 
@@ -398,7 +399,12 @@ fn resolved_text_font_paths() -> Vec<PathBuf> {
     if let Some(path) = env::var_os("VE_TEXT_FONT_PATH").map(PathBuf::from) {
         paths.push(path);
     }
-    paths.push(bundled_text_font_path());
+    let repository_root = repository_root_from_manifest();
+    paths.extend(
+        bundled_font_registry()
+            .iter()
+            .map(|font| font.font_path(&repository_root)),
+    );
     paths.extend([
         PathBuf::from("/System/Library/Fonts/PingFang.ttc"),
         PathBuf::from("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),

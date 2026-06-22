@@ -82,10 +82,23 @@ export type RealtimePreviewHostContentEvidence = {
 export type RealtimePreviewHostTextOverlayEvidence = {
   source: "text" | "subtitle";
   content: string;
+  fontFamily: string;
+  fontRef?: string | null;
+  fontSize: number;
+  color: string;
+  alignment: "left" | "center" | "right";
+  lineHeightMillis: number;
+  letterSpacingMillis: number;
   x: number;
   y: number;
   width: number;
   height: number;
+  visualPositionX: number;
+  visualPositionY: number;
+  visualScaleXMillis: number;
+  visualScaleYMillis: number;
+  visualRotationDegrees: number;
+  visualOpacityMillis: number;
 };
 
 export type RealtimePreviewHostSurfacePlacement = {

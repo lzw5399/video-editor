@@ -48,10 +48,24 @@ pub enum RealtimePlaybackSchedulerEvidenceSource {
 pub struct RealtimePlaybackTextOverlayEvidence {
     pub source: TextSegmentSource,
     pub content: String,
+    pub font_family: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_ref: Option<String>,
+    pub font_size: u32,
+    pub color: String,
+    pub alignment: String,
+    pub line_height_millis: u32,
+    pub letter_spacing_millis: u32,
     pub x: u32,
     pub y: u32,
     pub width: u32,
     pub height: u32,
+    pub visual_position_x: i32,
+    pub visual_position_y: i32,
+    pub visual_scale_x_millis: u32,
+    pub visual_scale_y_millis: u32,
+    pub visual_rotation_degrees: i32,
+    pub visual_opacity_millis: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,13 +460,34 @@ fn active_text_overlay_evidence(
             RealtimePlaybackTextOverlayEvidence {
                 source: text.overlay.source,
                 content: text.overlay.content.clone(),
+                font_family: text.overlay.font_family.clone(),
+                font_ref: text.overlay.font_ref.clone(),
+                font_size: text.overlay.font_size,
+                color: text.overlay.style.color.clone(),
+                alignment: text_alignment_label(text.overlay.alignment).to_owned(),
+                line_height_millis: text.overlay.line_height_millis,
+                letter_spacing_millis: text.overlay.letter_spacing_millis,
                 x: rect.x,
                 y: rect.y,
                 width: rect.width,
                 height: rect.height,
+                visual_position_x: text.visual.transform.position.x,
+                visual_position_y: text.visual.transform.position.y,
+                visual_scale_x_millis: text.visual.transform.scale.x_millis,
+                visual_scale_y_millis: text.visual.transform.scale.y_millis,
+                visual_rotation_degrees: text.visual.transform.rotation.degrees,
+                visual_opacity_millis: text.visual.transform.opacity.value_millis,
             }
         })
         .collect()
+}
+
+fn text_alignment_label(alignment: draft_model::TextAlignment) -> &'static str {
+    match alignment {
+        draft_model::TextAlignment::Left => "left",
+        draft_model::TextAlignment::Center => "center",
+        draft_model::TextAlignment::Right => "right",
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

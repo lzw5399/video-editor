@@ -1139,14 +1139,7 @@ fn push_wgpu_text_layer_draw(
         resources,
         draws,
         WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
-        textured_rect_vertices(
-            target,
-            i64::from(target_rect.x),
-            i64::from(target_rect.y),
-            target_rect.width,
-            target_rect.height,
-            text.visual.transform.opacity.value_millis.min(1_000) as f32 / 1_000.0,
-        ),
+        textured_text_rect_vertices(target, target_rect, &text.visual),
     );
     Ok(())
 }
@@ -1503,29 +1496,60 @@ fn textured_quad_vertices(
     )
 }
 
-fn textured_rect_vertices(
+fn textured_text_rect_vertices(
     target: &impl WgpuRenderTargetInfo,
-    x: i64,
-    y: i64,
-    width: u32,
-    height: u32,
-    opacity: f32,
+    rect: TargetRect,
+    visual: &SegmentVisual,
 ) -> Vec<u8> {
     let output = Dimensions {
         width: target.width(),
         height: target.height(),
     };
-    let left = x as f64;
-    let top = y as f64;
-    let right = left + f64::from(width);
-    let bottom = top + f64::from(height);
+    let scaled = Dimensions {
+        width: millis_of(rect.width, visual.transform.scale.x_millis).max(1),
+        height: millis_of(rect.height, visual.transform.scale.y_millis).max(1),
+    };
+    let base_left = i64::from(rect.x).saturating_add(visual_offset_to_target(
+        output.width,
+        visual.transform.position.x,
+    ));
+    let base_top = i64::from(rect.y).saturating_sub(visual_offset_to_target(
+        output.height,
+        visual.transform.position.y,
+    ));
+    let base_anchor_x = i64::from(millis_of(rect.width, visual.transform.anchor.x_millis));
+    let base_anchor_y = i64::from(millis_of(rect.height, visual.transform.anchor.y_millis));
+    let scaled_anchor_x = i64::from(millis_of(scaled.width, visual.transform.anchor.x_millis));
+    let scaled_anchor_y = i64::from(millis_of(scaled.height, visual.transform.anchor.y_millis));
+    let left = base_left
+        .saturating_add(base_anchor_x)
+        .saturating_sub(scaled_anchor_x) as f64;
+    let top = base_top
+        .saturating_add(base_anchor_y)
+        .saturating_sub(scaled_anchor_y) as f64;
+    let right = left + f64::from(scaled.width);
+    let bottom = top + f64::from(scaled.height);
+    let pivot_x = base_left.saturating_add(base_anchor_x) as f64;
+    let pivot_y = base_top.saturating_add(base_anchor_y) as f64;
+    let radians = f64::from(visual.transform.rotation.degrees).to_radians();
+    let sin = radians.sin();
+    let cos = radians.cos();
+    let opacity = visual.transform.opacity.value_millis.min(1_000) as f32 / 1_000.0;
     textured_vertices_from_corners(
         output,
         [
-            vertex_corner(left, top, 0.0, 0.0, 0.0, 1.0, output, 0.0, 0.0, opacity),
-            vertex_corner(right, top, 0.0, 0.0, 0.0, 1.0, output, 1.0, 0.0, opacity),
-            vertex_corner(right, bottom, 0.0, 0.0, 0.0, 1.0, output, 1.0, 1.0, opacity),
-            vertex_corner(left, bottom, 0.0, 0.0, 0.0, 1.0, output, 0.0, 1.0, opacity),
+            vertex_corner(
+                left, top, pivot_x, pivot_y, sin, cos, output, 0.0, 0.0, opacity,
+            ),
+            vertex_corner(
+                right, top, pivot_x, pivot_y, sin, cos, output, 1.0, 0.0, opacity,
+            ),
+            vertex_corner(
+                right, bottom, pivot_x, pivot_y, sin, cos, output, 1.0, 1.0, opacity,
+            ),
+            vertex_corner(
+                left, bottom, pivot_x, pivot_y, sin, cos, output, 0.0, 1.0, opacity,
+            ),
         ],
     )
 }
@@ -2093,6 +2117,10 @@ fn layer_placement(visual: &SegmentVisual, output: Dimensions, layer: Dimensions
 
 fn normalized_millis_to_canvas_pixel(span: u32, value_millis: i32) -> i64 {
     (i64::from(span) * i64::from(1_000 + value_millis)) / 2_000
+}
+
+fn visual_offset_to_target(span: u32, value_millis: i32) -> i64 {
+    (i64::from(span) * i64::from(value_millis)) / 2_000
 }
 
 fn millis_of(span: u32, millis: u32) -> u32 {

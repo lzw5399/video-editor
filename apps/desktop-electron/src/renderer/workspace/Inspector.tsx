@@ -84,6 +84,17 @@ type TextFormState = {
   source: TextSegment["source"];
 };
 
+const BUNDLED_TEXT_FONTS = [
+  {
+    family: "Noto Sans CJK SC",
+    fontRef: "font://bundled/noto-sans-cjk-sc-regular"
+  },
+  {
+    family: "Noto Serif CJK SC",
+    fontRef: "font://bundled/noto-serif-cjk-sc-regular"
+  }
+] as const;
+
 type CanvasPresetChoice = CanvasAspectRatioPreset | "custom";
 
 type CanvasFormState = {
@@ -128,8 +139,8 @@ const DEFAULT_TEXT_STATE: TextFormState = {
   shadowEnabled: false,
   backgroundColor: "#101010",
   backgroundEnabled: false,
-  fontFamily: "PingFang SC",
-  fontRef: null,
+  fontFamily: BUNDLED_TEXT_FONTS[0].family,
+  fontRef: BUNDLED_TEXT_FONTS[0].fontRef,
   lineHeightMillis: 1200,
   letterSpacingMillis: 0,
   textBoxWidthMillis: 800,
@@ -473,12 +484,19 @@ export function Inspector({
                       <span>字体</span>
                       <input
                         aria-label="字体"
+                        list="inspector-bundled-fonts"
                         value={textState.fontFamily}
                         onChange={(event) => {
                           const fontFamily = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, fontFamily }));
+                          const font = BUNDLED_TEXT_FONTS.find((entry) => entry.family === fontFamily);
+                          setTextState((current) => ({ ...current, fontFamily, fontRef: font?.fontRef ?? null }));
                         }}
                       />
+                      <datalist id="inspector-bundled-fonts">
+                        {BUNDLED_TEXT_FONTS.map((font) => (
+                          <option key={font.fontRef} value={font.family} />
+                        ))}
+                      </datalist>
                     </label>
                     <TextNumberField
                       label="字号"

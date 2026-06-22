@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use draft_model::{Microseconds, TargetTimerange, TextAlignment, resolve_bundled_font};
+use draft_model::{
+    Microseconds, TargetTimerange, TextAlignment, repository_root_from_manifest,
+    resolve_bundled_font,
+};
 use render_graph::{RenderGraph, RenderGraphPlan, RenderOutputProfile, RenderTextOverlay};
 use serde::{Deserialize, Serialize};
 
@@ -100,16 +103,31 @@ pub fn resolve_text_font(
 
     if let Some(font_ref) = &overlay.overlay.font_ref {
         if let Some(entry) = resolve_bundled_font(font_ref) {
-            if let Some(path) = &capability.bundled_font_path {
-                if capability.bundled_font_ref.as_deref() == Some(font_ref.as_str())
-                    && available.contains(path)
-                {
+            let registry_path = entry
+                .font_path(&repository_root_from_manifest())
+                .display()
+                .to_string();
+            let candidates = [
+                Some(registry_path.as_str()),
+                Some(entry.relative_path),
+                capability
+                    .bundled_font_path
+                    .as_deref()
+                    .filter(|_| capability.bundled_font_ref.as_deref() == Some(font_ref.as_str())),
+            ];
+            for path in candidates.into_iter().flatten() {
+                if available.contains(path) {
                     return Ok(ResolvedTextFont {
-                        family: capability
-                            .bundled_font_family
-                            .clone()
-                            .unwrap_or_else(|| entry.family.to_owned()),
-                        path: path.clone(),
+                        family: if capability.bundled_font_ref.as_deref() == Some(font_ref.as_str())
+                        {
+                            capability
+                                .bundled_font_family
+                                .clone()
+                                .unwrap_or_else(|| entry.family.to_owned())
+                        } else {
+                            entry.family.to_owned()
+                        },
+                        path: path.to_owned(),
                         candidate: font_ref.clone(),
                     });
                 }

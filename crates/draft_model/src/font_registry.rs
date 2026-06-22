@@ -12,17 +12,36 @@ pub const BUNDLED_TEXT_FONT_RELATIVE_PATH: &str =
 pub const BUNDLED_TEXT_FONT_LICENSE_PATH: &str = "assets/fonts/noto-sans-cjk-sc/OFL.txt";
 pub const BUNDLED_TEXT_FONT_LICENSE_SPDX: &str = "OFL-1.1";
 pub const BUNDLED_TEXT_FONT_COVERAGE_SAMPLE: &str = "标题字幕测试第一句";
+pub const BUNDLED_SERIF_TEXT_FONT_REF: &str = "font://bundled/noto-serif-cjk-sc-regular";
+pub const BUNDLED_SERIF_TEXT_FONT_FAMILY: &str = "Noto Serif CJK SC";
+pub const BUNDLED_SERIF_TEXT_FONT_STYLE: &str = "Regular";
+pub const BUNDLED_SERIF_TEXT_FONT_WEIGHT: u16 = 400;
+pub const BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH: &str =
+    "assets/fonts/noto-serif-cjk-sc/NotoSerifCJKsc-Regular.otf";
+pub const BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH: &str = "assets/fonts/noto-serif-cjk-sc/OFL.txt";
 
-const BUNDLED_FONTS: &[BundledFontRegistryEntry] = &[BundledFontRegistryEntry {
-    font_ref: BUNDLED_TEXT_FONT_REF,
-    family: BUNDLED_TEXT_FONT_FAMILY,
-    style: BUNDLED_TEXT_FONT_STYLE,
-    weight: BUNDLED_TEXT_FONT_WEIGHT,
-    relative_path: BUNDLED_TEXT_FONT_RELATIVE_PATH,
-    license_spdx: BUNDLED_TEXT_FONT_LICENSE_SPDX,
-    license_path: BUNDLED_TEXT_FONT_LICENSE_PATH,
-    coverage_sample: BUNDLED_TEXT_FONT_COVERAGE_SAMPLE,
-}];
+const BUNDLED_FONTS: &[BundledFontRegistryEntry] = &[
+    BundledFontRegistryEntry {
+        font_ref: BUNDLED_TEXT_FONT_REF,
+        family: BUNDLED_TEXT_FONT_FAMILY,
+        style: BUNDLED_TEXT_FONT_STYLE,
+        weight: BUNDLED_TEXT_FONT_WEIGHT,
+        relative_path: BUNDLED_TEXT_FONT_RELATIVE_PATH,
+        license_spdx: BUNDLED_TEXT_FONT_LICENSE_SPDX,
+        license_path: BUNDLED_TEXT_FONT_LICENSE_PATH,
+        coverage_sample: BUNDLED_TEXT_FONT_COVERAGE_SAMPLE,
+    },
+    BundledFontRegistryEntry {
+        font_ref: BUNDLED_SERIF_TEXT_FONT_REF,
+        family: BUNDLED_SERIF_TEXT_FONT_FAMILY,
+        style: BUNDLED_SERIF_TEXT_FONT_STYLE,
+        weight: BUNDLED_SERIF_TEXT_FONT_WEIGHT,
+        relative_path: BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH,
+        license_spdx: BUNDLED_TEXT_FONT_LICENSE_SPDX,
+        license_path: BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH,
+        coverage_sample: BUNDLED_TEXT_FONT_COVERAGE_SAMPLE,
+    },
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BundledFontRegistryEntry {
@@ -93,6 +112,10 @@ pub fn repository_root_from_manifest() -> PathBuf {
 
 pub fn bundled_text_font_path() -> PathBuf {
     bundled_text_font().font_path(&repository_root_from_manifest())
+}
+
+pub fn bundled_font_path(font_ref: &str) -> Option<PathBuf> {
+    resolve_bundled_font(font_ref).map(|font| font.font_path(&repository_root_from_manifest()))
 }
 
 pub fn validate_bundled_font_registry(

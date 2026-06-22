@@ -2,6 +2,7 @@ appId: org.videoeditor.desktop
 productName: Video Editor
 asar: true
 npmRebuild: false
+electronDist: node_modules/electron/dist
 directories:
   output: out
 files:

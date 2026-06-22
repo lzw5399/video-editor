@@ -1,8 +1,10 @@
 use std::path::Path;
 
 use draft_model::{
-    BUNDLED_TEXT_FONT_COVERAGE_SAMPLE, BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, TextFont,
-    bundled_font_registry, validate_bundled_font_registry,
+    BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_REF,
+    BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH, BUNDLED_TEXT_FONT_COVERAGE_SAMPLE,
+    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF, TextFont, bundled_font_registry,
+    validate_bundled_font_registry,
 };
 
 #[test]
@@ -35,6 +37,20 @@ fn font_registry_tracks_bundled_cjk_font_asset_license_and_glyphs() {
     let validations = validate_bundled_font_registry(&root).expect("bundled fonts should validate");
     assert!(validations.iter().any(|validation| {
         validation.font_ref == BUNDLED_TEXT_FONT_REF
+            && validation.covered_sample == BUNDLED_TEXT_FONT_COVERAGE_SAMPLE
+    }));
+    let serif = entries
+        .iter()
+        .find(|entry| entry.font_ref == BUNDLED_SERIF_TEXT_FONT_REF)
+        .expect("bundled serif font should be registered");
+    assert_eq!(serif.family, BUNDLED_SERIF_TEXT_FONT_FAMILY);
+    assert_eq!(serif.relative_path, BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH);
+    assert!(
+        root.join(serif.relative_path).is_file(),
+        "bundled serif font file should exist"
+    );
+    assert!(validations.iter().any(|validation| {
+        validation.font_ref == BUNDLED_SERIF_TEXT_FONT_REF
             && validation.covered_sample == BUNDLED_TEXT_FONT_COVERAGE_SAMPLE
     }));
 }

@@ -5,9 +5,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use draft_model::{
-    BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF,
-    BUNDLED_TEXT_FONT_RELATIVE_PATH, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
-    SegmentId,
+    BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH, BUNDLED_TEXT_FONT_FAMILY,
+    BUNDLED_TEXT_FONT_LICENSE_SPDX, BUNDLED_TEXT_FONT_REF, BUNDLED_TEXT_FONT_RELATIVE_PATH,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId,
 };
 use render_graph::{
     ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderAudioMixDiagnostic,
@@ -71,6 +71,7 @@ impl CompilerCapabilities {
                 env_text_font_path: Some("/fonts/PingFang.ttc".to_owned()),
                 available_font_paths: vec![
                     BUNDLED_TEXT_FONT_RELATIVE_PATH.to_owned(),
+                    BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH.to_owned(),
                     "/fonts/PingFang.ttc".to_owned(),
                     "/System/Library/Fonts/PingFang.ttc".to_owned(),
                     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf".to_owned(),

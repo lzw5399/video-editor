@@ -124,10 +124,24 @@ pub enum NativePreviewContentEvidenceSource {
 pub struct NativePreviewTextOverlayEvidence {
     pub source: TextSegmentSource,
     pub content: String,
+    pub font_family: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_ref: Option<String>,
+    pub font_size: u32,
+    pub color: String,
+    pub alignment: String,
+    pub line_height_millis: u32,
+    pub letter_spacing_millis: u32,
     pub x: u32,
     pub y: u32,
     pub width: u32,
     pub height: u32,
+    pub visual_position_x: i32,
+    pub visual_position_y: i32,
+    pub visual_scale_x_millis: u32,
+    pub visual_scale_y_millis: u32,
+    pub visual_rotation_degrees: i32,
+    pub visual_opacity_millis: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

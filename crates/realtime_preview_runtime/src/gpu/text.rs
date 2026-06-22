@@ -1,10 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 
 use draft_model::{
-    TextAlignment, bundled_text_font_path, repository_root_from_manifest, resolve_bundled_font,
+    TextAlignment, bundled_font_path, repository_root_from_manifest, resolve_bundled_font,
     validate_bundled_font_registry,
 };
 use fontdue::{Font, FontSettings, Metrics};
@@ -20,7 +21,7 @@ use crate::{
 pub const TEXT_PARITY_UNPROVEN_REASON: &str = "gpu text parity has not been proven with repository fonts; realtime preview must use fallback text rasterization";
 
 thread_local! {
-    static BUNDLED_TEXT_FONT: RefCell<Option<Result<Font, TextRasterizationError>>> = const { RefCell::new(None) };
+    static BUNDLED_TEXT_FONTS: RefCell<HashMap<String, Result<Font, TextRasterizationError>>> = RefCell::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,7 +279,7 @@ pub(crate) fn rasterize_text_overlay(
         segment_id: segment_id.clone(),
         font_ref: font_ref.to_owned(),
     })?;
-    with_bundled_text_font(|font| {
+    with_bundled_text_font(font_ref, |font| {
         let font_size = sampled
             .map(|sample| sample.font_size)
             .unwrap_or(text.overlay.font_size)
@@ -389,27 +390,30 @@ pub(crate) fn rasterize_text_overlay(
 }
 
 fn with_bundled_text_font<T>(
+    font_ref: &str,
     action: impl FnOnce(&Font) -> Result<T, TextRasterizationError>,
 ) -> Result<T, TextRasterizationError> {
-    BUNDLED_TEXT_FONT.with(|cached| {
+    BUNDLED_TEXT_FONTS.with(|cached| {
         let mut cached = cached.borrow_mut();
-        if cached.is_none() {
-            *cached = Some(load_bundled_text_font());
-        }
-        match cached
-            .as_ref()
-            .expect("bundled text font cache initialized")
-        {
+        let font = cached
+            .entry(font_ref.to_owned())
+            .or_insert_with(|| load_bundled_text_font(font_ref));
+        match font {
             Ok(font) => action(font),
             Err(error) => Err(error.clone()),
         }
     })
 }
 
-fn load_bundled_text_font() -> Result<Font, TextRasterizationError> {
+fn load_bundled_text_font(font_ref: &str) -> Result<Font, TextRasterizationError> {
     validate_bundled_font_registry(&repository_root_from_manifest())
         .map_err(|error| TextRasterizationError::RegistryValidationFailed(error.to_string()))?;
-    let font_bytes = fs::read(bundled_text_font_path())
+    let font_path =
+        bundled_font_path(font_ref).ok_or_else(|| TextRasterizationError::UnregisteredFontRef {
+            segment_id: "font-cache".to_owned(),
+            font_ref: font_ref.to_owned(),
+        })?;
+    let font_bytes = fs::read(font_path)
         .map_err(|error| TextRasterizationError::FontReadFailed(error.to_string()))?;
     Font::from_bytes(font_bytes, FontSettings::default())
         .map_err(|error| TextRasterizationError::FontParseFailed(error.to_owned()))
@@ -509,4 +513,88 @@ fn parse_text_color(color: &str) -> Result<[u8; 4], TextRasterizationError> {
 fn parse_hex_byte(value: &str, original: &str) -> Result<u8, TextRasterizationError> {
     u8::from_str_radix(value, 16)
         .map_err(|_| TextRasterizationError::InvalidColor(original.to_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use draft_model::{
+        BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_REF, BUNDLED_TEXT_FONT_FAMILY,
+        BUNDLED_TEXT_FONT_REF, Draft, Material, MaterialKind, Microseconds, Segment,
+        SourceTimerange, TargetTimerange, TextFont, TextSegment, TextStyle, Track, TrackKind,
+    };
+    use render_graph::OutputDimensions;
+
+    use crate::{RealtimePreviewGraphInput, prepare_realtime_preview_graph};
+
+    use super::rasterize_text_overlay;
+
+    #[test]
+    fn rasterizer_uses_the_requested_bundled_font_ref() {
+        let sans = rasterized_text_hash(BUNDLED_TEXT_FONT_FAMILY, BUNDLED_TEXT_FONT_REF);
+        let serif =
+            rasterized_text_hash(BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_REF);
+
+        assert_ne!(
+            sans, serif,
+            "different bundled fontRefs must produce different text pixels"
+        );
+    }
+
+    fn rasterized_text_hash(family: &str, font_ref: &str) -> u64 {
+        let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+            draft: text_draft(family, font_ref),
+            target_time: Microseconds::new(500_000),
+            preview_dimensions: OutputDimensions::new(960, 540),
+        })
+        .expect("text draft prepares graph");
+        let layer = rasterize_text_overlay(&prepared.graph.text_overlays[0], None, 1080, 1080)
+            .expect("text rasterizes");
+
+        layer
+            .pixels
+            .iter()
+            .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
+            })
+    }
+
+    fn text_draft(family: &str, font_ref: &str) -> Draft {
+        let mut draft = Draft::new("text-rasterizer-font", "Text rasterizer font");
+        draft.materials.push(Material::new(
+            "text-material",
+            MaterialKind::Text,
+            "text://title",
+            "text-material",
+        ));
+
+        let mut style = TextStyle::default_title();
+        style.font = TextFont {
+            family: family.to_owned(),
+            font_ref: Some(font_ref.to_owned()),
+        };
+        style.font_size = 72;
+        style.color = "#ffffff".to_owned();
+
+        let mut segment = Segment::new(
+            "text-a",
+            "text-material",
+            SourceTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+            TargetTimerange::new(Microseconds::new(0), Microseconds::new(1_000_000)),
+        );
+        segment.text = Some(TextSegment {
+            content: "字体字幕".to_owned(),
+            source: Default::default(),
+            style,
+            text_box: Default::default(),
+            layout_region: Default::default(),
+            wrapping: Default::default(),
+            bubble: None,
+            effect: None,
+        });
+
+        let mut track = Track::new("text-track", TrackKind::Text, "Text");
+        track.segments.push(segment);
+        draft.tracks.push(track);
+        draft
+    }
 }

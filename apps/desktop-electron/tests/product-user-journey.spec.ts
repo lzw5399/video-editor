@@ -46,7 +46,8 @@ import {
   updateSelectedVisualThroughInspector,
   waitForCompositedPreviewEvidence,
   waitForProductPlaybackSuccess,
-  zoomTimelineIn
+  zoomTimelineIn,
+  type ProductJourneyAppController
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
@@ -57,6 +58,8 @@ const USER_JOURNEY_SEQUENCE_DURATION_US = 3_000_000;
 const THIRTY_FPS_FRAME_DURATION_US = 33_333;
 const SEQUENCE_END_FRAME_ALIGNED_MIN_US =
   USER_JOURNEY_SEQUENCE_DURATION_US - THIRTY_FPS_FRAME_DURATION_US - 7_000;
+const BUNDLED_SANS_FONT_REF = "font://bundled/noto-sans-cjk-sc-regular";
+const BUNDLED_SERIF_FONT_REF = "font://bundled/noto-serif-cjk-sc-regular";
 const P0_USER_PORTRAIT_MATERIAL =
   process.env.VIDEO_EDITOR_P0_USER_MATERIAL ??
   join(process.env.HOME ?? "", "Downloads", "5300d8457cc6d4692ff5b922c089f823_raw.mp4");
@@ -706,6 +709,409 @@ test("product playback UAT composites video external audio text and two-cue SRT 
   }
 });
 
+test("product text and subtitle editing UAT covers multi-font multi-track native preview evidence", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_LONG_AV_VIDEO,
+    USER_JOURNEY_LONG_TONE_AUDIO
+  ]);
+  const firstSubtitleTrackSrt =
+    "1\n00:00:00,000 --> 00:00:03,000\n并行字幕 A\n\n2\n00:00:03,000 --> 00:00:05,000\n后续字幕 A\n";
+  const secondSubtitleTrackSrt =
+    "1\n00:00:00,000 --> 00:00:03,000\n并行字幕 B\n\n2\n00:00:03,000 --> 00:00:05,000\n后续字幕 B\n";
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_AV_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
+
+    await addTextThroughProductPanel(page, app, "多字体主标题");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "多字体主标题 已编辑",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 48,
+      color: "#40ff80",
+      alignment: "left",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 180,
+      layoutXMillis: 80,
+      layoutYMillis: 90,
+      layoutWidthMillis: 820,
+      layoutHeightMillis: 240,
+      lineHeightMillis: 1150,
+      letterSpacingMillis: 80
+    });
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: -80,
+      positionY: 40,
+      scaleX: 1000,
+      scaleY: 1000,
+      rotation: -8,
+      opacity: 940,
+      fitMode: "适应"
+    });
+
+    await importSubtitleSrtThroughProductPanel(page, app, firstSubtitleTrackSrt);
+    await page.getByRole("button", { name: /片段 并行字幕 A/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "并行字幕 A 已校对",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 36,
+      color: "#ffd21f",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 110,
+      layoutYMillis: 610,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 0
+    });
+    await page.getByRole("button", { name: /片段 后续字幕 A/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "后续字幕 A 已换字",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 34,
+      color: "#00e5ff",
+      alignment: "center",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 120,
+      layoutYMillis: 620,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1180,
+      letterSpacingMillis: 40
+    });
+
+    await addRenamedSubtitleTrack(page, app, "字幕轨道 2");
+    await importSubtitleSrtThroughProductPanel(page, app, secondSubtitleTrackSrt);
+    await page.getByRole("button", { name: /片段 并行字幕 B/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "并行字幕 B 已旋转",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 40,
+      color: "#ff4fd8",
+      alignment: "right",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 90,
+      layoutYMillis: 760,
+      layoutWidthMillis: 820,
+      layoutHeightMillis: 200,
+      lineHeightMillis: 1250,
+      letterSpacingMillis: 120
+    });
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: 120,
+      positionY: -40,
+      scaleX: 1100,
+      scaleY: 1100,
+      rotation: 14,
+      opacity: 870,
+      fitMode: "适应"
+    });
+    await page.getByRole("button", { name: /片段 后续字幕 B/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "后续字幕 B 已右移",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 32,
+      color: "#ffffff",
+      alignment: "right",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 150,
+      layoutYMillis: 760,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1220,
+      letterSpacingMillis: 90
+    });
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.getByLabel("预览选中框"), "native text editing evidence must not be satisfied by edit chrome").toHaveCount(0);
+    await expect(page.locator(".preview-text-overlay"), "native text editing evidence must not be satisfied by DOM text overlays").toHaveCount(0);
+    await seekTimelinePlayhead(page, app, 500_000);
+    const sameTimeEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["多字体主标题 已编辑", "并行字幕 A 已校对", "并行字幕 B 已旋转"],
+      0,
+      2_900_000
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-subtitle-editing-same-time-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-subtitle-editing-same-time-host.png"),
+      sameTimeEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, sameTimeEvidence, "same-time text/subtitle matrix");
+    const titleOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "多字体主标题 已编辑");
+    const firstSubtitleOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "并行字幕 A 已校对");
+    const secondSubtitleOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "并行字幕 B 已旋转");
+    expect(titleOverlay.fontFamily, "title font family should come from inspector edit").toBe("Noto Sans CJK SC");
+    expect(titleOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(titleOverlay.color).toBe("#40ff80");
+    expect(titleOverlay.fontSize).toBe(48);
+    expect(titleOverlay.alignment).toBe("left");
+    expect(titleOverlay.letterSpacingMillis).toBe(80);
+    expect(titleOverlay.visualRotationDegrees).toBe(-8);
+    expect(titleOverlay.visualPositionX).toBe(-80);
+    expect(firstSubtitleOverlay.fontFamily).toBe("Noto Sans CJK SC");
+    expect(firstSubtitleOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(firstSubtitleOverlay.color).toBe("#ffd21f");
+    expect(firstSubtitleOverlay.fontSize).toBe(36);
+    expect(firstSubtitleOverlay.y, "first subtitle should render below title").toBeGreaterThan(titleOverlay.y + titleOverlay.height);
+    expect(secondSubtitleOverlay.fontFamily).toBe("Noto Serif CJK SC");
+    expect(secondSubtitleOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(secondSubtitleOverlay.color).toBe("#ff4fd8");
+    expect(secondSubtitleOverlay.fontSize).toBe(40);
+    expect(secondSubtitleOverlay.alignment).toBe("right");
+    expect(secondSubtitleOverlay.letterSpacingMillis).toBe(120);
+    expect(secondSubtitleOverlay.visualRotationDegrees).toBe(14);
+    expect(secondSubtitleOverlay.visualPositionX).toBe(120);
+    expect(secondSubtitleOverlay.visualPositionY).toBe(-40);
+    expect(secondSubtitleOverlay.visualScaleXMillis).toBe(1100);
+    expect(secondSubtitleOverlay.visualOpacityMillis).toBe(870);
+    expect(firstSubtitleOverlay.y, "same-time subtitle tracks must not share the same bbox").not.toBe(secondSubtitleOverlay.y);
+
+    const before = sameTimeEvidence.previewEvidence;
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await controls.getByRole("button", { name: "暂停预览" }).click();
+    await expect(controls.getByRole("button", { name: "播放预览" })).toBeEnabled();
+    await seekTimelinePlayhead(page, app, 3_200_000);
+    const laterEvidence = await waitForActiveTextOverlaySetEvidence(page, app, ["后续字幕 A 已换字", "后续字幕 B 已右移"], 3_000_000, 4_900_000);
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-subtitle-editing-later-cues-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-subtitle-editing-later-cues-host.png"),
+      laterEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, laterEvidence, "later subtitle cues");
+    expect(laterEvidence.activeTextOverlays.some((overlay) => textContentMatches(overlay.content, "并行字幕 A 已校对"))).toBe(false);
+    expect(laterEvidence.activeTextOverlays.some((overlay) => textContentMatches(overlay.content, "并行字幕 B 已旋转"))).toBe(false);
+    const laterSubtitleA = overlayByContent(laterEvidence.activeTextOverlays, "后续字幕 A 已换字");
+    const laterSubtitleB = overlayByContent(laterEvidence.activeTextOverlays, "后续字幕 B 已右移");
+    expect(laterSubtitleA.fontFamily).toBe("Noto Serif CJK SC");
+    expect(laterSubtitleA.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(laterSubtitleA.color).toBe("#00e5ff");
+    expect(laterSubtitleA.letterSpacingMillis).toBe(40);
+    expect(laterSubtitleB.fontFamily).toBe("Noto Sans CJK SC");
+    expect(laterSubtitleB.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(laterSubtitleB.color).toBe("#ffffff");
+    expect(laterSubtitleB.letterSpacingMillis).toBe(90);
+    const calls = await readNativeCommandObservations(app);
+    expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(2);
+    expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(5);
+    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(2);
+    expect(requestProjectSessionPreviewFrameCount(calls), "text editing matrix must not request artifact preview frames").toBe(
+      frameRequestsBeforePlay
+    );
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readDirectNativeCommandObservations(app),
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+    );
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
+type ActiveTextOverlayEvidence = {
+  source: "text" | "subtitle";
+  content: string;
+  fontFamily: string;
+  fontRef?: string | null;
+  fontSize: number;
+  color: string;
+  alignment: "left" | "center" | "right";
+  lineHeightMillis: number;
+  letterSpacingMillis: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visualPositionX: number;
+  visualPositionY: number;
+  visualScaleXMillis: number;
+  visualScaleYMillis: number;
+  visualRotationDegrees: number;
+  visualOpacityMillis: number;
+};
+
+type TextInspectorEdit = {
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  alignment: "left" | "center" | "right";
+  textBoxWidthMillis: number;
+  textBoxHeightMillis: number;
+  layoutXMillis: number;
+  layoutYMillis: number;
+  layoutWidthMillis: number;
+  layoutHeightMillis: number;
+  lineHeightMillis: number;
+  letterSpacingMillis: number;
+};
+
+async function editSelectedTextThroughInspector(
+  page: Page,
+  app: ProductJourneyAppController,
+  edit: TextInspectorEdit
+): Promise<void> {
+  const nextCount = (await commandCount(app, "editSelectedText")) + 1;
+  const textTab = page.getByRole("tab", { name: "文本" });
+  if ((await textTab.count()) > 0) {
+    await textTab.click();
+  }
+  const textSection = page.locator('section[aria-label="文本"]');
+  await expect(textSection).toBeVisible();
+  await textSection.locator("textarea").fill(edit.content);
+  await textSection.getByRole("combobox", { name: "字体" }).fill(edit.fontFamily);
+  await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill(String(edit.fontSize));
+  await textSection.getByRole("textbox", { name: "颜色", exact: true }).fill(edit.color);
+
+  const styleSection = page.locator('section[aria-label="样式"]');
+  const alignmentLabel = edit.alignment === "left" ? "左" : edit.alignment === "center" ? "中" : "右";
+  await styleSection.getByRole("group", { name: "检查器文字对齐" }).getByRole("button", { name: alignmentLabel }).click();
+
+  const textBoxSection = page.locator('section[aria-label="文本框"]');
+  await textBoxSection.getByRole("spinbutton", { name: "宽度", exact: true }).fill(String(edit.textBoxWidthMillis));
+  await textBoxSection.getByRole("spinbutton", { name: "高度", exact: true }).fill(String(edit.textBoxHeightMillis));
+  await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).fill(String(edit.lineHeightMillis));
+  await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).fill(String(edit.letterSpacingMillis));
+
+  const layoutSection = page.locator('section[aria-label="布局"]');
+  await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).fill(String(edit.layoutXMillis));
+  await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).fill(String(edit.layoutYMillis));
+  await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).fill(String(edit.layoutWidthMillis));
+  await layoutSection.getByRole("spinbutton", { name: "高", exact: true }).fill(String(edit.layoutHeightMillis));
+  await expect(layoutSection.getByRole("button", { name: "应用文字" })).toBeEnabled();
+  await layoutSection.getByRole("button", { name: "应用文字" }).click();
+  await waitForCommandCountAtLeast(app, "editSelectedText", nextCount);
+  await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
+    edit.content
+  );
+}
+
+async function addRenamedSubtitleTrack(page: Page, app: ProductJourneyAppController, name: string): Promise<void> {
+  const textTrackButtons = page.getByRole("button", { name: /选择轨道 文字轨道 \d+/ });
+  const buttonIndex = await textTrackButtons.count();
+  const nextAddTrackCount = (await commandCount(app, "addTrackIntent")) + 1;
+  await page.getByRole("button", { name: "添加文字轨道" }).click();
+  await waitForCommandCountAtLeast(app, "addTrackIntent", nextAddTrackCount);
+  await expect(textTrackButtons).toHaveCount(buttonIndex + 1);
+  const newTrackButton = textTrackButtons.nth(buttonIndex);
+  const newTrackLabel = (await newTrackButton.getAttribute("aria-label")) ?? "";
+  const newTrackName = newTrackLabel.replace(/^选择轨道\s+/, "");
+  expect(newTrackName, "new text track name must be discoverable").not.toBe("");
+  const nextRenameCount = (await commandCount(app, "renameSelectedTrack")) + 1;
+  await newTrackButton.click();
+  const nameInput = page.getByRole("textbox", { name: `${newTrackName} 名称` });
+  await nameInput.fill(name);
+  await nameInput.press("Enter");
+  await waitForCommandCountAtLeast(app, "renameSelectedTrack", nextRenameCount);
+  await expect(page.getByRole("button", { name: `选择轨道 ${name}` })).toBeVisible();
+  await page.getByRole("button", { name: `选择轨道 ${name}` }).click();
+}
+
+async function waitForActiveTextOverlaySetEvidence(
+  page: Page,
+  app: ProductJourneyAppController,
+  expectedContents: string[],
+  minTargetTimeUs: number,
+  maxTargetTimeUs = Number.POSITIVE_INFINITY
+) {
+  const deadline = Date.now() + 12_000;
+  let lastEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const previewEvidence = await capturePreviewEvidence(page);
+    const evidence = previewEvidence.hostState?.contentEvidence;
+    const activeTextOverlays = (evidence?.activeTextOverlays ?? []) as ActiveTextOverlayEvidence[];
+    const activeContents = activeTextOverlays.map((overlay) => overlay.content);
+    lastEvidence = {
+      activeContents,
+      activeTextOverlays,
+      source: evidence?.source ?? null,
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0
+    };
+    const targetTime = evidence?.targetTimeMicroseconds ?? 0;
+    if (
+      evidence?.source === "renderGraphGpuComposited" &&
+      targetTime >= minTargetTimeUs &&
+      targetTime <= maxTargetTimeUs &&
+      expectedContents.every((content) => activeTextOverlays.some((overlay) => textContentMatches(overlay.content, content)))
+    ) {
+      return {
+        previewEvidence,
+        activeTextOverlays,
+        targetTimeMicroseconds: targetTime,
+        hostImage: await captureVisiblePreviewHostImage(page, app)
+      };
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`Timed out waiting for active text overlays ${expectedContents.join(", ")}: ${JSON.stringify(lastEvidence)}`);
+}
+
+async function expectTextEditingNativeEvidence(
+  page: Page,
+  app: ProductJourneyAppController,
+  evidence: Awaited<ReturnType<typeof waitForActiveTextOverlaySetEvidence>>,
+  label: string
+): Promise<void> {
+  expect(evidence.previewEvidence.hostState?.productReady, `${label} must use product-ready native preview`).toBe(true);
+  expect(evidence.previewEvidence.hostState?.fallbackActive, `${label} must not use fallback preview`).toBe(false);
+  expect(evidence.previewEvidence.hostState?.backend, `${label} backend`).toBe("renderGraphGpu");
+  expect(evidence.previewEvidence.hostState?.contentEvidence?.source, `${label} content source`).toBe("renderGraphGpuComposited");
+  const expectedScreenRect = await expectedPreviewHostScreenRect(page, app);
+  const placement = evidence.previewEvidence.hostState?.surfacePlacement ?? null;
+  expect(maxRectDelta(placement?.hostScreenRect ?? null, expectedScreenRect), `${label} host rect`).toBeLessThanOrEqual(2);
+  expect(maxRectDelta(placement?.nativeScreenRect ?? null, expectedScreenRect), `${label} native rect`).toBeLessThanOrEqual(2);
+  await expectPreviewHostCoversCanvas(page);
+  expectLandscapeNativePreviewPlacement(await measurePngPreviewPlacement(page, evidence.hostImage), `${label} native preview`);
+  const contentEvidence = evidence.previewEvidence.hostState?.contentEvidence;
+  for (const overlay of evidence.activeTextOverlays) {
+    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, overlay, `${label} ${overlay.content}`);
+  }
+}
+
+function overlayByContent(overlays: ActiveTextOverlayEvidence[], content: string): ActiveTextOverlayEvidence {
+  const overlay = overlays.find((candidate) => textContentMatches(candidate.content, content));
+  expect(overlay, `overlay ${content} must be active`).toBeDefined();
+  return overlay!;
+}
+
+function textContentMatches(actual: string, expected: string): boolean {
+  return normalizedTextContent(actual) === normalizedTextContent(expected);
+}
+
+function normalizedTextContent(content: string): string {
+  return content.replace(/\s+/g, "");
+}
+
+async function commandCount(app: ProductJourneyAppController, command: string): Promise<number> {
+  return (await readNativeCommandObservations(app)).filter((call) => call.command === command).length;
+}
+
+async function waitForCommandCountAtLeast(app: ProductJourneyAppController, command: string, count: number): Promise<void> {
+  await expect.poll(async () => commandCount(app, command), { timeout: 10_000 }).toBeGreaterThanOrEqual(count);
+}
+
 async function waitForActiveSubtitleEvidence(
   page: Page,
   app: Awaited<ReturnType<typeof launchProductJourneyApp>>["app"],
@@ -795,27 +1201,53 @@ async function expectTextOverlayPixelsInNativeHost(
   page: Page,
   image: Buffer,
   contentEvidence: { width: number; height: number } | null | undefined,
-  overlay: { x: number; y: number; width: number; height: number; content: string },
+  overlay: ActiveTextOverlayEvidence,
   label: string
 ): Promise<void> {
   expect(contentEvidence?.width ?? 0, `${label} render target width`).toBeGreaterThan(0);
   expect(contentEvidence?.height ?? 0, `${label} render target height`).toBeGreaterThan(0);
-  const whitePixelCount = await countWhiteTextPixelsInOverlay(page, image, contentEvidence, overlay);
+  const transformedBox = transformedTextOverlayBox(contentEvidence, overlay);
+  const textPixelCount = await countTextColorPixelsInOverlay(page, image, contentEvidence, transformedBox, overlay.color);
   expect(
-    whitePixelCount,
-    `${label} bbox must contain real white text pixels in the native host PNG: ${JSON.stringify({ overlay, contentEvidence })}`
-  ).toBeGreaterThan(80);
+    textPixelCount,
+    `${label} bbox must contain real colored text pixels in the native host PNG: ${JSON.stringify({ overlay, transformedBox, contentEvidence })}`
+  ).toBeGreaterThan(40);
 }
 
-async function countWhiteTextPixelsInOverlay(
+function transformedTextOverlayBox(
+  contentEvidence: { width: number; height: number } | null | undefined,
+  overlay: ActiveTextOverlayEvidence
+): { x: number; y: number; width: number; height: number } {
+  const targetWidth = Math.max(1, contentEvidence?.width ?? 1);
+  const targetHeight = Math.max(1, contentEvidence?.height ?? 1);
+  const scaleX = Math.max(1, overlay.visualScaleXMillis) / 1000;
+  const scaleY = Math.max(1, overlay.visualScaleYMillis) / 1000;
+  const width = Math.max(1, overlay.width * scaleX);
+  const height = Math.max(1, overlay.height * scaleY);
+  const centerX = overlay.x + overlay.width / 2 + (targetWidth * overlay.visualPositionX) / 2000;
+  const centerY = overlay.y + overlay.height / 2 - (targetHeight * overlay.visualPositionY) / 2000;
+  const radians = (overlay.visualRotationDegrees * Math.PI) / 180;
+  const rotatedWidth = Math.abs(width * Math.cos(radians)) + Math.abs(height * Math.sin(radians));
+  const rotatedHeight = Math.abs(width * Math.sin(radians)) + Math.abs(height * Math.cos(radians));
+  return {
+    x: centerX - rotatedWidth / 2,
+    y: centerY - rotatedHeight / 2,
+    width: rotatedWidth,
+    height: rotatedHeight
+  };
+}
+
+async function countTextColorPixelsInOverlay(
   page: Page,
   image: Buffer,
   contentEvidence: { width: number; height: number } | null | undefined,
-  overlay: { x: number; y: number; width: number; height: number }
+  overlay: { x: number; y: number; width: number; height: number },
+  color: string
 ): Promise<number> {
   const base64 = image.toString("base64");
+  const expectedColor = parseHexColor(color);
   return page.evaluate(
-    async ({ pngBase64, evidenceWidth, evidenceHeight, box }) => {
+    async ({ pngBase64, evidenceWidth, evidenceHeight, box, expected }) => {
       const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
       const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
       const canvas = document.createElement("canvas");
@@ -837,26 +1269,45 @@ async function countWhiteTextPixelsInOverlay(
         return 0;
       }
       const data = context.getImageData(left, top, right - left, bottom - top).data;
-      let whitePixels = 0;
+      const colorDistanceThreshold = 125;
+      let textPixels = 0;
       for (let index = 0; index < data.length; index += 4) {
         const red = data[index];
         const green = data[index + 1];
         const blue = data[index + 2];
-        const max = Math.max(red, green, blue);
-        const min = Math.min(red, green, blue);
-        if (min >= 180 && max - min <= 90) {
-          whitePixels += 1;
+        const distance = Math.hypot(red - expected.red, green - expected.green, blue - expected.blue);
+        const expectedMax = Math.max(expected.red, expected.green, expected.blue);
+        const expectedMin = Math.min(expected.red, expected.green, expected.blue);
+        if (expectedMax - expectedMin <= 40) {
+          const max = Math.max(red, green, blue);
+          const min = Math.min(red, green, blue);
+          if (min >= 170 && max - min <= 95) {
+            textPixels += 1;
+          }
+        } else if (distance <= colorDistanceThreshold) {
+          textPixels += 1;
         }
       }
-      return whitePixels;
+      return textPixels;
     },
     {
       pngBase64: base64,
       evidenceWidth: contentEvidence?.width ?? 0,
       evidenceHeight: contentEvidence?.height ?? 0,
-      box: overlay
+      box: overlay,
+      expected: expectedColor
     }
   );
+}
+
+function parseHexColor(color: string): { red: number; green: number; blue: number } {
+  const normalized = color.trim().replace(/^#/, "");
+  expect(normalized, `text color must be #rrggbb: ${color}`).toMatch(/^[0-9a-fA-F]{6}$/);
+  return {
+    red: Number.parseInt(normalized.slice(0, 2), 16),
+    green: Number.parseInt(normalized.slice(2, 4), 16),
+    blue: Number.parseInt(normalized.slice(4, 6), 16)
+  };
 }
 
 type PngPreviewPlacementMetrics = {
