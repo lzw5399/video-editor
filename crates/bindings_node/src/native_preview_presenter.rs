@@ -1,7 +1,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use draft_model::{Draft, Material, MaterialKind, Microseconds, Segment, TrackKind};
+use draft_model::{
+    Draft, Material, MaterialKind, Microseconds, Segment, TextSegmentSource, TrackKind,
+};
 use project_store::resolve_material_uri;
 use serde::{Deserialize, Serialize};
 
@@ -106,6 +108,8 @@ pub struct NativePreviewContentEvidence {
     pub target_time_microseconds: u64,
     pub presented_frames: u32,
     pub submitted_draws: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_text_overlays: Vec<NativePreviewTextOverlayEvidence>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,6 +117,13 @@ pub struct NativePreviewContentEvidence {
 pub enum NativePreviewContentEvidenceSource {
     NativeVideoBridge,
     RenderGraphGpuComposited,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePreviewTextOverlayEvidence {
+    pub source: TextSegmentSource,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -698,6 +709,7 @@ mod macos {
                 target_time_microseconds: target_time.get(),
                 presented_frames: 0,
                 submitted_draws: 0,
+                active_text_overlays: Vec::new(),
             })
         }
     }
@@ -818,6 +830,7 @@ mod tests {
                 target_time_microseconds: 123_000,
                 presented_frames: 0,
                 submitted_draws: 0,
+                active_text_overlays: Vec::new(),
             },
         ));
 

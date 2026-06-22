@@ -1912,6 +1912,16 @@ fn native_evidence_from_scheduler(
         target_time_microseconds: evidence.target_time_microseconds,
         presented_frames: evidence.presented_frames,
         submitted_draws: evidence.submitted_draws,
+        active_text_overlays: evidence
+            .active_text_overlays
+            .into_iter()
+            .map(
+                |text| crate::native_preview_presenter::NativePreviewTextOverlayEvidence {
+                    source: text.source,
+                    content: text.content,
+                },
+            )
+            .collect(),
     }
 }
 
@@ -2368,8 +2378,8 @@ mod realtime_preview_bindings {
     };
     use draft_model::{
         AudioPreviewPlaybackStatus, Draft, Material, MaterialId, MaterialKind, MaterialMetadata,
-        Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track,
-        TrackKind,
+        Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextSegment,
+        TextSegmentSource, Track, TrackKind,
     };
     use realtime_preview_runtime::{
         MediaIoFrameProvider, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
@@ -2687,6 +2697,14 @@ mod realtime_preview_bindings {
             NativePreviewContentEvidenceSource::RenderGraphGpuComposited
         );
         assert!(evidence.target_time_microseconds >= 500_000);
+        assert_eq!(
+            evidence
+                .active_text_overlays
+                .iter()
+                .map(|text| (text.source, text.content.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(TextSegmentSource::Subtitle, "调度字幕证据")]
+        );
         assert!(telemetry.presented_frame_count > 0);
         assert!(telemetry.target_time_microseconds >= 500_000);
         assert_eq!(
@@ -2933,6 +2951,32 @@ mod realtime_preview_bindings {
         let mut track = Track::new("track-video-001", TrackKind::Video, "视频");
         track.segments.push(segment);
         draft.tracks.push(track);
+        let text_material = Material::new(
+            "material-subtitle-001",
+            MaterialKind::Text,
+            "text://scheduler-subtitle-001",
+            "调度字幕证据",
+        );
+        draft.materials.push(text_material);
+        let mut text_segment = Segment::new(
+            "segment-subtitle-001",
+            "material-subtitle-001",
+            SourceTimerange::new(0, 2_000_000),
+            TargetTimerange::new(0, 2_000_000),
+        );
+        text_segment.text = Some(TextSegment {
+            content: "调度字幕证据".to_owned(),
+            source: TextSegmentSource::Subtitle,
+            style: Default::default(),
+            text_box: Default::default(),
+            layout_region: Default::default(),
+            wrapping: Default::default(),
+            bubble: None,
+            effect: None,
+        });
+        let mut text_track = Track::new("track-subtitle-001", TrackKind::Text, "字幕");
+        text_track.segments.push(text_segment);
+        draft.tracks.push(text_track);
         draft
     }
 

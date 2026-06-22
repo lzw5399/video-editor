@@ -76,6 +76,12 @@ export type RealtimePreviewHostContentEvidence = {
   targetTimeMicroseconds: number;
   presentedFrames: number;
   submittedDraws: number;
+  activeTextOverlays?: RealtimePreviewHostTextOverlayEvidence[];
+};
+
+export type RealtimePreviewHostTextOverlayEvidence = {
+  source: "text" | "subtitle";
+  content: string;
 };
 
 export type RealtimePreviewHostSurfacePlacement = {

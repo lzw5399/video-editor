@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::{Duration, Instant};
 
-use draft_model::{Draft, Microseconds};
+use draft_model::{Draft, Microseconds, TextSegmentSource};
 use render_graph::{OutputDimensions, RenderGraph};
 use serde::{Deserialize, Serialize};
 
@@ -33,12 +33,21 @@ pub struct RealtimePlaybackSchedulerEvidence {
     pub target_time_microseconds: u64,
     pub presented_frames: u32,
     pub submitted_draws: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_text_overlays: Vec<RealtimePlaybackTextOverlayEvidence>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RealtimePlaybackSchedulerEvidenceSource {
     RenderGraphGpuComposited,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePlaybackTextOverlayEvidence {
+    pub source: TextSegmentSource,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -370,6 +379,7 @@ impl RealtimePlaybackScheduler {
             preview_dimensions: self.config.preview_dimensions,
         })
         .map_err(RealtimePlaybackSchedulerError::GraphPrepare)?;
+        let active_text_overlays = active_text_overlay_evidence(&prepared.graph);
         let presentation =
             presenter.present_render_graph(&prepared.graph, target_time, playback_generation)?;
         if presentation.presented_frames == 0 {
@@ -386,10 +396,22 @@ impl RealtimePlaybackScheduler {
             target_time_microseconds: target_time.get(),
             presented_frames: presentation.presented_frames,
             submitted_draws: presentation.submitted_draws,
+            active_text_overlays,
         };
         self.last_evidence = Some(evidence.clone());
         Ok(evidence)
     }
+}
+
+fn active_text_overlay_evidence(graph: &RenderGraph) -> Vec<RealtimePlaybackTextOverlayEvidence> {
+    graph
+        .text_overlays
+        .iter()
+        .map(|text| RealtimePlaybackTextOverlayEvidence {
+            source: text.overlay.source,
+            content: text.overlay.content.clone(),
+        })
+        .collect()
 }
 
 #[derive(Debug)]

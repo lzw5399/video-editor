@@ -150,6 +150,10 @@ type RealtimePreviewHostState = {
     targetTimeMicroseconds: number;
     presentedFrames: number;
     submittedDraws: number;
+    activeTextOverlays?: Array<{
+      source: "text" | "subtitle";
+      content: string;
+    }>;
   } | null;
   surfacePlacement?: {
     surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";

@@ -604,6 +604,12 @@ export type RealtimePreviewPresentationEvidence = {
   targetTimeMicroseconds: number;
   presentedFrames: number;
   submittedDraws: number;
+  activeTextOverlays?: RealtimePreviewTextOverlayEvidence[];
+};
+
+export type RealtimePreviewTextOverlayEvidence = {
+  source: "text" | "subtitle";
+  content: string;
 };
 
 export type RealtimePreviewScreenRect = {

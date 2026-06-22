@@ -450,13 +450,22 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     USER_JOURNEY_TONE_AUDIO
   ]);
   const srtContent =
-    "1\n00:00:00,000 --> 00:00:01,400\n第一条组合字幕\n\n2\n00:00:01,400 --> 00:00:03,000\n第二条组合字幕\n";
+    "1\n00:00:00,000 --> 00:00:02,000\n第一条组合字幕\n\n2\n00:00:02,000 --> 00:00:03,000\n第二条组合字幕\n";
 
   try {
     await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
     await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO);
-    await addTextThroughProductPanel(page, app, "产品级组合文字");
+    await addTextThroughProductPanel(page, app, "组合标题");
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: 0,
+      positionY: -240,
+      scaleX: 1000,
+      scaleY: 1000,
+      rotation: 0,
+      opacity: 1000,
+      fitMode: "适应"
+    });
 
     const commandCountBeforeSrt = await readNativeCommandObservations(app);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
@@ -483,7 +492,32 @@ test("product playback UAT composites video external audio text and two-cue SRT 
       )), { timeout: 10_000 })
       .toBe(true);
 
+    const firstSubtitleEvidence = await waitForActiveSubtitleEvidence(page, app, "第一条组合字幕", 0, 1_900_000);
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-first-subtitle.png"),
+      firstSubtitleEvidence.hostImage
+    );
     const { after } = await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
+    const secondSubtitleEvidence = await waitForActiveSubtitleEvidence(page, app, "第二条组合字幕", 2_000_000);
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "combo-preview-second-subtitle.png"),
+      secondSubtitleEvidence.hostImage
+    );
+
+    expect(firstSubtitleEvidence.activeTextOverlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "text", content: "组合标题" }),
+        expect.objectContaining({ source: "subtitle", content: "第一条组合字幕" })
+      ])
+    );
+    expect(secondSubtitleEvidence.activeTextOverlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "text", content: "组合标题" }),
+        expect.objectContaining({ source: "subtitle", content: "第二条组合字幕" })
+      ])
+    );
+    expect(firstSubtitleEvidence.activeTextOverlays).not.toEqual(secondSubtitleEvidence.activeTextOverlays);
     expect(after.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
     expect(after.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
     expect(after.hostState?.telemetry?.presentedFrameCount ?? 0).toBeGreaterThan(
@@ -498,6 +532,44 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     await app.close();
   }
 });
+
+async function waitForActiveSubtitleEvidence(
+  page: Page,
+  app: Awaited<ReturnType<typeof launchProductJourneyApp>>["app"],
+  subtitle: string,
+  minTargetTimeUs: number,
+  maxTargetTimeUs = Number.POSITIVE_INFINITY
+) {
+  const deadline = Date.now() + 10_000;
+  let lastEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const evidence = (await capturePreviewEvidence(page)).hostState?.contentEvidence;
+    const activeTextOverlays = evidence?.activeTextOverlays ?? [];
+    const activeSubtitle = activeTextOverlays.find((text) => text.source === "subtitle")?.content ?? null;
+    lastEvidence = {
+      activeSubtitle,
+      activeTextOverlays,
+      source: evidence?.source ?? null,
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0
+    };
+    if (
+      evidence?.source === "renderGraphGpuComposited" &&
+      (evidence.targetTimeMicroseconds ?? 0) >= minTargetTimeUs &&
+      (evidence.targetTimeMicroseconds ?? 0) <= maxTargetTimeUs &&
+      activeSubtitle === subtitle
+    ) {
+      return {
+        activeTextOverlays,
+        targetTimeMicroseconds: evidence.targetTimeMicroseconds,
+        hostImage: await captureVisiblePreviewHostImage(page, app)
+      };
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`Timed out waiting for active subtitle ${subtitle}: ${JSON.stringify(lastEvidence)}`);
+}
 
 test("product playback UAT keeps video presentation synchronized with timeline through sequence end", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
