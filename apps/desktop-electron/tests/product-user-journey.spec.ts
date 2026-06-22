@@ -928,6 +928,288 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
   }
 });
 
+test("product text editing UAT exercises preview drag, multi-font captions, and staggered subtitle tracks", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_LONG_AV_VIDEO,
+    USER_JOURNEY_LONG_TONE_AUDIO
+  ]);
+  const firstTrackSrt =
+    "1\n00:00:00,000 --> 00:00:01,400\n同屏字幕甲\n\n2\n00:00:01,400 --> 00:00:02,800\n错峰字幕甲\n\n3\n00:00:03,200 --> 00:00:04,800\n尾部字幕甲\n";
+  const secondTrackSrt =
+    "1\n00:00:00,000 --> 00:00:01,400\n同屏字幕乙\n\n2\n00:00:01,400 --> 00:00:02,800\n错峰字幕乙\n";
+  const thirdTrackSrt =
+    "1\n00:00:00,000 --> 00:00:01,400\n同屏字幕丙\n\n2\n00:00:03,200 --> 00:00:04,800\n尾部字幕丙\n";
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_AV_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
+
+    await addTextThroughProductPanel(page, app, "预览拖动标题");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "预览拖动标题 Sans",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 44,
+      color: "#62ff9a",
+      alignment: "left",
+      textBoxWidthMillis: 720,
+      textBoxHeightMillis: 170,
+      layoutXMillis: 70,
+      layoutYMillis: 80,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 210,
+      lineHeightMillis: 1120,
+      letterSpacingMillis: 60
+    });
+    const titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "预览拖动标题 Sans", 72, 34);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: titleDragVisual.transform.position.x,
+      positionY: titleDragVisual.transform.position.y,
+      scaleX: 1060,
+      scaleY: 980,
+      rotation: -12,
+      opacity: 910,
+      fitMode: "适应"
+    });
+
+    await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
+    await page.getByRole("button", { name: /片段 同屏字幕甲/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "同屏字幕甲 Serif",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 34,
+      color: "#ffbf47",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 140,
+      layoutXMillis: 110,
+      layoutYMillis: 545,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 170,
+      lineHeightMillis: 1180,
+      letterSpacingMillis: 20
+    });
+    await page.getByRole("button", { name: /片段 错峰字幕甲/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "错峰字幕甲 Sans",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 35,
+      color: "#37dcff",
+      alignment: "center",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 140,
+      layoutXMillis: 120,
+      layoutYMillis: 620,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 170,
+      lineHeightMillis: 1180,
+      letterSpacingMillis: 70
+    });
+    await page.getByRole("button", { name: /片段 尾部字幕甲/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "尾部字幕甲 Serif",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 36,
+      color: "#ffe66d",
+      alignment: "left",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 90,
+      layoutYMillis: 700,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1210,
+      letterSpacingMillis: 40
+    });
+
+    await addRenamedSubtitleTrack(page, app, "字幕轨道 2");
+    await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
+    await page.getByRole("button", { name: /片段 同屏字幕乙/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "同屏字幕乙 预览拖动",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 33,
+      color: "#ff5edb",
+      alignment: "right",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 145,
+      layoutXMillis: 105,
+      layoutYMillis: 660,
+      layoutWidthMillis: 800,
+      layoutHeightMillis: 175,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 100
+    });
+    const subtitleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "同屏字幕乙 预览拖动", -54, 42);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: subtitleDragVisual.transform.position.x,
+      positionY: subtitleDragVisual.transform.position.y,
+      scaleX: 1120,
+      scaleY: 1080,
+      rotation: 16,
+      opacity: 850,
+      fitMode: "适应"
+    });
+    await page.getByRole("button", { name: /片段 错峰字幕乙/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "错峰字幕乙 Serif",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 36,
+      color: "#d6ff43",
+      alignment: "right",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 110,
+      layoutYMillis: 730,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1240,
+      letterSpacingMillis: 110
+    });
+
+    await addRenamedSubtitleTrack(page, app, "字幕轨道 3");
+    await importSubtitleSrtThroughProductPanel(page, app, thirdTrackSrt);
+    await page.getByRole("button", { name: /片段 同屏字幕丙/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "同屏字幕丙 右侧",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 32,
+      color: "#b8ff3d",
+      alignment: "right",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 140,
+      layoutXMillis: 125,
+      layoutYMillis: 790,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 170,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 130
+    });
+    await page.getByRole("button", { name: /片段 尾部字幕丙/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "尾部字幕丙 Sans",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 34,
+      color: "#ffffff",
+      alignment: "center",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 115,
+      layoutYMillis: 610,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 50
+    });
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.getByLabel("预览选中框"), "native text matrix must not be satisfied by edit selection chrome").toHaveCount(0);
+    await expect(page.locator(".preview-text-overlay"), "native text matrix must not be satisfied by DOM text overlays").toHaveCount(0);
+
+    await seekTimelinePlayhead(page, app, 500_000);
+    const sameTimeEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["预览拖动标题 Sans", "同屏字幕甲 Serif", "同屏字幕乙 预览拖动", "同屏字幕丙 右侧"],
+      0,
+      {
+        maxTargetTimeUs: 1_350_000,
+        exactOverlayCount: 4,
+        forbiddenContents: ["错峰字幕甲 Sans", "错峰字幕乙 Serif", "尾部字幕甲 Serif", "尾部字幕丙 Sans"]
+      }
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-editing-preview-drag-same-time-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-editing-preview-drag-same-time-host.png"),
+      sameTimeEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, sameTimeEvidence, "preview drag same-time subtitle matrix");
+    const draggedTitleOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "预览拖动标题 Sans");
+    const firstSameTimeOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "同屏字幕甲 Serif");
+    const draggedSubtitleOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "同屏字幕乙 预览拖动");
+    const thirdSameTimeOverlay = overlayByContent(sameTimeEvidence.activeTextOverlays, "同屏字幕丙 右侧");
+    expect(draggedTitleOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(draggedTitleOverlay.visualPositionX).toBe(titleDragVisual.transform.position.x);
+    expect(draggedTitleOverlay.visualPositionY).toBe(titleDragVisual.transform.position.y);
+    expect(draggedTitleOverlay.visualRotationDegrees).toBe(-12);
+    expect(draggedTitleOverlay.visualScaleXMillis).toBe(1060);
+    expect(firstSameTimeOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(firstSameTimeOverlay.color).toBe("#ffbf47");
+    expect(draggedSubtitleOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(draggedSubtitleOverlay.visualPositionX).toBe(subtitleDragVisual.transform.position.x);
+    expect(draggedSubtitleOverlay.visualPositionY).toBe(subtitleDragVisual.transform.position.y);
+    expect(draggedSubtitleOverlay.visualRotationDegrees).toBe(16);
+    expect(draggedSubtitleOverlay.visualScaleXMillis).toBe(1120);
+    expect(thirdSameTimeOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(new Set([
+      firstSameTimeOverlay.y,
+      draggedSubtitleOverlay.y,
+      thirdSameTimeOverlay.y
+    ]).size, "same-time subtitle tracks should occupy distinct render bboxes").toBe(3);
+
+    await seekTimelinePlayhead(page, app, 1_650_000);
+    const staggeredEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["预览拖动标题 Sans", "错峰字幕甲 Sans", "错峰字幕乙 Serif"],
+      1_400_000,
+      {
+        maxTargetTimeUs: 2_750_000,
+        exactOverlayCount: 3,
+        forbiddenContents: ["同屏字幕甲 Serif", "同屏字幕乙 预览拖动", "同屏字幕丙 右侧", "尾部字幕甲 Serif"]
+      }
+    );
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-editing-preview-drag-staggered-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-editing-preview-drag-staggered-host.png"),
+      staggeredEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, staggeredEvidence, "preview drag staggered subtitle matrix");
+    expect(staggeredEvidence.activeTextOverlays.some((overlay) => textContentMatches(overlay.content, "同屏字幕甲 Serif"))).toBe(false);
+    expect(staggeredEvidence.activeTextOverlays.some((overlay) => textContentMatches(overlay.content, "同屏字幕乙 预览拖动"))).toBe(false);
+    expect(overlayByContent(staggeredEvidence.activeTextOverlays, "错峰字幕甲 Sans").fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(overlayByContent(staggeredEvidence.activeTextOverlays, "错峰字幕乙 Serif").fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+
+    await seekTimelinePlayhead(page, app, 3_450_000);
+    const tailEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["尾部字幕甲 Serif", "尾部字幕丙 Sans"],
+      3_200_000,
+      {
+        maxTargetTimeUs: 4_750_000,
+        exactOverlayCount: 2,
+        forbiddenContents: ["预览拖动标题 Sans", "错峰字幕甲 Sans", "错峰字幕乙 Serif"]
+      }
+    );
+    await expectTextEditingNativeEvidence(page, app, tailEvidence, "preview drag tail subtitle matrix");
+    expect(tailEvidence.activeTextOverlays.some((overlay) => textContentMatches(overlay.content, "错峰字幕甲 Sans"))).toBe(false);
+    expect(overlayByContent(tailEvidence.activeTextOverlays, "尾部字幕甲 Serif").fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(overlayByContent(tailEvidence.activeTextOverlays, "尾部字幕丙 Sans").fontRef).toBe(BUNDLED_SANS_FONT_REF);
+
+    const calls = await readNativeCommandObservations(app);
+    expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(3);
+    expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(8);
+    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(4);
+    expect(requestProjectSessionPreviewFrameCount(calls), "text editing matrix must not request artifact preview frames").toBe(0);
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readDirectNativeCommandObservations(app),
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+    );
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
 type ActiveTextOverlayEvidence = {
   source: "text" | "subtitle";
   content: string;
@@ -964,6 +1246,24 @@ type TextInspectorEdit = {
   layoutHeightMillis: number;
   lineHeightMillis: number;
   letterSpacingMillis: number;
+};
+
+type TextOverlayWaitOptions = {
+  maxTargetTimeUs?: number;
+  exactOverlayCount?: number;
+  forbiddenContents?: string[];
+  timeoutMs?: number;
+};
+
+type VisualCommandEvidence = {
+  visible: boolean;
+  fitMode: string;
+  transform: {
+    position: { x: number; y: number };
+    scale: { xMillis: number; yMillis: number };
+    rotation: { degrees: number };
+    opacity: { valueMillis: number };
+  };
 };
 
 async function editSelectedTextThroughInspector(
@@ -1027,14 +1327,116 @@ async function addRenamedSubtitleTrack(page: Page, app: ProductJourneyAppControl
   await page.getByRole("button", { name: `选择轨道 ${name}` }).click();
 }
 
+async function dragSelectedPreviewTextOverlay(
+  page: Page,
+  app: ProductJourneyAppController,
+  expectedContent: string,
+  deltaX: number,
+  deltaY: number
+): Promise<VisualCommandEvidence> {
+  const beforeEvidence = await waitForActiveTextOverlaySetEvidence(page, app, [expectedContent], 0, {
+    timeoutMs: 8_000
+  });
+  const beforeOverlay = overlayByContent(beforeEvidence.activeTextOverlays, expectedContent);
+  const nextVisualUpdateCount = (await commandCount(app, "updateSelectedSegmentVisual")) + 1;
+  const selectionOutline = page.getByLabel("预览选中框");
+  await expect(selectionOutline, "selected text must expose preview edit handles over the native surface").toBeVisible({
+    timeout: 10_000
+  });
+  const box = await selectionOutline.boundingBox();
+  expect(box, "selected preview text edit handle must have a measurable box").not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + deltaX, box!.y + box!.height / 2 + deltaY, {
+    steps: 8
+  });
+  await page.mouse.up();
+  await waitForCommandCountAtLeast(app, "updateSelectedSegmentVisual", nextVisualUpdateCount);
+  const visual = latestVisualCommandEvidence(await readNativeCommandObservations(app));
+  const afterEvidence = await waitForTextOverlayVisualPositionEvidence(
+    page,
+    app,
+    expectedContent,
+    visual.transform.position.x,
+    visual.transform.position.y
+  );
+  const afterOverlay = overlayByContent(afterEvidence.activeTextOverlays, expectedContent);
+  expect(
+    Math.abs(afterOverlay.visualPositionX - beforeOverlay.visualPositionX) +
+      Math.abs(afterOverlay.visualPositionY - beforeOverlay.visualPositionY),
+    `${expectedContent} native text evidence must reflect direct preview drag movement`
+  ).toBeGreaterThan(10);
+  expect(
+    afterEvidence.hostImage.equals(beforeEvidence.hostImage),
+    `${expectedContent} native host pixels must change after direct preview drag`
+  ).toBe(false);
+  return visual;
+}
+
+function latestVisualCommandEvidence(calls: Awaited<ReturnType<typeof readNativeCommandObservations>>): VisualCommandEvidence {
+  const visual =
+    calls.findLast(
+      (call) => call.command === "updateSelectedSegmentVisual" && call.visual !== null && call.visual !== undefined
+    )?.visual ?? null;
+  expect(visual, "preview drag must send a session-owned visual update").not.toBeNull();
+  return visual!;
+}
+
+async function waitForTextOverlayVisualPositionEvidence(
+  page: Page,
+  app: ProductJourneyAppController,
+  expectedContent: string,
+  visualPositionX: number,
+  visualPositionY: number
+) {
+  const deadline = Date.now() + 8_000;
+  let lastEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const previewEvidence = await capturePreviewEvidence(page);
+    const evidence = previewEvidence.hostState?.contentEvidence;
+    const activeTextOverlays = (evidence?.activeTextOverlays ?? []) as ActiveTextOverlayEvidence[];
+    const overlay = activeTextOverlays.find((candidate) => textContentMatches(candidate.content, expectedContent));
+    lastEvidence = {
+      activeTextOverlays,
+      source: evidence?.source ?? null,
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0,
+      expectedContent,
+      visualPositionX,
+      visualPositionY
+    };
+    if (
+      evidence?.source === "renderGraphGpuComposited" &&
+      overlay !== undefined &&
+      overlay.visualPositionX === visualPositionX &&
+      overlay.visualPositionY === visualPositionY
+    ) {
+      return {
+        previewEvidence,
+        activeTextOverlays,
+        targetTimeMicroseconds: evidence.targetTimeMicroseconds,
+        hostImage: await captureVisiblePreviewHostImage(page, app)
+      };
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`Timed out waiting for text overlay visual position evidence: ${JSON.stringify(lastEvidence)}`);
+}
+
 async function waitForActiveTextOverlaySetEvidence(
   page: Page,
   app: ProductJourneyAppController,
   expectedContents: string[],
   minTargetTimeUs: number,
-  maxTargetTimeUs = Number.POSITIVE_INFINITY
+  maxTargetTimeUsOrOptions: number | TextOverlayWaitOptions = Number.POSITIVE_INFINITY
 ) {
-  const deadline = Date.now() + 12_000;
+  const options =
+    typeof maxTargetTimeUsOrOptions === "number" ? { maxTargetTimeUs: maxTargetTimeUsOrOptions } : maxTargetTimeUsOrOptions;
+  const maxTargetTimeUs = options.maxTargetTimeUs ?? Number.POSITIVE_INFINITY;
+  const exactOverlayCount = options.exactOverlayCount ?? null;
+  const forbiddenContents = options.forbiddenContents ?? [];
+  const deadline = Date.now() + (options.timeoutMs ?? 12_000);
   let lastEvidence: unknown = null;
 
   while (Date.now() < deadline) {
@@ -1042,18 +1444,30 @@ async function waitForActiveTextOverlaySetEvidence(
     const evidence = previewEvidence.hostState?.contentEvidence;
     const activeTextOverlays = (evidence?.activeTextOverlays ?? []) as ActiveTextOverlayEvidence[];
     const activeContents = activeTextOverlays.map((overlay) => overlay.content);
+    const expectedPresent = expectedContents.every((content) =>
+      activeTextOverlays.some((overlay) => textContentMatches(overlay.content, content))
+    );
+    const forbiddenPresent = forbiddenContents.filter((content) =>
+      activeTextOverlays.some((overlay) => textContentMatches(overlay.content, content))
+    );
     lastEvidence = {
       activeContents,
       activeTextOverlays,
       source: evidence?.source ?? null,
-      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0,
+      expectedContents,
+      exactOverlayCount,
+      forbiddenContents,
+      forbiddenPresent
     };
     const targetTime = evidence?.targetTimeMicroseconds ?? 0;
     if (
       evidence?.source === "renderGraphGpuComposited" &&
       targetTime >= minTargetTimeUs &&
       targetTime <= maxTargetTimeUs &&
-      expectedContents.every((content) => activeTextOverlays.some((overlay) => textContentMatches(overlay.content, content)))
+      expectedPresent &&
+      forbiddenPresent.length === 0 &&
+      (exactOverlayCount === null || activeTextOverlays.length === exactOverlayCount)
     ) {
       return {
         previewEvidence,

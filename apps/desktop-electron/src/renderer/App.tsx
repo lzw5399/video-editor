@@ -629,21 +629,40 @@ export function App(): React.ReactElement {
       (current, result) => applyProjectSessionTimelineResult(current, result, intent.kind)
     );
 
-    if (
-      result !== null &&
-      result.ok &&
-      result.data !== null &&
-      (intent.kind === "addTimelineSegmentIntent" ||
-        intent.kind === "addTextSegmentIntent" ||
-        intent.kind === "addAudioSegmentIntent")
-    ) {
-      const previewTarget = selectedSegmentStart(result.data);
+    if (result !== null && result.ok && result.data !== null && previewAffectingIntentNeedsRefresh(intent.kind)) {
+      const previewTarget = previewRefreshTarget(intent.kind, result.data);
       if (previewTarget !== null) {
         refreshRealtimePreviewAt(previewTarget);
       }
     }
 
     return result;
+  }
+
+  function previewAffectingIntentNeedsRefresh(intentKind: ExecuteProjectIntentRequest["intent"]["kind"]): boolean {
+    return (
+      intentKind === "addTimelineSegmentIntent" ||
+      intentKind === "addTextSegmentIntent" ||
+      intentKind === "addAudioSegmentIntent" ||
+      intentKind === "importSubtitleSrtIntent" ||
+      intentKind === "editSelectedText" ||
+      intentKind === "updateSelectedSegmentVisual" ||
+      intentKind === "setSelectedTrackVisibility"
+    );
+  }
+
+  function previewRefreshTarget(
+    intentKind: ExecuteProjectIntentRequest["intent"]["kind"],
+    result: ProjectSessionTimelineIntentResponse
+  ): number | null {
+    if (
+      intentKind === "addTimelineSegmentIntent" ||
+      intentKind === "addTextSegmentIntent" ||
+      intentKind === "addAudioSegmentIntent"
+    ) {
+      return selectedSegmentStart(result);
+    }
+    return playheadRef.current;
   }
 
   function applyProjectSessionTimelineResult(
