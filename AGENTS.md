@@ -13,6 +13,7 @@ This is a general-purpose editor, not an AI talking-head or oral-video product. 
 ### Constraints
 
 - **Architecture**: UI emits commands; Rust core owns project and timeline semantics. No UI code may directly construct FFmpeg commands.
+- **Production refactor policy**: Do not patch around a known-wrong ownership boundary. If preview, edit, render, session, media, or native-surface code is structurally wrong, replace the boundary with the long-term production architecture, delete the legacy path, and add gates that fail the old behavior. Short-term CSS/DOM/IPC timing offsets, renderer resync tricks, fallback paths, or "temporary" compatibility layers are not acceptable unless the user explicitly asks for containment.
 - **Project format**: `.veproj/project.json` is the canonical source of truth. Render graphs, FFmpeg scripts, thumbnails, waveform data, proxy files, and preview caches are derived artifacts.
 - **Terminology**: Product language, desktop code, Rust domain types, IPC commands, docs, schema, and tests should follow Jianying concepts wherever possible. Prefer draft/material/track/segment/keyframe/filter/transition-style terms over invented equivalents.
 - **Time model**: Core time math must use integer microseconds, frame indices, or rational frame rates. Avoid naked floating-point time in persisted semantics.

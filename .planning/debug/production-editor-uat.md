@@ -2,7 +2,7 @@
 status: investigating
 trigger: "Production editor UAT from ordinary Jianying-style user perspective, based on pasted review requirements: UI reference screenshots, combination playback, Rust-owned semantics/session, preview scheduler, preview/export parity, FFmpeg reliability, and hard verification gates."
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-06-23
 ---
 
 # Debug Session: production-editor-uat
@@ -20,7 +20,8 @@ updated: 2026-06-21
 - hypothesis: "The remaining realtime preview ownership leak was an Electron 33ms status/presentation loop plus a synchronous play boundary that still made Electron look like part of the playback pump."
 - test: "Delete Electron playbackTimer/presentPlaybackTick, make play enqueue the Rust worker without waiting for first-frame presentation, keep resize continuation inside Rust, and require cadence gates to pass with low snapshot-read counts."
 - expecting: "Rust worker telemetry accounts for 90 frames over the 3s 30fps media window, Electron snapshot reads stay coarse and below frame cadence, and resize during playback continues on the new generation."
-- next_action: "Continue broader production UAT gaps after this slice: deterministic packaged FFmpeg/ffprobe, product playback visual screenshot gates at required viewports, and longer-term Rust playback supervisor/event stream."
+- next_action: "Proceed only with destructive production-grade fixes for preview/edit/render ownership: Rust-owned live-edit playback transactions, native text hit-test evidence/API, unified text render contract, A/V coordinator, and resize visible-state policy. Do not land short-term DOM/CSS/renderer resync patches on known-wrong preview boundaries."
+- standing_rule: "Short-term fixes are treated as not fixed for this product. If the current architecture is wrong at an ownership or boundary level, replace it with the long-term production architecture even if the change is destructive, delete the old path, and add gates that fail the old behavior."
 - reasoning_checkpoint: "Use production-architecture-review output shape: Decision, Current chain, Production target, Gap, Required action, Verification gates."
 - tdd_checkpoint: "Before product code edits, add or strengthen gates that would fail the observed bad UI/playback/parity state."
 
@@ -101,6 +102,12 @@ updated: 2026-06-21
 - timestamp: 2026-06-21
   observation: "A follow-up subagent audit found the remaining FFmpeg runtime gap: packaged Electron still honored a pre-set VE_BUNDLED_FFMPEG_DIR before resourcesPath. Packaged app startup now always forces VE_BUNDLED_FFMPEG_DIR to process.resourcesPath/ffmpeg/<platform-arch>; only development/test shells can keep an injected bundled runtime directory."
   data: "Verification: cargo test -p draft_model -- --nocapture -> passed; cargo test -p draft_commands -- --nocapture -> passed; cargo test -p bindings_node -- --nocapture -> passed; cargo test -p media_runtime discovery -- --nocapture and runtime_capability -> passed; corepack pnpm run test:phase3-source-guards -> passed; corepack pnpm --dir apps/desktop-electron run build -> passed and logged Validated bundled FFmpeg runtime at apps/desktop-electron/runtime/ffmpeg/darwin-arm64. Negative grep found no old structural edit commands in schemas/command.schema.json, generated CommandEnvelope.ts, renderer commandHelpers.ts, or main/index.ts."
+- timestamp: 2026-06-23
+  observation: "User UAT reports that double-clicking preview subtitles cannot edit, subtitles look blurry, playback can freeze video while audio continues after inserting text, and resize still exposes a short native-surface mismatch."
+  data: "Repo inspection confirms PreviewMonitor only renders .preview-text-overlay when showRealtimeSurface is false, so the native compositor path has no text edit hit target. App.refreshRealtimePreviewAt unconditionally sets playbackRunning=false while not stopping audio, which can leave audio running on the old generation after preview-affecting edits."
+- timestamp: 2026-06-23
+  observation: "User explicitly rejected short-term/containment patches for production preview and instructed that hard destructive long-term refactors are the standing rule."
+  data: "Aborted renderer-owned DOM text hotspot/playback-resume and fixed-ratio text-rasterization patches before commit. Required direction is to replace invalid ownership boundaries rather than patching around them."
 
 ## Eliminated
 
