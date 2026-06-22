@@ -625,7 +625,7 @@ export async function addTextThroughProductPanel(
   expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
 ): Promise<void> {
   const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
+  await selectProductTopFeatureCategory(page, "文本");
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
@@ -642,7 +642,7 @@ export async function importSubtitleSrtThroughProductPanel(
   srtContent: string
 ): Promise<void> {
   const nextCount = (await countCommand(app, "importSubtitleSrtIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "字幕" }).click();
+  await selectProductTopFeatureCategory(page, "字幕");
   const captionsPanel = page.getByRole("region", { name: "素材面板" });
   await expect(captionsPanel).not.toContainText("字幕暂未开放");
   await captionsPanel.getByLabel("SRT 内容").fill(srtContent);
@@ -665,7 +665,7 @@ export async function addAudioThroughProductPanel(
   expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
 ): Promise<void> {
   const nextCount = (await countCommand(app, "addAudioSegmentIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "音频" }).click();
+  await selectProductTopFeatureCategory(page, "音频");
   const audioPanel = page.getByRole("region", { name: "素材面板" });
   await audioPanel.getByLabel("BGM素材").selectOption({ label: basename(audioPath) });
   await audioPanel.getByRole("button", { name: "添加音频", exact: true }).click();
@@ -802,6 +802,23 @@ export async function expectTimelineSnappingStatusVisible(page: Page): Promise<v
   const snapping = page.locator(".snapping-status");
   await expect(snapping).toHaveAttribute("aria-label", /吸附/);
   await expect(snapping).toHaveAttribute("aria-pressed", /true|false/);
+}
+
+async function selectProductTopFeatureCategory(page: Page, category: string): Promise<void> {
+  const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
+  const visibleButton = topFeatureNav.getByRole("button", { name: category });
+  if ((await visibleButton.count()) > 0) {
+    await visibleButton.click();
+    return;
+  }
+
+  const overflow = page.getByRole("button", { name: "更多功能" });
+  await expect(overflow).toBeEnabled();
+  await overflow.click();
+  const menu = page.getByRole("menu", { name: "更多功能菜单" });
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitemradio", { name: category }).click();
+  await expect(menu).toHaveCount(0);
 }
 
 async function clickTimelineRulerAt(page: Page, targetTimeUs: number): Promise<void> {

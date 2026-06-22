@@ -991,7 +991,7 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
 
   try {
     await resetNativeCommandObservations(app, page);
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "字幕" }).click();
+    await selectTopFeatureCategory(page, "字幕");
     await expect(page.getByRole("heading", { name: "字幕", exact: true })).toBeVisible();
     await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("SRT 字幕");

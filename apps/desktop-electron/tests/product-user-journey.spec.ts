@@ -604,6 +604,115 @@ test("product playback UAT plays embedded video audio through native output", as
   }
 });
 
+test("P0 user portrait material supports real text and subtitle native overlay editing", async () => {
+  test.skip(
+    !existsSync(P0_USER_PORTRAIT_MATERIAL),
+    `P0 user material not present at ${P0_USER_PORTRAIT_MATERIAL}; set VIDEO_EDITOR_P0_USER_MATERIAL to run this local regression`
+  );
+
+  const { app, page } = await launchProductJourneyApp([P0_USER_PORTRAIT_MATERIAL]);
+  const p0Srt = "1\n00:00:00,000 --> 00:00:02,000\n真实素材字幕\nPortrait 验证\n";
+
+  try {
+    await importMaterialThroughProductPicker(app, page, P0_USER_PORTRAIT_MATERIAL);
+    await dragMaterialToTimeline(app, page, P0_USER_PORTRAIT_MATERIAL);
+
+    await addTextThroughProductPanel(page, app, "真实素材标题 初稿");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "真实素材标题\nSans 编辑",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 44,
+      color: "#3dff93",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 180,
+      layoutXMillis: 90,
+      layoutYMillis: 120,
+      layoutWidthMillis: 800,
+      layoutHeightMillis: 220,
+      lineHeightMillis: 1150,
+      letterSpacingMillis: 50
+    });
+    const titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "真实素材标题\nSans 编辑", 42, 28);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: titleDragVisual.transform.position.x,
+      positionY: titleDragVisual.transform.position.y,
+      scaleX: 1040,
+      scaleY: 1040,
+      rotation: -7,
+      opacity: 930,
+      fitMode: "适应"
+    });
+
+    await importSubtitleSrtThroughProductPanel(page, app, p0Srt);
+    await page.getByRole("button", { name: /片段 真实素材字幕/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "真实素材字幕\nPortrait 验证",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 34,
+      color: "#ffcf42",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 110,
+      layoutYMillis: 710,
+      layoutWidthMillis: 780,
+      layoutHeightMillis: 190,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 70
+    });
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.locator(".preview-text-overlay"), "P0 text overlay evidence must come from native preview").toHaveCount(0);
+    const evidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["真实素材标题\nSans 编辑", "真实素材字幕\nPortrait 验证"],
+      0,
+      {
+        exactOverlayCount: 2,
+        forbiddenContents: ["真实素材标题 初稿"]
+      }
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-text-subtitle-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-text-subtitle-host.png"),
+      evidence.hostImage
+    );
+
+    expect(evidence.previewEvidence.hostState?.productReady, "P0 text regression must use product-ready native preview").toBe(true);
+    expect(evidence.previewEvidence.hostState?.fallbackActive, "P0 text regression must not use fallback preview").toBe(false);
+    expect(evidence.previewEvidence.hostState?.backend, "P0 text regression backend").toBe("renderGraphGpu");
+    expect(evidence.previewEvidence.hostState?.contentEvidence?.source, "P0 text regression content source").toBe("renderGraphGpuComposited");
+    expect(evidence.previewEvidence.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+    await expectPreviewHostCoversCanvas(page);
+    expectP0NativePreviewPlacement(await measurePngPreviewPlacement(page, evidence.hostImage), "P0 text/subtitle native preview");
+    const contentEvidence = evidence.previewEvidence.hostState?.contentEvidence;
+    const titleOverlay = overlayByContent(evidence.activeTextOverlays, "真实素材标题\nSans 编辑");
+    const subtitleOverlay = overlayByContent(evidence.activeTextOverlays, "真实素材字幕\nPortrait 验证");
+    expect(titleOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(titleOverlay.visualRotationDegrees).toBe(-7);
+    expect(subtitleOverlay.source).toBe("subtitle");
+    expect(subtitleOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(subtitleOverlay.y).toBeGreaterThan(titleOverlay.y + titleOverlay.height);
+    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, titleOverlay, "P0 portrait title");
+    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, subtitleOverlay, "P0 portrait subtitle");
+
+    const calls = await readNativeCommandObservations(app);
+    expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(1);
+    expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(2);
+    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(2);
+    expect(requestProjectSessionPreviewFrameCount(calls), "P0 text regression must not request artifact preview frames").toBe(0);
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
 test("product playback UAT composites video external audio text and two-cue SRT on the native surface", async () => {
   const { app, page } = await launchProductJourneyApp([
     USER_JOURNEY_MOVING_VIDEO,
@@ -1199,6 +1308,292 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(8);
     expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(4);
     expect(requestProjectSessionPreviewFrameCount(calls), "text editing matrix must not request artifact preview frames").toBe(0);
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readDirectNativeCommandObservations(app),
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+    );
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+  }
+});
+
+test("product text editing UAT covers repeated font switching, multiline copy, layered text, and timed subtitles", async () => {
+  const { app, page } = await launchProductJourneyApp([
+    USER_JOURNEY_LONG_AV_VIDEO,
+    USER_JOURNEY_LONG_TONE_AUDIO
+  ]);
+  const firstTrackSrt =
+    "1\n00:00:00,000 --> 00:00:01,800\n同屏字幕 A 第一行\n真实示例 A\n\n2\n00:00:01,800 --> 00:00:03,600\n错峰字幕 A 初稿\n";
+  const secondTrackSrt =
+    "1\n00:00:00,000 --> 00:00:01,800\n同屏字幕 B 第一行\nLaunch 2026\n\n2\n00:00:01,800 --> 00:00:03,600\n错峰字幕 B 初稿\n";
+
+  try {
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_AV_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
+
+    await addTextThroughProductPanel(page, app, "真实项目标题 初稿");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "真实案例标题\nSans 初版",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 46,
+      color: "#52ff9f",
+      alignment: "left",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 190,
+      layoutXMillis: 70,
+      layoutYMillis: 80,
+      layoutWidthMillis: 820,
+      layoutHeightMillis: 240,
+      lineHeightMillis: 1120,
+      letterSpacingMillis: 50
+    });
+    const initialTitleEvidence = await waitForActiveTextOverlaySetEvidence(page, app, ["真实案例标题\nSans 初版"], 0, {
+      exactOverlayCount: 1,
+      forbiddenContents: ["真实项目标题 初稿"]
+    });
+    const titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "真实案例标题\nSans 初版", 64, -30);
+
+    await editSelectedTextThroughInspector(page, app, {
+      content: "真实案例标题\nSerif 二次编辑",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 45,
+      color: "#c084ff",
+      alignment: "center",
+      textBoxWidthMillis: 800,
+      textBoxHeightMillis: 190,
+      layoutXMillis: 90,
+      layoutYMillis: 90,
+      layoutWidthMillis: 800,
+      layoutHeightMillis: 230,
+      lineHeightMillis: 1160,
+      letterSpacingMillis: 95
+    });
+    const serifTitleEvidence = await waitForActiveTextOverlaySetEvidence(page, app, ["真实案例标题\nSerif 二次编辑"], 0, {
+      exactOverlayCount: 1,
+      forbiddenContents: ["真实案例标题\nSans 初版"]
+    });
+    expect(
+      serifTitleEvidence.hostImage.equals(initialTitleEvidence.hostImage),
+      "native host pixels must change after switching title content and font"
+    ).toBe(false);
+    const serifTitleOverlay = overlayByContent(serifTitleEvidence.activeTextOverlays, "真实案例标题\nSerif 二次编辑");
+    expect(serifTitleOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(serifTitleOverlay.visualPositionX).toBe(titleDragVisual.transform.position.x);
+    expect(serifTitleOverlay.visualPositionY).toBe(titleDragVisual.transform.position.y);
+
+    await editSelectedTextThroughInspector(page, app, {
+      content: "真实案例标题\nSans 终版",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 47,
+      color: "#2cffb4",
+      alignment: "right",
+      textBoxWidthMillis: 800,
+      textBoxHeightMillis: 190,
+      layoutXMillis: 90,
+      layoutYMillis: 90,
+      layoutWidthMillis: 800,
+      layoutHeightMillis: 230,
+      lineHeightMillis: 1180,
+      letterSpacingMillis: 30
+    });
+    const finalTitleEvidence = await waitForActiveTextOverlaySetEvidence(page, app, ["真实案例标题\nSans 终版"], 0, {
+      exactOverlayCount: 1,
+      forbiddenContents: ["真实案例标题\nSerif 二次编辑", "真实案例标题\nSans 初版"]
+    });
+    expect(
+      finalTitleEvidence.hostImage.equals(serifTitleEvidence.hostImage),
+      "native host pixels must change after switching the title font back to Sans"
+    ).toBe(false);
+    const finalTitleOnlyOverlay = overlayByContent(finalTitleEvidence.activeTextOverlays, "真实案例标题\nSans 终版");
+    expect(finalTitleOnlyOverlay.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+
+    await addRenamedSubtitleTrack(page, app, "文字轨道 品牌条");
+    await addTextThroughProductPanel(page, app, "品牌条 初稿");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "品牌条｜多字体 Serif",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 30,
+      color: "#ff9e2c",
+      alignment: "left",
+      textBoxWidthMillis: 620,
+      textBoxHeightMillis: 120,
+      layoutXMillis: 70,
+      layoutYMillis: 430,
+      layoutWidthMillis: 650,
+      layoutHeightMillis: 150,
+      lineHeightMillis: 1100,
+      letterSpacingMillis: 60
+    });
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: -130,
+      positionY: -20,
+      scaleX: 1040,
+      scaleY: 1040,
+      rotation: 6,
+      opacity: 920,
+      fitMode: "适应"
+    });
+
+    await addRenamedSubtitleTrack(page, app, "字幕轨道 A");
+    await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
+    await page.getByRole("button", { name: /片段 同屏字幕 A/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "同屏字幕 A\n真实示例",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 35,
+      color: "#f9f871",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 105,
+      layoutYMillis: 600,
+      layoutWidthMillis: 790,
+      layoutHeightMillis: 190,
+      lineHeightMillis: 1220,
+      letterSpacingMillis: 20
+    });
+    await page.getByRole("button", { name: /片段 错峰字幕 A/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "错峰字幕 A\nSerif 后半段",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 34,
+      color: "#40c7ff",
+      alignment: "center",
+      textBoxWidthMillis: 770,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 115,
+      layoutYMillis: 650,
+      layoutWidthMillis: 770,
+      layoutHeightMillis: 190,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 70
+    });
+
+    await addRenamedSubtitleTrack(page, app, "字幕轨道 B");
+    await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
+    await page.getByRole("button", { name: /片段 同屏字幕 B/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "同屏字幕 B\nLaunch 2026",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 33,
+      color: "#ff63d8",
+      alignment: "right",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 105,
+      layoutYMillis: 760,
+      layoutWidthMillis: 800,
+      layoutHeightMillis: 190,
+      lineHeightMillis: 1240,
+      letterSpacingMillis: 120
+    });
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: 95,
+      positionY: -35,
+      scaleX: 1090,
+      scaleY: 1090,
+      rotation: -10,
+      opacity: 880,
+      fitMode: "适应"
+    });
+    await page.getByRole("button", { name: /片段 错峰字幕 B/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      content: "错峰字幕 B\nSans 后半段",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 34,
+      color: "#ffffff",
+      alignment: "right",
+      textBoxWidthMillis: 770,
+      textBoxHeightMillis: 160,
+      layoutXMillis: 130,
+      layoutYMillis: 760,
+      layoutWidthMillis: 770,
+      layoutHeightMillis: 190,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 90
+    });
+
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.locator(".preview-text-overlay"), "native text regression must not be satisfied by DOM text overlays").toHaveCount(0);
+    await seekTimelinePlayhead(page, app, 600_000);
+    const sameTimeEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["真实案例标题\nSans 终版", "品牌条｜多字体 Serif", "同屏字幕 A\n真实示例", "同屏字幕 B\nLaunch 2026"],
+      0,
+      {
+        maxTargetTimeUs: 1_750_000,
+        exactOverlayCount: 4,
+        forbiddenContents: ["真实案例标题\nSans 初版", "真实案例标题\nSerif 二次编辑", "错峰字幕 A\nSerif 后半段", "错峰字幕 B\nSans 后半段"]
+      }
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-editing-expanded-same-time-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-editing-expanded-same-time-host.png"),
+      sameTimeEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, sameTimeEvidence, "expanded same-time text/subtitle regression");
+    const finalTitle = overlayByContent(sameTimeEvidence.activeTextOverlays, "真实案例标题\nSans 终版");
+    const brandStrip = overlayByContent(sameTimeEvidence.activeTextOverlays, "品牌条｜多字体 Serif");
+    const sameSubtitleA = overlayByContent(sameTimeEvidence.activeTextOverlays, "同屏字幕 A\n真实示例");
+    const sameSubtitleB = overlayByContent(sameTimeEvidence.activeTextOverlays, "同屏字幕 B\nLaunch 2026");
+    expect(finalTitle.source).toBe("text");
+    expect(finalTitle.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(finalTitle.visualPositionX).toBe(titleDragVisual.transform.position.x);
+    expect(finalTitle.visualPositionY).toBe(titleDragVisual.transform.position.y);
+    expect(brandStrip.source).toBe("text");
+    expect(brandStrip.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(brandStrip.visualRotationDegrees).toBe(6);
+    expect(sameSubtitleA.source).toBe("subtitle");
+    expect(sameSubtitleA.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(sameSubtitleB.source).toBe("subtitle");
+    expect(sameSubtitleB.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(sameSubtitleB.visualRotationDegrees).toBe(-10);
+    expect(new Set([finalTitle.y, brandStrip.y, sameSubtitleA.y, sameSubtitleB.y]).size).toBeGreaterThanOrEqual(3);
+
+    await seekTimelinePlayhead(page, app, 3_200_000);
+    const staggeredEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["错峰字幕 A\nSerif 后半段", "错峰字幕 B\nSans 后半段"],
+      3_000_000,
+      {
+        maxTargetTimeUs: 3_580_000,
+        exactOverlayCount: 2,
+        forbiddenContents: ["真实案例标题\nSans 终版", "品牌条｜多字体 Serif", "同屏字幕 A\n真实示例", "同屏字幕 B\nLaunch 2026"]
+      }
+    );
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-editing-expanded-staggered-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-editing-expanded-staggered-host.png"),
+      staggeredEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, staggeredEvidence, "expanded staggered subtitle regression");
+    const staggeredSubtitleA = overlayByContent(staggeredEvidence.activeTextOverlays, "错峰字幕 A\nSerif 后半段");
+    const staggeredSubtitleB = overlayByContent(staggeredEvidence.activeTextOverlays, "错峰字幕 B\nSans 后半段");
+    expect(staggeredSubtitleA.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(staggeredSubtitleB.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(staggeredSubtitleA.y).not.toBe(staggeredSubtitleB.y);
+
+    const calls = await readNativeCommandObservations(app);
+    expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(2);
+    expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(8);
+    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(3);
+    expect(
+      calls.filter((call) => call.command === "editSelectedText").map((call) => call.textFontRef),
+      "font switching regression must exercise both bundled CJK font refs through session intents"
+    ).toEqual(expect.arrayContaining([BUNDLED_SANS_FONT_REF, BUNDLED_SERIF_FONT_REF]));
+    expect(requestProjectSessionPreviewFrameCount(calls), "expanded text regression must not request artifact preview frames").toBe(0);
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
