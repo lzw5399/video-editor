@@ -190,6 +190,12 @@
   padding-top: 0;
 }
 
+.timeline-surface.material-drop-active .track-list {
+  outline: 1px solid #20c7d9;
+  outline-offset: -1px;
+  background: rgba(32, 199, 217, 0.06);
+}
+
 .track-scroll-content {
   position: relative;
   display: grid;

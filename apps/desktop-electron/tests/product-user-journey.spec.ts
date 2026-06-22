@@ -10,6 +10,7 @@ import {
   addAudioThroughProductPanel,
   addTextThroughProductPanel,
   addMaterialToTimeline,
+  dragMaterialToTimeline,
   addVideoTrack,
   activateProductJourneyApp,
   capturePreviewEvidence,
@@ -132,7 +133,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     const sessionCalls = await readProjectSessionCalls(app);
     expect(sessionCalls).toEqual(
       expect.arrayContaining([
@@ -150,7 +151,8 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
           command: "executeProjectIntent",
           expectedRevision: 1,
           intentKind: "addTimelineSegmentIntent",
-          hasDraftField: false
+          hasDraftField: false,
+          timelineSemanticKeys: []
         })
       ])
     );

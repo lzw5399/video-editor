@@ -1073,6 +1073,14 @@ h2 {
   background: #252522;
 }
 
+.material-row[draggable="true"] {
+  cursor: grab;
+}
+
+.material-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .material-row-action {
   justify-self: end;
 }

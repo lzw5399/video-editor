@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent as ReactDragEvent } from "react";
 
 import type { Material } from "../../generated/Draft";
 import {
@@ -14,6 +14,7 @@ import {
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
+import { MATERIAL_DRAG_DATA_TYPE } from "./dragTypes";
 
 type FeaturePanelProps = {
   category: WorkspaceCategory;
@@ -473,6 +474,17 @@ function MaterialList({
   pending: boolean;
   onAddTimelineSegment: (materialId: string) => void;
 }): React.ReactElement {
+  function handleMaterialDragStart(event: ReactDragEvent<HTMLElement>, material: Material): void {
+    if (material.status !== "available") {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(MATERIAL_DRAG_DATA_TYPE, material.materialId);
+    event.dataTransfer.setData("text/plain", material.materialId);
+  }
+
   if (materials.length === 0) {
     return (
       <div className="empty-state">
@@ -489,7 +501,13 @@ function MaterialList({
         const resourceStatus = resourceStatuses.find((status) => status.materialId === material.materialId);
 
         return (
-          <article className="material-row" aria-label={`素材 ${material.displayName}`} key={material.materialId}>
+          <article
+            className="material-row"
+            aria-label={`素材 ${material.displayName}`}
+            draggable={material.status === "available"}
+            key={material.materialId}
+            onDragStart={(event) => handleMaterialDragStart(event, material)}
+          >
             <div className="material-thumb" aria-hidden="true">{formatMaterialKind(material.kind)}</div>
             <div className="material-copy">
               <div className="material-title">

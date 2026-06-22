@@ -564,6 +564,24 @@ export async function addMaterialToTimeline(
   await expect(page.getByLabel("预览选中框")).toBeVisible();
 }
 
+export async function dragMaterialToTimeline(
+  app: ProductJourneyAppController,
+  page: Page,
+  materialPath: string
+): Promise<void> {
+  const materialName = basename(materialPath);
+  const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
+  const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
+  const timelineDropTarget = page.locator('[data-material-drop-target="true"]');
+
+  await expect(materialRow).toContainText("可用", { timeout: 10_000 });
+  await expect(timelineDropTarget).toBeVisible();
+  await materialRow.dragTo(timelineDropTarget);
+  await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
+  await expect(page.getByLabel("预览选中框")).toBeVisible();
+}
+
 export async function addVideoTrack(page: Page, app: ProductJourneyAppController): Promise<void> {
   const nextCount = (await countCommand(app, "addTrackIntent")) + 1;
   await page.getByRole("button", { name: "添加视频轨道" }).click();

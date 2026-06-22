@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 
 import type { TrackKind } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
@@ -11,6 +11,7 @@ import {
   type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
+import { MATERIAL_DRAG_DATA_TYPE } from "./dragTypes";
 
 import "./timeline.css";
 
@@ -78,6 +79,7 @@ export function Timeline({
   const trackListRef = useRef<HTMLDivElement>(null);
   const trackContentRef = useRef<HTMLDivElement>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [materialDropActive, setMaterialDropActive] = useState(false);
   const playheadRatio = Math.max(0, Math.min(1, Math.max(0, playheadUs) / Math.max(1, timeline.duration)));
   const playheadStyle = {
     left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
@@ -139,9 +141,50 @@ export function Timeline({
     },
     [seekFromTrackClientX]
   );
+  const canAcceptMaterialDrop = useCallback(
+    (dataTransfer: DataTransfer) =>
+      workspace.pendingCommand === null &&
+      onAddSegment !== undefined &&
+      Array.from(dataTransfer.types).includes(MATERIAL_DRAG_DATA_TYPE),
+    [onAddSegment, workspace.pendingCommand]
+  );
+  const handleMaterialDragOver = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!canAcceptMaterialDrop(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setMaterialDropActive(true);
+    },
+    [canAcceptMaterialDrop]
+  );
+  const handleMaterialDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+    setMaterialDropActive(false);
+  }, []);
+  const handleMaterialDrop = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!canAcceptMaterialDrop(event.dataTransfer)) {
+        setMaterialDropActive(false);
+        return;
+      }
+      event.preventDefault();
+      setMaterialDropActive(false);
+
+      const materialId = event.dataTransfer.getData(MATERIAL_DRAG_DATA_TYPE).trim();
+      if (materialId.length > 0) {
+        onAddSegment?.(materialId);
+      }
+    },
+    [canAcceptMaterialDrop, onAddSegment]
+  );
 
   return (
-    <div className="timeline-surface">
+    <div className={materialDropActive ? "timeline-surface material-drop-active" : "timeline-surface"}>
       <TransportStrip
         workspace={workspace}
         playheadUs={playheadUs}
@@ -170,7 +213,16 @@ export function Timeline({
         </div>
       </div>
 
-      <div className="track-list" aria-label="轨道列表" ref={trackListRef}>
+      <div
+        className="track-list"
+        aria-label="轨道列表"
+        data-material-drop-target="true"
+        ref={trackListRef}
+        onDragEnter={handleMaterialDragOver}
+        onDragOver={handleMaterialDragOver}
+        onDragLeave={handleMaterialDragLeave}
+        onDrop={handleMaterialDrop}
+      >
         <div className="track-scroll-content" ref={trackContentRef} style={zoomContentStyle}>
           <div
             className="playhead"
