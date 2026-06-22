@@ -211,6 +211,7 @@ function MaterialPanel({
         materials={filteredMaterials}
         resourceStatuses={workspace.resourcePanel.materials}
         pending={workspace.pendingCommand !== null}
+        showResourceDiagnostics={showDeveloperDiagnostics}
         onAddTimelineSegment={onAddTimelineSegment}
       />
     </div>
@@ -467,11 +468,13 @@ function MaterialList({
   materials,
   resourceStatuses,
   pending,
+  showResourceDiagnostics,
   onAddTimelineSegment
 }: {
   materials: Material[];
   resourceStatuses: MaterialResourceStatusView[];
   pending: boolean;
+  showResourceDiagnostics: boolean;
   onAddTimelineSegment: (materialId: string) => void;
 }): React.ReactElement {
   function handleMaterialDragStart(event: ReactDragEvent<HTMLElement>, material: Material): void {
@@ -518,7 +521,7 @@ function MaterialList({
                 <span>{formatMicroseconds(material.metadata.duration)}</span>
                 <span>{formatMaterialDetail(material)}</span>
               </div>
-              <MaterialResourceStatusLine status={resourceStatus} />
+              {showResourceDiagnostics ? <MaterialResourceStatusLine status={resourceStatus} /> : null}
               {statusMessage === null ? null : <p className="material-warning">{statusMessage}</p>}
             </div>
             <button

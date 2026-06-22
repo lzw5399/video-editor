@@ -1055,22 +1055,23 @@ h2 {
 
 .material-list {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   align-content: start;
-  gap: 8px;
+  gap: 10px;
   min-height: 0;
 }
 
 .material-row {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 64px;
-  padding: 8px;
+  grid-template-rows: auto minmax(0, 1fr) 26px;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 154px;
+  padding: 6px;
   border: 1px solid #343431;
   border-radius: 6px;
   color: #cbc8c1;
-  background: #252522;
+  background: #20201e;
 }
 
 .material-row[draggable="true"] {
@@ -1082,14 +1083,25 @@ h2 {
 }
 
 .material-row-action {
-  justify-self: end;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .material-thumb {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
   border-radius: 4px;
   color: #f0eee8;
   background: #151515;
@@ -1105,10 +1117,10 @@ h2 {
 }
 
 .material-title {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .material-title strong,
@@ -1124,7 +1136,7 @@ h2 {
 
 .material-status {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -1143,11 +1155,11 @@ h2 {
 
 .material-metadata {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
   overflow: hidden;
   color: #96938c;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -1158,7 +1170,9 @@ h2 {
 }
 
 .material-warning {
-  margin-top: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .material-resource-status {
@@ -1214,6 +1228,27 @@ h2 {
 .resource-tone-error,
 .resource-maintenance-error {
   color: #e45a5a;
+}
+
+@media (max-width: 1180px) {
+  .material-list {
+    grid-template-columns: 1fr;
+  }
+
+  .material-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 26px;
+    min-height: 96px;
+  }
+
+  .material-thumb {
+    grid-row: 1 / 3;
+    align-self: start;
+  }
+
+  .material-row-action {
+    grid-column: 2;
+  }
 }
 
 .resource-tone-muted {
