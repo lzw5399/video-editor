@@ -208,6 +208,7 @@ function MaterialPanel({
       ) : null}
 
       <MaterialList
+        bundlePath={bundlePath}
         materials={filteredMaterials}
         resourceStatuses={workspace.resourcePanel.materials}
         pending={workspace.pendingCommand !== null}
@@ -465,12 +466,14 @@ function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): R
 }
 
 function MaterialList({
+  bundlePath,
   materials,
   resourceStatuses,
   pending,
   showResourceDiagnostics,
   onAddTimelineSegment
 }: {
+  bundlePath: string;
   materials: Material[];
   resourceStatuses: MaterialResourceStatusView[];
   pending: boolean;
@@ -502,6 +505,7 @@ function MaterialList({
       {materials.map((material) => {
         const statusMessage = materialStatusMessage(material);
         const resourceStatus = resourceStatuses.find((status) => status.materialId === material.materialId);
+        const thumbnailUrl = materialThumbnailUrl(bundlePath, resourceStatus);
 
         return (
           <article
@@ -511,7 +515,7 @@ function MaterialList({
             key={material.materialId}
             onDragStart={(event) => handleMaterialDragStart(event, material)}
           >
-            <div className="material-thumb" aria-hidden="true">{formatMaterialKind(material.kind)}</div>
+            <MaterialThumbnail material={material} thumbnailUrl={thumbnailUrl} />
             <div className="material-copy">
               <div className="material-title">
                 <strong>{material.displayName}</strong>
@@ -538,6 +542,54 @@ function MaterialList({
       })}
     </div>
   );
+}
+
+function MaterialThumbnail({ material, thumbnailUrl }: { material: Material; thumbnailUrl: string | null }): React.ReactElement {
+  if (thumbnailUrl !== null) {
+    return (
+      <div className="material-thumb has-thumbnail" aria-hidden="true">
+        <img src={thumbnailUrl} alt="" draggable={false} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`material-thumb material-thumb-${material.kind}`} aria-hidden="true">
+      <span>{formatMaterialKind(material.kind)}</span>
+    </div>
+  );
+}
+
+function materialThumbnailUrl(bundlePath: string, resourceStatus: MaterialResourceStatusView | undefined): string | null {
+  const ref = resourceStatus?.thumbnailRef ?? null;
+  if (ref === null || ref.artifactKind !== "thumbnail") {
+    return null;
+  }
+
+  return projectRelativeFileUrl(bundlePath, ref.projectRelativeRef);
+}
+
+function projectRelativeFileUrl(bundlePath: string, projectRelativeRef: string): string | null {
+  const root = bundlePath.trim();
+  const ref = projectRelativeRef.trim();
+  const refSegments = ref.split("/");
+  if (
+    root.length === 0 ||
+    ref.length === 0 ||
+    !root.startsWith("/") ||
+    ref.startsWith("/") ||
+    ref.includes("\\") ||
+    refSegments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
+  ) {
+    return null;
+  }
+
+  const rootUrl = absolutePathFileUrl(root.endsWith("/") ? root : `${root}/`);
+  return new URL(refSegments.map(encodeURIComponent).join("/"), rootUrl).toString();
+}
+
+function absolutePathFileUrl(path: string): string {
+  return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 function ResourceTaskStrip({

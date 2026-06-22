@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-vh45 inspector draft parameters
-last_updated: "2026-06-22T05:46:30Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-vh45: inspector draft parameters
+stopped_at: Completed quick task 260622-mf46 material thumbnail refs
+last_updated: "2026-06-22T05:58:14Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-mf46: material thumbnail refs
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-vh45: inspector draft parameters
+Last activity: 2026-06-22 -- Completed quick task 260622-mf46: material thumbnail refs
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-mf46-material-thumbnail-refs | Material cards now consume Rust artifact-store ready thumbnail `displayRef` values as bundle-local image URLs, preserve deterministic fallback visuals when refs are absent, and revalidated build, workspace, UI reference, source guard, and display-model gates. |
 | 2026-06-22 | 260622-vh45-inspector-draft-parameters | Reworked the product no-selection right inspector into a direct `草稿参数` parameter list, hid explanatory empty-state copy from product mode, preserved the modify action, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-rp44-control-chrome-icons | Replaced preview and timeline product control glyph/text chrome with app-local SVG icons, removed the unimplemented fullscreen fake control, hid idle timeline diagnostic copy in product mode, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-dq43-category-icon-toolbar | Replaced product top category fallback glyphs with app-local SVG icon masks sourced from `/icons`, kept category semantics and accessibility labels stable, and revalidated workspace, UI reference, source guard, and build gates. |

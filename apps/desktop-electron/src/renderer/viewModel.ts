@@ -19,6 +19,7 @@ import type {
   ArtifactQuotaStatus,
   ArtifactStatusSummary,
   ArtifactTaskStatus,
+  DisplayableArtifactRef,
   ExportDiagnosticKind,
   ExportJobPhase,
   ExportValidationReport,
@@ -116,9 +117,16 @@ export type MaterialResourceChipView = {
   progressPerMille: number | null;
 };
 
+export type MaterialResourceDisplayRefView = {
+  label: string;
+  projectRelativeRef: string;
+  artifactKind: string;
+};
+
 export type MaterialResourceStatusView = {
   materialId: string;
   materialLabel: string;
+  thumbnailRef: MaterialResourceDisplayRefView | null;
   chips: MaterialResourceChipView[];
 };
 
@@ -668,8 +676,12 @@ function materialResourceViews(statuses: MaterialArtifactStatus[]): MaterialReso
       {
         materialId: status.materialId,
         materialLabel: status.materialLabel,
+        thumbnailRef: null,
         chips: []
       };
+    if (status.artifactKind === "thumbnail" && status.status === "ready") {
+      view.thumbnailRef = displayRefView(status.displayRef);
+    }
     view.chips.push({
       key: `${status.materialId}-${status.artifactKind}`,
       label: artifactKindLabel(status.artifactKind),
@@ -681,6 +693,18 @@ function materialResourceViews(statuses: MaterialArtifactStatus[]): MaterialReso
   }
 
   return Array.from(grouped.values());
+}
+
+function displayRefView(ref: DisplayableArtifactRef | null | undefined): MaterialResourceDisplayRefView | null {
+  if (ref === null || ref === undefined) {
+    return null;
+  }
+
+  return {
+    label: ref.label,
+    projectRelativeRef: ref.projectRelativeRef,
+    artifactKind: ref.artifactKind
+  };
 }
 
 function maintenanceFromQuota(

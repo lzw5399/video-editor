@@ -7,6 +7,7 @@ import type { Keyframe, SegmentVisual } from "../src/generated/Draft";
 import {
   formatRealtimePreviewBackendLabel,
   formatRealtimePreviewFallbackReason,
+  resourcePanelFromArtifactStatus,
   summarizeRealtimePreviewDisplay,
   summarizeRealtimePreviewProductDisplay,
   type RealtimePreviewDisplayModel
@@ -1560,6 +1561,83 @@ test("fallback source guard keeps renderer display-only for telemetry", () => {
   expect(viewModelSource, "display model should not inspect drafts to infer support").not.toMatch(
     /if\s*\([^)]*(?:draft|material)[^)]*\)[\s\S]{0,160}fallback/i
   );
+});
+
+test("resource panel carries ready thumbnail display refs from artifact status", () => {
+  const panel = resourcePanelFromArtifactStatus({
+    sessionId: "desktop-artifact-session",
+    statusLabel: "资源已就绪",
+    refreshAvailable: true,
+    quota: {
+      statusLabel: "缓存空间正常",
+      severity: "ready",
+      usedLabel: "1 MB",
+      reclaimableLabel: "0 MB",
+      releasedLabel: "0 MB",
+      cleanupAvailable: false
+    },
+    tasks: [],
+    materials: [
+      {
+        materialId: "material-video",
+        materialLabel: "城市街景.mp4",
+        artifactKind: "thumbnail",
+        status: "ready",
+        statusLabel: "已生成",
+        progressPerMille: null,
+        canRefresh: true,
+        canRetry: false,
+        canResume: false,
+        canCancel: false,
+        displayRef: {
+          label: "缩略图",
+          projectRelativeRef: "derived/thumbnails/material-video.jpg",
+          artifactKind: "thumbnail"
+        }
+      },
+      {
+        materialId: "material-video",
+        materialLabel: "城市街景.mp4",
+        artifactKind: "waveform",
+        status: "ready",
+        statusLabel: "已生成",
+        progressPerMille: null,
+        canRefresh: true,
+        canRetry: false,
+        canResume: false,
+        canCancel: false,
+        displayRef: {
+          label: "波形",
+          projectRelativeRef: "derived/waveforms/material-video.json",
+          artifactKind: "waveform"
+        }
+      },
+      {
+        materialId: "material-audio",
+        materialLabel: "背景音乐.wav",
+        artifactKind: "thumbnail",
+        status: "running",
+        statusLabel: "生成中",
+        progressPerMille: 400,
+        canRefresh: false,
+        canRetry: false,
+        canResume: false,
+        canCancel: true,
+        displayRef: {
+          label: "未完成缩略图",
+          projectRelativeRef: "derived/thumbnails/material-audio.jpg",
+          artifactKind: "thumbnail"
+        }
+      }
+    ]
+  });
+
+  expect(panel.materials.find((material) => material.materialId === "material-video")?.thumbnailRef).toEqual({
+    label: "缩略图",
+    projectRelativeRef: "derived/thumbnails/material-video.jpg",
+    artifactKind: "thumbnail"
+  });
+  expect(panel.materials.find((material) => material.materialId === "material-audio")?.thumbnailRef).toBeNull();
 });
 
 test("Phase 11 source guard and root scripts are wired", () => {
