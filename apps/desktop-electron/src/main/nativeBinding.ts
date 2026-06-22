@@ -14,8 +14,6 @@ import type {
   CommandEvent,
   CommandResultEnvelope,
   ExportJobStatusResponse,
-  ListMaterialsResponse,
-  ListMissingMaterialsResponse,
   MissingMaterialCommandDiagnostic,
   PreviewArtifactResponse,
   RuntimeCapabilityReport,
@@ -268,18 +266,20 @@ export type ProjectSessionOpenResponse = {
   warnings: string[];
 };
 
-export type ProjectSessionMaterialsResponse = ListMaterialsResponse & {
+export type ProjectSessionMaterialsResponse = {
   sessionId: string;
   revision: number;
   bundlePath: string;
   projectJsonPath: string;
+  materials: Material[];
 };
 
-export type ProjectSessionMissingMaterialsResponse = ListMissingMaterialsResponse & {
+export type ProjectSessionMissingMaterialsResponse = {
   sessionId: string;
   revision: number;
   bundlePath: string;
   projectJsonPath: string;
+  diagnostics: MissingMaterialCommandDiagnostic[];
 };
 
 export type ProjectSessionClosedResponse = {

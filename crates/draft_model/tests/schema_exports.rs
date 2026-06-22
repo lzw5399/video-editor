@@ -21,10 +21,8 @@ use draft_model::{
     ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
     ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
-    ImportMaterialCommandPayload, ImportMaterialResponse, InvalidatePreviewCacheCommandPayload,
-    InvalidationScope, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
-    KeyframeValue, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse, MAX_TEXT_LAYOUT_MILLIS,
+    InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_TEXT_LAYOUT_MILLIS,
     MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
     MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata,
     MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
@@ -163,9 +161,6 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<ImportMaterialCommandPayload>(),
-            export_decl::<ListMaterialsCommandPayload>(),
-            export_decl::<ListMissingMaterialsCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
             export_decl::<RuntimeTextureBackend>(),
             export_decl::<RuntimeDeviceId>(),
@@ -264,9 +259,6 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
-            export_decl::<ImportMaterialResponse>(),
-            export_decl::<ListMaterialsResponse>(),
-            export_decl::<ListMissingMaterialsResponse>(),
             export_decl::<ChangedEntity>(),
             export_decl::<DirtyDomain>(),
             export_decl::<DirtyRange>(),
@@ -382,9 +374,6 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<ImportMaterialCommandPayload>(),
-            export_decl::<ListMaterialsCommandPayload>(),
-            export_decl::<ListMissingMaterialsCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
             export_decl::<RuntimeTextureBackend>(),
             export_decl::<RuntimeDeviceId>(),
@@ -459,9 +448,6 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
-            export_decl::<ImportMaterialResponse>(),
-            export_decl::<ListMaterialsResponse>(),
-            export_decl::<ListMissingMaterialsResponse>(),
             export_decl::<ChangedEntity>(),
             export_decl::<DirtyDomain>(),
             export_decl::<DirtyRange>(),
@@ -1469,9 +1455,6 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<ImportMaterialCommandPayload>(),
-            export_decl::<ListMaterialsCommandPayload>(),
-            export_decl::<ListMissingMaterialsCommandPayload>(),
             export_decl::<PreviewFrameStoragePreference>(),
             export_decl::<PreviewDecodeRequest>(),
             export_decl::<ReleasePreviewFrameCommandPayload>(),
@@ -1566,9 +1549,6 @@ fn command_result_ts_contract() -> String {
             export_decl::<RuntimeCapabilityReport>(),
             export_decl::<MissingMaterialCommandDiagnosticKind>(),
             export_decl::<MissingMaterialCommandDiagnostic>(),
-            export_decl::<ImportMaterialResponse>(),
-            export_decl::<ListMaterialsResponse>(),
-            export_decl::<ListMissingMaterialsResponse>(),
             export_decl::<ChangedEntity>(),
             export_decl::<DirtyDomain>(),
             export_decl::<DirtyRange>(),
@@ -2389,13 +2369,13 @@ fn assert_command_schema_rejects_zero_frame_rates(schema_json: &str) {
 
     assert!(
         schema
-            .validate(&list_materials_command_with_frame_rate(0, 1))
+            .validate(&export_command_with_frame_rate(0, 1))
             .is_err(),
         "command schema should reject zero frame-rate numerator"
     );
     assert!(
         schema
-            .validate(&list_materials_command_with_frame_rate(24, 0))
+            .validate(&export_command_with_frame_rate(24, 0))
             .is_err(),
         "command schema should reject zero frame-rate denominator"
     );
@@ -2408,27 +2388,25 @@ fn assert_command_schema_rejects_invalid_canvas_config(schema_json: &str) {
 
     assert!(
         schema
-            .validate(&list_materials_command_with_canvas_config(0, 1080, 16, 9))
+            .validate(&export_command_with_canvas_config(0, 1080, 16, 9))
             .is_err(),
         "command schema should reject zero canvas width"
     );
     assert!(
         schema
-            .validate(&list_materials_command_with_canvas_config(1920, 0, 16, 9))
+            .validate(&export_command_with_canvas_config(1920, 0, 16, 9))
             .is_err(),
         "command schema should reject zero canvas height"
     );
     assert!(
         schema
-            .validate(&list_materials_command_with_canvas_config(1920, 1080, 0, 9))
+            .validate(&export_command_with_canvas_config(1920, 1080, 0, 9))
             .is_err(),
         "command schema should reject zero custom aspect-ratio numerator"
     );
     assert!(
         schema
-            .validate(&list_materials_command_with_canvas_config(
-                1920, 1080, 16, 0
-            ))
+            .validate(&export_command_with_canvas_config(1920, 1080, 16, 0))
             .is_err(),
         "command schema should reject zero custom aspect-ratio denominator"
     );
@@ -2440,7 +2418,7 @@ fn assert_command_schema_rejects_invalid_text_contracts(schema_json: &str) {
     let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
 
     for (case, draft) in invalid_text_contract_drafts() {
-        let value = list_materials_command_with_draft(draft);
+        let value = export_command_with_draft(draft);
         assert!(
             schema.validate(&value).is_err(),
             "command schema should reject invalid text contract: {case}"
@@ -2454,7 +2432,7 @@ fn assert_command_schema_rejects_invalid_keyframe_contracts(schema_json: &str) {
     let schema = jsonschema::validator_for(&schema_value).expect("command schema should compile");
 
     for (case, draft) in invalid_keyframe_contract_drafts() {
-        let value = list_materials_command_with_draft(draft);
+        let value = export_command_with_draft(draft);
         assert!(
             schema.validate(&value).is_err(),
             "command schema should reject invalid keyframe contract: {case}"
@@ -2462,37 +2440,43 @@ fn assert_command_schema_rejects_invalid_keyframe_contracts(schema_json: &str) {
     }
 }
 
-fn list_materials_command_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
+fn export_command_with_frame_rate(numerator: u32, denominator: u32) -> serde_json::Value {
     json!({
-        "command": "listMaterials",
+        "command": "startExport",
         "payload": {
-            "kind": "listMaterials",
-            "draft": draft_value_with_frame_rate(numerator, denominator)
+            "kind": "startExport",
+            "draft": draft_value_with_frame_rate(numerator, denominator),
+            "outputPath": "/tmp/video-editor-schema-export.mp4",
+            "preset": "h264AacBalanced"
         }
     })
 }
 
-fn list_materials_command_with_draft(draft: serde_json::Value) -> serde_json::Value {
+fn export_command_with_draft(draft: serde_json::Value) -> serde_json::Value {
     json!({
-        "command": "listMaterials",
+        "command": "startExport",
         "payload": {
-            "kind": "listMaterials",
-            "draft": draft
+            "kind": "startExport",
+            "draft": draft,
+            "outputPath": "/tmp/video-editor-schema-export.mp4",
+            "preset": "h264AacBalanced"
         }
     })
 }
 
-fn list_materials_command_with_canvas_config(
+fn export_command_with_canvas_config(
     width: u32,
     height: u32,
     numerator: u32,
     denominator: u32,
 ) -> serde_json::Value {
     json!({
-        "command": "listMaterials",
+        "command": "startExport",
         "payload": {
-            "kind": "listMaterials",
-            "draft": draft_value_with_canvas_config(width, height, numerator, denominator)
+            "kind": "startExport",
+            "draft": draft_value_with_canvas_config(width, height, numerator, denominator),
+            "outputPath": "/tmp/video-editor-schema-export.mp4",
+            "preset": "h264AacBalanced"
         }
     })
 }
@@ -2839,9 +2823,6 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         "version",
         "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "importMaterial",
-        "listMaterials",
-        "listMissingMaterials",
         "requestPreviewDecode",
         "releasePreviewFrame",
         "requestPreviewFrame",

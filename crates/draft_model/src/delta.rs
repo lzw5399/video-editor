@@ -15,8 +15,6 @@ pub enum CommandDeltaName {
     ProbeMediaRuntime,
     ProbeRuntimeCapabilities,
     ImportMaterial,
-    ListMaterials,
-    ListMissingMaterials,
     AddSegment,
     AddTimelineSegmentIntent,
     SelectTimelineSegments,

@@ -82,9 +82,6 @@ pub enum CommandName {
     Version,
     ProbeMediaRuntime,
     ProbeRuntimeCapabilities,
-    ImportMaterial,
-    ListMaterials,
-    ListMissingMaterials,
     RequestPreviewDecode,
     ReleasePreviewFrame,
     RequestPreviewFrame,
@@ -121,9 +118,6 @@ pub enum CommandPayload {
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
     ProbeRuntimeCapabilities(ProbeRuntimeCapabilitiesCommandPayload),
-    ImportMaterial(ImportMaterialCommandPayload),
-    ListMaterials(ListMaterialsCommandPayload),
-    ListMissingMaterials(ListMissingMaterialsCommandPayload),
     RequestPreviewDecode(PreviewDecodeRequest),
     ReleasePreviewFrame(ReleasePreviewFrameCommandPayload),
     RequestPreviewFrame(RequestPreviewFrameCommandPayload),
@@ -196,9 +190,6 @@ impl CommandPayload {
             Self::Version(_) => CommandName::Version,
             Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
             Self::ProbeRuntimeCapabilities(_) => CommandName::ProbeRuntimeCapabilities,
-            Self::ImportMaterial(_) => CommandName::ImportMaterial,
-            Self::ListMaterials(_) => CommandName::ListMaterials,
-            Self::ListMissingMaterials(_) => CommandName::ListMissingMaterials,
             Self::RequestPreviewDecode(_) => CommandName::RequestPreviewDecode,
             Self::ReleasePreviewFrame(_) => CommandName::ReleasePreviewFrame,
             Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
@@ -277,39 +268,6 @@ pub struct ProbeMediaRuntimeCommandPayload {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProbeRuntimeCapabilitiesCommandPayload {}
-
-/// Payload accepted by the Phase 2 material import command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ImportMaterialCommandPayload {
-    pub draft: Draft,
-    pub bundle_path: String,
-    pub material_path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub material_id: Option<MaterialId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub display_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub material_kind_hint: Option<MaterialKind>,
-}
-
-/// Payload accepted by the Phase 2 material list command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ListMaterialsCommandPayload {
-    pub draft: Draft,
-}
-
-/// Payload accepted by the Phase 2 missing-material diagnostic command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ListMissingMaterialsCommandPayload {
-    pub draft: Draft,
-    pub bundle_path: String,
-}
 
 /// Payload accepted by the Phase 3 timeline add command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -1333,33 +1291,6 @@ pub struct TimelineCommandResponse {
     pub selection: TimelineSelection,
     pub events: Vec<CommandEvent>,
     pub delta: CommandDelta,
-}
-
-/// Response data returned by the Phase 2 material import command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ImportMaterialResponse {
-    pub draft: Draft,
-    pub material: Material,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub diagnostic: Option<MissingMaterialCommandDiagnostic>,
-    pub bundle_path: String,
-    pub project_json_path: String,
-}
-
-/// Response data returned by the Phase 2 material list command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ListMaterialsResponse {
-    pub materials: Vec<Material>,
-}
-
-/// Response data returned by the Phase 2 missing-material diagnostic command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ListMissingMaterialsResponse {
-    pub diagnostics: Vec<MissingMaterialCommandDiagnostic>,
 }
 
 /// Binding-safe missing-material diagnostic returned through command envelopes.

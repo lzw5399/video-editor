@@ -462,9 +462,6 @@
         "version",
         "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "importMaterial",
-        "listMaterials",
-        "listMissingMaterials",
         "requestPreviewDecode",
         "releasePreviewFrame",
         "requestPreviewFrame",
@@ -550,98 +547,6 @@
           },
           "required": [
             "kind"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Payload accepted by the Phase 2 material import command.",
-          "properties": {
-            "bundlePath": {
-              "type": "string"
-            },
-            "displayName": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "draft": {
-              "$ref": "#/$defs/Draft"
-            },
-            "kind": {
-              "const": "importMaterial",
-              "type": "string"
-            },
-            "materialId": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/MaterialId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "materialKindHint": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/MaterialKind"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "materialPath": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "draft",
-            "bundlePath",
-            "materialPath"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Payload accepted by the Phase 2 material list command.",
-          "properties": {
-            "draft": {
-              "$ref": "#/$defs/Draft"
-            },
-            "kind": {
-              "const": "listMaterials",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "draft"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Payload accepted by the Phase 2 missing-material diagnostic command.",
-          "properties": {
-            "bundlePath": {
-              "type": "string"
-            },
-            "draft": {
-              "$ref": "#/$defs/Draft"
-            },
-            "kind": {
-              "const": "listMissingMaterials",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "draft",
-            "bundlePath"
           ],
           "type": "object"
         },
@@ -25391,57 +25296,6 @@
           "properties": {
             "kind": {
               "const": "probeRuntimeCapabilities"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        }
-      }
-    },
-    {
-      "properties": {
-        "command": {
-          "const": "importMaterial"
-        },
-        "payload": {
-          "properties": {
-            "kind": {
-              "const": "importMaterial"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        }
-      }
-    },
-    {
-      "properties": {
-        "command": {
-          "const": "listMaterials"
-        },
-        "payload": {
-          "properties": {
-            "kind": {
-              "const": "listMaterials"
-            }
-          },
-          "required": [
-            "kind"
-          ]
-        }
-      }
-    },
-    {
-      "properties": {
-        "command": {
-          "const": "listMissingMaterials"
-        },
-        "payload": {
-          "properties": {
-            "kind": {
-              "const": "listMissingMaterials"
             }
           },
           "required": [

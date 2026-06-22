@@ -33,6 +33,7 @@ ARTIFACT_CONTROL_EXECUTE_ALLOWLIST_PATTERN='\|[[:space:]]*"(?:getArtifactStatus|
 RUNTIME_CAPABILITY_LEGACY_COMMAND_PATTERN='\b(?:buildProbeRuntimeCapabilitiesCommand|ProbeRuntimeCapabilitiesCommandPayload)\b|command:[[:space:]]*"probeRuntimeCapabilities"|kind:[[:space:]]*"probeRuntimeCapabilities"'
 RUNTIME_CAPABILITY_GENERIC_EXECUTE_PATTERN='window\.videoEditorCore\.executeCommand<[^>]*RuntimeCapabilityReport|executeCommand<RuntimeCapabilityReport>'
 GENERIC_PROJECT_BUNDLE_COMMAND_PATTERN='\b(?:OpenProjectBundleCommandPayload|SaveProjectBundleCommandPayload|OpenProjectBundleResponse|SaveProjectBundleResponse|OpenProjectBundle|SaveProjectBundle)\b|"\s*(?:openProjectBundle|saveProjectBundle)"|kind:[[:space:]]*"(?:openProjectBundle|saveProjectBundle)"'
+GENERIC_MATERIAL_DRAFT_COMMAND_PATTERN='\b(?:ImportMaterialCommandPayload|ListMaterialsCommandPayload|ListMissingMaterialsCommandPayload|ImportMaterialResponse|ListMaterialsResponse|ListMissingMaterialsResponse)\b|"\s*(?:importMaterial|listMaterials|listMissingMaterials)"|kind:[[:space:]]*"(?:importMaterial|listMaterials|listMissingMaterials)"'
 PRELOAD_GENERIC_EXECUTE_COMMAND_PATTERN='executeCommand[[:space:]]*:[[:space:]]*\([^)]*CommandEnvelope|core:executeCommand'
 ELECTRON_GENERIC_EXECUTE_COMMAND_PATTERN='ipcMain\.handle\([[:space:]]*"core:executeCommand"|executeCommand[[:space:]]*:[[:space:]]*\(command:[[:space:]]*CommandEnvelope|export[[:space:]]+function[[:space:]]+executeCommand[[:space:]]*\('
 NATIVE_JS_GENERIC_EXECUTE_COMMAND_EXPORT_PATTERN='module\.exports\.executeCommand|export[[:space:]]+declare[[:space:]]+function[[:space:]]+executeCommand'
@@ -246,6 +247,14 @@ fail_if_matches \
   crates/bindings_node/src/lib.rs \
   apps/desktop-electron/src/generated/CommandEnvelope.ts \
   apps/desktop-electron/src/generated/CommandResultEnvelope.ts \
+  schemas/command.schema.json
+
+fail_if_matches \
+  "generic command contracts must not expose draft-bearing material commands; use project sessions" \
+  "$GENERIC_MATERIAL_DRAFT_COMMAND_PATTERN" \
+  crates/draft_model/src/lib.rs \
+  crates/bindings_node/src/lib.rs \
+  apps/desktop-electron/src/generated/CommandEnvelope.ts \
   schemas/command.schema.json
 
 fail_if_matches \

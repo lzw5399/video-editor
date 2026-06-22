@@ -8,9 +8,7 @@ use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandName, CommandPayload,
     CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
     GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
-    GetExportJobStatusCommandPayload, ImportMaterialCommandPayload, ImportMaterialResponse,
-    InvalidatePreviewCacheCommandPayload, ListMaterialsCommandPayload, ListMaterialsResponse,
-    ListMissingMaterialsCommandPayload, ListMissingMaterialsResponse,
+    GetExportJobStatusCommandPayload, InvalidatePreviewCacheCommandPayload,
     MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
     PreviewDecodeRequest, RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
     RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
@@ -22,16 +20,14 @@ use napi::Env;
 use napi::bindgen_prelude::Result;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
-use project_store::{ProjectStoreError, ProjectStoreWarning, StdPlatformFileSystem};
+use project_store::{ProjectStoreError, ProjectStoreWarning};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use crate::artifact_store_service::handle_artifact_store_command;
 use crate::audio_service::{AudioPreviewBindingRegistry, handle_audio_service_command};
 use crate::material_service::{
-    ImportMaterialRequest, MaterialServiceError, MissingMaterialDiagnostic,
-    MissingMaterialDiagnosticKind, import_material_and_save, list_materials,
-    list_missing_materials,
+    MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
 };
 use crate::preview_export_service::{
     ExportCommandError, PreviewCommandError, compiler_capabilities_from_runtime,
@@ -97,9 +93,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "ping"
                 | "version"
                 | "probeMediaRuntime"
-                | "importMaterial"
-                | "listMaterials"
-                | "listMissingMaterials"
                 | "requestPreviewDecode"
                 | "releasePreviewFrame"
                 | "requestPreviewFrame"
@@ -140,20 +133,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "Runtime capability probing requires the explicit native API".to_string(),
             Some("probeRuntimeCapabilities".to_string()),
         )),
-        CommandName::ImportMaterial => match envelope.payload {
-            CommandPayload::ImportMaterial(payload) => import_material_command(payload),
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::ListMaterials => match envelope.payload {
-            CommandPayload::ListMaterials(payload) => list_materials_command(payload),
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::ListMissingMaterials => match envelope.payload {
-            CommandPayload::ListMissingMaterials(payload) => {
-                list_missing_materials_command(payload)
-            }
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
         CommandName::RequestPreviewDecode => match envelope.payload {
             CommandPayload::RequestPreviewDecode(payload) => {
                 request_preview_decode_command(payload)
@@ -712,71 +691,6 @@ fn runtime_capability_error_envelope(
         runtime_capability_message(error),
         Some("probeRuntimeCapabilities".to_string()),
     )
-}
-
-fn import_material_command(payload: ImportMaterialCommandPayload) -> Result<serde_json::Value> {
-    let fs = StdPlatformFileSystem;
-    let executor = DesktopFfmpegExecutor::default();
-    let runtime = match discover_runtime_config() {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            return to_js_value(error_envelope(
-                CommandErrorKind::MaterialProbeFailed,
-                runtime_discovery_message(error),
-                Some("importMaterial".to_string()),
-            ));
-        }
-    };
-    let mut draft = payload.draft;
-    let mut request = ImportMaterialRequest::new(PathBuf::from(payload.material_path));
-    if let Some(material_id) = payload.material_id {
-        request = request.with_material_id(material_id);
-    }
-    if let Some(display_name) = payload.display_name {
-        request = request.with_display_name(display_name);
-    }
-    if let Some(kind) = payload.material_kind_hint {
-        request = request.with_material_kind_hint(kind);
-    }
-
-    match import_material_and_save(
-        &mut draft,
-        request,
-        &fs,
-        &executor,
-        &runtime,
-        PathBuf::from(payload.bundle_path),
-    ) {
-        Ok(imported) => to_js_value(ok_envelope(ImportMaterialResponse {
-            draft,
-            material: imported.material,
-            diagnostic: imported.diagnostic.map(command_diagnostic),
-            bundle_path: imported.bundle_path.display().to_string(),
-            project_json_path: imported.project_json_path.display().to_string(),
-        })),
-        Err(error) => to_js_value(material_service_error_envelope("importMaterial", error)),
-    }
-}
-
-fn list_materials_command(payload: ListMaterialsCommandPayload) -> Result<serde_json::Value> {
-    to_js_value(ok_envelope(ListMaterialsResponse {
-        materials: list_materials(&payload.draft),
-    }))
-}
-
-fn list_missing_materials_command(
-    payload: ListMissingMaterialsCommandPayload,
-) -> Result<serde_json::Value> {
-    let fs = StdPlatformFileSystem;
-    match list_missing_materials(&payload.draft, &fs, PathBuf::from(payload.bundle_path)) {
-        Ok(diagnostics) => to_js_value(ok_envelope(ListMissingMaterialsResponse {
-            diagnostics: diagnostics.into_iter().map(command_diagnostic).collect(),
-        })),
-        Err(error) => to_js_value(material_service_error_envelope(
-            "listMissingMaterials",
-            error,
-        )),
-    }
 }
 
 fn request_preview_decode_command(payload: PreviewDecodeRequest) -> Result<serde_json::Value> {
