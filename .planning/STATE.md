@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-mr48 preview empty monitor
-last_updated: "2026-06-22T06:06:48Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-mr48: preview empty monitor
+stopped_at: Completed quick task 260622-mt49 hide timeline material quick add
+last_updated: "2026-06-22T06:11:49Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-mt49: hide timeline material quick add
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-mr48: preview empty monitor
+Last activity: 2026-06-22 -- Completed quick task 260622-mt49: hide timeline material quick add
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-mt49-hide-timeline-material-quick-add | Hid the product timeline material select and quick-add shortcut so drag from the media grid remains the primary material-to-timeline path, kept the diagnostic-only material-id intent fallback, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-mr48-preview-empty-monitor | Reduced the product preview empty state from a bordered instruction-card feel to a quiet monitor surface while preserving canvas geometry, realtime host DOM, product copy, and build/workspace/UI/source guard gates. |
 | 2026-06-22 | 260622-mh47-material-card-icon-action | Replaced the dominant material-card `添加到时间线` text button with a compact thumbnail-corner SVG add action, kept drag-to-timeline visually primary, preserved the material-id-only Rust intent path, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-mf46-material-thumbnail-refs | Material cards now consume Rust artifact-store ready thumbnail `displayRef` values as bundle-local image URLs, preserve deterministic fallback visuals when refs are absent, and revalidated build, workspace, UI reference, source guard, and display-model gates. |

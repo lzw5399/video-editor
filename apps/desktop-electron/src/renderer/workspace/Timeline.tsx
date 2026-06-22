@@ -310,6 +310,7 @@ function TransportStrip({
   const snappingLabel = editControls.snappingLabel;
   const isPlaybackRunning = playbackRunning;
   const togglePlayback = onTogglePlayback;
+  const showMaterialQuickAdd = showDeveloperDiagnostics && onAddSegment !== undefined;
 
   return (
     <div className="transport-strip" aria-label="时间线控制">
@@ -333,26 +334,30 @@ function TransportStrip({
           disabled={pending && !isPlaybackRunning}
         />
       </div>
-      <label className="timeline-control compact-select">
-        <span>素材</span>
-        <select value={selectedMaterialId} onChange={(event) => setMaterialId(event.currentTarget.value)}>
-          {timelineMaterials.map((material) => (
-            <option key={material.materialId} value={material.materialId}>
-              {material.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        className="transport-button icon-only accent add-action"
-        aria-label="添加片段"
-        title="添加片段"
-        onClick={() => onAddSegment?.(selectedMaterialId)}
-        disabled={pending || selectedMaterialId.length === 0}
-      >
-        <IconGlyph icon="timelineAdd" />
-      </button>
+      {showMaterialQuickAdd ? (
+        <>
+          <label className="timeline-control compact-select">
+            <span>素材</span>
+            <select value={selectedMaterialId} onChange={(event) => setMaterialId(event.currentTarget.value)}>
+              {timelineMaterials.map((material) => (
+                <option key={material.materialId} value={material.materialId}>
+                  {material.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="transport-button icon-only accent add-action"
+            aria-label="添加片段"
+            title="添加片段"
+            onClick={() => onAddSegment?.(selectedMaterialId)}
+            disabled={pending || selectedMaterialId.length === 0}
+          >
+            <IconGlyph icon="timelineAdd" />
+          </button>
+        </>
+      ) : null}
       <div className="timeline-tool-group" role="group" aria-label="添加轨道">
         <TimelineIconButton label="添加视频轨道" icon="categoryMedia" onClick={() => onAddTrack?.("video")} disabled={pending} />
         <TimelineIconButton label="添加音频轨道" icon="categoryAudio" onClick={() => onAddTrack?.("audio")} disabled={pending} />

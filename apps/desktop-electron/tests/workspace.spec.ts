@@ -634,6 +634,10 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByRole("button", { name: "全屏" })).toHaveCount(0);
     await expectPreviewCanvasAspectRatio(page);
 
+    const timelineControls = page.getByLabel("时间线控制");
+    await expect(timelineControls.getByText("素材", { exact: true })).toHaveCount(0);
+    await expect(timelineControls.getByRole("button", { name: "添加片段" })).toHaveCount(0);
+
     await expect(page.getByText("未选择片段")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "草稿参数" }).first()).toBeVisible();
     await expect(page.getByLabel("草稿参数")).toContainText("画布比例");
