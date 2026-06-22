@@ -125,14 +125,18 @@ require_fixed "$PACKAGE_JSON" "cargo test -p testkit preview_export_parity -- --
 require_fixed "$PACKAGE_JSON" "pnpm run test:contracts"
 
 require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type DirtyRange ="
-require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type InvalidatePreviewCacheCommandPayload ="
 require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "export type ExportPrepDirtyFacts ="
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type CommandDelta ="
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type TimelineCommandResponse ="
 require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "export type ExportPrepDirtyFacts ="
-require_fixed "schemas/command.schema.json" "\"CommandDelta\""
 require_fixed "schemas/command.schema.json" "\"DirtyRange\""
 require_fixed "schemas/command.schema.json" "\"ExportPrepDirtyFacts\""
+
+fail_matches \
+  "generic preview cache invalidation command must not be public; Rust session/export services own preview cache invalidation" \
+  "invalidatePreviewCache|InvalidatePreviewCacheCommandPayload|PreviewCacheEntryRef" \
+  "apps/desktop-electron/src/generated/CommandEnvelope.ts" \
+  "schemas/command.schema.json"
 
 for target in "${PHASE13_TEST_TARGETS[@]}"; do
   [ -f "$target" ] || fail "missing Phase 13 test target ${target}"
@@ -170,7 +174,6 @@ fail_matches \
   scripts \
   --glob '!crates/artifact_store/**' \
   --glob '!crates/bindings_node/tests/artifact_store_commands.rs' \
-  --glob '!scripts/phase13-source-guards.sh' \
-  --glob '!scripts/phase14-source-guards.sh'
+  --glob '!scripts/phase*-source-guards.sh'
 
 git diff --exit-code schemas apps/desktop-electron/src/generated >/dev/null

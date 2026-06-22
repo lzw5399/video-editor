@@ -42,6 +42,7 @@ type PreviewMonitorProps = {
   selectedSegment: SelectedSegmentView | null;
   showDeveloperDiagnostics: boolean;
   pending: boolean;
+  audioPending: boolean;
   playheadUs?: number;
   playbackRunning: boolean;
   onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
@@ -232,6 +233,7 @@ export function PreviewMonitor({
   selectedSegment,
   showDeveloperDiagnostics,
   pending,
+  audioPending,
   playheadUs = 0,
   playbackRunning,
   onRealtimePreviewHostStateChange,
@@ -622,7 +624,7 @@ export function PreviewMonitor({
             aria-label="重试音频"
             title="重试音频"
             onClick={onRetryAudioPreview}
-            disabled={pending}
+            disabled={pending || audioPending}
           >
             重试音频
           </button>

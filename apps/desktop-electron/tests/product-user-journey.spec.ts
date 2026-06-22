@@ -28,7 +28,7 @@ import {
   readProjectSessionCalls,
   readRealtimePreviewHostCalls,
   readTimelineSegments,
-  requestPreviewFrameCount,
+  requestProjectSessionPreviewFrameCount,
   redoTimelineEdit,
   seekTimelinePlayhead,
   splitSelectedSegment,
@@ -152,7 +152,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
     );
 
     const before = await capturePreviewEvidence(page);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
 
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
@@ -162,7 +162,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
 
     await page.waitForTimeout(800);
     const after = await capturePreviewEvidence(page);
-    const frameRequestsAfterPlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsAfterPlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
 
     expect(
       after.timecodeUs,
@@ -247,7 +247,7 @@ test("product user can import a repo video, add it to the timeline, and see rend
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
@@ -314,7 +314,7 @@ test("product playback UAT keeps the native surface aligned with the preview mon
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     const playButton = controls.getByRole("button", { name: "播放预览" });
     await expect(playButton).toBeEnabled({ timeout: 20_000 });
@@ -364,7 +364,7 @@ test("product playback UAT uses native audio output instead of status-only or mo
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
@@ -394,7 +394,7 @@ test("product playback UAT plays embedded video audio through native output", as
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
     await activateProductJourneyApp(app, page);
     await controls.getByRole("button", { name: "播放预览" }).click();
@@ -441,7 +441,7 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     await seekTimelinePlayhead(page, app, 0);
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await expect
@@ -464,7 +464,7 @@ test("product playback UAT composites video external audio text and two-cue SRT 
     const hostCalls = await readRealtimePreviewHostCalls(app);
     expectNoProductFallbackCalls(hostCalls);
     expectNoRejectedSurfaceAcquire(hostCalls);
-    expect(requestPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
   } finally {
     await app.close();
   }
@@ -479,7 +479,7 @@ test("product playback UAT keeps video presentation synchronized with timeline t
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
@@ -701,7 +701,7 @@ test("product user editing matrix uses real commands and still produces visible 
         "redoTimelineEdit"
       ]
     );
-    expect(requestPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
+    expect(requestProjectSessionPreviewFrameCount(callsAfterEdits), "product editing matrix must not use artifact preview frames").toBe(0);
     const visualCall = [...callsAfterEdits].reverse().find((call) => call.command === "updateSelectedSegmentVisual");
     expect(visualCall?.visual?.fitMode).toBe("fill");
     expect(visualCall?.visual?.transform.position.x).toBe(120);
@@ -710,7 +710,7 @@ test("product user editing matrix uses real commands and still produces visible 
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
-    const frameRequestsBeforePlay = requestPreviewFrameCount(await readNativeCommandObservations(app));
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     await activateProductJourneyApp(app, page);
     await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);

@@ -229,6 +229,7 @@ export function WorkspaceShell({
           selectedSegment={selectedSegment}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           pending={workspace.pendingCommand !== null}
+          audioPending={workspace.pendingAudioCommand !== null}
           playheadUs={playheadUs}
           playbackRunning={playbackRunning}
           onRealtimePreviewHostStateChange={onRealtimePreviewHostStateChange}

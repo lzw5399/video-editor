@@ -140,25 +140,23 @@ async function launchWorkspaceApp(
     await page.getByRole("button", { name: "新建项目" }).click();
   }
   await expectVisibleWorkspaceRegions(page);
-  if (useNewProject) {
-    await expect
-      .poll(
-        async () =>
-          (
-            await app.evaluate(() => {
-              return (
-                (
-                  globalThis as typeof globalThis & {
-                    __videoEditorTestProjectSessionCalls?: ProjectSessionCall[];
-                  }
-                ).__videoEditorTestProjectSessionCalls ?? []
-              );
-            })
-          ).some((call) => call.command === "createProjectSession"),
-        { timeout: 20_000 }
-      )
-      .toBe(true);
-  }
+  await expect
+    .poll(
+      async () =>
+        (
+          await app.evaluate(() => {
+            return (
+              (
+                globalThis as typeof globalThis & {
+                  __videoEditorTestProjectSessionCalls?: ProjectSessionCall[];
+                }
+              ).__videoEditorTestProjectSessionCalls ?? []
+            );
+          })
+        ).some((call) => call.command === "createProjectSession" || call.command === "openProjectSession"),
+      { timeout: 20_000 }
+    )
+    .toBe(true);
   return { app, page };
 }
 
@@ -219,9 +217,9 @@ async function readNativeCommandObservations(app: ElectronApplication): Promise<
           call.command === "startProjectSessionExport"
             ? "startExport"
             : call.command === "requestProjectSessionPreviewFrame"
-              ? "requestPreviewFrame"
+              ? "requestProjectSessionPreviewFrame"
               : call.command === "requestProjectSessionPreviewSegment"
-                ? "requestPreviewSegment"
+                ? "requestProjectSessionPreviewSegment"
                 : (call.intentKind ?? "executeProjectIntent");
         return {
           command,
@@ -282,7 +280,7 @@ async function openDraftParametersDialog(page: Page): Promise<Locator> {
 async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
   await expect
     .poll(async () => {
-      const calls = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestPreviewFrame");
+      const calls = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestProjectSessionPreviewFrame");
       return calls.at(-1)?.targetTime ?? null;
     })
     .toBe(targetTime);
@@ -299,7 +297,7 @@ async function expectLatestRealtimeHostSeekTarget(app: ElectronApplication, targ
 
 async function expectNoPreviewFrameCommands(app: ElectronApplication): Promise<void> {
   const calls = await readNativeCommandObservations(app);
-  expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
+  expect(calls.filter((call) => call.command === "requestProjectSessionPreviewFrame")).toHaveLength(0);
 }
 
 async function setViewportSizeAndVerifyLayout(app: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
@@ -1107,7 +1105,7 @@ test("预览控制通过实时预览和会话预览 API 更新帧和片段状态
     await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestPreviewFrame");
+    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
     await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
     await expect(page.getByLabel("预览产物")).toContainText("image/png");
     const previewImage = page.getByRole("img", { name: "当前预览帧" });
@@ -1116,14 +1114,14 @@ test("预览控制通过实时预览和会话预览 API 更新帧和片段状态
     await expect(page.getByLabel("预览画面", { exact: true })).not.toContainText("/tmp/video-editor-preview-cache/test-frame-1200000.png");
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestPreviewSegment");
+    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
     await expect(page.getByLabel("预览产物")).toContainText("预览片段命中缓存");
     await expect(page.getByLabel("预览产物")).toContainText("video/mp4");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-1200000.mp4");
 
     const calls = await readNativeCommandObservations(app);
-    const frameCall = calls.find((call) => call.command === "requestPreviewFrame");
-    const segmentCall = calls.find((call) => call.command === "requestPreviewSegment");
+    const frameCall = calls.find((call) => call.command === "requestProjectSessionPreviewFrame");
+    const segmentCall = calls.find((call) => call.command === "requestProjectSessionPreviewSegment");
     expect(frameCall?.targetTime).toBe(1_200_000);
     expect(segmentCall?.targetTimerange).toEqual({ start: 1_200_000, duration: 2_000_000 });
   } finally {
@@ -1191,7 +1189,7 @@ test("预览播放按钮使用实时预览画面而不是连续请求预览帧",
     await previewControls.getByRole("button", { name: "播放" }).click();
     await page.waitForTimeout(500);
 
-    const playbackFrameRequests = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestPreviewFrame");
+    const playbackFrameRequests = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestProjectSessionPreviewFrame");
     expect(playbackFrameRequests).toHaveLength(0);
   } finally {
     await app.close();
@@ -1555,7 +1553,7 @@ test("baseline preview capability does not productize realtime fallback copy", a
     await expectNativePreviewHostLayout(app, page, 1280, 800);
     const previewWindowText = (await page.getByLabel("预览窗口").textContent()) ?? "";
     expect(previewWindowText).not.toMatch(
-      /Mock|backend|fallback|cache|artifact|nativeVideoBridge|renderGraphGpu|requestPreviewFrame|备用产物|缓存|降级|排队|渲染|运行时帧/
+      /Mock|backend|fallback|cache|artifact|nativeVideoBridge|renderGraphGpu|requestProjectSessionPreviewFrame|备用产物|缓存|降级|排队|渲染|运行时帧/
     );
     await expect(page.getByLabel("实时预览备用产物")).toHaveCount(0);
     await expect(page.getByLabel("实时预览受限")).toHaveCount(0);
@@ -1837,12 +1835,12 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestPreviewFrame");
+    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
     await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestPreviewSegment");
+    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
 
     let exportDialog = await openExportDialog(page);
@@ -1881,12 +1879,12 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expectNoLeftSecondaryMenu(page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestPreviewFrame");
+    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
     await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
 
     await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestPreviewSegment");
+    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
     await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
 
     let exportDialog = await openExportDialog(page);
@@ -1975,7 +1973,7 @@ test("selection preview overlay follows accepted visible segment and allows dire
     await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestPreviewFrame");
+    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
     await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
     await expect(page.getByLabel("预览选中框")).toHaveCount(0);
 
@@ -2009,7 +2007,7 @@ test("预览失败显示中文分类错误且不改草稿", async () => {
     await resetNativeCommandObservations(app, page);
 
     await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestPreviewFrame");
+    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("请求预览帧失败");
     await expect(page.getByLabel("预览状态", { exact: true })).toContainText("预览服务失败");
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);

@@ -7,18 +7,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use draft_model::{
-    DecodedPreviewFrameResponse, Draft, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
+    DirtyDomain, DirtyRange, Draft, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
     ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset, ExportValidationReport,
-    InvalidatePreviewCacheCommandPayload, Material, MaterialKind, Microseconds,
-    PreviewArtifactResponse, PreviewCacheEntryRef, PreviewCacheInvalidationResponse,
-    PreviewDecodeDiagnostic, PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind,
-    PreviewFrameReleaseResponse, PreviewFrameStorageKind, PreviewFrameStoragePreference,
-    PreviewOutputProfile, PreviewStatus, ReleasePreviewFrameCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId, RuntimeFrameDimensions,
-    RuntimeMediaIoFallbackReason, RuntimeSelectedDecodePath, RuntimeTextureBackend,
-    RuntimeTextureHandleMetadata, RuntimeVideoColorMetadata, RuntimeVideoPixelFormat,
-    StartExportCommandPayload,
+    MaterialId, Microseconds, PreviewArtifactResponse, PreviewCacheEntryRef,
+    PreviewCacheInvalidationResponse, PreviewDiagnostic, PreviewDiagnosticKind,
+    PreviewOutputProfile, PreviewStatus, StartExportCommandPayload, TargetTimerange,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{
@@ -46,7 +39,6 @@ use render_graph::{
 #[derive(Debug)]
 pub enum PreviewCommandError {
     Service(PreviewServiceError),
-    Handle(String),
 }
 
 #[derive(Debug)]
@@ -65,7 +57,6 @@ impl fmt::Display for PreviewCommandError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Service(error) => write!(formatter, "preview service failed: {error}"),
-            Self::Handle(message) => write!(formatter, "preview service failed: {message}"),
         }
     }
 }
@@ -74,7 +65,6 @@ impl Error for PreviewCommandError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Service(error) => Some(error),
-            Self::Handle(_) => None,
         }
     }
 }
@@ -83,6 +73,33 @@ impl From<PreviewServiceError> for PreviewCommandError {
     fn from(error: PreviewServiceError) -> Self {
         Self::Service(error)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewFrameArtifactRequest {
+    pub draft: Draft,
+    pub target_time: Microseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewSegmentArtifactRequest {
+    pub draft: Draft,
+    pub target_timerange: TargetTimerange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreviewCacheInvalidationCommand {
+    pub entries: Vec<PreviewCacheEntryRef>,
+    pub changed_ranges: Vec<DirtyRange>,
+    pub changed_material_ids: Vec<MaterialId>,
+    pub changed_graph_node_ids: Vec<String>,
+    pub changed_domains: Vec<DirtyDomain>,
+    pub runtime_capability_fingerprint: Option<String>,
+    pub output_profile_fingerprint: Option<String>,
+    pub full_draft: bool,
+    pub reason: String,
+    pub artifact_schema_version: u32,
+    pub generator_version: String,
 }
 
 impl fmt::Display for ExportCommandError {
@@ -116,7 +133,7 @@ impl Error for ExportCommandError {
 pub fn request_preview_frame_with_executor(
     executor: &impl FfmpegExecutor,
     config: &PreviewServiceConfig,
-    payload: RequestPreviewFrameCommandPayload,
+    payload: PreviewFrameArtifactRequest,
 ) -> Result<PreviewArtifactResponse, PreviewCommandError> {
     let response = request_preview_frame(
         executor,
@@ -132,7 +149,7 @@ pub fn request_preview_frame_with_executor(
 pub fn request_preview_segment_with_executor(
     executor: &impl FfmpegExecutor,
     config: &PreviewServiceConfig,
-    payload: RequestPreviewSegmentCommandPayload,
+    payload: PreviewSegmentArtifactRequest,
 ) -> Result<PreviewArtifactResponse, PreviewCommandError> {
     let response = request_preview_segment(
         executor,
@@ -146,7 +163,7 @@ pub fn request_preview_segment_with_executor(
 }
 
 pub fn invalidate_preview_cache_command(
-    payload: InvalidatePreviewCacheCommandPayload,
+    payload: PreviewCacheInvalidationCommand,
 ) -> PreviewCacheInvalidationResponse {
     let artifact_schema_version = payload.artifact_schema_version;
     let generator_version = payload.generator_version.clone();
@@ -188,290 +205,6 @@ pub fn invalidate_preview_cache_command(
         artifact_schema_version,
         generator_version,
     }
-}
-
-#[derive(Debug, Clone)]
-struct PreviewFrameHandleEntry {
-    frame: RuntimeDecodedFrameHandleMetadata,
-}
-
-#[derive(Default)]
-struct PreviewFrameHandleRegistryState {
-    next_id: u64,
-    entries: BTreeMap<String, PreviewFrameHandleEntry>,
-}
-
-pub struct PreviewFrameHandleRegistry {
-    state: Mutex<PreviewFrameHandleRegistryState>,
-}
-
-impl PreviewFrameHandleRegistry {
-    pub fn new() -> Self {
-        Self {
-            state: Mutex::new(PreviewFrameHandleRegistryState {
-                next_id: 1,
-                entries: BTreeMap::new(),
-            }),
-        }
-    }
-
-    pub fn request_decode(
-        &self,
-        payload: PreviewDecodeRequest,
-    ) -> Result<DecodedPreviewFrameResponse, PreviewCommandError> {
-        let material = decode_material(&payload)?;
-        let dimensions = decode_dimensions(material)?;
-        let color = RuntimeVideoColorMetadata::unknown_with_diagnostic(
-            "preview decode binding did not receive source color metadata",
-        );
-        let decode_path = select_preview_decode_path(&payload);
-        let frame_handle_id = self.next_frame_handle_id();
-        let frame = RuntimeDecodedFrameHandleMetadata {
-            frame_handle_id: frame_handle_id.clone(),
-            owner_session: payload.session_id.clone(),
-            generation: payload.playback_generation,
-            dimensions,
-            pixel_format: RuntimeVideoPixelFormat::Nv12,
-            color: color.clone(),
-        };
-        let texture = decode_path.texture_backend.map(|backend| {
-            let device_id = payload
-                .preview_device
-                .clone()
-                .unwrap_or_else(|| runtime_device_for_backend(backend));
-            RuntimeTextureHandleMetadata {
-                texture_handle_id: format!("{frame_handle_id}-texture"),
-                owner_session: payload.session_id.clone(),
-                generation: payload.playback_generation,
-                backend,
-                device_id,
-                dimensions,
-                pixel_format: RuntimeVideoPixelFormat::Nv12,
-                color: color.clone(),
-            }
-        });
-        let diagnostic = PreviewDecodeDiagnostic {
-            material_id: payload.material_id.clone(),
-            selected_path: decode_path.selected_path,
-            fallback_reason: decode_path.fallback_reason,
-            storage_kind: decode_path.storage_kind,
-            texture_compatible: decode_path.texture_compatible,
-            preview_device: payload.preview_device.clone(),
-            native_device: texture.as_ref().map(|texture| texture.device_id.clone()),
-            message: preview_decode_message(
-                decode_path.selected_path,
-                decode_path.fallback_reason,
-                decode_path.storage_kind,
-                decode_path.texture_compatible,
-            ),
-        };
-        let response = DecodedPreviewFrameResponse {
-            frame: frame.clone(),
-            texture,
-            storage_kind: decode_path.storage_kind,
-            source_time: payload.source_time,
-            selected_path: decode_path.selected_path,
-            texture_compatible: decode_path.texture_compatible,
-            fallback_reason: decode_path.fallback_reason,
-            color,
-            diagnostics: vec![diagnostic],
-        };
-
-        self.state
-            .lock()
-            .expect("preview frame handle registry lock")
-            .entries
-            .insert(frame_handle_id, PreviewFrameHandleEntry { frame });
-
-        Ok(response)
-    }
-
-    pub fn release(
-        &self,
-        payload: ReleasePreviewFrameCommandPayload,
-    ) -> Result<PreviewFrameReleaseResponse, PreviewCommandError> {
-        let mut state = self
-            .state
-            .lock()
-            .expect("preview frame handle registry lock");
-        let entry = state.entries.get(&payload.frame_handle_id).ok_or_else(|| {
-            PreviewCommandError::Handle(format!(
-                "unknown preview frame handle: {}",
-                payload.frame_handle_id
-            ))
-        })?;
-
-        if entry.frame.owner_session != payload.session_id {
-            return Err(PreviewCommandError::Handle(format!(
-                "preview frame handle {} belongs to session {}, not {}",
-                payload.frame_handle_id, entry.frame.owner_session, payload.session_id
-            )));
-        }
-        if entry.frame.generation != payload.playback_generation {
-            return Err(PreviewCommandError::Handle(format!(
-                "preview frame handle {} generation {} does not match release generation {}",
-                payload.frame_handle_id, entry.frame.generation, payload.playback_generation
-            )));
-        }
-
-        let entry = state
-            .entries
-            .remove(&payload.frame_handle_id)
-            .expect("preview frame handle was just checked");
-        Ok(PreviewFrameReleaseResponse {
-            frame_handle_id: entry.frame.frame_handle_id,
-            owner_session: entry.frame.owner_session,
-            generation: entry.frame.generation,
-            released: true,
-        })
-    }
-
-    fn next_frame_handle_id(&self) -> String {
-        let mut state = self
-            .state
-            .lock()
-            .expect("preview frame handle registry lock");
-        let handle_id = format!("preview-frame-{}", state.next_id);
-        state.next_id = state.next_id.saturating_add(1);
-        handle_id
-    }
-}
-
-impl Default for PreviewFrameHandleRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub fn global_preview_frame_handle_registry() -> &'static PreviewFrameHandleRegistry {
-    static REGISTRY: OnceLock<PreviewFrameHandleRegistry> = OnceLock::new();
-    REGISTRY.get_or_init(PreviewFrameHandleRegistry::new)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct PreviewDecodePathDecision {
-    storage_kind: PreviewFrameStorageKind,
-    selected_path: RuntimeSelectedDecodePath,
-    fallback_reason: Option<RuntimeMediaIoFallbackReason>,
-    texture_compatible: bool,
-    texture_backend: Option<RuntimeTextureBackend>,
-}
-
-fn decode_material(payload: &PreviewDecodeRequest) -> Result<&Material, PreviewCommandError> {
-    let material = payload
-        .draft
-        .materials
-        .iter()
-        .find(|material| material.material_id == payload.material_id)
-        .ok_or_else(|| {
-            PreviewCommandError::Handle(format!(
-                "preview decode material {} was not found in draft",
-                payload.material_id.as_str()
-            ))
-        })?;
-
-    if material.kind != MaterialKind::Video && !material.metadata.has_video {
-        return Err(PreviewCommandError::Handle(format!(
-            "preview decode material {} is not a video material",
-            payload.material_id.as_str()
-        )));
-    }
-
-    Ok(material)
-}
-
-fn decode_dimensions(material: &Material) -> Result<RuntimeFrameDimensions, PreviewCommandError> {
-    let width = material.metadata.width.ok_or_else(|| {
-        PreviewCommandError::Handle(format!(
-            "preview decode material {} is missing width metadata",
-            material.material_id.as_str()
-        ))
-    })?;
-    let height = material.metadata.height.ok_or_else(|| {
-        PreviewCommandError::Handle(format!(
-            "preview decode material {} is missing height metadata",
-            material.material_id.as_str()
-        ))
-    })?;
-
-    if width == 0 || height == 0 {
-        return Err(PreviewCommandError::Handle(format!(
-            "preview decode material {} has invalid dimensions {}x{}",
-            material.material_id.as_str(),
-            width,
-            height
-        )));
-    }
-
-    Ok(RuntimeFrameDimensions { width, height })
-}
-
-fn select_preview_decode_path(payload: &PreviewDecodeRequest) -> PreviewDecodePathDecision {
-    match payload.preferred_storage {
-        PreviewFrameStoragePreference::Texture => match payload.preview_device.as_ref() {
-            Some(device) => PreviewDecodePathDecision {
-                storage_kind: PreviewFrameStorageKind::Texture,
-                selected_path: RuntimeSelectedDecodePath::NativeHardwareTexture,
-                fallback_reason: None,
-                texture_compatible: true,
-                texture_backend: Some(device.backend),
-            },
-            None => PreviewDecodePathDecision {
-                storage_kind: PreviewFrameStorageKind::Cpu,
-                selected_path: RuntimeSelectedDecodePath::FfmpegCpuFrame,
-                fallback_reason: Some(RuntimeMediaIoFallbackReason::TextureInteropUnavailable),
-                texture_compatible: false,
-                texture_backend: None,
-            },
-        },
-        PreviewFrameStoragePreference::Cpu => PreviewDecodePathDecision {
-            storage_kind: PreviewFrameStorageKind::Cpu,
-            selected_path: RuntimeSelectedDecodePath::NativeSoftwareCpuFrame,
-            fallback_reason: None,
-            texture_compatible: false,
-            texture_backend: None,
-        },
-        PreviewFrameStoragePreference::Any => match payload.preview_device.as_ref() {
-            Some(device) => PreviewDecodePathDecision {
-                storage_kind: PreviewFrameStorageKind::Texture,
-                selected_path: RuntimeSelectedDecodePath::NativeHardwareTexture,
-                fallback_reason: None,
-                texture_compatible: true,
-                texture_backend: Some(device.backend),
-            },
-            None => PreviewDecodePathDecision {
-                storage_kind: PreviewFrameStorageKind::Cpu,
-                selected_path: RuntimeSelectedDecodePath::NativeSoftwareCpuFrame,
-                fallback_reason: None,
-                texture_compatible: false,
-                texture_backend: None,
-            },
-        },
-    }
-}
-
-fn runtime_device_for_backend(backend: RuntimeTextureBackend) -> RuntimeDeviceId {
-    RuntimeDeviceId {
-        backend,
-        adapter_id: "unknown-adapter".to_owned(),
-        device_id: "unknown-device".to_owned(),
-    }
-}
-
-fn preview_decode_message(
-    selected_path: RuntimeSelectedDecodePath,
-    fallback_reason: Option<RuntimeMediaIoFallbackReason>,
-    storage_kind: PreviewFrameStorageKind,
-    texture_compatible: bool,
-) -> String {
-    if let Some(reason) = fallback_reason {
-        return format!(
-            "preview decode selected {selected_path:?} with {reason:?}; storage={storage_kind:?}; textureCompatible={texture_compatible}"
-        );
-    }
-    format!(
-        "preview decode selected {selected_path:?}; storage={storage_kind:?}; textureCompatible={texture_compatible}"
-    )
 }
 
 #[derive(Clone)]

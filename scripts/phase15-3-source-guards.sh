@@ -71,7 +71,7 @@ fail_if_matches \
 
 fail_if_matches \
   "default workspace shell/timeline must not expose backend, mock, request-preview, artifact, or cache copy" \
-  'FFmpeg|ffprobe|Mock|requestPreviewFrame|生成预览片段|资源维护|运行环境诊断|草稿包路径' \
+  'FFmpeg|ffprobe|Mock|requestProjectSessionPreviewFrame|生成预览片段|资源维护|运行环境诊断|草稿包路径' \
   apps/desktop-electron/src/renderer/workspace/WorkspaceShell.tsx \
   apps/desktop-electron/src/renderer/workspace/Timeline.tsx
 
@@ -145,13 +145,13 @@ fail_if_matches \
 
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "waitForVisiblePreviewCenterChange"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "renderGraphGpuComposited"
-require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "requestPreviewFrameCount"
+require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "requestProjectSessionPreviewFrameCount"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "getByRole(\"main\", { name: \"项目入口\" })"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "getByRole(\"button\", { name: \"导入素材\" })"
 require_fixed "apps/desktop-electron/tests/helpers/userJourney.ts" "importMaterialsThroughProductPicker"
 require_fixed "apps/desktop-electron/tests/product-user-journey.spec.ts" "waitForProductPlaybackSuccess"
 require_fixed "apps/desktop-electron/tests/product-user-journey.spec.ts" "renderGraphGpuComposited"
-require_fixed "apps/desktop-electron/tests/product-user-journey.spec.ts" "requestPreviewFrameCount"
+require_fixed "apps/desktop-electron/tests/product-user-journey.spec.ts" "requestProjectSessionPreviewFrameCount"
 
 require_fixed "package.json" "\"test:phase15-3-source-guards\""
 require_fixed "package.json" "bash scripts/phase15-3-source-guards.sh"

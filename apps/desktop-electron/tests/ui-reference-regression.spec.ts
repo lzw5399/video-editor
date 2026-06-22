@@ -22,7 +22,7 @@ const REFERENCE_DIR = join(REPO_ROOT, "docs/ui-reference/jianying-pro");
 const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const FORBIDDEN_DEFAULT_COPY =
-  /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
+  /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
 
 test.describe.configure({ timeout: 90_000 });
 

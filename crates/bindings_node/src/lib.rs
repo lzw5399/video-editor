@@ -8,10 +8,8 @@ use draft_model::{
     CommandEnvelope, CommandError, CommandErrorKind, CommandName, CommandPayload,
     CommandResultEnvelope, DRAFT_MODEL_VERSION, ExportJobStatusResponse,
     GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
-    GetExportJobStatusCommandPayload, InvalidatePreviewCacheCommandPayload,
-    MissingMaterialCommandDiagnostic, MissingMaterialCommandDiagnosticKind, PingResponse,
-    PreviewDecodeRequest, RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
+    GetExportJobStatusCommandPayload, MissingMaterialCommandDiagnostic,
+    MissingMaterialCommandDiagnosticKind, PingResponse, RefreshArtifactStatusCommandPayload,
     RunArtifactGarbageCollectionCommandPayload, StartExportCommandPayload, VersionResponse,
 };
 use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
@@ -30,9 +28,9 @@ use crate::material_service::{
     MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
 };
 use crate::preview_export_service::{
-    ExportCommandError, PreviewCommandError, compiler_capabilities_from_runtime,
-    export_error_diagnostic, global_export_registry, global_preview_frame_handle_registry,
-    invalidate_preview_cache_command, request_preview_frame_with_executor,
+    ExportCommandError, PreviewCommandError, PreviewFrameArtifactRequest,
+    PreviewSegmentArtifactRequest, compiler_capabilities_from_runtime, export_error_diagnostic,
+    global_export_registry, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
 };
 use crate::realtime_preview_service::{
@@ -93,11 +91,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "ping"
                 | "version"
                 | "probeMediaRuntime"
-                | "requestPreviewDecode"
-                | "releasePreviewFrame"
-                | "requestPreviewFrame"
-                | "requestPreviewSegment"
-                | "invalidatePreviewCache"
                 | "startExport"
                 | "getExportJobStatus"
                 | "cancelExport"
@@ -133,32 +126,6 @@ pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> 
             "Runtime capability probing requires the explicit native API".to_string(),
             Some("probeRuntimeCapabilities".to_string()),
         )),
-        CommandName::RequestPreviewDecode => match envelope.payload {
-            CommandPayload::RequestPreviewDecode(payload) => {
-                request_preview_decode_command(payload)
-            }
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::ReleasePreviewFrame => match envelope.payload {
-            CommandPayload::ReleasePreviewFrame(payload) => release_preview_frame_command(payload),
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::RequestPreviewFrame => match envelope.payload {
-            CommandPayload::RequestPreviewFrame(payload) => request_preview_frame_command(payload),
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::RequestPreviewSegment => match envelope.payload {
-            CommandPayload::RequestPreviewSegment(payload) => {
-                request_preview_segment_command(payload)
-            }
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
-        CommandName::InvalidatePreviewCache => match envelope.payload {
-            CommandPayload::InvalidatePreviewCache(payload) => {
-                invalidate_preview_cache_binding_command(payload)
-            }
-            _ => unreachable!("command/payload pair was validated during deserialization"),
-        },
         CommandName::CreateAudioPreviewSession
         | CommandName::PlayAudioPreview
         | CommandName::PauseAudioPreview
@@ -693,78 +660,6 @@ fn runtime_capability_error_envelope(
     )
 }
 
-fn request_preview_decode_command(payload: PreviewDecodeRequest) -> Result<serde_json::Value> {
-    match global_preview_frame_handle_registry().request_decode(payload) {
-        Ok(response) => to_js_value(ok_envelope(response)),
-        Err(error) => to_js_value(preview_error_envelope("requestPreviewDecode", error)),
-    }
-}
-
-fn release_preview_frame_command(
-    payload: ReleasePreviewFrameCommandPayload,
-) -> Result<serde_json::Value> {
-    match global_preview_frame_handle_registry().release(payload) {
-        Ok(response) => to_js_value(ok_envelope(response)),
-        Err(error) => to_js_value(preview_error_envelope("releasePreviewFrame", error)),
-    }
-}
-
-fn request_preview_frame_command(
-    payload: RequestPreviewFrameCommandPayload,
-) -> Result<serde_json::Value> {
-    let executor = DesktopFfmpegExecutor::default();
-    let runtime = match discover_runtime_config() {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            return to_js_value(error_envelope(
-                CommandErrorKind::PreviewServiceFailed,
-                runtime_discovery_message(error),
-                Some("requestPreviewFrame".to_string()),
-            ));
-        }
-    };
-    let config = preview_service_config_from_preview_payload(
-        payload.cache_root.as_deref(),
-        payload.bundle_path.as_deref(),
-        &runtime,
-    );
-    match request_preview_frame_with_executor(&executor, &config, payload) {
-        Ok(response) => to_js_value(ok_envelope(response)),
-        Err(error) => to_js_value(preview_error_envelope("requestPreviewFrame", error)),
-    }
-}
-
-fn request_preview_segment_command(
-    payload: RequestPreviewSegmentCommandPayload,
-) -> Result<serde_json::Value> {
-    let executor = DesktopFfmpegExecutor::default();
-    let runtime = match discover_runtime_config() {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            return to_js_value(error_envelope(
-                CommandErrorKind::PreviewServiceFailed,
-                runtime_discovery_message(error),
-                Some("requestPreviewSegment".to_string()),
-            ));
-        }
-    };
-    let config = preview_service_config_from_preview_payload(
-        payload.cache_root.as_deref(),
-        payload.bundle_path.as_deref(),
-        &runtime,
-    );
-    match request_preview_segment_with_executor(&executor, &config, payload) {
-        Ok(response) => to_js_value(ok_envelope(response)),
-        Err(error) => to_js_value(preview_error_envelope("requestPreviewSegment", error)),
-    }
-}
-
-fn invalidate_preview_cache_binding_command(
-    payload: InvalidatePreviewCacheCommandPayload,
-) -> Result<serde_json::Value> {
-    to_js_value(ok_envelope(invalidate_preview_cache_command(payload)))
-}
-
 fn audio_service_command(
     command: CommandName,
     payload: CommandPayload,
@@ -938,10 +833,8 @@ fn request_project_session_preview_frame_command(
     };
     let bundle_path = snapshot.bundle_path.display().to_string();
     let config = preview_service_config_from_preview_payload(None, Some(&bundle_path), &runtime);
-    let payload = RequestPreviewFrameCommandPayload {
+    let payload = PreviewFrameArtifactRequest {
         draft: snapshot.draft,
-        cache_root: None,
-        bundle_path: Some(bundle_path),
         target_time: request.target_time,
     };
     let executor = DesktopFfmpegExecutor::default();
@@ -987,10 +880,8 @@ fn request_project_session_preview_segment_command(
     };
     let bundle_path = snapshot.bundle_path.display().to_string();
     let config = preview_service_config_from_preview_payload(None, Some(&bundle_path), &runtime);
-    let payload = RequestPreviewSegmentCommandPayload {
+    let payload = PreviewSegmentArtifactRequest {
         draft: snapshot.draft,
-        cache_root: None,
-        bundle_path: Some(bundle_path),
         target_timerange: request.target_timerange,
     };
     let executor = DesktopFfmpegExecutor::default();

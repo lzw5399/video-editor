@@ -724,9 +724,9 @@ function recordTestNativeCommandObservation(command: CommandEnvelope): void {
     return;
   }
 
-  const targetTime = command.payload.kind === "requestPreviewFrame" ? command.payload.targetTime : null;
-  const targetTimerange = command.payload.kind === "requestPreviewSegment" ? command.payload.targetTimerange : null;
-  const duration = targetTimerange?.duration ?? null;
+  const targetTime = null;
+  const targetTimerange = null;
+  const duration = null;
   const outputPath = command.payload.kind === "startExport" ? command.payload.outputPath : null;
   const preset = command.payload.kind === "startExport" ? command.payload.preset : null;
   const sessionId = isAudioPreviewCommandKind(command.payload.kind) ? command.payload.sessionId ?? null : null;

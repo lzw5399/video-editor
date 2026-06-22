@@ -37,10 +37,13 @@ fail_matches \
   "\\b(thumbnails|thumbnailPath|waveforms|waveformPath|previewCaches|previewCache|renderGraph|ffmpegScripts|ffmpegArgs|filterComplex|exportScript|exports|proxyFiles|proxyPath|outputValidation|validationExpectation)\\b" \
   schemas/draft.schema.json fixtures/draft/positive
 
-rg -n "requestPreviewFrame|requestPreviewSegment|invalidatePreviewCache" \
-  apps/desktop-electron/src/generated/CommandEnvelope.ts >/dev/null
+fail_matches \
+  "generic preview command envelope API must not be public; use project-session preview or realtime scheduler APIs" \
+  "requestPreviewDecode|releasePreviewFrame|requestPreviewFrame|requestPreviewSegment|invalidatePreviewCache|PreviewDecodeRequest|ReleasePreviewFrameCommandPayload|RequestPreviewFrameCommandPayload|RequestPreviewSegmentCommandPayload|InvalidatePreviewCacheCommandPayload" \
+  apps/desktop-electron/src/generated/CommandEnvelope.ts \
+  schemas/command.schema.json
 
-rg -n "PreviewArtifactResponse|PreviewCacheInvalidationResponse" \
+rg -n "PreviewArtifactResponse" \
   apps/desktop-electron/src/generated/CommandResultEnvelope.ts >/dev/null
 
 rg -n "startExport|getExportJobStatus|cancelExport" \

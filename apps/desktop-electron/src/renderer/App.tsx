@@ -2099,7 +2099,7 @@ export function App(): React.ReactElement {
       );
 
       if (workspaceRef.current.commandError === null) {
-        requestPreviewFrameAt(normalizePlayheadTime(playheadUs));
+        requestProjectSessionPreviewFrameAt(normalizePlayheadTime(playheadUs));
       }
     })();
   }
@@ -2546,7 +2546,7 @@ export function App(): React.ReactElement {
     }
 
     pendingAutoPreviewTimeRef.current = null;
-    requestPreviewFrameAt(targetTime);
+    requestProjectSessionPreviewFrameAt(targetTime);
   }
 
   function schedulePendingAutoPreviewFlush(): void {
@@ -2565,10 +2565,10 @@ export function App(): React.ReactElement {
   }
 
   function handleRequestPreviewFrame(): void {
-    requestPreviewFrameAt(normalizePlayheadTime(playheadUs));
+    requestProjectSessionPreviewFrameAt(normalizePlayheadTime(playheadUs));
   }
 
-  function requestPreviewFrameAt(targetTime: number): void {
+  function requestProjectSessionPreviewFrameAt(targetTime: number): void {
     if (!showDeveloperDiagnostics) {
       void (async () => {
         const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();

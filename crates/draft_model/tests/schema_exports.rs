@@ -15,33 +15,27 @@ use draft_model::{
     CancelExportCommandPayload, CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset,
     CanvasBackground, CanvasBackgroundCapability, ChangedEntity, CommandDelta, CommandDeltaName,
     CommandEnvelope, CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot,
-    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DecodedPreviewFrameResponse,
-    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
-    DraftId, DraftMetadata, DraftSchemaVersion, ExportDiagnostic, ExportDiagnosticKind,
-    ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset,
-    ExportValidationReport, Filter, GetArtifactQuotaStatusCommandPayload,
-    GetArtifactStatusCommandPayload, GetExportJobStatusCommandPayload,
-    InvalidatePreviewCacheCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
+    CommandName, CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain, DirtyRange,
+    DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
+    DraftSchemaVersion, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
+    ExportJobStatusResponse, ExportPrepDirtyFacts, ExportPreset, ExportValidationReport, Filter,
+    GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
+    GetExportJobStatusCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
     KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_TEXT_LAYOUT_MILLIS,
     MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
     MainTrackMagnet, Material, MaterialArtifactStatus, MaterialId, MaterialKind, MaterialMetadata,
     MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
     MissingMaterialCommandDiagnosticKind, PingCommandPayload, PreviewArtifactResponse,
-    PreviewCacheEntryRef, PreviewCacheInvalidationResponse, PreviewDecodeDiagnostic,
-    PreviewDecodeRequest, PreviewDiagnostic, PreviewDiagnosticKind, PreviewFrameReleaseResponse,
-    PreviewFrameStorageKind, PreviewFrameStoragePreference, PreviewOutputProfile, PreviewStatus,
+    PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
     ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RefreshArtifactStatusCommandPayload, ReleasePreviewFrameCommandPayload,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RunArtifactGarbageCollectionCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
-    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
-    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
-    RuntimeColorTransfer, RuntimeDecodedFrameHandleMetadata, RuntimeDeviceId,
-    RuntimeFallbackDecodePathCapability, RuntimeFallbackLadderCapability, RuntimeFeatureCapability,
-    RuntimeFontCapability, RuntimeFrameDimensions, RuntimeLicensePosture,
-    RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities, RuntimeMediaIoFallbackReason,
-    RuntimePixelFormatCapability, RuntimeSelectedDecodePath, RuntimeTextureBackend,
-    RuntimeTextureHandleMetadata, RuntimeTextureInteropCapability, RuntimeVideoColorMetadata,
+    RefreshArtifactStatusCommandPayload, RunArtifactGarbageCollectionCommandPayload,
+    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
+    RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
+    RuntimeColorRange, RuntimeColorTransfer, RuntimeDeviceId, RuntimeFallbackDecodePathCapability,
+    RuntimeFallbackLadderCapability, RuntimeFeatureCapability, RuntimeFontCapability,
+    RuntimeLicensePosture, RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities,
+    RuntimeMediaIoFallbackReason, RuntimePixelFormatCapability, RuntimeSelectedDecodePath,
+    RuntimeTextureBackend, RuntimeTextureInteropCapability, RuntimeVideoColorMetadata,
     RuntimeVideoPixelFormat, RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor,
     SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
     SegmentId, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
@@ -161,19 +155,10 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<PreviewFrameStoragePreference>(),
-            export_decl::<RuntimeTextureBackend>(),
-            export_decl::<RuntimeDeviceId>(),
-            export_decl::<PreviewDecodeRequest>(),
-            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
-            export_decl::<RequestPreviewFrameCommandPayload>(),
-            export_decl::<RequestPreviewSegmentCommandPayload>(),
-            export_decl::<PreviewCacheEntryRef>(),
             export_decl::<DirtyDomain>(),
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
-            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<AudioPreviewCommandPayload>(),
             export_decl::<GetArtifactStatusCommandPayload>(),
             export_decl::<RefreshArtifactStatusCommandPayload>(),
@@ -209,11 +194,6 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
-            export_decl::<PreviewFrameStorageKind>(),
-            export_decl::<PreviewDecodeDiagnostic>(),
-            export_decl::<DecodedPreviewFrameResponse>(),
-            export_decl::<PreviewFrameReleaseResponse>(),
-            export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<AudioPreviewPlaybackStatus>(),
             export_decl::<AudioOutputDeviceStatus>(),
             export_decl::<WaveformDisplayStatus>(),
@@ -245,9 +225,6 @@ fn schema_exports_generated_contract_artifacts_from_rust() {
             export_decl::<RuntimeColorDiagnostic>(),
             export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
-            export_decl::<RuntimeFrameDimensions>(),
-            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
-            export_decl::<RuntimeTextureHandleMetadata>(),
             export_decl::<RuntimeWindowsMediaIoCapabilities>(),
             export_decl::<RuntimeMacosMediaIoCapabilities>(),
             export_decl::<RuntimeCodecCapability>(),
@@ -374,16 +351,7 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<PreviewFrameStoragePreference>(),
-            export_decl::<RuntimeTextureBackend>(),
-            export_decl::<RuntimeDeviceId>(),
-            export_decl::<PreviewDecodeRequest>(),
-            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
-            export_decl::<RequestPreviewFrameCommandPayload>(),
-            export_decl::<RequestPreviewSegmentCommandPayload>(),
-            export_decl::<PreviewCacheEntryRef>(),
-            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<ExportPreset>(),
             export_decl::<StartExportCommandPayload>(),
             export_decl::<GetExportJobStatusCommandPayload>(),
@@ -407,11 +375,6 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
-            export_decl::<PreviewFrameStorageKind>(),
-            export_decl::<PreviewDecodeDiagnostic>(),
-            export_decl::<DecodedPreviewFrameResponse>(),
-            export_decl::<PreviewFrameReleaseResponse>(),
-            export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<ExportJobPhase>(),
             export_decl::<ExportDiagnosticKind>(),
             export_decl::<ExportDiagnostic>(),
@@ -434,9 +397,6 @@ fn schema_exports_include_timeline_command_session_contracts() {
             export_decl::<RuntimeColorDiagnostic>(),
             export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
-            export_decl::<RuntimeFrameDimensions>(),
-            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
-            export_decl::<RuntimeTextureHandleMetadata>(),
             export_decl::<RuntimeWindowsMediaIoCapabilities>(),
             export_decl::<RuntimeMacosMediaIoCapabilities>(),
             export_decl::<RuntimeCodecCapability>(),
@@ -477,7 +437,6 @@ fn schema_exports_include_timeline_command_session_contracts() {
 
 #[test]
 fn schema_exports_include_phase13_incremental_harness_anchors() {
-    let command_schema = command_schema_json();
     let draft_schema = draft_schema_json();
     let command_result_ts = command_result_ts_contract();
     let draft_ts = ts_contract(&[
@@ -486,15 +445,6 @@ fn schema_exports_include_phase13_incremental_harness_anchors() {
         export_decl::<MaterialId>(),
     ]);
 
-    for expected_contract in [
-        "InvalidatePreviewCacheCommandPayload",
-        "PreviewCacheInvalidationResponse",
-    ] {
-        assert!(
-            command_schema.contains(expected_contract),
-            "Phase 13 downstream contract assertions should attach to {expected_contract}"
-        );
-    }
     assert!(
         command_result_ts.contains("TimelineCommandResponse"),
         "Phase 13 timeline response contract should be exported from command result TS"
@@ -552,9 +502,6 @@ fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
         .expect("command schema should expose definitions");
 
     for expected_contract in [
-        "PreviewCacheEntryRef",
-        "InvalidatePreviewCacheCommandPayload",
-        "PreviewCacheInvalidationResponse",
         "ExportPrepDirtyFacts",
         "StartExportCommandPayload",
         "ExportJobStatusResponse",
@@ -565,15 +512,25 @@ fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
         );
     }
 
-    let invalidation_payload = defs
-        .get("InvalidatePreviewCacheCommandPayload")
-        .expect("InvalidatePreviewCacheCommandPayload should be generated");
+    for removed_contract in [
+        "PreviewCacheEntryRef",
+        "InvalidatePreviewCacheCommandPayload",
+    ] {
+        assert!(
+            !defs.contains_key(removed_contract),
+            "generic preview cache command contract {removed_contract} must not be public"
+        );
+    }
+
+    let export_dirty_facts = defs
+        .get("ExportPrepDirtyFacts")
+        .expect("ExportPrepDirtyFacts should be generated");
     assert_eq!(
-        invalidation_payload
-            .pointer("/properties/changedRanges/items/$ref")
+        export_dirty_facts
+            .pointer("/properties/dirtyRanges/items/$ref")
             .and_then(|value| value.as_str()),
         Some("#/$defs/DirtyRange"),
-        "preview invalidation changedRanges must use DirtyRange transport"
+        "export dirtyFacts dirtyRanges must use DirtyRange transport"
     );
     for expected_field in [
         "changedMaterialIds",
@@ -587,30 +544,10 @@ fn schema_exports_include_phase13_preview_export_dirty_fact_contracts() {
         "generatorVersion",
     ] {
         assert!(
-            invalidation_payload
+            export_dirty_facts
                 .pointer(&format!("/properties/{expected_field}"))
                 .is_some(),
-            "preview invalidation payload should expose {expected_field}"
-        );
-    }
-
-    let entry_ref = defs
-        .get("PreviewCacheEntryRef")
-        .expect("PreviewCacheEntryRef should be generated");
-    for expected_field in [
-        "graphNodeIds",
-        "semanticFingerprint",
-        "inputFingerprint",
-        "outputProfileFingerprint",
-        "runtimeCapabilityFingerprint",
-        "artifactSchemaVersion",
-        "generatorVersion",
-    ] {
-        assert!(
-            entry_ref
-                .pointer(&format!("/properties/{expected_field}"))
-                .is_some(),
-            "preview cache entry refs should expose v2 key fact field {expected_field}"
+            "export dirtyFacts should expose {expected_field}"
         );
     }
 
@@ -1135,20 +1072,8 @@ fn schema_exports_include_preview_command_contracts() {
     let command_result_ts = command_result_ts_contract();
 
     for expected_contract in [
-        "PreviewDecodeRequest",
-        "ReleasePreviewFrameCommandPayload",
-        "PreviewFrameStoragePreference",
-        "RequestPreviewFrameCommandPayload",
-        "RequestPreviewSegmentCommandPayload",
-        "InvalidatePreviewCacheCommandPayload",
-        "PreviewCacheEntryRef",
         "PreviewOutputProfile",
         "PreviewArtifactResponse",
-        "DecodedPreviewFrameResponse",
-        "PreviewFrameReleaseResponse",
-        "PreviewFrameStorageKind",
-        "PreviewDecodeDiagnostic",
-        "PreviewCacheInvalidationResponse",
         "PreviewStatus",
         "PreviewDiagnosticKind",
     ] {
@@ -1157,6 +1082,33 @@ fn schema_exports_include_preview_command_contracts() {
                 || command_envelope_ts.contains(expected_contract)
                 || command_result_ts.contains(expected_contract),
             "preview command contracts should include {expected_contract}"
+        );
+    }
+
+    for removed_contract in [
+        "PreviewDecodeRequest",
+        "ReleasePreviewFrameCommandPayload",
+        "PreviewFrameStoragePreference",
+        "RequestPreviewFrameCommandPayload",
+        "RequestPreviewSegmentCommandPayload",
+        "InvalidatePreviewCacheCommandPayload",
+        "PreviewCacheEntryRef",
+        "DecodedPreviewFrameResponse",
+        "PreviewFrameReleaseResponse",
+        "PreviewFrameStorageKind",
+        "PreviewDecodeDiagnostic",
+        "PreviewCacheInvalidationResponse",
+        "requestPreviewDecode",
+        "releasePreviewFrame",
+        "requestPreviewFrame",
+        "requestPreviewSegment",
+        "invalidatePreviewCache",
+    ] {
+        assert!(
+            !schema_json.contains(removed_contract)
+                && !command_envelope_ts.contains(removed_contract)
+                && !command_result_ts.contains(removed_contract),
+            "generic preview command contract {removed_contract} must not be public"
         );
     }
 
@@ -1250,9 +1202,6 @@ fn schema_exports_include_runtime_capability_command_contracts() {
         "RuntimeColorRange",
         "RuntimeColorDiagnostic",
         "RuntimeVideoColorMetadata",
-        "RuntimeFrameDimensions",
-        "RuntimeDecodedFrameHandleMetadata",
-        "RuntimeTextureHandleMetadata",
     ] {
         assert!(
             schema_json.contains(expected_contract)
@@ -1271,8 +1220,6 @@ fn schema_exports_include_runtime_capability_command_contracts() {
         "textureInterop",
         "fallbackLadder",
         "compatibleWithPreviewDevice",
-        "ownerSession",
-        "generation",
         "backend",
         "deviceId",
     ] {
@@ -1455,17 +1402,10 @@ fn command_envelope_ts_contract() -> String {
             export_decl::<VersionCommandPayload>(),
             export_decl::<ProbeMediaRuntimeCommandPayload>(),
             export_decl::<ProbeRuntimeCapabilitiesCommandPayload>(),
-            export_decl::<PreviewFrameStoragePreference>(),
-            export_decl::<PreviewDecodeRequest>(),
-            export_decl::<ReleasePreviewFrameCommandPayload>(),
             export_decl::<PreviewOutputProfile>(),
-            export_decl::<RequestPreviewFrameCommandPayload>(),
-            export_decl::<RequestPreviewSegmentCommandPayload>(),
-            export_decl::<PreviewCacheEntryRef>(),
             export_decl::<DirtyDomain>(),
             export_decl::<DirtyRangeSource>(),
             export_decl::<DirtyRange>(),
-            export_decl::<InvalidatePreviewCacheCommandPayload>(),
             export_decl::<AudioPreviewCommandPayload>(),
             export_decl::<GetArtifactStatusCommandPayload>(),
             export_decl::<RefreshArtifactStatusCommandPayload>(),
@@ -1499,11 +1439,6 @@ fn command_result_ts_contract() -> String {
             export_decl::<PreviewDiagnosticKind>(),
             export_decl::<PreviewDiagnostic>(),
             export_decl::<PreviewArtifactResponse>(),
-            export_decl::<PreviewFrameStorageKind>(),
-            export_decl::<PreviewDecodeDiagnostic>(),
-            export_decl::<DecodedPreviewFrameResponse>(),
-            export_decl::<PreviewFrameReleaseResponse>(),
-            export_decl::<PreviewCacheInvalidationResponse>(),
             export_decl::<AudioPreviewPlaybackStatus>(),
             export_decl::<AudioOutputDeviceStatus>(),
             export_decl::<WaveformDisplayStatus>(),
@@ -1535,9 +1470,6 @@ fn command_result_ts_contract() -> String {
             export_decl::<RuntimeColorDiagnostic>(),
             export_decl::<RuntimeVideoColorMetadata>(),
             export_decl::<RuntimeDeviceId>(),
-            export_decl::<RuntimeFrameDimensions>(),
-            export_decl::<RuntimeDecodedFrameHandleMetadata>(),
-            export_decl::<RuntimeTextureHandleMetadata>(),
             export_decl::<RuntimeWindowsMediaIoCapabilities>(),
             export_decl::<RuntimeMacosMediaIoCapabilities>(),
             export_decl::<RuntimeCodecCapability>(),
@@ -1758,34 +1690,6 @@ fn command_schema_json() -> String {
     let schema = schema_for!(CommandEnvelope);
     let mut schema_value =
         serde_json::to_value(schema).expect("command schema should serialize to JSON value");
-    include_command_contract_schema::<PreviewFrameStoragePreference>(
-        &mut schema_value,
-        "PreviewFrameStoragePreference",
-    );
-    include_command_contract_schema::<PreviewDecodeRequest>(
-        &mut schema_value,
-        "PreviewDecodeRequest",
-    );
-    include_command_contract_schema::<ReleasePreviewFrameCommandPayload>(
-        &mut schema_value,
-        "ReleasePreviewFrameCommandPayload",
-    );
-    include_command_contract_schema::<RequestPreviewFrameCommandPayload>(
-        &mut schema_value,
-        "RequestPreviewFrameCommandPayload",
-    );
-    include_command_contract_schema::<RequestPreviewSegmentCommandPayload>(
-        &mut schema_value,
-        "RequestPreviewSegmentCommandPayload",
-    );
-    include_command_contract_schema::<PreviewCacheEntryRef>(
-        &mut schema_value,
-        "PreviewCacheEntryRef",
-    );
-    include_command_contract_schema::<InvalidatePreviewCacheCommandPayload>(
-        &mut schema_value,
-        "InvalidatePreviewCacheCommandPayload",
-    );
     include_command_contract_schema::<AudioPreviewCommandPayload>(
         &mut schema_value,
         "AudioPreviewCommandPayload",
@@ -1845,26 +1749,6 @@ fn command_schema_json() -> String {
     include_command_contract_schema::<PreviewArtifactResponse>(
         &mut schema_value,
         "PreviewArtifactResponse",
-    );
-    include_command_contract_schema::<PreviewFrameStorageKind>(
-        &mut schema_value,
-        "PreviewFrameStorageKind",
-    );
-    include_command_contract_schema::<PreviewDecodeDiagnostic>(
-        &mut schema_value,
-        "PreviewDecodeDiagnostic",
-    );
-    include_command_contract_schema::<DecodedPreviewFrameResponse>(
-        &mut schema_value,
-        "DecodedPreviewFrameResponse",
-    );
-    include_command_contract_schema::<PreviewFrameReleaseResponse>(
-        &mut schema_value,
-        "PreviewFrameReleaseResponse",
-    );
-    include_command_contract_schema::<PreviewCacheInvalidationResponse>(
-        &mut schema_value,
-        "PreviewCacheInvalidationResponse",
     );
     include_command_contract_schema::<ExportValidationReport>(
         &mut schema_value,
@@ -1930,18 +1814,6 @@ fn command_schema_json() -> String {
         "RuntimeVideoColorMetadata",
     );
     include_command_contract_schema::<RuntimeDeviceId>(&mut schema_value, "RuntimeDeviceId");
-    include_command_contract_schema::<RuntimeFrameDimensions>(
-        &mut schema_value,
-        "RuntimeFrameDimensions",
-    );
-    include_command_contract_schema::<RuntimeDecodedFrameHandleMetadata>(
-        &mut schema_value,
-        "RuntimeDecodedFrameHandleMetadata",
-    );
-    include_command_contract_schema::<RuntimeTextureHandleMetadata>(
-        &mut schema_value,
-        "RuntimeTextureHandleMetadata",
-    );
     include_command_contract_schema::<RuntimeWindowsMediaIoCapabilities>(
         &mut schema_value,
         "RuntimeWindowsMediaIoCapabilities",
@@ -2823,11 +2695,6 @@ fn command_payload_pairing_constraints() -> serde_json::Value {
         "version",
         "probeMediaRuntime",
         "probeRuntimeCapabilities",
-        "requestPreviewDecode",
-        "releasePreviewFrame",
-        "requestPreviewFrame",
-        "requestPreviewSegment",
-        "invalidatePreviewCache",
         "createAudioPreviewSession",
         "playAudioPreview",
         "pauseAudioPreview",

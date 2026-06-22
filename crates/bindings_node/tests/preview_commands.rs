@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 use bindings_node::execute_command;
 use bindings_node::preview_export_service::{
+    PreviewCacheInvalidationCommand, PreviewFrameArtifactRequest, PreviewSegmentArtifactRequest,
     invalidate_preview_cache_command, request_preview_frame_with_executor,
     request_preview_segment_with_executor,
 };
@@ -15,19 +16,17 @@ use bindings_node::realtime_preview_service::{
     RealtimePreviewSessionBindingConfig,
 };
 use draft_model::{
-    CommandErrorKind, DecodedPreviewFrameResponse, DirtyDomain, DirtyRange, DirtyRangeSource,
-    Draft, InvalidatePreviewCacheCommandPayload, Material, MaterialId, MaterialKind, Microseconds,
-    PreviewCacheEntryRef, PreviewFrameStorageKind, PreviewOutputProfile,
-    RequestPreviewFrameCommandPayload, RequestPreviewSegmentCommandPayload,
-    RuntimeSelectedDecodePath, Segment, SourceTimerange, TargetTimerange, TextAlignment, TextBox,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
+    CommandErrorKind, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Material, MaterialId,
+    MaterialKind, Microseconds, PreviewCacheEntryRef, PreviewOutputProfile, Segment,
+    SourceTimerange, TargetTimerange, TextAlignment, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextStyle, TextWrapping, Track, TrackKind,
 };
 use media_runtime::FfmpegExecutor;
 use preview_service::PreviewServiceConfig;
 use realtime_preview_runtime::{
     PreviewCancellationToken, PreviewRequestMode, RealtimePreviewFallbackReason,
 };
-use serde_json::{Value, json};
+use serde_json::json;
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -42,10 +41,8 @@ fn preview_commands_request_frame_and_segment_through_preview_service_adapter() 
     let frame = request_preview_frame_with_executor(
         &executor,
         &config,
-        RequestPreviewFrameCommandPayload {
+        PreviewFrameArtifactRequest {
             draft: draft.clone(),
-            cache_root: Some(temp.path().display().to_string()),
-            bundle_path: None,
             target_time: Microseconds::new(500_000),
         },
     )
@@ -54,10 +51,8 @@ fn preview_commands_request_frame_and_segment_through_preview_service_adapter() 
     let segment = request_preview_segment_with_executor(
         &executor,
         &config,
-        RequestPreviewSegmentCommandPayload {
+        PreviewSegmentArtifactRequest {
             draft,
-            cache_root: Some(temp.path().display().to_string()),
-            bundle_path: None,
             target_timerange: TargetTimerange::new(
                 Microseconds::new(500_000),
                 Microseconds::new(100_000),
@@ -86,10 +81,8 @@ fn preview_commands_resolve_project_local_artifact_root_without_renderer_cache_r
     let frame = request_preview_frame_with_executor(
         &executor,
         &config,
-        RequestPreviewFrameCommandPayload {
+        PreviewFrameArtifactRequest {
             draft,
-            cache_root: None,
-            bundle_path: Some(bundle_path.display().to_string()),
             target_time: Microseconds::new(500_000),
         },
     )
@@ -98,25 +91,11 @@ fn preview_commands_resolve_project_local_artifact_root_without_renderer_cache_r
     assert!(frame.path.contains("draft.veproj/derived/blobs/preview"));
     assert!(!frame.path.contains("fallback-cache"));
     assert_eq!(executor.calls(), 1);
-
-    let envelope = execute_command(json!({
-        "command": "requestPreviewFrame",
-        "payload": {
-            "kind": "requestPreviewFrame",
-            "draft": preview_draft(),
-            "bundlePath": bundle_path,
-            "targetTime": 500000
-        },
-        "requestId": "req-preview-project-root"
-    }))
-    .expect("preview command should return envelope");
-
-    assert_ne!(envelope["error"]["kind"], "invalidPayload", "{envelope:#}");
 }
 
 #[test]
 fn preview_commands_invalidate_cache_without_mutating_draft() {
-    let payload = InvalidatePreviewCacheCommandPayload {
+    let payload = PreviewCacheInvalidationCommand {
         entries: vec![
             cache_entry_ref(
                 "video.png",
@@ -162,167 +141,116 @@ fn preview_commands_invalidate_cache_without_mutating_draft() {
 
     assert_eq!(response.invalidated_count, 2);
     assert_eq!(response.retained_count, 1);
-
-    let envelope = execute_command(json!({
-        "command": "invalidatePreviewCache",
-        "payload": {
-            "kind": "invalidatePreviewCache",
-            "entries": [
-                {
-                    "profile": "framePng",
-                    "targetTimerange": { "start": 0, "duration": 200000 },
-                    "materialDependencies": ["video"],
-                    "artifactPath": "/cache/video.png"
-                },
-                {
-                    "profile": "segmentMp4",
-                    "targetTimerange": { "start": 800000, "duration": 200000 },
-                    "materialDependencies": ["audio"],
-                    "artifactPath": "/cache/audio.mp4"
-                }
-            ],
-            "changedRanges": [],
-            "changedMaterialIds": ["audio"],
-            "reason": "material changed"
-        },
-        "requestId": "req-invalidate-preview"
-    }))
-    .expect("invalidate preview command should return envelope");
-
-    assert_eq!(envelope["ok"], true, "{envelope:#}");
-    assert_eq!(envelope["data"]["invalidatedCount"], 1);
-    assert_eq!(envelope["data"]["retainedCount"], 1);
-    assert_eq!(envelope["error"], Value::Null);
 }
 
 #[test]
 fn preview_commands_transport_v2_dirty_facts_without_renderer_owned_overrides() {
-    let envelope = execute_command(json!({
-        "command": "invalidatePreviewCache",
-        "payload": {
-            "kind": "invalidatePreviewCache",
-            "entries": [
-                {
-                    "profile": "framePng",
-                    "targetTimerange": { "start": 0, "duration": 200000 },
-                    "materialDependencies": ["video"],
-                    "artifactPath": "/cache/video.png",
-                    "graphNodeIds": ["draft:draft-preview:track:video-track:segment:video-a:video"],
-                    "semanticFingerprint": "video-semantic-v1",
-                    "inputFingerprint": "video-input-v1",
-                    "outputProfileFingerprint": "profile-v1",
-                    "runtimeCapabilityFingerprint": "runtime-v1",
-                    "artifactSchemaVersion": 2,
-                    "generatorVersion": "preview-cache-generator-v2"
-                },
-                {
-                    "profile": "framePng",
-                    "targetTimerange": { "start": 400000, "duration": 100000 },
-                    "materialDependencies": ["text"],
-                    "artifactPath": "/cache/text.png",
-                    "graphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
-                    "semanticFingerprint": "text-semantic-v1",
-                    "inputFingerprint": "text-input-v1",
-                    "outputProfileFingerprint": "profile-v1",
-                    "runtimeCapabilityFingerprint": "runtime-v1",
-                    "artifactSchemaVersion": 2,
-                    "generatorVersion": "preview-cache-generator-v2"
-                }
-            ],
-            "changedRanges": [
-                { "targetTimerange": { "start": 450000, "duration": 50000 }, "source": "current" }
-            ],
-            "changedMaterialIds": [],
-            "changedGraphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
-            "changedDomains": ["text", "previewCache"],
-            "runtimeCapabilityFingerprint": "runtime-v1",
-            "outputProfileFingerprint": "profile-v1",
-            "fullDraft": false,
-            "reason": "accepted text edit",
-            "artifactSchemaVersion": 2,
-            "generatorVersion": "preview-cache-generator-v2"
-        },
-        "requestId": "req-invalidate-preview-v2"
-    }))
-    .expect("invalidate preview command should return envelope");
+    let response = invalidate_preview_cache_command(PreviewCacheInvalidationCommand {
+        entries: vec![
+            cache_entry_ref_with_metadata(
+                "video.png",
+                0,
+                200_000,
+                &["video"],
+                &["draft:draft-preview:track:video-track:segment:video-a:video"],
+                "video-semantic-v1",
+            ),
+            cache_entry_ref_with_metadata(
+                "text.png",
+                400_000,
+                100_000,
+                &["text"],
+                &["draft:draft-preview:track:text-track:segment:text-a:text"],
+                "text-semantic-v1",
+            ),
+        ],
+        changed_ranges: vec![DirtyRange {
+            target_timerange: TargetTimerange::new(
+                Microseconds::new(450_000),
+                Microseconds::new(50_000),
+            ),
+            source: DirtyRangeSource::Current,
+        }],
+        changed_material_ids: Vec::new(),
+        changed_graph_node_ids: vec![
+            "draft:draft-preview:track:text-track:segment:text-a:text".to_owned(),
+        ],
+        changed_domains: vec![DirtyDomain::Text, DirtyDomain::PreviewCache],
+        runtime_capability_fingerprint: Some("runtime-v1".to_owned()),
+        output_profile_fingerprint: Some("profile-v1".to_owned()),
+        full_draft: false,
+        reason: "accepted text edit".to_owned(),
+        artifact_schema_version: 2,
+        generator_version: "preview-cache-generator-v2".to_owned(),
+    });
 
-    assert_eq!(envelope["ok"], true, "{envelope:#}");
-    assert_eq!(envelope["data"]["invalidatedCount"], 1);
-    assert_eq!(envelope["data"]["retainedCount"], 1);
+    assert_eq!(response.invalidated_count, 1);
+    assert_eq!(response.retained_count, 1);
     assert_eq!(
-        envelope["data"]["changedGraphNodeIds"],
-        json!(["draft:draft-preview:track:text-track:segment:text-a:text"])
+        response.changed_graph_node_ids,
+        vec!["draft:draft-preview:track:text-track:segment:text-a:text"]
     );
-    assert_eq!(envelope["data"]["dirtyRanges"][0]["source"], "current");
+    assert_eq!(response.dirty_ranges[0].source, DirtyRangeSource::Current);
     assert_eq!(
-        envelope["data"]["runtimeCapabilityFingerprint"],
-        "runtime-v1"
+        response.runtime_capability_fingerprint.as_deref(),
+        Some("runtime-v1")
     );
-    assert_eq!(
-        envelope["data"]["generatorVersion"],
-        "preview-cache-generator-v2"
-    );
+    assert_eq!(response.generator_version, "preview-cache-generator-v2");
 
-    let export_only = execute_command(json!({
-        "command": "invalidatePreviewCache",
-        "payload": {
-            "kind": "invalidatePreviewCache",
-            "entries": [
-                {
-                    "profile": "framePng",
-                    "targetTimerange": { "start": 400000, "duration": 100000 },
-                    "materialDependencies": ["text"],
-                    "artifactPath": "/cache/text.png",
-                    "graphNodeIds": ["draft:draft-preview:track:text-track:segment:text-a:text"],
-                    "semanticFingerprint": "text-semantic-v1",
-                    "inputFingerprint": "text-input-v1",
-                    "outputProfileFingerprint": "profile-v1",
-                    "runtimeCapabilityFingerprint": "runtime-v1",
-                    "artifactSchemaVersion": 2,
-                    "generatorVersion": "preview-cache-generator-v2"
-                }
-            ],
-            "changedRanges": [
-                { "targetTimerange": { "start": 450000, "duration": 50000 }, "source": "current" }
-            ],
-            "changedMaterialIds": [],
-            "changedGraphNodeIds": [],
-            "changedDomains": ["exportPrep"],
-            "runtimeCapabilityFingerprint": "runtime-v1",
-            "outputProfileFingerprint": "profile-v1",
-            "fullDraft": false,
-            "reason": "export-only dirty fact",
-            "artifactSchemaVersion": 2,
-            "generatorVersion": "preview-cache-generator-v2"
-        },
-        "requestId": "req-invalidate-preview-export-only"
-    }))
-    .expect("invalidate preview command should return envelope");
+    let export_only = invalidate_preview_cache_command(PreviewCacheInvalidationCommand {
+        entries: vec![cache_entry_ref_with_metadata(
+            "text.png",
+            400_000,
+            100_000,
+            &["text"],
+            &["draft:draft-preview:track:text-track:segment:text-a:text"],
+            "text-semantic-v1",
+        )],
+        changed_ranges: vec![DirtyRange {
+            target_timerange: TargetTimerange::new(
+                Microseconds::new(450_000),
+                Microseconds::new(50_000),
+            ),
+            source: DirtyRangeSource::Current,
+        }],
+        changed_material_ids: Vec::new(),
+        changed_graph_node_ids: Vec::new(),
+        changed_domains: vec![DirtyDomain::ExportPrep],
+        runtime_capability_fingerprint: Some("runtime-v1".to_owned()),
+        output_profile_fingerprint: Some("profile-v1".to_owned()),
+        full_draft: false,
+        reason: "export-only dirty fact".to_owned(),
+        artifact_schema_version: 2,
+        generator_version: "preview-cache-generator-v2".to_owned(),
+    });
 
-    assert_eq!(export_only["ok"], true, "{export_only:#}");
-    assert_eq!(export_only["data"]["invalidatedCount"], 0);
-    assert_eq!(export_only["data"]["retainedCount"], 1);
+    assert_eq!(export_only.invalidated_count, 0);
+    assert_eq!(export_only.retained_count, 1);
 }
 
 #[test]
-fn preview_commands_reject_mismatched_preview_command_payload_pair() {
-    let envelope = execute_command(json!({
-        "command": "requestPreviewFrame",
-        "payload": {
-            "kind": "requestPreviewSegment",
-            "draft": preview_draft(),
-            "cacheRoot": "/cache",
-            "targetTimerange": { "start": 0, "duration": 100000 }
-        },
-        "requestId": "req-preview-mismatch"
-    }))
-    .expect("mismatched preview command should return envelope");
+fn generic_preview_commands_are_not_public_command_envelope_api() {
+    for command in [
+        "requestPreviewDecode",
+        "releasePreviewFrame",
+        "requestPreviewFrame",
+        "requestPreviewSegment",
+        "invalidatePreviewCache",
+    ] {
+        let envelope = execute_command(json!({
+            "command": command,
+            "payload": { "kind": command },
+            "requestId": format!("req-{command}")
+        }))
+        .expect("generic preview command should return rejection envelope");
 
-    assert_eq!(envelope["ok"], false);
-    assert_eq!(
-        envelope["error"]["kind"],
-        serde_json::to_value(CommandErrorKind::InvalidPayload).unwrap()
-    );
+        assert_eq!(envelope["ok"], false, "{command}: {envelope:#}");
+        assert_eq!(
+            envelope["error"]["kind"],
+            serde_json::to_value(CommandErrorKind::UnsupportedCommand).unwrap(),
+            "{command}: {envelope:#}"
+        );
+    }
 }
 
 #[test]
@@ -372,141 +300,6 @@ fn preview_commands_realtime_binding_preserves_fallback_and_cancellation_telemet
             .get("gpuDevice")
             .is_none()
     );
-}
-
-#[test]
-fn preview_decode_command_returns_handle_metadata_without_full_frame_payloads() {
-    let envelope = execute_command(json!({
-        "command": "requestPreviewDecode",
-        "payload": {
-            "kind": "requestPreviewDecode",
-            "sessionId": "preview-session-1",
-            "draft": preview_draft(),
-            "materialId": "video",
-            "sourceTime": 250000,
-            "playbackGeneration": 7,
-            "preferredStorage": "texture",
-            "previewDevice": {
-                "backend": "d3d11Texture2D",
-                "adapterId": "adapter-1",
-                "deviceId": "device-1"
-            }
-        },
-        "requestId": "req-preview-decode"
-    }))
-    .expect("preview decode command should return envelope");
-
-    assert_eq!(envelope["ok"], true, "{envelope:#}");
-    let data: DecodedPreviewFrameResponse =
-        serde_json::from_value(envelope["data"].clone()).expect("decode response contract");
-    assert_eq!(data.storage_kind, PreviewFrameStorageKind::Texture);
-    assert_eq!(
-        data.selected_path,
-        RuntimeSelectedDecodePath::NativeHardwareTexture
-    );
-    assert!(
-        data.frame.frame_handle_id.starts_with("preview-frame-"),
-        "preview frame handle IDs must be opaque binding-owned IDs"
-    );
-    assert_eq!(data.frame.owner_session, "preview-session-1");
-    assert_eq!(data.frame.generation, 7);
-    assert_eq!(
-        data.texture.as_ref().expect("texture metadata").generation,
-        7
-    );
-    assert!(data.texture_compatible);
-
-    let serialized = serde_json::to_string(&envelope).expect("response serializes");
-    for forbidden in [
-        "nativePointer",
-        "rawHandle",
-        "ArrayBuffer",
-        "Uint8Array",
-        "bytes",
-        "pixels",
-    ] {
-        assert!(
-            !serialized.contains(forbidden),
-            "preview decode response must not expose {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn preview_decode_release_rejects_unknown_wrong_session_and_stale_generation_handles() {
-    let envelope = execute_command(json!({
-        "command": "requestPreviewDecode",
-        "payload": {
-            "kind": "requestPreviewDecode",
-            "sessionId": "preview-session-release",
-            "draft": preview_draft(),
-            "materialId": "video",
-            "sourceTime": 0,
-            "playbackGeneration": 3,
-            "preferredStorage": "cpu"
-        },
-        "requestId": "req-preview-decode-release"
-    }))
-    .expect("preview decode command should return envelope");
-    assert_eq!(envelope["ok"], true, "{envelope:#}");
-    let data: DecodedPreviewFrameResponse =
-        serde_json::from_value(envelope["data"].clone()).expect("decode response contract");
-
-    let wrong_session = execute_command(json!({
-        "command": "releasePreviewFrame",
-        "payload": {
-            "kind": "releasePreviewFrame",
-            "sessionId": "other-session",
-            "frameHandleId": data.frame.frame_handle_id,
-            "playbackGeneration": 3
-        },
-        "requestId": "req-preview-release-wrong-session"
-    }))
-    .expect("release command should return envelope");
-    assert_eq!(wrong_session["ok"], false);
-    assert_eq!(wrong_session["error"]["kind"], "previewServiceFailed");
-
-    let stale = execute_command(json!({
-        "command": "releasePreviewFrame",
-        "payload": {
-            "kind": "releasePreviewFrame",
-            "sessionId": "preview-session-release",
-            "frameHandleId": data.frame.frame_handle_id,
-            "playbackGeneration": 99
-        },
-        "requestId": "req-preview-release-stale"
-    }))
-    .expect("release command should return envelope");
-    assert_eq!(stale["ok"], false);
-    assert_eq!(stale["error"]["kind"], "previewServiceFailed");
-
-    let released = execute_command(json!({
-        "command": "releasePreviewFrame",
-        "payload": {
-            "kind": "releasePreviewFrame",
-            "sessionId": "preview-session-release",
-            "frameHandleId": data.frame.frame_handle_id,
-            "playbackGeneration": 3
-        },
-        "requestId": "req-preview-release-valid"
-    }))
-    .expect("release command should return envelope");
-    assert_eq!(released["ok"], true, "{released:#}");
-    assert_eq!(released["data"]["released"], true);
-
-    let unknown = execute_command(json!({
-        "command": "releasePreviewFrame",
-        "payload": {
-            "kind": "releasePreviewFrame",
-            "sessionId": "preview-session-release",
-            "frameHandleId": "preview-frame-missing",
-            "playbackGeneration": 3
-        },
-        "requestId": "req-preview-release-unknown"
-    }))
-    .expect("release command should return envelope");
-    assert_eq!(unknown["ok"], false);
-    assert_eq!(unknown["error"]["kind"], "previewServiceFailed");
 }
 
 struct FakePreviewExecutor {
@@ -651,6 +444,34 @@ fn cache_entry_ref(
         artifact_schema_version: 0,
         generator_version: String::new(),
     }
+}
+
+fn cache_entry_ref_with_metadata(
+    artifact: &str,
+    start: u64,
+    duration: u64,
+    material_ids: &[&str],
+    graph_node_ids: &[&str],
+    semantic_fingerprint: &str,
+) -> PreviewCacheEntryRef {
+    let mut entry = cache_entry_ref(
+        artifact,
+        PreviewOutputProfile::FramePng,
+        start,
+        duration,
+        material_ids,
+    );
+    entry.graph_node_ids = graph_node_ids
+        .iter()
+        .map(|graph_node_id| (*graph_node_id).to_owned())
+        .collect();
+    entry.semantic_fingerprint = Some(semantic_fingerprint.to_owned());
+    entry.input_fingerprint = Some(format!("{semantic_fingerprint}-input"));
+    entry.output_profile_fingerprint = Some("profile-v1".to_owned());
+    entry.runtime_capability_fingerprint = Some("runtime-v1".to_owned());
+    entry.artifact_schema_version = 2;
+    entry.generator_version = "preview-cache-generator-v2".to_owned();
+    entry
 }
 
 #[cfg(unix)]

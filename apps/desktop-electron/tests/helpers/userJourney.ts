@@ -246,7 +246,7 @@ export async function waitForProductPlaybackSuccess(
     visibleMotion,
     after,
     frameRequestsBeforePlay,
-    frameRequestsAfterPlay: requestPreviewFrameCount(await readNativeCommandObservations(app))
+    frameRequestsAfterPlay: requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))
   });
   return { after, visibleMotion };
 }
@@ -289,7 +289,7 @@ export function expectProductPlaybackSuccessEvidence({
   ).not.toBe(visibleBefore.visibleCenterHash);
   expect(
     frameRequestsAfterPlay,
-    "product playback must not drive a requestPreviewFrame PNG/artifact loop"
+    "product playback must not drive a requestProjectSessionPreviewFrame PNG/artifact loop"
   ).toBe(frameRequestsBeforePlay);
   expect(after.hostState?.frameDisplay).toBeNull();
 }
@@ -604,7 +604,7 @@ export async function updateSelectedVisualThroughInspector(
 }
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
-  const frameRequestsBefore = requestPreviewFrameCount(await readNativeCommandObservations(app));
+  const frameRequestsBefore = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
   await clickTimelineRulerAt(page, targetTimeUs);
   await expect
     .poll(async () => parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""), {
@@ -617,7 +617,7 @@ export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppCon
     })
     .toBeLessThanOrEqual(targetTimeUs + TIMELINE_RULER_CLICK_TOLERANCE_US);
   expect(
-    requestPreviewFrameCount(await readNativeCommandObservations(app)),
+    requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app)),
     "product seek must not fall back to preview artifact frame requests"
   ).toBe(frameRequestsBefore);
 }
@@ -831,8 +831,8 @@ export async function readRealtimePreviewHostCalls(app: ProductJourneyAppControl
   return app.readRealtimePreviewHostCalls();
 }
 
-export function requestPreviewFrameCount(calls: NativeCommandObservation[]): number {
-  return calls.filter((call) => call.command === "requestPreviewFrame").length;
+export function requestProjectSessionPreviewFrameCount(calls: NativeCommandObservation[]): number {
+  return calls.filter((call) => call.command === "requestProjectSessionPreviewFrame").length;
 }
 
 export async function readTimelineSegments(
@@ -940,9 +940,9 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
     call.command === "startProjectSessionExport"
       ? "startExport"
       : call.command === "requestProjectSessionPreviewFrame"
-        ? "requestPreviewFrame"
+        ? "requestProjectSessionPreviewFrame"
         : call.command === "requestProjectSessionPreviewSegment"
-          ? "requestPreviewSegment"
+          ? "requestProjectSessionPreviewSegment"
           : (call.intentKind ?? "executeProjectIntent");
   return {
     command,

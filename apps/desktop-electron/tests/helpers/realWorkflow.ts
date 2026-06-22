@@ -105,8 +105,8 @@ export async function runRealImportPreviewExportWorkflow(
   expect(observedActions).toEqual(
     expect.arrayContaining(["addTimelineSegmentIntent", "addTextSegmentIntent", "addAudioSegmentIntent"])
   );
-  expect(calls.filter((call) => call.command === "requestPreviewFrame")).toHaveLength(0);
-  expect(calls.filter((call) => call.command === "requestPreviewSegment")).toHaveLength(0);
+  expect(calls.filter((call) => call.command === "requestProjectSessionPreviewFrame")).toHaveLength(0);
+  expect(calls.filter((call) => call.command === "requestProjectSessionPreviewSegment")).toHaveLength(0);
 
   return {
     calls,
@@ -288,8 +288,8 @@ async function addAudioSegment(page: Page, app: ElectronApplication, audioName: 
 async function verifyRealtimePreviewPlayback(page: Page, app: ElectronApplication): Promise<void> {
   const previewMonitor = page.getByLabel("预览窗口");
   await expect(previewMonitor.getByLabel("实时预览画面")).toBeVisible({ timeout: 20_000 });
-  const frameRequestsBefore = await countCommand(app, "requestPreviewFrame");
-  const segmentRequestsBefore = await countCommand(app, "requestPreviewSegment");
+  const frameRequestsBefore = await countCommand(app, "requestProjectSessionPreviewFrame");
+  const segmentRequestsBefore = await countCommand(app, "requestProjectSessionPreviewSegment");
   const playCallsBefore = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "play").length;
   const stateBefore = await readRealtimePreviewHostState(page);
   const presentedBefore = stateBefore?.telemetry?.presentedFrameCount ?? 0;
@@ -322,8 +322,8 @@ async function verifyRealtimePreviewPlayback(page: Page, app: ElectronApplicatio
     .toBe(true);
 
   await previewMonitor.getByRole("button", { name: "暂停" }).click();
-  expect(await countCommand(app, "requestPreviewFrame")).toBe(frameRequestsBefore);
-  expect(await countCommand(app, "requestPreviewSegment")).toBe(segmentRequestsBefore);
+  expect(await countCommand(app, "requestProjectSessionPreviewFrame")).toBe(frameRequestsBefore);
+  expect(await countCommand(app, "requestProjectSessionPreviewSegment")).toBe(segmentRequestsBefore);
 }
 
 async function exportDraft(

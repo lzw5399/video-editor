@@ -82,11 +82,6 @@ pub enum CommandName {
     Version,
     ProbeMediaRuntime,
     ProbeRuntimeCapabilities,
-    RequestPreviewDecode,
-    ReleasePreviewFrame,
-    RequestPreviewFrame,
-    RequestPreviewSegment,
-    InvalidatePreviewCache,
     CreateAudioPreviewSession,
     PlayAudioPreview,
     PauseAudioPreview,
@@ -118,11 +113,6 @@ pub enum CommandPayload {
     Version(VersionCommandPayload),
     ProbeMediaRuntime(ProbeMediaRuntimeCommandPayload),
     ProbeRuntimeCapabilities(ProbeRuntimeCapabilitiesCommandPayload),
-    RequestPreviewDecode(PreviewDecodeRequest),
-    ReleasePreviewFrame(ReleasePreviewFrameCommandPayload),
-    RequestPreviewFrame(RequestPreviewFrameCommandPayload),
-    RequestPreviewSegment(RequestPreviewSegmentCommandPayload),
-    InvalidatePreviewCache(InvalidatePreviewCacheCommandPayload),
     CreateAudioPreviewSession(AudioPreviewCommandPayload),
     PlayAudioPreview(AudioPreviewCommandPayload),
     PauseAudioPreview(AudioPreviewCommandPayload),
@@ -190,11 +180,6 @@ impl CommandPayload {
             Self::Version(_) => CommandName::Version,
             Self::ProbeMediaRuntime(_) => CommandName::ProbeMediaRuntime,
             Self::ProbeRuntimeCapabilities(_) => CommandName::ProbeRuntimeCapabilities,
-            Self::RequestPreviewDecode(_) => CommandName::RequestPreviewDecode,
-            Self::ReleasePreviewFrame(_) => CommandName::ReleasePreviewFrame,
-            Self::RequestPreviewFrame(_) => CommandName::RequestPreviewFrame,
-            Self::RequestPreviewSegment(_) => CommandName::RequestPreviewSegment,
-            Self::InvalidatePreviewCache(_) => CommandName::InvalidatePreviewCache,
             Self::CreateAudioPreviewSession(_) => CommandName::CreateAudioPreviewSession,
             Self::PlayAudioPreview(_) => CommandName::PlayAudioPreview,
             Self::PauseAudioPreview(_) => CommandName::PauseAudioPreview,
@@ -699,126 +684,6 @@ pub enum PreviewStatus {
     Invalidated,
 }
 
-/// Payload accepted by the Phase 5 preview frame command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RequestPreviewFrameCommandPayload {
-    pub draft: Draft,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub cache_root: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub bundle_path: Option<String>,
-    pub target_time: Microseconds,
-}
-
-/// Payload accepted by the Phase 5 preview segment command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RequestPreviewSegmentCommandPayload {
-    pub draft: Draft,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub cache_root: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub bundle_path: Option<String>,
-    pub target_timerange: TargetTimerange,
-}
-
-/// Storage preference requested by a preview decode caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum PreviewFrameStoragePreference {
-    Any,
-    Cpu,
-    Texture,
-}
-
-/// Payload accepted by the handle-based preview decode command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreviewDecodeRequest {
-    pub session_id: String,
-    pub draft: Draft,
-    pub material_id: MaterialId,
-    pub source_time: Microseconds,
-    pub playback_generation: u64,
-    pub preferred_storage: PreviewFrameStoragePreference,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub preview_device: Option<RuntimeDeviceId>,
-}
-
-/// Payload accepted by the preview frame release command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ReleasePreviewFrameCommandPayload {
-    pub session_id: String,
-    pub frame_handle_id: String,
-    pub playback_generation: u64,
-}
-
-/// Binding-visible storage returned for a decoded preview frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum PreviewFrameStorageKind {
-    Cpu,
-    Texture,
-    PlatformOpaque,
-    ArtifactFallback,
-}
-
-/// Decode route diagnostic returned with handle-based preview frames.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreviewDecodeDiagnostic {
-    pub material_id: MaterialId,
-    pub selected_path: RuntimeSelectedDecodePath,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
-    pub storage_kind: PreviewFrameStorageKind,
-    pub texture_compatible: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub preview_device: Option<RuntimeDeviceId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub native_device: Option<RuntimeDeviceId>,
-    pub message: String,
-}
-
-/// Handle-based preview decode response. Frame payloads remain native/Rust-owned.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DecodedPreviewFrameResponse {
-    pub frame: RuntimeDecodedFrameHandleMetadata,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub texture: Option<RuntimeTextureHandleMetadata>,
-    pub storage_kind: PreviewFrameStorageKind,
-    pub source_time: Microseconds,
-    pub selected_path: RuntimeSelectedDecodePath,
-    pub texture_compatible: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub fallback_reason: Option<RuntimeMediaIoFallbackReason>,
-    pub color: RuntimeVideoColorMetadata,
-    pub diagnostics: Vec<PreviewDecodeDiagnostic>,
-}
-
-/// Response returned when a retained preview frame handle is released.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreviewFrameReleaseResponse {
-    pub frame_handle_id: String,
-    pub owner_session: String,
-    pub generation: u64,
-    pub released: bool,
-}
-
 /// Renderer-provided reference to an existing derived preview cache entry.
 ///
 /// This intentionally contains no cache-key formula, FFmpeg args, render graph,
@@ -844,32 +709,6 @@ pub struct PreviewCacheEntryRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub runtime_capability_fingerprint: Option<String>,
-    #[serde(default, skip_serializing_if = "is_zero_u32")]
-    pub artifact_schema_version: u32,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub generator_version: String,
-}
-
-/// Payload accepted by the Phase 5 preview cache invalidation command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InvalidatePreviewCacheCommandPayload {
-    pub entries: Vec<PreviewCacheEntryRef>,
-    pub changed_ranges: Vec<DirtyRange>,
-    pub changed_material_ids: Vec<MaterialId>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub changed_graph_node_ids: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub changed_domains: Vec<DirtyDomain>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub runtime_capability_fingerprint: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
-    pub output_profile_fingerprint: Option<String>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub full_draft: bool,
-    pub reason: String,
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub artifact_schema_version: u32,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -1761,40 +1600,6 @@ pub struct RuntimeDeviceId {
     pub backend: RuntimeTextureBackend,
     pub adapter_id: String,
     pub device_id: String,
-}
-
-/// Binding-safe frame dimensions for decoded frame and texture metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RuntimeFrameDimensions {
-    pub width: u32,
-    pub height: u32,
-}
-
-/// Binding-safe decoded frame metadata. The frame payload stays owned by Rust/native runtime.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RuntimeDecodedFrameHandleMetadata {
-    pub frame_handle_id: String,
-    pub owner_session: String,
-    pub generation: u64,
-    pub dimensions: RuntimeFrameDimensions,
-    pub pixel_format: RuntimeVideoPixelFormat,
-    pub color: RuntimeVideoColorMetadata,
-}
-
-/// Binding-safe texture metadata. Native pointers and GPU objects never cross this contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RuntimeTextureHandleMetadata {
-    pub texture_handle_id: String,
-    pub owner_session: String,
-    pub generation: u64,
-    pub backend: RuntimeTextureBackend,
-    pub device_id: RuntimeDeviceId,
-    pub dimensions: RuntimeFrameDimensions,
-    pub pixel_format: RuntimeVideoPixelFormat,
-    pub color: RuntimeVideoColorMetadata,
 }
 
 /// Binding-safe native media IO capability report.
