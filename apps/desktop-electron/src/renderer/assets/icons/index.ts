@@ -21,9 +21,11 @@ import previewPreviousFrameIconUrl from "./preview-previous-frame.svg";
 import previewStopIconUrl from "./preview-stop.svg";
 import redoIconUrl from "./redo.svg";
 import splitIconUrl from "./split.svg";
+import titlebarMenuIconUrl from "./titlebar-menu.svg";
 import timelineAddIconUrl from "./timeline-add.svg";
 import timelineSnapOffIconUrl from "./timeline-snap-off.svg";
 import timelineSnapOnIconUrl from "./timeline-snap-on.svg";
+import topExportIconUrl from "./top-export.svg";
 import trackHideOffIconUrl from "./track-hide-off.svg";
 import trackHideOnIconUrl from "./track-hide-on.svg";
 import trackLockOffIconUrl from "./track-lock-off.svg";
@@ -58,9 +60,11 @@ export const appIconUrls = {
   previewStop: previewStopIconUrl,
   redo: redoIconUrl,
   split: splitIconUrl,
+  titlebarMenu: titlebarMenuIconUrl,
   timelineAdd: timelineAddIconUrl,
   timelineSnapOff: timelineSnapOffIconUrl,
   timelineSnapOn: timelineSnapOnIconUrl,
+  topExport: topExportIconUrl,
   trackHideOff: trackHideOffIconUrl,
   trackHideOn: trackHideOnIconUrl,
   trackLockOff: trackLockOffIconUrl,

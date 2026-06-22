@@ -603,7 +603,7 @@ export async function addTextThroughProductPanel(
   expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
 ): Promise<void> {
   const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();

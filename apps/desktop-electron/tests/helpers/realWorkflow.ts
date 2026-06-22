@@ -232,7 +232,7 @@ async function importMaterials(
 
 async function addVisualSegment(page: Page, app: ElectronApplication, materialName: string): Promise<void> {
   const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "素材" }).click();
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   await expect(materialRow).toBeVisible({ timeout: 20_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
@@ -267,7 +267,7 @@ async function seekTimelinePlayhead(page: Page, app: ElectronApplication, target
 async function addTextSegment(page: Page, app: ElectronApplication, content: string): Promise<void> {
   const nextCommandCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
   const nextIntentCount = (await countProjectSessionIntent(app, "addTextSegmentIntent")) + 1;
-  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+  await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
   await page.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await page.getByRole("button", { name: "添加文字", exact: true }).click();
   await waitForCommandOrProjectIntentCount(page, app, "addTextSegmentIntent", nextCommandCount, nextIntentCount);

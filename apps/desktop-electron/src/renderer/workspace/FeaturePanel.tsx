@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent
 import type { Material } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
+  WORKSPACE_CATEGORY_META,
   formatMaterialDetail,
   formatMaterialDiagnostic,
   formatMaterialKind,
@@ -149,7 +150,7 @@ function MaterialPanel({
 
         <div className="media-library-pane">
           <div className="panel-header media-library-title-row">
-            <h2>媒体</h2>
+            <h2>{WORKSPACE_CATEGORY_META["媒体"].label}</h2>
           </div>
 
           {showDeveloperDiagnostics ? (
@@ -272,7 +273,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
   return (
     <div className="feature-panel-content">
       <div className="panel-header">
-        <h2>文字</h2>
+        <h2>{WORKSPACE_CATEGORY_META["文字"].label}</h2>
       </div>
 
       <section className="function-card field-stack text-feature-card" aria-label="默认文字">
@@ -496,14 +497,15 @@ function AudioPanel({
 }
 
 function DeferredCategoryPanel({ category }: { category: WorkspaceCategory }): React.ReactElement {
-  const title = category === "数字人" ? "能力暂未开放" : `${category}暂未开放`;
+  const label = WORKSPACE_CATEGORY_META[category].label;
+  const title = category === "数字人" ? "能力暂未开放" : `${label}暂未开放`;
 
   return (
     <div className="feature-panel-content">
       <div className="panel-header">
-        <h2>{category}</h2>
+        <h2>{label}</h2>
       </div>
-      <div className="empty-state deferred-category-state" aria-label={`${category}暂不可用`}>
+      <div className="empty-state deferred-category-state" aria-label={`${label}暂不可用`}>
         <strong>{title}</strong>
         <span>当前版本暂不提供该类编辑，切换分类不会修改草稿内容。</span>
       </div>

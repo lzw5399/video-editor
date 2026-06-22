@@ -56,25 +56,24 @@ export const WORKSPACE_CATEGORIES: readonly WorkspaceCategory[] = [
   "字幕",
   "滤镜",
   "调节",
-  "模板",
-  "数字人"
+  "模板"
 ];
 
 export type WorkspaceCategoryMetadata = {
-  label: WorkspaceCategory;
+  label: string;
 };
 
 export const WORKSPACE_CATEGORY_META: Record<WorkspaceCategory, WorkspaceCategoryMetadata> = {
-  媒体: { label: "媒体" },
+  媒体: { label: "素材" },
   音频: { label: "音频" },
-  文字: { label: "文字" },
+  文字: { label: "文本" },
   贴纸: { label: "贴纸" },
   特效: { label: "特效" },
   转场: { label: "转场" },
   字幕: { label: "字幕" },
   滤镜: { label: "滤镜" },
   调节: { label: "调节" },
-  模板: { label: "模板" },
+  模板: { label: "智能包装" },
   数字人: { label: "数字人" }
 };
 

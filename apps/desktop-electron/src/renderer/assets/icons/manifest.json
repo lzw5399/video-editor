@@ -176,6 +176,16 @@
       "name": "mediaFilter",
       "source": "icons/Canvas/TrackHeader/filter.svg",
       "target": "apps/desktop-electron/src/renderer/assets/icons/media-filter.svg"
+    },
+    {
+      "name": "titlebarMenu",
+      "source": "icons/ToolBar/more_timeline_2.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/titlebar-menu.svg"
+    },
+    {
+      "name": "topExport",
+      "source": "app-local export glyph",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/top-export.svg"
     }
   ]
 }

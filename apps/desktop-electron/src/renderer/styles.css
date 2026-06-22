@@ -171,10 +171,10 @@ button {
   grid-column: 1 / 4;
   grid-row: 1;
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) auto;
+  grid-template-columns: 260px minmax(0, 1fr) 260px;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 10px;
   background: #151515;
   -webkit-app-region: drag;
 }
@@ -183,14 +183,37 @@ button {
   grid-column: 1 / 4;
   grid-row: 2;
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 36px;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
+  gap: 6px;
+  padding: 0 10px;
 }
 
-.window-control-spacer {
+.titlebar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  overflow: hidden;
+  padding-left: 74px;
+  color: #858985;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.titlebar-status span {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #20c7d9;
+}
+
+.titlebar-status strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
 }
 
 .workspace-title {
@@ -205,18 +228,9 @@ button {
   white-space: nowrap;
 }
 
-.product-mark,
 h2 {
   margin: 0;
   letter-spacing: 0;
-}
-
-.product-mark {
-  color: #f4f2ec;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
 }
 
 h2 {
@@ -229,7 +243,8 @@ h2 {
 .category-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 2px;
   min-width: 0;
   height: 48px;
   overflow: hidden;
@@ -238,14 +253,14 @@ h2 {
 .category-button {
   position: relative;
   display: grid;
-  flex: 0 0 60px;
+  flex: 0 0 66px;
   grid-template-rows: 20px 16px;
   align-items: center;
   justify-items: center;
-  height: 40px;
-  padding: 2px 4px 4px;
+  height: 42px;
+  padding: 3px 4px 4px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 5px;
   color: #bfbdb6;
   background: transparent;
   white-space: nowrap;
@@ -296,23 +311,54 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   min-width: 0;
   -webkit-app-region: no-drag;
 }
 
 .top-export-button {
-  height: 32px;
-  min-width: 72px;
-  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  min-width: 74px;
+  padding: 0 12px;
   border: 1px solid #20c7d9;
-  border-radius: 6px;
+  border-radius: 5px;
   color: #061314;
   background: #20c7d9;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 30px;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.top-export-button .app-icon-mask {
+  width: 13px;
+  height: 13px;
+}
+
+.top-feature-overflow {
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 5px;
+  color: #bfbdb6;
+  background: transparent;
+}
+
+.top-feature-overflow .app-icon-mask {
+  width: 18px;
+  height: 18px;
+}
+
+.top-feature-overflow:disabled {
+  opacity: 0.72;
 }
 
 .material-panel {
@@ -1912,11 +1958,11 @@ h2 {
   }
 
   .product-titlebar {
-    grid-template-columns: 112px minmax(0, 1fr) auto;
+    grid-template-columns: 220px minmax(0, 1fr) 220px;
   }
 
   .top-feature-bar {
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 32px;
   }
 
   .category-nav {

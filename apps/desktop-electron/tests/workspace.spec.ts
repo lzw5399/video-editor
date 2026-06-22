@@ -90,8 +90,8 @@ type WindowChromeMetrics = {
   contentBounds: RegionBox;
 };
 
-const WORKSPACE_CATEGORIES = ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
-const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "模板", "数字人"] as const;
+const WORKSPACE_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "智能包装"] as const;
+const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "智能包装"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
@@ -560,6 +560,7 @@ async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
     ".preview-icon-button",
+    ".top-feature-overflow",
     ".transport-button.icon-only",
     ".track-state-button",
     ".keyframe-button"
@@ -715,8 +716,8 @@ test("workspace panels switch categories without losing Chinese empty states", a
   try {
     const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
 
-    await topFeatureNav.getByRole("button", { name: "文字" }).click();
-    await expect(page.getByRole("heading", { name: "文字", exact: true })).toBeVisible();
+    await topFeatureNav.getByRole("button", { name: "文本" }).click();
+    await expect(page.getByRole("heading", { name: "文本", exact: true })).toBeVisible();
     await expectNoLeftSecondaryMenu(page);
     await expect(page.getByRole("button", { name: "添加文字", exact: true })).toBeVisible();
     await expect(page.getByLabel("素材面板")).not.toContainText("微秒");
@@ -745,7 +746,7 @@ test("workspace panels switch categories without losing Chinese empty states", a
       await expect(page.getByRole("heading", { name: category })).toBeVisible();
       await expectNoLeftSecondaryMenu(page);
       await expect(page.getByLabel(`${category}暂不可用`)).toContainText(
-        category === "数字人" ? "能力暂未开放" : `${category}暂未开放`
+        `${category}暂未开放`
       );
       await expect(page.getByLabel(`${category}暂不可用`)).toContainText("当前版本暂不提供该类编辑，切换分类不会修改草稿内容。");
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
@@ -759,7 +760,7 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
   const { app, page } = await launchWorkspaceApp();
 
   try {
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
 
     await expectNoLeftSecondaryMenu(page);
     await expectCompactScrollbarBaseline();
@@ -784,7 +785,7 @@ test("text edit routes complete text inspector changes through project session i
 
   try {
     await resetNativeCommandObservations(app, page);
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("开场标题");
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegmentIntent");
@@ -855,7 +856,7 @@ test("bundled font is the default fontRef for new text segments", async () => {
 
   try {
     await resetNativeCommandObservations(app, page);
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
     await page.getByLabel("默认文字").getByLabel("文字内容").fill("默认字体");
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expectCommandCall(app, "addTextSegmentIntent");
@@ -2365,7 +2366,7 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await expectCommandCall(app, "setSelectedTrackMute");
     await expect(page.getByRole("button", { name: "音频轨道 1 静音状态：已静音" })).toBeVisible();
 
-    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文字" }).click();
+    await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expect(page.locator(".segment-kind-text")).toHaveCount(1);
 
