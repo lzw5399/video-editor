@@ -379,7 +379,7 @@ export function Inspector({
   return (
     <div className="inspector-content">
       <div className="panel-header">
-        <h2>属性检查器</h2>
+        <h2>{selected === null ? "草稿参数" : "属性检查器"}</h2>
       </div>
 
       {selected === null ? null : (
@@ -404,6 +404,7 @@ export function Inspector({
           <CanvasDraftSettings
             workspace={workspace}
             sequenceDuration={sequenceDuration}
+            showDeveloperDiagnostics={showDeveloperDiagnostics}
             onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           />
           {workspace.commandError === null ? null : <p className="command-error">{workspace.commandError}</p>}
@@ -829,10 +830,12 @@ export function Inspector({
 function CanvasDraftSettings({
   workspace,
   sequenceDuration,
+  showDeveloperDiagnostics,
   onUpdateDraftCanvasConfig
 }: {
   workspace: WorkspaceState;
   sequenceDuration: number;
+  showDeveloperDiagnostics: boolean;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
 }): React.ReactElement {
   const project = workspace.viewModel.project;
@@ -905,17 +908,27 @@ function CanvasDraftSettings({
   }
 
   return (
-    <section className="inspector-section canvas-settings-section" aria-label="草稿参数" role="tabpanel">
+    <section
+      className={
+        showDeveloperDiagnostics
+          ? "inspector-section canvas-settings-section developer-diagnostics"
+          : "inspector-section canvas-settings-section product-draft-settings"
+      }
+      aria-label="草稿参数"
+      role="tabpanel"
+    >
       <div className="inspector-section-title">
         <h3>草稿参数</h3>
         <button type="button" className="secondary-action compact-action" onClick={openModal}>
           修改
         </button>
       </div>
-      <div className="empty-state compact-empty">
-        <strong>未选择片段</strong>
-        <span>这里显示草稿级画布参数。选择时间线片段后，可调整片段画面、音频、文字和关键帧参数。</span>
-      </div>
+      {showDeveloperDiagnostics ? (
+        <div className="empty-state compact-empty">
+          <strong>未选择片段</strong>
+          <span>这里显示草稿级画布参数。选择时间线片段后，可调整片段画面、音频、文字和关键帧参数。</span>
+        </div>
+      ) : null}
 
       <dl className="inspector-list compact">
         <InspectorDatum label="草稿名称" value={project.draftName} />

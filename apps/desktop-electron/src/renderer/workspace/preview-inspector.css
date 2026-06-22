@@ -620,6 +620,43 @@
   border-radius: 4px;
 }
 
+.product-draft-settings {
+  gap: 14px;
+  padding: 8px 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.product-draft-settings .inspector-section-title {
+  justify-content: flex-end;
+}
+
+.product-draft-settings .inspector-section-title h3 {
+  display: none;
+}
+
+.product-draft-settings .inspector-list.compact {
+  gap: 10px;
+}
+
+.product-draft-settings .inspector-list.compact div {
+  grid-template-columns: 96px minmax(0, 1fr);
+  min-height: 30px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.product-draft-settings .inspector-list.compact dt {
+  color: #8e8b84;
+  font-size: 13px;
+}
+
+.product-draft-settings .inspector-list.compact dd {
+  color: #d9d7d0;
+  font-size: 13px;
+}
+
 .inspector-list.compact {
   gap: 4px;
   padding: 0;
