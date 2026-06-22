@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
 type RegionBox = {
@@ -43,10 +43,13 @@ const REFERENCE_DIR = join(REPO_ROOT, "docs/ui-reference/jianying-pro");
 const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
 const REFERENCE_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
-const REFERENCE_VIDEO = join(REFERENCE_MEDIA_DIR, "p0-moving-testsrc.mp4");
+const REFERENCE_VIDEO = join(REFERENCE_MEDIA_DIR, "p0-portrait-testsrc.mp4");
 const REFERENCE_AUDIO = join(REFERENCE_MEDIA_DIR, "p0-tone.wav");
 const REFERENCE_IMAGE = join(REFERENCE_MEDIA_DIR, "p0-overlay-testsrc.png");
 const REFERENCE_MEDIA_FILES = [REFERENCE_VIDEO, REFERENCE_AUDIO, REFERENCE_IMAGE] as const;
+const REFERENCE_VIDEO_NAME = basename(REFERENCE_VIDEO);
+const REFERENCE_AUDIO_NAME = basename(REFERENCE_AUDIO);
+const REFERENCE_IMAGE_NAME = basename(REFERENCE_IMAGE);
 const FORBIDDEN_DEFAULT_COPY =
   /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
 const FORBIDDEN_REFERENCE_MEDIA_COPY = /素材丢失|解析失败|素材解析失败|素材解析失败，请检查文件格式或重新导入/;
@@ -188,14 +191,14 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
   await page.getByRole("button", { name: "新建项目" }).click();
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
   await page.getByRole("button", { name: "导入素材" }).click();
-  await expect(page.getByRole("article", { name: "素材 p0-moving-testsrc.mp4" })).toBeVisible();
-  await expect(page.getByRole("article", { name: "素材 p0-tone.wav" })).toBeVisible();
-  await expect(page.getByRole("article", { name: "素材 p0-overlay-testsrc.png" })).toBeVisible();
+  await expect(page.getByRole("article", { name: `素材 ${REFERENCE_VIDEO_NAME}` })).toBeVisible();
+  await expect(page.getByRole("article", { name: `素材 ${REFERENCE_AUDIO_NAME}` })).toBeVisible();
+  await expect(page.getByRole("article", { name: `素材 ${REFERENCE_IMAGE_NAME}` })).toBeVisible();
   await expect(page.getByLabel("素材面板")).not.toContainText(FORBIDDEN_REFERENCE_MEDIA_COPY);
-  await page.getByRole("button", { name: "添加 p0-moving-testsrc.mp4 到时间线" }).click();
-  await page.getByRole("button", { name: "添加 p0-tone.wav 到时间线" }).click();
-  await expect(page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /片段 p0-tone\.wav/ })).toBeVisible();
+  await page.getByRole("button", { name: `添加 ${REFERENCE_VIDEO_NAME} 到时间线` }).click();
+  await page.getByRole("button", { name: `添加 ${REFERENCE_AUDIO_NAME} 到时间线` }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(REFERENCE_VIDEO_NAME)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(REFERENCE_AUDIO_NAME)}`) })).toBeVisible();
   await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
   await expect(page.getByLabel("属性检查器")).toContainText("草稿参数");
   await prepareReferenceNativePreview(page, app);
@@ -806,4 +809,8 @@ async function materialAddButtonOpacity(addButton: Locator): Promise<number> {
 
 function readReferenceManifest(): ReferenceManifest {
   return JSON.parse(readFileSync(join(REFERENCE_DIR, "manifest.json"), "utf8")) as ReferenceManifest;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
