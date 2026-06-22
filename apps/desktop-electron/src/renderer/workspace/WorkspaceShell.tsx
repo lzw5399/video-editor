@@ -253,6 +253,7 @@ export function WorkspaceShell({
           audioPending={workspace.pendingAudioCommand !== null}
           nativeSurfaceSuspended={exportModalOpen}
           playheadUs={playheadUs}
+          timelineDurationUs={workspace.viewModel.timeline.duration}
           playbackRunning={playbackRunning}
           onRealtimePreviewHostStateChange={onRealtimePreviewHostStateChange}
           onPlayheadChange={onPlayheadChange}

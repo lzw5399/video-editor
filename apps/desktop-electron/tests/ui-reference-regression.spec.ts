@@ -64,10 +64,12 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
     await expectWorkspaceHierarchy(app, page, 1280, 800);
     await capturePhaseScreenshot(page, "workspace-1280x800.png");
     await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png");
+    await capturePreviewMonitorScreenshot(page, "preview-monitor-1280x800.png");
 
     await expectWorkspaceHierarchy(app, page, 1120, 720);
     await capturePhaseScreenshot(page, "workspace-1120x720.png");
     await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png");
+    await capturePreviewMonitorScreenshot(page, "preview-monitor-1120x720.png");
   } finally {
     await app.close();
   }
@@ -183,6 +185,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.preview, boxes.timeline, "预览窗口", "时间线");
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
   await expectMaterialLibraryGeometry(page, width);
+  await expectPreviewMonitorChrome(page, boxes.preview, width);
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
   expect(previewCanvas.x, `预览画布左侧不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.x);
@@ -267,6 +270,41 @@ async function capturePhaseScreenshot(page: Page, filename: string): Promise<voi
 async function captureMaterialLibraryScreenshot(page: Page, filename: string): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
   await page.locator('[aria-label="素材面板"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function capturePreviewMonitorScreenshot(page: Page, filename: string): Promise<void> {
+  mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  await page.locator('[aria-label="预览窗口"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function expectPreviewMonitorChrome(page: Page, previewBox: RegionBox, width: number): Promise<void> {
+  const preview = page.locator('[aria-label="预览窗口"]');
+  const titlebar = preview.locator(".preview-titlebar");
+  const transport = preview.locator(".preview-transport");
+  const timeCluster = preview.locator(".preview-timecode-cluster");
+  const playButton = preview.getByRole("button", { name: "播放预览" });
+  const viewControls = preview.getByRole("group", { name: "预览画面控制" });
+  const titlebarBox = await stableBox(titlebar, `播放器标题栏 ${width}`);
+  const transportBox = await stableBox(transport, `播放器控制栏 ${width}`);
+  const timeBox = await stableBox(timeCluster, `播放器时间 ${width}`);
+  const playBox = await stableBox(playButton, `播放器播放按钮 ${width}`);
+  const viewBox = await stableBox(viewControls, `播放器画面控制 ${width}`);
+
+  await expect(titlebar).toContainText("播放器-时间线01");
+  await expect(titlebar).not.toContainText("未命名草稿");
+  await expect(preview.getByRole("button", { name: "播放器菜单" })).toBeVisible();
+  await expect(preview.getByLabel("当前时间码")).toBeVisible();
+  await expect(preview.getByLabel("总时长")).toBeVisible();
+  await expect(viewControls.getByRole("button", { name: "原画" })).toBeVisible();
+  await expect(viewControls.getByRole("button", { name: "画面比例" })).toBeVisible();
+  await expect(viewControls.getByRole("button", { name: "画布读数" })).toHaveAttribute("title", /画布/);
+
+  expect(titlebarBox.width, `播放器标题栏应铺满预览面板 ${width}`).toBeGreaterThan(previewBox.width - 4);
+  expect(transportBox.width, `播放器控制栏应铺满预览面板 ${width}`).toBeGreaterThan(previewBox.width - 4);
+  expect(timeBox.x, `播放器时间应在左侧 ${width}`).toBeLessThan(playBox.x);
+  expect(viewBox.x, `画面控制应在播放按钮右侧 ${width}`).toBeGreaterThan(playBox.x + playBox.width);
+  expect(Math.abs(playBox.x + playBox.width / 2 - (previewBox.x + previewBox.width / 2)), `播放按钮应靠近预览面板中心 ${width}`).toBeLessThanOrEqual(24);
+  expect(viewBox.x + viewBox.width, `画面控制应靠近预览面板右侧 ${width}`).toBeGreaterThan(previewBox.x + previewBox.width - 150);
 }
 
 async function expectMaterialLibraryGeometry(page: Page, width: number): Promise<void> {

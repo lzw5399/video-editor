@@ -408,6 +408,10 @@ test("product playback UAT keeps the native surface aligned with the preview mon
       join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-coverage.png"),
       await captureVisiblePreviewHostImage(page, app)
     );
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "native-surface-playing-workspace.png"),
+      fullPage: true
+    });
     expectVisiblePreviewCoverageChanged(coverageBefore, coverageAfter);
     expect(placement?.surfaceBoundsCoordinateSpace).toBe("browserWindowContentLogicalPixels");
     expect(placement?.screenRectCoordinateSpace).toBe("electronScreenLogicalPixels");

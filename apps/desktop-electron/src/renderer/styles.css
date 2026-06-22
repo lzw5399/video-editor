@@ -1586,9 +1586,9 @@ h2 {
 
 .preview-monitor {
   display: grid;
-  place-items: center;
+  place-items: stretch;
   overflow: hidden;
-  padding: 16px 20px;
+  padding: 0;
   background: #151515;
 }
 

@@ -45,6 +45,7 @@ type PreviewMonitorProps = {
   audioPending: boolean;
   nativeSurfaceSuspended?: boolean;
   playheadUs?: number;
+  timelineDurationUs: number;
   playbackRunning: boolean;
   onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
   onPlayheadChange: (value: number) => void;
@@ -191,6 +192,13 @@ type CanvasFitSize = {
   height: number;
 };
 
+type MonitorViewControl = {
+  label: string;
+  className?: string;
+  icon?: AppIconName;
+  value?: string;
+};
+
 declare global {
   interface Window {
     videoEditorRealtimePreviewHost?: RealtimePreviewHostApi;
@@ -219,13 +227,12 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
 };
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
-  { label: "播放", icon: "play", symbol: "▶" },
   { label: "停止", imageIcon: "previewStop" },
   { label: "上一帧", icon: "previewPreviousFrame" },
-  { label: "下一帧", icon: "previewNextFrame" },
-  { label: "适应窗口", icon: "previewFit" },
-  { label: "画面比例", symbol: "16:9" }
+  { label: "下一帧", icon: "previewNextFrame" }
 ];
+
+const MONITOR_TITLE = "播放器-时间线01";
 
 export function PreviewMonitor({
   draftName,
@@ -244,6 +251,7 @@ export function PreviewMonitor({
   audioPending,
   nativeSurfaceSuspended = false,
   playheadUs = 0,
+  timelineDurationUs,
   playbackRunning,
   onRealtimePreviewHostStateChange,
   onPlayheadChange,
@@ -260,6 +268,7 @@ export function PreviewMonitor({
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const [canvasFitSize, setCanvasFitSize] = useState<CanvasFitSize | null>(null);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
+  const safeTimelineDurationUs = Math.max(0, Math.round(timelineDurationUs));
   const frameStepUs = frameDurationUs(canvasConfig);
   const canvasReadout = formatCanvasReadout(canvasConfig);
   const canvasRatio = formatCanvasAspectRatio(canvasConfig);
@@ -271,6 +280,13 @@ export function PreviewMonitor({
     height: canvasFitSize === null ? undefined : `${canvasFitSize.height}px`,
     background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
   } as CSSProperties;
+  const monitorViewControls: readonly MonitorViewControl[] = [
+    { label: "原画", className: "original-button", value: "原画" },
+    { label: "适应窗口", icon: "previewFit" },
+    { label: "画布读数", value: "画布" },
+    { label: "画面比例", className: "ratio-button", value: canvasRatio },
+    { label: "全屏", value: "全屏" }
+  ];
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
   const showRealtimeSurface = !nativeSurfaceSuspended && nativeHostState.productReady && !nativeHostState.fallbackActive;
@@ -509,8 +525,10 @@ export function PreviewMonitor({
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
       <div className="preview-titlebar">
-        <strong>{draftName}</strong>
-        <span title={canvasReadout}>{canvasReadout}</span>
+        <strong title={`当前草稿：${draftName}`}>{MONITOR_TITLE}</strong>
+        <button type="button" className="preview-title-menu" aria-label="播放器菜单" title="播放器菜单" disabled>
+          <span className="app-icon-mask" style={iconMaskStyle("titlebarMenu")} aria-hidden="true" />
+        </button>
       </div>
 
       <div ref={previewStageRef} className="preview-canvas-stage">
@@ -577,21 +595,28 @@ export function PreviewMonitor({
         className={showDeveloperDiagnostics ? "preview-transport developer-diagnostics" : "preview-transport"}
         aria-label="预览控制"
       >
-        <div className="preview-timecode" aria-label="当前时间码">
-          {formatMicroseconds(safePlayheadUs)}
+        <div className="preview-timecode-cluster" aria-label="播放器时间">
+          <span className="preview-timecode current" aria-label="当前时间码">
+            {formatMicroseconds(safePlayheadUs)}
+          </span>
+          <span className="preview-time-divider" aria-hidden="true">
+            /
+          </span>
+          <span className="preview-timecode duration" aria-label="总时长">
+            {formatMicroseconds(safeTimelineDurationUs)}
+          </span>
         </div>
-        <div className="preview-control-group" role="group" aria-label="预览播放控制">
+        {showDeveloperDiagnostics ? (
+        <div className="preview-frame-control-group" role="group" aria-label="逐帧预览控制">
           {MONITOR_CONTROLS.map((control) => (
             <button
               key={control.label}
               type="button"
-              className={control.label === "画面比例" ? "preview-icon-button ratio-button" : "preview-icon-button"}
+              className="preview-icon-button"
               aria-label={previewControlLabel(control.label, playbackRunning)}
               title={previewControlLabel(control.label, playbackRunning)}
               onClick={() => {
-                if (control.label === "播放") {
-                  onTogglePlayback();
-                } else if (control.label === "停止") {
+                if (control.label === "停止") {
                   onStopPlayback();
                 } else if (control.label === "上一帧") {
                   onPlayheadChange(Math.max(0, safePlayheadUs - frameStepUs));
@@ -600,12 +625,47 @@ export function PreviewMonitor({
                 }
               }}
               disabled={
-                (pending && !(playbackRunning && (control.label === "播放" || control.label === "停止"))) ||
-                control.label === "适应窗口" ||
-                control.label === "画面比例"
+                pending && !(playbackRunning && control.label === "停止")
               }
             >
               <MonitorControlGlyph control={control} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
+            </button>
+          ))}
+        </div>
+        ) : null}
+        <div className="preview-control-group" role="group" aria-label="预览播放控制">
+          <button
+            type="button"
+            className="preview-play-button"
+            aria-label={previewControlLabel("播放", playbackRunning)}
+            title={previewControlLabel("播放", playbackRunning)}
+            onClick={onTogglePlayback}
+            disabled={pending && !playbackRunning}
+          >
+            <MonitorControlGlyph control={{ label: "播放", icon: "play", symbol: "▶" }} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
+          </button>
+        </div>
+        <div className="preview-view-control-group" role="group" aria-label="预览画面控制">
+          {monitorViewControls.map((control) => (
+            <button
+              key={control.label}
+              type="button"
+              className={["preview-view-button", control.className].filter(Boolean).join(" ")}
+              aria-label={control.label}
+              title={
+                control.label === "画布读数"
+                  ? canvasReadout
+                  : control.label === "画面比例"
+                    ? `画面比例 ${canvasRatio}`
+                    : control.value ?? control.label
+              }
+              disabled
+            >
+              {control.icon === undefined ? (
+                <span aria-hidden="true">{control.value}</span>
+              ) : (
+                <span className="app-icon-mask" style={iconMaskStyle(control.icon)} aria-hidden="true" />
+              )}
             </button>
           ))}
         </div>

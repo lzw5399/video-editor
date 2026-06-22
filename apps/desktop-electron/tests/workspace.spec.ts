@@ -593,6 +593,9 @@ async function expectIconButtonsHaveAccessibleNames(page: Page): Promise<void> {
   const selector = [
     ".category-button",
     ".preview-icon-button",
+    ".preview-play-button",
+    ".preview-title-menu",
+    ".preview-view-button",
     ".top-feature-overflow",
     ".transport-button.icon-only",
     ".track-state-button",
@@ -717,7 +720,7 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByRole("spinbutton", { name: "预览时间" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "适应窗口" })).toBeVisible();
     await expect(page.getByRole("button", { name: "画面比例" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "全屏" })).toHaveCount(0);
+    await expect(page.getByLabel("预览画面控制").getByRole("button", { name: "全屏" })).toBeDisabled();
     await expectPreviewCanvasAspectRatio(page);
 
     const timelineControls = page.getByLabel("时间线控制");
@@ -1169,9 +1172,10 @@ test("auto canvas adopts the first imported portrait material without renderer-o
     await dragWorkspaceMaterialToTimeline(page, "p0-portrait-testsrc.mp4");
     await expectCommandCall(app, "addTimelineSegmentIntent");
     await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
-    await expect(
-      page.getByLabel("预览窗口").getByText("画布 9:16 · 180 x 320 · 30000/1001 fps", { exact: true })
-    ).toBeVisible();
+    await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
+      "title",
+      "画布 9:16 · 180 x 320 · 30000/1001 fps"
+    );
     await expectPreviewCanvasContained(page, "portrait material preview");
     await expect(page.getByLabel("预览选中框")).toHaveAttribute("data-fit-mode", "fit");
   } finally {
@@ -1197,7 +1201,10 @@ test("developer diagnostics preview time input seeks realtime host without artif
     await dialog.getByLabel("帧率分母").fill("1001");
     await dialog.getByRole("button", { name: "应用草稿参数" }).click();
     await expectCommandCall(app, "updateDraftCanvasConfig");
-    await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
+    await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
+      "title",
+      /30000\/1001 fps/
+    );
 
     await resetNativeCommandObservations(app, page);
     await page.getByLabel("预览时间").fill("0");
@@ -1897,9 +1904,10 @@ test("草稿参数画布 UI 通过 Rust command 更新预览读数并保存截�
     await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expectCommandCall(app, "updateDraftCanvasConfig");
-    await expect(
-      page.getByLabel("预览窗口").getByText("画布 9:16 · 1080 x 1920 · 30 fps", { exact: true })
-    ).toBeVisible();
+    await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
+      "title",
+      "画布 9:16 · 1080 x 1920 · 30 fps"
+    );
     await expect(page.getByText("模糊填充 · 降级").first()).toBeVisible();
 
     const calls = await readNativeCommandObservations(app);
@@ -1937,7 +1945,10 @@ test("自定义帧率在画布参数变更时保持有理数语义", async () =>
     await dialog.getByRole("button", { name: "应用草稿参数" }).click();
 
     await expectCommandCall(app, "updateDraftCanvasConfig");
-    await expect(page.getByLabel("预览窗口")).toContainText("30000/1001 fps");
+    await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
+      "title",
+      /30000\/1001 fps/
+    );
 
     dialog = await openDraftParametersDialog(page);
     await dialog.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "纯色" }).click();

@@ -124,7 +124,10 @@ test.describe("draft parameter inspector modal", () => {
       await expect
         .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === "updateDraftCanvasConfig"))
         .toBe(true);
-      await expect(page.getByLabel("预览窗口")).toContainText("画布 9:16 · 1080 x 1920 · 30 fps");
+      await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
+        "title",
+        "画布 9:16 · 1080 x 1920 · 30 fps"
+      );
 
       const canvasCall = (await readNativeCommandObservations(app)).find((call) => call.command === "updateDraftCanvasConfig");
       expect(canvasCall?.canvasConfig).toMatchObject({
