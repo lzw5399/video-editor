@@ -1,13 +1,33 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 type RegionBox = {
   x: number;
   y: number;
   width: number;
   height: number;
+};
+
+type ProductWindowMetrics = {
+  contentBounds: RegionBox;
+  displayScaleFactor: number;
+};
+
+type ReferencePreviewHostState = {
+  ok: boolean;
+  productReady: boolean;
+  fallbackActive: boolean;
+  backend: "renderGraphGpu" | "none";
+  diagnosticSource: "nativeVideoBridge" | "runtimeFrameRequest" | "none";
+  contentEvidence: {
+    source: "nativeVideoBridge" | "renderGraphGpuComposited";
+    targetTimeMicroseconds: number;
+  } | null;
 };
 
 type ReferenceManifest = {
@@ -33,6 +53,7 @@ const FORBIDDEN_REFERENCE_MEDIA_COPY = /素材丢失|解析失败|素材解析�
 const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
 const OVERFLOW_TOP_CATEGORIES = ["智能包装", "滤镜", "调节", "数字人"] as const;
 const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
+const execFileAsync = promisify(execFile);
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -72,18 +93,18 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
 
   try {
     await expectWorkspaceHierarchy(app, page, 1280, 800);
-    await capturePhaseScreenshot(page, "workspace-1280x800.png");
-    await captureTimelineScreenshot(page, "timeline-bottom-1280x800.png");
-    await captureTopFeatureOverflowScreenshot(page, "top-feature-overflow-1280x800.png");
+    await capturePhaseScreenshot(page, "workspace-1280x800.png", app);
+    await captureTimelineScreenshot(page, "timeline-bottom-1280x800.png", app);
+    await captureTopFeatureOverflowScreenshot(page, "top-feature-overflow-1280x800.png", app);
     await expectTopFeatureCategoriesReachable(page);
-    await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png");
-    await capturePreviewMonitorScreenshot(page, "preview-monitor-1280x800.png");
+    await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png", app);
+    await capturePreviewMonitorScreenshot(page, "preview-monitor-1280x800.png", app);
 
     await expectWorkspaceHierarchy(app, page, 1120, 720);
-    await capturePhaseScreenshot(page, "workspace-1120x720.png");
-    await captureTimelineScreenshot(page, "timeline-bottom-1120x720.png");
-    await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png");
-    await capturePreviewMonitorScreenshot(page, "preview-monitor-1120x720.png");
+    await capturePhaseScreenshot(page, "workspace-1120x720.png", app);
+    await captureTimelineScreenshot(page, "timeline-bottom-1120x720.png", app);
+    await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png", app);
+    await capturePreviewMonitorScreenshot(page, "preview-monitor-1120x720.png", app);
   } finally {
     await app.close();
   }
@@ -124,7 +145,7 @@ test("top-right export modal and audio dropdown capture production modal states"
     expect(listBox.x, "dropdown left clipped by modal").toBeGreaterThanOrEqual(dialogBox.x);
     expect(listBox.x + listBox.width, "dropdown right clipped by modal").toBeLessThanOrEqual(dialogBox.x + dialogBox.width + 1);
     await expectNoDebugCopy(dialog);
-    await capturePhaseScreenshot(page, "export-advanced-dropdown-1280x800.png");
+    await capturePhaseScreenshot(page, "export-advanced-dropdown-1280x800.png", app);
   } finally {
     await app.close();
   }
@@ -177,6 +198,7 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
   await expect(page.getByRole("button", { name: /片段 p0-tone\.wav/ })).toBeVisible();
   await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
   await expect(page.getByLabel("属性检查器")).toContainText("草稿参数");
+  await prepareReferenceNativePreview(page, app);
   return { app, page };
 }
 
@@ -282,11 +304,11 @@ async function expectTopFeatureNavigationChrome(page: Page): Promise<void> {
   await expect(menu).toHaveCount(0);
 }
 
-async function captureTopFeatureOverflowScreenshot(page: Page, filename: string): Promise<void> {
+async function captureTopFeatureOverflowScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
   const overflow = page.getByRole("button", { name: "更多功能" });
   await overflow.click();
   await expect(page.getByRole("menu", { name: "更多功能菜单" })).toBeVisible();
-  await capturePhaseScreenshot(page, filename);
+  await capturePhaseScreenshot(page, filename, app);
   await overflow.click();
   await expect(page.getByRole("menu", { name: "更多功能菜单" })).toHaveCount(0);
 }
@@ -372,24 +394,221 @@ async function collectProductSurfaceCopy(locator: Locator): Promise<string> {
   });
 }
 
-async function capturePhaseScreenshot(page: Page, filename: string): Promise<void> {
+async function prepareReferenceNativePreview(page: Page, app: ElectronApplication): Promise<void> {
+  const playButton = page.getByRole("button", { name: "播放预览" });
+  await expect(playButton).toBeEnabled({ timeout: 20_000 });
+  await playButton.click();
+  await expect
+    .poll(async () => {
+      const state = await readReferencePreviewHostState(page);
+      return (
+        state?.ok === true &&
+        state.productReady === true &&
+        state.fallbackActive === false &&
+        state.backend === "renderGraphGpu" &&
+        state.diagnosticSource === "none" &&
+        state.contentEvidence?.source === "renderGraphGpuComposited" &&
+        (state.contentEvidence?.targetTimeMicroseconds ?? 0) > 0
+      );
+    }, { timeout: 20_000 })
+    .toBe(true);
+  await expectReferencePreviewScreenPixels(page, app);
+  const pauseButton = page.getByRole("button", { name: "暂停预览" });
+  if ((await pauseButton.count()) > 0) {
+    await pauseButton.click();
+  }
+  await expect(page.getByRole("button", { name: "播放预览" })).toBeVisible({ timeout: 10_000 });
+}
+
+async function readReferencePreviewHostState(page: Page): Promise<ReferencePreviewHostState | null> {
+  await page.evaluate(() => {
+    const target = window as typeof window & {
+      __videoEditorUiReferencePreviewHostSubscribed?: boolean;
+      __videoEditorUiReferencePreviewHostState?: ReferencePreviewHostState | null;
+      videoEditorRealtimePreviewHost?: {
+        subscribeTelemetry: (listener: (state: ReferencePreviewHostState) => void) => () => void;
+      };
+    };
+    if (target.__videoEditorUiReferencePreviewHostSubscribed) {
+      return;
+    }
+    target.__videoEditorUiReferencePreviewHostSubscribed = true;
+    target.__videoEditorUiReferencePreviewHostState = null;
+    target.videoEditorRealtimePreviewHost?.subscribeTelemetry((state) => {
+      target.__videoEditorUiReferencePreviewHostState = state;
+    });
+  });
+  return page.evaluate(() => {
+    return (
+      (window as typeof window & {
+        __videoEditorUiReferencePreviewHostState?: ReferencePreviewHostState | null;
+      }).__videoEditorUiReferencePreviewHostState ?? null
+    );
+  });
+}
+
+async function expectReferencePreviewScreenPixels(page: Page, app: ElectronApplication): Promise<void> {
+  if (process.platform !== "darwin") {
+    return;
+  }
+  const image = await captureLocatorScreenRegion(page, app, page.getByLabel("实时预览画面", { exact: true }));
+  const stats = await measurePngLuma(page, image);
+  expect(stats.mean, `native preview screen capture should not be black: ${JSON.stringify(stats)}`).toBeGreaterThan(5);
+  expect(stats.stddev, `native preview screen capture should contain real image detail: ${JSON.stringify(stats)}`).toBeGreaterThan(2);
+}
+
+async function capturePhaseScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  if (app !== undefined && process.platform === "darwin") {
+    const viewport = await page.viewportSize();
+    const image = await captureScreenRegion(page, app, {
+      x: 0,
+      y: 0,
+      width: viewport?.width ?? 1,
+      height: viewport?.height ?? 1
+    });
+    writeFileSync(join(PHASE15_3_SCREENSHOT_DIR, filename), image);
+    return;
+  }
   await page.screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename), fullPage: true });
 }
 
-async function captureMaterialLibraryScreenshot(page: Page, filename: string): Promise<void> {
+async function captureMaterialLibraryScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  if (app !== undefined && process.platform === "darwin") {
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, filename),
+      await captureLocatorScreenRegion(page, app, page.locator('[aria-label="素材面板"]'))
+    );
+    return;
+  }
   await page.locator('[aria-label="素材面板"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
 }
 
-async function capturePreviewMonitorScreenshot(page: Page, filename: string): Promise<void> {
+async function capturePreviewMonitorScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  if (app !== undefined && process.platform === "darwin") {
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, filename),
+      await captureLocatorScreenRegion(page, app, page.locator('[aria-label="预览窗口"]'))
+    );
+    return;
+  }
   await page.locator('[aria-label="预览窗口"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
 }
 
-async function captureTimelineScreenshot(page: Page, filename: string): Promise<void> {
+async function captureTimelineScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  if (app !== undefined && process.platform === "darwin") {
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, filename),
+      await captureLocatorScreenRegion(page, app, page.locator('[aria-label="时间线"]'))
+    );
+    return;
+  }
   await page.locator('[aria-label="时间线"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function captureLocatorScreenRegion(page: Page, app: ElectronApplication, locator: Locator): Promise<Buffer> {
+  const box = await stableBox(locator, "截图区域");
+  return captureScreenRegion(page, app, {
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height
+  });
+}
+
+async function readWindowMetrics(app: ElectronApplication): Promise<ProductWindowMetrics> {
+  return app.evaluate(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window === undefined) {
+      throw new Error("No BrowserWindow available for UI reference screenshot");
+    }
+    return {
+      contentBounds: window.getContentBounds(),
+      displayScaleFactor: screen.getDisplayMatching(window.getBounds()).scaleFactor
+    };
+  });
+}
+
+async function captureScreenRegion(
+  page: Page,
+  app: ElectronApplication,
+  clip: { x: number; y: number; width: number; height: number }
+): Promise<Buffer> {
+  const metrics = await readWindowMetrics(app);
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }));
+  const scaleX = viewport.width > 0 ? metrics.contentBounds.width / viewport.width : 1;
+  const scaleY = viewport.height > 0 ? metrics.contentBounds.height / viewport.height : 1;
+  const screenClip = {
+    x: Math.round((metrics.contentBounds.x + clip.x * scaleX) * metrics.displayScaleFactor),
+    y: Math.round((metrics.contentBounds.y + clip.y * scaleY) * metrics.displayScaleFactor),
+    width: Math.max(1, Math.round(clip.width * scaleX * metrics.displayScaleFactor)),
+    height: Math.max(1, Math.round(clip.height * scaleY * metrics.displayScaleFactor))
+  };
+  const fullPath = join(
+    tmpdir(),
+    `video-editor-ui-reference-full-${process.pid}-${Date.now()}-${Math.round(Math.random() * 1_000_000)}.png`
+  );
+  const cropPath = join(
+    tmpdir(),
+    `video-editor-ui-reference-crop-${process.pid}-${Date.now()}-${Math.round(Math.random() * 1_000_000)}.png`
+  );
+  try {
+    await execFileAsync("screencapture", ["-x", fullPath]);
+    await execFileAsync("sips", [
+      "-c",
+      String(screenClip.height),
+      String(screenClip.width),
+      "--cropOffset",
+      String(screenClip.y),
+      String(screenClip.x),
+      fullPath,
+      "--out",
+      cropPath
+    ]);
+    return await readFile(cropPath);
+  } finally {
+    await unlink(fullPath).catch(() => undefined);
+    await unlink(cropPath).catch(() => undefined);
+  }
+}
+
+async function measurePngLuma(page: Page, image: Buffer): Promise<{ mean: number; stddev: number }> {
+  const base64 = image.toString("base64");
+  return page.evaluate(async (pngBase64) => {
+    const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      throw new Error("Canvas 2D context unavailable for UI reference luma measurement");
+    }
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    let sum = 0;
+    let sumSquares = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      const luma = 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2];
+      count += 1;
+      sum += luma;
+      sumSquares += luma * luma;
+    }
+    const mean = count === 0 ? 0 : sum / count;
+    const variance = count === 0 ? 0 : Math.max(0, sumSquares / count - mean * mean);
+    return {
+      mean,
+      stddev: Math.sqrt(variance)
+    };
+  }, base64);
 }
 
 async function expectTimelineChrome(page: Page, width: number): Promise<void> {
