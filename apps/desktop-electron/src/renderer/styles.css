@@ -176,6 +176,7 @@ button {
   gap: 12px;
   padding: 0 12px;
   background: #151515;
+  -webkit-app-region: drag;
 }
 
 .top-feature-bar {
@@ -188,30 +189,8 @@ button {
   padding: 0 12px;
 }
 
-.window-control-dots {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.window-control-spacer {
   min-width: 0;
-}
-
-.window-dot {
-  display: block;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-}
-
-.window-dot.close {
-  background: #ff5f57;
-}
-
-.window-dot.minimize {
-  background: #ffbd2e;
-}
-
-.window-dot.maximize {
-  background: #28c840;
 }
 
 .workspace-title {
@@ -318,6 +297,7 @@ h2 {
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
+  -webkit-app-region: no-drag;
 }
 
 .top-export-button {

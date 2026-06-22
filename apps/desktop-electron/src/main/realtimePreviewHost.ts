@@ -148,6 +148,10 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
     assertAllowedSender(event);
     return hostForEvent(event).updateHostRect(rect);
   });
+  ipcMain.handle("realtimePreviewHost:detachSurface", (event) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).detachSurface();
+  });
   ipcMain.handle("realtimePreviewHost:subscribeTelemetry", (event) => {
     assertAllowedSender(event);
     return hostForEvent(event).subscribeTelemetry(event.sender);
@@ -476,6 +480,22 @@ export class RealtimePreviewHost {
       }
       return stopRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
     }, "实时预览已停止");
+  }
+
+  detachSurface(): RealtimePreviewHostDisplayState {
+    if (this.sessionId !== null && this.attached) {
+      try {
+        detachRealtimePreviewSurface({ sessionId: this.sessionId });
+        recordRealtimePreviewHostCall({ kind: "detachSurface" });
+      } catch (error) {
+        this.fallbackLabel = attachFailureLabel(error);
+        return this.state("实时预览不可用");
+      }
+    }
+
+    this.attached = false;
+    this.lastBounds = null;
+    return this.state("实时预览表面已隐藏");
   }
 
   close(): void {

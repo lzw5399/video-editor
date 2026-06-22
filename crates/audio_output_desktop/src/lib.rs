@@ -9,7 +9,7 @@ pub use audio_engine::MockAudioOutputDevice;
 #[rustfmt::skip]
 pub use cpal_output::CpalAudioOutputSink as
     CpalAudioOutputStream;
-pub use cpal_output::{CpalAudioOutputDevice, CpalAudioOutputSink};
+pub use cpal_output::{CpalAudioOutputDevice, CpalAudioOutputQueue, CpalAudioOutputSink};
 pub use mock_output::create_desktop_audio_output;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

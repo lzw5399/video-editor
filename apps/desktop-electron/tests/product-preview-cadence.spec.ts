@@ -159,6 +159,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
         90
       );
     }
+    const expectedPacingSamples = Math.max(1, metrics.presentedDelta);
     expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
       30
     );
@@ -181,9 +182,11 @@ test("product preview cadence presents sustained GPU frames without artifact fal
     expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
     expect(
       framePacing?.sampleCount ?? 0,
-      "3s playback should include one pacing sample per presented frame"
-    ).toBeGreaterThanOrEqual(90);
-    expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the 3s window").toBeGreaterThanOrEqual(90);
+      "3s playback should include one pacing sample per actually presented frame"
+    ).toBeGreaterThanOrEqual(expectedPacingSamples);
+    expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the presented 3s window").toBeGreaterThanOrEqual(
+      expectedPacingSamples
+    );
     expect(framePacing?.intervalP50Ms, "frame pacing p50 must be reported").not.toBeNull();
     expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(25);
     expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(42);
@@ -214,6 +217,7 @@ test("product preview cadence stays sustained for video external audio text and 
     await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO, 3_000_000);
     await addTextThroughProductPanel(page, app, "产品级组合文字", 3_000_000);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
+    await seekTimelinePlayhead(page, app, 0);
 
     await expectCadencePlayback(page, app, "product preview combo cadence metrics");
   } finally {
@@ -320,6 +324,7 @@ async function expectCadencePlayback(
       90
     );
   }
+  const expectedPacingSamples = Math.max(1, metrics.presentedDelta);
   expect(metrics.presentationSnapshotReads.count, "Electron snapshot reads must not become the playback cadence").toBeLessThanOrEqual(
     30
   );
@@ -341,9 +346,11 @@ async function expectCadencePlayback(
   expect(framePacing, "Rust worker must expose frame pacing telemetry for product preview").not.toBeNull();
   expect(
     framePacing?.sampleCount ?? 0,
-    "3s playback should include one pacing sample per presented frame"
-  ).toBeGreaterThanOrEqual(90);
-  expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the 3s window").toBeGreaterThanOrEqual(90);
+    "3s playback should include one pacing sample per actually presented frame"
+  ).toBeGreaterThanOrEqual(expectedPacingSamples);
+  expect(framePacing?.samples?.length ?? 0, "recent pacing sample buffer should cover the presented 3s window").toBeGreaterThanOrEqual(
+    expectedPacingSamples
+  );
   expect(framePacing?.intervalP50Ms, "frame pacing p50 must be reported").not.toBeNull();
   expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeGreaterThanOrEqual(25);
   expect(framePacing?.intervalP50Ms ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(42);

@@ -95,6 +95,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   });
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
+    detachSurface: () => ipcRenderer.invoke("realtimePreviewHost:detachSurface"),
     subscribeTelemetry: subscribeRealtimePreviewTelemetry,
     updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number) =>
       ipcRenderer.invoke(

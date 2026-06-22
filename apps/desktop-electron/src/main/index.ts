@@ -521,12 +521,20 @@ if (testObservationEnabled) {
 }
 
 async function createWindow(): Promise<void> {
+  const macosWindowChrome =
+    process.platform === "darwin"
+      ? ({
+          titleBarStyle: "hiddenInset",
+          trafficLightPosition: { x: 16, y: 10 }
+        } as const)
+      : {};
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#171717",
+    ...macosWindowChrome,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

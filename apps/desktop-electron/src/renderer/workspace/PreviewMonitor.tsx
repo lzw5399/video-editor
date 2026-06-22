@@ -43,6 +43,7 @@ type PreviewMonitorProps = {
   showDeveloperDiagnostics: boolean;
   pending: boolean;
   audioPending: boolean;
+  nativeSurfaceSuspended?: boolean;
   playheadUs?: number;
   playbackRunning: boolean;
   onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
@@ -164,6 +165,7 @@ type RealtimePreviewHostContentEvidence = {
 
 export type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
+  detachSurface: () => Promise<RealtimePreviewHostState>;
   subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
   updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number) => Promise<RealtimePreviewHostState>;
   seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
@@ -182,6 +184,11 @@ type PreviewDragState = {
   canvasWidth: number;
   canvasHeight: number;
   moved: boolean;
+};
+
+type CanvasFitSize = {
+  width: number;
+  height: number;
 };
 
 declare global {
@@ -235,6 +242,7 @@ export function PreviewMonitor({
   showDeveloperDiagnostics,
   pending,
   audioPending,
+  nativeSurfaceSuspended = false,
   playheadUs = 0,
   playbackRunning,
   onRealtimePreviewHostStateChange,
@@ -246,9 +254,11 @@ export function PreviewMonitor({
   onUpdateSelectedSegmentVisual
 }: PreviewMonitorProps): React.ReactElement {
   const nativeHostRef = useRef<HTMLDivElement>(null);
+  const previewStageRef = useRef<HTMLDivElement>(null);
   const lastSentHostRectRef = useRef<string | null>(null);
   const previewDragRef = useRef<PreviewDragState | null>(null);
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
+  const [canvasFitSize, setCanvasFitSize] = useState<CanvasFitSize | null>(null);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const frameStepUs = frameDurationUs(canvasConfig);
   const canvasReadout = formatCanvasReadout(canvasConfig);
@@ -257,11 +267,13 @@ export function PreviewMonitor({
   const backgroundTone = canvasBackgroundTone(canvasConfig);
   const canvasStyle = {
     aspectRatio: `${Math.max(1, canvasConfig.width)} / ${Math.max(1, canvasConfig.height)}`,
+    width: canvasFitSize === null ? undefined : `${canvasFitSize.width}px`,
+    height: canvasFitSize === null ? undefined : `${canvasFitSize.height}px`,
     background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
-  };
+  } as CSSProperties;
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
-  const showRealtimeSurface = nativeHostState.productReady && !nativeHostState.fallbackActive;
+  const showRealtimeSurface = !nativeSurfaceSuspended && nativeHostState.productReady && !nativeHostState.fallbackActive;
   const productPreviewStatusLabel = formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const previewStatusLabel = showDeveloperDiagnostics
     ? preview.error ?? preview.statusLabel
@@ -349,6 +361,44 @@ export function PreviewMonitor({
   }
 
   useEffect(() => {
+    const stageElement = previewStageRef.current;
+    if (stageElement === null) {
+      return;
+    }
+
+    const calculateFitSize = () => {
+      const box = stageElement.getBoundingClientRect();
+      const availableWidth = Math.max(1, Math.floor(box.width));
+      const availableHeight = Math.max(1, Math.floor(box.height));
+      const sourceWidth = Math.max(1, canvasConfig.width);
+      const sourceHeight = Math.max(1, canvasConfig.height);
+      const sourceRatio = sourceWidth / sourceHeight;
+
+      let width = Math.min(availableWidth, 840);
+      let height = Math.round(width / sourceRatio);
+      if (height > availableHeight) {
+        height = availableHeight;
+        width = Math.round(height * sourceRatio);
+      }
+
+      setCanvasFitSize((current) => {
+        if (current !== null && current.width === width && current.height === height) {
+          return current;
+        }
+        return { width, height };
+      });
+    };
+
+    const observer = new ResizeObserver(calculateFitSize);
+    observer.observe(stageElement);
+    calculateFitSize();
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [canvasConfig.height, canvasConfig.width]);
+
+  useEffect(() => {
     const hostElement = nativeHostRef.current;
     const bridge = window.videoEditorRealtimePreviewHost;
     if (hostElement === null || bridge === undefined) {
@@ -357,6 +407,22 @@ export function PreviewMonitor({
 
     let cancelled = false;
     let animationFrame: number | null = null;
+
+    if (nativeSurfaceSuspended) {
+      lastSentHostRectRef.current = null;
+      void bridge
+        .detachSurface()
+        .then((state) => {
+          if (!cancelled) {
+            setNativeHostState(state);
+            onRealtimePreviewHostStateChange(state);
+          }
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const publishBounds = () => {
       animationFrame = null;
@@ -418,7 +484,7 @@ export function PreviewMonitor({
         window.cancelAnimationFrame(animationFrame);
       }
     };
-  }, [onRealtimePreviewHostStateChange]);
+  }, [nativeSurfaceSuspended, onRealtimePreviewHostStateChange]);
 
   useEffect(() => {
     const bridge = window.videoEditorRealtimePreviewHost;
@@ -447,17 +513,18 @@ export function PreviewMonitor({
         <span title={canvasReadout}>{canvasReadout}</span>
       </div>
 
-      <div
-        className={`preview-canvas canvas-background-${backgroundTone}`}
-        aria-label="预览画面"
-        style={canvasStyle}
-      >
-        {!showRealtimeSurface ? (
-          <div className="preview-placeholder">
-            <span>{previewPlaceholderLabel}</span>
-          </div>
-        ) : null}
-        {selectedSegment !== null && selectionOverlayStyle !== null ? (
+      <div ref={previewStageRef} className="preview-canvas-stage">
+        <div
+          className={`preview-canvas canvas-background-${backgroundTone}`}
+          aria-label="预览画面"
+          style={canvasStyle}
+        >
+          {!showRealtimeSurface ? (
+            <div className="preview-placeholder">
+              <span>{previewPlaceholderLabel}</span>
+            </div>
+          ) : null}
+          {selectedSegment !== null && selectionOverlayStyle !== null ? (
           <div
             className="preview-selection-outline"
             aria-label="预览选中框"
@@ -469,8 +536,8 @@ export function PreviewMonitor({
             onPointerUp={handlePreviewDragPointerUp}
             onPointerCancel={handlePreviewDragPointerCancel}
           />
-        ) : null}
-        {selectedSegment !== null && selectedSegment.text !== null && textOverlayStyle !== null ? (
+          ) : null}
+          {selectedSegment !== null && selectedSegment.text !== null && textOverlayStyle !== null ? (
           <div
             className="preview-text-overlay"
             aria-label="预览文字"
@@ -484,8 +551,8 @@ export function PreviewMonitor({
           >
             {selectedSegment.text.content}
           </div>
-        ) : null}
-        <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览画面">
+          ) : null}
+          <div ref={nativeHostRef} className="preview-native-host" aria-label="实时预览画面">
           {showDeveloperDiagnostics ? (
             <div className="preview-native-host-readout">
               <span aria-label="实时预览状态">{formatRealtimePreviewHostStatus(nativeHostState)}</span>
@@ -502,6 +569,7 @@ export function PreviewMonitor({
               {formatRealtimePreviewFallbackArtifact(nativeHostState, showDeveloperDiagnostics)}
             </div>
           ) : null}
+          </div>
         </div>
       </div>
 

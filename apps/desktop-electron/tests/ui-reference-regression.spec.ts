@@ -182,7 +182,17 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
-  expect(previewCanvas.width / boxes.preview.width, `预览画布应填充预览窗口 ${width}x${height}`).toBeGreaterThanOrEqual(0.7);
+  expect(previewCanvas.x, `预览画布左侧不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.x);
+  expect(previewCanvas.y, `预览画布顶部不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.y);
+  expect(previewCanvas.x + previewCanvas.width, `预览画布右侧不能越界 ${width}x${height}`).toBeLessThanOrEqual(
+    boxes.preview.x + boxes.preview.width + 1
+  );
+  expect(previewCanvas.y + previewCanvas.height, `预览画布底部不能越界 ${width}x${height}`).toBeLessThanOrEqual(
+    boxes.preview.y + boxes.preview.height + 1
+  );
+  if (previewCanvas.width >= previewCanvas.height) {
+    expect(previewCanvas.width / boxes.preview.width, `横屏预览画布应填充预览窗口 ${width}x${height}`).toBeGreaterThanOrEqual(0.7);
+  }
   await expect(page.getByLabel("项目标题", { exact: true })).toContainText("未命名草稿");
 
   const exportButtonBox = await stableBox(page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }), "顶部导出");

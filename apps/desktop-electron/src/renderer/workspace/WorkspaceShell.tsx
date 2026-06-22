@@ -164,11 +164,7 @@ export function WorkspaceShell({
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
       <header className="product-titlebar" aria-label="项目标题栏">
-        <div className="window-control-dots" aria-hidden="true">
-          <span className="window-dot close" />
-          <span className="window-dot minimize" />
-          <span className="window-dot maximize" />
-        </div>
+        <div className="window-control-spacer" aria-hidden="true" />
         <div className="workspace-title" aria-label="项目标题" title={workspace.viewModel.project.draftName}>
           {workspace.viewModel.project.draftName}
         </div>
@@ -249,6 +245,7 @@ export function WorkspaceShell({
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           pending={workspace.pendingCommand !== null}
           audioPending={workspace.pendingAudioCommand !== null}
+          nativeSurfaceSuspended={exportModalOpen}
           playheadUs={playheadUs}
           playbackRunning={playbackRunning}
           onRealtimePreviewHostStateChange={onRealtimePreviewHostStateChange}

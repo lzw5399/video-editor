@@ -85,6 +85,10 @@ type RegionBox = {
   width: number;
   height: number;
 };
+type WindowChromeMetrics = {
+  bounds: RegionBox;
+  contentBounds: RegionBox;
+};
 
 const WORKSPACE_CATEGORIES = ["媒体", "音频", "文字", "贴纸", "特效", "转场", "字幕", "滤镜", "调节", "模板", "数字人"] as const;
 const DEFERRED_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "模板", "数字人"] as const;
@@ -172,6 +176,20 @@ async function expectVisibleWorkspaceRegions(page: Page): Promise<void> {
   await expect(page.locator('[aria-label="预览窗口"]')).toBeVisible();
   await expect(page.locator('[aria-label="属性检查器"]')).toBeVisible();
   await expect(page.locator('[aria-label="时间线"]')).toBeVisible();
+}
+
+async function expectWindowContentStartsAtTop(app: ElectronApplication): Promise<void> {
+  const metrics = await app.evaluate(({ BrowserWindow }): WindowChromeMetrics => {
+    const window = BrowserWindow.getAllWindows()[0];
+    return {
+      bounds: window.getBounds(),
+      contentBounds: window.getContentBounds()
+    };
+  });
+  expect(
+    Math.abs(metrics.contentBounds.y - metrics.bounds.y),
+    `native titlebar must not reserve a visible top strip: ${JSON.stringify(metrics)}`
+  ).toBeLessThanOrEqual(1);
 }
 
 async function resetNativeCommandObservations(app: ElectronApplication, page: Page): Promise<void> {
@@ -430,6 +448,16 @@ async function expectPreviewCanvasAspectRatio(page: Page): Promise<void> {
   expect(Math.abs(ratio - 16 / 9), "预览画面保持 16:9").toBeLessThanOrEqual(0.04);
 }
 
+async function expectPreviewCanvasContained(page: Page, label: string): Promise<void> {
+  const monitor = await expectStableBox(page.locator('[aria-label="预览窗口"]'), `${label} 预览窗口`);
+  const canvas = await expectStableBox(page.locator(".preview-canvas"), `${label} 预览画布`);
+
+  expect(canvas.x, `${label} canvas left clipped`).toBeGreaterThanOrEqual(monitor.x);
+  expect(canvas.y, `${label} canvas top clipped`).toBeGreaterThanOrEqual(monitor.y);
+  expect(canvas.x + canvas.width, `${label} canvas right clipped`).toBeLessThanOrEqual(monitor.x + monitor.width + 1);
+  expect(canvas.y + canvas.height, `${label} canvas bottom clipped`).toBeLessThanOrEqual(monitor.y + monitor.height + 1);
+}
+
 async function expectPreviewControlsFit(page: Page, label: string): Promise<void> {
   const clippedItems = await page.locator(".preview-shell").evaluate((shell) => {
     const shellBox = shell.getBoundingClientRect();
@@ -605,6 +633,7 @@ test("Chinese editor workspace opens with required regions and material states",
 
     await expect(page.getByLabel("项目标题栏")).toBeVisible();
     await expect(page.getByLabel("项目标题", { exact: true })).toContainText("未命名草稿");
+    await expectWindowContentStartsAtTop(app);
 
     for (const category of WORKSPACE_CATEGORIES) {
       await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
@@ -937,9 +966,15 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
     expect(importCalls[0].textSource).toBeNull();
     expect(calls.filter((call) => call.command === "addTextSegmentIntent")).toHaveLength(0);
     const editTextCall = calls.find((call) => call.command === "editSelectedText");
-    expect(editTextCall?.textSource).toBe("subtitle");
+    expect(
+      editTextCall?.textSource,
+      "SRT subtitle editing must use editSelectedText and must not fall back to editTextSegment"
+    ).toBe("subtitle");
     expect(editTextCall?.textContent).toBe("第一句字幕 已校对");
-    expect(calls.find((call) => call.command === "updateSelectedSegmentVisual")?.visual?.transform.position.x).toBe(80);
+    expect(
+      calls.find((call) => call.command === "updateSelectedSegmentVisual")?.visual?.transform.position.x,
+      "SRT subtitle visual editing must use updateSelectedSegmentVisual and must not fall back to updateSegmentVisual"
+    ).toBe(80);
   } finally {
     await app.close();
   }
@@ -1102,6 +1137,7 @@ test("auto canvas adopts the first imported portrait material without renderer-o
     await expect(
       page.getByLabel("预览窗口").getByText("画布 9:16 · 180 x 320 · 30000/1001 fps", { exact: true })
     ).toBeVisible();
+    await expectPreviewCanvasContained(page, "portrait material preview");
     await expect(page.getByLabel("预览选中框")).toHaveAttribute("data-fit-mode", "fit");
   } finally {
     await app.close();

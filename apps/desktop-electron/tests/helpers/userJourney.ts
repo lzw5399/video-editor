@@ -16,8 +16,11 @@ import {
 export const USER_JOURNEY_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
 export const USER_JOURNEY_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-moving-testsrc.mp4");
 export const USER_JOURNEY_AV_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-av-tone-testsrc.mp4");
+export const USER_JOURNEY_LONG_MOVING_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-long-moving-testsrc.mp4");
+export const USER_JOURNEY_LONG_AV_VIDEO = join(USER_JOURNEY_MEDIA_DIR, "p0-long-av-tone-testsrc.mp4");
 export const USER_JOURNEY_OVERLAY_IMAGE = join(USER_JOURNEY_MEDIA_DIR, "p0-overlay-testsrc.png");
 export const USER_JOURNEY_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-tone.wav");
+export const USER_JOURNEY_LONG_TONE_AUDIO = join(USER_JOURNEY_MEDIA_DIR, "p0-long-tone.wav");
 const TIMELINE_RULER_CLICK_TOLERANCE_US = 10_000;
 const DEFAULT_INTENT_SEGMENT_DURATION_US = 3_000_000;
 const execFileAsync = promisify(execFile);

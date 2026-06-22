@@ -177,8 +177,25 @@ impl RealtimePlaybackTimeline {
         sequence_duration: Microseconds,
         cadence: RealtimePlaybackCadence,
     ) {
+        self.start_after_prewarm_at(
+            start_time,
+            playback_generation,
+            sequence_duration,
+            cadence,
+            Instant::now(),
+        );
+    }
+
+    pub fn start_after_prewarm_at(
+        &mut self,
+        start_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+        sequence_duration: Microseconds,
+        cadence: RealtimePlaybackCadence,
+        started_at: Instant,
+    ) {
         self.anchor = Some(RealtimePlaybackAnchor {
-            started_at: Instant::now(),
+            started_at,
             start_time,
             playback_generation,
             sequence_duration,
@@ -544,6 +561,31 @@ mod tests {
 
         assert_eq!(due_tick.target_time.get(), expected_target_time);
         assert_eq!(due_tick.dropped_frames, 15);
+    }
+
+    #[test]
+    fn playback_timeline_keeps_media_clock_running_during_prewarm() {
+        let cadence =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(30, 1), PlaybackRate::normal())
+                .expect("30fps cadence is valid");
+        let generation = PlaybackGeneration::new(7);
+        let mut timeline = RealtimePlaybackTimeline::new();
+        timeline.start_after_prewarm_at(
+            Microseconds::ZERO,
+            generation,
+            Microseconds::new(2_000_000),
+            cadence,
+            Instant::now()
+                .checked_sub(Duration::from_millis(120))
+                .expect("120ms before now is representable"),
+        );
+
+        let due_tick = timeline
+            .due_tick(generation)
+            .expect("prewarm elapsed time should be reflected in the media clock");
+
+        assert_eq!(due_tick.target_time.get(), 3 * cadence.frame_duration_us());
+        assert_eq!(due_tick.dropped_frames, 2);
     }
 
     #[test]

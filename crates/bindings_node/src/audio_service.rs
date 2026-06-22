@@ -4,6 +4,11 @@ use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::path::Path;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use audio_engine::{
@@ -11,7 +16,7 @@ use audio_engine::{
     AudioPreviewSessionId,
 };
 use audio_output_desktop::{
-    CpalAudioOutputDevice, CpalAudioOutputSink, DesktopAudioOutputBackend,
+    CpalAudioOutputDevice, CpalAudioOutputQueue, CpalAudioOutputSink, DesktopAudioOutputBackend,
     DesktopAudioOutputBackendCapabilities, DesktopAudioOutputCapabilityStatus,
     probe_desktop_audio_output_capabilities,
 };
@@ -30,6 +35,10 @@ use serde::{Deserialize, Serialize};
 
 const SESSION_PREFIX: &str = "audio-session-";
 const MAX_WAVEFORM_PEAK_BINS: u16 = 512;
+const AUDIO_PREVIEW_CHUNK_DURATION: Microseconds = Microseconds(2_000_000);
+const AUDIO_PREVIEW_TARGET_QUEUE_DURATION: Microseconds = Microseconds(4_000_000);
+const AUDIO_PREVIEW_REFILL_LOW_WATER: Microseconds = Microseconds(1_500_000);
+const AUDIO_PREVIEW_REFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
 pub struct AudioPreviewBindingRegistry {
@@ -49,6 +58,17 @@ struct AudioPreviewBindingSession {
 struct NativeAudioPreviewOutput {
     sink: CpalAudioOutputSink,
     device: AudioOutputDeviceSummary,
+    refill_stop: Arc<AtomicBool>,
+    refill_thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for NativeAudioPreviewOutput {
+    fn drop(&mut self) {
+        self.refill_stop.store(true, Ordering::Release);
+        if let Some(thread) = self.refill_thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 impl AudioPreviewBindingRegistry {
@@ -103,6 +123,7 @@ impl AudioPreviewBindingRegistry {
                 vec!["stale playback generation rejected".to_owned()],
             ));
         }
+        self.outputs.remove(session_id);
         let output = self.open_native_output_for_draft(draft, target_time)?;
         let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
@@ -298,28 +319,62 @@ impl AudioPreviewBindingRegistry {
                 error.to_string(),
             )
         })?;
-        let samples = render_draft_audio_preview(
-            draft,
-            target_time,
+        let output_channels = capabilities.max_channel_count.min(2).max(1);
+        let mut cursor = target_time;
+        while queued_duration_us(
+            sink.queued_sample_count(),
             capabilities.sample_rate_hz,
-            capabilities.max_channel_count,
-        )?;
-        sink.enqueue_f32_interleaved(&samples).map_err(|error| {
-            AudioPreviewBindingError::new(
-                AudioPreviewBindingErrorKind::RuntimeFailed,
-                error.to_string(),
-            )
-        })?;
+            output_channels,
+        ) < AUDIO_PREVIEW_TARGET_QUEUE_DURATION.get()
+        {
+            let samples = match render_draft_audio_preview(
+                draft,
+                cursor,
+                capabilities.sample_rate_hz,
+                output_channels,
+                AUDIO_PREVIEW_CHUNK_DURATION,
+            ) {
+                Ok(samples) => samples,
+                Err(error) if sink.queued_sample_count() > 0 => {
+                    eprintln!("audio preview refill reached natural end during prefill: {error}");
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
+            sink.enqueue_f32_interleaved(&samples).map_err(|error| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    error.to_string(),
+                )
+            })?;
+            cursor = Microseconds::new(
+                cursor
+                    .get()
+                    .saturating_add(AUDIO_PREVIEW_CHUNK_DURATION.get()),
+            );
+        }
         sink.start().map_err(|error| {
             AudioPreviewBindingError::new(
                 AudioPreviewBindingErrorKind::DeviceUnavailable,
                 error.to_string(),
             )
         })?;
+        let queue = sink.queue_handle();
+        let refill_stop = Arc::new(AtomicBool::new(false));
+        let refill_thread = spawn_audio_refill_thread(
+            draft.clone(),
+            queue,
+            cursor,
+            capabilities.sample_rate_hz,
+            output_channels,
+            Arc::clone(&refill_stop),
+        )?;
         let summary = native_device_summary(device.summary());
         Ok(NativeAudioPreviewOutput {
             sink,
             device: summary,
+            refill_stop,
+            refill_thread: Some(refill_thread),
         })
     }
 
@@ -842,6 +897,7 @@ fn render_draft_audio_preview(
     target_time: Microseconds,
     output_sample_rate_hz: u32,
     output_channels: u16,
+    duration: Microseconds,
 ) -> Result<Vec<f32>, AudioPreviewBindingError> {
     if output_sample_rate_hz == 0 || output_channels == 0 {
         return Err(AudioPreviewBindingError::new(
@@ -850,9 +906,14 @@ fn render_draft_audio_preview(
         ));
     }
     let output_channels = usize::from(output_channels.min(2));
-    let output_frame_count = usize::try_from(output_sample_rate_hz)
-        .unwrap_or(48_000)
-        .saturating_mul(4);
+    let output_frame_count = usize::try_from(
+        duration
+            .get()
+            .saturating_mul(u64::from(output_sample_rate_hz))
+            / 1_000_000,
+    )
+    .unwrap_or(usize::MAX)
+    .max(1);
     let mut mixed = vec![0.0f32; output_frame_count.saturating_mul(output_channels)];
     let materials = draft
         .materials
@@ -921,13 +982,93 @@ fn render_draft_audio_preview(
         mixed_any = true;
     }
 
-    if !mixed_any || !mixed.iter().any(|sample| sample.abs() > 0.000_01) {
+    if !mixed_any {
         return Err(AudioPreviewBindingError::new(
             AudioPreviewBindingErrorKind::RuntimeFailed,
-            "audio preview found no non-zero PCM samples for the current timeline range",
+            "audio preview found no audio-capable timeline segment for the current playback range",
         ));
     }
     Ok(mixed)
+}
+
+fn spawn_audio_refill_thread(
+    draft: Draft,
+    queue: CpalAudioOutputQueue,
+    start_time: Microseconds,
+    output_sample_rate_hz: u32,
+    output_channels: u16,
+    stop: Arc<AtomicBool>,
+) -> Result<JoinHandle<()>, AudioPreviewBindingError> {
+    thread::Builder::new()
+        .name("audio-preview-refill".to_owned())
+        .spawn(move || {
+            run_audio_refill_loop(
+                draft,
+                queue,
+                start_time,
+                output_sample_rate_hz,
+                output_channels,
+                stop,
+            );
+        })
+        .map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::RuntimeFailed,
+                format!("failed to start audio preview refill thread: {error}"),
+            )
+        })
+}
+
+fn run_audio_refill_loop(
+    draft: Draft,
+    queue: CpalAudioOutputQueue,
+    mut cursor: Microseconds,
+    output_sample_rate_hz: u32,
+    output_channels: u16,
+    stop: Arc<AtomicBool>,
+) {
+    loop {
+        if stop.load(Ordering::Acquire) {
+            return;
+        }
+        if queued_duration_us(
+            queue.queued_sample_count(),
+            output_sample_rate_hz,
+            output_channels,
+        ) >= AUDIO_PREVIEW_REFILL_LOW_WATER.get()
+        {
+            thread::sleep(AUDIO_PREVIEW_REFILL_POLL_INTERVAL);
+            continue;
+        }
+        let Ok(samples) = render_draft_audio_preview(
+            &draft,
+            cursor,
+            output_sample_rate_hz,
+            output_channels,
+            AUDIO_PREVIEW_CHUNK_DURATION,
+        ) else {
+            return;
+        };
+        if queue.enqueue_f32_interleaved(&samples).is_err() {
+            return;
+        }
+        cursor = Microseconds::new(
+            cursor
+                .get()
+                .saturating_add(AUDIO_PREVIEW_CHUNK_DURATION.get()),
+        );
+    }
+}
+
+fn queued_duration_us(queued_samples: usize, sample_rate_hz: u32, channels: u16) -> u64 {
+    if sample_rate_hz == 0 || channels == 0 {
+        return 0;
+    }
+    u64::try_from(queued_samples)
+        .unwrap_or(u64::MAX)
+        .saturating_mul(1_000_000)
+        / u64::from(sample_rate_hz)
+        / u64::from(channels)
 }
 
 fn mix_ffmpeg_audio_segment(

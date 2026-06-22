@@ -15,6 +15,8 @@ use crate::{
     DesktopAudioOutputCapabilityStatus, DesktopAudioOutputDiagnostic,
 };
 
+const DEFAULT_MAX_QUEUED_SECONDS: usize = 12;
+
 #[derive(Debug, Clone)]
 pub struct CpalAudioOutputDevice {
     device: cpal::Device,
@@ -79,30 +81,37 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
         let sample_format = self.default_config.sample_format();
         let config: cpal::StreamConfig = self.default_config.clone().into();
         let presented_result_count = Arc::new(AtomicU64::new(0));
-        let queued_samples = Arc::new(Mutex::new(VecDeque::new()));
-        let underrun_sample_count = Arc::new(AtomicU64::new(0));
+        let max_queued_samples = usize::try_from(capabilities.sample_rate_hz)
+            .unwrap_or(48_000)
+            .saturating_mul(usize::from(capabilities.max_channel_count))
+            .saturating_mul(DEFAULT_MAX_QUEUED_SECONDS);
+        let queue = CpalAudioOutputQueue {
+            queued_samples: Arc::new(Mutex::new(VecDeque::new())),
+            underrun_sample_count: Arc::new(AtomicU64::new(0)),
+            max_queued_samples,
+        };
         let error_callback = |error| eprintln!("native audio output stream diagnostic: {error}");
 
         let stream = match sample_format {
             cpal::SampleFormat::I16 => build_queued_stream::<I16Writer>(
                 &self.device,
                 config,
-                queued_samples.clone(),
-                underrun_sample_count.clone(),
+                queue.queued_samples.clone(),
+                queue.underrun_sample_count.clone(),
                 error_callback,
             ),
             cpal::SampleFormat::U16 => build_queued_stream::<U16Writer>(
                 &self.device,
                 config,
-                queued_samples.clone(),
-                underrun_sample_count.clone(),
+                queue.queued_samples.clone(),
+                queue.underrun_sample_count.clone(),
                 error_callback,
             ),
             cpal::SampleFormat::F32 => build_queued_stream::<F32Writer>(
                 &self.device,
                 config,
-                queued_samples.clone(),
-                underrun_sample_count.clone(),
+                queue.queued_samples.clone(),
+                queue.underrun_sample_count.clone(),
                 error_callback,
             ),
             format => {
@@ -118,8 +127,7 @@ impl AudioOutputDevice for CpalAudioOutputDevice {
         Ok(CpalAudioOutputSink {
             stream,
             presented_result_count,
-            queued_samples,
-            underrun_sample_count,
+            queue,
         })
     }
 }
@@ -171,13 +179,45 @@ fn validate_native_output_capabilities(
 
 pub struct CpalAudioOutputSink {
     stream: cpal::Stream,
-    queued_samples: Arc<Mutex<VecDeque<f32>>>,
     presented_result_count: Arc<AtomicU64>,
-    underrun_sample_count: Arc<AtomicU64>,
+    queue: CpalAudioOutputQueue,
 }
 
 impl CpalAudioOutputSink {
     pub fn enqueue_f32_interleaved(&mut self, samples: &[f32]) -> Result<(), AudioOutputError> {
+        self.queue.enqueue_f32_interleaved(samples)
+    }
+
+    pub fn queue_handle(&self) -> CpalAudioOutputQueue {
+        self.queue.clone()
+    }
+
+    pub fn start(&self) -> Result<(), AudioOutputError> {
+        self.stream
+            .play()
+            .map_err(|error| AudioOutputError::InvalidCapabilities {
+                reason: format!("failed to start native output stream: {error}"),
+            })
+    }
+
+    pub fn queued_sample_count(&self) -> usize {
+        self.queue.queued_sample_count()
+    }
+
+    pub fn underrun_sample_count(&self) -> u64 {
+        self.queue.underrun_sample_count()
+    }
+}
+
+#[derive(Clone)]
+pub struct CpalAudioOutputQueue {
+    queued_samples: Arc<Mutex<VecDeque<f32>>>,
+    underrun_sample_count: Arc<AtomicU64>,
+    max_queued_samples: usize,
+}
+
+impl CpalAudioOutputQueue {
+    pub fn enqueue_f32_interleaved(&self, samples: &[f32]) -> Result<(), AudioOutputError> {
         if samples.is_empty() {
             return Err(AudioOutputError::InvalidCapabilities {
                 reason: "native output requires non-empty PCM samples".to_owned(),
@@ -189,22 +229,13 @@ impl CpalAudioOutputSink {
                 .map_err(|_| AudioOutputError::InvalidCapabilities {
                     reason: "native output PCM queue lock failed".to_owned(),
                 })?;
-        let max_samples = 48_000usize * 2 * 8;
         for sample in samples {
-            if queue.len() >= max_samples {
+            if queue.len() >= self.max_queued_samples {
                 let _ = queue.pop_front();
             }
             queue.push_back(sample.clamp(-1.0, 1.0));
         }
         Ok(())
-    }
-
-    pub fn start(&self) -> Result<(), AudioOutputError> {
-        self.stream
-            .play()
-            .map_err(|error| AudioOutputError::InvalidCapabilities {
-                reason: format!("failed to start native output stream: {error}"),
-            })
     }
 
     pub fn queued_sample_count(&self) -> usize {

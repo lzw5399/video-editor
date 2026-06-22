@@ -10,6 +10,7 @@ use std::sync::{
 use std::time::Duration;
 
 use draft_model::{MaterialId, SegmentFitMode, SegmentVisual};
+use media_runtime::{ColorMatrix, ColorRange, VideoColorMetadata};
 use render_graph::{
     RenderCanvasBackgroundMode, RenderGraph, RenderMaterial, RenderTextOverlay, RenderVideoLayer,
 };
@@ -882,7 +883,10 @@ struct WgpuLayerDraw {
 enum WgpuLayerTexture {
     Owned(wgpu::Texture),
     Imported(Rc<wgpu::Texture>),
-    ExternalNv12(Rc<RealtimePreviewExternalTexturePlanes>),
+    ExternalNv12 {
+        planes: Rc<RealtimePreviewExternalTexturePlanes>,
+        color: VideoColorMetadata,
+    },
 }
 
 impl WgpuLayerTexture {
@@ -890,7 +894,7 @@ impl WgpuLayerTexture {
         match self {
             Self::Owned(texture) => texture,
             Self::Imported(texture) => texture.as_ref(),
-            Self::ExternalNv12(_) => {
+            Self::ExternalNv12 { .. } => {
                 panic!("external texture planes cannot be used as a sampled rgba texture")
             }
         }
@@ -1232,7 +1236,7 @@ fn push_wgpu_layer_draw(
     vertices: Vec<u8>,
 ) {
     let (layer_resources, bind_group, pipeline_kind) = match texture {
-        WgpuLayerTexture::ExternalNv12(planes) => {
+        WgpuLayerTexture::ExternalNv12 { planes, color } => {
             let Some(layout) = resources.external_bind_group_layout.as_ref() else {
                 return;
             };
@@ -1243,7 +1247,7 @@ fn push_wgpu_layer_draw(
                     width: planes.width,
                     height: planes.height,
                     format: wgpu::ExternalTextureFormat::Nv12,
-                    yuv_conversion_matrix: BT709_LIMITED_YUV_TO_RGBA,
+                    yuv_conversion_matrix: nv12_yuv_conversion_matrix(&color),
                     gamut_conversion_matrix: IDENTITY_3X3,
                     src_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
                     dst_transfer_function: wgpu::ExternalTextureTransferFunction::default(),
@@ -1375,7 +1379,10 @@ fn upload_wgpu_layer_texture(
                     );
                 }
                 if let Some(planes) = lease.resource_as::<RealtimePreviewExternalTexturePlanes>() {
-                    return Ok(WgpuLayerTexture::ExternalNv12(planes));
+                    return Ok(WgpuLayerTexture::ExternalNv12 {
+                        planes,
+                        color: handle.color,
+                    });
                 }
                 if let Some(planes) = texture_cache
                     .import_native_nv12_external_texture(device, &handle, &lease)
@@ -1383,7 +1390,10 @@ fn upload_wgpu_layer_texture(
                         RealtimePreviewCompositorError::WgpuFrameUpload(error.to_string())
                     })?
                 {
-                    return Ok(WgpuLayerTexture::ExternalNv12(planes));
+                    return Ok(WgpuLayerTexture::ExternalNv12 {
+                        planes,
+                        color: handle.color,
+                    });
                 }
                 return Err(
                     RealtimePreviewCompositorError::WgpuLayerTextureHandleUnsupported {
@@ -1626,12 +1636,65 @@ const IDENTITY_3X3: [f32; 9] = [
     0.0, 1.0, 0.0, //
     0.0, 0.0, 1.0,
 ];
-const BT709_LIMITED_YUV_TO_RGBA: [f32; 16] = [
-    1.164383, 1.164383, 1.164383, 0.0, //
-    0.0, -0.213249, 2.112402, 0.0, //
-    1.792741, -0.532909, 0.0, 0.0, //
-    -0.972945, 0.301483, -1.133402, 1.0,
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Nv12Range {
+    Limited,
+    Full,
+}
+
+fn nv12_yuv_conversion_matrix(color: &VideoColorMetadata) -> [f32; 16] {
+    let (kr, kb) = match color.matrix {
+        ColorMatrix::Bt2020NonConstant => (0.2627, 0.0593),
+        ColorMatrix::Bt709 | ColorMatrix::Identity | ColorMatrix::Unknown => (0.2126, 0.0722),
+    };
+    let range = match color.range {
+        ColorRange::Full => Nv12Range::Full,
+        ColorRange::Limited | ColorRange::Unknown => Nv12Range::Limited,
+    };
+    yuv_to_rgba_matrix(kr, kb, range)
+}
+
+fn yuv_to_rgba_matrix(kr: f32, kb: f32, range: Nv12Range) -> [f32; 16] {
+    let kg = 1.0 - kr - kb;
+    let y_scale = match range {
+        Nv12Range::Limited => 255.0 / 219.0,
+        Nv12Range::Full => 1.0,
+    };
+    let chroma_scale = match range {
+        Nv12Range::Limited => 255.0 / 224.0,
+        Nv12Range::Full => 1.0,
+    };
+    let y_offset = match range {
+        Nv12Range::Limited => 16.0 / 255.0,
+        Nv12Range::Full => 0.0,
+    };
+    let chroma_offset = 128.0 / 255.0;
+
+    let r_v = (2.0 - 2.0 * kr) * chroma_scale;
+    let b_u = (2.0 - 2.0 * kb) * chroma_scale;
+    let g_u = -(kb * (2.0 - 2.0 * kb) / kg) * chroma_scale;
+    let g_v = -(kr * (2.0 - 2.0 * kr) / kg) * chroma_scale;
+    let y = y_scale;
+
+    [
+        y,
+        y,
+        y,
+        0.0,
+        0.0,
+        g_u,
+        b_u,
+        0.0,
+        r_v,
+        g_v,
+        0.0,
+        0.0,
+        -(y * y_offset) - (r_v * chroma_offset),
+        -(y * y_offset) - (g_u * chroma_offset) - (g_v * chroma_offset),
+        -(y * y_offset) - (b_u * chroma_offset),
+        1.0,
+    ]
+}
 
 fn canvas_clear_color(graph: &RenderGraph) -> Result<wgpu::Color, RealtimePreviewCompositorError> {
     let color = match graph.canvas.background.mode {
@@ -2005,4 +2068,86 @@ fn texture_cache_diagnostic(
     error: RealtimePreviewTextureCacheError,
 ) -> RealtimePreviewDiagnostic {
     layer_diagnostic(layer, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use media_runtime::{ColorPrimaries, ColorTransfer};
+
+    use super::*;
+
+    fn color(matrix: ColorMatrix, range: ColorRange) -> VideoColorMetadata {
+        VideoColorMetadata {
+            primaries: ColorPrimaries::Bt709,
+            transfer: ColorTransfer::Bt709,
+            matrix,
+            range,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn assert_close(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() <= 0.000_5,
+            "expected {actual} to be close to {expected}"
+        );
+    }
+
+    #[test]
+    fn nv12_color_metadata_preserves_bt709_limited_range_contract() {
+        let matrix = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Limited));
+
+        assert_close(matrix[0], 1.164_383);
+        assert_close(matrix[5], -0.213_249);
+        assert_close(matrix[6], 2.112_402);
+        assert_close(matrix[8], 1.792_741);
+        assert_close(matrix[9], -0.532_909);
+        assert_close(matrix[12], -0.972_945);
+        assert_close(matrix[13], 0.301_483);
+        assert_close(matrix[14], -1.133_402);
+    }
+
+    #[test]
+    fn nv12_color_metadata_does_not_treat_full_range_as_limited() {
+        let limited = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Limited));
+        let full = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Full));
+
+        assert_close(full[0], 1.0);
+        assert_close(full[6], 1.855_6);
+        assert_close(full[8], 1.574_8);
+        assert!(
+            (limited[0] - full[0]).abs() > 0.1,
+            "full-range luma scale must not reuse limited-range expansion"
+        );
+        assert!(
+            (limited[12] - full[12]).abs() > 0.15,
+            "full-range chroma offsets must not reuse limited-range offsets"
+        );
+    }
+
+    #[test]
+    fn nv12_color_metadata_defaults_unknown_to_bt709_limited_sdr() {
+        let unknown = nv12_yuv_conversion_matrix(&VideoColorMetadata::unknown_with_diagnostic(
+            "container omitted color metadata",
+        ));
+        let limited = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Limited));
+
+        assert_eq!(unknown, limited);
+    }
+
+    #[test]
+    fn nv12_color_metadata_uses_bt2020_non_constant_matrix_when_declared() {
+        let bt709 = nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt709, ColorRange::Limited));
+        let bt2020 =
+            nv12_yuv_conversion_matrix(&color(ColorMatrix::Bt2020NonConstant, ColorRange::Limited));
+
+        assert!(
+            (bt709[8] - bt2020[8]).abs() > 0.1,
+            "BT.2020 red chroma coefficient must not reuse BT.709"
+        );
+        assert!(
+            (bt709[6] - bt2020[6]).abs() > 0.02,
+            "BT.2020 blue chroma coefficient must not reuse BT.709"
+        );
+    }
 }

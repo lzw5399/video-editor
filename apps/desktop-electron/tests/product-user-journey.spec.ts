@@ -4,6 +4,9 @@ import { join } from "node:path";
 
 import {
   USER_JOURNEY_AV_VIDEO,
+  USER_JOURNEY_LONG_AV_VIDEO,
+  USER_JOURNEY_LONG_MOVING_VIDEO,
+  USER_JOURNEY_LONG_TONE_AUDIO,
   USER_JOURNEY_OVERLAY_IMAGE,
   USER_JOURNEY_MOVING_VIDEO,
   USER_JOURNEY_TONE_AUDIO,
@@ -256,9 +259,14 @@ test("product user can import a repo video, add it to the timeline, and see rend
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    const firstFrame = await waitForCompositedPreviewEvidence(page, app, 8_000, -1);
+    expect(
+      firstFrame.hostState?.contentEvidence?.targetTimeMicroseconds ?? Number.POSITIVE_INFINITY,
+      "dragging material to the timeline must present a first preview frame before playback starts"
+    ).toBeLessThanOrEqual(100_000);
 
-    const before = await capturePreviewEvidence(page);
+    const before = firstFrame;
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
     const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
     const controls = page.getByRole("group", { name: "预览播放控制" });
@@ -375,6 +383,12 @@ test("product playback UAT keeps the native surface aligned with the preview mon
     expect(placement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
     expect(Math.abs(placement?.deltaPx.x ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(2);
     expect(Math.abs(placement?.deltaPx.y ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(2);
+
+    await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "导出" })).toBeVisible();
+    await expect
+      .poll(async () => (await readRealtimePreviewHostCalls(app)).some((call) => call.kind === "detachSurface"), { timeout: 5_000 })
+      .toBe(true);
   } finally {
     await app.close();
   }
@@ -382,14 +396,14 @@ test("product playback UAT keeps the native surface aligned with the preview mon
 
 test("product playback UAT uses native audio output instead of status-only or mock audio", async () => {
   const { app, page } = await launchProductJourneyApp([
-    USER_JOURNEY_MOVING_VIDEO,
-    USER_JOURNEY_TONE_AUDIO
+    USER_JOURNEY_LONG_MOVING_VIDEO,
+    USER_JOURNEY_LONG_TONE_AUDIO
   ]);
 
   try {
-    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_MOVING_VIDEO, USER_JOURNEY_TONE_AUDIO]);
-    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await addAudioThroughProductPanel(page, app, USER_JOURNEY_TONE_AUDIO);
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_MOVING_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_MOVING_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
@@ -408,6 +422,7 @@ test("product playback UAT uses native audio output instead of status-only or mo
       typeof call.expectedRevision === "number" &&
       call.hasDraftField === false
     )), { timeout: 10_000 }).toBe(true);
+    await expectNativeAudioContinuity(page, app);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
@@ -415,11 +430,11 @@ test("product playback UAT uses native audio output instead of status-only or mo
 });
 
 test("product playback UAT plays embedded video audio through native output", async () => {
-  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_AV_VIDEO]);
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_LONG_AV_VIDEO]);
 
   try {
-    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_AV_VIDEO);
-    await addMaterialToTimeline(app, page, USER_JOURNEY_AV_VIDEO);
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
 
     const before = await capturePreviewEvidence(page);
     const visibleBefore = await captureVisiblePreviewEvidence(page, app);
@@ -438,6 +453,7 @@ test("product playback UAT plays embedded video audio through native output", as
       typeof call.expectedRevision === "number" &&
       call.hasDraftField === false
     )), { timeout: 10_000 }).toBe(true);
+    await expectNativeAudioContinuity(page, app);
     await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay);
   } finally {
     await app.close();
@@ -957,3 +973,57 @@ test("product text and transform interaction UAT supports direct canvas drag", a
     await app.close();
   }
 });
+
+async function expectNativeAudioContinuity(
+  page: Page,
+  app: ProductJourneyAppController
+): Promise<void> {
+  await page.waitForTimeout(5_500);
+  const playCall = (await readNativeCommandObservations(app)).findLast((call) => call.command === "playAudioPreview");
+  expect(playCall?.sessionId, "native audio continuity requires a real audio preview session").toEqual(expect.any(String));
+  expect(playCall?.projectSessionId, "audio preview must be tied to the Rust project session").toEqual(expect.any(String));
+  expect(playCall?.expectedRevision, "audio preview must use the Rust project revision").toEqual(expect.any(Number));
+
+  const status = await page.evaluate(async (request) => {
+    const core = (window as typeof window & {
+      videoEditorCore: {
+        getAudioPreviewStatus: (payload: typeof request) => Promise<{
+          ok: boolean;
+          data: null | {
+            status: string;
+            device: {
+              status: string;
+              diagnostics: string[];
+            };
+          };
+        }>;
+      };
+    }).videoEditorCore;
+    return core.getAudioPreviewStatus(request);
+  }, {
+    sessionId: playCall?.sessionId ?? null,
+    projectSessionId: playCall?.projectSessionId ?? null,
+    expectedRevision: playCall?.expectedRevision ?? null,
+    targetTime: 0
+  });
+  expect(status.ok, `audio status must be readable: ${JSON.stringify(status)}`).toBe(true);
+  expect(status.data?.status, `audio output must still be playing after the old 4s queue window: ${JSON.stringify(status)}`).toBe(
+    "playing"
+  );
+  expect(status.data?.device.status, `native audio device must be ready: ${JSON.stringify(status)}`).toBe("ready");
+  expect(status.data?.device.diagnostics ?? []).toEqual(
+    expect.arrayContaining([expect.stringContaining("native CPAL output stream is active")])
+  );
+  const queueDiagnostic = (status.data?.device.diagnostics ?? []).find((diagnostic) =>
+    diagnostic.startsWith("native queued samples:")
+  );
+  expect(queueDiagnostic, `audio status must expose native queue and underrun evidence: ${JSON.stringify(status)}`).toEqual(
+    expect.any(String)
+  );
+  const match = /native queued samples: (\d+); underrun samples: (\d+)/.exec(queueDiagnostic ?? "");
+  expect(match, `audio queue diagnostic must be parseable: ${queueDiagnostic}`).not.toBeNull();
+  const queuedSamples = Number(match?.[1] ?? 0);
+  const underrunSamples = Number(match?.[2] ?? 0);
+  expect(queuedSamples, `audio refill must keep samples queued after sustained playback: ${queueDiagnostic}`).toBeGreaterThan(0);
+  expect(underrunSamples, `audio output must not underrun during sustained product playback: ${queueDiagnostic}`).toBe(0);
+}
