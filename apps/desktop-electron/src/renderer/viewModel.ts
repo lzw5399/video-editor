@@ -61,21 +61,20 @@ export const WORKSPACE_CATEGORIES: readonly WorkspaceCategory[] = [
 
 export type WorkspaceCategoryMetadata = {
   label: WorkspaceCategory;
-  symbol: string;
 };
 
 export const WORKSPACE_CATEGORY_META: Record<WorkspaceCategory, WorkspaceCategoryMetadata> = {
-  媒体: { label: "媒体", symbol: "▣" },
-  音频: { label: "音频", symbol: "♪" },
-  文字: { label: "文字", symbol: "T" },
-  贴纸: { label: "贴纸", symbol: "◇" },
-  特效: { label: "特效", symbol: "✦" },
-  转场: { label: "转场", symbol: "⇄" },
-  字幕: { label: "字幕", symbol: "CC" },
-  滤镜: { label: "滤镜", symbol: "◐" },
-  调节: { label: "调节", symbol: "☷" },
-  模板: { label: "模板", symbol: "▤" },
-  数字人: { label: "数字人", symbol: "人" }
+  媒体: { label: "媒体" },
+  音频: { label: "音频" },
+  文字: { label: "文字" },
+  贴纸: { label: "贴纸" },
+  特效: { label: "特效" },
+  转场: { label: "转场" },
+  字幕: { label: "字幕" },
+  滤镜: { label: "滤镜" },
+  调节: { label: "调节" },
+  模板: { label: "模板" },
+  数字人: { label: "数字人" }
 };
 
 export type BindingStatus =

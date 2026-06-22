@@ -242,7 +242,6 @@ h2 {
   content: "";
 }
 
-.category-symbol,
 .category-label {
   display: block;
   overflow: hidden;
@@ -253,9 +252,10 @@ h2 {
 }
 
 .category-symbol {
+  display: block;
+  width: 19px;
+  height: 19px;
   color: inherit;
-  font-size: 16px;
-  font-weight: 600;
 }
 
 .category-label {

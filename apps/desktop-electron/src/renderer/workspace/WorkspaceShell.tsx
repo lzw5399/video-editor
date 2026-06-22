@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import {
   WORKSPACE_CATEGORIES,
@@ -13,6 +13,7 @@ import {
 } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, SegmentVisual } from "../../generated/Draft";
+import { appIconUrls, type AppIconName } from "../assets/icons";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor, type RealtimePreviewHostState } from "./PreviewMonitor";
@@ -81,6 +82,20 @@ type WorkspaceShellProps = {
   onSetTimelineTrackMute: Parameters<typeof Timeline>[0]["onSetTrackMute"];
   onUndoTimelineEdit: Parameters<typeof Timeline>[0]["onUndo"];
   onRedoTimelineEdit: Parameters<typeof Timeline>[0]["onRedo"];
+};
+
+const CATEGORY_ICON_NAMES: Record<WorkspaceCategory, AppIconName> = {
+  媒体: "categoryMedia",
+  音频: "categoryAudio",
+  文字: "categoryText",
+  贴纸: "categorySticker",
+  特效: "categoryEffect",
+  转场: "categoryTransition",
+  字幕: "categoryCaption",
+  滤镜: "categoryFilter",
+  调节: "categoryAdjust",
+  模板: "categoryTemplate",
+  数字人: "categoryDigitalHuman"
 };
 
 export function WorkspaceShell({
@@ -164,9 +179,7 @@ export function WorkspaceShell({
                 title={metadata.label}
                 onClick={() => onCategoryChange(category)}
               >
-                <span className="category-symbol" aria-hidden="true">
-                  {metadata.symbol}
-                </span>
+                <span className="category-symbol app-icon-mask" style={iconMaskStyle(CATEGORY_ICON_NAMES[category])} aria-hidden="true" />
                 <span className="category-label">{metadata.label}</span>
               </button>
             );
@@ -293,6 +306,10 @@ export function WorkspaceShell({
       ) : null}
     </main>
   );
+}
+
+function iconMaskStyle(icon: AppIconName): CSSProperties {
+  return { "--app-icon-url": `url("${appIconUrls[icon]}")` } as CSSProperties;
 }
 
 type ExportModalProps = {

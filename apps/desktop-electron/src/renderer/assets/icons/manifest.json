@@ -3,6 +3,61 @@
   "sourceRoot": "icons",
   "mappings": [
     {
+      "name": "categoryMedia",
+      "source": "icons/Drag/video.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-media.svg"
+    },
+    {
+      "name": "categoryAudio",
+      "source": "icons/Drag/audio.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-audio.svg"
+    },
+    {
+      "name": "categoryText",
+      "source": "icons/Canvas/TrackHeader/text.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-text.svg"
+    },
+    {
+      "name": "categorySticker",
+      "source": "icons/Canvas/TrackHeader/sticker.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-sticker.svg"
+    },
+    {
+      "name": "categoryEffect",
+      "source": "icons/Canvas/TrackHeader/effect.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-effect.svg"
+    },
+    {
+      "name": "categoryTransition",
+      "source": "icons/Canvas/transition.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-transition.svg"
+    },
+    {
+      "name": "categoryCaption",
+      "source": "icons/Canvas/subtitleIcon.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-caption.svg"
+    },
+    {
+      "name": "categoryFilter",
+      "source": "icons/Canvas/TrackHeader/filter.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-filter.svg"
+    },
+    {
+      "name": "categoryAdjust",
+      "source": "icons/Canvas/TrackHeader/adjust.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-adjust.svg"
+    },
+    {
+      "name": "categoryTemplate",
+      "source": "icons/Canvas/template_combination.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-template.svg"
+    },
+    {
+      "name": "categoryDigitalHuman",
+      "source": "icons/Canvas/ai_generate_tag.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/category-digital-human.svg"
+    },
+    {
       "name": "play",
       "source": "icons/MaterialReplacement/play.svg",
       "target": "apps/desktop-electron/src/renderer/assets/icons/play.svg"
