@@ -15,7 +15,9 @@ import { MATERIAL_DRAG_DATA_TYPE } from "./dragTypes";
 
 import "./timeline.css";
 
-const TIMELINE_HEADER_WIDTH_PX = 160;
+const TIMELINE_HEADER_WIDTH_PX = 128;
+const SEGMENT_FILMSTRIP_CELL_COUNT = 12;
+const SEGMENT_TEXT_CHIP_COUNT = 6;
 const AUDIO_WAVEFORM_PLACEHOLDER_PATTERN: readonly ("short" | "medium" | "tall")[] = [
   "short",
   "medium",
@@ -86,6 +88,9 @@ export function Timeline({
   const playheadStyle = {
     left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
   };
+  const timelineSurfaceStyle = {
+    "--timeline-header-width": `${TIMELINE_HEADER_WIDTH_PX}px`
+  } as CSSProperties;
   const zoomContentStyle = {
     width: `${zoomPercent}%`,
     minWidth: "100%"
@@ -186,7 +191,10 @@ export function Timeline({
   );
 
   return (
-    <div className={materialDropActive ? "timeline-surface material-drop-active" : "timeline-surface"}>
+    <div
+      className={materialDropActive ? "timeline-surface material-drop-active" : "timeline-surface"}
+      style={timelineSurfaceStyle}
+    >
       <TransportStrip
         workspace={workspace}
         showDeveloperDiagnostics={showDeveloperDiagnostics}
@@ -314,19 +322,70 @@ function TransportStrip({
 
   return (
     <div className="transport-strip" aria-label="时间线控制">
-      <div className="timeline-tool-group transport-buttons" role="group" aria-label="播放与历史">
-        <TimelineIconButton
-          label="撤销"
-          icon="undo"
-          onClick={onUndo}
-          disabled={pending || !editControls.canUndo}
-        />
-        <TimelineIconButton
-          label="重做"
-          icon="redo"
-          onClick={onRedo}
-          disabled={pending || !editControls.canRedo}
-        />
+      <div className="timeline-edit-cluster timeline-edit-cluster-left">
+        <div className="timeline-tool-group transport-buttons" role="group" aria-label="历史">
+          <TimelineIconButton
+            label="撤销"
+            icon="undo"
+            onClick={onUndo}
+            disabled={pending || !editControls.canUndo}
+          />
+          <TimelineIconButton
+            label="重做"
+            icon="redo"
+            onClick={onRedo}
+            disabled={pending || !editControls.canRedo}
+          />
+        </div>
+        <span className="timeline-tool-divider" aria-hidden="true" />
+        <div className="timeline-tool-group" role="group" aria-label="剪辑">
+          <TimelineIconButton
+            label="分割所选片段"
+            icon="split"
+            onClick={() => onSplitSelectedSegment?.()}
+            disabled={pending || !editControls.hasSelectedSegment}
+          />
+          <TimelineIconButton
+            label="删除所选片段"
+            icon="delete"
+            className="danger"
+            onClick={onDeleteSelectedSegment}
+            disabled={pending || !editControls.hasSelectedSegment}
+          />
+        </div>
+        <span className="timeline-tool-divider" aria-hidden="true" />
+        <div className="timeline-tool-group" role="group" aria-label="添加轨道">
+          <TimelineIconButton label="添加视频轨道" icon="categoryMedia" onClick={() => onAddTrack?.("video")} disabled={pending} />
+          <TimelineIconButton label="添加音频轨道" icon="categoryAudio" onClick={() => onAddTrack?.("audio")} disabled={pending} />
+          <TimelineIconButton label="添加文字轨道" icon="categoryText" onClick={() => onAddTrack?.("text")} disabled={pending} />
+        </div>
+        {showMaterialQuickAdd ? (
+          <>
+            <span className="timeline-tool-divider" aria-hidden="true" />
+            <label className="timeline-control compact-select">
+              <span>素材</span>
+              <select value={selectedMaterialId} onChange={(event) => setMaterialId(event.currentTarget.value)}>
+                {timelineMaterials.map((material) => (
+                  <option key={material.materialId} value={material.materialId}>
+                    {material.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="transport-button icon-only accent add-action"
+              aria-label="添加片段"
+              title="添加片段"
+              onClick={() => onAddSegment?.(selectedMaterialId)}
+              disabled={pending || selectedMaterialId.length === 0}
+            >
+              <IconGlyph icon="timelineAdd" />
+            </button>
+          </>
+        ) : null}
+      </div>
+      <div className="timeline-edit-cluster timeline-edit-cluster-center">
         <TimelineIconButton
           label={isPlaybackRunning ? "暂停" : "播放"}
           icon={isPlaybackRunning ? "pause" : "play"}
@@ -334,85 +393,45 @@ function TransportStrip({
           disabled={pending && !isPlaybackRunning}
         />
       </div>
-      {showMaterialQuickAdd ? (
-        <>
-          <label className="timeline-control compact-select">
-            <span>素材</span>
-            <select value={selectedMaterialId} onChange={(event) => setMaterialId(event.currentTarget.value)}>
-              {timelineMaterials.map((material) => (
-                <option key={material.materialId} value={material.materialId}>
-                  {material.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="transport-button icon-only accent add-action"
-            aria-label="添加片段"
-            title="添加片段"
-            onClick={() => onAddSegment?.(selectedMaterialId)}
-            disabled={pending || selectedMaterialId.length === 0}
-          >
-            <IconGlyph icon="timelineAdd" />
-          </button>
-        </>
-      ) : null}
-      <div className="timeline-tool-group" role="group" aria-label="添加轨道">
-        <TimelineIconButton label="添加视频轨道" icon="categoryMedia" onClick={() => onAddTrack?.("video")} disabled={pending} />
-        <TimelineIconButton label="添加音频轨道" icon="categoryAudio" onClick={() => onAddTrack?.("audio")} disabled={pending} />
-        <TimelineIconButton label="添加文字轨道" icon="categoryText" onClick={() => onAddTrack?.("text")} disabled={pending} />
+      <div className="timeline-edit-cluster timeline-edit-cluster-right">
+        <button
+          type="button"
+          className="snapping-status"
+          aria-label={snappingLabel}
+          aria-pressed={editControls.snappingEnabled}
+          disabled
+        >
+          <IconGlyph icon={editControls.snappingEnabled ? "timelineSnapOn" : "timelineSnapOff"} />
+        </button>
+        <div className="timeline-zoom-shell" aria-label="时间线缩放">
+          <TimelineIconButton
+            label="缩小时间线"
+            icon="zoomOut"
+            onClick={() => onZoomPercentChange((current) => Math.max(50, current - 25))}
+            disabled={zoomPercent <= 50}
+          />
+          <input
+            aria-label="时间线缩放比例"
+            type="range"
+            min="50"
+            max="200"
+            step="25"
+            value={zoomPercent}
+            onChange={(event) => onZoomPercentChange(event.currentTarget.valueAsNumber)}
+          />
+          <TimelineIconButton
+            label="放大时间线"
+            icon="zoomIn"
+            onClick={() => onZoomPercentChange((current) => Math.min(200, current + 25))}
+            disabled={zoomPercent >= 200}
+          />
+          <span>{zoomPercent}%</span>
+        </div>
+        <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
+        {showDeveloperDiagnostics || workspace.pendingCommand !== null ? (
+          <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
+        ) : null}
       </div>
-      <TimelineIconButton
-        label="分割所选片段"
-        icon="split"
-        onClick={() => onSplitSelectedSegment?.()}
-        disabled={pending || !editControls.hasSelectedSegment}
-      />
-      <TimelineIconButton
-        label="删除所选片段"
-        icon="delete"
-        className="danger"
-        onClick={onDeleteSelectedSegment}
-        disabled={pending || !editControls.hasSelectedSegment}
-      />
-      <div className="timeline-zoom-shell" aria-label="时间线缩放">
-        <TimelineIconButton
-          label="缩小时间线"
-          icon="zoomOut"
-          onClick={() => onZoomPercentChange((current) => Math.max(50, current - 25))}
-          disabled={zoomPercent <= 50}
-        />
-        <input
-          aria-label="时间线缩放比例"
-          type="range"
-          min="50"
-          max="200"
-          step="25"
-          value={zoomPercent}
-          onChange={(event) => onZoomPercentChange(event.currentTarget.valueAsNumber)}
-        />
-        <TimelineIconButton
-          label="放大时间线"
-          icon="zoomIn"
-          onClick={() => onZoomPercentChange((current) => Math.min(200, current + 25))}
-          disabled={zoomPercent >= 200}
-        />
-        <span>{zoomPercent}%</span>
-      </div>
-      <button
-        type="button"
-        className="snapping-status"
-        aria-label={snappingLabel}
-        aria-pressed={editControls.snappingEnabled}
-        disabled
-      >
-        <IconGlyph icon={editControls.snappingEnabled ? "timelineSnapOn" : "timelineSnapOff"} />
-      </button>
-      <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
-      {showDeveloperDiagnostics || workspace.pendingCommand !== null ? (
-        <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
-      ) : null}
     </div>
   );
 }
@@ -571,9 +590,6 @@ function TimelineTrackRow({
             onClick={() => onSetTrackMute?.(row.selectionHandle, row.nextMuted)}
           />
         </div>
-        <span className="track-status-line">
-          {row.statusLabel} · {row.lockLabel} · {row.muteLabel}
-        </span>
       </div>
       <div className="segment-lane">
         {row.segments.map((segment) => (
@@ -720,6 +736,7 @@ function TimelineSegmentBlock({
         onPointerUp={completePointerIntent}
         onPointerCancel={completePointerIntent}
       />
+      <SegmentVisualBed visualKind={segment.visualKind} />
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
       {showAudioWaveform && segment.waveformMaterialId !== null ? (
@@ -753,6 +770,34 @@ function TimelineSegmentBlock({
   );
 }
 
+function SegmentVisualBed({ visualKind }: { visualKind: TimelineSegmentView["visualKind"] }): React.ReactElement | null {
+  if (visualKind === "video" || visualKind === "image" || visualKind === "sticker") {
+    return (
+      <span className={`segment-visual-bed segment-filmstrip segment-filmstrip-${visualKind}`} aria-hidden="true">
+        {Array.from({ length: SEGMENT_FILMSTRIP_CELL_COUNT }, (_, index) => (
+          <span key={index} className="segment-filmstrip-cell" />
+        ))}
+      </span>
+    );
+  }
+
+  if (visualKind === "text") {
+    return (
+      <span className="segment-visual-bed segment-text-bed" aria-hidden="true">
+        {Array.from({ length: SEGMENT_TEXT_CHIP_COUNT }, (_, index) => (
+          <span key={index} className="segment-text-chip" />
+        ))}
+      </span>
+    );
+  }
+
+  if (visualKind === "filter") {
+    return <span className="segment-visual-bed segment-effect-bed" aria-hidden="true" />;
+  }
+
+  return null;
+}
+
 function AudioWaveform({
   waveform,
   materialId
@@ -762,7 +807,7 @@ function AudioWaveform({
 }): React.ReactElement {
   if (waveform.status === "ready" && waveform.materialId === materialId && waveform.peaks.length > 0) {
     return (
-      <span className="audio-waveform-placeholder audio-waveform-ready" aria-label="音频波形" title={waveform.statusLabel}>
+      <span className="segment-wave-bed audio-waveform-placeholder audio-waveform-ready" aria-label="音频波形" title={waveform.statusLabel}>
         {waveform.peaks.map((peak, index) => {
           const heightMillis = Math.max(Math.abs(peak.minMillis), Math.abs(peak.maxMillis));
           return (
@@ -779,7 +824,11 @@ function AudioWaveform({
   }
 
   return (
-    <span className={`audio-waveform-placeholder audio-waveform-${waveform.status}`} aria-label="音频波形占位" title={waveform.statusLabel}>
+    <span
+      className={`segment-wave-bed audio-waveform-placeholder audio-waveform-${waveform.status}`}
+      aria-label="音频波形占位"
+      title={waveform.statusLabel}
+    >
       {AUDIO_WAVEFORM_PLACEHOLDER_PATTERN.map((height, index) => (
         <span key={`${height}-${index}`} className="audio-waveform-bar" data-height={height} aria-hidden="true" />
       ))}

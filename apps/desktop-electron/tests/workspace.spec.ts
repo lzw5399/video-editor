@@ -393,12 +393,16 @@ function expectSameSize(before: RegionBox, after: RegionBox, label: string): voi
 async function expectTimelineControlsInsideStrip(page: Page, label: string): Promise<void> {
   const clippedControls = await page.locator('[aria-label="时间线控制"]').evaluate((strip) => {
     const stripBox = strip.getBoundingClientRect();
-    return Array.from(strip.children)
+    return Array.from(strip.querySelectorAll("button, input, select, [role='group'], .timeline-edit-cluster, .timeline-zoom-shell"))
       .map((child) => {
         const box = child.getBoundingClientRect();
         const style = window.getComputedStyle(child);
         return {
-          label: child.textContent?.replace(/\s+/g, " ").trim() || child.getAttribute("aria-label") || child.tagName,
+          label:
+            child.getAttribute("aria-label") ||
+            child.getAttribute("title") ||
+            child.textContent?.replace(/\s+/g, " ").trim() ||
+            child.tagName,
           visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
           left: box.left,
           top: box.top,
@@ -417,6 +421,35 @@ async function expectTimelineControlsInsideStrip(page: Page, label: string): Pro
   });
 
   expect(clippedControls, `${label} controls clipped`).toEqual([]);
+  const overlappingClusters = await page.locator('[aria-label="时间线控制"]').evaluate((strip) => {
+    const clusters = Array.from(strip.querySelectorAll(".timeline-edit-cluster"))
+      .map((cluster) => {
+        const box = cluster.getBoundingClientRect();
+        const style = window.getComputedStyle(cluster);
+        return {
+          label: cluster.getAttribute("class") ?? "timeline cluster",
+          visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom
+        };
+      })
+      .filter((box) => box.visible);
+    const overlaps: Array<{ first: string; second: string }> = [];
+    for (let index = 0; index < clusters.length; index += 1) {
+      for (let next = index + 1; next < clusters.length; next += 1) {
+        const first = clusters[index];
+        const second = clusters[next];
+        const separated = first.right <= second.left + 1 || second.right <= first.left + 1 || first.bottom <= second.top + 1 || second.bottom <= first.top + 1;
+        if (!separated) {
+          overlaps.push({ first: first.label, second: second.label });
+        }
+      }
+    }
+    return overlaps;
+  });
+  expect(overlappingClusters, `${label} clusters overlap`).toEqual([]);
 }
 
 async function expectNoCategoryLabelWrap(page: Page): Promise<void> {
@@ -661,6 +694,34 @@ async function expectTimelineInputsFit(page: Page): Promise<void> {
   );
 
   expect(clippedInputs, "时间线数字输入不能裁切当前数值").toEqual([]);
+}
+
+async function expectTimelineChromeDensity(page: Page): Promise<void> {
+  const controlsBox = await expectStableBox(page.getByLabel("时间线控制"), "时间线控制密度");
+  const rulerBox = await expectStableBox(page.getByLabel("时间线标尺"), "时间线标尺密度");
+  const headerBox = await expectStableBox(page.locator(".track-header").first(), "时间线轨道头密度");
+  const visibleRowHeights = await page.locator(".track-row").evaluateAll((rows) =>
+    rows
+      .map((row) => {
+        const box = row.getBoundingClientRect();
+        return {
+          height: box.height,
+          visible: box.bottom > 0 && box.top < window.innerHeight
+        };
+      })
+      .filter((row) => row.visible)
+      .map((row) => row.height)
+  );
+
+  expect(controlsBox.height, "时间线工具栏应保持紧凑").toBeLessThanOrEqual(44);
+  expect(rulerBox.height, "时间线标尺应保持紧凑").toBeLessThanOrEqual(26);
+  expect(headerBox.width, "轨道头不应继续使用宽松旧布局").toBeGreaterThanOrEqual(118);
+  expect(headerBox.width, "轨道头不应继续使用宽松旧布局").toBeLessThanOrEqual(132);
+  expect(visibleRowHeights.length, "时间线应露出多行轨道").toBeGreaterThanOrEqual(3);
+  for (const height of visibleRowHeights) {
+    expect(height, "轨道行应保持剪辑工作台密度").toBeGreaterThanOrEqual(38);
+    expect(height, "轨道行应保持剪辑工作台密度").toBeLessThanOrEqual(46);
+  }
 }
 
 async function seekWorkspaceTimelinePlayhead(page: Page, targetTimeUs: number): Promise<void> {
@@ -2428,6 +2489,10 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await expect(page.locator(".track-state-button")).toHaveCount(9);
     await expect(page.locator(".segment-kind-video")).toHaveCount(1);
     await expect(page.locator(".segment-kind-audio")).toHaveCount(1);
+    await expect(page.locator(".track-status-line")).toHaveCount(0);
+    await expect(page.locator(".segment-filmstrip")).toHaveCount(1);
+    await expect(page.locator(".segment-wave-bed")).toHaveCount(1);
+    await expectTimelineChromeDensity(page);
 
     await resetNativeCommandObservations(app, page);
     await page.getByRole("button", { name: "音频轨道 1 静音状态：未静音" }).click();
@@ -2437,6 +2502,7 @@ test("professional timeline exposes stable toolbar, track, segment, ruler, zoom,
     await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "文本" }).click();
     await page.getByRole("button", { name: "添加文字", exact: true }).click();
     await expect(page.locator(".segment-kind-text")).toHaveCount(1);
+    await expect(page.locator(".segment-text-bed")).toHaveCount(1);
 
     const firstSegment = page.getByRole("button", { name: /片段 城市街景\.mp4/ });
     const before = await expectStableBox(firstSegment, "片段 hover 前");

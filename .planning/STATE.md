@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-preview-monitor-jianying-chrome
-last_updated: "2026-06-22T09:40:41Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-preview-monitor-jianying-chrome: preview monitor Jianying chrome
+stopped_at: Completed quick task 260622-timeline-jianying-chrome
+last_updated: "2026-06-22T16:28:19Z"
+last_activity: 2026-06-23 -- Completed quick task 260622-timeline-jianying-chrome: timeline Jianying chrome
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-preview-monitor-jianying-chrome: preview monitor Jianying chrome
+Last activity: 2026-06-23 -- Completed quick task 260622-timeline-jianying-chrome: timeline Jianying chrome
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-23 | 260622-timeline-jianying-chrome | Reworked the bottom timeline into a denser Jianying-style chrome with compact track headers, grouped toolbar controls, filmstrip/waveform/text segment beds, single-owner timeline CSS, cropped timeline screenshot gates, and layout assertions for clipping, overlap, row density, and product diagnostic cleanup. |
 | 2026-06-22 | 260622-preview-monitor-jianying-chrome | Reworked the product preview monitor into a Jianying-style player header and transport with left timecode, centered playback, and right view controls; regenerated packaged playback evidence after `package:dir` and revalidated UI reference, workspace, native-surface, and diff gates. |
 | 2026-06-22 | 260622-ms54-hide-available-material-status | Removed default `可用` chips from product material cards, kept actionable missing/probe-failed states visible, moved old add coverage to drag-to-timeline, and revalidated workspace, smoke, real workflow, packaged, source guard, and playing native-surface gates. |
 | 2026-06-22 | 260622-mt53-media-tool-row | Reworked the media panel top controls into a Jianying-like compact toolbar with app-local import/list/filter icons, kept unimplemented advanced filter disabled, preserved real import/search/filter/drag behavior, and revalidated static, narrow, packaged, and playing native-surface gates. |

@@ -66,6 +66,7 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
   try {
     await expectWorkspaceHierarchy(app, page, 1280, 800);
     await capturePhaseScreenshot(page, "workspace-1280x800.png");
+    await captureTimelineScreenshot(page, "timeline-bottom-1280x800.png");
     await captureTopFeatureOverflowScreenshot(page, "top-feature-overflow-1280x800.png");
     await expectTopFeatureCategoriesReachable(page);
     await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png");
@@ -73,6 +74,7 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
 
     await expectWorkspaceHierarchy(app, page, 1120, 720);
     await capturePhaseScreenshot(page, "workspace-1120x720.png");
+    await captureTimelineScreenshot(page, "timeline-bottom-1120x720.png");
     await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png");
     await capturePreviewMonitorScreenshot(page, "preview-monitor-1120x720.png");
   } finally {
@@ -201,6 +203,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   await expectMaterialLibraryGeometry(page, width);
   await expectPreviewMonitorChrome(page, boxes.preview, width);
   await expectTopFeatureNavigationChrome(page);
+  await expectTimelineChrome(page, width);
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
   expect(previewCanvas.x, `预览画布左侧不能越界 ${width}x${height}`).toBeGreaterThanOrEqual(boxes.preview.x);
@@ -337,6 +340,109 @@ async function captureMaterialLibraryScreenshot(page: Page, filename: string): P
 async function capturePreviewMonitorScreenshot(page: Page, filename: string): Promise<void> {
   mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
   await page.locator('[aria-label="预览窗口"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function captureTimelineScreenshot(page: Page, filename: string): Promise<void> {
+  mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+  await page.locator('[aria-label="时间线"]').screenshot({ path: join(PHASE15_3_SCREENSHOT_DIR, filename) });
+}
+
+async function expectTimelineChrome(page: Page, width: number): Promise<void> {
+  const toolbar = page.getByLabel("时间线控制");
+  const ruler = page.getByLabel("时间线标尺");
+  const header = page.locator(".track-header").first();
+  const toolbarBox = await stableBox(toolbar, `时间线工具栏 ${width}`);
+  const rulerBox = await stableBox(ruler, `时间线标尺 ${width}`);
+  const headerBox = await stableBox(header, `时间线轨道头 ${width}`);
+
+  expect(toolbarBox.height, `timeline toolbar should stay compact ${width}`).toBeLessThanOrEqual(44);
+  expect(rulerBox.height, `timeline ruler should stay compact ${width}`).toBeLessThanOrEqual(26);
+  expect(headerBox.width, `track header should be compact ${width}`).toBeGreaterThanOrEqual(118);
+  expect(headerBox.width, `track header should not dominate timeline ${width}`).toBeLessThanOrEqual(132);
+
+  const rowMetrics = await page.locator(".track-row").evaluateAll((rows) =>
+    rows.map((row) => {
+      const box = row.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      return {
+        height: box.height,
+        visible: box.bottom > 0 && box.top < viewportHeight
+      };
+    })
+  );
+  expect(rowMetrics.filter((row) => row.visible).length, `timeline should expose multiple rows ${width}`).toBeGreaterThanOrEqual(3);
+  for (const row of rowMetrics) {
+    expect(row.height, `timeline row should stay dense ${width}`).toBeGreaterThanOrEqual(38);
+    expect(row.height, `timeline row should stay dense ${width}`).toBeLessThanOrEqual(46);
+  }
+
+  await expect(page.locator(".track-status-line")).toHaveCount(0);
+  await expect(page.locator(".timeline-tool-divider")).toHaveCount(2);
+  await expectTimelineToolbarContentsInside(page, width);
+  await expect(page.locator(".segment-filmstrip").first()).toBeVisible();
+  await expect(page.locator(".segment-wave-bed").first()).toBeVisible();
+}
+
+async function expectTimelineToolbarContentsInside(page: Page, width: number): Promise<void> {
+  const clippedControls = await page.getByLabel("时间线控制").evaluate((strip) => {
+    const stripBox = strip.getBoundingClientRect();
+    return Array.from(strip.querySelectorAll("button, input, select, [role='group'], .timeline-edit-cluster, .timeline-zoom-shell"))
+      .map((child) => {
+        const box = child.getBoundingClientRect();
+        const style = window.getComputedStyle(child);
+        return {
+          label:
+            child.getAttribute("aria-label") ||
+            child.getAttribute("title") ||
+            child.textContent?.replace(/\s+/g, " ").trim() ||
+            child.tagName,
+          visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom
+        };
+      })
+      .filter(
+        (box) =>
+          box.visible &&
+          (box.left < stripBox.left - 1 ||
+            box.top < stripBox.top - 1 ||
+            box.right > stripBox.right + 1 ||
+            box.bottom > stripBox.bottom + 1)
+      );
+  });
+
+  expect(clippedControls, `timeline toolbar controls clipped ${width}`).toEqual([]);
+  const overlappingClusters = await page.getByLabel("时间线控制").evaluate((strip) => {
+    const clusters = Array.from(strip.querySelectorAll(".timeline-edit-cluster"))
+      .map((cluster) => {
+        const box = cluster.getBoundingClientRect();
+        const style = window.getComputedStyle(cluster);
+        return {
+          label: cluster.getAttribute("class") ?? "timeline cluster",
+          visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom
+        };
+      })
+      .filter((box) => box.visible);
+    const overlaps: Array<{ first: string; second: string }> = [];
+    for (let index = 0; index < clusters.length; index += 1) {
+      for (let next = index + 1; next < clusters.length; next += 1) {
+        const first = clusters[index];
+        const second = clusters[next];
+        const separated = first.right <= second.left + 1 || second.right <= first.left + 1 || first.bottom <= second.top + 1 || second.bottom <= first.top + 1;
+        if (!separated) {
+          overlaps.push({ first: first.label, second: second.label });
+        }
+      }
+    }
+    return overlaps;
+  });
+  expect(overlappingClusters, `timeline toolbar clusters overlap ${width}`).toEqual([]);
 }
 
 async function expectPreviewMonitorChrome(page: Page, previewBox: RegionBox, width: number): Promise<void> {
