@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260623-titlebar-jianying-chrome
-last_updated: "2026-06-22T17:01:30Z"
-last_activity: 2026-06-23 -- Completed quick task 260623-titlebar-jianying-chrome: titlebar Jianying chrome
+stopped_at: Completed quick task 260623-clean-ui-reference-media
+last_updated: "2026-06-22T17:12:57Z"
+last_activity: 2026-06-23 -- Completed quick task 260623-clean-ui-reference-media: healthy UI reference media fixture
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-23 -- Completed quick task 260623-titlebar-jianying-chrome: titlebar Jianying chrome
+Last activity: 2026-06-23 -- Completed quick task 260623-clean-ui-reference-media: healthy UI reference media fixture
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-23 | 260623-clean-ui-reference-media | Changed UI reference screenshots to create a fresh project, import real local fixture video/audio/image, add real timeline clips, and assert the default product material panel is not an error-state fixture while preserving missing/failed material coverage elsewhere. |
 | 2026-06-23 | 260623-titlebar-jianying-chrome | Reworked the product titlebar toward the Jianying reference with macOS-style window dots and autosave-local status copy, added unclipped titlebar assertions, and revalidated UI reference, packaged native-surface playback, source guard, and diff gates. |
 | 2026-06-23 | 260623-product-ui-reference-gap | Promoted transition and caption into the always-visible product top feature toolbar, tightened category sizing for 1280x800 and 1120x720, added visible-bounds regression checks, and revalidated UI reference, packaged playback, source guard, and diff gates. |
 | 2026-06-23 | 260623-native-surface-window-reflow | Added main-process BrowserWindow geometry reflow for the native realtime preview surface, covered playing move/maximize/restore without playback restart, and revalidated packaged native-surface placement, resize, source guard, and diff gates. |

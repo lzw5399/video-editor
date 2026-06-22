@@ -1,5 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 type RegionBox = {
@@ -21,8 +22,14 @@ const REPO_ROOT = join(process.cwd(), "../..");
 const REFERENCE_DIR = join(REPO_ROOT, "docs/ui-reference/jianying-pro");
 const REFERENCE_SCREENSHOT_DIR = join(REFERENCE_DIR, "screenshots");
 const PHASE15_3_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase15-3");
+const REFERENCE_MEDIA_DIR = join(process.cwd(), "tests/fixtures/media");
+const REFERENCE_VIDEO = join(REFERENCE_MEDIA_DIR, "p0-moving-testsrc.mp4");
+const REFERENCE_AUDIO = join(REFERENCE_MEDIA_DIR, "p0-tone.wav");
+const REFERENCE_IMAGE = join(REFERENCE_MEDIA_DIR, "p0-overlay-testsrc.png");
+const REFERENCE_MEDIA_FILES = [REFERENCE_VIDEO, REFERENCE_AUDIO, REFERENCE_IMAGE] as const;
 const FORBIDDEN_DEFAULT_COPY =
   /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
+const FORBIDDEN_REFERENCE_MEDIA_COPY = /素材丢失|解析失败|素材解析失败|素材解析失败，请检查文件格式或重新导入/;
 const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
 const OVERFLOW_TOP_CATEGORIES = ["智能包装", "滤镜", "调节", "数字人"] as const;
 const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
@@ -145,19 +152,36 @@ async function launchWorkspaceApp(): Promise<{ app: ElectronApplication; page: P
     env: {
       ...process.env,
       VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
-      VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "demo",
+      VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: referenceProjectBundlePath(),
       VIDEO_EDITOR_TEST_MOCK_PREVIEW_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS: "1",
       VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS: "1",
       VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
-      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(["/tmp/demo-material.mp4"])
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(REFERENCE_MEDIA_FILES)
     }
   });
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
+  await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
+  await page.getByRole("button", { name: "新建项目" }).click();
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
+  await page.getByRole("button", { name: "导入素材" }).click();
+  await expect(page.getByRole("article", { name: "素材 p0-moving-testsrc.mp4" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "素材 p0-tone.wav" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "素材 p0-overlay-testsrc.png" })).toBeVisible();
+  await expect(page.getByLabel("素材面板")).not.toContainText(FORBIDDEN_REFERENCE_MEDIA_COPY);
+  await page.getByRole("button", { name: "添加 p0-moving-testsrc.mp4 到时间线" }).click();
+  await page.getByRole("button", { name: "添加 p0-tone.wav 到时间线" }).click();
+  await expect(page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /片段 p0-tone\.wav/ })).toBeVisible();
+  await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+  await expect(page.getByLabel("属性检查器")).toContainText("草稿参数");
   return { app, page };
+}
+
+function referenceProjectBundlePath(): string {
+  return join(mkdtempSync(join(tmpdir(), "video-editor-ui-reference-")), "未命名草稿.veproj");
 }
 
 async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
@@ -202,6 +226,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   expectNoOverlap(boxes.preview, boxes.timeline, "预览窗口", "时间线");
   expectNoOverlap(boxes.inspector, boxes.timeline, "属性检查器", "时间线");
   await expectMaterialLibraryGeometry(page, width);
+  await expect(page.getByLabel("素材面板")).not.toContainText(FORBIDDEN_REFERENCE_MEDIA_COPY);
   await expectPreviewMonitorChrome(page, boxes.preview, width);
   await expectTopFeatureNavigationChrome(page);
   await expectTimelineChrome(page, width);
