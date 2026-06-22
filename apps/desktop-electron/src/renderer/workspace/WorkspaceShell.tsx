@@ -163,6 +163,21 @@ export function WorkspaceShell({
 
   return (
     <main className="workspace" aria-label="剪映风格编辑工作区">
+      <header className="product-titlebar" aria-label="项目标题栏">
+        <div className="window-control-dots" aria-hidden="true">
+          <span className="window-dot close" />
+          <span className="window-dot minimize" />
+          <span className="window-dot maximize" />
+        </div>
+        <div className="workspace-title" aria-label="项目标题" title={workspace.viewModel.project.draftName}>
+          {workspace.viewModel.project.draftName}
+        </div>
+        <div className="product-action-bar" aria-label="产品操作">
+          <button type="button" className="top-export-button" aria-label="导出" onClick={() => setExportModalOpen(true)}>
+            导出
+          </button>
+        </div>
+      </header>
       <header className="top-feature-bar" aria-label="顶部功能区">
         <h1 className="product-mark">视频剪辑</h1>
         <nav className="category-nav" aria-label="顶部功能区">
@@ -185,11 +200,6 @@ export function WorkspaceShell({
             );
           })}
         </nav>
-        <div className="product-action-bar" aria-label="产品操作">
-          <button type="button" className="top-export-button" aria-label="导出" onClick={() => setExportModalOpen(true)}>
-            导出
-          </button>
-        </div>
       </header>
 
       <section className="material-panel" aria-label="素材面板">

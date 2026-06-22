@@ -153,6 +153,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   await setViewport(app, page, width, height);
 
   const boxes = {
+    titlebar: await stableBox(page.locator('[aria-label="项目标题栏"]'), `项目标题栏 ${width}x${height}`),
     top: await stableBox(page.locator('[aria-label="顶部功能区"]').first(), `顶部功能区 ${width}x${height}`),
     left: await stableBox(page.locator('[aria-label="素材面板"]'), `素材面板 ${width}x${height}`),
     preview: await stableBox(page.locator('[aria-label="预览窗口"]'), `预览窗口 ${width}x${height}`),
@@ -160,7 +161,8 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
     timeline: await stableBox(page.locator('[aria-label="时间线"]'), `时间线 ${width}x${height}`)
   };
 
-  expect(boxes.top.y, "top bar starts at viewport top").toBeLessThanOrEqual(1);
+  expect(boxes.titlebar.y, "project titlebar starts at viewport top").toBeLessThanOrEqual(1);
+  expect(boxes.top.y, "feature bar below project titlebar").toBeGreaterThanOrEqual(boxes.titlebar.y + boxes.titlebar.height - 1);
   expect(boxes.left.x, "left panel before preview").toBeLessThan(boxes.preview.x);
   expect(boxes.preview.x + boxes.preview.width, "preview before inspector").toBeLessThanOrEqual(boxes.inspector.x + 1);
   expect(boxes.timeline.y, "timeline below editor body").toBeGreaterThan(boxes.top.y + boxes.top.height);
@@ -181,6 +183,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
 
   const previewCanvas = await stableBox(page.locator(".preview-canvas"), `预览画布 ${width}x${height}`);
   expect(previewCanvas.width / boxes.preview.width, `预览画布应填充预览窗口 ${width}x${height}`).toBeGreaterThanOrEqual(0.7);
+  await expect(page.getByLabel("项目标题", { exact: true })).toContainText("未命名草稿");
 
   const exportButtonBox = await stableBox(page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }), "顶部导出");
   expect(exportButtonBox.x, "export action is top-right").toBeGreaterThan(width - 180);

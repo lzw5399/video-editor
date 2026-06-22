@@ -594,6 +594,9 @@ test("Chinese editor workspace opens with required regions and material states",
 
     const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
 
+    await expect(page.getByLabel("项目标题栏")).toBeVisible();
+    await expect(page.getByLabel("项目标题", { exact: true })).toContainText("未命名草稿");
+
     for (const category of WORKSPACE_CATEGORIES) {
       await expect(topFeatureNav.getByRole("button", { name: category })).toBeVisible();
     }

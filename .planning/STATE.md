@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-mp50 preview canvas fill
-last_updated: "2026-06-22T06:21:19Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-mp50: preview canvas fill
+stopped_at: Completed quick task 260622-mc51 product titlebar chrome
+last_updated: "2026-06-22T06:39:37Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-mc51: product titlebar chrome
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-mp50: preview canvas fill
+Last activity: 2026-06-22 -- Completed quick task 260622-mc51: product titlebar chrome
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-mc51-product-titlebar-chrome | Added a dedicated product titlebar with decorative window dots, real draft name, and top-right export action; split workspace rows explicitly, fixed narrow top chrome layout, and revalidated static, narrow, packaged, and playing native-surface gates. |
 | 2026-06-22 | 260622-mp50-preview-canvas-fill | Fixed product preview canvas sizing by removing unused product grid rows, making the monitor width-driven, adding a fill-ratio UI gate, and revalidating static, narrow, packaged, and playing native-surface screenshots. |
 | 2026-06-22 | 260622-mt49-hide-timeline-material-quick-add | Hid the product timeline material select and quick-add shortcut so drag from the media grid remains the primary material-to-timeline path, kept the diagnostic-only material-id intent fallback, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-mr48-preview-empty-monitor | Reduced the product preview empty state from a bordered instruction-card feel to a quiet monitor surface while preserving canvas geometry, realtime host DOM, product copy, and build/workspace/UI/source guard gates. |
