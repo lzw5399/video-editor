@@ -182,8 +182,12 @@ export function WorkspaceShell({
     <main className="workspace" aria-label="剪映风格编辑工作区">
       <header className="product-titlebar" aria-label="项目标题栏">
         <div className="titlebar-status" aria-label="草稿保存状态">
-          <span aria-hidden="true" />
-          <strong>本地草稿</strong>
+          <span className="titlebar-window-controls" aria-hidden="true">
+            <span className="titlebar-window-dot close" />
+            <span className="titlebar-window-dot minimize" />
+            <span className="titlebar-window-dot zoom" />
+          </span>
+          <strong>{formatAutosaveStatusLabel()}</strong>
         </div>
         <div className="workspace-title" aria-label="项目标题" title={workspace.viewModel.project.draftName}>
           {workspace.viewModel.project.draftName}
@@ -357,6 +361,13 @@ export function WorkspaceShell({
       ) : null}
     </main>
   );
+}
+
+function formatAutosaveStatusLabel(date = new Date()): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds} 自动保存本地`;
 }
 
 function CategoryButton({

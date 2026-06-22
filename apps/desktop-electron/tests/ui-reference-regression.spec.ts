@@ -195,6 +195,7 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
     expect(box.y + box.height, `${name} bottom clipped`).toBeLessThanOrEqual(height + 1);
   }
 
+  await expectTitlebarChrome(page, boxes.titlebar, width);
   expectNoOverlap(boxes.left, boxes.preview, "素材面板", "预览窗口");
   expectNoOverlap(boxes.preview, boxes.inspector, "预览窗口", "属性检查器");
   expectNoOverlap(boxes.left, boxes.timeline, "素材面板", "时间线");
@@ -222,6 +223,17 @@ async function expectWorkspaceHierarchy(app: ElectronApplication, page: Page, wi
   const exportButtonBox = await stableBox(page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }), "顶部导出");
   expect(exportButtonBox.x, "export action is top-right").toBeGreaterThan(width - 180);
   await expectNoDebugCopy(page.locator("body"));
+}
+
+async function expectTitlebarChrome(page: Page, titlebarBox: RegionBox, width: number): Promise<void> {
+  const status = page.getByLabel("草稿保存状态");
+  await expect(status).toContainText(/\d{2}:\d{2}:\d{2} 自动保存本地/);
+  await expect(status.locator(".titlebar-window-dot")).toHaveCount(3);
+  const statusBox = await stableBox(status, `草稿保存状态 ${width}`);
+  expect(statusBox.x, `titlebar save status left clipped ${width}`).toBeGreaterThanOrEqual(titlebarBox.x);
+  expect(statusBox.x + statusBox.width, `titlebar save status right clipped ${width}`).toBeLessThanOrEqual(
+    titlebarBox.x + titlebarBox.width + 1
+  );
 }
 
 async function expectTopFeatureNavigationChrome(page: Page): Promise<void> {
