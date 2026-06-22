@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-mt53 media tool row
-last_updated: "2026-06-22T07:01:54Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-mt53: media tool row
+stopped_at: Completed quick task 260622-ms54 hide available material status
+last_updated: "2026-06-22T07:17:13Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-ms54: hide available material status
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-mt53: media tool row
+Last activity: 2026-06-22 -- Completed quick task 260622-ms54: hide available material status
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-ms54-hide-available-material-status | Removed default `可用` chips from product material cards, kept actionable missing/probe-failed states visible, moved old add coverage to drag-to-timeline, and revalidated workspace, smoke, real workflow, packaged, source guard, and playing native-surface gates. |
 | 2026-06-22 | 260622-mt53-media-tool-row | Reworked the media panel top controls into a Jianying-like compact toolbar with app-local import/list/filter icons, kept unimplemented advanced filter disabled, preserved real import/search/filter/drag behavior, and revalidated static, narrow, packaged, and playing native-surface gates. |
 | 2026-06-22 | 260622-ms52-media-source-rail | Added a Jianying-like media source rail with `导入` active and unavailable source libraries disabled, preserved import/search/filter/drag behavior, kept product diagnostics hidden, and revalidated static, narrow, packaged, and playing native-surface gates. |
 | 2026-06-22 | 260622-mc51-product-titlebar-chrome | Added a dedicated product titlebar with decorative window dots, real draft name, and top-right export action; split workspace rows explicitly, fixed narrow top chrome layout, and revalidated static, narrow, packaged, and playing native-surface gates. |

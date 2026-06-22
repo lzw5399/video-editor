@@ -532,7 +532,7 @@ export async function importMaterialThroughProductPicker(
   const nextCount = (await countProjectSessionIntent(app, "importMaterial")) + 1;
   await page.getByRole("button", { name: "导入素材" }).click();
   await waitForProjectSessionIntentCount(app, "importMaterial", nextCount);
-  await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", {
+  await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toBeVisible({
     timeout: 30_000
   });
 }
@@ -547,7 +547,7 @@ export async function importMaterialsThroughProductPicker(
   await waitForProjectSessionIntentCount(app, "importMaterial", nextCount);
   for (const materialPath of materialPaths) {
     const materialName = basename(materialPath);
-    await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toContainText("可用", {
+    await expect(page.getByRole("article", { name: `素材 ${materialName}` })).toBeVisible({
       timeout: 30_000
     });
   }
@@ -561,7 +561,7 @@ export async function addMaterialToTimeline(
   const materialName = basename(materialPath);
   const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
-  await expect(materialRow).toContainText("可用", { timeout: 10_000 });
+  await expect(materialRow).toBeVisible({ timeout: 10_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
@@ -578,7 +578,7 @@ export async function dragMaterialToTimeline(
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
   const timelineDropTarget = page.locator('[data-material-drop-target="true"]');
 
-  await expect(materialRow).toContainText("可用", { timeout: 10_000 });
+  await expect(materialRow).toBeVisible({ timeout: 10_000 });
   await expect(timelineDropTarget).toBeVisible();
   await materialRow.dragTo(timelineDropTarget);
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);

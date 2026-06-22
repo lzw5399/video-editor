@@ -550,6 +550,7 @@ function MaterialList({
     <div className="material-list">
       {materials.map((material) => {
         const statusMessage = materialStatusMessage(material);
+        const showStatusLabel = material.status !== "available";
         const resourceStatus = resourceStatuses.find((status) => status.materialId === material.materialId);
         const thumbnailUrl = materialThumbnailUrl(bundlePath, resourceStatus);
 
@@ -570,7 +571,9 @@ function MaterialList({
             <div className="material-copy">
               <div className="material-title">
                 <strong>{material.displayName}</strong>
-                <span className={`material-status ${material.status}`}>{formatMaterialStatus(material.status)}</span>
+                {showStatusLabel ? (
+                  <span className={`material-status ${material.status}`}>{formatMaterialStatus(material.status)}</span>
+                ) : null}
               </div>
               <div className="material-metadata">
                 <span>{formatMicroseconds(material.metadata.duration)}</span>

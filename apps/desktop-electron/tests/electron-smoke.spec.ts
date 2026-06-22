@@ -184,7 +184,7 @@ test("test fixture opt-in loads demo workspace materials", async () => {
     await expect(page.getByLabel("草稿包路径")).toHaveValue(/^\/(?:private\/)?tmp\/phase-04-demo\.veproj$/);
     await expect(page.getByLabel("素材路径")).toHaveValue(/^\/(?:private\/)?tmp\/demo-material\.mp4$/);
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
-    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("可用");
+    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).not.toContainText("可用");
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toContainText("音频");
     await expect(page.getByRole("article", { name: "素材 封面图.png" })).toContainText("素材丢失");
     await expect(page.getByRole("article", { name: "素材 贴纸素材.webp" })).toContainText("解析失败");

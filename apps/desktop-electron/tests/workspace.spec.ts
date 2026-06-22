@@ -586,6 +586,15 @@ async function seekWorkspaceTimelinePlayhead(page: Page, targetTimeUs: number): 
   await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height * 0.5);
 }
 
+async function dragWorkspaceMaterialToTimeline(page: Page, materialName: string): Promise<void> {
+  const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
+  const timelineDropTarget = page.locator('[data-material-drop-target="true"]');
+
+  await expect(materialRow).toBeVisible({ timeout: 20_000 });
+  await expect(timelineDropTarget).toBeVisible();
+  await materialRow.dragTo(timelineDropTarget);
+}
+
 test("Chinese editor workspace opens with required regions and material states", async () => {
   const { app, page } = await launchWorkspaceApp();
 
@@ -660,7 +669,7 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("视频");
     await expect(page.getByRole("article", { name: "素材 背景音乐.wav" })).toContainText("音频");
     await expect(page.getByRole("article", { name: "素材 封面图.png" })).toContainText("图片");
-    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).toContainText("可用");
+    await expect(page.getByRole("article", { name: "素材 城市街景.mp4" })).not.toContainText("可用");
     await expect(page.getByRole("article", { name: "素材 封面图.png" })).toContainText("素材丢失");
     await expect(page.getByRole("article", { name: "素材 贴纸素材.webp" })).toContainText("解析失败");
     await materialFilters.getByRole("button", { name: "丢失" }).click();
@@ -1087,7 +1096,7 @@ test("auto canvas adopts the first imported portrait material without renderer-o
     await expectCommandCall(app, "importMaterial");
     await expect(page.locator('[aria-label="素材 p0-portrait-testsrc.mp4"]')).toBeVisible();
 
-    await page.getByRole("button", { name: "添加片段" }).click();
+    await dragWorkspaceMaterialToTimeline(page, "p0-portrait-testsrc.mp4");
     await expectCommandCall(app, "addTimelineSegmentIntent");
     await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
     await expect(
@@ -1147,10 +1156,9 @@ test("预览播放按钮使用实时预览画面而不是连续请求预览帧",
 
   try {
     await page.getByRole("button", { name: "导入素材" }).click();
-    await expect(page.getByRole("article", { name: "素材 p0-portrait-testsrc.mp4" })).toContainText("可用", { timeout: 20_000 });
-    await page.locator(".compact-select select").selectOption({ label: "p0-portrait-testsrc.mp4" });
+    await expect(page.getByRole("article", { name: "素材 p0-portrait-testsrc.mp4" })).toContainText("视频", { timeout: 20_000 });
     await seekWorkspaceTimelinePlayhead(page, 8_000_000);
-    await page.getByRole("button", { name: "添加片段" }).click();
+    await dragWorkspaceMaterialToTimeline(page, "p0-portrait-testsrc.mp4");
     await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
     await resetNativeCommandObservations(app, page);
 

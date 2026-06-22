@@ -117,9 +117,9 @@ export async function runRealImportPreviewExportWorkflow(
 
 export async function assertReopenedProjectState(page: Page, fixtures: Phase6MediaFixtures): Promise<void> {
   await expect(page.getByRole("main", { name: "剪映风格编辑工作区" })).toBeVisible();
-  await expect(page.getByRole("article", { name: `素材 ${fixtures.videoName}` })).toContainText("可用", { timeout: 20_000 });
-  await expect(page.getByRole("article", { name: `素材 ${fixtures.imageName}` })).toContainText("可用", { timeout: 20_000 });
-  await expect(page.getByRole("article", { name: `素材 ${fixtures.audioName}` })).toContainText("可用", { timeout: 20_000 });
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.videoName}` })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.imageName}` })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("article", { name: `素材 ${fixtures.audioName}` })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.videoName)}`) })).toHaveCount(2);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.imageName)}`) })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(fixtures.audioName)}`) })).toBeVisible();
@@ -226,7 +226,7 @@ async function importMaterials(
 ): Promise<void> {
   await page.getByRole("button", { name: "导入素材" }).click();
   for (const material of materials) {
-    await expect(page.getByRole("article", { name: `素材 ${material.name}` })).toContainText("可用", { timeout: 20_000 });
+    await expect(page.getByRole("article", { name: `素材 ${material.name}` })).toBeVisible({ timeout: 20_000 });
   }
 }
 
@@ -234,7 +234,7 @@ async function addVisualSegment(page: Page, app: ElectronApplication, materialNa
   const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   await page.getByRole("navigation", { name: "顶部功能区" }).getByRole("button", { name: "媒体" }).click();
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
-  await expect(materialRow).toContainText("可用", { timeout: 20_000 });
+  await expect(materialRow).toBeVisible({ timeout: 20_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForProjectSessionIntentCount(page, app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
