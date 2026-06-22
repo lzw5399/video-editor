@@ -16,7 +16,6 @@ type VideoEditorPlatformApi = {
   createProjectBundle: () => Promise<{ canceled: boolean; bundlePath: string | null }>;
   openProjectBundle: () => Promise<{ canceled: boolean; bundlePath: string | null }>;
   openMaterialFiles: () => Promise<{ canceled: boolean; filePaths: string[] }>;
-  pathToFileUrl: (path: string) => Promise<string>;
 };
 
 declare global {
@@ -124,8 +123,7 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
       hasExecuteCommand: Object.prototype.hasOwnProperty.call(window.videoEditorCore ?? {}, "executeCommand"),
       keys: Object.keys(window.videoEditorCore ?? {}),
       platformKeys: Object.keys(window.videoEditorPlatform ?? {}),
-      openMaterialFiles: typeof window.videoEditorPlatform?.openMaterialFiles,
-      pathToFileUrl: typeof window.videoEditorPlatform?.pathToFileUrl
+      openMaterialFiles: typeof window.videoEditorPlatform?.openMaterialFiles
     }));
     expect(apiShape).toEqual({
       ping: "function",
@@ -146,9 +144,8 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
         "startProjectSessionExport",
         "closeProjectSession"
       ]),
-      platformKeys: ["createProjectBundle", "openProjectBundle", "openMaterialFiles", "pathToFileUrl"],
-      openMaterialFiles: "function",
-      pathToFileUrl: "function"
+      platformKeys: ["createProjectBundle", "openProjectBundle", "openMaterialFiles"],
+      openMaterialFiles: "function"
     });
 
     const ping = await page.evaluate(() => window.videoEditorCore?.ping());

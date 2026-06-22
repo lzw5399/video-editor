@@ -12,8 +12,6 @@ import type {
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
   ProjectSessionRequest,
-  RequestProjectSessionPreviewFrameRequest,
-  RequestProjectSessionPreviewSegmentRequest,
   StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 
@@ -88,17 +86,12 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     getArtifactQuotaStatus: (request: ArtifactQuotaRequest) => ipcRenderer.invoke("core:getArtifactQuotaStatus", request),
     runArtifactGarbageCollection: (request: ArtifactGarbageCollectionRequest) =>
       ipcRenderer.invoke("core:runArtifactGarbageCollection", request),
-    requestProjectSessionPreviewFrame: (request: RequestProjectSessionPreviewFrameRequest) =>
-      ipcRenderer.invoke("core:requestProjectSessionPreviewFrame", request),
-    requestProjectSessionPreviewSegment: (request: RequestProjectSessionPreviewSegmentRequest) =>
-      ipcRenderer.invoke("core:requestProjectSessionPreviewSegment", request),
     closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {
     createProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:createProjectBundle"),
     openProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:openProjectBundle"),
-    openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles"),
-    pathToFileUrl: (path: string) => ipcRenderer.invoke("platform:pathToFileUrl", path)
+    openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles")
   });
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),

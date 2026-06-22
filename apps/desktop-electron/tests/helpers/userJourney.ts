@@ -60,8 +60,6 @@ type ProjectSessionCall = {
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
     | "startProjectSessionExport"
-    | "requestProjectSessionPreviewFrame"
-    | "requestProjectSessionPreviewSegment"
     | "closeProjectSession";
   sessionId: string | null;
   expectedRevision: number | null;
@@ -811,9 +809,7 @@ export async function readNativeCommandObservations(app: ProductJourneyAppContro
       .filter(
         (call) =>
           (call.command === "executeProjectIntent" && call.intentKind !== null) ||
-          call.command === "startProjectSessionExport" ||
-          call.command === "requestProjectSessionPreviewFrame" ||
-          call.command === "requestProjectSessionPreviewSegment"
+          call.command === "startProjectSessionExport"
       )
       .map(projectSessionCallToNativeObservation)
   ];
@@ -939,11 +935,7 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
   const command =
     call.command === "startProjectSessionExport"
       ? "startExport"
-      : call.command === "requestProjectSessionPreviewFrame"
-        ? "requestProjectSessionPreviewFrame"
-        : call.command === "requestProjectSessionPreviewSegment"
-          ? "requestProjectSessionPreviewSegment"
-          : (call.intentKind ?? "executeProjectIntent");
+      : (call.intentKind ?? "executeProjectIntent");
   return {
     command,
     kind: command,

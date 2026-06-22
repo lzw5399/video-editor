@@ -2,9 +2,8 @@ use bindings_node::{
     close_project_session, close_realtime_preview_session, create_audio_preview_session,
     create_project_session, create_realtime_preview_session, execute_command,
     execute_project_intent, get_audio_preview_status, list_project_session_materials,
-    list_project_session_missing_materials, open_project_session,
-    request_project_session_preview_frame, request_project_session_preview_segment,
-    seek_audio_preview, start_project_session_export, stop_audio_preview,
+    list_project_session_missing_materials, open_project_session, seek_audio_preview,
+    start_project_session_export, stop_audio_preview,
     update_realtime_preview_project_session_snapshot,
 };
 use draft_model::{Draft, TextSegmentSource};
@@ -1971,74 +1970,6 @@ fn project_session_export_rejects_renderer_draft_payload() {
     assert_eq!(rejected["ok"], false, "{rejected:#}");
     assert_eq!(rejected["data"], Value::Null);
     assert_eq!(rejected["error"]["kind"], "invalidPayload");
-}
-
-#[test]
-fn project_session_preview_commands_reject_stale_unknown_and_renderer_draft_payloads() {
-    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    let bundle_path = temp_dir
-        .path()
-        .join("session-preview-command-boundary.veproj");
-    save_timeline_draft(&bundle_path);
-    open_project_session(json!({
-        "bundlePath": bundle_path.display().to_string(),
-        "sessionId": "test-session-preview-command-boundary"
-    }))
-    .expect("openProjectSession should return an envelope");
-
-    let stale = request_project_session_preview_frame(json!({
-        "sessionId": "test-session-preview-command-boundary",
-        "expectedRevision": 1,
-        "targetTime": 0
-    }))
-    .expect("stale session preview frame should return an envelope");
-    assert_eq!(stale["ok"], false, "{stale:#}");
-    assert_eq!(stale["error"]["kind"], "invalidPayload");
-    assert_eq!(
-        stale["error"]["command"],
-        "requestProjectSessionPreviewFrame"
-    );
-
-    let unknown = request_project_session_preview_segment(json!({
-        "sessionId": "missing-session-preview-command",
-        "expectedRevision": 0,
-        "targetTimerange": { "start": 0, "duration": 1_000_000 }
-    }))
-    .expect("unknown session preview segment should return an envelope");
-    assert_eq!(unknown["ok"], false, "{unknown:#}");
-    assert_eq!(unknown["error"]["kind"], "invalidProject");
-    assert_eq!(
-        unknown["error"]["command"],
-        "requestProjectSessionPreviewSegment"
-    );
-
-    let draft_bearing_frame = request_project_session_preview_frame(json!({
-        "sessionId": "test-session-preview-command-boundary",
-        "expectedRevision": 0,
-        "targetTime": 0,
-        "draft": timeline_draft_json()
-    }))
-    .expect("draft-bearing session preview frame should return an envelope");
-    assert_eq!(draft_bearing_frame["ok"], false, "{draft_bearing_frame:#}");
-    assert_eq!(draft_bearing_frame["data"], Value::Null);
-    assert_eq!(draft_bearing_frame["error"]["kind"], "invalidPayload");
-
-    let draft_bearing_segment = request_project_session_preview_segment(json!({
-        "sessionId": "test-session-preview-command-boundary",
-        "expectedRevision": 0,
-        "targetTimerange": { "start": 0, "duration": 1_000_000 },
-        "draft": timeline_draft_json()
-    }))
-    .expect("draft-bearing session preview segment should return an envelope");
-    assert_eq!(
-        draft_bearing_segment["ok"], false,
-        "{draft_bearing_segment:#}"
-    );
-    assert_eq!(draft_bearing_segment["data"], Value::Null);
-    assert_eq!(draft_bearing_segment["error"]["kind"], "invalidPayload");
-
-    close_project_session(json!({ "sessionId": "test-session-preview-command-boundary" }))
-        .expect("closeProjectSession should return an envelope");
 }
 
 #[test]

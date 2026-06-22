@@ -208,19 +208,13 @@ async function readNativeCommandObservations(app: ElectronApplication): Promise<
       .filter(
         (call) =>
           call.command === "startProjectSessionExport" ||
-          call.command === "requestProjectSessionPreviewFrame" ||
-          call.command === "requestProjectSessionPreviewSegment" ||
           call.intentKind !== null
       )
       .map((call) => {
         const command =
           call.command === "startProjectSessionExport"
             ? "startExport"
-            : call.command === "requestProjectSessionPreviewFrame"
-              ? "requestProjectSessionPreviewFrame"
-              : call.command === "requestProjectSessionPreviewSegment"
-                ? "requestProjectSessionPreviewSegment"
-                : (call.intentKind ?? "executeProjectIntent");
+            : (call.intentKind ?? "executeProjectIntent");
         return {
           command,
           kind: command,
@@ -275,15 +269,6 @@ async function openDraftParametersDialog(page: Page): Promise<Locator> {
   const dialog = page.getByRole("dialog", { name: "草稿参数" });
   await expect(dialog).toBeVisible();
   return dialog;
-}
-
-async function expectLatestPreviewFrameTarget(app: ElectronApplication, targetTime: number): Promise<void> {
-  await expect
-    .poll(async () => {
-      const calls = (await readNativeCommandObservations(app)).filter((call) => call.command === "requestProjectSessionPreviewFrame");
-      return calls.at(-1)?.targetTime ?? null;
-    })
-    .toBe(targetTime);
 }
 
 async function expectLatestRealtimeHostSeekTarget(app: ElectronApplication, targetTime: number): Promise<void> {
@@ -1095,41 +1080,7 @@ test("auto canvas adopts the first imported portrait material without renderer-o
   }
 });
 
-test("预览控制通过实时预览和会话预览 API 更新帧和片段状态", async () => {
-  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
-
-  try {
-    await resetNativeCommandObservations(app, page);
-
-    await seekWorkspaceTimelinePlayhead(page, 1_200_000);
-    await expect(page.getByLabel("当前时间码")).toContainText("00:00:01.200");
-
-    await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
-    await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
-    await expect(page.getByLabel("预览产物")).toContainText("image/png");
-    const previewImage = page.getByRole("img", { name: "当前预览帧" });
-    await expect(previewImage).toBeVisible();
-    await expect(previewImage).toHaveAttribute("src", /test-frame-1200000\.png$/);
-    await expect(page.getByLabel("预览画面", { exact: true })).not.toContainText("/tmp/video-editor-preview-cache/test-frame-1200000.png");
-
-    await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
-    await expect(page.getByLabel("预览产物")).toContainText("预览片段命中缓存");
-    await expect(page.getByLabel("预览产物")).toContainText("video/mp4");
-    await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-1200000.mp4");
-
-    const calls = await readNativeCommandObservations(app);
-    const frameCall = calls.find((call) => call.command === "requestProjectSessionPreviewFrame");
-    const segmentCall = calls.find((call) => call.command === "requestProjectSessionPreviewSegment");
-    expect(frameCall?.targetTime).toBe(1_200_000);
-    expect(segmentCall?.targetTimerange).toEqual({ start: 1_200_000, duration: 2_000_000 });
-  } finally {
-    await app.close();
-  }
-});
-
-test("developer diagnostics preview time input and production frame buttons seek realtime host", async () => {
+test("developer diagnostics preview time input seeks realtime host without artifact frame requests", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
@@ -1834,15 +1785,6 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
   try {
     await resetNativeCommandObservations(app, page);
 
-    await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
-
-    await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
-    await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
-
     let exportDialog = await openExportDialog(page);
     await exportDialog.getByRole("button", { name: "开始导出" }).click();
     await expectCommandCall(app, "startExport");
@@ -1858,9 +1800,8 @@ test("画布变更后旧预览和导出派生状态失效", async () => {
     await expectCommandCall(app, "updateDraftCanvasConfig");
 
     await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
-    await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
-    await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新请求预览帧");
-    await expect(page.getByLabel("预览产物")).toContainText("画布已更新，请重新生成预览片段");
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
+    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画布已更新，预览待刷新");
     exportDialog = await openExportDialog(page);
     await expect(exportDialog.getByLabel("导出状态", { exact: true })).toContainText("草稿已更新，请重新开始导出");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
@@ -1877,15 +1818,6 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
   try {
     await resetNativeCommandObservations(app, page);
     await expectNoLeftSecondaryMenu(page);
-
-    await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
-
-    await page.getByRole("button", { name: "生成预览片段" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewSegment");
-    await expect(page.getByLabel("预览产物")).toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
 
     let exportDialog = await openExportDialog(page);
     await exportDialog.getByRole("button", { name: "开始导出" }).click();
@@ -1923,17 +1855,15 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await visualForm.getByRole("button", { name: "应用画面" }).click();
 
     await expectCommandCall(app, "updateSelectedSegmentVisual");
-    await expectLatestPreviewFrameTarget(app, 0);
+    await expectLatestRealtimeHostSeekTarget(app, 0);
     await expect(visualForm.getByLabel("位置 X", { exact: true })).toHaveValue("160");
     await expect(visualForm.getByLabel("位置 Y", { exact: true })).toHaveValue("-90");
     await expect(visualForm.getByLabel("缩放 X", { exact: true })).toHaveValue("1250");
     await expect(visualForm.getByLabel("缩放 Y", { exact: true })).toHaveValue("850");
 
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveAttribute("src", /test-frame-0\.png$/);
-    await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-segment-0.mp4");
-    await expect(page.getByLabel("预览产物")).toContainText("预览帧已生成");
-    await expect(page.getByLabel("预览产物")).toContainText("画面变换已更新，请重新生成预览片段");
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
+    await expect(page.getByLabel("预览产物")).toHaveCount(0);
+    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("画面变换已更新，预览待刷新");
     exportDialog = await openExportDialog(page);
     await expect(exportDialog.getByLabel("导出状态", { exact: true })).toContainText("画面变换已更新，请重新开始导出");
     await expect(exportDialog.getByLabel("输出校验")).toContainText("输出校验待完成");
@@ -1972,10 +1902,8 @@ test("selection preview overlay follows accepted visible segment and allows dire
   try {
     await resetNativeCommandObservations(app, page);
 
-    await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
     await expect(page.getByLabel("预览选中框")).toHaveCount(0);
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
     await page.getByRole("button", { name: /片段 城市街景\.mp4/ }).click();
     await expectCommandCall(app, "selectTimelineItemIntent");
@@ -1983,7 +1911,7 @@ test("selection preview overlay follows accepted visible segment and allows dire
     const overlay = page.getByLabel("预览选中框");
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute("data-segment-id", "segment-main-video");
-    await expect(page.getByRole("img", { name: "当前预览帧" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "当前预览帧" })).toHaveCount(0);
 
     const overlayPointerEvents = await overlay.evaluate((element) => window.getComputedStyle(element).pointerEvents);
     expect(overlayPointerEvents).toBe("auto");
@@ -1992,27 +1920,6 @@ test("selection preview overlay follows accepted visible segment and allows dire
     await expect(overlay).toBeVisible();
     await setViewportSizeAndVerifyLayout(app, page, 1120, 720);
     await expect(overlay).toBeVisible();
-  } finally {
-    await app.close();
-  }
-});
-
-test("预览失败显示中文分类错误且不改草稿", async () => {
-  const { app, page } = await launchWorkspaceApp({
-    mockPreviewCommands: false,
-    showDeveloperDiagnostics: true
-  });
-
-  try {
-    await resetNativeCommandObservations(app, page);
-
-    await page.getByRole("button", { name: "请求预览帧" }).click();
-    await expectCommandCall(app, "requestProjectSessionPreviewFrame");
-    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("请求预览帧失败");
-    await expect(page.getByLabel("预览状态", { exact: true })).toContainText("预览服务失败");
-    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
-    await expect(page.getByLabel("预览产物")).toContainText("预览帧失败");
-    await expect(page.getByLabel("预览产物")).not.toContainText("/tmp/video-editor-preview-cache/test-frame");
   } finally {
     await app.close();
   }

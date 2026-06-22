@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-sg41 remove generic preview commands
-last_updated: "2026-06-22T02:29:17Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-sg41: remove generic preview commands
+stopped_at: Completed quick task 260622-sg42 remove project-session preview artifacts
+last_updated: "2026-06-22T02:59:19Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-sg42: remove project-session preview artifacts
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-sg41: remove generic preview commands
+Last activity: 2026-06-22 -- Completed quick task 260622-sg42: remove project-session preview artifacts
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,8 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-sg42-remove-project-session-preview-artifacts | Removed Electron-visible project-session preview frame/segment artifact APIs, deleted developer artifact preview controls/state, kept preview on Rust realtime host controls, and revalidated workspace, cadence, smoke, UI reference, and source guards. |
+| 2026-06-22 | 260622-sg41-remove-generic-preview-commands | Removed generic preview decode/frame/segment/cache commands from public command envelopes, bindings routes, schema, and generated TS contracts while preserving explicit realtime/session preview paths and guards against reintroduction. |
 | 2026-06-22 | 260622-sg40-remove-generic-material-draft-commands | Removed generic draft-bearing material commands from `CommandEnvelope`, bindings routes, schema, and generated TS contracts while preserving project-session material intent/read APIs; guards now block reintroduction. |
 | 2026-06-22 | 260622-sg39-remove-ffmpeg-env-runtime-lookup | Removed the debug/test FFmpeg runtime env resolver, kept discovery on explicit bundled-directory configuration plus app-local dev default, strengthened release guards and packaged PATH poisoning, and revalidated packaged release gates. |
 | 2026-06-22 | 260622-sg38-remove-generic-project-bundle-commands | Removed generic CommandEnvelope project bundle open/save routes and full-Draft responses, regenerated schema/TS contracts, guarded against reintroduction, and revalidated no-mock real workflow plus product cadence at 90/90 accounted frames. |

@@ -49,8 +49,6 @@ type PreviewMonitorProps = {
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
-  onRequestPreviewFrame: () => void;
-  onRequestPreviewSegment: () => void;
   onProbeRuntimeCapabilities: () => void;
   onRetryAudioPreview: () => void;
   onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
@@ -240,8 +238,6 @@ export function PreviewMonitor({
   onPlayheadChange,
   onTogglePlayback,
   onStopPlayback,
-  onRequestPreviewFrame,
-  onRequestPreviewSegment,
   onProbeRuntimeCapabilities,
   onRetryAudioPreview,
   onUpdateSelectedSegmentVisual
@@ -260,21 +256,17 @@ export function PreviewMonitor({
     aspectRatio: `${Math.max(1, canvasConfig.width)} / ${Math.max(1, canvasConfig.height)}`,
     background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
   };
-  const previewFrameLabel = runtimeDiagnostics.canPreview ? "请求预览帧" : "预览暂不可用";
-  const previewSegmentLabel = runtimeDiagnostics.canPreview ? "生成预览片段" : "预览暂不可用";
   const previewPlaceholderLabel =
     selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
   const showRealtimeSurface = nativeHostState.productReady && !nativeHostState.fallbackActive;
-  const showPreviewFrameImage = preview.frameDisplayUrl !== null && !showRealtimeSurface;
   const productPreviewStatusLabel = formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const previewStatusLabel = showDeveloperDiagnostics
-    ? preview.error ?? preview.frameStatusLabel
+    ? preview.error ?? preview.statusLabel
     : productPreviewStatusLabel === "画面已更新，预览待刷新"
       ? productPreviewStatusLabel
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
   const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
-  const textOverlayStyle =
-    preview.frameDisplayUrl === null && !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
+  const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (selectedSegment === null || !selectedSegment.visual.visible) {
@@ -457,13 +449,10 @@ export function PreviewMonitor({
         aria-label="预览画面"
         style={canvasStyle}
       >
-        {!showPreviewFrameImage && !showRealtimeSurface ? (
+        {!showRealtimeSurface ? (
           <div className="preview-placeholder">
-            <span>{preview.frameArtifactPath === null ? previewPlaceholderLabel : "预览帧已返回，正在准备显示"}</span>
+            <span>{previewPlaceholderLabel}</span>
           </div>
-        ) : null}
-        {showPreviewFrameImage ? (
-          <img className="preview-frame-image" src={preview.frameDisplayUrl} alt="当前预览帧" aria-label="当前预览帧" />
         ) : null}
         {selectedSegment !== null && selectionOverlayStyle !== null ? (
           <div
@@ -563,44 +552,12 @@ export function PreviewMonitor({
                 onChange={(event) => onPlayheadChange(Math.max(0, Math.round(event.currentTarget.valueAsNumber || 0)))}
               />
             </label>
-            <div className="preview-command-group" role="group" aria-label="预览生成">
-              <button
-                type="button"
-                className="preview-command-button"
-                aria-label={previewFrameLabel}
-                title={previewFrameLabel}
-                onClick={onRequestPreviewFrame}
-                disabled={pending || !runtimeDiagnostics.canPreview}
-              >
-                帧
-              </button>
-              <button
-                type="button"
-                className="preview-command-button"
-                aria-label={previewSegmentLabel}
-                title={previewSegmentLabel}
-                onClick={onRequestPreviewSegment}
-                disabled={pending || !runtimeDiagnostics.canPreview}
-              >
-                片段
-              </button>
-            </div>
           </>
         ) : null}
       </div>
 
       {showDeveloperDiagnostics ? (
         <>
-          <div className="preview-artifact-panel" aria-label="预览产物">
-            <PreviewArtifactLine title="预览帧" status={preview.frameStatusLabel} metadata={preview.frameMetadataLabel} path={preview.frameArtifactPath} />
-            <PreviewArtifactLine
-              title="预览片段"
-              status={preview.segmentStatusLabel}
-              metadata={preview.segmentMetadataLabel}
-              path={preview.segmentArtifactPath}
-            />
-          </div>
-
           <RuntimeDiagnosticsPanel diagnostics={runtimeDiagnostics} pending={pending} onProbe={onProbeRuntimeCapabilities} />
         </>
       ) : null}
@@ -649,23 +606,19 @@ function formatProductPreviewStatus(preview: PreviewDisplayState, placeholderLab
     return "正在准备预览画面";
   }
 
-  if (preview.frameStatusLabel.includes("已更新，请重新请求预览帧")) {
+  if (preview.statusLabel.includes("预览待刷新")) {
     return "画面已更新，预览待刷新";
   }
 
-  if (preview.frameStatusLabel === "预览暂不可用") {
+  if (preview.statusLabel === "预览暂不可用") {
     return "预览暂不可用";
   }
 
-  if (preview.frameStatusLabel === "预览帧失败") {
+  if (preview.statusLabel === "预览画面失败") {
     return "预览画面生成失败";
   }
 
-  if (preview.frameDisplayUrl !== null) {
-    return "预览就绪";
-  }
-
-  return preview.frameArtifactPath === null ? placeholderLabel : "正在准备预览画面";
+  return preview.statusLabel === "实时预览就绪" ? "预览就绪" : placeholderLabel;
 }
 
 function previewControlLabel(label: string, playbackRunning: boolean): string {
@@ -982,25 +935,4 @@ function RuntimeDiagnosticsRowView({ row }: { row: RuntimeDiagnosticsRow }): Rea
 
 function runtimeToneClass(tone: RuntimeDiagnosticsTone): string {
   return tone;
-}
-
-function PreviewArtifactLine({
-  title,
-  status,
-  metadata,
-  path
-}: {
-  title: string;
-  status: string;
-  metadata: string;
-  path: string | null;
-}): React.ReactElement {
-  return (
-    <div className="preview-artifact-line">
-      <strong>{title}</strong>
-      <span>{status}</span>
-      <span>{metadata}</span>
-      {path === null ? null : <code>{path}</code>}
-    </div>
-  );
 }

@@ -19,8 +19,6 @@ import type {
   ProjectSessionRequest,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse,
-  RequestProjectSessionPreviewFrameRequest,
-  RequestProjectSessionPreviewSegmentRequest,
   StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 import type {
@@ -32,7 +30,6 @@ import type {
   ArtifactStatusSummary,
   CommandResultEnvelope,
   ExportJobStatusResponse,
-  PreviewArtifactResponse,
   RuntimeCapabilityReport,
   WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
@@ -61,8 +58,6 @@ import {
   artifactPreviewStatusLabel,
   formatExportDiagnostic,
   formatCommandError,
-  formatMicroseconds,
-  formatPreviewStatus,
   resourcePanelFromArtifactStatus,
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
@@ -81,7 +76,6 @@ import type { RealtimePreviewHostState } from "./workspace/PreviewMonitor";
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
 
-const PREVIEW_SEGMENT_DURATION_US = 2_000_000;
 const SEQUENCE_END_EPSILON_US = 7_000;
 
 type VideoEditorCoreApi = {
@@ -128,12 +122,6 @@ type VideoEditorCoreApi = {
   runArtifactGarbageCollection: (
     request: ArtifactGarbageCollectionRequest
   ) => Promise<CommandResultEnvelope<ArtifactMaintenanceResult>>;
-  requestProjectSessionPreviewFrame: (
-    request: RequestProjectSessionPreviewFrameRequest
-  ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
-  requestProjectSessionPreviewSegment: (
-    request: RequestProjectSessionPreviewSegmentRequest
-  ) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
   closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {
@@ -148,13 +136,7 @@ type VideoEditorPlatformApi = {
   createProjectBundle: () => Promise<ProjectBundlePickerResponse>;
   openProjectBundle: () => Promise<ProjectBundlePickerResponse>;
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
-  pathToFileUrl: (path: string) => Promise<string>;
 };
-type PreviewCommandRunner = (session: ProjectSessionClientState) => Promise<CommandResultEnvelope<PreviewArtifactResponse>>;
-type PreviewCommandResultApplier = (
-  current: WorkspaceState,
-  result: CommandResultEnvelope<PreviewArtifactResponse>
-) => WorkspaceState;
 type ProjectSessionClientState = {
   sessionId: string;
   revision: number;
@@ -172,50 +154,32 @@ type ArtifactCommandResultApplier<T> = (
   result: CommandResultEnvelope<T>
 ) => WorkspaceState;
 type DerivedStateInvalidationCopy = {
-  frameStatusLabel: string;
-  frameMetadataLabel: string;
-  segmentStatusLabel: string;
-  segmentMetadataLabel: string;
+  previewStatusLabel: string;
   exportLogSummary: string;
 };
 
 const CANVAS_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  frameStatusLabel: "画布已更新，请重新请求预览帧",
-  frameMetadataLabel: "预览帧需要重新生成",
-  segmentStatusLabel: "画布已更新，请重新生成预览片段",
-  segmentMetadataLabel: "预览片段需要重新生成",
+  previewStatusLabel: "画布已更新，预览待刷新",
   exportLogSummary: "草稿已更新，请重新开始导出"
 };
 
 const VISUAL_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  frameStatusLabel: "画面变换已更新，请重新请求预览帧",
-  frameMetadataLabel: "预览帧需要重新生成",
-  segmentStatusLabel: "画面变换已更新，请重新生成预览片段",
-  segmentMetadataLabel: "预览片段需要重新生成",
+  previewStatusLabel: "画面变换已更新，预览待刷新",
   exportLogSummary: "画面变换已更新，请重新开始导出"
 };
 
 const TEXT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  frameStatusLabel: "文字已更新，请重新请求预览帧",
-  frameMetadataLabel: "预览帧需要重新生成",
-  segmentStatusLabel: "文字已更新，请重新生成预览片段",
-  segmentMetadataLabel: "预览片段需要重新生成",
+  previewStatusLabel: "文字已更新，预览待刷新",
   exportLogSummary: "文字已更新，请重新开始导出"
 };
 
 const KEYFRAME_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  frameStatusLabel: "关键帧已更新，请重新请求预览帧",
-  frameMetadataLabel: "预览帧需要重新生成",
-  segmentStatusLabel: "关键帧已更新，请重新生成预览片段",
-  segmentMetadataLabel: "预览片段需要重新生成",
+  previewStatusLabel: "关键帧已更新，预览待刷新",
   exportLogSummary: "关键帧已更新，请重新开始导出"
 };
 
 const AUDIO_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  frameStatusLabel: "音频已更新，请重新请求预览帧",
-  frameMetadataLabel: "预览帧需要重新生成",
-  segmentStatusLabel: "音频已更新，请重新生成预览片段",
-  segmentMetadataLabel: "预览片段需要重新生成",
+  previewStatusLabel: "音频已更新，预览待刷新",
   exportLogSummary: "音频已更新，请重新开始导出"
 };
 
@@ -252,9 +216,6 @@ export function App(): React.ReactElement {
   const commandInFlightRef = useRef(false);
   const audioCommandInFlightRef = useRef(false);
   const runtimeProbeInFlightRef = useRef(false);
-  const pendingAutoPreviewTimeRef = useRef<number | null>(null);
-  const autoPreviewRetryTimerRef = useRef<number | null>(null);
-  const autoPreviewRetryCountRef = useRef(0);
   const realtimePreviewSnapshotRef = useRef<RealtimePreviewProjectSessionSnapshotKey | null>(null);
   const realtimePreviewLastSeekTargetRef = useRef<number | null>(null);
 
@@ -265,72 +226,6 @@ export function App(): React.ReactElement {
   useEffect(() => {
     playheadRef.current = playheadUs;
   }, [playheadUs]);
-
-  useEffect(() => {
-    flushPendingAutoPreviewFrame();
-  }, [workspace.pendingCommand, workspace.runtimeDiagnostics.canPreview]);
-
-  useEffect(() => {
-    return () => {
-      if (autoPreviewRetryTimerRef.current !== null) {
-        window.clearTimeout(autoPreviewRetryTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const artifactPath = workspace.preview.frameArtifactPath;
-    const platform = window.videoEditorPlatform;
-    if (artifactPath === null || workspace.preview.frameDisplayUrl !== null || platform === undefined) {
-      return;
-    }
-
-    let cancelled = false;
-    void platform.pathToFileUrl(artifactPath).then(
-      (displayUrl) => {
-        if (cancelled) {
-          return;
-        }
-        setWorkspace((current) => {
-          if (current.preview.frameArtifactPath !== artifactPath) {
-            return current;
-          }
-          const next = {
-            ...current,
-            preview: {
-              ...current.preview,
-              frameDisplayUrl: displayUrl
-            }
-          };
-          workspaceRef.current = next;
-          return next;
-        });
-      },
-      () => {
-        if (cancelled) {
-          return;
-        }
-        setWorkspace((current) => {
-          if (current.preview.frameArtifactPath !== artifactPath) {
-            return current;
-          }
-          const next = {
-            ...current,
-            preview: {
-              ...current.preview,
-              frameDisplayUrl: null
-            }
-          };
-          workspaceRef.current = next;
-          return next;
-        });
-      }
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspace.preview.frameArtifactPath, workspace.preview.frameDisplayUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -743,7 +638,7 @@ export function App(): React.ReactElement {
     ) {
       const previewTarget = selectedSegmentStart(result.data);
       if (previewTarget !== null) {
-        queueAutoPreviewFrame(previewTarget);
+        refreshRealtimePreviewAt(previewTarget);
       }
     }
 
@@ -824,95 +719,6 @@ export function App(): React.ReactElement {
     }
 
     return next;
-  }
-
-  async function executePreviewCommand(
-    runCommand: PreviewCommandRunner,
-    pendingCommand: string,
-    applyResult: PreviewCommandResultApplier
-  ): Promise<void> {
-    const session = projectSessionRef.current;
-    if (session === null) {
-      setWorkspace((current) => {
-        const message = commandErrorMessage("项目会话未就绪，请先新建或打开项目");
-        const next = {
-          ...current,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            error: message
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-      return;
-    }
-    if (commandInFlightRef.current) {
-      setWorkspace((current) => {
-        const message = commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回");
-        const next = {
-          ...current,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            error: message
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-      return;
-    }
-
-    commandInFlightRef.current = true;
-    setWorkspace((current) => {
-      const next = {
-        ...current,
-        pendingCommand,
-        commandError: null,
-        preview: {
-          ...current.preview,
-          error: null,
-          frameArtifactPath: pendingCommand === "请求预览帧" ? null : current.preview.frameArtifactPath,
-          frameDisplayUrl: pendingCommand === "请求预览帧" ? null : current.preview.frameDisplayUrl,
-          frameStatusLabel: pendingCommand === "请求预览帧" ? "正在请求预览帧" : current.preview.frameStatusLabel,
-          segmentStatusLabel: pendingCommand === "生成预览片段" ? "正在生成预览片段" : current.preview.segmentStatusLabel
-        }
-      };
-      workspaceRef.current = next;
-      return next;
-    });
-
-    try {
-      const result = await runCommand(session);
-      setWorkspace((current) => {
-        const next = applyResult(current, result);
-        workspaceRef.current = next;
-        return next;
-      });
-    } catch (error: unknown) {
-      const message = previewCommandErrorMessage(error instanceof Error ? error.message : String(error), pendingCommand);
-      setWorkspace((current) => {
-        const next = {
-          ...current,
-          pendingCommand: null,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            error: message,
-            frameArtifactPath: pendingCommand === "请求预览帧" ? null : current.preview.frameArtifactPath,
-            frameDisplayUrl: pendingCommand === "请求预览帧" ? null : current.preview.frameDisplayUrl,
-            frameStatusLabel: pendingCommand === "请求预览帧" ? "预览帧失败" : current.preview.frameStatusLabel,
-            segmentStatusLabel: pendingCommand === "生成预览片段" ? "预览片段失败" : current.preview.segmentStatusLabel
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-    } finally {
-      commandInFlightRef.current = false;
-    }
   }
 
   async function executeExportJobControl(
@@ -2099,7 +1905,7 @@ export function App(): React.ReactElement {
       );
 
       if (workspaceRef.current.commandError === null) {
-        requestProjectSessionPreviewFrameAt(normalizePlayheadTime(playheadUs));
+        refreshRealtimePreviewAt(normalizePlayheadTime(playheadUs));
       }
     })();
   }
@@ -2151,6 +1957,19 @@ export function App(): React.ReactElement {
     void syncProjectSessionPlayhead(targetTime, "定位播放头", { reportBusy: false });
     void seekRealtimePreviewHost(targetTime);
     void handleSeekAudioPreview(targetTime);
+  }
+
+  function refreshRealtimePreviewAt(value: number): void {
+    const targetTime = normalizePlayheadTime(value);
+    setPlaybackRunning(false);
+    setPlayheadUs(targetTime);
+    playheadRef.current = targetTime;
+    void (async () => {
+      const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();
+      if (snapshotReady) {
+        await seekRealtimePreviewHost(targetTime);
+      }
+    })();
   }
 
   function handleTogglePlayback(): void {
@@ -2532,188 +2351,6 @@ export function App(): React.ReactElement {
     );
   }
 
-  function queueAutoPreviewFrame(targetTime: number): void {
-    setPlayheadUs(targetTime);
-    pendingAutoPreviewTimeRef.current = targetTime;
-    autoPreviewRetryCountRef.current = 0;
-    schedulePendingAutoPreviewFlush();
-  }
-
-  function flushPendingAutoPreviewFrame(): void {
-    const targetTime = pendingAutoPreviewTimeRef.current;
-    if (targetTime === null || commandInFlightRef.current || !workspaceRef.current.runtimeDiagnostics.canPreview) {
-      return;
-    }
-
-    pendingAutoPreviewTimeRef.current = null;
-    requestProjectSessionPreviewFrameAt(targetTime);
-  }
-
-  function schedulePendingAutoPreviewFlush(): void {
-    if (autoPreviewRetryTimerRef.current !== null) {
-      return;
-    }
-
-    autoPreviewRetryTimerRef.current = window.setTimeout(() => {
-      autoPreviewRetryTimerRef.current = null;
-      flushPendingAutoPreviewFrame();
-      if (pendingAutoPreviewTimeRef.current !== null && autoPreviewRetryCountRef.current < 80) {
-        autoPreviewRetryCountRef.current += 1;
-        schedulePendingAutoPreviewFlush();
-      }
-    }, 50);
-  }
-
-  function handleRequestPreviewFrame(): void {
-    requestProjectSessionPreviewFrameAt(normalizePlayheadTime(playheadUs));
-  }
-
-  function requestProjectSessionPreviewFrameAt(targetTime: number): void {
-    if (!showDeveloperDiagnostics) {
-      void (async () => {
-        const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();
-        if (snapshotReady) {
-          await seekRealtimePreviewHost(targetTime);
-        }
-      })();
-      return;
-    }
-
-    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
-      const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
-      setWorkspace((current) => {
-        const next = {
-          ...current,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            frameArtifactPath: null,
-            frameDisplayUrl: null,
-            frameStatusLabel: "预览暂不可用",
-            error: message
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-      return;
-    }
-
-    void executePreviewCommand(
-      (session) =>
-        window.videoEditorCore.requestProjectSessionPreviewFrame({
-          sessionId: session.sessionId,
-          expectedRevision: session.revision,
-          targetTime
-        }),
-      "请求预览帧",
-      (current, result) => {
-        if (!result.ok || result.data === null) {
-          const message = previewCommandErrorMessage(result, "请求预览帧");
-          return {
-            ...current,
-            pendingCommand: null,
-            commandError: message,
-            preview: {
-              ...current.preview,
-              frameArtifactPath: null,
-              frameDisplayUrl: null,
-              frameStatusLabel: "预览帧失败",
-              error: message,
-              lastRequestedPlayhead: targetTime
-            }
-          };
-        }
-
-        return {
-          ...current,
-          pendingCommand: null,
-          commandError: null,
-          preview: {
-            ...current.preview,
-            frameArtifactPath: result.data.path,
-            frameDisplayUrl: null,
-            frameStatusLabel: `预览帧${formatPreviewStatus(result.data.status)}`,
-            frameMetadataLabel: `${result.data.mimeType} · ${formatMicroseconds(result.data.targetTimerange.start)}`,
-            error: null,
-            lastRequestedPlayhead: targetTime
-          }
-        };
-      }
-    );
-  }
-
-  function handleRequestPreviewSegment(): void {
-    if (!workspaceRef.current.runtimeDiagnostics.canPreview) {
-      const message = runtimeUnavailableMessage(workspaceRef.current, "预览暂不可用");
-      setWorkspace((current) => {
-        const next = {
-          ...current,
-          commandError: message,
-          preview: {
-            ...current.preview,
-            segmentStatusLabel: "预览暂不可用",
-            error: message
-          }
-        };
-        workspaceRef.current = next;
-        return next;
-      });
-      return;
-    }
-
-    const previewRange = {
-      start: Math.max(0, Math.round(playheadUs)),
-      duration: PREVIEW_SEGMENT_DURATION_US
-    };
-
-    void executePreviewCommand(
-      (session) =>
-        window.videoEditorCore.requestProjectSessionPreviewSegment({
-          sessionId: session.sessionId,
-          expectedRevision: session.revision,
-          targetTimerange: previewRange
-        }),
-      "生成预览片段",
-      (current, result) => {
-        const rangeLabel = `${formatMicroseconds(previewRange.start)} - ${formatMicroseconds(
-          previewRange.start + previewRange.duration
-        )}`;
-
-        if (!result.ok || result.data === null) {
-          const message = previewCommandErrorMessage(result, "生成预览片段");
-          return {
-            ...current,
-            pendingCommand: null,
-            commandError: message,
-            preview: {
-              ...current.preview,
-              segmentStatusLabel: "预览片段失败",
-              error: message,
-              lastRequestedPlayhead: previewRange.start,
-              lastRequestedRangeLabel: rangeLabel
-            }
-          };
-        }
-
-        return {
-          ...current,
-          pendingCommand: null,
-          commandError: null,
-          preview: {
-            ...current.preview,
-            segmentArtifactPath: result.data.path,
-            segmentStatusLabel: `预览片段${formatPreviewStatus(result.data.status)}`,
-            segmentMetadataLabel: `${result.data.mimeType} · ${rangeLabel}`,
-            error: null,
-            lastRequestedPlayhead: previewRange.start,
-            lastRequestedRangeLabel: rangeLabel
-          }
-        };
-      }
-    );
-  }
-
   function handleExportOutputPathChange(value: string): void {
     setWorkspace((current) => {
       const next = {
@@ -2808,8 +2445,6 @@ export function App(): React.ReactElement {
       onPlayheadChange={handleSeekPlayhead}
       onTogglePlayback={handleTogglePlayback}
       onStopPlayback={handleStopPlayback}
-      onRequestPreviewFrame={handleRequestPreviewFrame}
-      onRequestPreviewSegment={handleRequestPreviewSegment}
       onProbeRuntimeCapabilities={handleProbeRuntimeCapabilities}
       onExportOutputPathChange={handleExportOutputPathChange}
       onExportPresetChange={handleExportPresetChange}
@@ -3039,16 +2674,8 @@ function clearDerivedPreviewState(
 ): PreviewDisplayState {
   return {
     ...preview,
-    frameArtifactPath: null,
-    frameDisplayUrl: null,
-    frameStatusLabel: copy.frameStatusLabel,
-    frameMetadataLabel: copy.frameMetadataLabel,
-    segmentArtifactPath: null,
-    segmentStatusLabel: copy.segmentStatusLabel,
-    segmentMetadataLabel: copy.segmentMetadataLabel,
-    error: null,
-    lastRequestedPlayhead: null,
-    lastRequestedRangeLabel: null
+    statusLabel: copy.previewStatusLabel,
+    error: null
   };
 }
 
@@ -3067,24 +2694,6 @@ function clearDerivedExportState(
     diagnosticLabel: null,
     error: null
   };
-}
-
-function previewCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string, actionLabel: string): string {
-  const kindLabels: Record<string, string> = {
-    previewServiceFailed: "预览服务失败",
-    runtimeDiscoveryFailed: "运行时发现失败",
-    invalidPayload: "命令参数无效",
-    internal: "内部错误"
-  };
-  const commandError =
-    typeof resultOrMessage === "string" ? null : resultOrMessage.error;
-  const message =
-    typeof resultOrMessage === "string"
-      ? resultOrMessage
-      : resultOrMessage.error?.message ?? "剪辑核心返回未知预览错误";
-  const kindLabel = commandError === null ? "预览命令失败" : kindLabels[commandError.kind] ?? commandError.kind;
-
-  return `${actionLabel}失败（${kindLabel}）：${message}`;
 }
 
 function exportCommandErrorMessage(resultOrMessage: CommandResultEnvelope<unknown> | string, actionLabel: string): string {

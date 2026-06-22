@@ -33,8 +33,6 @@ type WorkspaceShellProps = {
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
-  onRequestPreviewFrame: () => void;
-  onRequestPreviewSegment: () => void;
   onProbeRuntimeCapabilities: () => void;
   onExportOutputPathChange: (value: string) => void;
   onExportPresetChange: (value: ExportPreset) => void;
@@ -100,8 +98,6 @@ export function WorkspaceShell({
   onPlayheadChange,
   onTogglePlayback,
   onStopPlayback,
-  onRequestPreviewFrame,
-  onRequestPreviewSegment,
   onProbeRuntimeCapabilities,
   onExportOutputPathChange,
   onExportPresetChange,
@@ -236,8 +232,6 @@ export function WorkspaceShell({
           onPlayheadChange={onPlayheadChange}
           onTogglePlayback={onTogglePlayback}
           onStopPlayback={onStopPlayback}
-          onRequestPreviewFrame={onRequestPreviewFrame}
-          onRequestPreviewSegment={onRequestPreviewSegment}
           onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
           onRetryAudioPreview={onRetryAudioPreview}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}

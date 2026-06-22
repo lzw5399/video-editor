@@ -15,7 +15,6 @@ import type {
   CommandResultEnvelope,
   ExportJobStatusResponse,
   MissingMaterialCommandDiagnostic,
-  PreviewArtifactResponse,
   RuntimeCapabilityReport,
   WaveformDisplayPeaksResponse
 } from "../generated/CommandResultEnvelope";
@@ -92,12 +91,6 @@ type NativeBinding = {
   runArtifactGarbageCollection: (
     request: ArtifactGarbageCollectionRequest
   ) => CommandResultEnvelope<ArtifactMaintenanceResult>;
-  requestProjectSessionPreviewFrame: (
-    request: RequestProjectSessionPreviewFrameRequest
-  ) => CommandResultEnvelope<PreviewArtifactResponse>;
-  requestProjectSessionPreviewSegment: (
-    request: RequestProjectSessionPreviewSegmentRequest
-  ) => CommandResultEnvelope<PreviewArtifactResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   subscribeRealtimePreviewEvents: (
     callback: (errorOrEventJson: unknown, eventJson?: string) => void
@@ -189,18 +182,6 @@ export type ArtifactGarbageCollectionRequest = {
   sessionId: string;
   bundlePath: string;
   dryRun: boolean;
-};
-
-export type RequestProjectSessionPreviewFrameRequest = {
-  sessionId: string;
-  expectedRevision: number;
-  targetTime: Microseconds;
-};
-
-export type RequestProjectSessionPreviewSegmentRequest = {
-  sessionId: string;
-  expectedRevision: number;
-  targetTimerange: TargetTimerange;
 };
 
 export type ProjectIntent =
@@ -908,26 +889,6 @@ export function runArtifactGarbageCollection(
   return binding.runArtifactGarbageCollection(request);
 }
 
-export function requestProjectSessionPreviewFrame(
-  request: RequestProjectSessionPreviewFrameRequest
-): CommandResultEnvelope<PreviewArtifactResponse> {
-  const binding = loadNativeBinding();
-  if (binding === null) {
-    return bindingLoadError("requestProjectSessionPreviewFrame");
-  }
-  return binding.requestProjectSessionPreviewFrame(request);
-}
-
-export function requestProjectSessionPreviewSegment(
-  request: RequestProjectSessionPreviewSegmentRequest
-): CommandResultEnvelope<PreviewArtifactResponse> {
-  const binding = loadNativeBinding();
-  if (binding === null) {
-    return bindingLoadError("requestProjectSessionPreviewSegment");
-  }
-  return binding.requestProjectSessionPreviewSegment(request);
-}
-
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
@@ -1045,8 +1006,6 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.cancelArtifactGeneration !== "function" ||
       typeof loaded.getArtifactQuotaStatus !== "function" ||
       typeof loaded.runArtifactGarbageCollection !== "function" ||
-      typeof loaded.requestProjectSessionPreviewFrame !== "function" ||
-      typeof loaded.requestProjectSessionPreviewSegment !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.subscribeRealtimePreviewEvents !== "function" ||
       typeof loaded.unsubscribeRealtimePreviewEvents !== "function" ||
@@ -1101,8 +1060,6 @@ function loadNativeBinding(): NativeBinding | null {
       cancelArtifactGeneration: loaded.cancelArtifactGeneration,
       getArtifactQuotaStatus: loaded.getArtifactQuotaStatus,
       runArtifactGarbageCollection: loaded.runArtifactGarbageCollection,
-      requestProjectSessionPreviewFrame: loaded.requestProjectSessionPreviewFrame,
-      requestProjectSessionPreviewSegment: loaded.requestProjectSessionPreviewSegment,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       subscribeRealtimePreviewEvents: loaded.subscribeRealtimePreviewEvents,
       unsubscribeRealtimePreviewEvents: loaded.unsubscribeRealtimePreviewEvents,

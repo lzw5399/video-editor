@@ -159,16 +159,8 @@ export type ResourcePanelState = {
 };
 
 export type PreviewDisplayState = {
-  frameArtifactPath: string | null;
-  frameDisplayUrl: string | null;
-  frameStatusLabel: string;
-  frameMetadataLabel: string;
-  segmentArtifactPath: string | null;
-  segmentStatusLabel: string;
-  segmentMetadataLabel: string;
+  statusLabel: string;
   error: string | null;
-  lastRequestedPlayhead: Microseconds | null;
-  lastRequestedRangeLabel: string | null;
 };
 
 export type AudioPreviewDisplayModel = {
@@ -326,16 +318,8 @@ export function createInitialWorkspaceState(
     materialDiagnostics: [],
     resourcePanel: createInitialResourcePanelState(),
     preview: {
-      frameArtifactPath: null,
-      frameDisplayUrl: null,
-      frameStatusLabel: "等待请求预览帧",
-      frameMetadataLabel: "帧预览尚未生成",
-      segmentArtifactPath: null,
-      segmentStatusLabel: "等待生成预览片段",
-      segmentMetadataLabel: "片段预览尚未生成",
-      error: null,
-      lastRequestedPlayhead: null,
-      lastRequestedRangeLabel: null
+      statusLabel: "实时预览准备中",
+      error: null
     },
     audioPreview: createInitialAudioPreviewDisplayModel(),
     audioDevices: createInitialAudioDeviceDisplayModel(),

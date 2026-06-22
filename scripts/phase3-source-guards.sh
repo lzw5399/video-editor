@@ -264,19 +264,23 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/commandHelpers.ts \
   apps/desktop-electron/src/preload
 
-require_matches \
-  "renderer still preview uses project-session preview frame API" \
-  '\brequestProjectSessionPreviewFrame\b' \
+fail_if_matches \
+  "Electron-facing preview must not expose project-session preview frame artifact APIs; use realtime preview host controls" \
+  '\b(?:requestProjectSessionPreviewFrame|RequestProjectSessionPreviewFrameRequest|core:requestProjectSessionPreviewFrame)\b' \
   apps/desktop-electron/src/renderer/App.tsx \
   apps/desktop-electron/src/preload/index.ts \
-  apps/desktop-electron/src/main/nativeBinding.ts
+  apps/desktop-electron/src/main/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  crates/bindings_node/src/lib.rs
 
-require_matches \
-  "renderer segment preview uses project-session preview segment API" \
-  '\brequestProjectSessionPreviewSegment\b' \
+fail_if_matches \
+  "Electron-facing preview must not expose project-session preview segment artifact APIs; use realtime preview host controls" \
+  '\b(?:requestProjectSessionPreviewSegment|RequestProjectSessionPreviewSegmentRequest|core:requestProjectSessionPreviewSegment)\b' \
   apps/desktop-electron/src/renderer/App.tsx \
   apps/desktop-electron/src/preload/index.ts \
-  apps/desktop-electron/src/main/nativeBinding.ts
+  apps/desktop-electron/src/main/index.ts \
+  apps/desktop-electron/src/main/nativeBinding.ts \
+  crates/bindings_node/src/lib.rs
 
 fail_if_matches \
   "renderer command helpers must not expose legacy low-level timeline command payloads" \
