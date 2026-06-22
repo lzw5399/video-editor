@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260623-text-reopen-preview-parity
-last_updated: "2026-06-22T18:00:15Z"
-last_activity: 2026-06-23 -- Completed quick task 260623-text-reopen-preview-parity: multi-font text/subtitle edits now save, close, reopen, play through native render-graph preview, and prove restored overlay metadata without DOM/artifact fallback
+stopped_at: Completed quick task 260623-ui-reference-playing-state-gate
+last_updated: "2026-06-22T18:06:04Z"
+last_activity: 2026-06-23 -- Completed quick task 260623-ui-reference-playing-state-gate: UI reference regression now captures playing-state native render-graph workspace and preview monitor screenshots alongside static and narrow evidence
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-23 -- Completed quick task 260623-text-reopen-preview-parity: multi-font text/subtitle edits now save, close, reopen, play through native render-graph preview, and prove restored overlay metadata without DOM/artifact fallback
+Last activity: 2026-06-23 -- Completed quick task 260623-ui-reference-playing-state-gate: UI reference regression now captures playing-state native render-graph workspace and preview monitor screenshots alongside static and narrow evidence
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -224,6 +224,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Quick task 260623-ui-reference-first-frame-evidence completed: UI reference screenshots now play/wait for product-ready native render-graph preview, assert non-black macOS screen pixels, and capture workspace/panel screenshots through window-level screen capture so visual audits include the native preview surface. (URGENT)
 - Quick task 260623-ui-reference-portrait-preview-fixture completed: UI reference screenshots now use the committed portrait preview fixture, keep external audio/image materials available, and enforce portrait canvas containment in 1120x720 product layout. (URGENT)
 - Quick task 260623-text-reopen-preview-parity completed: product E2E now saves multi-font text/subtitle edits with preview-drag transforms, closes/reopens the `.veproj`, plays through native render-graph preview, and verifies restored overlay metadata without DOM/artifact fallback. (URGENT)
+- Quick task 260623-ui-reference-playing-state-gate completed: UI reference regression now captures playing-state workspace and preview monitor screenshots from the macOS window-level native render-graph surface, alongside static and narrow UI evidence. (URGENT)
 - Generic public preview commands are removed from the `CommandEnvelope` contract: product preview now uses project-session preview APIs and realtime scheduler/session controls, while explicit audio/artifact/export APIs remain separate. (URGENT)
 - Electron/native test observations now use native command observation terminology instead of `executeCommand` call naming, with source guards blocking the old test bridge names. (URGENT)
 - Runtime capability probing now uses an explicit native API from renderer through preload/main/nativeBinding into Rust; renderer no longer constructs `probeRuntimeCapabilities` command envelopes, and source guards block reintroduction. (URGENT)
@@ -526,6 +527,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-23 | 260623-ui-reference-playing-state-gate | Added UI reference playing-state screenshots that start playback, wait for native render-graph compositor evidence to advance, verify non-black native pixels, and capture full workspace plus preview monitor crops alongside static and narrow evidence. |
 | 2026-06-23 | 260623-text-reopen-preview-parity | Added an opened-project product journey launcher and a real video/audio/text/SRT E2E proving edited fonts, subtitle cues, preview-drag movement, rotation, scale, and opacity survive `.veproj` save/close/reopen and still render through native preview without DOM/artifact fallback. |
 | 2026-06-23 | 260623-ui-reference-portrait-preview-fixture | Switched UI reference workspace screenshots to the committed portrait preview fixture, derived fixture selectors from basenames, tightened preview shell containment, and revalidated build, UI reference regression, screenshot evidence, and diff checks. |
 | 2026-06-23 | 260623-clean-ui-reference-media | Changed UI reference screenshots to create a fresh project, import real local fixture video/audio/image, add real timeline clips, and assert the default product material panel is not an error-state fixture while preserving missing/failed material coverage elsewhere. |

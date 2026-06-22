@@ -102,6 +102,10 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
     await expectTopFeatureCategoriesReachable(page);
     await captureMaterialLibraryScreenshot(page, "material-library-1280x800.png", app);
     await capturePreviewMonitorScreenshot(page, "preview-monitor-1280x800.png", app);
+    await capturePlayingReferenceScreenshots(page, app, {
+      workspace: "workspace-playing-1280x800.png",
+      preview: "preview-monitor-playing-1280x800.png"
+    });
 
     await expectWorkspaceHierarchy(app, page, 1120, 720);
     await capturePhaseScreenshot(page, "workspace-1120x720.png", app);
@@ -458,6 +462,37 @@ async function expectReferencePreviewScreenPixels(page: Page, app: ElectronAppli
   const stats = await measurePngLuma(page, image);
   expect(stats.mean, `native preview screen capture should not be black: ${JSON.stringify(stats)}`).toBeGreaterThan(5);
   expect(stats.stddev, `native preview screen capture should contain real image detail: ${JSON.stringify(stats)}`).toBeGreaterThan(2);
+}
+
+async function capturePlayingReferenceScreenshots(
+  page: Page,
+  app: ElectronApplication,
+  filenames: { workspace: string; preview: string }
+): Promise<void> {
+  const beforeTargetTime = (await readReferencePreviewHostState(page))?.contentEvidence?.targetTimeMicroseconds ?? 0;
+  const playButton = page.getByRole("button", { name: "播放预览" });
+  await expect(playButton).toBeEnabled({ timeout: 20_000 });
+  await playButton.click();
+  await expect(page.getByRole("button", { name: "暂停预览" })).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(async () => {
+      const state = await readReferencePreviewHostState(page);
+      return (
+        state?.ok === true &&
+        state.productReady === true &&
+        state.fallbackActive === false &&
+        state.backend === "renderGraphGpu" &&
+        state.diagnosticSource === "none" &&
+        state.contentEvidence?.source === "renderGraphGpuComposited" &&
+        (state.contentEvidence?.targetTimeMicroseconds ?? 0) > beforeTargetTime
+      );
+    }, { timeout: 20_000 })
+    .toBe(true);
+  await expectReferencePreviewScreenPixels(page, app);
+  await capturePhaseScreenshot(page, filenames.workspace, app);
+  await capturePreviewMonitorScreenshot(page, filenames.preview, app);
+  await page.getByRole("button", { name: "暂停预览" }).click();
+  await expect(page.getByRole("button", { name: "播放预览" })).toBeVisible({ timeout: 10_000 });
 }
 
 async function capturePhaseScreenshot(page: Page, filename: string, app?: ElectronApplication): Promise<void> {
