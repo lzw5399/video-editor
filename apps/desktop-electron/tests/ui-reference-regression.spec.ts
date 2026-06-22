@@ -531,6 +531,7 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   const materialCard = page.locator(".material-row").first();
   const thumbnail = materialCard.locator(".material-thumb");
   const copy = materialCard.locator(".material-copy");
+  const addButton = materialCard.getByRole("button", { name: /添加 .+ 到时间线/ });
   const panelBox = await stableBox(materialPanel, `素材面板 ${width}`);
   const railBox = await stableBox(sourceRail, `媒体来源 ${width}`);
   const paneBox = await stableBox(libraryPane, `素材库 ${width}`);
@@ -561,6 +562,27 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(112);
   expect(thumbBox.y, `thumbnail must stay above title ${width}`).toBeLessThan(copyBox.y);
   expect(Math.abs(thumbBox.x - cardBox.x), `thumbnail should align with card left edge ${width}`).toBeLessThanOrEqual(1);
+  await expect(materialCard).toHaveAttribute("draggable", "true");
+  await expect.poll(() => materialAddButtonOpacity(addButton), {
+    message: `material add affordance must be hidden by default so dragging is visually primary ${width}`
+  }).toBeLessThanOrEqual(0.05);
+  await addButton.focus();
+  await expect.poll(() => materialAddButtonOpacity(addButton), {
+    message: `keyboard focus must reveal material add fallback affordance ${width}`
+  }).toBeGreaterThanOrEqual(0.95);
+  await page.evaluate(() => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  });
+  await expect.poll(() => materialAddButtonOpacity(addButton), {
+    message: `material add affordance must return to hidden state before screenshots ${width}`
+  }).toBeLessThanOrEqual(0.05);
+}
+
+async function materialAddButtonOpacity(addButton: Locator): Promise<number> {
+  return addButton.evaluate((element) => Number.parseFloat(getComputedStyle(element).opacity));
 }
 
 function readReferenceManifest(): ReferenceManifest {

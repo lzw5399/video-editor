@@ -1535,7 +1535,21 @@ h2 {
   color: #f0eee8;
   background: rgba(24, 24, 22, 0.86);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.26);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
   cursor: pointer;
+}
+
+.material-row[draggable="true"]:hover .material-add-icon-button,
+.material-row:focus-within .material-add-icon-button {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .material-add-icon-button .app-icon-mask {
