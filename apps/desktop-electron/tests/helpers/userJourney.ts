@@ -514,6 +514,49 @@ export async function launchProductJourneyApp(
   return { app: controller, page };
 }
 
+export async function launchOpenedProductJourneyApp(
+  projectBundlePath: string,
+  openMaterialFiles: string[] = [],
+  env: NodeJS.ProcessEnv = {}
+): Promise<{ app: ProductJourneyAppController; page: Page }> {
+  await expectFileExists(join(projectBundlePath, "project.json"));
+  await Promise.all(openMaterialFiles.map((filePath) => expectFileExists(filePath)));
+  const productEnv = {
+    VIDEO_EDITOR_TEST_RECORD_COMMANDS: "1",
+    VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0",
+    VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS: "0",
+    VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE: projectBundlePath,
+    ...env
+  };
+
+  if (process.platform === "darwin") {
+    const launch = await launchForegroundProductApp(openMaterialFiles, productEnv);
+    const controller = wrapForegroundController(launch.app);
+    await openProjectFromProductEntry(controller, launch.page);
+    await expectProductWorkspace(launch.page);
+    return {
+      app: controller,
+      page: launch.page
+    };
+  }
+
+  const app = await electron.launch({
+    args: [join(process.cwd(), "dist/main/index.cjs")],
+    env: {
+      ...process.env,
+      ...productEnv,
+      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify(openMaterialFiles),
+    }
+  });
+  const page = await app.firstWindow();
+  await page.waitForLoadState("domcontentloaded");
+  await activateProductWindow(app, page);
+  const controller = wrapElectronApp(app);
+  await openProjectFromProductEntry(controller, page);
+  await expectProductWorkspace(page);
+  return { app: controller, page };
+}
+
 export async function expectProductEntry(page: Page): Promise<void> {
   await expect(page.getByRole("main", { name: "项目入口" })).toBeVisible();
   await expect(page.getByRole("button", { name: "新建项目" })).toBeVisible();
@@ -527,6 +570,13 @@ export async function createProjectFromProductEntry(app: ProductJourneyAppContro
   const nextCount = (await countProjectSessionCommand(app, "createProjectSession")) + 1;
   await page.getByRole("button", { name: "新建项目" }).click();
   await waitForProjectSessionCommandCount(app, "createProjectSession", nextCount);
+}
+
+export async function openProjectFromProductEntry(app: ProductJourneyAppController, page: Page): Promise<void> {
+  await expectProductEntry(page);
+  const nextCount = (await countProjectSessionCommand(app, "openProjectSession")) + 1;
+  await page.getByRole("button", { name: "打开项目" }).click();
+  await waitForProjectSessionCommandCount(app, "openProjectSession", nextCount);
 }
 
 export async function expectProductWorkspace(page: Page): Promise<void> {

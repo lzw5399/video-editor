@@ -34,6 +34,7 @@ import {
   importSubtitleSrtThroughProductPanel,
   importMaterialsThroughProductPicker,
   importMaterialThroughProductPicker,
+  launchOpenedProductJourneyApp,
   launchProductJourneyApp,
   moveSelectedSegmentRight,
   readNativeCommandObservations,
@@ -1760,6 +1761,211 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
   }
 });
 
+test("product text/subtitle edits survive reopen and match native preview evidence", async () => {
+  const projectBundlePath = join(PHASE15_3_SCREENSHOT_DIR, `text-reopen-${Date.now().toString(36)}.veproj`);
+  mkdirSync(projectBundlePath, { recursive: true });
+  const created = await launchProductJourneyApp(
+    [
+      USER_JOURNEY_LONG_AV_VIDEO,
+      USER_JOURNEY_LONG_TONE_AUDIO
+    ],
+    { VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath }
+  );
+  const reopenSrt =
+    "1\n00:00:00,000 --> 00:00:01,700\n重开字幕 初稿\n\n2\n00:00:01,700 --> 00:00:03,200\n重开后半字幕 初稿\n";
+
+  let titleDragVisual: VisualCommandEvidence | null = null;
+  let subtitleDragVisual: VisualCommandEvidence | null = null;
+
+  try {
+    const { app, page } = created;
+    await importMaterialsThroughProductPicker(app, page, [USER_JOURNEY_LONG_AV_VIDEO, USER_JOURNEY_LONG_TONE_AUDIO]);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_LONG_AV_VIDEO);
+    await addAudioThroughProductPanel(page, app, USER_JOURNEY_LONG_TONE_AUDIO, 8_000_000);
+
+    await addTextThroughProductPanel(page, app, "重开标题 初稿");
+    await editSelectedTextThroughInspector(page, app, {
+      content: "重开标题\nSans Saved",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 45,
+      color: "#3dff96",
+      alignment: "left",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 180,
+      layoutXMillis: 80,
+      layoutYMillis: 90,
+      layoutWidthMillis: 790,
+      layoutHeightMillis: 220,
+      lineHeightMillis: 1140,
+      letterSpacingMillis: 50
+    });
+    titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "重开标题\nSans Saved", 58, -28);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: titleDragVisual.transform.position.x,
+      positionY: titleDragVisual.transform.position.y,
+      scaleX: 1070,
+      scaleY: 990,
+      rotation: -11,
+      opacity: 920,
+      fitMode: "适应"
+    });
+
+    await addRenamedSubtitleTrack(page, app, "重开字幕轨道");
+    await importSubtitleSrtThroughProductPanel(page, app, reopenSrt);
+    await page.getByRole("button", { name: /片段 重开字幕/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "重开字幕 初稿",
+      content: "重开字幕\nSerif Saved",
+      fontFamily: "Noto Serif CJK SC",
+      fontSize: 35,
+      color: "#ffcc47",
+      alignment: "center",
+      textBoxWidthMillis: 780,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 105,
+      layoutYMillis: 640,
+      layoutWidthMillis: 790,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1210,
+      letterSpacingMillis: 70
+    });
+    subtitleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "重开字幕\nSerif Saved", -46, 38);
+    await updateSelectedVisualThroughInspector(page, app, {
+      positionX: subtitleDragVisual.transform.position.x,
+      positionY: subtitleDragVisual.transform.position.y,
+      scaleX: 1110,
+      scaleY: 1060,
+      rotation: 13,
+      opacity: 860,
+      fitMode: "适应"
+    });
+
+    await page.getByRole("button", { name: /片段 重开后半字幕/ }).click();
+    await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "重开后半字幕 初稿",
+      content: "重开后半字幕\nSans Later",
+      fontFamily: "Noto Sans CJK SC",
+      fontSize: 34,
+      color: "#ffffff",
+      alignment: "right",
+      textBoxWidthMillis: 760,
+      textBoxHeightMillis: 150,
+      layoutXMillis: 130,
+      layoutYMillis: 720,
+      layoutWidthMillis: 760,
+      layoutHeightMillis: 180,
+      lineHeightMillis: 1200,
+      letterSpacingMillis: 95
+    });
+
+    await waitForProjectBundleStrings(projectBundlePath, [
+      "重开标题\nSans Saved",
+      "重开字幕\nSerif Saved",
+      "重开后半字幕\nSans Later",
+      BUNDLED_SANS_FONT_REF,
+      BUNDLED_SERIF_FONT_REF
+    ]);
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app)), "saved text project must not request artifact preview frames").toBe(0);
+    expectProductEditCommandsAreSessionOwned(
+      await readProjectSessionCalls(app),
+      await readDirectNativeCommandObservations(app),
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+    );
+  } finally {
+    await created.app.close();
+  }
+
+  expect(titleDragVisual, "created project must capture the title preview drag visual").not.toBeNull();
+  expect(subtitleDragVisual, "created project must capture the subtitle preview drag visual").not.toBeNull();
+  const reopened = await launchOpenedProductJourneyApp(projectBundlePath);
+  try {
+    const { app, page } = reopened;
+    await expect(page.getByRole("button", { name: /片段 重开标题/ })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /片段 重开字幕/ })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /片段 重开后半字幕/ })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: /片段 重开标题/ }).click();
+    await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
+      "重开标题\nSans Saved"
+    );
+    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    await expect(page.locator(".preview-text-overlay"), "reopened preview evidence must not use DOM text overlays").toHaveCount(0);
+
+    const beforePlay = await capturePreviewEvidence(page);
+    const visibleBeforePlay = await captureVisiblePreviewEvidence(page, app);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    await activateProductJourneyApp(app, page);
+    await page.getByRole("group", { name: "预览播放控制" }).getByRole("button", { name: "播放预览" }).click();
+    await waitForProductPlaybackSuccess(page, app, beforePlay, visibleBeforePlay, frameRequestsBeforePlay);
+    const controls = page.getByRole("group", { name: "预览播放控制" });
+    await controls.getByRole("button", { name: "暂停预览" }).click();
+    await expect(controls.getByRole("button", { name: "播放预览" })).toBeEnabled();
+
+    await seekTimelinePlayhead(page, app, 650_000);
+    const sameTimeEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["重开标题\nSans Saved", "重开字幕\nSerif Saved"],
+      0,
+      {
+        maxTargetTimeUs: 1_650_000,
+        exactOverlayCount: 2,
+        forbiddenContents: ["重开后半字幕\nSans Later"]
+      }
+    );
+    mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(PHASE15_3_SCREENSHOT_DIR, "text-reopen-same-time-workspace.png"),
+      fullPage: true
+    });
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-reopen-same-time-host.png"),
+      sameTimeEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, sameTimeEvidence, "reopened same-time text/subtitle parity");
+    const reopenedTitle = overlayByContent(sameTimeEvidence.activeTextOverlays, "重开标题\nSans Saved");
+    const reopenedSubtitle = overlayByContent(sameTimeEvidence.activeTextOverlays, "重开字幕\nSerif Saved");
+    expect(reopenedTitle.source).toBe("text");
+    expect(reopenedTitle.fontRef).toBe(BUNDLED_SANS_FONT_REF);
+    expect(reopenedTitle.visualPositionX).toBe(titleDragVisual!.transform.position.x);
+    expect(reopenedTitle.visualPositionY).toBe(titleDragVisual!.transform.position.y);
+    expect(reopenedTitle.visualRotationDegrees).toBe(-11);
+    expect(reopenedTitle.visualScaleXMillis).toBe(1070);
+    expect(reopenedTitle.visualOpacityMillis).toBe(920);
+    expect(reopenedSubtitle.source).toBe("subtitle");
+    expect(reopenedSubtitle.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    expect(reopenedSubtitle.visualPositionX).toBe(subtitleDragVisual!.transform.position.x);
+    expect(reopenedSubtitle.visualPositionY).toBe(subtitleDragVisual!.transform.position.y);
+    expect(reopenedSubtitle.visualRotationDegrees).toBe(13);
+    expect(reopenedSubtitle.visualScaleXMillis).toBe(1110);
+    expect(reopenedSubtitle.visualOpacityMillis).toBe(860);
+
+    await seekTimelinePlayhead(page, app, 2_100_000);
+    const laterEvidence = await waitForActiveTextOverlaySetEvidence(
+      page,
+      app,
+      ["重开标题\nSans Saved", "重开后半字幕\nSans Later"],
+      1_700_000,
+      {
+        maxTargetTimeUs: 3_100_000,
+        exactOverlayCount: 2,
+        forbiddenContents: ["重开字幕\nSerif Saved"]
+      }
+    );
+    writeFileSync(
+      join(PHASE15_3_SCREENSHOT_DIR, "text-reopen-later-host.png"),
+      laterEvidence.hostImage
+    );
+    await expectTextEditingNativeEvidence(page, app, laterEvidence, "reopened later subtitle parity");
+    expect(overlayByContent(laterEvidence.activeTextOverlays, "重开后半字幕\nSans Later").fontRef).toBe(BUNDLED_SANS_FONT_REF);
+
+    expect((await readProjectSessionCalls(app)).map((call) => call.command)).toContain("openProjectSession");
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app)), "reopened text preview must not request artifact preview frames").toBe(0);
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await reopened.app.close();
+  }
+});
+
 test("product text/subtitle export frame matches native preview text pixels", async () => {
   const { app, page } = await launchProductJourneyApp([
     USER_JOURNEY_LONG_AV_VIDEO,
@@ -1935,6 +2141,36 @@ type VisualCommandEvidence = {
     opacity: { valueMillis: number };
   };
 };
+
+async function waitForProjectBundleStrings(projectBundlePath: string, expectedStrings: string[]): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        try {
+          const projectJson = JSON.parse(await readFile(join(projectBundlePath, "project.json"), "utf8")) as unknown;
+          const projectStrings = collectJsonStrings(projectJson);
+          return expectedStrings.every((expected) => projectStrings.includes(expected));
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 10_000 }
+    )
+    .toBe(true);
+}
+
+function collectJsonStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectJsonStrings(item));
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).flatMap((item) => collectJsonStrings(item));
+  }
+  return [];
+}
 
 async function editSelectedTextThroughInspector(
   page: Page,
