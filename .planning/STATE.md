@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260623-drag-primary-material-cards
-last_updated: "2026-06-22T17:20:25Z"
-last_activity: 2026-06-23 -- Completed quick task 260623-drag-primary-material-cards: material cards now make drag-to-timeline visually primary while preserving hover/focus add fallback
+stopped_at: Completed quick task 260623-text-editing-preview-drag-stability
+last_updated: "2026-06-22T17:30:25Z"
+last_activity: 2026-06-23 -- Completed quick task 260623-text-editing-preview-drag-stability: text/subtitle product E2E now waits for selected segment inspector sync before editing and preview-drag/native text gates pass
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-23 -- Completed quick task 260623-drag-primary-material-cards: material cards now make drag-to-timeline visually primary while preserving hover/focus add fallback
+Last activity: 2026-06-23 -- Completed quick task 260623-text-editing-preview-drag-stability: text/subtitle product E2E now waits for selected segment inspector sync before editing and preview-drag/native text gates pass
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -219,6 +219,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Realtime preview telemetry is now subscription-only for renderer/product UI: preload no longer exposes `getTelemetry`, `PreviewMonitor` no longer polls on an interval, main owns snapshot fanout, and product cadence still proves 90/90 accounted frames for both single-video and video+external-audio+text+two-cue-SRT playback. (URGENT)
 - Realtime preview telemetry fanout is now driven by Rust native playback/control events instead of Electron main-process interval polling; packaged product cadence proves native `framePresented=90`, 90/90 presented frames, and only 13 presentation snapshot reads over each 3s playback window. (URGENT)
 - Quick task 260623-drag-primary-material-cards completed: material card add buttons are hidden by default and revealed on hover/focus, making drag-to-timeline the primary product affordance while keeping accessible add fallback and passing UI reference, product drag/playback, native surface, source guard, package, and diff checks. (URGENT)
+- Quick task 260623-text-editing-preview-drag-stability completed: text/subtitle product E2E now asserts inspector selection sync before each subtitle cue edit; preview drag, repeated font switching, and multi-font native text/subtitle gates pass with native GPU evidence and no artifact preview fallback. (URGENT)
 - Generic public preview commands are removed from the `CommandEnvelope` contract: product preview now uses project-session preview APIs and realtime scheduler/session controls, while explicit audio/artifact/export APIs remain separate. (URGENT)
 - Electron/native test observations now use native command observation terminology instead of `executeCommand` call naming, with source guards blocking the old test bridge names. (URGENT)
 - Runtime capability probing now uses an explicit native API from renderer through preload/main/nativeBinding into Rust; renderer no longer constructs `probeRuntimeCapabilities` command envelopes, and source guards block reintroduction. (URGENT)

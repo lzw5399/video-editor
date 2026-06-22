@@ -782,6 +782,7 @@ test("P0 user portrait material supports real text and subtitle native overlay e
     await importSubtitleSrtThroughProductPanel(page, app, p0Srt);
     await page.getByRole("button", { name: /片段 真实素材字幕/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "真实素材字幕\nPortrait 验证",
       content: "真实素材字幕\nPortrait 验证",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 34,
@@ -997,6 +998,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     await importSubtitleSrtThroughProductPanel(page, app, firstSubtitleTrackSrt);
     await page.getByRole("button", { name: /片段 并行字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "并行字幕 A",
       content: "并行字幕 A 已校对",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 36,
@@ -1013,6 +1015,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     });
     await page.getByRole("button", { name: /片段 后续字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "后续字幕 A",
       content: "后续字幕 A 已换字",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 34,
@@ -1032,6 +1035,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     await importSubtitleSrtThroughProductPanel(page, app, secondSubtitleTrackSrt);
     await page.getByRole("button", { name: /片段 并行字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "并行字幕 B",
       content: "并行字幕 B 已旋转",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 40,
@@ -1057,6 +1061,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     });
     await page.getByRole("button", { name: /片段 后续字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "后续字幕 B",
       content: "后续字幕 B 已右移",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 32,
@@ -1219,6 +1224,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕甲/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "同屏字幕甲",
       content: "同屏字幕甲 Serif",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 34,
@@ -1235,6 +1241,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
     await page.getByRole("button", { name: /片段 错峰字幕甲/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "错峰字幕甲",
       content: "错峰字幕甲 Sans",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 35,
@@ -1251,6 +1258,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
     await page.getByRole("button", { name: /片段 尾部字幕甲/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "尾部字幕甲",
       content: "尾部字幕甲 Serif",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 36,
@@ -1270,6 +1278,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕乙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "同屏字幕乙",
       content: "同屏字幕乙 预览拖动",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 33,
@@ -1296,6 +1305,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
     await page.getByRole("button", { name: /片段 错峰字幕乙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "错峰字幕乙",
       content: "错峰字幕乙 Serif",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 36,
@@ -1315,6 +1325,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     await importSubtitleSrtThroughProductPanel(page, app, thirdTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕丙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "同屏字幕丙",
       content: "同屏字幕丙 右侧",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 32,
@@ -1331,6 +1342,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
     await page.getByRole("button", { name: /片段 尾部字幕丙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "尾部字幕丙",
       content: "尾部字幕丙 Sans",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 34,
@@ -1576,6 +1588,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "同屏字幕 A 第一行\n真实示例 A",
       content: "同屏字幕 A\n真实示例",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 35,
@@ -1592,6 +1605,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     });
     await page.getByRole("button", { name: /片段 错峰字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "错峰字幕 A 初稿",
       content: "错峰字幕 A\nSerif 后半段",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 34,
@@ -1611,6 +1625,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "同屏字幕 B 第一行\nLaunch 2026",
       content: "同屏字幕 B\nLaunch 2026",
       fontFamily: "Noto Serif CJK SC",
       fontSize: 33,
@@ -1636,6 +1651,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     });
     await page.getByRole("button", { name: /片段 错峰字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
+      expectedCurrentContent: "错峰字幕 B 初稿",
       content: "错峰字幕 B\nSans 后半段",
       fontFamily: "Noto Sans CJK SC",
       fontSize: 34,
@@ -1763,6 +1779,7 @@ type ActiveTextOverlayEvidence = {
 };
 
 type TextInspectorEdit = {
+  expectedCurrentContent?: string | RegExp;
   content: string;
   fontFamily: string;
   fontSize: number;
@@ -1808,7 +1825,13 @@ async function editSelectedTextThroughInspector(
   }
   const textSection = page.locator('section[aria-label="文本"]');
   await expect(textSection).toBeVisible();
-  await textSection.locator("textarea").fill(edit.content);
+  const contentInput = textSection.locator("textarea");
+  if (edit.expectedCurrentContent !== undefined) {
+    await expect(contentInput, "inspector must be synced to the selected text segment before editing").toHaveValue(
+      edit.expectedCurrentContent
+    );
+  }
+  await contentInput.fill(edit.content);
   await textSection.getByRole("combobox", { name: "字体" }).fill(edit.fontFamily);
   await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill(String(edit.fontSize));
   await textSection.getByRole("textbox", { name: "颜色", exact: true }).fill(edit.color);
