@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed quick task 260622-dq43 category icon toolbar
-last_updated: "2026-06-22T05:25:57Z"
-last_activity: 2026-06-22 -- Completed quick task 260622-dq43: category icon toolbar
+stopped_at: Completed quick task 260622-rp44 control chrome icons
+last_updated: "2026-06-22T05:40:25Z"
+last_activity: 2026-06-22 -- Completed quick task 260622-rp44: control chrome icons
 progress:
   total_phases: 23
   completed_phases: 20
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
 Plan: TBD
 Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
-Last activity: 2026-06-22 -- Completed quick task 260622-dq43: category icon toolbar
+Last activity: 2026-06-22 -- Completed quick task 260622-rp44: control chrome icons
 
 Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
 
@@ -520,6 +520,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-22 | 260622-rp44-control-chrome-icons | Replaced preview and timeline product control glyph/text chrome with app-local SVG icons, removed the unimplemented fullscreen fake control, hid idle timeline diagnostic copy in product mode, and revalidated build, workspace, UI reference, and source guards. |
 | 2026-06-22 | 260622-dq43-category-icon-toolbar | Replaced product top category fallback glyphs with app-local SVG icon masks sourced from `/icons`, kept category semantics and accessibility labels stable, and revalidated workspace, UI reference, source guard, and build gates. |
 | 2026-06-22 | 260622-zu42-media-panel-jianying-grid | Replaced the product media list with a responsive Jianying-style thumbnail grid, hid per-material resource diagnostics from product mode, preserved material-id-only drag semantics, and revalidated source guards plus workspace/product preview gates. |
 | 2026-06-22 | 260622-sg42-remove-project-session-preview-artifacts | Removed Electron-visible project-session preview frame/segment artifact APIs, deleted developer artifact preview controls/state, kept preview on Rust realtime host controls, and revalidated workspace, cadence, smoke, UI reference, and source guards. |

@@ -57,7 +57,8 @@ type PreviewMonitorProps = {
 type MonitorControl = {
   label: string;
   icon?: AppIconName;
-  symbol: string;
+  imageIcon?: AppIconName;
+  symbol?: string;
 };
 
 type RealtimePreviewHostRect = {
@@ -212,12 +213,11 @@ const INITIAL_REALTIME_PREVIEW_HOST_STATE: RealtimePreviewHostState = {
 
 const MONITOR_CONTROLS: readonly MonitorControl[] = [
   { label: "播放", icon: "play", symbol: "▶" },
-  { label: "停止", symbol: "■" },
-  { label: "上一帧", symbol: "‹" },
-  { label: "下一帧", symbol: "›" },
-  { label: "适应窗口", symbol: "□" },
-  { label: "画面比例", symbol: "16:9" },
-  { label: "全屏", symbol: "⛶" }
+  { label: "停止", imageIcon: "previewStop" },
+  { label: "上一帧", icon: "previewPreviousFrame" },
+  { label: "下一帧", icon: "previewNextFrame" },
+  { label: "适应窗口", icon: "previewFit" },
+  { label: "画面比例", symbol: "16:9" }
 ];
 
 export function PreviewMonitor({
@@ -534,8 +534,7 @@ export function PreviewMonitor({
               disabled={
                 (pending && !(playbackRunning && (control.label === "播放" || control.label === "停止"))) ||
                 control.label === "适应窗口" ||
-                control.label === "画面比例" ||
-                control.label === "全屏"
+                control.label === "画面比例"
               }
             >
               <MonitorControlGlyph control={control} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
@@ -651,8 +650,11 @@ function MonitorControlGlyph({
   if (icon !== undefined) {
     return <span className="app-icon-mask" style={iconMaskStyle(icon)} aria-hidden="true" />;
   }
+  if (control.imageIcon !== undefined) {
+    return <img className="app-icon-image" src={appIconUrls[control.imageIcon]} alt="" aria-hidden="true" />;
+  }
 
-  return <span aria-hidden="true">{control.symbol}</span>;
+  return <span aria-hidden="true">{control.label === "画面比例" ? canvasRatio : control.symbol}</span>;
 }
 
 function iconMaskStyle(icon: AppIconName): CSSProperties {

@@ -630,7 +630,7 @@ test("Chinese editor workspace opens with required regions and material states",
     await expect(page.getByRole("spinbutton", { name: "预览时间" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "适应窗口" })).toBeVisible();
     await expect(page.getByRole("button", { name: "画面比例" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "全屏" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "全屏" })).toHaveCount(0);
     await expectPreviewCanvasAspectRatio(page);
 
     await expect(page.getByText("未选择片段")).toBeVisible();

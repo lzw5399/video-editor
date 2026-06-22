@@ -250,6 +250,13 @@
   opacity: 0.56;
 }
 
+.preview-icon-button .app-icon-image {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
 .preview-command-button {
   flex-basis: 38px;
   width: 38px;

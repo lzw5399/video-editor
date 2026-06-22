@@ -43,25 +43,6 @@
   background: #20c7d9;
 }
 
-.transport-button.symbol-action {
-  position: relative;
-  overflow: hidden;
-  border-color: #20c7d9;
-  color: transparent;
-  background: #20c7d9;
-  text-indent: -999px;
-}
-
-.transport-button.symbol-action::before {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: #061314;
-  text-indent: 0;
-  content: "+";
-}
-
 .transport-button.icon-only.danger {
   border-color: #723838;
   color: #f6d7d7;
@@ -71,8 +52,9 @@
 .snapping-status {
   display: grid;
   place-items: center;
+  width: 28px;
   height: 28px;
-  padding: 0 8px;
+  padding: 0;
   border: 1px solid #3d3d38;
   border-radius: 4px;
   color: #d8d6cf;
@@ -129,7 +111,7 @@
 
 .timeline-zoom-shell {
   display: flex;
-  flex: 0 0 100px;
+  flex: 0 0 144px;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -282,21 +264,13 @@
 }
 
 .track-target-button[aria-pressed="true"] .track-kind-symbol {
-  border-color: #20c7d9;
   background: #143133;
 }
 
 .track-kind-symbol {
-  display: grid;
-  place-items: center;
   width: 18px;
   height: 18px;
-  border: 1px solid #3d3d38;
-  border-radius: 4px;
   color: #20c7d9;
-  background: #252522;
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .track-name-input {
@@ -340,7 +314,6 @@
   border-radius: 4px;
   color: #aaa79f;
   background: #1a1a18;
-  font-size: 11px;
   line-height: 1;
 }
 

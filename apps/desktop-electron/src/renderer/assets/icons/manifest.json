@@ -58,6 +58,71 @@
       "target": "apps/desktop-electron/src/renderer/assets/icons/category-digital-human.svg"
     },
     {
+      "name": "previewStop",
+      "source": "icons/ToolBar/btnRecordStop.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/preview-stop.svg"
+    },
+    {
+      "name": "previewPreviousFrame",
+      "source": "icons/ToolBar/btnBackwardSelectIcon.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/preview-previous-frame.svg"
+    },
+    {
+      "name": "previewNextFrame",
+      "source": "icons/ToolBar/btnForwardSelectIcon.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/preview-next-frame.svg"
+    },
+    {
+      "name": "previewFit",
+      "source": "icons/ToolBar/btnZoomFitAdjust.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/preview-fit.svg"
+    },
+    {
+      "name": "timelineAdd",
+      "source": "icons/ToolBar/addTimeline.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/timeline-add.svg"
+    },
+    {
+      "name": "timelineSnapOn",
+      "source": "icons/ToolBar/btnOpenAdsorb.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/timeline-snap-on.svg"
+    },
+    {
+      "name": "timelineSnapOff",
+      "source": "icons/ToolBar/btnCloseAdsorb.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/timeline-snap-off.svg"
+    },
+    {
+      "name": "trackLockOn",
+      "source": "icons/Canvas/TrackHeader/lockOn.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-lock-on.svg"
+    },
+    {
+      "name": "trackLockOff",
+      "source": "icons/Canvas/TrackHeader/lockOff.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-lock-off.svg"
+    },
+    {
+      "name": "trackHideOn",
+      "source": "icons/Canvas/TrackHeader/hideOn.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-hide-on.svg"
+    },
+    {
+      "name": "trackHideOff",
+      "source": "icons/Canvas/TrackHeader/hideOff.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-hide-off.svg"
+    },
+    {
+      "name": "trackMuteOn",
+      "source": "icons/Canvas/TrackHeader/muteOn.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-mute-on.svg"
+    },
+    {
+      "name": "trackMuteOff",
+      "source": "icons/Canvas/TrackHeader/muteOff.svg",
+      "target": "apps/desktop-electron/src/renderer/assets/icons/track-mute-off.svg"
+    },
+    {
       "name": "play",
       "source": "icons/MaterialReplacement/play.svg",
       "target": "apps/desktop-electron/src/renderer/assets/icons/play.svg"

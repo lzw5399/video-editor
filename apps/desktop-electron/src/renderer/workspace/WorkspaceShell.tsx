@@ -270,6 +270,7 @@ export function WorkspaceShell({
       <section className="timeline-panel" aria-label="时间线">
         <Timeline
           workspace={workspace}
+          showDeveloperDiagnostics={showDeveloperDiagnostics}
           playheadUs={playheadUs}
           playbackRunning={playbackRunning}
           onPlayheadChange={onPlayheadChange}

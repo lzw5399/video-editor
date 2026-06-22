@@ -33,6 +33,7 @@ const AUDIO_WAVEFORM_PLACEHOLDER_PATTERN: readonly ("short" | "medium" | "tall")
 
 type TimelineProps = {
   workspace: WorkspaceState;
+  showDeveloperDiagnostics: boolean;
   playheadUs: number;
   playbackRunning: boolean;
   onPlayheadChange: (value: number) => void;
@@ -56,6 +57,7 @@ type TimelineProps = {
 
 export function Timeline({
   workspace,
+  showDeveloperDiagnostics,
   playheadUs,
   playbackRunning,
   onPlayheadChange,
@@ -187,6 +189,7 @@ export function Timeline({
     <div className={materialDropActive ? "timeline-surface material-drop-active" : "timeline-surface"}>
       <TransportStrip
         workspace={workspace}
+        showDeveloperDiagnostics={showDeveloperDiagnostics}
         playheadUs={playheadUs}
         playbackRunning={playbackRunning}
         onTogglePlayback={onTogglePlayback}
@@ -264,6 +267,7 @@ function pointerTimeFromLane(clientX: number, laneLeft: number, laneWidth: numbe
 
 function TransportStrip({
   workspace,
+  showDeveloperDiagnostics,
   playheadUs,
   playbackRunning,
   onTogglePlayback,
@@ -277,6 +281,7 @@ function TransportStrip({
   onZoomPercentChange
 }: {
   workspace: WorkspaceState;
+  showDeveloperDiagnostics: boolean;
   playheadUs: number;
   playbackRunning: boolean;
   onTogglePlayback: () => void;
@@ -340,18 +345,18 @@ function TransportStrip({
       </label>
       <button
         type="button"
-        className="transport-button symbol-action accent add-action"
+        className="transport-button icon-only accent add-action"
         aria-label="添加片段"
         title="添加片段"
         onClick={() => onAddSegment?.(selectedMaterialId)}
         disabled={pending || selectedMaterialId.length === 0}
       >
-        添加片段
+        <IconGlyph icon="timelineAdd" />
       </button>
       <div className="timeline-tool-group" role="group" aria-label="添加轨道">
-        <TimelineIconButton label="添加视频轨道" symbol="V+" onClick={() => onAddTrack?.("video")} disabled={pending} />
-        <TimelineIconButton label="添加音频轨道" symbol="A+" onClick={() => onAddTrack?.("audio")} disabled={pending} />
-        <TimelineIconButton label="添加文字轨道" symbol="T+" onClick={() => onAddTrack?.("text")} disabled={pending} />
+        <TimelineIconButton label="添加视频轨道" icon="categoryMedia" onClick={() => onAddTrack?.("video")} disabled={pending} />
+        <TimelineIconButton label="添加音频轨道" icon="categoryAudio" onClick={() => onAddTrack?.("audio")} disabled={pending} />
+        <TimelineIconButton label="添加文字轨道" icon="categoryText" onClick={() => onAddTrack?.("text")} disabled={pending} />
       </div>
       <TimelineIconButton
         label="分割所选片段"
@@ -397,10 +402,12 @@ function TransportStrip({
         aria-pressed={editControls.snappingEnabled}
         disabled
       >
-        {snappingLabel}
+        <IconGlyph icon={editControls.snappingEnabled ? "timelineSnapOn" : "timelineSnapOff"} />
       </button>
       <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
-      <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
+      {showDeveloperDiagnostics || workspace.pendingCommand !== null ? (
+        <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
+      ) : null}
     </div>
   );
 }
@@ -444,6 +451,16 @@ function IconGlyph({ icon, symbol }: { icon?: AppIconName; symbol?: string }): R
 
 function iconMaskStyle(icon: AppIconName): CSSProperties {
   return { "--app-icon-url": `url("${appIconUrls[icon]}")` } as CSSProperties;
+}
+
+function trackKindIcon(kindLabel: string): AppIconName {
+  if (kindLabel === "音频") {
+    return "categoryAudio";
+  }
+  if (kindLabel === "文字") {
+    return "categoryText";
+  }
+  return "categoryMedia";
 }
 
 function TimelineTrackRow({
@@ -505,9 +522,7 @@ function TimelineTrackRow({
             onClick={() => onSelectTrack?.(row.selectionHandle)}
             disabled={pending || onSelectTrack === undefined}
           >
-            <span className="track-kind-symbol" aria-hidden="true">
-              {row.symbol}
-            </span>
+            <span className="track-kind-symbol app-icon-mask" style={iconMaskStyle(trackKindIcon(row.kindLabel))} aria-hidden="true" />
           </button>
           <input
             className="track-name-input"
@@ -531,21 +546,21 @@ function TimelineTrackRow({
         <div className="track-header-controls" aria-label={`${row.name} 状态`}>
           <TrackStateButton
             label={`${row.name} 锁定状态：${row.lockLabel}`}
-            symbol="锁"
+            icon={row.lockActive ? "trackLockOn" : "trackLockOff"}
             active={row.lockActive}
             disabled={pending || onSetTrackLock === undefined}
             onClick={() => onSetTrackLock?.(row.selectionHandle, row.nextLocked)}
           />
           <TrackStateButton
             label={`${row.name} 可见状态：${row.visibilityLabel}`}
-            symbol={row.visibilitySymbol}
+            icon={row.visibilityActive ? "trackHideOff" : "trackHideOn"}
             active={row.visibilityActive}
             disabled={pending || !canToggleVisibility}
             onClick={() => onSetTrackVisibility?.(row.selectionHandle, row.nextVisible)}
           />
           <TrackStateButton
             label={`${row.name} 静音状态：${row.muteLabel}`}
-            symbol="静"
+            icon={row.muteActive ? "trackMuteOn" : "trackMuteOff"}
             active={row.muteActive}
             disabled={pending || !row.canToggleMute || onSetTrackMute === undefined}
             onClick={() => onSetTrackMute?.(row.selectionHandle, row.nextMuted)}
@@ -772,13 +787,13 @@ function AudioWaveform({
 
 function TrackStateButton({
   label,
-  symbol,
+  icon,
   active = false,
   disabled = false,
   onClick
 }: {
   label: string;
-  symbol: string;
+  icon: AppIconName;
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -792,7 +807,7 @@ function TrackStateButton({
       onClick={onClick}
       disabled={disabled}
     >
-      <span aria-hidden="true">{symbol}</span>
+      <IconGlyph icon={icon} />
     </button>
   );
 }

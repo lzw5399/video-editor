@@ -12,8 +12,21 @@ import categoryTransitionIconUrl from "./category-transition.svg";
 import deleteIconUrl from "./delete.svg";
 import pauseIconUrl from "./pause.svg";
 import playIconUrl from "./play.svg";
+import previewFitIconUrl from "./preview-fit.svg";
+import previewNextFrameIconUrl from "./preview-next-frame.svg";
+import previewPreviousFrameIconUrl from "./preview-previous-frame.svg";
+import previewStopIconUrl from "./preview-stop.svg";
 import redoIconUrl from "./redo.svg";
 import splitIconUrl from "./split.svg";
+import timelineAddIconUrl from "./timeline-add.svg";
+import timelineSnapOffIconUrl from "./timeline-snap-off.svg";
+import timelineSnapOnIconUrl from "./timeline-snap-on.svg";
+import trackHideOffIconUrl from "./track-hide-off.svg";
+import trackHideOnIconUrl from "./track-hide-on.svg";
+import trackLockOffIconUrl from "./track-lock-off.svg";
+import trackLockOnIconUrl from "./track-lock-on.svg";
+import trackMuteOffIconUrl from "./track-mute-off.svg";
+import trackMuteOnIconUrl from "./track-mute-on.svg";
 import undoIconUrl from "./undo.svg";
 import zoomInIconUrl from "./zoom-in.svg";
 import zoomOutIconUrl from "./zoom-out.svg";
@@ -33,8 +46,21 @@ export const appIconUrls = {
   delete: deleteIconUrl,
   pause: pauseIconUrl,
   play: playIconUrl,
+  previewFit: previewFitIconUrl,
+  previewNextFrame: previewNextFrameIconUrl,
+  previewPreviousFrame: previewPreviousFrameIconUrl,
+  previewStop: previewStopIconUrl,
   redo: redoIconUrl,
   split: splitIconUrl,
+  timelineAdd: timelineAddIconUrl,
+  timelineSnapOff: timelineSnapOffIconUrl,
+  timelineSnapOn: timelineSnapOnIconUrl,
+  trackHideOff: trackHideOffIconUrl,
+  trackHideOn: trackHideOnIconUrl,
+  trackLockOff: trackLockOffIconUrl,
+  trackLockOn: trackLockOnIconUrl,
+  trackMuteOff: trackMuteOffIconUrl,
+  trackMuteOn: trackMuteOnIconUrl,
   undo: undoIconUrl,
   zoomIn: zoomInIconUrl,
   zoomOut: zoomOutIconUrl
