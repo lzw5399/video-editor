@@ -1,6 +1,7 @@
-import { useMemo, useState, type DragEvent as ReactDragEvent } from "react";
+import { useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 
 import type { Material } from "../../generated/Draft";
+import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   formatMaterialDetail,
   formatMaterialDiagnostic,
@@ -515,7 +516,12 @@ function MaterialList({
             key={material.materialId}
             onDragStart={(event) => handleMaterialDragStart(event, material)}
           >
-            <MaterialThumbnail material={material} thumbnailUrl={thumbnailUrl} />
+            <MaterialThumbnail
+              material={material}
+              thumbnailUrl={thumbnailUrl}
+              pending={pending}
+              onAddTimelineSegment={onAddTimelineSegment}
+            />
             <div className="material-copy">
               <div className="material-title">
                 <strong>{material.displayName}</strong>
@@ -528,15 +534,6 @@ function MaterialList({
               {showResourceDiagnostics ? <MaterialResourceStatusLine status={resourceStatus} /> : null}
               {statusMessage === null ? null : <p className="material-warning">{statusMessage}</p>}
             </div>
-            <button
-              type="button"
-              className="secondary-action compact-action material-row-action"
-              aria-label={`添加 ${material.displayName} 到时间线`}
-              onClick={() => onAddTimelineSegment(material.materialId)}
-              disabled={pending || material.status !== "available"}
-            >
-              添加到时间线
-            </button>
           </article>
         );
       })}
@@ -544,18 +541,37 @@ function MaterialList({
   );
 }
 
-function MaterialThumbnail({ material, thumbnailUrl }: { material: Material; thumbnailUrl: string | null }): React.ReactElement {
-  if (thumbnailUrl !== null) {
-    return (
-      <div className="material-thumb has-thumbnail" aria-hidden="true">
-        <img src={thumbnailUrl} alt="" draggable={false} />
-      </div>
-    );
-  }
-
+function MaterialThumbnail({
+  material,
+  thumbnailUrl,
+  pending,
+  onAddTimelineSegment
+}: {
+  material: Material;
+  thumbnailUrl: string | null;
+  pending: boolean;
+  onAddTimelineSegment: (materialId: string) => void;
+}): React.ReactElement {
   return (
-    <div className={`material-thumb material-thumb-${material.kind}`} aria-hidden="true">
-      <span>{formatMaterialKind(material.kind)}</span>
+    <div className={`material-thumb material-thumb-${material.kind}`}>
+      {thumbnailUrl !== null ? (
+        <img src={thumbnailUrl} alt="" draggable={false} />
+      ) : (
+        <span aria-hidden="true">{formatMaterialKind(material.kind)}</span>
+      )}
+      <button
+        type="button"
+        className="material-add-icon-button"
+        aria-label={`添加 ${material.displayName} 到时间线`}
+        title={`添加 ${material.displayName} 到时间线`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAddTimelineSegment(material.materialId);
+        }}
+        disabled={pending || material.status !== "available"}
+      >
+        <span className="app-icon-mask" style={iconMaskStyle("timelineAdd")} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -590,6 +606,10 @@ function projectRelativeFileUrl(bundlePath: string, projectRelativeRef: string):
 
 function absolutePathFileUrl(path: string): string {
   return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function iconMaskStyle(icon: AppIconName): CSSProperties {
+  return { "--app-icon-url": `url("${appIconUrls[icon]}")` } as CSSProperties;
 }
 
 function ResourceTaskStrip({

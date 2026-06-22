@@ -1063,10 +1063,10 @@ h2 {
 
 .material-row {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 26px;
+  grid-template-rows: auto minmax(0, 1fr);
   align-items: stretch;
   gap: 6px;
-  min-height: 154px;
+  min-height: 124px;
   padding: 6px;
   border: 1px solid #343431;
   border-radius: 6px;
@@ -1080,19 +1080,6 @@ h2 {
 
 .material-row[draggable="true"]:active {
   cursor: grabbing;
-}
-
-.material-row-action {
-  justify-self: stretch;
-  min-width: 0;
-  width: 100%;
-  height: 26px;
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 24px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .material-thumb {
@@ -1120,6 +1107,41 @@ h2 {
 .material-thumb span {
   position: relative;
   z-index: 1;
+}
+
+.material-add-icon-button {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  color: #f0eee8;
+  background: rgba(24, 24, 22, 0.86);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.26);
+  cursor: pointer;
+}
+
+.material-add-icon-button .app-icon-mask {
+  width: 14px;
+  height: 14px;
+}
+
+.material-add-icon-button:hover,
+.material-add-icon-button:focus-visible {
+  border-color: #20c7d9;
+  color: #111312;
+  background: #20c7d9;
+}
+
+.material-add-icon-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .material-thumb-audio::before {
@@ -1268,17 +1290,13 @@ h2 {
 
   .material-row {
     grid-template-columns: 96px minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 26px;
+    grid-template-rows: minmax(0, 1fr);
     min-height: 96px;
   }
 
   .material-thumb {
-    grid-row: 1 / 3;
+    grid-row: 1;
     align-self: start;
-  }
-
-  .material-row-action {
-    grid-column: 2;
   }
 }
 
