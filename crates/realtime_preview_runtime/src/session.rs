@@ -5,6 +5,7 @@ use std::fmt;
 use draft_model::{AudioPreviewPlaybackStatus, Draft, Microseconds, RationalFrameRate};
 use render_graph::RenderGraph;
 use serde::{Deserialize, Serialize};
+use task_runtime::SchedulerTelemetrySnapshot;
 
 use crate::{
     PlaybackGeneration, PlaybackRate, PreviewCancellationToken, RealtimePreviewBackendUsed,
@@ -239,6 +240,16 @@ impl RealtimePreviewRuntime {
             dropped_frame_count,
             pacing_sample,
         );
+        Ok(())
+    }
+
+    pub fn record_scheduler_telemetry(
+        &mut self,
+        session_id: PreviewSessionId,
+        snapshot: &SchedulerTelemetrySnapshot,
+    ) -> Result<(), RealtimePreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.telemetry.record_scheduler_snapshot(snapshot);
         Ok(())
     }
 

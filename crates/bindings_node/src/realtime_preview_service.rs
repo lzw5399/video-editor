@@ -26,17 +26,17 @@ use realtime_preview_runtime::{
     PlaybackState, PreviewCancellationToken, PreviewDecodeDeviceContext, PreviewFrameInput,
     PreviewFrameProvider, PreviewFrameProviderError, PreviewFrameStoragePreference,
     PreviewGpuBackend, PreviewMaterialDecodeSource, PreviewRequestMode, PreviewSessionId,
-    REALTIME_PLAYBACK_IDLE_POLL_INTERVAL, RealtimePlaybackCadence, RealtimePlaybackDueTick,
-    RealtimePlaybackPresentationQueuePolicy, RealtimePlaybackPresentedFrame,
-    RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
-    RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerPresentation,
-    RealtimePlaybackSchedulerPresenter, RealtimePlaybackSelectedSegment,
-    RealtimePlaybackTextOverlayEvidence, RealtimePlaybackTimeline, RealtimePreviewAudioSyncState,
-    RealtimePreviewBackendUsed, RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor,
-    RealtimePreviewDiagnostic, RealtimePreviewError, RealtimePreviewFallbackReason,
-    RealtimePreviewFramePacingSample, RealtimePreviewFramePacingTelemetry,
-    RealtimePreviewFrameRequest, RealtimePreviewRuntime, RealtimePreviewSessionConfig,
-    RealtimePreviewTelemetry, RealtimePreviewUiChrome, TextureHandleDescriptor,
+    RealtimePlaybackCadence, RealtimePlaybackDueTick, RealtimePlaybackPresentationQueuePolicy,
+    RealtimePlaybackPresentedFrame, RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig,
+    RealtimePlaybackSchedulerError, RealtimePlaybackSchedulerEvidence,
+    RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerPresenter,
+    RealtimePlaybackSelectedSegment, RealtimePlaybackTextOverlayEvidence, RealtimePlaybackTimeline,
+    RealtimePreviewAudioSyncState, RealtimePreviewBackendUsed, RealtimePreviewCapabilityClassifier,
+    RealtimePreviewCompositor, RealtimePreviewDiagnostic, RealtimePreviewError,
+    RealtimePreviewFallbackReason, RealtimePreviewFramePacingSample,
+    RealtimePreviewFramePacingTelemetry, RealtimePreviewFrameRequest, RealtimePreviewRuntime,
+    RealtimePreviewSessionConfig, RealtimePreviewTelemetry, RealtimePreviewUiChrome,
+    TextureHandleDescriptor,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
@@ -47,6 +47,11 @@ use realtime_preview_runtime::{
 };
 use render_graph::{OutputDimensions, RenderGraph};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeDeError};
+use task_runtime::{
+    CompletionFreshness, JobCompletion, JobDomain, JobEnvelope, JobFreshness, JobId, JobPriority,
+    JobResult, JobResultKind, ResourceClass, SchedulerTelemetrySnapshot, TaskCancellationToken,
+    TaskRuntimeConfig,
+};
 
 use crate::native_preview_presenter::{
     NativePreviewContentEvidence, NativePreviewContentEvidenceSource,
@@ -199,8 +204,6 @@ pub struct RealtimePreviewBindingRegistry {
     sessions: BTreeMap<String, PreviewSessionId>,
     presenters: BTreeMap<String, NativePreviewPresenter>,
     schedulers: BTreeMap<String, RealtimePreviewSchedulerSession>,
-    still_frame_workers: BTreeMap<String, BindingPlaybackWorker>,
-    playback_workers: BTreeMap<String, BindingPlaybackWorker>,
 }
 
 impl RealtimePreviewBindingRegistry {
@@ -212,8 +215,6 @@ impl RealtimePreviewBindingRegistry {
             sessions: BTreeMap::new(),
             presenters: BTreeMap::new(),
             schedulers: BTreeMap::new(),
-            still_frame_workers: BTreeMap::new(),
-            playback_workers: BTreeMap::new(),
         }
     }
 
@@ -298,8 +299,7 @@ impl RealtimePreviewBindingRegistry {
             .sessions
             .remove(session_id)
             .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))?;
-        self.stop_still_frame_worker(session_id);
-        self.stop_playback_worker(session_id);
+        self.stop_playback_driver(session_id);
         if let Some(mut presenter) = self.presenters.remove(session_id) {
             presenter.detach();
         }
@@ -323,8 +323,7 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let descriptor = descriptor.to_runtime_descriptor()?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         self.with_scheduler_mut(session_id, |scheduler| scheduler.attach_surface(descriptor))?;
         let generation = match self.runtime_lock()?.attach_surface(runtime_id, descriptor) {
             Ok(generation) => generation,
@@ -365,8 +364,13 @@ impl RealtimePreviewBindingRegistry {
             scheduler.update_surface_bounds(bounds.to_runtime_bounds())
         })?;
         if playback_state != PlaybackState::Playing {
-            self.cancel_still_frame_worker(session_id);
-            self.start_still_frame_worker(session_id, runtime_id, generation, target_time)?;
+            self.present_scheduler_still_frame(
+                session_id,
+                runtime_id,
+                generation,
+                target_time,
+                PreviewRequestMode::FirstFrame,
+            )?;
         }
         Ok(generation_response(generation))
     }
@@ -376,8 +380,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         let generation = self
             .runtime_lock()?
             .detach_surface(runtime_id)
@@ -400,8 +403,7 @@ impl RealtimePreviewBindingRegistry {
         selected_segment: Option<RealtimePreviewSelectedSegmentBinding>,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         self.with_scheduler_mut(session_id, |scheduler| {
             scheduler.update_draft_snapshot(
                 draft.clone(),
@@ -429,8 +431,7 @@ impl RealtimePreviewBindingRegistry {
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         let target_time = Microseconds::new(target_time_microseconds);
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         let generation = self
             .runtime_lock()?
             .seek(runtime_id, target_time)
@@ -440,7 +441,13 @@ impl RealtimePreviewBindingRegistry {
             scheduler.set_active_generation(generation);
             Ok(())
         })?;
-        self.start_still_frame_worker(session_id, runtime_id, generation, target_time)?;
+        self.present_scheduler_still_frame(
+            session_id,
+            runtime_id,
+            generation,
+            target_time,
+            PreviewRequestMode::Seek,
+        )?;
         let mut event = RealtimePreviewBindingEvent::new(
             session_id,
             RealtimePreviewBindingEventKind::ControlChanged,
@@ -469,8 +476,7 @@ impl RealtimePreviewBindingRegistry {
             scheduler.validate_playback_ready()?;
             Ok(())
         })?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         let generation = self
             .runtime_lock()?
             .play(runtime_id)
@@ -479,7 +485,7 @@ impl RealtimePreviewBindingRegistry {
             scheduler.set_active_generation(generation);
             Ok(())
         })?;
-        self.start_playback_worker(session_id, runtime_id, generation, target_time, cadence)?;
+        self.start_playback_driver(session_id, runtime_id, generation, target_time, cadence)?;
         self.emit_control_event(session_id, generation);
         Ok(generation_response(generation))
     }
@@ -489,8 +495,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         self.with_scheduler_mut(session_id, |scheduler| {
             scheduler.pause_playback();
             Ok(())
@@ -512,8 +517,7 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
-        self.cancel_still_frame_worker(session_id);
-        self.cancel_playback_worker(session_id);
+        self.cancel_playback_driver(session_id);
         self.with_scheduler_mut(session_id, |scheduler| {
             scheduler.stop_playback();
             Ok(())
@@ -742,87 +746,41 @@ impl RealtimePreviewBindingRegistry {
             })
     }
 
-    fn stop_playback_worker(&mut self, session_id: &str) {
-        if let Some(worker) = self.playback_workers.remove(session_id) {
-            worker.stop();
+    fn stop_playback_driver(&mut self, session_id: &str) {
+        if let Some(session) = self.schedulers.get_mut(session_id) {
+            session.stop_playback_driver();
         }
     }
 
-    fn cancel_playback_worker(&mut self, session_id: &str) {
-        if let Some(worker) = self.playback_workers.remove(session_id) {
-            worker.cancel();
+    fn cancel_playback_driver(&mut self, session_id: &str) {
+        if let Some(session) = self.schedulers.get_mut(session_id) {
+            session.cancel_playback_driver();
         }
     }
 
-    fn stop_still_frame_worker(&mut self, session_id: &str) {
-        if let Some(worker) = self.still_frame_workers.remove(session_id) {
-            worker.stop();
-        }
-    }
-
-    fn cancel_still_frame_worker(&mut self, session_id: &str) {
-        if let Some(worker) = self.still_frame_workers.remove(session_id) {
-            worker.cancel();
-        }
-    }
-
-    fn start_still_frame_worker(
+    fn present_scheduler_still_frame(
         &mut self,
         session_id: &str,
         runtime_id: PreviewSessionId,
         playback_generation: PlaybackGeneration,
         target_time: Microseconds,
+        mode: PreviewRequestMode,
     ) -> Result<(), RealtimePreviewBindingError> {
         let scheduler = self.scheduler_handle(session_id)?;
-        {
-            let scheduler_guard = scheduler.lock().map_err(|_| {
-                RealtimePreviewBindingError::new(
-                    RealtimePreviewBindingErrorKind::Runtime,
-                    "realtime preview scheduler lock poisoned",
-                )
-            })?;
-            if !scheduler_guard.can_present_still_frame(playback_generation) {
-                return Ok(());
-            }
-        }
-
-        let runtime = Arc::clone(&self.runtime);
-        let event_sink = self.event_sink.clone();
-        let event_session_id = session_id.to_owned();
-        let stop = Arc::new(AtomicBool::new(false));
-        let worker_stop = Arc::clone(&stop);
-        let label = format!("rt-preview-still-{session_id}");
-        let handle = thread::Builder::new()
-            .name(label)
-            .spawn(move || {
-                run_binding_still_frame_present(
-                    runtime,
-                    runtime_id,
-                    scheduler,
-                    playback_generation,
-                    target_time,
-                    event_session_id,
-                    event_sink,
-                    worker_stop,
-                );
-            })
-            .map_err(|error| {
-                RealtimePreviewBindingError::new(
-                    RealtimePreviewBindingErrorKind::Runtime,
-                    format!("failed to start realtime preview still-frame worker: {error}"),
-                )
-            })?;
-        self.still_frame_workers.insert(
+        run_scheduler_still_frame_present(
+            Arc::clone(&self.runtime),
+            runtime_id,
+            scheduler,
+            playback_generation,
+            target_time,
+            mode,
             session_id.to_owned(),
-            BindingPlaybackWorker {
-                stop,
-                handle: Some(handle),
-            },
+            self.event_sink.clone(),
         );
         Ok(())
     }
 
-    fn start_playback_worker(
+    fn start_playback_driver(
         &mut self,
         session_id: &str,
         runtime_id: PreviewSessionId,
@@ -831,58 +789,34 @@ impl RealtimePreviewBindingRegistry {
         cadence: RealtimePlaybackCadence,
     ) -> Result<(), RealtimePreviewBindingError> {
         let scheduler = self.scheduler_handle(session_id)?;
-        let runtime = Arc::clone(&self.runtime);
-        let event_sink = self.event_sink.clone();
-        let event_session_id = session_id.to_owned();
-        let stop = Arc::new(AtomicBool::new(false));
-        let worker_stop = Arc::clone(&stop);
-        let label = format!("rt-preview-playback-{session_id}");
-        let handle = thread::Builder::new()
-            .name(label)
-            .spawn(move || {
-                run_binding_playback_loop(
-                    runtime,
-                    runtime_id,
-                    scheduler,
-                    playback_generation,
-                    start_time,
-                    cadence,
-                    event_session_id,
-                    event_sink,
-                    worker_stop,
-                );
-            })
-            .map_err(|error| {
-                RealtimePreviewBindingError::new(
-                    RealtimePreviewBindingErrorKind::Runtime,
-                    format!("failed to start realtime preview playback worker: {error}"),
-                )
-            })?;
-        self.playback_workers.insert(
+        let driver = PreviewPlaybackTaskDriver::spawn(
+            Arc::clone(&self.runtime),
+            runtime_id,
+            scheduler,
+            playback_generation,
+            start_time,
+            cadence,
             session_id.to_owned(),
-            BindingPlaybackWorker {
-                stop,
-                handle: Some(handle),
-            },
-        );
+            self.event_sink.clone(),
+        )?;
+        let session = self
+            .schedulers
+            .get_mut(session_id)
+            .ok_or_else(|| RealtimePreviewBindingError::unknown_session(session_id))?;
+        session.playback_driver = Some(driver);
         Ok(())
     }
 }
 
 impl Drop for RealtimePreviewBindingRegistry {
     fn drop(&mut self) {
-        let still_workers = std::mem::take(&mut self.still_frame_workers);
-        for (_, worker) in still_workers {
-            worker.stop();
-        }
-        let workers = std::mem::take(&mut self.playback_workers);
-        for (_, worker) in workers {
-            worker.stop();
+        for session in self.schedulers.values_mut() {
+            session.stop_playback_driver();
         }
     }
 }
 
-fn run_binding_playback_loop(
+fn run_scheduler_playback_driver(
     runtime: Arc<Mutex<RealtimePreviewRuntime>>,
     runtime_id: PreviewSessionId,
     scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
@@ -900,8 +834,18 @@ fn run_binding_playback_loop(
             Err(_) => return,
         };
         let frame_started = Instant::now();
-        match scheduler.present_next_tick(start_time, playback_generation) {
-            Ok(evidence) => {
+        match scheduler.present_next_tick(
+            start_time,
+            playback_generation,
+            PreviewRequestMode::FirstFrame,
+        ) {
+            Ok(presentation) => {
+                if let Ok(mut runtime) = runtime.lock() {
+                    let _ = runtime.record_scheduler_telemetry(runtime_id, &presentation.telemetry);
+                }
+                let Some(evidence) = presentation.evidence else {
+                    return;
+                };
                 scheduler.start_playback_after_prewarm(
                     start_time,
                     playback_generation,
@@ -973,17 +917,25 @@ fn run_binding_playback_loop(
             };
             let Some(due_tick) = scheduler.playback_timeline.due_tick(playback_generation) else {
                 drop(scheduler);
-                thread::sleep(REALTIME_PLAYBACK_IDLE_POLL_INTERVAL);
+                thread::sleep(Duration::from_millis(1));
                 continue;
             };
 
             let frame_started = Instant::now();
             match scheduler.present_playback_tick(playback_generation, due_tick) {
-                Ok(frame) => {
-                    let render_duration_ms =
-                        u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                    let presented_at = Instant::now();
-                    Ok(Some((frame, render_duration_ms, presented_at)))
+                Ok(scheduled) => {
+                    if let Ok(mut runtime) = runtime.lock() {
+                        let _ =
+                            runtime.record_scheduler_telemetry(runtime_id, &scheduled.telemetry);
+                    }
+                    if let Some(frame) = scheduled.frame {
+                        let render_duration_ms =
+                            u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                        let presented_at = Instant::now();
+                        Ok(Some((frame, render_duration_ms, presented_at)))
+                    } else {
+                        Ok(None)
+                    }
                 }
                 Err(error) => {
                     let transient = is_transient_playback_presentation_error(&error);
@@ -1065,31 +1017,35 @@ fn run_binding_playback_loop(
     }
 }
 
-fn run_binding_still_frame_present(
+fn run_scheduler_still_frame_present(
     runtime: Arc<Mutex<RealtimePreviewRuntime>>,
     runtime_id: PreviewSessionId,
     scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
     playback_generation: PlaybackGeneration,
     target_time: Microseconds,
+    mode: PreviewRequestMode,
     event_session_id: String,
     event_sink: RealtimePreviewEventSink,
-    stop: Arc<AtomicBool>,
 ) {
-    if stop.load(Ordering::Acquire) {
-        return;
-    }
-
     let frame_started = Instant::now();
     let evidence = {
         let mut scheduler = match scheduler.lock() {
             Ok(scheduler) => scheduler,
             Err(_) => return,
         };
-        if stop.load(Ordering::Acquire) || !scheduler.can_present_still_frame(playback_generation) {
+        if !scheduler.can_present_still_frame(playback_generation) {
             return;
         }
-        match scheduler.present_still_tick(playback_generation, target_time) {
-            Ok(evidence) => evidence,
+        match scheduler.present_still_tick(playback_generation, target_time, mode) {
+            Ok(presentation) => {
+                if let Ok(mut runtime) = runtime.lock() {
+                    let _ = runtime.record_scheduler_telemetry(runtime_id, &presentation.telemetry);
+                }
+                let Some(evidence) = presentation.evidence else {
+                    return;
+                };
+                evidence
+            }
             Err(error) => {
                 scheduler.publish_snapshot(
                     scheduler.evidence().cloned(),
@@ -1105,10 +1061,6 @@ fn run_binding_still_frame_present(
             }
         }
     };
-
-    if stop.load(Ordering::Acquire) {
-        return;
-    }
 
     let render_duration_ms = u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
     let generation_still_current = runtime
@@ -1151,6 +1103,7 @@ fn run_binding_still_frame_present(
 struct RealtimePreviewSchedulerSession {
     scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
     snapshot: Arc<Mutex<BindingPlaybackSnapshot>>,
+    playback_driver: Option<PreviewPlaybackTaskDriver>,
 }
 
 impl RealtimePreviewSchedulerSession {
@@ -1162,6 +1115,19 @@ impl RealtimePreviewSchedulerSession {
                 Arc::clone(&snapshot),
             ))),
             snapshot,
+            playback_driver: None,
+        }
+    }
+
+    fn stop_playback_driver(&mut self) {
+        if let Some(driver) = self.playback_driver.take() {
+            driver.stop();
+        }
+    }
+
+    fn cancel_playback_driver(&mut self) {
+        if let Some(driver) = self.playback_driver.take() {
+            driver.cancel();
         }
     }
 }
@@ -1173,14 +1139,66 @@ struct BindingPlaybackSnapshot {
     unsupported_reason: Option<String>,
 }
 
-struct BindingPlaybackWorker {
+struct ScheduledPreviewPresentation {
+    evidence: Option<RealtimePlaybackSchedulerEvidence>,
+    telemetry: SchedulerTelemetrySnapshot,
+}
+
+struct ScheduledPlaybackFrame {
+    frame: Option<RealtimePlaybackPresentedFrame>,
+    telemetry: SchedulerTelemetrySnapshot,
+}
+
+struct PreviewPlaybackTaskDriver {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
 }
 
-impl BindingPlaybackWorker {
-    fn cancel(self) {
+impl PreviewPlaybackTaskDriver {
+    fn spawn(
+        runtime: Arc<Mutex<RealtimePreviewRuntime>>,
+        runtime_id: PreviewSessionId,
+        scheduler: Arc<Mutex<RealtimePreviewBindingScheduler>>,
+        playback_generation: PlaybackGeneration,
+        start_time: Microseconds,
+        cadence: RealtimePlaybackCadence,
+        event_session_id: String,
+        event_sink: RealtimePreviewEventSink,
+    ) -> Result<Self, RealtimePreviewBindingError> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let driver_stop = Arc::clone(&stop);
+        let handle = thread::Builder::new()
+            .name(format!("task-runtime-preview-driver-{event_session_id}"))
+            .spawn(move || {
+                run_scheduler_playback_driver(
+                    runtime,
+                    runtime_id,
+                    scheduler,
+                    playback_generation,
+                    start_time,
+                    cadence,
+                    event_session_id,
+                    event_sink,
+                    driver_stop,
+                );
+            })
+            .map_err(|error| {
+                RealtimePreviewBindingError::new(
+                    RealtimePreviewBindingErrorKind::Runtime,
+                    format!("failed to start realtime preview scheduler driver: {error}"),
+                )
+            })?;
+        Ok(Self {
+            stop,
+            handle: Some(handle),
+        })
+    }
+
+    fn cancel(mut self) {
         self.stop.store(true, Ordering::Release);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 
     fn stop(mut self) {
@@ -1193,6 +1211,7 @@ impl BindingPlaybackWorker {
 
 struct RealtimePreviewBindingScheduler {
     scheduler: RealtimePlaybackScheduler,
+    task_scheduler: task_runtime::JobScheduler,
     snapshot: Arc<Mutex<BindingPlaybackSnapshot>>,
     gpu_device: Option<RealtimePreviewGpuDevice>,
     surface_target: Option<RealtimePreviewGpuPresentationTarget>,
@@ -1203,6 +1222,8 @@ struct RealtimePreviewBindingScheduler {
     last_evidence: Option<RealtimePlaybackSchedulerEvidence>,
     playback_timeline: RealtimePlaybackTimeline,
     active_generation: PlaybackGeneration,
+    task_scheduler_started_at: Instant,
+    next_task_job_id: u64,
     #[cfg(test)]
     test_mock_surface_attached: bool,
 }
@@ -1214,6 +1235,7 @@ impl RealtimePreviewBindingScheduler {
     ) -> Self {
         Self {
             scheduler: RealtimePlaybackScheduler::new(config),
+            task_scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
             snapshot,
             gpu_device: None,
             surface_target: None,
@@ -1224,6 +1246,8 @@ impl RealtimePreviewBindingScheduler {
             last_evidence: None,
             playback_timeline: RealtimePlaybackTimeline::new(),
             active_generation: PlaybackGeneration::initial(),
+            task_scheduler_started_at: Instant::now(),
+            next_task_job_id: 1,
             #[cfg(test)]
             test_mock_surface_attached: false,
         }
@@ -1471,7 +1495,160 @@ impl RealtimePreviewBindingScheduler {
         }
     }
 
+    fn scheduler_now_us(&self) -> u64 {
+        u64::try_from(self.task_scheduler_started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    fn next_task_job_id(&mut self, prefix: &str) -> JobId {
+        let sequence = self.next_task_job_id;
+        self.next_task_job_id = self.next_task_job_id.saturating_add(1);
+        JobId::new(format!("{prefix}-{sequence}"))
+    }
+
+    fn preview_job_policy(mode: PreviewRequestMode) -> (JobDomain, JobPriority) {
+        match mode {
+            PreviewRequestMode::Seek | PreviewRequestMode::Scrub => {
+                (JobDomain::ScrubSeek, JobPriority::Interactive)
+            }
+            PreviewRequestMode::FirstFrame => {
+                (JobDomain::InteractivePreview, JobPriority::Interactive)
+            }
+            PreviewRequestMode::PlaybackTick => {
+                (JobDomain::InteractivePreview, JobPriority::Realtime)
+            }
+        }
+    }
+
+    fn admit_preview_job(
+        &mut self,
+        target_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+        mode: PreviewRequestMode,
+    ) -> Result<JobId, RealtimePreviewBindingError> {
+        let (domain, priority) = Self::preview_job_policy(mode);
+        let submitted_at_us = self.scheduler_now_us();
+        let job_id = self.next_task_job_id(match mode {
+            PreviewRequestMode::Seek => "preview-seek",
+            PreviewRequestMode::Scrub => "preview-scrub",
+            PreviewRequestMode::FirstFrame => "preview-first-frame",
+            PreviewRequestMode::PlaybackTick => "preview-playback-tick",
+        });
+        let token = TaskCancellationToken::new(self.next_task_job_id);
+        let envelope = JobEnvelope::new(
+            job_id.clone(),
+            domain,
+            priority,
+            ResourceClass::GpuPresent,
+            token,
+            submitted_at_us,
+        )
+        .with_freshness(JobFreshness::timeline(target_time, playback_generation))
+        .with_deadline_at_us(submitted_at_us.saturating_add(match priority {
+            JobPriority::Realtime => 16_667,
+            JobPriority::Interactive => 33_333,
+            JobPriority::UserVisible | JobPriority::Background | JobPriority::Maintenance => {
+                100_000
+            }
+        }));
+        self.task_scheduler
+            .submit(envelope)
+            .map_err(task_scheduler_error)?;
+        let started = self
+            .task_scheduler
+            .start_next(self.scheduler_now_us())
+            .map_err(task_scheduler_error)?;
+        match started {
+            Some(started) if started.job_id == job_id => Ok(job_id),
+            Some(started) => Err(RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                format!(
+                    "task scheduler admitted unexpected preview job {} while waiting for {}",
+                    started.job_id.as_str(),
+                    job_id.as_str()
+                ),
+            )),
+            None => Err(RealtimePreviewBindingError::new(
+                RealtimePreviewBindingErrorKind::Runtime,
+                "task scheduler could not start realtime preview GPU presentation job",
+            )),
+        }
+    }
+
+    fn complete_preview_job(
+        &mut self,
+        job_id: JobId,
+        result: JobResult,
+        evidence: Option<&RealtimePlaybackSchedulerEvidence>,
+    ) -> Result<ScheduledPreviewPresentation, RealtimePreviewBindingError> {
+        let mut accepted = false;
+        let completion = self
+            .task_scheduler
+            .complete_with_commit(
+                &job_id,
+                result,
+                self.scheduler_now_us(),
+                CompletionFreshness::playback_generation(self.active_generation),
+                |_| accepted = true,
+            )
+            .map_err(task_scheduler_error)?;
+        let telemetry = self.task_scheduler.telemetry_snapshot();
+        let evidence = if matches!(completion, JobCompletion::Accepted { .. }) && accepted {
+            evidence.cloned()
+        } else {
+            None
+        };
+        if let Some(evidence) = evidence.as_ref() {
+            self.commit_presented_evidence(evidence.clone());
+        }
+        if matches!(
+            completion,
+            JobCompletion::Cancelled { .. } | JobCompletion::StaleRejected { .. }
+        ) {
+            return Ok(ScheduledPreviewPresentation {
+                evidence: None,
+                telemetry,
+            });
+        }
+        Ok(ScheduledPreviewPresentation {
+            evidence,
+            telemetry,
+        })
+    }
+
+    fn commit_presented_evidence(&mut self, evidence: RealtimePlaybackSchedulerEvidence) {
+        self.last_evidence = Some(evidence.clone());
+        self.publish_snapshot(Some(evidence), self.surface_placement(), None);
+    }
+
     fn present_next_tick(
+        &mut self,
+        target_time: Microseconds,
+        playback_generation: PlaybackGeneration,
+        mode: PreviewRequestMode,
+    ) -> Result<ScheduledPreviewPresentation, RealtimePreviewBindingError> {
+        let job_id = self.admit_preview_job(target_time, playback_generation, mode)?;
+        let frame_started = Instant::now();
+        let evidence = match self.render_next_tick(target_time, playback_generation) {
+            Ok(evidence) => evidence,
+            Err(error) => {
+                let _ = self.complete_preview_job(
+                    job_id.clone(),
+                    JobResult::new(job_id, JobResultKind::Failed),
+                    None,
+                );
+                return Err(error);
+            }
+        };
+        let mut result = JobResult::completed(job_id.clone());
+        if mode == PreviewRequestMode::FirstFrame {
+            result = result.with_first_frame_time_us(
+                u64::try_from(frame_started.elapsed().as_micros()).unwrap_or(u64::MAX),
+            );
+        }
+        self.complete_preview_job(job_id, result, Some(&evidence))
+    }
+
+    fn render_next_tick(
         &mut self,
         target_time: Microseconds,
         playback_generation: PlaybackGeneration,
@@ -1509,8 +1686,6 @@ impl RealtimePreviewBindingScheduler {
                 .scheduler
                 .present_tick(tick_time, playback_generation, &mut presenter)
                 .map_err(scheduler_error)?;
-            self.last_evidence = Some(evidence.clone());
-            self.publish_snapshot(Some(evidence.clone()), self.surface_placement(), None);
             return Ok(evidence);
         }
         self.ensure_media_provider()?;
@@ -1536,8 +1711,6 @@ impl RealtimePreviewBindingScheduler {
                     return Err(error);
                 }
             };
-        self.last_evidence = Some(evidence.clone());
-        self.publish_snapshot(Some(evidence.clone()), self.surface_placement(), None);
         Ok(evidence)
     }
 
@@ -1545,23 +1718,34 @@ impl RealtimePreviewBindingScheduler {
         &mut self,
         playback_generation: PlaybackGeneration,
         target_time: Microseconds,
-    ) -> Result<RealtimePlaybackSchedulerEvidence, RealtimePreviewBindingError> {
-        self.present_next_tick(target_time, playback_generation)
+        mode: PreviewRequestMode,
+    ) -> Result<ScheduledPreviewPresentation, RealtimePreviewBindingError> {
+        self.present_next_tick(target_time, playback_generation, mode)
     }
 
     fn present_playback_tick(
         &mut self,
         playback_generation: PlaybackGeneration,
         due_tick: RealtimePlaybackDueTick,
-    ) -> Result<RealtimePlaybackPresentedFrame, RealtimePreviewBindingError> {
-        let evidence = self.present_next_tick(due_tick.target_time, playback_generation)?;
-        self.playback_timeline
-            .advance_after_presented_tick(due_tick);
-        Ok(RealtimePlaybackPresentedFrame {
-            evidence,
-            dropped_frames: due_tick.dropped_frames,
-            schedule_lateness_ms: due_tick.schedule_lateness_ms,
-            reached_end: due_tick.reaches_sequence_end,
+    ) -> Result<ScheduledPlaybackFrame, RealtimePreviewBindingError> {
+        let presentation = self.present_next_tick(
+            due_tick.target_time,
+            playback_generation,
+            PreviewRequestMode::PlaybackTick,
+        )?;
+        let frame = presentation.evidence.map(|evidence| {
+            self.playback_timeline
+                .advance_after_presented_tick(due_tick);
+            RealtimePlaybackPresentedFrame {
+                evidence,
+                dropped_frames: due_tick.dropped_frames,
+                schedule_lateness_ms: due_tick.schedule_lateness_ms,
+                reached_end: due_tick.reaches_sequence_end,
+            }
+        });
+        Ok(ScheduledPlaybackFrame {
+            frame,
+            telemetry: presentation.telemetry,
         })
     }
 
@@ -2300,6 +2484,13 @@ fn scheduler_error(error: RealtimePlaybackSchedulerError) -> RealtimePreviewBind
     )))
 }
 
+fn task_scheduler_error(error: impl fmt::Display) -> RealtimePreviewBindingError {
+    RealtimePreviewBindingError::new(
+        RealtimePreviewBindingErrorKind::Runtime,
+        format!("task runtime scheduler rejected realtime preview job: {error}"),
+    )
+}
+
 fn is_transient_playback_presentation_error(error: &RealtimePreviewBindingError) -> bool {
     let message = error.message();
     message.contains("wgpu surface texture acquire failed: surface is occluded")
@@ -2588,6 +2779,12 @@ pub struct RealtimePreviewTelemetryBindingResponse {
     pub canceled_request_count: u64,
     pub fallback_count: u64,
     pub cache_hit_count: u64,
+    pub scheduler_queue_latency_p95_us: Option<u64>,
+    pub scheduler_queue_depth: u32,
+    pub scheduler_resource_saturation_count: u64,
+    pub scheduler_rejected_count: u64,
+    pub scheduler_canceled_count: u64,
+    pub scheduler_stale_rejected_count: u64,
     pub target_time_microseconds: u64,
     pub playback_generation: u64,
     pub frame_pacing: RealtimePreviewFramePacingTelemetry,
@@ -2607,6 +2804,13 @@ impl RealtimePreviewTelemetryBindingResponse {
             canceled_request_count: telemetry.canceled_request_count,
             fallback_count: telemetry.fallback_count,
             cache_hit_count: telemetry.cache_hit_count,
+            scheduler_queue_latency_p95_us: telemetry.scheduler_queue_latency_p95_us,
+            scheduler_queue_depth: u32::try_from(telemetry.scheduler_queue_depth)
+                .unwrap_or(u32::MAX),
+            scheduler_resource_saturation_count: telemetry.scheduler_resource_saturation_count,
+            scheduler_rejected_count: telemetry.scheduler_rejected_count,
+            scheduler_canceled_count: telemetry.scheduler_canceled_count,
+            scheduler_stale_rejected_count: telemetry.scheduler_stale_rejected_count,
             target_time_microseconds: telemetry.target_time.get(),
             playback_generation: telemetry.generation.get(),
             frame_pacing: telemetry.frame_pacing.clone(),

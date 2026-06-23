@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use draft_model::Microseconds;
 use serde::{Deserialize, Serialize};
+use task_runtime::SchedulerTelemetrySnapshot;
 
 use crate::{PlaybackGeneration, PreviewRequestMode, RealtimePreviewFrameRequest};
 
@@ -23,6 +24,13 @@ pub struct RealtimePreviewTelemetry {
     pub canceled_request_count: u64,
     pub fallback_count: u64,
     pub cache_hit_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheduler_queue_latency_p95_us: Option<u64>,
+    pub scheduler_queue_depth: usize,
+    pub scheduler_resource_saturation_count: u64,
+    pub scheduler_rejected_count: u64,
+    pub scheduler_canceled_count: u64,
+    pub scheduler_stale_rejected_count: u64,
     pub target_time: Microseconds,
     pub generation: PlaybackGeneration,
     pub frame_pacing: RealtimePreviewFramePacingTelemetry,
@@ -42,6 +50,12 @@ impl RealtimePreviewTelemetry {
             canceled_request_count: 0,
             fallback_count: 0,
             cache_hit_count: 0,
+            scheduler_queue_latency_p95_us: None,
+            scheduler_queue_depth: 0,
+            scheduler_resource_saturation_count: 0,
+            scheduler_rejected_count: 0,
+            scheduler_canceled_count: 0,
+            scheduler_stale_rejected_count: 0,
             target_time,
             generation,
             frame_pacing: RealtimePreviewFramePacingTelemetry::new(),
@@ -113,6 +127,15 @@ impl RealtimePreviewTelemetry {
         if self.first_frame_latency_ms.is_none() {
             self.first_frame_latency_ms = Some(render_duration_ms);
         }
+    }
+
+    pub fn record_scheduler_snapshot(&mut self, snapshot: &SchedulerTelemetrySnapshot) {
+        self.scheduler_queue_latency_p95_us = snapshot.queue_latency_us.p95;
+        self.scheduler_queue_depth = snapshot.current_queue_depth;
+        self.scheduler_resource_saturation_count = snapshot.resource_saturation_count;
+        self.scheduler_rejected_count = snapshot.rejected_count;
+        self.scheduler_canceled_count = snapshot.canceled_count;
+        self.scheduler_stale_rejected_count = snapshot.stale_rejected_count;
     }
 }
 
