@@ -1385,22 +1385,11 @@ test("调度诊断 exposes read-only scheduler status without renderer policy co
 });
 
 test("预览播放按钮使用实时预览画面而不是连续请求预览帧", async () => {
-  const { app, page } = await launchWorkspaceApp({
-    env: {
-      VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([PORTRAIT_VIDEO_FIXTURE])
-    }
-  });
+  const { app, page } = await launchWorkspaceApp();
 
   try {
-    await page.getByRole("button", { name: "导入素材" }).click();
-    await expect(page.getByRole("article", { name: "素材 p0-portrait-testsrc.mp4" })).toContainText("视频", { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toBeVisible();
     await seekWorkspaceTimelinePlayhead(page, 1_200_000);
-    await page
-      .getByRole("article", { name: "素材 p0-portrait-testsrc.mp4" })
-      .getByRole("button", { name: "添加 p0-portrait-testsrc.mp4 到时间线" })
-      .click();
-    await expectCommandCall(app, "addTimelineSegmentIntent");
-    await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
     await resetNativeCommandObservations(app, page);
 
     const previewControls = page.getByRole("group", { name: "预览播放控制" });
