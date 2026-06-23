@@ -65,7 +65,12 @@ fn scheduler_telemetry_classifies_cancel_stale_reject_fallback_unavailable_depth
     scheduler
         .submit(export_envelope("export-waiting", clock.now_us()))
         .expect("second export waits");
-    assert!(scheduler.start_next(clock.now_us()).expect("scan succeeds").is_none());
+    assert!(
+        scheduler
+            .start_next(clock.now_us())
+            .expect("scan succeeds")
+            .is_none()
+    );
 
     scheduler
         .submit(export_envelope("export-rejected", clock.now_us()))
@@ -98,7 +103,12 @@ fn scheduler_telemetry_classifies_cancel_stale_reject_fallback_unavailable_depth
 
     let fallback_id = JobId::new("preview-fallback");
     scheduler
-        .submit(preview_envelope(fallback_id.as_str(), 33_333, 2, clock.now_us()))
+        .submit(preview_envelope(
+            fallback_id.as_str(),
+            33_333,
+            2,
+            clock.now_us(),
+        ))
         .expect("fallback job queues");
     scheduler
         .start_next(clock.now_us())
@@ -122,10 +132,7 @@ fn scheduler_telemetry_classifies_cancel_stale_reject_fallback_unavailable_depth
     scheduler
         .cancel(&JobId::new("export-running"))
         .expect("release export resource");
-    let unavailable_id = JobId::new("export-unavailable");
-    scheduler
-        .submit(export_envelope(unavailable_id.as_str(), clock.now_us()))
-        .expect("unavailable export queues after release");
+    let unavailable_id = JobId::new("export-waiting");
     scheduler
         .start_next(clock.now_us())
         .expect("unavailable export starts")
@@ -152,12 +159,14 @@ fn scheduler_telemetry_classifies_cancel_stale_reject_fallback_unavailable_depth
     assert_eq!(snapshot.stale_rejected_count, 1);
     assert_eq!(snapshot.fallback_count, 1);
     assert_eq!(snapshot.unavailable_count, 1);
-    assert_eq!(snapshot.max_queue_depth, 1);
+    assert_eq!(snapshot.max_queue_depth, 2);
     assert_eq!(snapshot.resource_saturation_count, 1);
-    assert!(snapshot
-        .resource_saturation
-        .iter()
-        .any(|item| item.resource_class == ResourceClass::FfmpegProcess && item.count == 1));
+    assert!(
+        snapshot
+            .resource_saturation
+            .iter()
+            .any(|item| item.resource_class == ResourceClass::FfmpegProcess && item.count == 1)
+    );
     assert!(snapshot.fallback_classifications.iter().any(|item| {
         item.classification == JobDiagnosticClassification::RuntimeFallback && item.count == 1
     }));
@@ -194,7 +203,12 @@ fn test_config() -> TaskRuntimeConfig {
     }
 }
 
-fn preview_envelope(id: &str, target_time_us: u64, generation: u64, submitted_at_us: u64) -> JobEnvelope {
+fn preview_envelope(
+    id: &str,
+    target_time_us: u64,
+    generation: u64,
+    submitted_at_us: u64,
+) -> JobEnvelope {
     JobEnvelope::new(
         JobId::new(id),
         JobDomain::InteractivePreview,

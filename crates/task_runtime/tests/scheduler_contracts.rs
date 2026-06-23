@@ -85,7 +85,7 @@ fn scheduler_contracts_job_envelopes_carry_timeline_freshness() {
 #[test]
 fn scheduler_contracts_priority_lanes_start_interactive_while_export_saturated() {
     let mut scheduler = JobScheduler::new(test_config());
-    let mut clock = FakeClock::default();
+    let clock = FakeClock::default();
 
     scheduler
         .submit(export_envelope("export-running", 0))
@@ -95,7 +95,10 @@ fn scheduler_contracts_priority_lanes_start_interactive_while_export_saturated()
         .expect("export starts")
         .expect("started export");
     assert_eq!(running_export.job_id, JobId::new("export-running"));
-    assert_eq!(scheduler.resource_in_flight(ResourceClass::FfmpegProcess), 1);
+    assert_eq!(
+        scheduler.resource_in_flight(ResourceClass::FfmpegProcess),
+        1
+    );
 
     scheduler
         .submit(export_envelope("export-waiting", clock.now_us()))
@@ -112,7 +115,10 @@ fn scheduler_contracts_priority_lanes_start_interactive_while_export_saturated()
     assert_eq!(started.job_id, JobId::new("preview-now"));
     assert_eq!(started.domain, JobDomain::InteractivePreview);
     assert_eq!(scheduler.resource_in_flight(ResourceClass::GpuPresent), 1);
-    assert_eq!(scheduler.resource_in_flight(ResourceClass::FfmpegProcess), 1);
+    assert_eq!(
+        scheduler.resource_in_flight(ResourceClass::FfmpegProcess),
+        1
+    );
 }
 
 #[test]
@@ -184,7 +190,10 @@ fn scheduler_contracts_cancellation_releases_accounting_once() {
         |_| panic!("canceled completion must not commit visible state"),
     );
 
-    assert!(matches!(completion, Ok(task_runtime::JobCompletion::Cancelled { .. })));
+    assert!(matches!(
+        completion,
+        Ok(task_runtime::JobCompletion::Cancelled { .. })
+    ));
     assert_eq!(scheduler.telemetry_snapshot().canceled_count, 1);
 }
 
@@ -248,7 +257,12 @@ fn test_config() -> TaskRuntimeConfig {
     }
 }
 
-fn preview_envelope(id: &str, target_time_us: u64, generation: u64, submitted_at_us: u64) -> JobEnvelope {
+fn preview_envelope(
+    id: &str,
+    target_time_us: u64,
+    generation: u64,
+    submitted_at_us: u64,
+) -> JobEnvelope {
     JobEnvelope::new(
         JobId::new(id),
         JobDomain::InteractivePreview,
