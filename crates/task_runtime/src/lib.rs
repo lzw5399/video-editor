@@ -14,7 +14,10 @@ pub mod telemetry;
 pub mod testing;
 
 pub use cancellation::TaskCancellationToken;
-pub use config::{QueueOverflowPolicy, QueuePolicy, ResourceBudget, TaskRuntimeConfig};
+pub use config::{
+    QueueOverflowPolicy, QueuePolicy, ResourceBudget, TaskRuntimeConfig,
+    TaskRuntimeConfigValidationError,
+};
 pub use freshness::{
     PlaybackGeneration, PlaybackRate, PlaybackRateError, PlaybackState, TimelineClock,
     TimelineFreshness,

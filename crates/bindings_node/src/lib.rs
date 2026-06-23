@@ -36,6 +36,10 @@ use crate::realtime_preview_service::{
     RealtimePreviewTextHitTestBindingRequest,
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
+use crate::task_runtime_service::{
+    apply_task_runtime_dev_config_command, get_task_runtime_status_command,
+    get_task_runtime_telemetry_command,
+};
 
 pub mod artifact_store_service;
 pub mod audio_service;
@@ -45,6 +49,7 @@ pub mod preview_export_service;
 pub mod project_session_service;
 pub mod realtime_preview_service;
 pub mod runtime_capability_service;
+pub mod task_runtime_service;
 pub mod timeline_selection;
 
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -78,6 +83,21 @@ pub fn probe_runtime_capabilities() -> Result<serde_json::Value> {
         Ok(report) => to_js_value(ok_envelope(report)),
         Err(error) => to_js_value(runtime_capability_error_envelope(error)),
     }
+}
+
+#[napi(js_name = "getTaskRuntimeStatus")]
+pub fn get_task_runtime_status(request: serde_json::Value) -> Result<serde_json::Value> {
+    to_js_value(get_task_runtime_status_command(request))
+}
+
+#[napi(js_name = "getTaskRuntimeTelemetry")]
+pub fn get_task_runtime_telemetry(request: serde_json::Value) -> Result<serde_json::Value> {
+    to_js_value(get_task_runtime_telemetry_command(request))
+}
+
+#[napi(js_name = "applyTaskRuntimeDevConfig")]
+pub fn apply_task_runtime_dev_config(request: serde_json::Value) -> Result<serde_json::Value> {
+    to_js_value(apply_task_runtime_dev_config_command(request))
 }
 
 pub fn execute_command(command: serde_json::Value) -> Result<serde_json::Value> {
