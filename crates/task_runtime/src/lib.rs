@@ -6,3 +6,8 @@
 //! scheduler contracts, freshness vocabulary, and later runtime policy.
 
 pub mod freshness;
+
+pub use freshness::{
+    PlaybackGeneration, PlaybackRate, PlaybackRateError, PlaybackState, TimelineClock,
+    TimelineFreshness,
+};
