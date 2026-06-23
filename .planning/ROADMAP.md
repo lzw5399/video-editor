@@ -36,8 +36,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (completed 2026-06-20 after 15.2-07 product playback UAT reclose)
 - [x] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (completed 2026-06-20)
 - [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
-- [ ] **Phase 17: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
-- [ ] **Phase 18: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
+- [ ] **Phase 17: Template Import Core And Kaipai Offline Adapter Foundation** - Provider-neutral template import foundation with Kaipai as an offline external adapter
+- [ ] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
+- [ ] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
 
 ## Phase Details
 
@@ -766,10 +767,21 @@ Plans:
 
 - [ ] TBD - Plan after Phase 15.3 completion
 
-### Phase 17: Mobile/Server Binding Architecture And Runtime Ports
+### Phase 17: Template Import Core And Kaipai Offline Adapter Foundation
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 16
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run $gsd-plan-phase 17 to break down)
+
+### Phase 18: Mobile/Server Binding Architecture And Runtime Ports
 
 **Goal**: Turn the desktop-first Rust core into a portable runtime surface with explicit Node-API, C ABI, future JNI/Swift contracts, server entrypoints, and reference-counted opaque handle lifetimes.
-**Depends on**: Phase 16
+**Depends on**: Phase 17
 **Requirements**: PLAT-01, PLAT-02, PLAT-03, BIND-01, BIND-02, BIND-03, BIND-04, BIND-05
 **Success Criteria** (what must be TRUE):
 
@@ -784,12 +796,12 @@ Plans:
 
 Plans:
 
-- [ ] TBD - Plan after Phase 16 completion
+- [ ] TBD - Plan after Phase 17 completion
 
-### Phase 18: Production Effects, Retiming, And Transition Semantics
+### Phase 19: Production Effects, Retiming, And Transition Semantics
 
 **Goal**: Restore retiming, effects, filters, masks, blends, and transitions as production editor semantics once realtime preview, media IO, graph/cache, audio, and scheduling foundations exist.
-**Depends on**: Phase 17
+**Depends on**: Phase 18
 **Requirements**: PRODFX-01, PRODFX-02, PRODFX-03, PRODFX-04, PRODFX-05
 **UI hint**: yes
 **Success Criteria** (what must be TRUE):
@@ -804,12 +816,12 @@ Plans:
 
 Plans:
 
-- [ ] TBD - Plan after Phase 17 completion; sequence capability registry, retiming/speed, transitions, visual effects, then template fidelity gates; use `ROADMAP_PHASES_11_13_ARCHIVE.md` as historical input for retiming/effects/transition scope
+- [ ] TBD - Plan after Phase 18 completion; sequence capability registry, retiming/speed, transitions, visual effects, then template fidelity gates; use `ROADMAP_PHASES_11_13_ARCHIVE.md` as historical input for retiming/effects/transition scope
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1 -> 11 -> 12 -> 13 -> 14 -> 15 -> 15.1 -> 15.2 -> 15.3 -> 16 -> 17 -> 18
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10 -> 10.1 -> 11 -> 12 -> 13 -> 14 -> 15 -> 15.1 -> 15.2 -> 15.3 -> 16 -> 17 -> 18 -> 19
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -834,5 +846,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.2 P0 Real GPU Realtime Compositor Closure | 15/15 | Complete | 2026-06-20 |
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
-| 17. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
-| 18. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
+| 17. Template Import Core And Kaipai Offline Adapter Foundation | TBD | Not planned | - |
+| 18. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
+| 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

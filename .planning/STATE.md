@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+current_phase: 17
+current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: planning
 stopped_at: Completed quick task 260623-ui-reference-material-thumbnails
-last_updated: "2026-06-22T18:34:09Z"
-last_activity: 2026-06-23 -- Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks
+last_updated: "2026-06-23T16:27:24.199Z"
+last_activity: 2026-06-23
+last_activity_desc: "Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks"
 progress:
-  total_phases: 23
+  total_phases: 24
   completed_phases: 20
-  total_plans: 141
-  completed_plans: 141
-  percent: 87
+  total_plans: 149
+  completed_plans: 146
+  percent: 83
 ---
 
 # Project State
@@ -21,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 16 — Task Scheduler, Job Isolation, And Performance Telemetry
+**Current focus:** Phase 17 — Template Import Core And Kaipai Offline Adapter Foundation
 
 ## Current Position
 
-Phase: 16 (task-scheduler-job-isolation-and-performance-telemetry) — READY TO PLAN
+Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — READY TO PLAN
 Plan: TBD
-Status: Phase 15.3 complete; quick preview/editing architecture hardening continuing before Phase 16 planning
+Status: Phase 17 inserted and ready for later research/planning; core template import/rendering capabilities stay provider-neutral and Kaipai remains an external offline adapter.
 Last activity: 2026-06-23 -- Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks
 
-Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with aggregate production UI verification; Phase 16 is next
+Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-neutral template import plus a Kaipai offline adapter foundation, with former Phase 17/18 shifted to Phase 18/19.
 
 ## Performance Metrics
 
@@ -263,6 +266,7 @@ Progress: Phase 15.1 complete; Phase 15.2 complete; Phase 15.3 complete with agg
 - Future Phases 11-13 were archived outside active GSD in `ROADMAP_PHASES_11_13_ARCHIVE.md` so Phase 10.1 can continue without routing into retiming/effects/transitions work.
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
 - Phases 7-10 remain active completed post-MVP core editing capability expansion work: project canvas space, segment transform/compositing, complete text, and typed keyframes. Former future Phases 11-13 are archived outside active GSD until restored.
+- Phase 17 inserted after Phase 16: Template import core and Kaipai offline adapter foundation; former Phase 17/18 shifted to Phase 18/19; keep provider-neutral template/rendering capabilities separate from the external Kaipai adapter. (URGENT)
 
 ### Decisions
 
@@ -455,7 +459,7 @@ Recent decisions affecting current work:
 - [Phase 11]: Plan 06 keeps GPU text preview unsupported unless repository font parity is proven. — Text routes through TextParityUnsupported fallback diagnostics instead of silently approximating export output.
 - [Phase 11]: Plan 06 golden-tests realtime/export parity for supported no-divergence and divergent text/effect graphs. — This preserves shared render graph semantics while making divergence explicit.
 - [Phase 11]: Plan 07 closes realtime preview ownership with comment-filtered source guards and root `test:phase11` gates. — Renderer code remains UI-only while Rust/main own FFmpeg, render graph, GPU, fallback, cache, dirty range, timeline, and keyframe semantics.
-- [Phase 11]: Runtime-boundary docs now explicitly reserve Phase 12 media IO, Phase 15 audio, Phase 16 scheduling, and Phase 18 effects outside Phase 11. — Downstream phases can consume the contracts without relocating ownership.
+- [Phase 11]: Runtime-boundary docs now explicitly reserve Phase 12 media IO, Phase 15 audio, Phase 16 scheduling, and Phase 19 effects outside Phase 11. — Downstream phases can consume the contracts without relocating ownership.
 - [Phase 14]: Resource rows derive from Rust Draft/material/timeline facts and persist only under .veproj/derived/artifact-store.sqlite; canonical project.json remains semantic-only.
 - [Phase 14]: Artifact dependency rows validate all typed dependency facts before transactional writes, rejecting integer range overflow without partial rows.
 - [Phase 14]: Artifact invalidation now records audit-safe dirty reasons and source change kinds on artifact rows while keeping canonical project.json semantic-only.
@@ -519,9 +523,9 @@ None.
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Compatibility | Jianying/CapCut/Kaipai adapters | Deferred beyond Phase 18 production architecture | Initialization |
-| Platform | Full mobile app productization | Deferred beyond Phase 17 binding/runtime foundation | Initialization |
-| Effects | 100% proprietary effect/preset parity beyond first-party supported/degraded semantics | Deferred; Phase 18 covers self-owned production effects semantics | Initialization |
+| Compatibility | Full Jianying/CapCut/Kaipai parity and live provider integrations beyond the offline Phase 17 foundation | Deferred beyond Phase 19 production architecture | Initialization |
+| Platform | Full mobile app productization | Deferred beyond Phase 18 binding/runtime foundation | Initialization |
+| Effects | 100% proprietary effect/preset parity beyond first-party supported/degraded semantics | Deferred; Phase 19 covers self-owned production effects semantics | Initialization |
 
 ## Quick Tasks Completed
 
