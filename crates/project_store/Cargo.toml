@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dependencies]
 draft_model = { path = "../draft_model" }
 serde_json = "1.0.150"
+task_runtime = { path = "../task_runtime" }
 thiserror = "2.0.18"
 
 [target.'cfg(windows)'.dependencies]

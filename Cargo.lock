@@ -92,6 +92,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "task_runtime",
  "tempfile",
  "thiserror 2.0.18",
 ]
@@ -112,6 +113,7 @@ dependencies = [
  "draft_model",
  "realtime_preview_runtime",
  "serde",
+ "task_runtime",
 ]
 
 [[package]]
@@ -163,6 +165,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "task_runtime",
  "tempfile",
  "testkit",
  "wgpu",
@@ -1971,6 +1974,7 @@ version = "0.1.0"
 dependencies = [
  "draft_model",
  "serde_json",
+ "task_runtime",
  "tempfile",
  "thiserror 2.0.18",
  "windows-sys",

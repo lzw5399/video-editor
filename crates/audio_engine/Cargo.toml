@@ -13,3 +13,4 @@ path = "src/lib.rs"
 draft_model = { path = "../draft_model" }
 realtime_preview_runtime = { path = "../realtime_preview_runtime" }
 serde = { version = "1.0.228", features = ["derive"] }
+task_runtime = { path = "../task_runtime" }
