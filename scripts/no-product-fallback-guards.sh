@@ -85,4 +85,27 @@ if ! rg -q 'renderGraphGpuComposited' apps/desktop-electron/tests/product-user-j
   exit 1
 fi
 
+SCHEDULER_STRESS_SPEC="apps/desktop-electron/tests/product-scheduler-stress.spec.ts"
+if [ -f "$SCHEDULER_STRESS_SPEC" ]; then
+  fail_if_matches \
+    "Product scheduler stress success must not be satisfied by test runtime/export/artifact/audio mocks" \
+    'VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS|VIDEO_EDITOR_TEST_MOCK_ARTIFACT_COMMANDS|VIDEO_EDITOR_TEST_MOCK_AUDIO_COMMANDS|VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES:\s*"1"|mockSchedulerSuccess|artifactSchedulerSuccess|cpuProbeSchedulerSuccess|domOnlySchedulerSuccess' \
+    "$SCHEDULER_STRESS_SPEC"
+
+  for required in \
+    'renderGraphGpuComposited' \
+    'captureVisiblePreviewEvidence' \
+    'requestProjectSessionPreviewFrameCount' \
+    'getTaskRuntimeTelemetry' \
+    'queueLatencyUs' \
+    'resourceSaturationCount' \
+    'fallbackActive' \
+    'visibleCenterHash'; do
+    if ! rg -q "$required" "$SCHEDULER_STRESS_SPEC"; then
+      echo "no-product-fallback violation: scheduler stress success must require ${required}" >&2
+      exit 1
+    fi
+  done
+fi
+
 echo "no-product-fallback guards passed"
