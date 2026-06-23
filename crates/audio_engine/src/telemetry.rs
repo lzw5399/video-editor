@@ -1,6 +1,7 @@
 use draft_model::Microseconds;
 use realtime_preview_runtime::PlaybackGeneration;
 use serde::{Deserialize, Serialize};
+use task_runtime::SchedulerTelemetrySnapshot;
 
 use crate::session::AudioBufferRequest;
 
@@ -13,6 +14,13 @@ pub struct AudioPreviewTelemetry {
     pub underrun_count: u64,
     pub degraded_output_count: u64,
     pub bounded_rejected_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheduler_queue_latency_p95_us: Option<u64>,
+    pub scheduler_queue_depth: usize,
+    pub scheduler_resource_saturation_count: u64,
+    pub scheduler_rejected_count: u64,
+    pub scheduler_canceled_count: u64,
+    pub scheduler_stale_rejected_count: u64,
     pub target_time: Microseconds,
     pub generation: PlaybackGeneration,
 }
@@ -26,6 +34,12 @@ impl AudioPreviewTelemetry {
             underrun_count: 0,
             degraded_output_count: 0,
             bounded_rejected_count: 0,
+            scheduler_queue_latency_p95_us: None,
+            scheduler_queue_depth: 0,
+            scheduler_resource_saturation_count: 0,
+            scheduler_rejected_count: 0,
+            scheduler_canceled_count: 0,
+            scheduler_stale_rejected_count: 0,
             target_time,
             generation,
         }
@@ -53,5 +67,14 @@ impl AudioPreviewTelemetry {
         if bounded_rejected {
             self.bounded_rejected_count = self.bounded_rejected_count.saturating_add(1);
         }
+    }
+
+    pub fn record_scheduler_snapshot(&mut self, snapshot: &SchedulerTelemetrySnapshot) {
+        self.scheduler_queue_latency_p95_us = snapshot.queue_latency_us.p95;
+        self.scheduler_queue_depth = snapshot.current_queue_depth;
+        self.scheduler_resource_saturation_count = snapshot.resource_saturation_count;
+        self.scheduler_rejected_count = snapshot.rejected_count;
+        self.scheduler_canceled_count = snapshot.canceled_count;
+        self.scheduler_stale_rejected_count = snapshot.stale_rejected_count;
     }
 }

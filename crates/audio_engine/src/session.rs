@@ -5,6 +5,7 @@ use std::fmt;
 use draft_model::{Microseconds, RationalFrameRate};
 use realtime_preview_runtime::{PlaybackGeneration, PlaybackRate, PlaybackState, TimelineClock};
 use serde::{Deserialize, Serialize};
+use task_runtime::SchedulerTelemetrySnapshot;
 
 use crate::telemetry::AudioPreviewTelemetry;
 
@@ -195,6 +196,16 @@ impl AudioPreviewRuntime {
     ) -> Result<AudioBufferResult, AudioPreviewError> {
         let session = self.session_mut(session_id)?;
         Ok(session.request_buffer(request))
+    }
+
+    pub fn record_scheduler_telemetry(
+        &mut self,
+        session_id: AudioPreviewSessionId,
+        snapshot: &SchedulerTelemetrySnapshot,
+    ) -> Result<(), AudioPreviewError> {
+        let session = self.session_mut(session_id)?;
+        session.telemetry.record_scheduler_snapshot(snapshot);
+        Ok(())
     }
 
     fn session(

@@ -5,7 +5,7 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 use std::thread::{self, JoinHandle};
@@ -32,17 +32,22 @@ use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::resolve_material_uri;
 use realtime_preview_runtime::{PlaybackRate, PlaybackState};
 use serde::{Deserialize, Serialize};
+use task_runtime::{
+    CompletionFreshness, JobCompletion, JobDomain, JobEnvelope, JobFreshness, JobId, JobPriority,
+    JobResult, JobResultKind, ResourceClass, SchedulerTelemetrySnapshot, TaskCancellationToken,
+    TaskRuntimeConfig,
+};
 
 const SESSION_PREFIX: &str = "audio-session-";
 const MAX_WAVEFORM_PEAK_BINS: u16 = 512;
 const AUDIO_PREVIEW_CHUNK_DURATION: Microseconds = Microseconds(2_000_000);
 const AUDIO_PREVIEW_TARGET_QUEUE_DURATION: Microseconds = Microseconds(4_000_000);
 const AUDIO_PREVIEW_REFILL_LOW_WATER: Microseconds = Microseconds(1_500_000);
-const AUDIO_PREVIEW_REFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
 pub struct AudioPreviewBindingRegistry {
     runtime: AudioPreviewRuntime,
+    scheduler: Arc<Mutex<AudioPreviewTaskScheduler>>,
     next_binding_id: u64,
     sessions: BTreeMap<String, AudioPreviewBindingSession>,
     outputs: BTreeMap<String, NativeAudioPreviewOutput>,
@@ -58,15 +63,13 @@ struct AudioPreviewBindingSession {
 struct NativeAudioPreviewOutput {
     sink: CpalAudioOutputSink,
     device: AudioOutputDeviceSummary,
-    refill_stop: Arc<AtomicBool>,
-    refill_thread: Option<JoinHandle<()>>,
+    refill_driver: Option<AudioPreviewRefillDriver>,
 }
 
 impl Drop for NativeAudioPreviewOutput {
     fn drop(&mut self) {
-        self.refill_stop.store(true, Ordering::Release);
-        if let Some(thread) = self.refill_thread.take() {
-            let _ = thread.join();
+        if let Some(driver) = self.refill_driver.take() {
+            driver.stop();
         }
     }
 }
@@ -75,6 +78,7 @@ impl AudioPreviewBindingRegistry {
     pub fn new() -> Self {
         Self {
             runtime: AudioPreviewRuntime::new(),
+            scheduler: Arc::new(Mutex::new(AudioPreviewTaskScheduler::new())),
             next_binding_id: 1,
             sessions: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -124,13 +128,25 @@ impl AudioPreviewBindingRegistry {
             ));
         }
         self.outputs.remove(session_id);
-        let output = self.open_native_output_for_draft(draft, target_time)?;
         let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
             .and_then(|_| self.runtime.resume(runtime_id))
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.set_scheduler_generation(generation)?;
+        let output = match self.open_native_output_for_draft(draft, target_time, generation) {
+            Ok(output) => output,
+            Err(error) => {
+                let paused_generation = self
+                    .runtime
+                    .pause(runtime_id)
+                    .map_err(AudioPreviewBindingError::runtime)?;
+                self.set_scheduler_generation(paused_generation)?;
+                return Err(error);
+            }
+        };
+        self.record_scheduler_telemetry(runtime_id)?;
         self.outputs.insert(session_id.to_owned(), output);
         Ok(command_response(
             session_id,
@@ -154,6 +170,7 @@ impl AudioPreviewBindingRegistry {
             .runtime
             .pause(runtime_id)
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.set_scheduler_generation(generation)?;
         let target_time = self.status(session_id, project_session_id)?.target_time;
         Ok(command_response(
             session_id,
@@ -177,6 +194,7 @@ impl AudioPreviewBindingRegistry {
             .runtime
             .stop(runtime_id)
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.set_scheduler_generation(generation)?;
         Ok(command_response(
             session_id,
             generation.get(),
@@ -194,11 +212,13 @@ impl AudioPreviewBindingRegistry {
         project_session_id: &str,
         target_time: Microseconds,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
+        self.outputs.remove(session_id);
         let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let generation = self
             .runtime
             .seek(runtime_id, target_time)
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.set_scheduler_generation(generation)?;
         Ok(command_response(
             session_id,
             generation.get(),
@@ -215,6 +235,7 @@ impl AudioPreviewBindingRegistry {
         session_id: &str,
         project_session_id: &str,
     ) -> Result<AudioPreviewCommandResponse, AudioPreviewBindingError> {
+        self.outputs.remove(session_id);
         let runtime_id = self.runtime_session_id_for_project(session_id, project_session_id)?;
         let token = self
             .runtime
@@ -223,6 +244,7 @@ impl AudioPreviewBindingRegistry {
         self.runtime
             .cancel_request(runtime_id, token)
             .map_err(AudioPreviewBindingError::runtime)?;
+        self.cancel_scheduler_jobs()?;
         let status = self.status(session_id, project_session_id)?;
         Ok(command_response(
             session_id,
@@ -305,6 +327,7 @@ impl AudioPreviewBindingRegistry {
         &self,
         draft: &Draft,
         target_time: Microseconds,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
     ) -> Result<NativeAudioPreviewOutput, AudioPreviewBindingError> {
         let device = CpalAudioOutputDevice::default_output().map_err(|diagnostic| {
             AudioPreviewBindingError::new(
@@ -327,14 +350,16 @@ impl AudioPreviewBindingRegistry {
             output_channels,
         ) < AUDIO_PREVIEW_TARGET_QUEUE_DURATION.get()
         {
-            let samples = match render_draft_audio_preview(
+            let samples = match self.render_scheduled_audio_refill(
                 draft,
                 cursor,
                 capabilities.sample_rate_hz,
                 output_channels,
                 AUDIO_PREVIEW_CHUNK_DURATION,
+                playback_generation,
             ) {
-                Ok(samples) => samples,
+                Ok(Some(samples)) => samples,
+                Ok(None) => break,
                 Err(error) if sink.queued_sample_count() > 0 => {
                     eprintln!("audio preview refill reached natural end during prefill: {error}");
                     break;
@@ -360,21 +385,20 @@ impl AudioPreviewBindingRegistry {
             )
         })?;
         let queue = sink.queue_handle();
-        let refill_stop = Arc::new(AtomicBool::new(false));
-        let refill_thread = spawn_audio_refill_thread(
+        let refill_driver = AudioPreviewRefillDriver::spawn(
             draft.clone(),
             queue,
             cursor,
             capabilities.sample_rate_hz,
             output_channels,
-            Arc::clone(&refill_stop),
+            playback_generation,
+            Arc::clone(&self.scheduler),
         )?;
         let summary = native_device_summary(device.summary());
         Ok(NativeAudioPreviewOutput {
             sink,
             device: summary,
-            refill_stop,
-            refill_thread: Some(refill_thread),
+            refill_driver: Some(refill_driver),
         })
     }
 
@@ -462,6 +486,81 @@ impl AudioPreviewBindingRegistry {
                     .to_owned(),
             ],
         })
+    }
+
+    fn set_scheduler_generation(
+        &self,
+        generation: realtime_preview_runtime::PlaybackGeneration,
+    ) -> Result<(), AudioPreviewBindingError> {
+        self.scheduler
+            .lock()
+            .map_err(|_| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    "audio task scheduler lock poisoned",
+                )
+            })?
+            .set_active_generation(generation);
+        Ok(())
+    }
+
+    fn cancel_scheduler_jobs(&self) -> Result<(), AudioPreviewBindingError> {
+        self.scheduler
+            .lock()
+            .map_err(|_| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    "audio task scheduler lock poisoned",
+                )
+            })?
+            .cancel_active_jobs();
+        Ok(())
+    }
+
+    fn record_scheduler_telemetry(
+        &mut self,
+        runtime_id: AudioPreviewSessionId,
+    ) -> Result<(), AudioPreviewBindingError> {
+        let snapshot = self
+            .scheduler
+            .lock()
+            .map_err(|_| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    "audio task scheduler lock poisoned",
+                )
+            })?
+            .telemetry_snapshot();
+        self.runtime
+            .record_scheduler_telemetry(runtime_id, &snapshot)
+            .map_err(AudioPreviewBindingError::runtime)
+    }
+
+    fn render_scheduled_audio_refill(
+        &self,
+        draft: &Draft,
+        target_time: Microseconds,
+        output_sample_rate_hz: u32,
+        output_channels: u16,
+        duration: Microseconds,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    ) -> Result<Option<Vec<f32>>, AudioPreviewBindingError> {
+        self.scheduler
+            .lock()
+            .map_err(|_| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    "audio task scheduler lock poisoned",
+                )
+            })?
+            .render_audio_refill(
+                draft,
+                target_time,
+                output_sample_rate_hz,
+                output_channels,
+                duration,
+                playback_generation,
+            )
     }
 
     fn runtime_session_id_for_project(
@@ -847,6 +946,315 @@ fn playback_status_label(status: AudioPreviewPlaybackStatus) -> &'static str {
     }
 }
 
+struct AudioPreviewRefillDriver {
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl AudioPreviewRefillDriver {
+    fn spawn(
+        draft: Draft,
+        queue: CpalAudioOutputQueue,
+        start_time: Microseconds,
+        output_sample_rate_hz: u32,
+        output_channels: u16,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
+        scheduler: Arc<Mutex<AudioPreviewTaskScheduler>>,
+    ) -> Result<Self, AudioPreviewBindingError> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let driver_stop = Arc::clone(&stop);
+        let handle = thread::Builder::new()
+            .name("task-runtime-audio-driver".to_owned())
+            .spawn(move || {
+                drive_scheduler_audio_refill(
+                    draft,
+                    queue,
+                    start_time,
+                    output_sample_rate_hz,
+                    output_channels,
+                    playback_generation,
+                    scheduler,
+                    driver_stop,
+                );
+            })
+            .map_err(|error| {
+                AudioPreviewBindingError::new(
+                    AudioPreviewBindingErrorKind::RuntimeFailed,
+                    format!("failed to start audio preview scheduler driver: {error}"),
+                )
+            })?;
+        Ok(Self {
+            stop,
+            handle: Some(handle),
+        })
+    }
+
+    fn stop(mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AudioPreviewTaskScheduler {
+    scheduler: task_runtime::JobScheduler,
+    started_at: std::time::Instant,
+    next_job_id: u64,
+    active_generation: realtime_preview_runtime::PlaybackGeneration,
+    active_jobs: Vec<JobId>,
+}
+
+impl Default for AudioPreviewTaskScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AudioPreviewTaskScheduler {
+    fn new() -> Self {
+        Self {
+            scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            started_at: std::time::Instant::now(),
+            next_job_id: 1,
+            active_generation: realtime_preview_runtime::PlaybackGeneration::initial(),
+            active_jobs: Vec::new(),
+        }
+    }
+
+    fn set_active_generation(&mut self, generation: realtime_preview_runtime::PlaybackGeneration) {
+        self.active_generation = generation;
+        self.cancel_active_jobs();
+    }
+
+    fn cancel_active_jobs(&mut self) {
+        let jobs = std::mem::take(&mut self.active_jobs);
+        for job_id in jobs {
+            let _ = self.scheduler.cancel(&job_id);
+        }
+    }
+
+    fn telemetry_snapshot(&self) -> SchedulerTelemetrySnapshot {
+        self.scheduler.telemetry_snapshot()
+    }
+
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    fn next_id(&mut self, prefix: &str) -> JobId {
+        let id = self.next_job_id;
+        self.next_job_id = self.next_job_id.saturating_add(1);
+        JobId::new(format!("{prefix}-{id}"))
+    }
+
+    fn admit(
+        &mut self,
+        prefix: &str,
+        domain: JobDomain,
+        priority: JobPriority,
+        resource_class: ResourceClass,
+        target_time: Microseconds,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    ) -> Result<JobId, AudioPreviewBindingError> {
+        let submitted_at_us = self.now_us();
+        let job_id = self.next_id(prefix);
+        let envelope = JobEnvelope::new(
+            job_id.clone(),
+            domain,
+            priority,
+            resource_class,
+            TaskCancellationToken::new(self.next_job_id),
+            submitted_at_us,
+        )
+        .with_freshness(JobFreshness::timeline(target_time, playback_generation));
+        self.scheduler
+            .submit(envelope)
+            .map_err(audio_scheduler_error)?;
+        let started = self
+            .scheduler
+            .start_next(self.now_us())
+            .map_err(audio_scheduler_error)?;
+        match started {
+            Some(started) if started.job_id == job_id => {
+                self.active_jobs.push(job_id.clone());
+                Ok(job_id)
+            }
+            Some(started) => Err(AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::RuntimeFailed,
+                format!(
+                    "audio task scheduler admitted unexpected job {} while waiting for {}",
+                    started.job_id.as_str(),
+                    job_id.as_str()
+                ),
+            )),
+            None => Err(AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::RuntimeFailed,
+                "audio task scheduler could not start realtime audio job",
+            )),
+        }
+    }
+
+    fn complete(
+        &mut self,
+        job_id: JobId,
+        result: JobResult,
+    ) -> Result<bool, AudioPreviewBindingError> {
+        self.active_jobs.retain(|active| active != &job_id);
+        let mut accepted = false;
+        let completion = self
+            .scheduler
+            .complete_with_commit(
+                &job_id,
+                result,
+                self.now_us(),
+                CompletionFreshness::playback_generation(self.active_generation),
+                |_| accepted = true,
+            )
+            .map_err(audio_scheduler_error)?;
+        Ok(matches!(completion, JobCompletion::Accepted { .. }) && accepted)
+    }
+
+    fn render_audio_refill(
+        &mut self,
+        draft: &Draft,
+        target_time: Microseconds,
+        output_sample_rate_hz: u32,
+        output_channels: u16,
+        duration: Microseconds,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    ) -> Result<Option<Vec<f32>>, AudioPreviewBindingError> {
+        let job_id = self.admit(
+            "audio-refill",
+            JobDomain::Audio,
+            JobPriority::Realtime,
+            ResourceClass::AudioRealtime,
+            target_time,
+            playback_generation,
+        )?;
+        let result = render_draft_audio_preview(
+            draft,
+            target_time,
+            output_sample_rate_hz,
+            output_channels,
+            duration,
+            playback_generation,
+            self,
+        );
+        match result {
+            Ok(samples) => {
+                let accepted = self.complete(job_id.clone(), JobResult::completed(job_id))?;
+                Ok(accepted.then_some(samples))
+            }
+            Err(error) => {
+                let _ = self.complete(
+                    job_id.clone(),
+                    JobResult::new(job_id, JobResultKind::Failed),
+                );
+                Err(error)
+            }
+        }
+    }
+
+    fn decode_audio_window(
+        &mut self,
+        path: &Path,
+        source_start: Microseconds,
+        duration: Microseconds,
+        output_sample_rate_hz: u32,
+        output_channels: u16,
+        playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    ) -> Result<Option<DecodedWavPcm>, AudioPreviewBindingError> {
+        let job_id = self.admit(
+            "audio-decode",
+            JobDomain::Decode,
+            JobPriority::Interactive,
+            ResourceClass::CpuDecode,
+            source_start,
+            playback_generation,
+        )?;
+        let result = decode_audio_window_with_ffmpeg(
+            path,
+            source_start,
+            duration,
+            output_sample_rate_hz,
+            output_channels,
+        );
+        match result {
+            Ok(decoded) => {
+                let accepted = self.complete(job_id.clone(), JobResult::completed(job_id))?;
+                Ok(accepted.then_some(decoded))
+            }
+            Err(error) => {
+                let _ = self.complete(
+                    job_id.clone(),
+                    JobResult::new(job_id, JobResultKind::Failed),
+                );
+                Err(error)
+            }
+        }
+    }
+}
+
+fn drive_scheduler_audio_refill(
+    draft: Draft,
+    queue: CpalAudioOutputQueue,
+    mut cursor: Microseconds,
+    output_sample_rate_hz: u32,
+    output_channels: u16,
+    playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    scheduler: Arc<Mutex<AudioPreviewTaskScheduler>>,
+    stop: Arc<AtomicBool>,
+) {
+    loop {
+        if stop.load(Ordering::Acquire) {
+            return;
+        }
+        if queued_duration_us(
+            queue.queued_sample_count(),
+            output_sample_rate_hz,
+            output_channels,
+        ) >= AUDIO_PREVIEW_REFILL_LOW_WATER.get()
+        {
+            thread::sleep(Duration::from_millis(20));
+            continue;
+        }
+        let samples = {
+            let mut scheduler = match scheduler.lock() {
+                Ok(scheduler) => scheduler,
+                Err(_) => return,
+            };
+            match scheduler.render_audio_refill(
+                &draft,
+                cursor,
+                output_sample_rate_hz,
+                output_channels,
+                AUDIO_PREVIEW_CHUNK_DURATION,
+                playback_generation,
+            ) {
+                Ok(Some(samples)) => samples,
+                Ok(None) | Err(_) => return,
+            }
+        };
+        if queue.enqueue_f32_interleaved(&samples).is_err() {
+            return;
+        }
+        cursor = Microseconds::new(
+            cursor
+                .get()
+                .saturating_add(AUDIO_PREVIEW_CHUNK_DURATION.get()),
+        );
+    }
+}
+
+fn audio_scheduler_error(error: impl fmt::Display) -> AudioPreviewBindingError {
+    AudioPreviewBindingError::new(
+        AudioPreviewBindingErrorKind::RuntimeFailed,
+        format!("task runtime scheduler rejected audio preview job: {error}"),
+    )
+}
+
 fn device_summaries(
     backend: &DesktopAudioOutputBackendCapabilities,
 ) -> Vec<AudioOutputDeviceSummary> {
@@ -898,6 +1306,8 @@ fn render_draft_audio_preview(
     output_sample_rate_hz: u32,
     output_channels: u16,
     duration: Microseconds,
+    playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    scheduler: &mut AudioPreviewTaskScheduler,
 ) -> Result<Vec<f32>, AudioPreviewBindingError> {
     if output_sample_rate_hz == 0 || output_channels == 0 {
         return Err(AudioPreviewBindingError::new(
@@ -977,6 +1387,8 @@ fn render_draft_audio_preview(
                 target_time,
                 segment,
                 &path,
+                playback_generation,
+                scheduler,
             )?;
         }
         mixed_any = true;
@@ -989,75 +1401,6 @@ fn render_draft_audio_preview(
         ));
     }
     Ok(mixed)
-}
-
-fn spawn_audio_refill_thread(
-    draft: Draft,
-    queue: CpalAudioOutputQueue,
-    start_time: Microseconds,
-    output_sample_rate_hz: u32,
-    output_channels: u16,
-    stop: Arc<AtomicBool>,
-) -> Result<JoinHandle<()>, AudioPreviewBindingError> {
-    thread::Builder::new()
-        .name("audio-preview-refill".to_owned())
-        .spawn(move || {
-            run_audio_refill_loop(
-                draft,
-                queue,
-                start_time,
-                output_sample_rate_hz,
-                output_channels,
-                stop,
-            );
-        })
-        .map_err(|error| {
-            AudioPreviewBindingError::new(
-                AudioPreviewBindingErrorKind::RuntimeFailed,
-                format!("failed to start audio preview refill thread: {error}"),
-            )
-        })
-}
-
-fn run_audio_refill_loop(
-    draft: Draft,
-    queue: CpalAudioOutputQueue,
-    mut cursor: Microseconds,
-    output_sample_rate_hz: u32,
-    output_channels: u16,
-    stop: Arc<AtomicBool>,
-) {
-    loop {
-        if stop.load(Ordering::Acquire) {
-            return;
-        }
-        if queued_duration_us(
-            queue.queued_sample_count(),
-            output_sample_rate_hz,
-            output_channels,
-        ) >= AUDIO_PREVIEW_REFILL_LOW_WATER.get()
-        {
-            thread::sleep(AUDIO_PREVIEW_REFILL_POLL_INTERVAL);
-            continue;
-        }
-        let Ok(samples) = render_draft_audio_preview(
-            &draft,
-            cursor,
-            output_sample_rate_hz,
-            output_channels,
-            AUDIO_PREVIEW_CHUNK_DURATION,
-        ) else {
-            return;
-        };
-        if queue.enqueue_f32_interleaved(&samples).is_err() {
-            return;
-        }
-        cursor = Microseconds::new(
-            cursor
-                .get()
-                .saturating_add(AUDIO_PREVIEW_CHUNK_DURATION.get()),
-        );
-    }
 }
 
 fn queued_duration_us(queued_samples: usize, sample_rate_hz: u32, channels: u16) -> u64 {
@@ -1078,6 +1421,8 @@ fn mix_ffmpeg_audio_segment(
     target_time: Microseconds,
     segment: &draft_model::Segment,
     path: &Path,
+    playback_generation: realtime_preview_runtime::PlaybackGeneration,
+    scheduler: &mut AudioPreviewTaskScheduler,
 ) -> Result<(), AudioPreviewBindingError> {
     let output_frames = output.len() / output_channels;
     let output_duration_us = u64::try_from(output_frames)
@@ -1104,13 +1449,17 @@ fn mix_ffmpeg_audio_segment(
             .saturating_add(overlap_start.saturating_sub(segment_start)),
     );
     let duration = Microseconds::new(overlap_end.saturating_sub(overlap_start));
-    let decoded = decode_audio_window_with_ffmpeg(
+    let decoded = scheduler.decode_audio_window(
         path,
         source_start,
         duration,
         output_sample_rate_hz,
         u16::try_from(output_channels).unwrap_or(2),
+        playback_generation,
     )?;
+    let Some(decoded) = decoded else {
+        return Ok(());
+    };
     let output_offset_frame = usize::try_from(
         overlap_start
             .saturating_sub(preview_start)
@@ -1172,7 +1521,7 @@ fn decode_audio_window_with_ffmpeg(
             format!("audio preview requires FFmpeg to decode embedded media audio: {error}"),
         )
     })?;
-    let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_secs(10));
+    let executor = DesktopFfmpegExecutor::default();
     if !executor.can_execute(&runtime.ffmpeg.path) {
         return Err(AudioPreviewBindingError::new(
             AudioPreviewBindingErrorKind::DeviceUnavailable,
@@ -1204,12 +1553,15 @@ fn decode_audio_window_with_ffmpeg(
         OsString::from("pcm_s16le"),
         OsString::from("pipe:1"),
     ];
-    let output = executor.run(&runtime.ffmpeg.path, &args).map_err(|error| {
-        AudioPreviewBindingError::new(
-            AudioPreviewBindingErrorKind::RuntimeFailed,
-            format!("failed to launch FFmpeg audio decode: {error}"),
-        )
-    })?;
+    let ffmpeg_path = runtime.ffmpeg.path.clone();
+    let output = executor
+        .run(ffmpeg_path.as_path(), &args)
+        .map_err(|error| {
+            AudioPreviewBindingError::new(
+                AudioPreviewBindingErrorKind::RuntimeFailed,
+                format!("failed to launch FFmpeg audio decode: {error}"),
+            )
+        })?;
     if !output.status.success() {
         return Err(AudioPreviewBindingError::new(
             AudioPreviewBindingErrorKind::RuntimeFailed,
