@@ -55,6 +55,45 @@ fn scheduler_contracts_config_serializes_portable_budget_policy() {
 }
 
 #[test]
+fn scheduler_config_dev_override_rejects_zero_resource_capacity() {
+    let mut config = TaskRuntimeConfig::portable_default();
+    config.resource_budgets[0].max_in_flight = 0;
+
+    let error = config
+        .validate_dev_override()
+        .expect_err("zero resource capacity must be rejected");
+
+    assert!(
+        error.to_string().contains("maxInFlight"),
+        "validation error should name the rejected capacity field: {error}"
+    );
+}
+
+#[test]
+fn scheduler_config_dev_override_rejects_queue_depth_above_hard_cap() {
+    let mut config = TaskRuntimeConfig::portable_default();
+    config.queue_policies[0].max_queued = TaskRuntimeConfig::MAX_DEV_QUEUE_DEPTH + 1;
+
+    let error = config
+        .validate_dev_override()
+        .expect_err("huge queue depth must be rejected");
+
+    assert!(
+        error.to_string().contains("maxQueued"),
+        "validation error should name the rejected queue field: {error}"
+    );
+}
+
+#[test]
+fn scheduler_config_dev_override_accepts_portable_defaults() {
+    let config = TaskRuntimeConfig::portable_default();
+
+    config
+        .validate_dev_override()
+        .expect("portable defaults satisfy dev override validation");
+}
+
+#[test]
 fn scheduler_contracts_cancellation_tokens_are_cloneable_and_observable() {
     let token = TaskCancellationToken::new(42);
     let cloned = token.clone();
