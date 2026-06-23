@@ -21,7 +21,9 @@ import type {
   ProjectSessionClosedResponse,
   SegmentVisualPatch,
   TextSegmentPatch,
-  StartProjectSessionExportRequest
+  StartProjectSessionExportRequest,
+  TaskRuntimeStatusResponse,
+  TaskRuntimeTelemetryResponse
 } from "../main/nativeBinding";
 import type {
   AudioOutputDeviceSummary,
@@ -123,6 +125,8 @@ type VideoEditorCoreApi = {
   runArtifactGarbageCollection: (
     request: ArtifactGarbageCollectionRequest
   ) => Promise<CommandResultEnvelope<ArtifactMaintenanceResult>>;
+  getTaskRuntimeStatus: () => Promise<CommandResultEnvelope<TaskRuntimeStatusResponse>>;
+  getTaskRuntimeTelemetry: () => Promise<CommandResultEnvelope<TaskRuntimeTelemetryResponse>>;
   closeProjectSession: (request: ProjectSessionRequest) => Promise<CommandResultEnvelope<ProjectSessionClosedResponse>>;
 };
 type OpenMaterialFilesResponse = {

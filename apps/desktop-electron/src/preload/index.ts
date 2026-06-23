@@ -90,6 +90,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     getArtifactQuotaStatus: (request: ArtifactQuotaRequest) => ipcRenderer.invoke("core:getArtifactQuotaStatus", request),
     runArtifactGarbageCollection: (request: ArtifactGarbageCollectionRequest) =>
       ipcRenderer.invoke("core:runArtifactGarbageCollection", request),
+    getTaskRuntimeStatus: () => ipcRenderer.invoke("core:getTaskRuntimeStatus"),
+    getTaskRuntimeTelemetry: () => ipcRenderer.invoke("core:getTaskRuntimeTelemetry"),
     closeProjectSession: (request: ProjectSessionRequest) => ipcRenderer.invoke("core:closeProjectSession", request)
   });
   contextBridge.exposeInMainWorld("videoEditorPlatform", {

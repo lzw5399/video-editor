@@ -94,6 +94,9 @@ type NativeBinding = {
   runArtifactGarbageCollection: (
     request: ArtifactGarbageCollectionRequest
   ) => CommandResultEnvelope<ArtifactMaintenanceResult>;
+  getTaskRuntimeStatus: (request: TaskRuntimeStatusRequest) => CommandResultEnvelope<TaskRuntimeStatusResponse>;
+  getTaskRuntimeTelemetry: (request: TaskRuntimeTelemetryRequest) => CommandResultEnvelope<TaskRuntimeTelemetryResponse>;
+  applyTaskRuntimeDevConfig: (request: TaskRuntimeDevConfigRequest) => CommandResultEnvelope<TaskRuntimeDevConfigResponse>;
   createRealtimePreviewSession: (config: RealtimePreviewSessionConfig) => RealtimePreviewSessionResponse;
   subscribeRealtimePreviewEvents: (
     callback: (errorOrEventJson: unknown, eventJson?: string) => void
@@ -188,6 +191,65 @@ export type ArtifactGarbageCollectionRequest = {
   sessionId: string;
   bundlePath: string;
   dryRun: boolean;
+};
+
+export type TaskRuntimeDiagnosticsRequest = {
+  diagnostics?: boolean;
+};
+
+export type TaskRuntimeStatusRequest = TaskRuntimeDiagnosticsRequest;
+export type TaskRuntimeTelemetryRequest = TaskRuntimeDiagnosticsRequest;
+
+export type TaskRuntimeStatusResponse = {
+  status: "ready" | "degraded" | "unavailable";
+  statusLabel: string;
+  workAvailable: boolean;
+  telemetryAvailable: boolean;
+  configRevision: number;
+};
+
+export type TaskRuntimeTelemetrySummary = {
+  sampleCount: number;
+  p50?: number | null;
+  p95?: number | null;
+  max?: number | null;
+};
+
+export type TaskRuntimeTelemetryResponse = {
+  status: "ready" | "degraded" | "unavailable";
+  statusLabel: string;
+  submittedCount: number;
+  admittedCount: number;
+  startedCount: number;
+  completedCount: number;
+  rejectedCount: number;
+  coalescedCount: number;
+  canceledCount: number;
+  staleRejectedCount: number;
+  fallbackCount: number;
+  unavailableCount: number;
+  cacheHitCount: number;
+  firstFrameTimeUs: number | null;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  resourceSaturationCount: number;
+  queueLatencyUs: TaskRuntimeTelemetrySummary;
+  waitTimeUs: TaskRuntimeTelemetrySummary;
+  runTimeUs: TaskRuntimeTelemetrySummary;
+  jobDurationUs: TaskRuntimeTelemetrySummary;
+};
+
+export type TaskRuntimeDevConfigRequest = {
+  developerDiagnostics: boolean;
+  config: unknown;
+};
+
+export type TaskRuntimeDevConfigResponse = {
+  applied: boolean;
+  configRevision: number;
+  resourceClassCount: number;
+  domainPolicyCount: number;
+  telemetrySampleLimit: number;
 };
 
 export type ProjectIntent =
@@ -1004,6 +1066,34 @@ export function runArtifactGarbageCollection(
   return binding.runArtifactGarbageCollection(request);
 }
 
+export function getTaskRuntimeStatus(request: TaskRuntimeStatusRequest = {}): CommandResultEnvelope<TaskRuntimeStatusResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getTaskRuntimeStatus");
+  }
+  return binding.getTaskRuntimeStatus(request);
+}
+
+export function getTaskRuntimeTelemetry(
+  request: TaskRuntimeTelemetryRequest = {}
+): CommandResultEnvelope<TaskRuntimeTelemetryResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("getTaskRuntimeTelemetry");
+  }
+  return binding.getTaskRuntimeTelemetry(request);
+}
+
+export function applyTaskRuntimeDevConfig(
+  request: TaskRuntimeDevConfigRequest
+): CommandResultEnvelope<TaskRuntimeDevConfigResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("applyTaskRuntimeDevConfig");
+  }
+  return binding.applyTaskRuntimeDevConfig(request);
+}
+
 export function createRealtimePreviewSession(config: RealtimePreviewSessionConfig): RealtimePreviewSessionResponse {
   return requireLoadedBinding().createRealtimePreviewSession(config);
 }
@@ -1127,6 +1217,9 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.cancelArtifactGeneration !== "function" ||
       typeof loaded.getArtifactQuotaStatus !== "function" ||
       typeof loaded.runArtifactGarbageCollection !== "function" ||
+      typeof loaded.getTaskRuntimeStatus !== "function" ||
+      typeof loaded.getTaskRuntimeTelemetry !== "function" ||
+      typeof loaded.applyTaskRuntimeDevConfig !== "function" ||
       typeof loaded.createRealtimePreviewSession !== "function" ||
       typeof loaded.subscribeRealtimePreviewEvents !== "function" ||
       typeof loaded.unsubscribeRealtimePreviewEvents !== "function" ||
@@ -1182,6 +1275,9 @@ function loadNativeBinding(): NativeBinding | null {
       cancelArtifactGeneration: loaded.cancelArtifactGeneration,
       getArtifactQuotaStatus: loaded.getArtifactQuotaStatus,
       runArtifactGarbageCollection: loaded.runArtifactGarbageCollection,
+      getTaskRuntimeStatus: loaded.getTaskRuntimeStatus,
+      getTaskRuntimeTelemetry: loaded.getTaskRuntimeTelemetry,
+      applyTaskRuntimeDevConfig: loaded.applyTaskRuntimeDevConfig,
       createRealtimePreviewSession: loaded.createRealtimePreviewSession,
       subscribeRealtimePreviewEvents: loaded.subscribeRealtimePreviewEvents,
       unsubscribeRealtimePreviewEvents: loaded.unsubscribeRealtimePreviewEvents,

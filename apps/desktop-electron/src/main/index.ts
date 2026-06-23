@@ -30,6 +30,8 @@ import {
   getAudioPreviewStatus,
   getArtifactQuotaStatus,
   getArtifactStatus,
+  getTaskRuntimeStatus,
+  getTaskRuntimeTelemetry,
   getExportJobStatus,
   getWaveformDisplayPeaks,
   listProjectSessionMaterials,
@@ -51,6 +53,7 @@ import {
   startProjectSessionExport,
   stopAudioPreview,
   version,
+  applyTaskRuntimeDevConfig,
   type AudioPreviewRequest,
   type ArtifactGarbageCollectionRequest,
   type ArtifactGenerationActionRequest,
@@ -64,13 +67,14 @@ import {
   type ProjectSessionRequest,
   type SegmentVisualPatch,
   type StartProjectSessionExportRequest,
+  type TaskRuntimeDevConfigRequest,
   type TextSegmentPatch
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
 type TestNativeCommandObservation = {
-  command: CommandEnvelope["command"];
-  kind: CommandEnvelope["payload"]["kind"];
+  command: CommandEnvelope["command"] | "getTaskRuntimeStatus" | "getTaskRuntimeTelemetry" | "applyTaskRuntimeDevConfig";
+  kind: CommandEnvelope["payload"]["kind"] | "getTaskRuntimeStatus" | "getTaskRuntimeTelemetry" | "applyTaskRuntimeDevConfig";
   requestId: string | null;
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
@@ -435,6 +439,26 @@ ipcMain.handle("core:runArtifactGarbageCollection", (event, request: ArtifactGar
   }
   return runArtifactGarbageCollection(request);
 });
+ipcMain.handle("core:getTaskRuntimeStatus", (event) => {
+  assertAllowedIpcSender(event);
+  recordTestTaskRuntimeCall("getTaskRuntimeStatus");
+  return getTaskRuntimeStatus({});
+});
+ipcMain.handle("core:getTaskRuntimeTelemetry", (event) => {
+  assertAllowedIpcSender(event);
+  recordTestTaskRuntimeCall("getTaskRuntimeTelemetry");
+  return getTaskRuntimeTelemetry({});
+});
+if (isDevelopment && showDeveloperDiagnostics) {
+  ipcMain.handle("diagnostics:applyTaskRuntimeDevConfig", (event, request: TaskRuntimeDevConfigRequest) => {
+    assertAllowedIpcSender(event);
+    recordTestTaskRuntimeCall("applyTaskRuntimeDevConfig");
+    return applyTaskRuntimeDevConfig({
+      ...request,
+      developerDiagnostics: true
+    });
+  });
+}
 ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
   assertAllowedIpcSender(event);
   recordTestProjectSessionCall("closeProjectSession", request);
@@ -813,6 +837,39 @@ function recordTestExplicitArtifactCall(
   request: ArtifactStatusRequest | ArtifactGenerationActionRequest | ArtifactQuotaRequest | ArtifactGarbageCollectionRequest
 ): void {
   recordTestNativeCommandObservation(buildExplicitArtifactEnvelope(command, request));
+}
+
+function recordTestTaskRuntimeCall(command: "getTaskRuntimeStatus" | "getTaskRuntimeTelemetry" | "applyTaskRuntimeDevConfig"): void {
+  if (!testObservationEnabled) {
+    return;
+  }
+
+  globalThis.__videoEditorTestNativeCommandObservations ??= [];
+  globalThis.__videoEditorTestNativeCommandObservations.push({
+    command,
+    kind: command,
+    requestId: `explicit-${command}`,
+    targetTime: null,
+    targetTimerange: null,
+    duration: null,
+    canvasConfig: null,
+    visual: null,
+    keyframeProperty: null,
+    keyframeAt: null,
+    textContent: null,
+    textSource: null,
+    textFontRef: null,
+    srtContent: null,
+    outputPath: null,
+    preset: null,
+    jobId: null,
+    sessionId: null,
+    projectSessionId: null,
+    expectedRevision: null,
+    hasDraftField: false,
+    deviceSelectionId: null,
+    maxPeakBins: null
+  });
 }
 
 function recordTestProjectSessionCall(
