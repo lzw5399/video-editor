@@ -1,6 +1,9 @@
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
+use std::time::Instant;
 
 use artifact_store::ArtifactStoreError;
 use artifact_store::fingerprint::fingerprint_file;
@@ -8,10 +11,11 @@ use artifact_store::gc::{GcMode, collect_garbage};
 use artifact_store::generation::{
     ArtifactGenerator, GeneratedArtifact, GeneratedArtifactMime, GenerationWorkerContext,
     ProxyGenerationRequest, ThumbnailGenerationRequest, WaveformGenerationRequest,
-    generate_thumbnail_artifact,
+    generate_thumbnail_artifact_with_cancel_token,
 };
 use artifact_store::jobs::{
-    ArtifactGenerationJob, GenerationJobStatus, GenerationStatusSummary, cancel_generation_job,
+    ArtifactGenerationJob, GenerationJobStatus, GenerationStatusSummary,
+    artifact_generation_scheduler_envelope, cancel_generation_job, create_generation_job,
     job_status_summary, list_active_generation_jobs, restart_generation_job, resume_generation_job,
 };
 use artifact_store::quota::{QuotaState, compute_quota_state};
@@ -23,14 +27,18 @@ use draft_model::{
     CommandError, CommandErrorKind, CommandName, CommandPayload, CommandResultEnvelope,
     DisplayableArtifactRef, Draft, GetArtifactQuotaStatusCommandPayload,
     GetArtifactStatusCommandPayload, Material, MaterialArtifactStatus, MaterialId, MaterialKind,
-    MaterialStatus, RefreshArtifactStatusCommandPayload,
+    MaterialStatus, Microseconds, RefreshArtifactStatusCommandPayload,
     RunArtifactGarbageCollectionCommandPayload,
 };
-use media_runtime::{FfmpegExecutor, RuntimeConfig, discover_runtime_config};
+use media_runtime::{CancelToken, FfmpegExecutor, RuntimeConfig, discover_runtime_config};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use project_store::resolve_material_uri;
 use rusqlite::OptionalExtension;
 use serde_json::json;
+use task_runtime::{
+    CompletionFreshness, JobCompletion, JobDomain, JobFreshness, JobId, JobPriority, JobResult,
+    PlaybackGeneration, ResourceClass, TaskCancellationToken, TaskRuntimeConfig,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtifactStoreCommandKind {
@@ -41,6 +49,38 @@ pub enum ArtifactStoreCommandKind {
     CancelGeneration,
     GetQuota,
     RunGarbageCollection,
+}
+
+#[derive(Clone, Default)]
+struct SchedulerArtifactService {
+    state: Arc<Mutex<SchedulerArtifactState>>,
+}
+
+struct SchedulerArtifactState {
+    scheduler: task_runtime::JobScheduler,
+    pending: BTreeMap<JobId, ScheduledArtifactWork>,
+    started_at: Instant,
+    next_token_id: u64,
+}
+
+struct ScheduledArtifactWork {
+    session_id: String,
+    expected_revision: u64,
+    bundle_path: PathBuf,
+    request: ThumbnailGenerationRequest,
+    task_token: TaskCancellationToken,
+    runtime_cancel_token: CancelToken,
+}
+
+impl Default for SchedulerArtifactState {
+    fn default() -> Self {
+        Self {
+            scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            pending: BTreeMap::new(),
+            started_at: Instant::now(),
+            next_token_id: 1,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -93,7 +133,16 @@ impl ArtifactStoreBindingService {
 
     pub fn refresh_status(&mut self) -> Result<ArtifactStatusSummary, ArtifactBindingError> {
         if let Some(draft) = self.draft.clone() {
-            refresh_material_thumbnails(&self.bundle_path, &draft, self.material_id.as_ref())?;
+            let expected_revision =
+                crate::project_session_service::project_session_current_revision(&self.session_id)
+                    .unwrap_or(0);
+            enqueue_material_thumbnails(
+                &self.session_id,
+                &self.bundle_path,
+                &draft,
+                self.material_id.as_ref(),
+                expected_revision,
+            )?;
         }
         self.status()
     }
@@ -135,6 +184,7 @@ impl ArtifactStoreBindingService {
         &mut self,
         job_id: &str,
     ) -> Result<ArtifactGenerationTaskSummary, ArtifactBindingError> {
+        global_artifact_scheduler().cancel(job_id);
         let job =
             cancel_generation_job(&mut self.store, job_id).map_err(ArtifactBindingError::Store)?;
         Ok(task_summary_from_job(&job))
@@ -170,6 +220,185 @@ impl ArtifactStoreBindingService {
     }
 }
 
+impl SchedulerArtifactService {
+    fn enqueue_thumbnail(
+        &self,
+        session_id: String,
+        expected_revision: u64,
+        bundle_path: PathBuf,
+        request: ThumbnailGenerationRequest,
+    ) -> Result<(), ArtifactBindingError> {
+        {
+            let mut state = self.state.lock().expect("scheduler artifact lock");
+            let task_token = state.next_task_token();
+            let runtime_cancel_token = CancelToken::new();
+            let job_id = JobId::new(request.job_id.clone());
+            let submitted_at_us = state.now_us();
+            let _artifact_priority_marker = JobPriority::Background;
+            let _artifact_resource_marker = ResourceClass::BackgroundCpu;
+            let envelope = artifact_generation_scheduler_envelope(
+                job_id.clone(),
+                task_token.clone(),
+                submitted_at_us,
+            )
+            .with_freshness(
+                JobFreshness::timeline(
+                    Microseconds::new(request.target_time_us),
+                    PlaybackGeneration::new(0),
+                )
+                .with_project_session(session_id.clone(), expected_revision),
+            );
+            state
+                .scheduler
+                .submit(envelope)
+                .map_err(|_| ArtifactBindingError::SchedulerRejected)?;
+            state.pending.insert(
+                job_id,
+                ScheduledArtifactWork {
+                    session_id,
+                    expected_revision,
+                    bundle_path,
+                    request,
+                    task_token,
+                    runtime_cancel_token,
+                },
+            );
+        }
+        self.start_ready_jobs()
+    }
+
+    fn cancel(&self, job_id: &str) {
+        let mut state = self.state.lock().expect("scheduler artifact lock");
+        let job_id = JobId::new(job_id);
+        if let Some(work) = state.pending.remove(&job_id) {
+            work.task_token.cancel();
+            work.runtime_cancel_token.cancel();
+        }
+        let now_us = state.now_us();
+        let _ = state.scheduler.cancel_at(&job_id, now_us);
+    }
+
+    fn start_ready_jobs(&self) -> Result<(), ArtifactBindingError> {
+        let mut started = Vec::new();
+        {
+            let mut state = self.state.lock().expect("scheduler artifact lock");
+            loop {
+                let now_us = state.now_us();
+                let Some(envelope) = state
+                    .scheduler
+                    .start_next(now_us)
+                    .map_err(|_| ArtifactBindingError::SchedulerRejected)?
+                else {
+                    break;
+                };
+                if envelope.domain != JobDomain::ArtifactGeneration {
+                    continue;
+                }
+                if let Some(work) = state.pending.remove(&envelope.job_id) {
+                    started.push(work);
+                } else {
+                    let completed_at_us = state.now_us();
+                    let _ = state.scheduler.complete_with_commit(
+                        &envelope.job_id,
+                        JobResult::new(
+                            envelope.job_id.clone(),
+                            task_runtime::JobResultKind::Failed,
+                        ),
+                        completed_at_us,
+                        CompletionFreshness::none(),
+                        |_| {},
+                    );
+                }
+            }
+        }
+
+        for work in started {
+            let service = self.clone();
+            thread::Builder::new()
+                .name("task-runtime-artifact-driver".to_owned())
+                .spawn(move || service.run_thumbnail(work))
+                .map_err(|_| ArtifactBindingError::SchedulerRejected)?;
+        }
+        Ok(())
+    }
+
+    fn run_thumbnail(&self, work: ScheduledArtifactWork) {
+        if crate::project_session_service::project_session_current_revision(&work.session_id)
+            != Some(work.expected_revision)
+        {
+            self.complete_thumbnail(
+                &work,
+                JobResult::completed(JobId::new(work.request.job_id.clone())),
+            );
+            return;
+        }
+
+        let result = discover_runtime_config()
+            .map_err(|_| ArtifactBindingError::RuntimeUnavailable)
+            .and_then(|runtime| {
+                let executor = DesktopFfmpegExecutor::default();
+                let mut generator = DesktopThumbnailGenerator { runtime, executor };
+                generate_thumbnail_artifact_with_cancel_token(
+                    &work.bundle_path,
+                    &mut generator,
+                    work.request.clone(),
+                    work.runtime_cancel_token.clone(),
+                )
+                .map_err(ArtifactBindingError::Store)
+            });
+
+        let job_id = JobId::new(work.request.job_id.clone());
+        match result {
+            Ok(outcome) => {
+                let _ = outcome;
+                self.complete_thumbnail(&work, JobResult::completed(job_id));
+            }
+            Err(_) => {
+                self.complete_thumbnail(
+                    &work,
+                    JobResult::new(job_id, task_runtime::JobResultKind::Failed),
+                );
+            }
+        }
+        let _ = self.start_ready_jobs();
+    }
+
+    fn complete_thumbnail(&self, work: &ScheduledArtifactWork, result: JobResult) -> bool {
+        let job_id = JobId::new(work.request.job_id.clone());
+        let mut accepted = false;
+        let mut state = self.state.lock().expect("scheduler artifact lock");
+        let completed_at_us = state.now_us();
+        let current_revision =
+            crate::project_session_service::project_session_current_revision(&work.session_id);
+        let completion = state.scheduler.complete_with_commit(
+            &job_id,
+            result,
+            completed_at_us,
+            CompletionFreshness::none()
+                .with_expected_revision(current_revision.unwrap_or(u64::MAX)),
+            |_| accepted = true,
+        );
+        matches!(completion, Ok(JobCompletion::Accepted { .. })) && accepted
+    }
+}
+
+impl SchedulerArtifactState {
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    fn next_task_token(&mut self) -> TaskCancellationToken {
+        let token = TaskCancellationToken::new(self.next_token_id);
+        self.next_token_id = self.next_token_id.saturating_add(1);
+        token
+    }
+}
+
+fn global_artifact_scheduler() -> &'static SchedulerArtifactService {
+    static SCHEDULER: OnceLock<SchedulerArtifactService> = OnceLock::new();
+    SCHEDULER.get_or_init(SchedulerArtifactService::default)
+}
+
 #[derive(Debug)]
 pub enum ArtifactBindingError {
     InvalidInput,
@@ -177,6 +406,7 @@ pub enum ArtifactBindingError {
     UnknownJob,
     ActionUnavailable,
     RuntimeUnavailable,
+    SchedulerRejected,
     Store(ArtifactStoreError),
 }
 
@@ -442,16 +672,16 @@ fn thumbnail_status_for_material(
     })
 }
 
-fn refresh_material_thumbnails(
+fn enqueue_material_thumbnails(
+    session_id: &str,
     bundle_path: &Path,
     draft: &Draft,
     material_filter: Option<&MaterialId>,
+    expected_revision: u64,
 ) -> Result<(), ArtifactBindingError> {
     let index = index_draft_resources(bundle_path, draft).map_err(ArtifactBindingError::Store)?;
-    let runtime =
-        discover_runtime_config().map_err(|_| ArtifactBindingError::RuntimeUnavailable)?;
-    let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_secs(20));
-    let mut generator = DesktopThumbnailGenerator { runtime, executor };
+    let scheduler = global_artifact_scheduler();
+    let mut store = open_artifact_store(bundle_path).map_err(ArtifactBindingError::Store)?;
 
     for material in draft.materials.iter().filter(|material| {
         material_filter
@@ -500,7 +730,7 @@ fn refresh_material_thumbnails(
             material_id: material.material_id.clone(),
             source_ref: source_path.display().to_string(),
             source_fingerprint: source_fingerprint.to_string(),
-            runtime_capability_fingerprint: generator.runtime.ffmpeg.version.clone(),
+            runtime_capability_fingerprint: "scheduled-bundled-ffmpeg".to_owned(),
             output_profile_fingerprint: "thumbnail-png-320w:v1".to_owned(),
             generation_parameters_json: json!({
                 "kind": "materialThumbnail",
@@ -513,8 +743,14 @@ fn refresh_material_thumbnails(
             expected_mime: GeneratedArtifactMime::ImagePng,
             extension: "png".to_owned(),
         };
-        generate_thumbnail_artifact(bundle_path, &mut generator, request)
+        create_generation_job(&mut store, request.clone().into_generation_request())
             .map_err(ArtifactBindingError::Store)?;
+        scheduler.enqueue_thumbnail(
+            session_id.to_owned(),
+            expected_revision,
+            bundle_path.to_path_buf(),
+            request,
+        )?;
     }
     Ok(())
 }
@@ -656,13 +892,14 @@ impl ArtifactGenerator for DesktopThumbnailGenerator {
             OsString::from("pipe:1"),
         ]);
 
-        let output = self
-            .executor
-            .run(&self.runtime.ffmpeg.path, &args)
-            .map_err(|source| ArtifactStoreError::Io {
-                path: self.runtime.ffmpeg.path.clone(),
-                source,
-            })?;
+        let ffmpeg_path = self.runtime.ffmpeg.path.clone();
+        let output =
+            self.executor
+                .run(&ffmpeg_path, &args)
+                .map_err(|source| ArtifactStoreError::Io {
+                    path: ffmpeg_path.clone(),
+                    source,
+                })?;
         if !output.status.success() {
             return Err(ArtifactStoreError::InvalidDerivedPath {
                 path: request.artifact_id.clone(),
@@ -780,6 +1017,7 @@ fn artifact_error_envelope(
         ArtifactBindingError::UnknownJob => "Artifact generation job was not found",
         ArtifactBindingError::ActionUnavailable => "Artifact generation action is unavailable",
         ArtifactBindingError::RuntimeUnavailable => "Bundled media runtime is unavailable",
+        ArtifactBindingError::SchedulerRejected => "Artifact scheduler rejected the generation job",
         ArtifactBindingError::Store(_) => "Artifact store operation failed",
     };
     CommandResultEnvelope {

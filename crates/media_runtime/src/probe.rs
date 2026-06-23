@@ -18,6 +18,8 @@ pub enum MaterialProbeKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MaterialProbeStatus {
+    Queued,
+    Running,
     Probed,
 }
 
@@ -187,6 +189,14 @@ pub fn probe_material_metadata(
     })?;
 
     normalize_probe_output(parsed, path, runtime, executor)
+}
+
+pub fn run_scheduled_material_probe(
+    executor: &impl FfmpegExecutor,
+    runtime: &RuntimeConfig,
+    path: impl AsRef<Path>,
+) -> Result<MaterialProbeMetadata, MaterialProbeError> {
+    probe_material_metadata(executor, runtime, path)
 }
 
 fn process_error(

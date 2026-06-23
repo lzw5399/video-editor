@@ -11,6 +11,9 @@ mod paths;
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use task_runtime::{
+    JobDomain, JobEnvelope, JobId, JobPriority, ResourceClass, TaskCancellationToken,
+};
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
@@ -41,6 +44,21 @@ pub trait PlatformFileSystem {
 /// Standard desktop filesystem implementation.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StdPlatformFileSystem;
+
+pub fn project_io_scheduler_envelope(
+    job_id: impl Into<JobId>,
+    cancellation_token: TaskCancellationToken,
+    submitted_at_us: u64,
+) -> JobEnvelope {
+    JobEnvelope::new(
+        job_id.into(),
+        JobDomain::FilesystemIo,
+        JobPriority::UserVisible,
+        ResourceClass::DiskIo,
+        cancellation_token,
+        submitted_at_us,
+    )
+}
 
 impl PlatformFileSystem for StdPlatformFileSystem {
     fn read_to_string(&self, path: &Path) -> io::Result<String> {

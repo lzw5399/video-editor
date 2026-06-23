@@ -112,11 +112,7 @@ fn scheduler_artifact_probe_background_domains_do_not_block_interactive_lanes() 
             JobDomain::MediaProbe,
             ResourceClass::ValidationProbe,
         ),
-        (
-            "io-running",
-            JobDomain::FilesystemIo,
-            ResourceClass::DiskIo,
-        ),
+        ("io-running", JobDomain::FilesystemIo, ResourceClass::DiskIo),
     ] {
         scheduler
             .submit(background_envelope(job_id, domain, resource, 0))
@@ -141,8 +137,16 @@ fn scheduler_artifact_probe_background_domains_do_not_block_interactive_lanes() 
             JobDomain::InteractivePreview,
             ResourceClass::GpuPresent,
         ),
-        ("scrub-seek", JobDomain::ScrubSeek, ResourceClass::GpuPresent),
-        ("audio-refill", JobDomain::Audio, ResourceClass::AudioRealtime),
+        (
+            "scrub-seek",
+            JobDomain::ScrubSeek,
+            ResourceClass::GpuPresent,
+        ),
+        (
+            "audio-refill",
+            JobDomain::Audio,
+            ResourceClass::AudioRealtime,
+        ),
     ] {
         scheduler
             .submit(interactive_envelope(job_id, domain, resource, 2))
@@ -251,7 +255,11 @@ fn artifact_probe_io_config() -> TaskRuntimeConfig {
             },
         ],
         queue_policies: vec![
-            queue_policy(JobDomain::ArtifactGeneration, 4, QueueOverflowPolicy::Reject),
+            queue_policy(
+                JobDomain::ArtifactGeneration,
+                4,
+                QueueOverflowPolicy::Reject,
+            ),
             queue_policy(JobDomain::MediaProbe, 4, QueueOverflowPolicy::Reject),
             queue_policy(JobDomain::FilesystemIo, 4, QueueOverflowPolicy::Reject),
             queue_policy(

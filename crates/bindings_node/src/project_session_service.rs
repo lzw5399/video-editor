@@ -19,18 +19,23 @@ use draft_model::{
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
     UpdateSegmentVisualCommandPayload,
 };
-use media_runtime::discover_runtime_config;
+use media_runtime::{discover_runtime_config, run_scheduled_material_probe};
 use media_runtime_desktop::DesktopFfmpegExecutor;
 use napi::bindgen_prelude::Result;
 use project_store::{
     ProjectStoreError, StdPlatformFileSystem, create_project_bundle, open_project_bundle,
-    save_project_bundle,
+    project_io_scheduler_envelope, save_project_bundle,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use task_runtime::{
+    CompletionFreshness, JobDomain, JobEnvelope, JobFreshness, JobId, JobPriority, JobResult,
+    PlaybackGeneration, ResourceClass, TaskCancellationToken, TaskRuntimeConfig,
+};
 
 use crate::timeline_selection::{
     percent_decode_timeline_handle_component, timeline_segment_selection_handle,
@@ -332,6 +337,8 @@ struct ProjectSessionImportMaterialResponse {
     revision: u64,
     material: draft_model::Material,
     materials: Vec<draft_model::Material>,
+    probe_status: ProjectSessionProbeStatus,
+    probe_job_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostic: Option<MissingMaterialCommandDiagnostic>,
     #[serde(rename = "viewModel")]
@@ -340,6 +347,17 @@ struct ProjectSessionImportMaterialResponse {
     delta: draft_model::CommandDelta,
     bundle_path: String,
     project_json_path: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+enum ProjectSessionProbeStatus {
+    Queued,
+    Running,
+    Probed,
+    Failed,
+    Stale,
 }
 
 #[derive(Debug, Serialize)]
@@ -509,6 +527,46 @@ enum TimelineSegmentVisualKind {
 struct ProjectSessionRegistry {
     sessions: HashMap<String, ProjectSession>,
     next_session_id: u64,
+}
+
+struct MaterialProbeSchedulerState {
+    scheduler: task_runtime::JobScheduler,
+    started_at: Instant,
+    next_token_id: u64,
+}
+
+struct ProjectIoSchedulerState {
+    scheduler: task_runtime::JobScheduler,
+    started_at: Instant,
+    next_token_id: u64,
+}
+
+struct ScheduledMaterialProbe {
+    session_id: String,
+    expected_revision: u64,
+    material_id: MaterialId,
+    material_path: PathBuf,
+    task_token: TaskCancellationToken,
+}
+
+impl Default for MaterialProbeSchedulerState {
+    fn default() -> Self {
+        Self {
+            scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            started_at: Instant::now(),
+            next_token_id: 1,
+        }
+    }
+}
+
+impl Default for ProjectIoSchedulerState {
+    fn default() -> Self {
+        Self {
+            scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            started_at: Instant::now(),
+            next_token_id: 1,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -708,6 +766,15 @@ pub(crate) fn project_session_artifact_snapshot(
     }))
 }
 
+pub(crate) fn project_session_current_revision(session_id: &str) -> Option<u64> {
+    let registry = global_project_session_registry();
+    let registry = registry.lock().ok()?;
+    registry
+        .sessions
+        .get(session_id)
+        .map(|session| session.revision)
+}
+
 fn global_project_session_registry() -> &'static Mutex<ProjectSessionRegistry> {
     static REGISTRY: OnceLock<Mutex<ProjectSessionRegistry>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(ProjectSessionRegistry::default()))
@@ -720,6 +787,244 @@ fn with_project_session_registry(
         napi::Error::from_reason("project session registry lock poisoned".to_string())
     })?;
     f(&mut registry)
+}
+
+fn global_material_probe_scheduler() -> &'static Mutex<MaterialProbeSchedulerState> {
+    static SCHEDULER: OnceLock<Mutex<MaterialProbeSchedulerState>> = OnceLock::new();
+    SCHEDULER.get_or_init(|| Mutex::new(MaterialProbeSchedulerState::default()))
+}
+
+fn global_project_io_scheduler() -> &'static Mutex<ProjectIoSchedulerState> {
+    static SCHEDULER: OnceLock<Mutex<ProjectIoSchedulerState>> = OnceLock::new();
+    SCHEDULER.get_or_init(|| Mutex::new(ProjectIoSchedulerState::default()))
+}
+
+impl MaterialProbeSchedulerState {
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    fn next_task_token(&mut self) -> TaskCancellationToken {
+        let token = TaskCancellationToken::new(self.next_token_id);
+        self.next_token_id = self.next_token_id.saturating_add(1);
+        token
+    }
+}
+
+impl ProjectIoSchedulerState {
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
+
+    fn next_task_token(&mut self) -> TaskCancellationToken {
+        let token = TaskCancellationToken::new(self.next_token_id);
+        self.next_token_id = self.next_token_id.saturating_add(1);
+        token
+    }
+}
+
+fn enqueue_material_probe(work: ScheduledMaterialProbe) -> std::result::Result<String, String> {
+    let job_id = JobId::new(format!(
+        "material-probe-{}-{}",
+        work.material_id.as_str(),
+        work.expected_revision
+    ));
+    let started = {
+        let scheduler = global_material_probe_scheduler();
+        let mut state = scheduler
+            .lock()
+            .map_err(|_| "material probe scheduler lock poisoned".to_owned())?;
+        let submitted_at_us = state.now_us();
+        let token = state.next_task_token();
+        let envelope = JobEnvelope::new(
+            job_id.clone(),
+            JobDomain::MediaProbe,
+            JobPriority::UserVisible,
+            ResourceClass::ValidationProbe,
+            token.clone(),
+            submitted_at_us,
+        )
+        .with_freshness(
+            JobFreshness::timeline(Microseconds::ZERO, PlaybackGeneration::new(0))
+                .with_project_session(work.session_id.clone(), work.expected_revision),
+        );
+        state
+            .scheduler
+            .submit(envelope)
+            .map_err(|error| format!("material probe scheduler rejected: {error}"))?;
+        let mut work = work;
+        work.task_token = token;
+        let start_at_us = state.now_us();
+        match state
+            .scheduler
+            .start_next(start_at_us)
+            .map_err(|error| format!("material probe scheduler start failed: {error}"))?
+        {
+            Some(envelope) => Some((envelope.job_id, work)),
+            None => None,
+        }
+    };
+
+    if let Some((started_job_id, work)) = started {
+        thread::Builder::new()
+            .name("task-runtime-media-probe".to_owned())
+            .spawn(move || run_material_probe_worker(started_job_id, work))
+            .map_err(|error| format!("material probe worker failed to start: {error}"))?;
+    }
+
+    Ok(job_id.as_str().to_owned())
+}
+
+fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
+    let result = discover_runtime_config()
+        .map_err(|error| crate::runtime_discovery_message(error))
+        .and_then(|runtime| {
+            let executor = DesktopFfmpegExecutor::default();
+            run_scheduled_material_probe(&executor, &runtime, &work.material_path)
+                .map_err(|error| error.message)
+        });
+
+    let job_result = match &result {
+        Ok(_) => JobResult::completed(job_id.clone()),
+        Err(_) => JobResult::new(job_id.clone(), task_runtime::JobResultKind::Failed),
+    };
+
+    let current_revision = project_session_current_revision(&work.session_id);
+    let mut accepted = false;
+    let scheduler = global_material_probe_scheduler();
+    if let Ok(mut state) = scheduler.lock() {
+        let completed_at_us = state.now_us();
+        let _ = state.scheduler.complete_with_commit(
+            &job_id,
+            job_result,
+            completed_at_us,
+            CompletionFreshness::none()
+                .with_expected_revision(current_revision.unwrap_or(u64::MAX)),
+            |_| accepted = true,
+        );
+    }
+
+    if accepted {
+        match result {
+            Ok(metadata) => {
+                let _ = complete_material_probe_job(&work, Some(metadata), None);
+            }
+            Err(message) => {
+                let _ = complete_material_probe_job_error(&work, message);
+            }
+        }
+    }
+}
+
+fn complete_material_probe_job(
+    work: &ScheduledMaterialProbe,
+    metadata: Option<media_runtime::MaterialProbeMetadata>,
+    message: Option<String>,
+) -> bool {
+    let registry = global_project_session_registry();
+    let Ok(mut registry) = registry.lock() else {
+        return false;
+    };
+    let Some(session) = registry.sessions.get_mut(&work.session_id) else {
+        return false;
+    };
+    if session.revision != work.expected_revision {
+        return false;
+    }
+    let mut next_draft = session.draft.clone();
+    let material_result = if let Some(metadata) = metadata {
+        crate::material_service::apply_probe_metadata_to_material(
+            &mut next_draft,
+            &work.material_id,
+            metadata,
+        )
+    } else {
+        let runtime = media_runtime::RuntimeConfig {
+            ffmpeg: media_runtime::DiscoveredBinary {
+                kind: media_runtime::BinaryKind::Ffmpeg,
+                path: PathBuf::from("scheduled-probe"),
+                source: media_runtime::DiscoverySource::Bundled {
+                    directory: PathBuf::from("scheduled-probe"),
+                },
+                version: "scheduled-probe".to_owned(),
+            },
+            ffprobe: media_runtime::DiscoveredBinary {
+                kind: media_runtime::BinaryKind::Ffprobe,
+                path: PathBuf::from("scheduled-probe"),
+                source: media_runtime::DiscoverySource::Bundled {
+                    directory: PathBuf::from("scheduled-probe"),
+                },
+                version: "scheduled-probe".to_owned(),
+            },
+        };
+        let error = media_runtime::MaterialProbeError {
+            kind: media_runtime::MaterialProbeErrorKind::ProbeFailed,
+            path: work.material_path.clone(),
+            ffprobe_path: runtime.ffprobe.path,
+            executor: "task-runtime-media-probe".to_owned(),
+            stdout_summary: None,
+            stderr_summary: None,
+            message: message.unwrap_or_else(|| "material probe failed".to_owned()),
+        };
+        crate::material_service::apply_probe_error_to_material(
+            &mut next_draft,
+            &work.material_id,
+            &error,
+        )
+    };
+    if material_result.is_err() {
+        return false;
+    }
+    let fs = StdPlatformFileSystem;
+    let Ok(saved) = save_project_bundle(&fs, &session.bundle_path, &next_draft) else {
+        return false;
+    };
+    session.revision = session.revision.saturating_add(1);
+    session.draft = saved.draft;
+    session.bundle_path = saved.bundle_path;
+    session.project_json_path = saved.project_json_path;
+    true
+}
+
+fn complete_material_probe_job_error(work: &ScheduledMaterialProbe, message: String) -> bool {
+    complete_material_probe_job(work, None, Some(message))
+}
+
+fn run_project_io_job<T>(label: &str, expected_revision: u64, operation: impl FnOnce() -> T) -> T {
+    let job_id = JobId::new(format!("project-io-{label}-{expected_revision}"));
+    {
+        let scheduler = global_project_io_scheduler();
+        if let Ok(mut state) = scheduler.lock() {
+            let submitted_at_us = state.now_us();
+            let token = state.next_task_token();
+            let envelope = project_io_scheduler_envelope(job_id.clone(), token, submitted_at_us)
+                .with_freshness(
+                    JobFreshness::timeline(Microseconds::ZERO, PlaybackGeneration::new(0))
+                        .with_project_session(label.to_owned(), expected_revision),
+                );
+            let _ = state.scheduler.submit(envelope);
+            let now_us = state.now_us();
+            let _ = state.scheduler.start_next(now_us);
+        }
+    }
+    let output = operation();
+    complete_project_io_job(job_id, expected_revision);
+    output
+}
+
+fn complete_project_io_job(job_id: JobId, expected_revision: u64) {
+    // stale project session revision completions are rejected before session-visible mutation.
+    let scheduler = global_project_io_scheduler();
+    if let Ok(mut state) = scheduler.lock() {
+        let completed_at_us = state.now_us();
+        let _ = state.scheduler.complete_with_commit(
+            &job_id,
+            JobResult::completed(job_id.clone()),
+            completed_at_us,
+            CompletionFreshness::none().with_expected_revision(expected_revision),
+            |_| {},
+        );
+    }
 }
 
 impl ProjectSessionRegistry {
@@ -737,7 +1042,9 @@ impl ProjectSessionRegistry {
             Some(ProjectSessionFixture::Demo) => product_demo_fixture_draft(),
             None => product_default_draft(draft_id, draft_name),
         };
-        let bundle = match create_project_bundle(&fs, &bundle_path, &draft) {
+        let bundle = match run_project_io_job("create-project", 0, || {
+            create_project_bundle(&fs, &bundle_path, &draft)
+        }) {
             Ok(bundle) => bundle,
             Err(error) => {
                 return project_session_store_error("createProjectSession", error);
@@ -783,7 +1090,9 @@ impl ProjectSessionRegistry {
 
     fn open_session(&mut self, request: OpenProjectSessionRequest) -> Result<serde_json::Value> {
         let fs = StdPlatformFileSystem;
-        let opened = match open_project_bundle(&fs, PathBuf::from(&request.bundle_path)) {
+        let opened = match run_project_io_job("open-project", 0, || {
+            open_project_bundle(&fs, PathBuf::from(&request.bundle_path))
+        }) {
             Ok(opened) => opened,
             Err(error) => {
                 return project_session_store_error("openProjectSession", error);
@@ -1708,20 +2017,10 @@ impl ProjectSession {
         display_name: Option<String>,
         material_kind_hint: Option<MaterialKind>,
     ) -> Result<serde_json::Value> {
-        let runtime = match discover_runtime_config() {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                return crate::to_js_value(crate::error_envelope(
-                    CommandErrorKind::MaterialProbeFailed,
-                    crate::runtime_discovery_message(error),
-                    Some("executeProjectIntent".to_string()),
-                ));
-            }
-        };
         let fs = StdPlatformFileSystem;
-        let executor = DesktopFfmpegExecutor::default();
+        let material_path = PathBuf::from(material_path);
         let mut request =
-            crate::material_service::ImportMaterialRequest::new(PathBuf::from(material_path));
+            crate::material_service::ImportMaterialRequest::new(material_path.clone());
         if let Some(material_id) = material_id {
             request = request.with_material_id(material_id);
         }
@@ -1733,12 +2032,10 @@ impl ProjectSession {
         }
 
         let mut next_draft = self.draft.clone();
-        let imported = match crate::material_service::import_material_and_save(
+        let imported = match crate::material_service::queue_material_import(
             &mut next_draft,
             request,
             &fs,
-            &executor,
-            &runtime,
             &self.bundle_path,
         ) {
             Ok(imported) => imported,
@@ -1750,11 +2047,36 @@ impl ProjectSession {
             }
         };
 
+        let saved = match run_project_io_job("import-material", self.revision, || {
+            save_project_bundle(&fs, &self.bundle_path, &next_draft)
+        }) {
+            Ok(saved) => saved,
+            Err(error) => {
+                return project_session_store_error("executeProjectIntent", error);
+            }
+        };
+
         self.revision = self.revision.saturating_add(1);
-        self.draft = imported.draft;
-        self.bundle_path = imported.bundle_path;
-        self.project_json_path = imported.project_json_path;
+        self.draft = saved.draft;
+        self.bundle_path = saved.bundle_path;
+        self.project_json_path = saved.project_json_path;
         let material = imported.material;
+        let probe_job_id = match enqueue_material_probe(ScheduledMaterialProbe {
+            session_id: self.session_id.clone(),
+            expected_revision: self.revision,
+            material_id: material.material_id.clone(),
+            material_path,
+            task_token: TaskCancellationToken::new(0),
+        }) {
+            Ok(job_id) => job_id,
+            Err(error) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::MaterialProbeFailed,
+                    error,
+                    Some("executeProjectIntent".to_string()),
+                ));
+            }
+        };
         let delta = material_dependency_delta(
             CommandDeltaName::ImportMaterial,
             &self.draft,
@@ -1767,6 +2089,8 @@ impl ProjectSession {
             revision: self.revision,
             material,
             materials: crate::material_service::list_materials(&self.draft),
+            probe_status: ProjectSessionProbeStatus::Queued,
+            probe_job_id,
             diagnostic: imported.diagnostic.map(crate::command_diagnostic),
             view_model: project_session_view_model(
                 &self.draft,
@@ -1800,7 +2124,9 @@ impl ProjectSession {
         }
 
         let fs = StdPlatformFileSystem;
-        let saved = match save_project_bundle(&fs, &self.bundle_path, &response.draft) {
+        let saved = match run_project_io_job("timeline-save", self.revision, || {
+            save_project_bundle(&fs, &self.bundle_path, &response.draft)
+        }) {
             Ok(saved) => saved,
             Err(error) => {
                 return project_session_store_error("executeProjectIntent", error);

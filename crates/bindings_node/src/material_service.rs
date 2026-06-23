@@ -9,7 +9,7 @@ use draft_model::{
 };
 use media_runtime::{
     FfmpegExecutor, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
-    MaterialProbeMetadata, RuntimeConfig, probe_material_metadata,
+    MaterialProbeMetadata, RuntimeConfig, run_scheduled_material_probe,
 };
 use project_store::{
     MaterialUriKind, PlatformFileSystem, ProjectBundle, ProjectStoreError, classify_material_uri,
@@ -174,7 +174,7 @@ pub fn import_material(
         });
     }
 
-    match probe_material_metadata(executor, runtime, &request.path) {
+    match run_scheduled_material_probe(executor, runtime, &request.path) {
         Ok(metadata) => {
             let material = material_from_probe(material_id, uri, display_name, metadata);
             upsert_material(draft, material.clone())?;
@@ -216,6 +216,112 @@ pub fn import_material(
             })
         }
     }
+}
+
+pub fn queue_material_import(
+    draft: &mut Draft,
+    request: ImportMaterialRequest,
+    fs: &impl PlatformFileSystem,
+    bundle_path: impl AsRef<Path>,
+) -> Result<MaterialImportResult, MaterialServiceError> {
+    let bundle_path = bundle_path.as_ref();
+    let uri = material_uri_for_save(bundle_path, &request.path)?;
+    let material_id = request
+        .material_id
+        .clone()
+        .unwrap_or_else(|| deterministic_material_id(&uri));
+    let display_name = request
+        .display_name
+        .clone()
+        .unwrap_or_else(|| display_name_for_path(&request.path, &uri));
+    let material = recoverable_material(
+        material_id,
+        request.material_kind_hint.unwrap_or(MaterialKind::Video),
+        uri,
+        display_name,
+        if fs.exists(&request.path) {
+            MaterialStatus::Available
+        } else {
+            MaterialStatus::Missing
+        },
+        if fs.exists(&request.path) {
+            None
+        } else {
+            Some(format!(
+                "material path does not exist: {}",
+                request.path.display()
+            ))
+        },
+    );
+    upsert_material(draft, material.clone())?;
+    let diagnostic = if material.status == MaterialStatus::Missing {
+        Some(diagnostic_for_material(
+            fs,
+            bundle_path,
+            &material,
+            MissingMaterialDiagnosticKind::MissingFile,
+        )?)
+    } else {
+        None
+    };
+    Ok(MaterialImportResult {
+        material,
+        diagnostic,
+    })
+}
+
+pub(crate) fn apply_probe_metadata_to_material(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+    metadata: MaterialProbeMetadata,
+) -> Result<Material, MaterialServiceError> {
+    let existing = draft
+        .materials
+        .iter()
+        .find(|material| &material.material_id == material_id)
+        .cloned()
+        .ok_or_else(|| DraftValidationError::MissingRequiredSemanticField {
+            field: format!("materials[].materialId {}", material_id.as_str()),
+        })?;
+    let material = material_from_probe(
+        existing.material_id,
+        existing.uri,
+        existing.display_name,
+        metadata,
+    );
+    upsert_material(draft, material.clone())?;
+    mark_material_available(draft, &material.material_id)?;
+    Ok(material)
+}
+
+pub(crate) fn apply_probe_error_to_material(
+    draft: &mut Draft,
+    material_id: &MaterialId,
+    error: &MaterialProbeError,
+) -> Result<Material, MaterialServiceError> {
+    let existing = draft
+        .materials
+        .iter()
+        .find(|material| &material.material_id == material_id)
+        .cloned()
+        .ok_or_else(|| DraftValidationError::MissingRequiredSemanticField {
+            field: format!("materials[].materialId {}", material_id.as_str()),
+        })?;
+    let status = if error.kind == MaterialProbeErrorKind::MissingInput {
+        MaterialStatus::Missing
+    } else {
+        MaterialStatus::ProbeFailed
+    };
+    let material = recoverable_material(
+        existing.material_id,
+        existing.kind,
+        existing.uri,
+        existing.display_name,
+        status,
+        Some(error.message.clone()),
+    );
+    add_or_update_recoverable_material(draft, material.clone(), error)?;
+    Ok(material)
 }
 
 pub fn import_material_and_save(

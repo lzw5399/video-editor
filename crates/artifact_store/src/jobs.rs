@@ -1,6 +1,9 @@
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use task_runtime::{
+    JobDomain, JobEnvelope, JobId, JobPriority, ResourceClass, TaskCancellationToken,
+};
 
 use crate::ArtifactStoreError;
 use crate::schema::ArtifactStore;
@@ -353,6 +356,21 @@ pub fn create_generation_job(
 
     get_generation_job(store, &request.job_id)?
         .ok_or_else(|| invalid_job_err(&request.job_id, "job was not persisted"))
+}
+
+pub fn artifact_generation_scheduler_envelope(
+    job_id: impl Into<JobId>,
+    cancellation_token: TaskCancellationToken,
+    submitted_at_us: u64,
+) -> JobEnvelope {
+    JobEnvelope::new(
+        job_id.into(),
+        JobDomain::ArtifactGeneration,
+        JobPriority::Background,
+        ResourceClass::BackgroundCpu,
+        cancellation_token,
+        submitted_at_us,
+    )
 }
 
 pub fn list_generation_jobs(

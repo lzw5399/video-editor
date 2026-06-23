@@ -67,6 +67,7 @@ pub use media_io::{
 pub use probe::{
     MaterialProbeAudio, MaterialProbeError, MaterialProbeErrorKind, MaterialProbeKind,
     MaterialProbeMetadata, MaterialProbeStatus, RationalFrameRate, probe_material_metadata,
+    run_scheduled_material_probe,
 };
 pub use process::{DEFAULT_PROCESS_TIMEOUT, run_process_with_timeout};
 pub use texture::{

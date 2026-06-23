@@ -17,7 +17,7 @@ use artifact_store::paths::derived_root_path;
 use artifact_store::resource_index::ResourceId;
 use artifact_store::schema::open_artifact_store;
 use draft_model::{
-    ChangedEntity, CommandDelta, CommandName, DirtyDomain, InvalidationScope, MaterialId,
+    ChangedEntity, CommandDelta, CommandDeltaName, DirtyDomain, InvalidationScope, MaterialId,
 };
 use serde_json::json;
 
@@ -299,7 +299,7 @@ fn artifact_generation_records_material_resource_and_source_dependencies_for_inv
 
     let mut store = open_artifact_store(&bundle_path).expect("store should reopen");
     let delta = CommandDelta::targeted(
-        CommandName::ImportMaterial,
+        CommandDeltaName::ImportMaterial,
         vec![ChangedEntity::Material {
             material_id: MaterialId::new("material-001"),
         }],

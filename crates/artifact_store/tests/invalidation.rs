@@ -8,7 +8,7 @@ use artifact_store::invalidation::{
 };
 use artifact_store::schema::open_artifact_store;
 use draft_model::{
-    CommandDelta, CommandName, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
+    CommandDelta, CommandDeltaName, DirtyDomain, DirtyRange, DirtyRangeSource, InvalidationScope,
     MaterialId, TargetTimerange,
 };
 use rusqlite::params;
@@ -281,7 +281,7 @@ fn invalidation_command_delta_dirties_by_range_domain_material_and_graph_node() 
     .expect("unrelated range dependency should insert");
 
     let delta = CommandDelta::targeted(
-        CommandName::MoveSegment,
+        CommandDeltaName::MoveSegment,
         Vec::new(),
         vec![DirtyDomain::Visual],
         vec![DirtyRange {
@@ -424,7 +424,7 @@ fn invalidation_command_delta_range_overflow_records_full_draft_fallback() {
     insert_artifact(store.connection(), "artifact-b");
 
     let delta = CommandDelta::targeted(
-        CommandName::MoveSegment,
+        CommandDeltaName::MoveSegment,
         Vec::new(),
         vec![DirtyDomain::PreviewCache],
         vec![DirtyRange {

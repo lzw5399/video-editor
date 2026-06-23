@@ -272,11 +272,21 @@ pub fn generate_proxy_artifact(
     generator: &mut impl ArtifactGenerator,
     request: ProxyGenerationRequest,
 ) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
+    generate_proxy_artifact_with_cancel_token(bundle_path, generator, request, CancelToken::new())
+}
+
+pub fn generate_proxy_artifact_with_cancel_token(
+    bundle_path: impl AsRef<Path>,
+    generator: &mut impl ArtifactGenerator,
+    request: ProxyGenerationRequest,
+    cancel_token: CancelToken,
+) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
     generate_artifact(
         bundle_path.as_ref(),
         generator,
         request.clone().into_generation_request(),
         request.expected_mime,
+        cancel_token,
         |generator, context| generator.generate_proxy(context, &request),
     )
 }
@@ -286,11 +296,26 @@ pub fn generate_thumbnail_artifact(
     generator: &mut impl ArtifactGenerator,
     request: ThumbnailGenerationRequest,
 ) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
+    generate_thumbnail_artifact_with_cancel_token(
+        bundle_path,
+        generator,
+        request,
+        CancelToken::new(),
+    )
+}
+
+pub fn generate_thumbnail_artifact_with_cancel_token(
+    bundle_path: impl AsRef<Path>,
+    generator: &mut impl ArtifactGenerator,
+    request: ThumbnailGenerationRequest,
+    cancel_token: CancelToken,
+) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
     generate_artifact(
         bundle_path.as_ref(),
         generator,
         request.clone().into_generation_request(),
         request.expected_mime,
+        cancel_token,
         |generator, context| generator.generate_thumbnail(context, &request),
     )
 }
@@ -300,11 +325,26 @@ pub fn generate_waveform_artifact(
     generator: &mut impl ArtifactGenerator,
     request: WaveformGenerationRequest,
 ) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
+    generate_waveform_artifact_with_cancel_token(
+        bundle_path,
+        generator,
+        request,
+        CancelToken::new(),
+    )
+}
+
+pub fn generate_waveform_artifact_with_cancel_token(
+    bundle_path: impl AsRef<Path>,
+    generator: &mut impl ArtifactGenerator,
+    request: WaveformGenerationRequest,
+    cancel_token: CancelToken,
+) -> Result<ArtifactGenerationOutcome, ArtifactStoreError> {
     generate_artifact(
         bundle_path.as_ref(),
         generator,
         request.clone().into_generation_request(),
         request.expected_mime,
+        cancel_token,
         |generator, context| generator.generate_waveform(context, &request),
     )
 }
@@ -314,6 +354,7 @@ fn generate_artifact<G, F>(
     generator: &mut G,
     request: ArtifactGenerationRequest,
     expected_mime: GeneratedArtifactMime,
+    cancel_token: CancelToken,
     mut generate: F,
 ) -> Result<ArtifactGenerationOutcome, ArtifactStoreError>
 where
@@ -361,7 +402,7 @@ where
             .clone()
             .ok_or_else(|| generation_error(&request.job_id, "artifact id is required"))?,
         kind: request.kind,
-        cancel_token: CancelToken::new(),
+        cancel_token,
     };
     let generated = match generate(generator, &context) {
         Ok(generated) => generated,

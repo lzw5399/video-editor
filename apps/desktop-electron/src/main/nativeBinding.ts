@@ -344,6 +344,8 @@ export type ProjectSessionImportMaterialResponse = {
   revision: number;
   material: Material;
   materials: Material[];
+  probeStatus: "queued" | "running" | "probed" | "failed" | "stale";
+  probeJobId: string;
   diagnostic?: MissingMaterialCommandDiagnostic | null;
   viewModel: ProjectSessionViewModel;
   events: CommandEvent[];
