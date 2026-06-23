@@ -200,6 +200,10 @@ test("运行环境诊断在 1280x800 和 1120x720 内显示就绪状态", async 
     await expect(page.getByLabel("运行能力列表")).toContainText("字幕能力");
     await expect(page.getByLabel("运行能力列表")).toContainText("字体环境");
     await expect(page.getByLabel("运行能力列表")).toContainText("打包状态");
+    await expectCommandCall(app, "getTaskRuntimeStatus");
+    await expectCommandCall(app, "getTaskRuntimeTelemetry");
+    await expect(page.getByLabel("运行能力列表")).toContainText("调度服务");
+    await expect(page.getByLabel("运行能力列表")).toContainText("调度统计");
     await expect(page.getByRole("button", { name: "重新检测运行环境" })).toBeVisible();
 
     await expectWorkspaceLayoutAt(page, app, 1280, 800);

@@ -1355,6 +1355,35 @@ test("developer diagnostics preview time input seeks realtime host without artif
   }
 });
 
+test("调度诊断 exposes read-only scheduler status without renderer policy controls", async () => {
+  const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
+
+  try {
+    await expectCommandCall(app, "getTaskRuntimeStatus");
+    await expectCommandCall(app, "getTaskRuntimeTelemetry");
+    const diagnostics = page.getByLabel("运行能力列表");
+    await expect(diagnostics).toContainText("调度服务");
+    await expect(diagnostics).toContainText("调度统计");
+    await expect(diagnostics).toContainText("调度服务就绪");
+
+    const apiShape = await page.evaluate(() => {
+      const core = (window as Window & { videoEditorCore?: Record<string, unknown> }).videoEditorCore ?? {};
+      return {
+        getTaskRuntimeStatus: typeof core.getTaskRuntimeStatus,
+        getTaskRuntimeTelemetry: typeof core.getTaskRuntimeTelemetry,
+        hasDevConfigOverride: Object.prototype.hasOwnProperty.call(core, "applyTaskRuntimeDevConfig")
+      };
+    });
+    expect(apiShape).toEqual({
+      getTaskRuntimeStatus: "function",
+      getTaskRuntimeTelemetry: "function",
+      hasDevConfigOverride: false
+    });
+  } finally {
+    await app.close();
+  }
+});
+
 test("预览播放按钮使用实时预览画面而不是连续请求预览帧", async () => {
   const { app, page } = await launchWorkspaceApp({
     env: {
