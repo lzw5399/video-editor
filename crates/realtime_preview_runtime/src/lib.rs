@@ -20,7 +20,6 @@ pub use capabilities::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewCapabilityReport,
     RealtimePreviewGraphSupport,
 };
-pub use clock::{PlaybackGeneration, PlaybackRate, PlaybackState, TimelineClock};
 pub use diagnostics::{
     RealtimePreviewDiagnostic, RealtimePreviewDiagnosticDomain, RealtimePreviewSupport,
 };
@@ -62,6 +61,10 @@ pub use session::{
     RealtimePreviewSessionConfig,
 };
 pub use software_video_provider::{DecodedVideoFrameCache, SoftwareVideoFrameProvider};
+pub use task_runtime::{
+    PlaybackGeneration, PlaybackRate, PlaybackRateError, PlaybackState, TimelineClock,
+    TimelineFreshness,
+};
 pub use telemetry::{
     RealtimePreviewFramePacingSample, RealtimePreviewFramePacingTelemetry, RealtimePreviewTelemetry,
 };

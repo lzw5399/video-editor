@@ -2049,6 +2049,7 @@ dependencies = [
  "render_graph",
  "serde",
  "serde_json",
+ "task_runtime",
  "testkit",
  "wgpu",
 ]
