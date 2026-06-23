@@ -280,6 +280,7 @@ export type RuntimeDiagnosticsDisplayState = {
   statusLabel: string;
   statusDetail: string;
   packageStatusLabel: string;
+  schedulerStatusLabel: string | null;
   rows: RuntimeDiagnosticsRow[];
   diagnostics: string[];
   canPreview: boolean;
@@ -785,6 +786,7 @@ export function createWaitingRuntimeDiagnosticsState(): RuntimeDiagnosticsDispla
     statusLabel: "等待运行环境检测",
     statusDetail: "打包应用启动后会检测剪辑核心、媒体运行环境、编码器和字幕能力。",
     packageStatusLabel: "打包状态待检测",
+    schedulerStatusLabel: null,
     rows: [],
     diagnostics: [],
     canPreview: false,
@@ -799,6 +801,7 @@ export function createCheckingRuntimeDiagnosticsState(): RuntimeDiagnosticsDispl
     statusLabel: "正在检测运行环境",
     statusDetail: "正在检测剪辑核心、编码器、字幕和字体环境。",
     packageStatusLabel: "打包状态检测中",
+    schedulerStatusLabel: null,
     rows: [],
     diagnostics: [],
     canPreview: false,

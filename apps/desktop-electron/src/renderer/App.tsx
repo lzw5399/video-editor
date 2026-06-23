@@ -49,7 +49,8 @@ import type {
 import {
   commandErrorMessage,
   runtimeDiagnosticsFromError,
-  runtimeDiagnosticsFromReport
+  runtimeDiagnosticsFromReport,
+  runtimeDiagnosticsWithSchedulerEvidence
 } from "./commandHelpers";
 import {
   createCheckingRuntimeDiagnosticsState,
@@ -1145,12 +1146,21 @@ export function App(): React.ReactElement {
     });
 
     try {
-      const result = await window.videoEditorCore.probeRuntimeCapabilities();
+      const [result, schedulerStatusResult, schedulerTelemetryResult] = await Promise.all([
+        window.videoEditorCore.probeRuntimeCapabilities(),
+        window.videoEditorCore.getTaskRuntimeStatus(),
+        showDeveloperDiagnostics ? window.videoEditorCore.getTaskRuntimeTelemetry() : Promise.resolve(null)
+      ]);
       setWorkspace((current) => {
-        const runtimeDiagnostics =
+        const runtimeDiagnosticsBase =
           result.ok && result.data !== null
             ? runtimeDiagnosticsFromReport(result.data)
             : runtimeDiagnosticsFromError(result.error?.message ?? "运行环境检测失败");
+        const runtimeDiagnostics = runtimeDiagnosticsWithSchedulerEvidence(
+          runtimeDiagnosticsBase,
+          schedulerStatusResult,
+          schedulerTelemetryResult
+        );
         const next = {
           ...current,
           runtimeDiagnostics,

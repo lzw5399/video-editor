@@ -359,8 +359,15 @@ export function PreviewMonitor({
     { label: "画面比例", className: "ratio-button", value: canvasRatio },
     { label: "全屏", value: "全屏" }
   ];
+  const schedulerProductStatusLabel =
+    !showDeveloperDiagnostics &&
+    runtimeDiagnostics.schedulerStatusLabel !== null &&
+    runtimeDiagnostics.schedulerStatusLabel !== "调度服务就绪"
+      ? runtimeDiagnostics.schedulerStatusLabel
+      : null;
   const previewPlaceholderLabel =
-    selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中";
+    schedulerProductStatusLabel ??
+    (selectedSegment === null ? "添加素材到时间线后显示预览" : pending ? "正在准备预览画面" : "实时预览准备中");
   const showRealtimeSurface = !nativeSurfaceSuspended && nativeHostState.productReady && !nativeHostState.fallbackActive;
   const productPreviewStatusLabel = formatProductPreviewStatus(preview, previewPlaceholderLabel, pending);
   const previewStatusLabel = showDeveloperDiagnostics

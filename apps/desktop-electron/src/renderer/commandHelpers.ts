@@ -6,6 +6,11 @@ import type {
   RuntimeFontCapability
 } from "../generated/CommandResultEnvelope";
 import type {
+  TaskRuntimeStatusResponse,
+  TaskRuntimeTelemetryResponse,
+  TaskRuntimeTelemetrySummary
+} from "../main/nativeBinding";
+import type {
   RuntimeDiagnosticsDisplayState,
   RuntimeDiagnosticsRow,
   RuntimeDiagnosticsTone
@@ -47,6 +52,7 @@ export function runtimeDiagnosticsFromReport(report: RuntimeCapabilityReport): R
           ? "运行环境检测失败，请检查媒体运行环境后重试。"
         : "部分能力不可用，可继续编辑，但预览或导出可能受限。",
     packageStatusLabel: report.licensePosture.externalRuntime ? "运行环境异常" : "内置运行环境",
+    schedulerStatusLabel: null,
     rows: [
       binaryRow("媒体运行环境", report.ffmpeg),
       binaryRow("媒体探测环境", report.ffprobe),
@@ -73,6 +79,7 @@ export function runtimeDiagnosticsFromError(message: string): RuntimeDiagnostics
     statusLabel: "运行环境检测失败，请检查媒体运行环境后重试。",
     statusDetail: message,
     packageStatusLabel: "运行环境不可用",
+    schedulerStatusLabel: null,
     rows: [
       {
         label: "媒体运行环境",
@@ -91,6 +98,70 @@ export function runtimeDiagnosticsFromError(message: string): RuntimeDiagnostics
     canPreview: false,
     canExport: false,
     checkedAtLabel: "检测失败"
+  };
+}
+
+export function runtimeDiagnosticsWithSchedulerEvidence(
+  base: RuntimeDiagnosticsDisplayState,
+  statusResult: CommandResultEnvelope<TaskRuntimeStatusResponse>,
+  telemetryResult: CommandResultEnvelope<TaskRuntimeTelemetryResponse> | null
+): RuntimeDiagnosticsDisplayState {
+  const rows = [...base.rows];
+  const diagnostics = [...base.diagnostics];
+  const status = statusResult.ok ? statusResult.data : null;
+  const statusError = statusResult.ok ? null : statusResult.error?.message ?? "调度服务暂不可用";
+  const schedulerStatusLabel = status === null ? "调度暂不可用" : productSchedulerStatusLabel(status);
+  const schedulerWorkAvailable = status?.workAvailable === true;
+  const schedulerSeverity =
+    status === null ? "error" : status.status === "unavailable" ? "error" : status.status === "degraded" ? "warning" : "ready";
+
+  rows.push({
+    label: "调度服务",
+    value: schedulerStatusLabel,
+    detail:
+      status === null
+        ? statusError ?? "调度服务暂不可用"
+        : status.telemetryAvailable
+          ? `观测已接入 · 修订 ${status.configRevision}`
+          : `观测暂不可用 · 修订 ${status.configRevision}`,
+    tone: schedulerStatusTone(schedulerSeverity)
+  });
+
+  if (statusError !== null) {
+    diagnostics.push(statusError);
+  }
+
+  if (telemetryResult !== null) {
+    const telemetry = telemetryResult.ok ? telemetryResult.data : null;
+    const telemetryError = telemetryResult.ok ? null : telemetryResult.error?.message ?? "调度观测暂不可用";
+    rows.push({
+      label: "调度统计",
+      value: telemetry === null ? "观测暂不可用" : schedulerTelemetryValue(telemetry),
+      detail: telemetry === null ? telemetryError ?? "调度观测暂不可用" : schedulerTelemetryDetail(telemetry),
+      tone: telemetry === null ? "warning" : schedulerTelemetryTone(telemetry)
+    });
+    if (telemetryError !== null) {
+      diagnostics.push(telemetryError);
+    }
+  }
+
+  const statusDetail =
+    schedulerSeverity === "error"
+      ? statusError ?? "调度暂不可用，预览或导出暂不可用。"
+      : schedulerSeverity === "warning" && base.status !== "error"
+        ? "调度服务受限，可继续编辑，但后台任务可能排队。"
+        : base.statusDetail;
+
+  return {
+    ...base,
+    status: mergeRuntimeStatus(base.status, schedulerSeverity),
+    statusLabel: mergeRuntimeStatusLabel(base.status, schedulerSeverity, base.statusLabel),
+    statusDetail,
+    schedulerStatusLabel,
+    rows,
+    diagnostics: diagnostics.filter((message, index, all) => message.length > 0 && all.indexOf(message) === index),
+    canPreview: base.canPreview && schedulerWorkAvailable,
+    canExport: base.canExport && schedulerWorkAvailable
   };
 }
 
@@ -155,4 +226,86 @@ function statusTone(status: RuntimeBinaryCapability["status"]): RuntimeDiagnosti
   };
 
   return tones[status];
+}
+
+function productSchedulerStatusLabel(status: TaskRuntimeStatusResponse): string {
+  if (status.status === "ready" && status.workAvailable) {
+    return status.statusLabel.length > 0 ? status.statusLabel : "调度服务就绪";
+  }
+  if (status.status === "degraded") {
+    return "调度服务受限";
+  }
+  return "调度暂不可用";
+}
+
+function schedulerStatusTone(status: RuntimeDiagnosticsTone): RuntimeDiagnosticsTone {
+  return status;
+}
+
+function schedulerTelemetryValue(telemetry: TaskRuntimeTelemetryResponse): string {
+  return `已完成 ${formatCount(telemetry.completedCount)} · 已取消 ${formatCount(telemetry.canceledCount)}`;
+}
+
+function schedulerTelemetryDetail(telemetry: TaskRuntimeTelemetryResponse): string {
+  return [
+    `已提交 ${formatCount(telemetry.submittedCount)}`,
+    `已开始 ${formatCount(telemetry.startedCount)}`,
+    `已拒绝 ${formatCount(telemetry.rejectedCount)}`,
+    `已合并 ${formatCount(telemetry.coalescedCount)}`,
+    `旧请求 ${formatCount(telemetry.staleRejectedCount)}`,
+    `不可用 ${formatCount(telemetry.unavailableCount)}`,
+    `饱和 ${formatCount(telemetry.resourceSaturationCount)}`,
+    `等待 P95 ${formatSummaryP95(telemetry.waitTimeUs)}`
+  ].join(" · ");
+}
+
+function schedulerTelemetryTone(telemetry: TaskRuntimeTelemetryResponse): RuntimeDiagnosticsTone {
+  if (telemetry.status === "unavailable" || telemetry.unavailableCount > 0) {
+    return "error";
+  }
+  if (telemetry.status === "degraded" || telemetry.rejectedCount > 0 || telemetry.resourceSaturationCount > 0) {
+    return "warning";
+  }
+  return "ready";
+}
+
+function formatSummaryP95(summary: TaskRuntimeTelemetrySummary): string {
+  return summary.p95 === null || summary.p95 === undefined ? "-" : `${Math.round(summary.p95 / 1000)} ms`;
+}
+
+function formatCount(value: number): string {
+  return Math.max(0, Math.round(value)).toString();
+}
+
+function mergeRuntimeStatus(
+  base: RuntimeDiagnosticsDisplayState["status"],
+  schedulerSeverity: RuntimeDiagnosticsTone
+): RuntimeDiagnosticsDisplayState["status"] {
+  if (base === "checking") {
+    return base;
+  }
+  if (base === "error" || schedulerSeverity === "error") {
+    return "error";
+  }
+  if (base === "warning" || schedulerSeverity === "warning") {
+    return "warning";
+  }
+  return base;
+}
+
+function mergeRuntimeStatusLabel(
+  base: RuntimeDiagnosticsDisplayState["status"],
+  schedulerSeverity: RuntimeDiagnosticsTone,
+  baseLabel: string
+): string {
+  if (base === "error") {
+    return baseLabel;
+  }
+  if (schedulerSeverity === "error") {
+    return "调度暂不可用，预览或导出暂不可用。";
+  }
+  if (schedulerSeverity === "warning" && base !== "warning") {
+    return "部分能力不可用，可继续编辑，但预览或导出可能受限。";
+  }
+  return baseLabel;
 }
