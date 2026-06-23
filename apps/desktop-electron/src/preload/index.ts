@@ -22,6 +22,10 @@ type RealtimePreviewHostRect = {
   height: number;
   scaleFactorMillis: number;
 };
+type RealtimePreviewTextHitTestPoint = {
+  x: number;
+  y: number;
+};
 type RealtimePreviewTelemetryListener = (state: unknown) => void;
 type ProjectBundlePickerResponse = {
   canceled: boolean;
@@ -107,7 +111,9 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
       ipcRenderer.invoke("realtimePreviewHost:seek", sanitizeTargetTimeMicroseconds(targetTimeMicroseconds)),
     play: () => ipcRenderer.invoke("realtimePreviewHost:play"),
     pause: () => ipcRenderer.invoke("realtimePreviewHost:pause"),
-    stop: () => ipcRenderer.invoke("realtimePreviewHost:stop")
+    stop: () => ipcRenderer.invoke("realtimePreviewHost:stop"),
+    hitTestTextOverlay: (point: RealtimePreviewTextHitTestPoint) =>
+      ipcRenderer.invoke("realtimePreviewHost:hitTestTextOverlay", sanitizeHitTestPoint(point))
   });
   if (process.argv.includes("--video-editor-test-observations=1")) {
     contextBridge.exposeInMainWorld("videoEditorTestObservations", {
@@ -207,6 +213,13 @@ function finiteRounded(value: number): number {
 
 function sanitizeTargetTimeMicroseconds(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function sanitizeHitTestPoint(point: RealtimePreviewTextHitTestPoint): RealtimePreviewTextHitTestPoint {
+  return {
+    x: finiteRounded(point.x),
+    y: finiteRounded(point.y)
+  };
 }
 
 function sanitizeExpectedRevision(value: number): number {

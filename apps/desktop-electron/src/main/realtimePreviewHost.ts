@@ -8,6 +8,7 @@ import {
   detachRealtimePreviewSurface,
   getRealtimePreviewTelemetry,
   getRealtimePreviewPresentationState,
+  hitTestRealtimePreviewTextOverlay,
   nextRealtimePreviewCancellationToken,
   pauseRealtimePreview,
   playRealtimePreview,
@@ -24,6 +25,7 @@ import {
   type RealtimePreviewScreenRect,
   type RealtimePreviewSurfaceBounds,
   type RealtimePreviewSurfaceDescriptor,
+  type RealtimePreviewTextHitTestResponse,
   type RealtimePreviewTelemetryResponse
 } from "./nativeBinding";
 
@@ -80,6 +82,9 @@ export type RealtimePreviewHostContentEvidence = {
 };
 
 export type RealtimePreviewHostTextOverlayEvidence = {
+  trackId: string;
+  segmentId: string;
+  selectionHandle: string;
   source: "text" | "subtitle";
   content: string;
   fontFamily: string;
@@ -99,7 +104,15 @@ export type RealtimePreviewHostTextOverlayEvidence = {
   visualScaleYMillis: number;
   visualRotationDegrees: number;
   visualOpacityMillis: number;
+  selected?: boolean;
 };
+
+export type RealtimePreviewHostTextHitTestPoint = {
+  x: number;
+  y: number;
+};
+
+export type RealtimePreviewHostTextHitTestResponse = RealtimePreviewTextHitTestResponse;
 
 export type RealtimePreviewHostSurfacePlacement = {
   surfaceBoundsCoordinateSpace: "browserWindowContentLogicalPixels";
@@ -222,6 +235,10 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
   ipcMain.handle("realtimePreviewHost:stop", (event) => {
     assertAllowedSender(event);
     return hostForEvent(event).stop();
+  });
+  ipcMain.handle("realtimePreviewHost:hitTestTextOverlay", (event, point: RealtimePreviewHostTextHitTestPoint) => {
+    assertAllowedSender(event);
+    return hostForEvent(event).hitTestTextOverlay(point);
   });
   realtimePreviewHostIpcInstalled = true;
 }
@@ -484,6 +501,14 @@ export class RealtimePreviewHost {
         });
         if (presented) {
           this.refreshPreviewState();
+        } else {
+          this.fallbackLabel = attachFailureLabel(
+            new Error("render graph GPU compositor scheduler did not present the requested still frame")
+          );
+          this.presentationState = null;
+          this.lastContentEvidence = null;
+          this.telemetry = null;
+          this.publishCachedState(this.state("实时预览不可用"));
         }
       }
       return this.state("实时预览已寻帧");
@@ -498,6 +523,9 @@ export class RealtimePreviewHost {
       this.ensureSession();
       if (this.sessionId === null) {
         throw new Error("实时预览会话尚未创建");
+      }
+      if (renderGraphCompositorDisabledForTest()) {
+        throw new Error("render graph GPU compositor scheduler disabled by product test switch");
       }
       this.ensureNativeWindowVisible();
       const response = playRealtimePreview({ sessionId: this.sessionId });
@@ -525,6 +553,11 @@ export class RealtimePreviewHost {
       } catch {
         this.telemetry = null;
       }
+      if (renderGraphCompositorDisabledForTest()) {
+        this.presentationState = null;
+        this.lastContentEvidence = null;
+        this.telemetry = null;
+      }
       const state = this.state("实时预览不可用");
       this.publishCachedState(state);
       return state;
@@ -547,6 +580,33 @@ export class RealtimePreviewHost {
       }
       return stopRealtimePreview({ sessionId: this.sessionId }).playbackGeneration;
     }, "实时预览已停止");
+  }
+
+  hitTestTextOverlay(point: RealtimePreviewHostTextHitTestPoint): RealtimePreviewHostTextHitTestResponse {
+    if (this.sessionId === null || this.lastBounds === null || this.lastContentEvidence === null) {
+      return { hit: false };
+    }
+    const targetWidth = Math.max(1, this.lastContentEvidence.width);
+    const targetHeight = Math.max(1, this.lastContentEvidence.height);
+    const hostWidth = Math.max(1, this.lastBounds.width);
+    const hostHeight = Math.max(1, this.lastBounds.height);
+    const targetX = clampHitTestCoordinate(
+      Math.round((sanitizeHitTestCoordinate(point.x) * targetWidth) / hostWidth),
+      targetWidth
+    );
+    const targetY = clampHitTestCoordinate(
+      Math.round((sanitizeHitTestCoordinate(point.y) * targetHeight) / hostHeight),
+      targetHeight
+    );
+    const result = hitTestRealtimePreviewTextOverlay({
+      sessionId: this.sessionId,
+      point: { x: targetX, y: targetY }
+    });
+    recordRealtimePreviewHostCall({
+      kind: "hitTestTextOverlay",
+      targetTimeMicroseconds: result.targetTimeMicroseconds ?? undefined
+    });
+    return result;
   }
 
   detachSurface(): RealtimePreviewHostDisplayState {
@@ -807,6 +867,9 @@ export class RealtimePreviewHost {
     const durationMs = Math.round(performance.now() - startedAt);
     this.lastPresentationSnapshotRefreshAt = performance.now();
     this.lastContentEvidence = this.presentationState.evidence ?? null;
+    if (this.hasProductionCompositedPresenter()) {
+      this.fallbackLabel = null;
+    }
     recordRealtimePreviewHostCall({
       kind: "getPresentationState",
       durationMs,
@@ -985,6 +1048,7 @@ export class RealtimePreviewHost {
 
   private state(statusLabel: string): RealtimePreviewHostDisplayState {
     const productReady = this.hasProductionCompositedPresenter();
+    const fallbackLabel = productReady ? null : this.fallbackLabel;
     const backend: RealtimePreviewHostProductBackend = productReady ? "renderGraphGpu" : "none";
     const diagnosticSource: RealtimePreviewHostDiagnosticSource =
       this.presentationState?.backend === "nativeVideoBridge"
@@ -994,12 +1058,12 @@ export class RealtimePreviewHost {
           : "none";
     const fallbackReason = this.lastFrame?.fallback ?? null;
     return {
-      ok: this.fallbackLabel === null,
+      ok: fallbackLabel === null,
       productReady,
       hostAttached: this.attached,
-      fallbackActive: this.fallbackLabel !== null,
+      fallbackActive: fallbackLabel !== null,
       statusLabel,
-      fallbackLabel: this.fallbackLabel,
+      fallbackLabel,
       unsupportedReason: this.presentationState?.unsupportedReason ?? null,
       playbackGeneration: this.playbackGeneration,
       backend,
@@ -1042,6 +1106,14 @@ export class RealtimePreviewHost {
 
 function sanitizeTargetTimeMicroseconds(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function sanitizeHitTestCoordinate(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function clampHitTestCoordinate(value: number, span: number): number {
+  return Math.max(0, Math.min(Math.max(0, span - 1), value));
 }
 
 function sanitizeExpectedRevision(value: number): number {
@@ -1170,6 +1242,16 @@ function attachFailureLabel(error: unknown): string {
 
 function isSurfaceOccludedAcquire(message: string): boolean {
   return message.includes("wgpu surface texture acquire failed: surface is occluded");
+}
+
+function renderGraphCompositorDisabledForTest(): boolean {
+  return (
+    process.env.VIDEO_EDITOR_TEST_DISABLE_RENDER_GRAPH_COMPOSITOR === "1" ||
+    process.argv.some((value) => {
+      const prefix = "--video-editor-test-disable-render-graph-compositor";
+      return value === prefix || value === `${prefix}=1` || value.startsWith(`${prefix}=`);
+    })
+  );
 }
 
 function recordRealtimePreviewHostCall(call: RealtimePreviewHostRecord): void {

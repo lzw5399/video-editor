@@ -171,6 +171,7 @@ test("product preview cadence presents sustained GPU frames without artifact fal
       metrics.nativePreviewEvents.controlChanged,
       "Rust control changes should be visible through native preview events"
     ).toBeGreaterThanOrEqual(1);
+    expect(metrics.nativePreviewEvents.playbackError, "cadence playback must not emit native playbackError events").toBe(0);
     expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
     expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
       16
@@ -335,6 +336,7 @@ async function expectCadencePlayback(
   expect(metrics.nativePreviewEvents.controlChanged, "Rust control changes should be visible through native preview events").toBeGreaterThanOrEqual(
     1
   );
+  expect(metrics.nativePreviewEvents.playbackError, "cadence playback must not emit native playbackError events").toBe(0);
   expect(metrics.presentationSnapshotReads.p50, "presentation state queries must be lightweight snapshots").not.toBeNull();
   expect(metrics.presentationSnapshotReads.p50, "presentation state p50 should not include decode/render/present work").toBeLessThanOrEqual(
     16
@@ -364,13 +366,17 @@ async function expectCadencePlayback(
   expect(metrics.visibleChanged, "visible preview pixels should change during playback").toBe(true);
 }
 
-function summarizeNativePreviewEvents(events: Array<{ nativeEventKind?: string }>) {
+function summarizeNativePreviewEvents(events: Array<{ nativeEventKind?: string; errorMessage?: string }>) {
+  const playbackErrors = events
+    .filter((event) => event.nativeEventKind === "playbackError")
+    .map((event) => event.errorMessage ?? "<missing errorMessage>");
   return {
     total: events.length,
     controlChanged: events.filter((event) => event.nativeEventKind === "controlChanged").length,
     framePresented: events.filter((event) => event.nativeEventKind === "framePresented").length,
     playbackEnded: events.filter((event) => event.nativeEventKind === "playbackEnded").length,
-    playbackError: events.filter((event) => event.nativeEventKind === "playbackError").length
+    playbackError: playbackErrors.length,
+    playbackErrors
   };
 }
 

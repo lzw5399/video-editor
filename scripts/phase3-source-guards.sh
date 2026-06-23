@@ -17,8 +17,8 @@ RENDERER_TIMELINE_VIEW_PROJECTION_PATTERN='\b(?:deriveTimelineRows|getSelectedSe
 RENDERER_TIMELINE_HANDLE_ENCODING_PATTERN='\bencodeURIComponent[[:space:]]*\([[:space:]]*(?:trackId|segmentId|selectedTrackId|selectedSegmentId)[[:space:]]*\)'
 RENDERER_PROJECT_SUMMARY_DRAFT_PATTERN='\bworkspace\.draft\.(?:metadata|canvasConfig|tracks|materials)\b|\b(?:getSequenceDuration|getSequenceDurationUs)\s*\(|\bdraft\.tracks\.(?:reduce|flatMap|map|forEach)\s*\('
 RENDERER_PRODUCT_EDIT_STATE_PATTERN='\bworkspace\.(?:commandState|selection)\b|\bcommandState\.(?:undoStack|redoStack|snapping)\b|\bselection\.(?:segmentIds|trackIds)\b'
-ADD_INTENT_LEGACY_PLACEMENT_PATTERN='kind:[[:space:]]*"addTimelineSegmentIntent"(?s:.{0,500})\b(?:targetStart|targetTimerange|sourceTimerange|trackId|segmentId)[[:space:]]*:'
-MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN='kind:[[:space:]]*"(?:addTextSegmentIntent|addAudioSegmentIntent|importSubtitleSrtIntent)"(?s:.{0,700})\b(?:duration|timeOffset|targetStart|targetTimerange|sourceTimerange|trackId|segmentId|segmentIdPrefix|materialIdPrefix)[[:space:]]*:'
+ADD_INTENT_LEGACY_PLACEMENT_PATTERN='kind:[[:space:]]*"addTimelineSegmentIntent"(?s:.{0,500})\b(?:targetTimerange|sourceTimerange|trackId|targetTrackId|segmentId)[[:space:]]*:'
+MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN='kind:[[:space:]]*"addTextSegmentIntent"(?s:.{0,700})\b(?:duration|targetTimerange|sourceTimerange|trackId|targetTrackId|segmentId|segmentIdPrefix|materialIdPrefix)[[:space:]]*:|kind:[[:space:]]*"(?:addAudioSegmentIntent|importSubtitleSrtIntent)"(?s:.{0,700})\b(?:duration|timeOffset|targetStart|targetTimerange|sourceTimerange|trackId|targetTrackId|segmentId|segmentIdPrefix|materialIdPrefix)[[:space:]]*:'
 MEDIA_ADD_CALLBACK_LEGACY_TIMING_PATTERN='on(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[^;\n]*\b(?:durationUs|timeOffsetUs)\b|function[[:space:]]+handle(?:AddTextSegment|AddAudioSegment|ImportSubtitleSrt)[[:space:]]*\([^)]*\b(?:durationUs|timeOffsetUs)\b'
 TEXT_ADD_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent"(?s:.{0,220})\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent"(?s:.{0,420})\b(?:style|textBox|layoutRegion|wrapping|fontRef)[[:space:]]*:'
 TEXT_ADD_NATIVE_INTENT_LEGACY_PRESET_PATTERN='kind:[[:space:]]*"addTextSegmentIntent";[^\n|]*\btext[[:space:]]*:|kind:[[:space:]]*"importSubtitleSrtIntent";(?s:.{0,260})\b(?:style|textBox|layoutRegion|wrapping)[[:space:]]*:'
@@ -451,12 +451,12 @@ fail_if_matches \
   apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/preload
 
 fail_if_matches_multiline \
-  "renderer/native binding must not pass placement fields for addTimelineSegmentIntent" \
+  "renderer/native binding must not pass renderer-owned raw placement fields for addTimelineSegmentIntent" \
   "$ADD_INTENT_LEGACY_PLACEMENT_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/Timeline.tsx
 
 fail_if_matches_multiline \
-  "renderer/native binding must not pass timing or placement fields for text/audio/subtitle add intents" \
+  "renderer/native binding must not pass renderer-owned timing or raw placement fields for text/audio/subtitle add intents" \
   "$MEDIA_ADD_INTENT_LEGACY_TIMING_PATTERN" \
   apps/desktop-electron/src/main/nativeBinding.ts apps/desktop-electron/src/renderer/App.tsx apps/desktop-electron/src/renderer/workspace/FeaturePanel.tsx
 
@@ -703,12 +703,12 @@ const hasSelection = workspace.selection.segmentIds.length > 0;
 const snappingLabel = commandState.snapping.enabled ? "吸附 开" : "吸附 关";'
 
 assert_pattern_rejects \
-  "legacy addTimelineSegment placement field" \
+  "legacy addTimelineSegment raw timerange placement field" \
   "$ADD_INTENT_LEGACY_PLACEMENT_PATTERN" \
   'void executeProjectTimelineIntent({
     kind: "addTimelineSegmentIntent",
     materialId,
-    targetStart: normalizePlayheadTime(playheadUs)
+    targetTimerange: { start: nextStart, duration: nextDuration }
   }, "add");'
 
 assert_pattern_rejects \

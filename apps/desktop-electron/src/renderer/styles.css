@@ -1228,6 +1228,14 @@ h2 {
   min-width: 0;
 }
 
+.text-template-drag-source[draggable="true"] {
+  cursor: grab;
+}
+
+.text-template-drag-source[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .text-card-header span {
   flex: 0 0 auto;
   color: #d6a23f;

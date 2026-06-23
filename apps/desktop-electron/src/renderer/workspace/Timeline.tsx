@@ -11,7 +11,7 @@ import {
   type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
-import { MATERIAL_DRAG_DATA_TYPE } from "./dragTypes";
+import { MATERIAL_DRAG_DATA_TYPE, TEXT_SEGMENT_DRAG_DATA_TYPE } from "./dragTypes";
 
 import "./timeline.css";
 
@@ -33,6 +33,30 @@ const AUDIO_WAVEFORM_PLACEHOLDER_PATTERN: readonly ("short" | "medium" | "tall")
   "medium"
 ];
 
+type TimelineDropPlacement = {
+  targetStart: number;
+  targetTrackHandle: string | null;
+};
+
+type TimelineDragPreviewState = {
+  phase: "active" | "committing";
+  mode: "move" | "trim-left" | "trim-right";
+  deltaPx: number;
+  deltaY: number;
+  laneWidth: number;
+  baseStart: number;
+  baseDuration: number;
+  baseTrackSelectionHandle: string;
+};
+
+type TimelineTrackDropTarget = {
+  selectionHandle: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
 type TimelineProps = {
   workspace: WorkspaceState;
   showDeveloperDiagnostics: boolean;
@@ -43,12 +67,13 @@ type TimelineProps = {
   onStopPlayback: () => void;
   onSelectSegment?: (itemHandle: string) => void;
   onSelectTrack?: (itemHandle: string) => void;
-  onAddSegment?: (materialId: string) => void;
+  onAddSegment?: (materialId: string, placement?: TimelineDropPlacement) => void;
+  onAddTextSegment?: (content: string, placement?: TimelineDropPlacement) => void;
   onAddTrack?: (trackKind: TrackKind) => void;
   onRenameTrack?: (itemHandle: string, name: string) => void;
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
-  onMoveSelectedSegment?: (startAt: number) => void;
+  onMoveSelectedSegment?: (startAt: number, targetTrackHandle?: string | null) => void;
   onSplitSelectedSegment?: () => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   onDeleteSelectedSegment?: () => void;
@@ -67,6 +92,7 @@ export function Timeline({
   onSelectSegment,
   onSelectTrack,
   onAddSegment,
+  onAddTextSegment,
   onAddTrack,
   onRenameTrack,
   onSetTrackLock,
@@ -148,46 +174,66 @@ export function Timeline({
     },
     [seekFromTrackClientX]
   );
-  const canAcceptMaterialDrop = useCallback(
-    (dataTransfer: DataTransfer) =>
-      workspace.pendingCommand === null &&
-      onAddSegment !== undefined &&
-      Array.from(dataTransfer.types).includes(MATERIAL_DRAG_DATA_TYPE),
-    [onAddSegment, workspace.pendingCommand]
+  const canAcceptTimelineDrop = useCallback(
+    (dataTransfer: DataTransfer) => {
+      if (workspace.pendingCommand !== null) {
+        return false;
+      }
+      const transferTypes = Array.from(dataTransfer.types);
+      return (
+        (onAddSegment !== undefined && transferTypes.includes(MATERIAL_DRAG_DATA_TYPE)) ||
+        (onAddTextSegment !== undefined && transferTypes.includes(TEXT_SEGMENT_DRAG_DATA_TYPE))
+      );
+    },
+    [onAddSegment, onAddTextSegment, workspace.pendingCommand]
   );
-  const handleMaterialDragOver = useCallback(
+  const handleTimelineDragOver = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
-      if (!canAcceptMaterialDrop(event.dataTransfer)) {
+      if (!canAcceptTimelineDrop(event.dataTransfer)) {
         return;
       }
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
       setMaterialDropActive(true);
     },
-    [canAcceptMaterialDrop]
+    [canAcceptTimelineDrop]
   );
-  const handleMaterialDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+  const handleTimelineDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget;
     if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
       return;
     }
     setMaterialDropActive(false);
   }, []);
-  const handleMaterialDrop = useCallback(
+  const handleTimelineDrop = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
-      if (!canAcceptMaterialDrop(event.dataTransfer)) {
+      if (!canAcceptTimelineDrop(event.dataTransfer)) {
         setMaterialDropActive(false);
         return;
       }
       event.preventDefault();
       setMaterialDropActive(false);
+      const trackContent = trackContentRef.current;
+      const placement =
+        trackContent === null
+          ? undefined
+          : {
+              targetStart: pointerTimeFromTrackContent(event.clientX, trackContent, timeline.duration),
+              targetTrackHandle: timelineTrackHandleAtPoint(event.clientX, event.clientY)
+            };
 
       const materialId = event.dataTransfer.getData(MATERIAL_DRAG_DATA_TYPE).trim();
       if (materialId.length > 0) {
-        onAddSegment?.(materialId);
+        onAddSegment?.(materialId, placement);
+        return;
+      }
+
+      const textContent = event.dataTransfer.getData(TEXT_SEGMENT_DRAG_DATA_TYPE).trim();
+      if (textContent.length > 0) {
+        onAddTextSegment?.(textContent, placement);
       }
     },
-    [canAcceptMaterialDrop, onAddSegment]
+    [canAcceptTimelineDrop, onAddSegment, onAddTextSegment, timeline.duration]
   );
 
   return (
@@ -229,10 +275,10 @@ export function Timeline({
         aria-label="轨道列表"
         data-material-drop-target="true"
         ref={trackListRef}
-        onDragEnter={handleMaterialDragOver}
-        onDragOver={handleMaterialDragOver}
-        onDragLeave={handleMaterialDragLeave}
-        onDrop={handleMaterialDrop}
+        onDragEnter={handleTimelineDragOver}
+        onDragOver={handleTimelineDragOver}
+        onDragLeave={handleTimelineDragLeave}
+        onDrop={handleTimelineDrop}
       >
         <div className="track-scroll-content" ref={trackContentRef} style={zoomContentStyle}>
           <div
@@ -271,6 +317,68 @@ export function Timeline({
 function pointerTimeFromLane(clientX: number, laneLeft: number, laneWidth: number, timelineDuration: number): number {
   const ratio = Math.max(0, Math.min(1, (clientX - laneLeft) / Math.max(1, laneWidth)));
   return Math.max(0, Math.round(ratio * Math.max(1, timelineDuration)));
+}
+
+function pointerTimeFromTrackContent(clientX: number, trackContent: HTMLElement, timelineDuration: number): number {
+  const box = trackContent.getBoundingClientRect();
+  const laneLeft = box.left + TIMELINE_HEADER_WIDTH_PX;
+  const laneWidth = Math.max(1, box.width - TIMELINE_HEADER_WIDTH_PX);
+  return pointerTimeFromLane(clientX, laneLeft, laneWidth, timelineDuration);
+}
+
+function timelineTrackHandleAtPoint(clientX: number, clientY: number, excludeElement?: HTMLElement | null): string | null {
+  const targets = document.elementsFromPoint(clientX, clientY);
+  for (const target of targets) {
+    if (!(target instanceof HTMLElement)) {
+      continue;
+    }
+    const row = target.closest(".track-row");
+    if (!(row instanceof HTMLElement)) {
+      continue;
+    }
+    if (excludeElement !== null && excludeElement !== undefined && row.contains(excludeElement)) {
+      continue;
+    }
+    const handle = row.dataset.trackSelectionHandle?.trim();
+    return handle === undefined || handle.length === 0 ? null : handle;
+  }
+  return null;
+}
+
+function collectTimelineTrackDropTargets(root: Element | null): TimelineTrackDropTarget[] {
+  if (root === null) {
+    return [];
+  }
+  return Array.from(root.querySelectorAll(".track-row"))
+    .filter((row): row is HTMLElement => row instanceof HTMLElement)
+    .flatMap((row) => {
+      const selectionHandle = row.dataset.trackSelectionHandle?.trim() ?? "";
+      if (selectionHandle.length === 0) {
+        return [];
+      }
+      const rect = row.getBoundingClientRect();
+      return [
+        {
+          selectionHandle,
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom
+        }
+      ];
+    });
+}
+
+function timelineTrackHandleFromTargetsAtPoint(
+  targets: readonly TimelineTrackDropTarget[],
+  clientX: number,
+  clientY: number
+): string | null {
+  const target = targets.find(
+    (candidate) =>
+      clientX >= candidate.left && clientX <= candidate.right && clientY >= candidate.top && clientY <= candidate.bottom
+  );
+  return target?.selectionHandle ?? null;
 }
 
 function TransportStrip({
@@ -510,7 +618,7 @@ function TimelineTrackRow({
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
-  onMoveSelectedSegment?: (startAt: number) => void;
+  onMoveSelectedSegment?: (startAt: number, targetTrackHandle?: string | null) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
   pending: boolean;
 }): React.ReactElement {
@@ -534,7 +642,7 @@ function TimelineTrackRow({
   }, [onRenameTrack, row.selectionHandle, row.name]);
 
   return (
-    <div className={row.rowClassName}>
+    <div className={row.rowClassName} data-track-selection-handle={row.selectionHandle}>
       <div className="track-header">
         <div className="track-header-main">
           <button
@@ -601,6 +709,7 @@ function TimelineTrackRow({
             onSelectSegment={onSelectSegment}
             onMoveSelectedSegment={onMoveSelectedSegment}
             onTrimSelectedSegment={onTrimSelectedSegment}
+            trackSelectionHandle={row.selectionHandle}
             pending={pending}
           />
         ))}
@@ -616,26 +725,56 @@ function TimelineSegmentBlock({
   onSelectSegment,
   onMoveSelectedSegment,
   onTrimSelectedSegment,
+  trackSelectionHandle,
   pending
 }: {
   segment: TimelineSegmentView;
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;
-  onMoveSelectedSegment?: (startAt: number) => void;
+  onMoveSelectedSegment?: (startAt: number, targetTrackHandle?: string | null) => void;
   onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
+  trackSelectionHandle: string;
   pending: boolean;
 }): React.ReactElement {
   const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
   const showAudioWaveform = segment.visualKind === "audio";
+  const [dragPreview, setDragPreview] = useState<TimelineDragPreviewState | null>(null);
   const dragRef = useRef<{
     mode: "move" | "trim-left" | "trim-right";
     pointerId: number;
     startClientX: number;
+    startClientY: number;
     laneWidth: number;
+    trackTargets: TimelineTrackDropTarget[];
     moved: boolean;
   } | null>(null);
   const suppressClickRef = useRef(false);
+  const segmentStyle = buildTimelineSegmentBlockStyle(segment, timelineDuration, dragPreview);
+
+  useEffect(() => {
+    setDragPreview((current) => {
+      if (current === null || current.phase !== "committing") {
+        return current;
+      }
+      if (
+        current.baseStart !== segment.start ||
+        current.baseDuration !== segment.duration ||
+        current.baseTrackSelectionHandle !== trackSelectionHandle
+      ) {
+        return null;
+      }
+      return current;
+    });
+  }, [segment.duration, segment.start, trackSelectionHandle]);
+
+  useEffect(() => {
+    if (dragPreview?.phase !== "committing") {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setDragPreview(null), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [dragPreview]);
 
   const beginPointerIntent = useCallback(
     (event: ReactPointerEvent<HTMLElement>, mode: "move" | "trim-left" | "trim-right") => {
@@ -646,6 +785,8 @@ function TimelineSegmentBlock({
       if (!(lane instanceof HTMLElement)) {
         return;
       }
+      const laneWidth = Math.max(1, lane.getBoundingClientRect().width);
+      const trackTargets = collectTimelineTrackDropTargets(lane.closest(".track-scroll-content"));
       event.preventDefault();
       event.stopPropagation();
       onSelectSegment?.(segment.selectionHandle);
@@ -654,11 +795,23 @@ function TimelineSegmentBlock({
         mode,
         pointerId: event.pointerId,
         startClientX: event.clientX,
-        laneWidth: Math.max(1, lane.getBoundingClientRect().width),
+        startClientY: event.clientY,
+        laneWidth,
+        trackTargets,
         moved: false
       };
+      setDragPreview({
+        phase: "active",
+        mode,
+        deltaPx: 0,
+        deltaY: 0,
+        laneWidth,
+        baseStart: segment.start,
+        baseDuration: segment.duration,
+        baseTrackSelectionHandle: trackSelectionHandle
+      });
     },
-    [onSelectSegment, pending, segment.selectionHandle]
+    [onSelectSegment, pending, segment.duration, segment.selectionHandle, segment.start, trackSelectionHandle]
   );
 
   const updatePointerIntent = useCallback((event: ReactPointerEvent<HTMLElement>) => {
@@ -666,10 +819,20 @@ function TimelineSegmentBlock({
     if (drag === null || drag.pointerId !== event.pointerId) {
       return;
     }
-    if (Math.abs(event.clientX - drag.startClientX) >= 3) {
+    if (Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) >= 3) {
       drag.moved = true;
     }
-  }, []);
+    setDragPreview({
+      phase: "active",
+      mode: drag.mode,
+      deltaPx: event.clientX - drag.startClientX,
+      deltaY: drag.mode === "move" ? event.clientY - drag.startClientY : 0,
+      laneWidth: drag.laneWidth,
+      baseStart: segment.start,
+      baseDuration: segment.duration,
+      baseTrackSelectionHandle: trackSelectionHandle
+    });
+  }, [segment.duration, segment.start, trackSelectionHandle]);
 
   const completePointerIntent = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -685,31 +848,53 @@ function TimelineSegmentBlock({
       event.stopPropagation();
 
       const deltaUs = Math.round(((event.clientX - drag.startClientX) / drag.laneWidth) * Math.max(1, timelineDuration));
-      if (!drag.moved || deltaUs === 0) {
+      const targetTrackHandle =
+        drag.mode === "move" ? timelineTrackHandleFromTargetsAtPoint(drag.trackTargets, event.clientX, event.clientY) : null;
+      const trackChanged = targetTrackHandle !== null && targetTrackHandle !== trackSelectionHandle;
+      if (!drag.moved || (deltaUs === 0 && !trackChanged)) {
+        setDragPreview(null);
         return;
       }
       suppressClickRef.current = true;
+      const committingPreview: TimelineDragPreviewState = {
+        phase: "committing",
+        mode: drag.mode,
+        deltaPx: event.clientX - drag.startClientX,
+        deltaY: drag.mode === "move" ? event.clientY - drag.startClientY : 0,
+        laneWidth: drag.laneWidth,
+        baseStart: segment.start,
+        baseDuration: segment.duration,
+        baseTrackSelectionHandle: trackSelectionHandle
+      };
 
       if (drag.mode === "move") {
-        onMoveSelectedSegment?.(segment.start + deltaUs);
+        setDragPreview(committingPreview);
+        onMoveSelectedSegment?.(segment.start + deltaUs, targetTrackHandle);
         return;
       }
 
       if (drag.mode === "trim-left" && deltaUs > 0) {
+        setDragPreview(committingPreview);
         onTrimSelectedSegment?.("left", segment.start + deltaUs);
+        return;
       }
       if (drag.mode === "trim-right" && deltaUs < 0) {
+        setDragPreview(committingPreview);
         onTrimSelectedSegment?.("right", segment.start + segment.duration + deltaUs);
+        return;
       }
+      setDragPreview(null);
     },
-    [onMoveSelectedSegment, onTrimSelectedSegment, timelineDuration]
+    [onMoveSelectedSegment, onTrimSelectedSegment, segment.duration, segment.start, timelineDuration, trackSelectionHandle]
   );
 
   return (
     <button
       type="button"
-      className={`segment-block segment-kind-${segment.visualKind}${segment.selected ? " selected" : ""}`}
-      style={segmentBlockStyle(segment, timelineDuration)}
+      className={`segment-block segment-kind-${segment.visualKind}${segment.selected ? " selected" : ""}${
+        dragPreview !== null ? " dragging" : ""
+      }`}
+      style={segmentStyle}
       onPointerDown={(event) => beginPointerIntent(event, "move")}
       onPointerMove={updatePointerIntent}
       onPointerUp={completePointerIntent}
@@ -768,6 +953,48 @@ function TimelineSegmentBlock({
       />
     </button>
   );
+}
+
+function buildTimelineSegmentBlockStyle(
+  segment: TimelineSegmentView,
+  timelineDuration: number,
+  dragPreview: TimelineDragPreviewState | null
+): CSSProperties {
+  const baseStyle = segmentBlockStyle(segment, timelineDuration);
+  if (dragPreview === null) {
+    return baseStyle;
+  }
+
+  const safeDuration = Math.max(1, timelineDuration);
+  const baseLeftPercent = (Math.max(0, segment.start) / safeDuration) * 100;
+  const baseWidthPercent = (Math.max(1, segment.duration) / safeDuration) * 100;
+  const baseWidthPx = (Math.max(1, segment.duration) / safeDuration) * Math.max(1, dragPreview.laneWidth);
+  const maxShrinkPx = Math.max(0, baseWidthPx - 8);
+
+  if (dragPreview.mode === "move") {
+    return {
+      ...baseStyle,
+      transform: `translate(${Math.round(dragPreview.deltaPx)}px, ${Math.round(dragPreview.deltaY)}px)`,
+      zIndex: 8
+    };
+  }
+
+  if (dragPreview.mode === "trim-left") {
+    const deltaPx = Math.max(0, Math.min(maxShrinkPx, dragPreview.deltaPx));
+    return {
+      ...baseStyle,
+      left: `calc(${baseLeftPercent}% + ${Math.round(deltaPx)}px)`,
+      width: `calc(${baseWidthPercent}% - ${Math.round(deltaPx)}px)`,
+      zIndex: 8
+    };
+  }
+
+  const deltaPx = Math.min(0, Math.max(-maxShrinkPx, dragPreview.deltaPx));
+  return {
+    ...baseStyle,
+    width: `calc(${baseWidthPercent}% + ${Math.round(deltaPx)}px)`,
+    zIndex: 8
+  };
 }
 
 function SegmentVisualBed({ visualKind }: { visualKind: TimelineSegmentView["visualKind"] }): React.ReactElement | null {

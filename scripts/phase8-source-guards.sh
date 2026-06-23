@@ -99,8 +99,7 @@ for text in \
   "裁剪" \
   "背景填充" \
   "混合模式" \
-  "蒙版" \
-  "应用画面"; do
+  "蒙版"; do
   found=false
   for file in "${UI_FILES[@]}"; do
     if rg -n --fixed-strings "$text" "$file" >/dev/null; then
@@ -110,6 +109,11 @@ for text in \
   done
   [ "$found" = "true" ] || fail "missing required Chinese visual UI copy: ${text}"
 done
+
+fail_matches \
+  "visual inspector edits must be realtime; renderer source must not expose an old apply-visual button" \
+  '"应用画面"' \
+  "$RENDERER_DIR"
 
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "画面变换 command-only transform"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "expectNoLeftSecondaryMenu"

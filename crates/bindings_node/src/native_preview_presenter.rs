@@ -122,6 +122,9 @@ pub enum NativePreviewContentEvidenceSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativePreviewTextOverlayEvidence {
+    pub track_id: String,
+    pub segment_id: String,
+    pub selection_handle: String,
     pub source: TextSegmentSource,
     pub content: String,
     pub font_family: String,
@@ -142,6 +145,12 @@ pub struct NativePreviewTextOverlayEvidence {
     pub visual_scale_y_millis: u32,
     pub visual_rotation_degrees: i32,
     pub visual_opacity_millis: u32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub selected: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

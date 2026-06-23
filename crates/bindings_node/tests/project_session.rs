@@ -261,31 +261,50 @@ fn project_session_add_timeline_segment_uses_session_playhead() {
 }
 
 #[test]
-fn project_session_add_intent_rejects_renderer_placement_fields() {
+fn project_session_add_intent_accepts_atomic_drop_placement_handle() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    let bundle_path = temp_dir.path().join("session-add-reject-placement.veproj");
-    save_timeline_draft(&bundle_path);
+    let bundle_path = temp_dir.path().join("session-add-drop-placement.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
     open_project_session(json!({
         "bundlePath": bundle_path.display().to_string(),
-        "sessionId": "test-session-add-reject-placement"
+        "sessionId": "test-session-add-drop-placement"
     }))
     .expect("openProjectSession should return an envelope");
 
-    let rejected = execute_project_intent(json!({
-        "sessionId": "test-session-add-reject-placement",
+    let added = execute_project_intent(json!({
+        "sessionId": "test-session-add-drop-placement",
         "expectedRevision": 0,
         "intent": {
             "kind": "addTimelineSegmentIntent",
             "materialId": "video-material",
-            "targetStart": 450_000
+            "targetStart": 450_000,
+            "targetTrackHandle": "timeline-track:video-track"
         }
     }))
-    .expect("legacy add placement payload should return an envelope");
+    .expect("add drop placement payload should return an envelope");
+    assert_eq!(added["ok"], true, "{added:#}");
+    assert_no_renderer_project_state_payload(&added);
+    assert_eq!(
+        added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        450_000
+    );
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-add-drop-placement",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "addTimelineSegmentIntent",
+            "materialId": "video-material",
+            "targetStart": 550_000,
+            "targetTrackHandle": "timeline-track:audio-track"
+        }
+    }))
+    .expect("wrong track add drop placement payload should return an envelope");
     assert_eq!(rejected["ok"], false, "{rejected:#}");
     assert_eq!(rejected["data"], Value::Null);
-    assert_eq!(rejected["error"]["kind"], "invalidPayload");
+    assert_eq!(rejected["error"]["kind"], "invalidTimelineEdit");
 
-    close_project_session(json!({ "sessionId": "test-session-add-reject-placement" }))
+    close_project_session(json!({ "sessionId": "test-session-add-drop-placement" }))
         .expect("closeProjectSession should return an envelope");
 }
 
@@ -458,6 +477,13 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
     assert_eq!(subtitle.content, "播放头字幕");
     assert_eq!(subtitle.source, TextSegmentSource::Subtitle);
     assert_eq!(subtitle.style.font_size, 36);
+    assert_eq!(subtitle.style.color, "#ffffff");
+    assert_eq!(subtitle.style.stroke.as_ref().unwrap().color, "#000000");
+    assert_eq!(subtitle.style.stroke.as_ref().unwrap().width, 2);
+    assert_eq!(subtitle.style.shadow.as_ref().unwrap().color, "#222222");
+    assert_eq!(subtitle.style.shadow.as_ref().unwrap().offset_x, 2);
+    assert_eq!(subtitle.style.shadow.as_ref().unwrap().offset_y, 2);
+    assert_eq!(subtitle.style.shadow.as_ref().unwrap().blur, 4);
     assert_eq!(subtitle.text_box.height_millis, 180);
     assert_eq!(subtitle.layout_region.y_millis, 720);
     assert!(
@@ -466,6 +492,57 @@ fn project_session_add_text_audio_subtitle_use_session_playhead_and_core_timing(
     );
 
     close_project_session(json!({ "sessionId": "test-session-add-media-timing" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_add_text_segment_accepts_atomic_drop_placement_handle() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-text-drop-placement.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-text-drop-placement"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let text_added = execute_project_intent(json!({
+        "sessionId": "test-session-text-drop-placement",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTextSegmentIntent",
+            "content": "拖入时间线文字",
+            "targetStart": 900_000,
+            "targetTrackHandle": "timeline-track:text-track"
+        }
+    }))
+    .expect("text drop placement intent should return an envelope");
+    assert_eq!(text_added["ok"], true, "{text_added:#}");
+    assert_no_renderer_project_state_payload(&text_added);
+    assert_eq!(
+        text_added["data"]["viewModel"]["selectedSegment"]["selectionHandle"],
+        "timeline-segment:text-track:text-segment-1"
+    );
+    assert_eq!(
+        text_added["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        900_000
+    );
+
+    let rejected = execute_project_intent(json!({
+        "sessionId": "test-session-text-drop-placement",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "addTextSegmentIntent",
+            "content": "错误轨道文字",
+            "targetStart": 1_100_000,
+            "targetTrackHandle": "timeline-track:audio-track"
+        }
+    }))
+    .expect("wrong track text drop placement intent should return an envelope");
+    assert_eq!(rejected["ok"], false, "{rejected:#}");
+    assert_eq!(rejected["error"]["kind"], "invalidTimelineEdit");
+
+    close_project_session(json!({ "sessionId": "test-session-text-drop-placement" }))
         .expect("closeProjectSession should return an envelope");
 }
 
@@ -492,11 +569,6 @@ fn project_session_add_media_intents_reject_renderer_timing_fields() {
             "kind": "addTextSegmentIntent",
             "content": "旧文字时长",
             "duration": 1_000_000
-        }),
-        json!({
-            "kind": "addTextSegmentIntent",
-            "content": "旧文字位置",
-            "targetStart": 1_000_000
         }),
         json!({
             "kind": "addAudioSegmentIntent",
@@ -623,6 +695,293 @@ fn project_session_move_intent_rejects_renderer_built_delta() {
     assert_eq!(rejected["error"]["kind"], "invalidPayload");
 
     close_project_session(json!({ "sessionId": "test-session-move-reject" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_move_selected_text_segment_accepts_only_track_selection_handle() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-text-cross-track-move.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-text-cross-track-move"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let text_added = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "addTextSegmentIntent",
+            "content": "跨轨文字"
+        }
+    }))
+    .expect("text add intent should return an envelope");
+    assert_eq!(text_added["ok"], true, "{text_added:#}");
+    let mut revision = text_added["data"]["revision"].as_u64().unwrap();
+
+    let track_added = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "addTrackIntent",
+            "trackKind": "text"
+        }
+    }))
+    .expect("text track add intent should return an envelope");
+    assert_eq!(track_added["ok"], true, "{track_added:#}");
+    revision = track_added["data"]["revision"].as_u64().unwrap();
+    assert_eq!(
+        track_added["data"]["viewModel"]["timeline"]["rows"][3]["selectionHandle"],
+        "timeline-track:track-text-4"
+    );
+
+    let selected = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-segment:text-track:text-segment-1"
+        }
+    }))
+    .expect("select text segment intent should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    revision = selected["data"]["revision"].as_u64().unwrap();
+
+    let moved = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "startAt": 800_000,
+            "targetTrackHandle": "timeline-track:track-text-4"
+        }
+    }))
+    .expect("cross-track text move intent should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+    assert_eq!(moved["data"]["events"][0]["kind"], "segmentMoved");
+    assert_no_renderer_project_state_payload(&moved);
+    assert_eq!(
+        moved["data"]["viewModel"]["selectedSegment"]["selectionHandle"],
+        "timeline-segment:track-text-4:text-segment-1"
+    );
+    assert_eq!(
+        moved["data"]["viewModel"]["selectedSegment"]["targetTimerange"]["start"],
+        800_000
+    );
+    revision = moved["data"]["revision"].as_u64().unwrap();
+
+    let segment_target_rejected = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "startAt": 900_000,
+            "targetTrackHandle": "timeline-segment:track-text-4:text-segment-1"
+        }
+    }))
+    .expect("segment target handle move intent should return an envelope");
+    assert_eq!(
+        segment_target_rejected["ok"], false,
+        "{segment_target_rejected:#}"
+    );
+    assert_eq!(
+        segment_target_rejected["error"]["kind"],
+        "invalidTimelineEdit"
+    );
+
+    let raw_track_rejected = execute_project_intent(json!({
+        "sessionId": "test-session-text-cross-track-move",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "moveSelectedSegmentIntent",
+            "startAt": 900_000,
+            "trackId": "track-text-4"
+        }
+    }))
+    .expect("renderer raw track id move intent should return an envelope");
+    assert_eq!(raw_track_rejected["ok"], false, "{raw_track_rejected:#}");
+    assert_eq!(raw_track_rejected["error"]["kind"], "invalidPayload");
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("cross-track text move should save canonical project.json");
+    let source_text_track = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "text-track")
+        .expect("source text track should exist");
+    let target_text_track = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .find(|track| track.track_id.as_str() == "track-text-4")
+        .expect("target text track should exist");
+    assert!(source_text_track.segments.is_empty());
+    assert_eq!(target_text_track.segments.len(), 1);
+    assert_eq!(
+        target_text_track.segments[0].segment_id.as_str(),
+        "text-segment-1"
+    );
+    assert_eq!(
+        target_text_track.segments[0].target_timerange.start.get(),
+        800_000
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-text-cross-track-move" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_text_and_visual_edits_are_patch_owned() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-text-visual-patch.veproj");
+    save_multimedia_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-text-visual-patch"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let subtitle_added = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "importSubtitleSrtIntent",
+            "srtContent": "1\n00:00:00,000 --> 00:00:01,000\n旧字幕\n"
+        }
+    }))
+    .expect("subtitle import intent should return an envelope");
+    assert_eq!(subtitle_added["ok"], true, "{subtitle_added:#}");
+    let mut revision = subtitle_added["data"]["revision"].as_u64().unwrap();
+
+    let full_text_rejected = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "editSelectedText",
+            "text": text_segment_json("renderer full replacement", "text")
+        }
+    }))
+    .expect("full text replacement should return an envelope");
+    assert_eq!(full_text_rejected["ok"], false, "{full_text_rejected:#}");
+    assert_eq!(full_text_rejected["error"]["kind"], "invalidPayload");
+
+    let text_patched = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "editSelectedText",
+            "patch": {
+                "content": "Rust patch 字幕",
+                "fontFamily": "Noto Serif CJK SC",
+                "fontRef": "font://bundled/noto-serif-cjk-sc-regular",
+                "fontSize": 42,
+                "color": "#ffeeaa",
+                "alignment": "center",
+                "lineHeightMillis": 1300,
+                "letterSpacingMillis": 40,
+                "strokeEnabled": false,
+                "backgroundEnabled": true,
+                "backgroundColor": "#101010",
+                "textBoxWidthMillis": 700,
+                "textBoxHeightMillis": 180,
+                "layoutXMillis": 120,
+                "layoutYMillis": 700,
+                "layoutWidthMillis": 760,
+                "layoutHeightMillis": 200,
+                "wrapping": "auto"
+            }
+        }
+    }))
+    .expect("text patch intent should return an envelope");
+    assert_eq!(text_patched["ok"], true, "{text_patched:#}");
+    assert_no_renderer_project_state_payload(&text_patched);
+    revision = text_patched["data"]["revision"].as_u64().unwrap();
+
+    let full_visual_rejected = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "updateSelectedSegmentVisual",
+            "visual": text_patched["data"]["viewModel"]["selectedSegment"]["visual"].clone()
+        }
+    }))
+    .expect("full visual replacement should return an envelope");
+    assert_eq!(
+        full_visual_rejected["ok"], false,
+        "{full_visual_rejected:#}"
+    );
+    assert_eq!(full_visual_rejected["error"]["kind"], "invalidPayload");
+
+    let visual_patched = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "updateSelectedSegmentVisual",
+            "patch": {
+                "positionDeltaX": 140,
+                "positionDeltaY": -80,
+                "rotationDeltaDegrees": 25,
+                "opacityMillis": 830,
+                "fitMode": "fill"
+            }
+        }
+    }))
+    .expect("visual patch intent should return an envelope");
+    assert_eq!(visual_patched["ok"], true, "{visual_patched:#}");
+    assert_no_renderer_project_state_payload(&visual_patched);
+    revision = visual_patched["data"]["revision"].as_u64().unwrap();
+
+    let invalid_visual_patch = execute_project_intent(json!({
+        "sessionId": "test-session-text-visual-patch",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "updateSelectedSegmentVisual",
+            "patch": {
+                "opacityMillis": 1_001
+            }
+        }
+    }))
+    .expect("invalid visual patch should return an envelope");
+    assert_eq!(
+        invalid_visual_patch["ok"], false,
+        "{invalid_visual_patch:#}"
+    );
+    assert_eq!(invalid_visual_patch["error"]["kind"], "invalidTimelineEdit");
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("text and visual patch should save canonical project.json");
+    let subtitle = reopened
+        .bundle
+        .draft
+        .tracks
+        .iter()
+        .flat_map(|track| track.segments.iter())
+        .find(|segment| segment.segment_id.as_str() == "subtitle-segment-1")
+        .expect("subtitle segment should exist");
+    let text = subtitle
+        .text
+        .as_ref()
+        .expect("subtitle should keep text data");
+    assert_eq!(text.content, "Rust patch 字幕");
+    assert_eq!(text.source, TextSegmentSource::Subtitle);
+    assert_eq!(text.style.font.family, "Noto Serif CJK SC");
+    assert_eq!(
+        text.style.font.font_ref.as_deref(),
+        Some("font://bundled/noto-serif-cjk-sc-regular")
+    );
+    assert!(text.style.stroke.is_none());
+    assert_eq!(text.style.background.as_ref().unwrap().color, "#101010");
+    assert_eq!(subtitle.visual.transform.position.x, 140);
+    assert_eq!(subtitle.visual.transform.position.y, -80);
+    assert_eq!(subtitle.visual.transform.rotation.degrees, 25);
+    assert_eq!(subtitle.visual.transform.opacity.value_millis, 830);
+
+    close_project_session(json!({ "sessionId": "test-session-text-visual-patch" }))
         .expect("closeProjectSession should return an envelope");
 }
 

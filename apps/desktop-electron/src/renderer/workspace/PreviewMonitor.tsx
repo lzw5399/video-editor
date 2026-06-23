@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 
 import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
+import type { SegmentVisualPatch } from "../../main/nativeBinding";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   canvasBackgroundTone,
@@ -53,7 +61,9 @@ type PreviewMonitorProps = {
   onStopPlayback: () => void;
   onProbeRuntimeCapabilities: () => void;
   onRetryAudioPreview: () => void;
-  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
+  onUpdateSelectedSegmentVisual: (patch: SegmentVisualPatch) => void;
+  onSelectPreviewTextOverlay: (selectionHandle: string) => void;
+  onEditPreviewTextOverlay: (selectionHandle: string) => void;
 };
 
 type MonitorControl = {
@@ -167,6 +177,38 @@ type RealtimePreviewHostContentEvidence = {
   targetTimeMicroseconds: number;
   presentedFrames: number;
   submittedDraws: number;
+  activeTextOverlays?: RealtimePreviewTextOverlayEvidence[];
+};
+
+type RealtimePreviewTextOverlayEvidence = {
+  trackId: string;
+  segmentId: string;
+  selectionHandle: string;
+  source: "text" | "subtitle";
+  content: string;
+  fontFamily: string;
+  fontRef?: string | null;
+  fontSize: number;
+  color: string;
+  alignment: "left" | "center" | "right";
+  lineHeightMillis: number;
+  letterSpacingMillis: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visualPositionX: number;
+  visualPositionY: number;
+  visualScaleXMillis: number;
+  visualScaleYMillis: number;
+  visualRotationDegrees: number;
+  visualOpacityMillis: number;
+  selected?: boolean;
+};
+
+type RealtimePreviewTextHitTestResponse = {
+  hit: boolean;
+  selectionHandle?: string | null;
 };
 
 export type RealtimePreviewHostApi = {
@@ -178,23 +220,45 @@ export type RealtimePreviewHostApi = {
   play: () => Promise<RealtimePreviewHostState>;
   pause: () => Promise<RealtimePreviewHostState>;
   stop: () => Promise<RealtimePreviewHostState>;
+  hitTestTextOverlay: (point: { x: number; y: number }) => Promise<RealtimePreviewTextHitTestResponse>;
 };
 
 type PreviewDragState = {
+  mode: "move" | "rotate";
   pointerId: number;
   startClientX: number;
   startClientY: number;
   lastClientX: number;
   lastClientY: number;
-  startVisual: SegmentVisual;
   canvasWidth: number;
   canvasHeight: number;
   moved: boolean;
+  centerClientX?: number;
+  centerClientY?: number;
+  startAngleDegrees?: number;
 };
+
+type PreviewDragPreviewState =
+  | {
+      mode: "move";
+      deltaClientX: number;
+      deltaClientY: number;
+    }
+  | {
+      mode: "rotate";
+      deltaDegrees: number;
+    };
 
 type CanvasFitSize = {
   width: number;
   height: number;
+};
+
+type SelectionOverlayModel = {
+  style: CSSProperties;
+  source: "native-text" | "segment-visual";
+  selectionHandle: string | null;
+  rotateEnabled: boolean;
 };
 
 type MonitorViewControl = {
@@ -264,7 +328,9 @@ export function PreviewMonitor({
   onStopPlayback,
   onProbeRuntimeCapabilities,
   onRetryAudioPreview,
-  onUpdateSelectedSegmentVisual
+  onUpdateSelectedSegmentVisual,
+  onSelectPreviewTextOverlay,
+  onEditPreviewTextOverlay
 }: PreviewMonitorProps): React.ReactElement {
   const nativeHostRef = useRef<HTMLDivElement>(null);
   const previewStageRef = useRef<HTMLDivElement>(null);
@@ -272,6 +338,7 @@ export function PreviewMonitor({
   const previewDragRef = useRef<PreviewDragState | null>(null);
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const [canvasFitSize, setCanvasFitSize] = useState<CanvasFitSize | null>(null);
+  const [previewDragPreview, setPreviewDragPreview] = useState<PreviewDragPreviewState | null>(null);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const safeTimelineDurationUs = Math.max(0, Math.round(timelineDurationUs));
   const frameStepUs = frameDurationUs(canvasConfig);
@@ -301,8 +368,12 @@ export function PreviewMonitor({
     : productPreviewStatusLabel === "画面已更新，预览待刷新"
       ? productPreviewStatusLabel
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
-  const selectionOverlayStyle = buildSelectionOverlayStyle(selectedSegment);
-  const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment) : null;
+  const selectionOverlay = buildSelectionOverlayModel(
+    selectedSegment,
+    nativeHostState.contentEvidence,
+    previewDragPreview
+  );
+  const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment, previewDragPreview) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (selectedSegment === null || !selectedSegment.visual.visible) {
@@ -322,19 +393,58 @@ export function PreviewMonitor({
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     previewDragRef.current = {
+      mode: "move",
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       lastClientX: event.clientX,
       lastClientY: event.clientY,
-      startVisual: selectedSegment.visual,
       canvasWidth: canvasRect.width,
       canvasHeight: canvasRect.height,
       moved: false
     };
+    setPreviewDragPreview({ mode: "move", deltaClientX: 0, deltaClientY: 0 });
   }
 
-  function handlePreviewDragPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+  function handlePreviewRotatePointerDown(event: ReactPointerEvent<HTMLButtonElement>): void {
+    if (selectedSegment === null || !selectedSegment.visual.visible) {
+      return;
+    }
+
+    const outline = event.currentTarget.closest(".preview-selection-outline");
+    const canvas = event.currentTarget.closest(".preview-canvas");
+    if (!(outline instanceof HTMLElement) || !(canvas instanceof HTMLElement)) {
+      return;
+    }
+    const outlineRect = outline.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    if (outlineRect.width <= 0 || outlineRect.height <= 0 || canvasRect.width <= 0 || canvasRect.height <= 0) {
+      return;
+    }
+
+    const centerClientX = outlineRect.left + outlineRect.width / 2;
+    const centerClientY = outlineRect.top + outlineRect.height / 2;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    previewDragRef.current = {
+      mode: "rotate",
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      moved: false,
+      centerClientX,
+      centerClientY,
+      startAngleDegrees: pointerAngleDegrees(event.clientX, event.clientY, centerClientX, centerClientY)
+    };
+    setPreviewDragPreview({ mode: "rotate", deltaDegrees: 0 });
+  }
+
+  function handlePreviewDragPointerMove(event: ReactPointerEvent<HTMLElement>): void {
     const drag = previewDragRef.current;
     if (drag === null || drag.pointerId !== event.pointerId) {
       return;
@@ -345,14 +455,29 @@ export function PreviewMonitor({
     drag.moved =
       drag.moved ||
       Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) > 2;
+    if (drag.mode === "rotate") {
+      const centerClientX = drag.centerClientX ?? drag.startClientX;
+      const centerClientY = drag.centerClientY ?? drag.startClientY;
+      const startAngle =
+        drag.startAngleDegrees ?? pointerAngleDegrees(drag.startClientX, drag.startClientY, centerClientX, centerClientY);
+      const currentAngle = pointerAngleDegrees(event.clientX, event.clientY, centerClientX, centerClientY);
+      setPreviewDragPreview({ mode: "rotate", deltaDegrees: normalizeRotationDegrees(currentAngle - startAngle) });
+      return;
+    }
+    setPreviewDragPreview({
+      mode: "move",
+      deltaClientX: event.clientX - drag.startClientX,
+      deltaClientY: event.clientY - drag.startClientY
+    });
   }
 
-  function handlePreviewDragPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+  function handlePreviewDragPointerUp(event: ReactPointerEvent<HTMLElement>): void {
     const drag = previewDragRef.current;
     if (drag === null || drag.pointerId !== event.pointerId) {
       return;
     }
     previewDragRef.current = null;
+    setPreviewDragPreview(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -360,25 +485,71 @@ export function PreviewMonitor({
       return;
     }
 
+    if (drag.mode === "rotate") {
+      const centerClientX = drag.centerClientX ?? drag.startClientX;
+      const centerClientY = drag.centerClientY ?? drag.startClientY;
+      const startAngle =
+        drag.startAngleDegrees ?? pointerAngleDegrees(drag.startClientX, drag.startClientY, centerClientX, centerClientY);
+      const currentAngle = pointerAngleDegrees(drag.lastClientX, drag.lastClientY, centerClientX, centerClientY);
+      const deltaDegrees = normalizeRotationDegrees(currentAngle - startAngle);
+      onUpdateSelectedSegmentVisual({ rotationDeltaDegrees: Math.round(deltaDegrees) });
+      return;
+    }
+
     const deltaX = Math.round(((drag.lastClientX - drag.startClientX) * 2000) / drag.canvasWidth);
     const deltaY = Math.round(((drag.lastClientY - drag.startClientY) * 2000) / drag.canvasHeight);
-    onUpdateSelectedSegmentVisual({
-      ...drag.startVisual,
-      transform: {
-        ...drag.startVisual.transform,
-        position: {
-          x: clampCanvasPosition(drag.startVisual.transform.position.x + deltaX),
-          y: clampCanvasPosition(drag.startVisual.transform.position.y - deltaY)
-        }
-      }
-    });
+    onUpdateSelectedSegmentVisual({ positionDeltaX: deltaX, positionDeltaY: -deltaY });
   }
 
-  function handlePreviewDragPointerCancel(event: ReactPointerEvent<HTMLDivElement>): void {
+  function handlePreviewDragPointerCancel(event: ReactPointerEvent<HTMLElement>): void {
     const drag = previewDragRef.current;
     if (drag !== null && drag.pointerId === event.pointerId) {
       previewDragRef.current = null;
+      setPreviewDragPreview(null);
     }
+  }
+
+  function handlePreviewCanvasClick(event: ReactMouseEvent<HTMLDivElement>): void {
+    void selectPreviewTextAtClientPoint(event.clientX, event.clientY, false);
+  }
+
+  function handlePreviewCanvasDoubleClick(event: ReactMouseEvent<HTMLDivElement>): void {
+    void selectPreviewTextAtClientPoint(event.clientX, event.clientY, true);
+  }
+
+  async function selectPreviewTextAtClientPoint(
+    clientX: number,
+    clientY: number,
+    editAfterSelect: boolean
+  ): Promise<void> {
+    const bridge = window.videoEditorRealtimePreviewHost;
+    const hostElement = nativeHostRef.current;
+    if (bridge === undefined || hostElement === null || !showRealtimeSurface) {
+      return;
+    }
+    const hostRect = hostElement.getBoundingClientRect();
+    if (hostRect.width <= 0 || hostRect.height <= 0) {
+      return;
+    }
+    const point = {
+      x: Math.round(clientX - hostRect.left),
+      y: Math.round(clientY - hostRect.top)
+    };
+    if (point.x < 0 || point.y < 0 || point.x > hostRect.width || point.y > hostRect.height) {
+      return;
+    }
+    await bridge
+      .hitTestTextOverlay(point)
+      .then((hit) => {
+        if (hit.hit && typeof hit.selectionHandle === "string" && hit.selectionHandle.length > 0) {
+          if (editAfterSelect) {
+            onEditPreviewTextOverlay(hit.selectionHandle);
+          } else {
+            onSelectPreviewTextOverlay(hit.selectionHandle);
+          }
+        }
+      })
+      .catch(() => undefined);
   }
 
   useEffect(() => {
@@ -557,24 +728,43 @@ export function PreviewMonitor({
           className={`preview-canvas canvas-background-${backgroundTone}`}
           aria-label="预览画面"
           style={canvasStyle}
+          onClick={handlePreviewCanvasClick}
+          onDoubleClick={handlePreviewCanvasDoubleClick}
         >
           {!showRealtimeSurface ? (
             <div className="preview-placeholder">
               <span>{previewPlaceholderLabel}</span>
             </div>
           ) : null}
-          {selectedSegment !== null && selectionOverlayStyle !== null ? (
+          {selectedSegment !== null && selectionOverlay !== null ? (
           <div
-            className="preview-selection-outline"
+            className={`preview-selection-outline preview-selection-${selectionOverlay.source}`}
             aria-label="预览选中框"
             data-segment-id={selectedSegment.segmentKey}
+            data-selection-handle={selectionOverlay.selectionHandle ?? selectedSegment.selectionHandle}
+            data-overlay-source={selectionOverlay.source}
             data-fit-mode={selectedSegment.visual.fitMode}
-            style={selectionOverlayStyle}
+            style={selectionOverlay.style}
             onPointerDown={handlePreviewDragPointerDown}
             onPointerMove={handlePreviewDragPointerMove}
             onPointerUp={handlePreviewDragPointerUp}
             onPointerCancel={handlePreviewDragPointerCancel}
-          />
+          >
+            {selectionOverlay.rotateEnabled ? (
+              <button
+                type="button"
+                className="preview-selection-rotate-handle"
+                aria-label="旋转文字"
+                title="旋转文字"
+                onPointerDown={handlePreviewRotatePointerDown}
+                onPointerMove={handlePreviewDragPointerMove}
+                onPointerUp={handlePreviewDragPointerUp}
+                onPointerCancel={handlePreviewDragPointerCancel}
+              >
+                <span aria-hidden="true">↻</span>
+              </button>
+            ) : null}
+          </div>
           ) : null}
           {selectedSegment !== null && selectedSegment.text !== null && textOverlayStyle !== null ? (
           <div
@@ -933,9 +1123,44 @@ function formatRealtimePreviewFallbackArtifact(
   return formatRealtimePreviewTelemetry(state, false);
 }
 
-function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
+function buildSelectionOverlayModel(
+  selectedSegment: SelectedSegmentView | null,
+  contentEvidence: RealtimePreviewHostContentEvidence | null,
+  dragPreview: PreviewDragPreviewState | null
+): SelectionOverlayModel | null {
   if (selectedSegment === null || !selectedSegment.visual.visible) {
     return null;
+  }
+
+  const selectedTextOverlay = selectedNativeTextOverlay(contentEvidence, selectedSegment);
+  if (selectedTextOverlay !== null && contentEvidence !== null && contentEvidence.width > 0 && contentEvidence.height > 0) {
+    const visual = selectedSegment.visual;
+    const targetWidth = Math.max(1, contentEvidence.width);
+    const targetHeight = Math.max(1, contentEvidence.height);
+    const scaleX = Math.max(1, selectedTextOverlay.visualScaleXMillis) / 1000;
+    const scaleY = Math.max(1, selectedTextOverlay.visualScaleYMillis) / 1000;
+    const centerX =
+      selectedTextOverlay.x +
+      selectedTextOverlay.width / 2 +
+      (targetWidth * selectedTextOverlay.visualPositionX) / 2000;
+    const centerY =
+      selectedTextOverlay.y +
+      selectedTextOverlay.height / 2 -
+      (targetHeight * selectedTextOverlay.visualPositionY) / 2000;
+    const opacity = Math.max(0.28, Math.min(1, visual.transform.opacity.valueMillis / 1000));
+    return {
+      source: "native-text",
+      selectionHandle: selectedTextOverlay.selectionHandle,
+      rotateEnabled: true,
+      style: {
+        left: `${(centerX / targetWidth) * 100}%`,
+        top: `${(centerY / targetHeight) * 100}%`,
+        width: `${((Math.max(1, selectedTextOverlay.width) * scaleX) / targetWidth) * 100}%`,
+        height: `${((Math.max(1, selectedTextOverlay.height) * scaleY) / targetHeight) * 100}%`,
+        opacity,
+        transform: buildCenteredPreviewTransform(selectedTextOverlay.visualRotationDegrees, dragPreview)
+      }
+    };
   }
 
   const visual = selectedSegment.visual;
@@ -949,13 +1174,53 @@ function buildSelectionOverlayStyle(selectedSegment: SelectedSegmentView | null)
   const opacity = Math.max(0.28, Math.min(1, visual.transform.opacity.valueMillis / 1000));
 
   return {
-    left: `calc(50% + ${xPercent}%)`,
-    top: `calc(50% - ${yPercent}%)`,
-    width: `${widthPercent}%`,
-    height: `${heightPercent}%`,
-    opacity,
-    transform: `translate(-50%, -50%) rotate(${visual.transform.rotation.degrees}deg)`
+    source: "segment-visual",
+    selectionHandle: selectedSegment.selectionHandle,
+    rotateEnabled: selectedSegment.text !== null,
+    style: {
+      left: `calc(50% + ${xPercent}%)`,
+      top: `calc(50% - ${yPercent}%)`,
+      width: `${widthPercent}%`,
+      height: `${heightPercent}%`,
+      opacity,
+      transform: buildCenteredPreviewTransform(visual.transform.rotation.degrees, dragPreview)
+    }
   };
+}
+
+function buildCenteredPreviewTransform(
+  baseRotationDegrees: number,
+  dragPreview: PreviewDragPreviewState | null
+): string {
+  const moveX = dragPreview?.mode === "move" ? dragPreview.deltaClientX : 0;
+  const moveY = dragPreview?.mode === "move" ? dragPreview.deltaClientY : 0;
+  const rotationDelta = dragPreview?.mode === "rotate" ? dragPreview.deltaDegrees : 0;
+  return `translate(calc(-50% + ${Math.round(moveX)}px), calc(-50% + ${Math.round(moveY)}px)) rotate(${
+    baseRotationDegrees + rotationDelta
+  }deg)`;
+}
+
+function buildDirectPreviewTransform(
+  baseRotationDegrees: number,
+  dragPreview: PreviewDragPreviewState | null
+): string {
+  const moveX = dragPreview?.mode === "move" ? dragPreview.deltaClientX : 0;
+  const moveY = dragPreview?.mode === "move" ? dragPreview.deltaClientY : 0;
+  const rotationDelta = dragPreview?.mode === "rotate" ? dragPreview.deltaDegrees : 0;
+  return `translate(${Math.round(moveX)}px, ${Math.round(moveY)}px) rotate(${baseRotationDegrees + rotationDelta}deg)`;
+}
+
+function selectedNativeTextOverlay(
+  contentEvidence: RealtimePreviewHostContentEvidence | null,
+  selectedSegment: SelectedSegmentView
+): RealtimePreviewTextOverlayEvidence | null {
+  if (selectedSegment.text === null || contentEvidence?.activeTextOverlays === undefined) {
+    return null;
+  }
+  return (
+    contentEvidence.activeTextOverlays.find((overlay) => overlay.selectionHandle === selectedSegment.selectionHandle) ??
+    null
+  );
 }
 
 function clampOverlayPercent(value: number): number {
@@ -966,11 +1231,25 @@ function clampOverlayOffsetPercent(value: number): number {
   return Math.max(-48, Math.min(48, value));
 }
 
-function clampCanvasPosition(value: number): number {
-  return Math.max(-960, Math.min(960, Math.round(value)));
+function pointerAngleDegrees(clientX: number, clientY: number, centerClientX: number, centerClientY: number): number {
+  return (Math.atan2(clientY - centerClientY, clientX - centerClientX) * 180) / Math.PI;
 }
 
-function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSSProperties | null {
+function normalizeRotationDegrees(value: number): number {
+  let normalized = Math.round(value);
+  while (normalized > 180) {
+    normalized -= 360;
+  }
+  while (normalized < -180) {
+    normalized += 360;
+  }
+  return normalized;
+}
+
+function buildTextOverlayStyle(
+  selectedSegment: SelectedSegmentView | null,
+  dragPreview: PreviewDragPreviewState | null
+): CSSProperties | null {
   if (
     selectedSegment === null ||
     !selectedSegment.visual.visible ||
@@ -1002,7 +1281,7 @@ function buildTextOverlayStyle(selectedSegment: SelectedSegmentView | null): CSS
     width: `${widthMillis / 10}%`,
     minHeight: `${Math.max(20, heightMillis / 10)}%`,
     opacity: Math.max(0.28, Math.min(1, visual.transform.opacity.valueMillis / 1000)),
-    transform: `rotate(${visual.transform.rotation.degrees}deg)`,
+    transform: buildDirectPreviewTransform(visual.transform.rotation.degrees, dragPreview),
     color: style.color,
     backgroundColor: style.background?.color ?? "transparent",
     fontFamily: quoteFontFamily(style.font.family),

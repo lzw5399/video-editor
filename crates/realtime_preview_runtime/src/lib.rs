@@ -54,7 +54,8 @@ pub use scheduler::{
     RealtimePlaybackPresentedFrame, RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig,
     RealtimePlaybackSchedulerError, RealtimePlaybackSchedulerEvidence,
     RealtimePlaybackSchedulerEvidenceSource, RealtimePlaybackSchedulerPresentation,
-    RealtimePlaybackSchedulerPresenter, RealtimePlaybackTimeline,
+    RealtimePlaybackSchedulerPresenter, RealtimePlaybackSelectedSegment,
+    RealtimePlaybackTextOverlayEvidence, RealtimePlaybackTimeline, RealtimePreviewUiChrome,
 };
 pub use session::{
     PreviewGpuBackend, PreviewSessionId, RealtimePreviewError, RealtimePreviewRuntime,

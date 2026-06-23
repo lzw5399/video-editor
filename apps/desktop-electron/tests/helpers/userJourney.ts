@@ -41,10 +41,13 @@ type NativeCommandObservation = {
       opacity: { valueMillis: number };
     };
   } | null;
+  visualPatch?: Record<string, unknown> | null;
+  textPatch?: Record<string, unknown> | null;
   textContent?: string | null;
   textSource?: string | null;
   textFontRef?: string | null;
   srtContent?: string | null;
+  targetTrackHandle?: string | null;
   outputPath?: string | null;
   preset?: string | null;
   sessionId?: string | null;
@@ -67,6 +70,7 @@ type ProjectSessionCall = {
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;
+  itemHandle: string | null;
   materialId: string | null;
   materialPath: string | null;
   outputPath?: string | null;
@@ -75,10 +79,13 @@ type ProjectSessionCall = {
   targetTimerange?: { start: number; duration: number } | null;
   duration?: number | null;
   visual?: NativeCommandObservation["visual"] | null;
+  visualPatch?: Record<string, unknown> | null;
+  textPatch?: Record<string, unknown> | null;
   textContent?: string | null;
   textSource?: string | null;
   textFontRef?: string | null;
   srtContent?: string | null;
+  targetTrackHandle?: string | null;
   timelineSemanticKeys?: string[];
   hasDraftField: boolean;
 };
@@ -174,6 +181,7 @@ type RealtimePreviewHostState = {
       visualScaleYMillis: number;
       visualRotationDegrees: number;
       visualOpacityMillis: number;
+      selected?: boolean;
     }>;
   } | null;
   surfacePlacement?: {
@@ -236,6 +244,7 @@ export type ProductPlaybackSuccessEvidence = {
 export type TimelineSegmentSnapshot = {
   label: string;
   targetLabel: string;
+  trackName: string;
   targetStartUs: number;
   targetDurationUs: number;
   selected: boolean;
@@ -286,15 +295,38 @@ export async function waitForProductPlaybackSuccess(
     timeoutMs,
     before.hostState?.contentEvidence?.targetTimeMicroseconds ?? before.timecodeUs
   );
+  const afterWithAdvancedTimecode =
+    after.timecodeUs > before.timecodeUs
+      ? after
+      : await waitForPreviewTimecodeAdvance(page, before.timecodeUs, Math.min(timeoutMs, 5_000));
   expectProductPlaybackSuccessEvidence({
     before,
     visibleBefore,
     visibleMotion,
-    after,
+    after: afterWithAdvancedTimecode,
     frameRequestsBeforePlay,
     frameRequestsAfterPlay: requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))
   });
-  return { after, visibleMotion };
+  return { after: afterWithAdvancedTimecode, visibleMotion };
+}
+
+async function waitForPreviewTimecodeAdvance(
+  page: Page,
+  afterTimeUs: number,
+  timeoutMs: number
+): Promise<PreviewEvidence> {
+  const deadline = Date.now() + timeoutMs;
+  let lastEvidence: PreviewEvidence | null = null;
+  while (Date.now() < deadline) {
+    lastEvidence = await capturePreviewEvidence(page);
+    if (lastEvidence.timecodeUs > afterTimeUs) {
+      return lastEvidence;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error(
+    `Timed out waiting for preview UI timecode to advance beyond ${afterTimeUs}us. Last evidence: ${JSON.stringify(lastEvidence)}`
+  );
 }
 
 export function expectProductPlaybackSuccessEvidence({
@@ -652,12 +684,25 @@ export async function dragMaterialToTimeline(
   const materialName = basename(materialPath);
   const nextCount = (await countProjectSessionIntent(app, "addTimelineSegmentIntent")) + 1;
   const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
-  const timelineDropTarget = page.locator('[data-material-drop-target="true"]');
+  const timelineDropTarget = page
+    .locator(".track-row", {
+      has: page.getByRole("button", { name: /选择轨道 .*视频轨道/ })
+    })
+    .first();
 
   await expect(materialRow).toBeVisible({ timeout: 10_000 });
   await expect(materialRow).toHaveAttribute("draggable", "true", { timeout: 60_000 });
   await expect(timelineDropTarget).toBeVisible();
-  await materialRow.dragTo(timelineDropTarget);
+  const dropBox = await timelineDropTarget.boundingBox();
+  if (dropBox === null) {
+    throw new Error("Material timeline drop target is not visible");
+  }
+  await materialRow.dragTo(timelineDropTarget, {
+    targetPosition: {
+      x: 132,
+      y: Math.max(1, Math.round(dropBox.height / 2))
+    }
+  });
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
@@ -681,6 +726,41 @@ export async function addTextThroughProductPanel(
   const textPanel = page.getByRole("region", { name: "素材面板" });
   await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
   await textPanel.getByRole("button", { name: "添加文字", exact: true }).click();
+  await waitForCommandCount(app, "addTextSegmentIntent", nextCount);
+  await expectTimelineSegmentDuration(page, new RegExp(escapeRegex(content)), expectedDurationUs);
+  await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
+    content
+  );
+}
+
+export async function dragTextTemplateToTimelineThroughProductPanel(
+  page: Page,
+  app: ProductJourneyAppController,
+  content: string,
+  expectedDurationUs = DEFAULT_INTENT_SEGMENT_DURATION_US
+): Promise<void> {
+  const nextCount = (await countCommand(app, "addTextSegmentIntent")) + 1;
+  await selectProductTopFeatureCategory(page, "文本");
+  const textPanel = page.getByRole("region", { name: "素材面板" });
+  await textPanel.getByLabel("默认文字").getByLabel("文字内容").fill(content);
+  const textTemplate = textPanel.getByLabel("文字模板 默认文字");
+  const timelineDropTarget = page
+    .locator(".track-row", {
+      has: page.getByRole("button", { name: /选择轨道 .*文字轨道/ })
+    })
+    .first();
+  await expect(textTemplate).toHaveAttribute("draggable", "true", { timeout: 10_000 });
+  await expect(timelineDropTarget).toBeVisible();
+  const dropBox = await timelineDropTarget.boundingBox();
+  if (dropBox === null) {
+    throw new Error("Text timeline drop target is not visible");
+  }
+  await textTemplate.dragTo(timelineDropTarget, {
+    targetPosition: {
+      x: 132,
+      y: Math.max(1, Math.round(dropBox.height / 2))
+    }
+  });
   await waitForCommandCount(app, "addTextSegmentIntent", nextCount);
   await expectTimelineSegmentDuration(page, new RegExp(escapeRegex(content)), expectedDurationUs);
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
@@ -761,8 +841,7 @@ export async function updateSelectedVisualThroughInspector(
   await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).fill(String(rotation));
   await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).fill(String(opacity));
   await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: fitMode }).click();
-  await expect(visualForm.getByRole("button", { name: "应用画面" })).toBeEnabled();
-  await visualForm.getByRole("button", { name: "应用画面" }).click();
+  await expect(visualForm.getByRole("button", { name: "应用画面" })).toHaveCount(0);
   await waitForCommandCount(app, "updateSelectedSegmentVisual", nextCount);
 }
 
@@ -793,8 +872,17 @@ export async function splitSelectedSegment(page: Page, app: ProductJourneyAppCon
 }
 
 export async function moveSelectedSegmentRight(page: Page, app: ProductJourneyAppController, deltaUs: number): Promise<void> {
+  await moveSelectedSegmentBy(page, app, deltaUs);
+}
+
+export async function moveSelectedSegmentBy(
+  page: Page,
+  app: ProductJourneyAppController,
+  deltaUs: number,
+  targetTrackName?: string
+): Promise<void> {
   const nextCount = (await countCommand(app, "moveSelectedSegmentIntent")) + 1;
-  await dragSelectedSegmentBy(page, deltaUs);
+  await dragSelectedSegmentBy(page, deltaUs, targetTrackName);
   await waitForCommandCount(app, "moveSelectedSegmentIntent", nextCount);
 }
 
@@ -804,10 +892,12 @@ export async function trimSelectedSegmentLeftEdgeRight(
   deltaUs: number
 ): Promise<void> {
   const nextCount = (await countCommand(app, "trimSelectedSegmentIntent")) + 1;
+  const segment = page.locator(".segment-block.selected").first();
   const handle = page.locator(".segment-block.selected .segment-trim-handle.left").first();
+  const segmentBox = await segment.boundingBox();
   const handleBox = await handle.boundingBox();
   const rulerBox = await page.locator(".ruler-track").boundingBox();
-  if (handleBox === null || rulerBox === null) {
+  if (segmentBox === null || handleBox === null || rulerBox === null) {
     throw new Error("Selected segment trim handle or timeline ruler is not visible for trim interaction");
   }
 
@@ -817,6 +907,44 @@ export async function trimSelectedSegmentLeftEdgeRight(
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(startX + deltaPx, startY, { steps: 4 });
+  const liveSegmentBox = await segment.boundingBox();
+  expect(liveSegmentBox, "selected segment must stay measurable during left trim drag").not.toBeNull();
+  expect(liveSegmentBox!.x - segmentBox.x, "left trim handle must move the segment start before mouseup").toBeGreaterThan(2);
+  expect(
+    segmentBox.width - liveSegmentBox!.width,
+    "left trim handle must shrink the selected segment before mouseup"
+  ).toBeGreaterThan(2);
+  await page.mouse.up();
+  await waitForCommandCount(app, "trimSelectedSegmentIntent", nextCount);
+}
+
+export async function trimSelectedSegmentRightEdgeLeft(
+  page: Page,
+  app: ProductJourneyAppController,
+  deltaUs: number
+): Promise<void> {
+  const nextCount = (await countCommand(app, "trimSelectedSegmentIntent")) + 1;
+  const segment = page.locator(".segment-block.selected").first();
+  const handle = page.locator(".segment-block.selected .segment-trim-handle.right").first();
+  const segmentBox = await segment.boundingBox();
+  const handleBox = await handle.boundingBox();
+  const rulerBox = await page.locator(".ruler-track").boundingBox();
+  if (segmentBox === null || handleBox === null || rulerBox === null) {
+    throw new Error("Selected segment right trim handle or timeline ruler is not visible for trim interaction");
+  }
+
+  const deltaPx = Math.max(6, (Math.abs(deltaUs) / 10_000_000) * rulerBox.width);
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - deltaPx, startY, { steps: 4 });
+  const liveSegmentBox = await segment.boundingBox();
+  expect(liveSegmentBox, "selected segment must stay measurable during right trim drag").not.toBeNull();
+  expect(
+    segmentBox.width - liveSegmentBox!.width,
+    "right trim handle must shrink the selected segment before mouseup"
+  ).toBeGreaterThan(2);
   await page.mouse.up();
   await waitForCommandCount(app, "trimSelectedSegmentIntent", nextCount);
 }
@@ -883,7 +1011,7 @@ async function clickTimelineRulerAt(page: Page, targetTimeUs: number): Promise<v
   await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height / 2);
 }
 
-async function dragSelectedSegmentBy(page: Page, deltaUs: number): Promise<void> {
+async function dragSelectedSegmentBy(page: Page, deltaUs: number, targetTrackName?: string): Promise<void> {
   const segment = page.locator(".segment-block.selected").first();
   const segmentBox = await segment.boundingBox();
   const rulerBox = await page.locator(".ruler-track").boundingBox();
@@ -894,9 +1022,25 @@ async function dragSelectedSegmentBy(page: Page, deltaUs: number): Promise<void>
   const deltaPx = (deltaUs / 10_000_000) * rulerBox.width;
   const startX = segmentBox.x + Math.max(12, Math.min(segmentBox.width - 12, segmentBox.width / 2));
   const startY = segmentBox.y + segmentBox.height / 2;
+  let targetY = startY;
+  if (targetTrackName !== undefined) {
+    const targetTrackButton = page.getByRole("button", { name: `选择轨道 ${targetTrackName}` });
+    const targetRow = page.locator(".track-row", { has: targetTrackButton }).first();
+    const targetRowBox = await targetRow.boundingBox();
+    if (targetRowBox === null) {
+      throw new Error(`Target timeline track is not visible: ${targetTrackName}`);
+    }
+    targetY = targetRowBox.y + targetRowBox.height / 2;
+  }
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await page.mouse.move(startX + deltaPx, startY, { steps: 4 });
+  await page.mouse.move(startX + deltaPx, targetY, { steps: 6 });
+  const liveSegmentBox = await segment.boundingBox();
+  expect(liveSegmentBox, "selected segment must stay measurable during timeline drag").not.toBeNull();
+  expect(
+    Math.abs(liveSegmentBox!.x - segmentBox.x) + Math.abs(liveSegmentBox!.y - segmentBox.y),
+    "selected segment must follow the pointer before mouseup"
+  ).toBeGreaterThan(6);
   await page.mouse.up();
 }
 
@@ -1020,9 +1164,12 @@ export async function readTimelineSegments(
   const segments = await page.locator(".segment-block").evaluateAll((elements) =>
     elements.map((element) => {
       const block = element as HTMLElement;
+      const row = block.closest(".track-row");
+      const trackNameInput = row?.querySelector(".track-name-input");
       return {
         label: block.querySelector("strong")?.textContent?.trim() ?? "",
         targetLabel: block.querySelector(".segment-time-label")?.textContent?.trim() ?? "",
+        trackName: trackNameInput instanceof HTMLInputElement ? trackNameInput.value.trim() : "",
         selected: block.classList.contains("selected") || block.getAttribute("aria-pressed") === "true"
       };
     })
@@ -1126,10 +1273,13 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
     targetTimerange: call.targetTimerange ?? null,
     duration: call.duration ?? null,
     visual: call.visual ?? null,
+    visualPatch: call.visualPatch ?? null,
+    textPatch: call.textPatch ?? null,
     textContent: call.textContent ?? null,
     textSource: call.textSource ?? null,
     textFontRef: call.textFontRef ?? null,
     srtContent: call.srtContent ?? null,
+    targetTrackHandle: call.targetTrackHandle ?? null,
     outputPath: call.outputPath ?? null,
     preset: call.preset ?? null,
     sessionId: call.sessionId,

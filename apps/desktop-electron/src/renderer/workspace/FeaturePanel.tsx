@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 
 import type { Material } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
@@ -16,7 +16,7 @@ import {
   type WorkspaceCategory,
   type WorkspaceState
 } from "../viewModel";
-import { MATERIAL_DRAG_DATA_TYPE } from "./dragTypes";
+import { MATERIAL_DRAG_DATA_TYPE, TEXT_SEGMENT_DRAG_DATA_TYPE } from "./dragTypes";
 
 type FeaturePanelProps = {
   category: WorkspaceCategory;
@@ -62,6 +62,12 @@ type ShowcaseCategory = Exclude<WorkspaceCategory, "媒体" | "音频" | "文字
 type ShowcasePanelSpec = {
   rail: readonly string[];
   cards: readonly string[];
+};
+type AudioPanelOptions = {
+  gainMillis: number;
+  panBalanceMillis: number;
+  fadeInDuration: number;
+  fadeOutDuration: number;
 };
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
@@ -302,6 +308,18 @@ function MaterialPanel({
 function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.ReactElement {
   const [content, setContent] = useState("输入文字");
   const hasTextTrack = workspace.viewModel.timeline.capabilities.hasTextTrack;
+  const canAddText = workspace.pendingCommand === null && hasTextTrack && content.trim().length > 0;
+
+  function handleTextTemplateDragStart(event: ReactDragEvent<HTMLElement>): void {
+    if (!canAddText) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(TEXT_SEGMENT_DRAG_DATA_TYPE, content);
+    event.dataTransfer.setData("text/plain", content);
+  }
 
   return (
     <div className="feature-panel-content">
@@ -310,7 +328,12 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
       </div>
 
       <section className="function-card field-stack text-feature-card" aria-label="默认文字">
-        <div className="text-card-header">
+        <div
+          className="text-card-header text-template-drag-source"
+          aria-label="文字模板 默认文字"
+          draggable={canAddText}
+          onDragStart={handleTextTemplateDragStart}
+        >
           <h3>默认文字</h3>
           <span>文字片段</span>
         </div>
@@ -322,7 +345,7 @@ function TextPanel({ workspace, onAddTextSegment }: FeaturePanelProps): React.Re
           type="button"
           className="primary-action wide-action"
           onClick={() => onAddTextSegment(content)}
-          disabled={workspace.pendingCommand !== null || !hasTextTrack}
+          disabled={!canAddText}
         >
           添加文字
         </button>
@@ -399,6 +422,57 @@ function AudioPanel({
   const selectedTrack = workspace.viewModel.selectedTrack;
   const hasAudioTrack = workspace.viewModel.timeline.capabilities.hasAudioTrack;
   const selectedMaterialId = materialId || (audioMaterials[0]?.materialId ?? "");
+  const audioCommitKeyRef = useRef<string | null>(null);
+  const audioHydrationSelectionRef = useRef<string | null>(null);
+  const audioOptions = useMemo(
+    () => audioPanelOptionsFromState(volumePercent, panPercent, fadeInSeconds, fadeOutSeconds),
+    [fadeInSeconds, fadeOutSeconds, panPercent, volumePercent]
+  );
+
+  useEffect(() => {
+    if (selectedSegment === null) {
+      audioCommitKeyRef.current = null;
+      audioHydrationSelectionRef.current = null;
+      return;
+    }
+
+    const selectedOptions = audioPanelOptionsFromSelected(selectedSegment);
+    setVolumePercent(Math.round(selectedOptions.gainMillis / 10));
+    setPanPercent(Math.round(selectedOptions.panBalanceMillis / 10));
+    setFadeInSeconds(microsecondsToSeconds(selectedOptions.fadeInDuration));
+    setFadeOutSeconds(microsecondsToSeconds(selectedOptions.fadeOutDuration));
+    audioCommitKeyRef.current = audioPanelOptionsKey(selectedOptions);
+    audioHydrationSelectionRef.current = selectedSegment.selectionHandle;
+  }, [
+    selectedSegment?.selectionHandle,
+    selectedSegment?.volume.levelMillis,
+    selectedSegment?.audio?.gainMillis,
+    selectedSegment?.audio?.panBalanceMillis,
+    selectedSegment?.audio?.fadeInDuration.duration,
+    selectedSegment?.audio?.fadeOutDuration.duration
+  ]);
+
+  useEffect(() => {
+    if (selectedSegment === null) {
+      return undefined;
+    }
+    if (audioHydrationSelectionRef.current === selectedSegment.selectionHandle) {
+      audioHydrationSelectionRef.current = null;
+      return undefined;
+    }
+    if (workspace.pendingCommand !== null) {
+      return undefined;
+    }
+    const nextKey = audioPanelOptionsKey(audioOptions);
+    if (nextKey === audioCommitKeyRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      audioCommitKeyRef.current = nextKey;
+      onUpdateSelectedSegmentAudio(audioOptions);
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [audioOptions, onUpdateSelectedSegmentAudio, selectedSegment, workspace.pendingCommand]);
 
   return (
     <div className="feature-panel-content">
@@ -500,21 +574,6 @@ function AudioPanel({
           />
         </label>
         <div className="button-row">
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={() =>
-              onUpdateSelectedSegmentAudio({
-                gainMillis: volumePercent * 10,
-                panBalanceMillis: panPercent * 10,
-                fadeInDuration: secondsToNonNegativeMicroseconds(fadeInSeconds),
-                fadeOutDuration: secondsToNonNegativeMicroseconds(fadeOutSeconds)
-              })
-            }
-            disabled={workspace.pendingCommand !== null || selectedSegment === null}
-          >
-            应用音频
-          </button>
           <button
             type="button"
             className="secondary-action"
@@ -864,6 +923,39 @@ function ResourceProgress({ value, compact = false }: { value: number | null; co
 
 function toPositiveInteger(value: number, fallback: number): number {
   return Math.max(1, Math.round(Number.isFinite(value) ? value : fallback));
+}
+
+function audioPanelOptionsFromSelected(
+  selectedSegment: NonNullable<WorkspaceState["viewModel"]["selectedSegment"]>
+): AudioPanelOptions {
+  return {
+    gainMillis: selectedSegment.audio?.gainMillis ?? selectedSegment.volume.levelMillis,
+    panBalanceMillis: selectedSegment.audio?.panBalanceMillis ?? 0,
+    fadeInDuration: selectedSegment.audio?.fadeInDuration.duration ?? 0,
+    fadeOutDuration: selectedSegment.audio?.fadeOutDuration.duration ?? 0
+  };
+}
+
+function audioPanelOptionsFromState(
+  volumePercent: number,
+  panPercent: number,
+  fadeInSeconds: number,
+  fadeOutSeconds: number
+): AudioPanelOptions {
+  return {
+    gainMillis: volumePercent * 10,
+    panBalanceMillis: panPercent * 10,
+    fadeInDuration: secondsToNonNegativeMicroseconds(fadeInSeconds),
+    fadeOutDuration: secondsToNonNegativeMicroseconds(fadeOutSeconds)
+  };
+}
+
+function audioPanelOptionsKey(options: AudioPanelOptions): string {
+  return JSON.stringify(options);
+}
+
+function microsecondsToSeconds(value: number): number {
+  return Math.max(0, value / 1_000_000);
 }
 
 function secondsToNonNegativeMicroseconds(value: number): number {

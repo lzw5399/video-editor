@@ -8,11 +8,12 @@ use draft_model::{
     KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
     MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload,
     RationalFrameRate, RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment,
-    SegmentAudio, SegmentId, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    SegmentAudio, SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentPosition,
+    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
-    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBox,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBackground,
+    TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
     TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
     TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
     UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
@@ -30,6 +31,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::timeline_selection::{
+    percent_decode_timeline_handle_component, timeline_segment_selection_handle,
+    timeline_track_selection_handle,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -108,6 +114,10 @@ enum ProjectIntent {
     AddTimelineSegmentIntent {
         #[serde(rename = "materialId")]
         material_id: MaterialId,
+        #[serde(default, rename = "targetStart")]
+        target_start: Option<Microseconds>,
+        #[serde(default, rename = "targetTrackHandle")]
+        target_track_handle: Option<String>,
     },
     SelectTimelineItemIntent {
         #[serde(rename = "itemHandle")]
@@ -116,6 +126,8 @@ enum ProjectIntent {
     MoveSelectedSegmentIntent {
         #[serde(rename = "startAt")]
         start_at: Microseconds,
+        #[serde(default, rename = "targetTrackHandle")]
+        target_track_handle: Option<String>,
     },
     SplitSelectedSegmentIntent {},
     TrimSelectedSegmentIntent {
@@ -126,9 +138,13 @@ enum ProjectIntent {
     DeleteSelectedSegment {},
     AddTextSegmentIntent {
         content: String,
+        #[serde(default, rename = "targetStart")]
+        target_start: Option<Microseconds>,
+        #[serde(default, rename = "targetTrackHandle")]
+        target_track_handle: Option<String>,
     },
     EditSelectedText {
-        text: TextSegment,
+        patch: TextSegmentPatch,
     },
     ImportSubtitleSrtIntent {
         #[serde(rename = "srtContent")]
@@ -177,7 +193,7 @@ enum ProjectIntent {
         canvas_config: DraftCanvasConfig,
     },
     UpdateSelectedSegmentVisual {
-        visual: SegmentVisual,
+        patch: SegmentVisualPatch,
     },
     SetSelectedSegmentKeyframe {
         property: KeyframeProperty,
@@ -189,6 +205,104 @@ enum ProjectIntent {
     },
     UndoTimelineEdit {},
     RedoTimelineEdit {},
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TextSegmentPatch {
+    #[serde(default)]
+    content: Option<String>,
+    #[serde(default, rename = "fontFamily")]
+    font_family: Option<String>,
+    #[serde(default, rename = "fontRef")]
+    font_ref: Option<String>,
+    #[serde(default, rename = "fontSize")]
+    font_size: Option<u32>,
+    #[serde(default)]
+    color: Option<String>,
+    #[serde(default)]
+    alignment: Option<TextAlignment>,
+    #[serde(default, rename = "lineHeightMillis")]
+    line_height_millis: Option<u32>,
+    #[serde(default, rename = "letterSpacingMillis")]
+    letter_spacing_millis: Option<u32>,
+    #[serde(default, rename = "strokeEnabled")]
+    stroke_enabled: Option<bool>,
+    #[serde(default, rename = "strokeColor")]
+    stroke_color: Option<String>,
+    #[serde(default, rename = "strokeWidth")]
+    stroke_width: Option<u32>,
+    #[serde(default, rename = "shadowEnabled")]
+    shadow_enabled: Option<bool>,
+    #[serde(default, rename = "shadowColor")]
+    shadow_color: Option<String>,
+    #[serde(default, rename = "backgroundEnabled")]
+    background_enabled: Option<bool>,
+    #[serde(default, rename = "backgroundColor")]
+    background_color: Option<String>,
+    #[serde(default, rename = "textBoxWidthMillis")]
+    text_box_width_millis: Option<u32>,
+    #[serde(default, rename = "textBoxHeightMillis")]
+    text_box_height_millis: Option<u32>,
+    #[serde(default, rename = "layoutXMillis")]
+    layout_x_millis: Option<u32>,
+    #[serde(default, rename = "layoutYMillis")]
+    layout_y_millis: Option<u32>,
+    #[serde(default, rename = "layoutWidthMillis")]
+    layout_width_millis: Option<u32>,
+    #[serde(default, rename = "layoutHeightMillis")]
+    layout_height_millis: Option<u32>,
+    #[serde(default)]
+    wrapping: Option<TextWrapping>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SegmentVisualPatch {
+    #[serde(default)]
+    visible: Option<bool>,
+    #[serde(default, rename = "positionX")]
+    position_x: Option<i32>,
+    #[serde(default, rename = "positionY")]
+    position_y: Option<i32>,
+    #[serde(default, rename = "positionDeltaX")]
+    position_delta_x: Option<i32>,
+    #[serde(default, rename = "positionDeltaY")]
+    position_delta_y: Option<i32>,
+    #[serde(default, rename = "scaleXMillis")]
+    scale_x_millis: Option<u32>,
+    #[serde(default, rename = "scaleYMillis")]
+    scale_y_millis: Option<u32>,
+    #[serde(default, rename = "rotationDegrees")]
+    rotation_degrees: Option<i32>,
+    #[serde(default, rename = "rotationDeltaDegrees")]
+    rotation_delta_degrees: Option<i32>,
+    #[serde(default, rename = "opacityMillis")]
+    opacity_millis: Option<u32>,
+    #[serde(default, rename = "cropLeftMillis")]
+    crop_left_millis: Option<u32>,
+    #[serde(default, rename = "cropRightMillis")]
+    crop_right_millis: Option<u32>,
+    #[serde(default, rename = "cropTopMillis")]
+    crop_top_millis: Option<u32>,
+    #[serde(default, rename = "cropBottomMillis")]
+    crop_bottom_millis: Option<u32>,
+    #[serde(default, rename = "fitMode")]
+    fit_mode: Option<SegmentFitMode>,
+    #[serde(default, rename = "backgroundKind")]
+    background_kind: Option<SegmentBackgroundFillingPatchKind>,
+    #[serde(default, rename = "backgroundColor")]
+    background_color: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SegmentBackgroundFillingPatchKind {
+    None,
+    Black,
+    SolidColor,
+    Blur,
+    Image,
 }
 
 #[derive(Debug, Serialize)]
@@ -413,6 +527,13 @@ struct ProjectSession {
 pub(crate) struct ProjectSessionPreviewSnapshot {
     pub draft: Draft,
     pub bundle_path: PathBuf,
+    pub selected_segment: Option<ProjectSessionPreviewSelectedSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ProjectSessionPreviewSelectedSegment {
+    pub track_id: TrackId,
+    pub segment_id: SegmentId,
 }
 
 #[derive(Debug, Clone)]
@@ -541,6 +662,24 @@ pub(crate) fn project_session_snapshot(
     Ok(ProjectSessionPreviewSnapshot {
         draft: session.draft.clone(),
         bundle_path: session.bundle_path.clone(),
+        selected_segment: selected_segment_for_preview(&session.draft, &session.selection),
+    })
+}
+
+fn selected_segment_for_preview(
+    draft: &Draft,
+    selection: &TimelineSelection,
+) -> Option<ProjectSessionPreviewSelectedSegment> {
+    let selected_segment_id = selection.segment_ids.first()?;
+    draft.tracks.iter().find_map(|track| {
+        track
+            .segments
+            .iter()
+            .find(|segment| &segment.segment_id == selected_segment_id)
+            .map(|segment| ProjectSessionPreviewSelectedSegment {
+                track_id: track.track_id.clone(),
+                segment_id: segment.segment_id.clone(),
+            })
     })
 }
 
@@ -862,14 +1001,23 @@ impl ProjectSession {
             ProjectIntent::ImportMaterial { .. } => {
                 unreachable!("importMaterial is handled before timeline payload conversion")
             }
-            ProjectIntent::AddTimelineSegmentIntent { material_id } => {
+            ProjectIntent::AddTimelineSegmentIntent {
+                material_id,
+                target_start,
+                target_track_handle,
+            } => {
+                let selection = self.selection_for_material_target_track(
+                    target_track_handle.as_deref(),
+                    &material_id,
+                    "添加片段",
+                )?;
                 Ok(TimelineEditPayload::AddTimelineSegmentIntent(
                     AddTimelineSegmentIntentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
-                        selection: self.selection.clone(),
+                        selection,
                         material_id,
-                        target_start: Some(self.playhead),
+                        target_start: target_start.or(Some(self.playhead)),
                     },
                 ))
             }
@@ -885,15 +1033,22 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::MoveSelectedSegmentIntent { start_at } => {
+            ProjectIntent::MoveSelectedSegmentIntent {
+                start_at,
+                target_track_handle,
+            } => {
                 let (segment_id, track_id) = self.selected_segment_location("移动片段")?;
+                let target_track_id = match target_track_handle {
+                    Some(handle) => self.track_id_from_timeline_item_handle(&handle)?,
+                    None => track_id,
+                };
                 Ok(TimelineEditPayload::MoveSegment(
                     MoveSegmentCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
                         segment_id,
-                        target_track_id: track_id,
+                        target_track_id,
                         target_start: start_at,
                     },
                 ))
@@ -930,25 +1085,39 @@ impl ProjectSession {
                     segment_id: self.selected_segment_id("删除片段")?,
                 },
             )),
-            ProjectIntent::AddTextSegmentIntent { content } => Ok(
-                TimelineEditPayload::AddTextSegmentIntent(AddTextSegmentIntentCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    text: default_text_segment(content, TextSegmentSource::Text),
-                    duration: None,
-                    target_start: Some(self.playhead),
-                }),
-            ),
-            ProjectIntent::EditSelectedText { text } => Ok(TimelineEditPayload::EditTextSegment(
-                EditTextSegmentCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    segment_id: self.selected_segment_id("编辑文字")?,
-                    text,
-                },
-            )),
+            ProjectIntent::AddTextSegmentIntent {
+                content,
+                target_start,
+                target_track_handle,
+            } => {
+                let selection = self.selection_for_kind_target_track(
+                    target_track_handle.as_deref(),
+                    TrackKind::Text,
+                    "添加文字",
+                )?;
+                Ok(TimelineEditPayload::AddTextSegmentIntent(
+                    AddTextSegmentIntentCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection,
+                        text: default_text_segment(content, TextSegmentSource::Text),
+                        duration: None,
+                        target_start: target_start.or(Some(self.playhead)),
+                    },
+                ))
+            }
+            ProjectIntent::EditSelectedText { patch } => {
+                let text = self.apply_text_segment_patch(patch)?;
+                Ok(TimelineEditPayload::EditTextSegment(
+                    EditTextSegmentCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id: self.selected_segment_id("编辑文字")?,
+                        text,
+                    },
+                ))
+            }
             ProjectIntent::ImportSubtitleSrtIntent { srt_content } => {
                 Ok(TimelineEditPayload::ImportSubtitleSrtIntent(
                     ImportSubtitleSrtIntentCommandPayload {
@@ -957,7 +1126,7 @@ impl ProjectSession {
                         selection: self.selection.clone(),
                         srt_content,
                         time_offset: Some(self.playhead),
-                        style: TextStyle::default(),
+                        style: default_text_style(),
                         text_box: default_subtitle_text_box(),
                         layout_region: default_subtitle_layout_region(),
                         wrapping: TextWrapping::default(),
@@ -994,7 +1163,7 @@ impl ProjectSession {
                     draft: self.draft.clone(),
                     command_state: self.command_state.clone(),
                     selection: self.selection.clone(),
-                    segment_id: self.selected_segment_id("应用音频")?,
+                    segment_id: self.selected_segment_id("编辑音频")?,
                     gain_millis,
                     pan_balance_millis,
                     fade_in_duration,
@@ -1059,15 +1228,18 @@ impl ProjectSession {
                     },
                 ))
             }
-            ProjectIntent::UpdateSelectedSegmentVisual { visual } => Ok(
-                TimelineEditPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
-                    draft: self.draft.clone(),
-                    command_state: self.command_state.clone(),
-                    selection: self.selection.clone(),
-                    segment_id: self.selected_segment_id("应用画面")?,
-                    visual,
-                }),
-            ),
+            ProjectIntent::UpdateSelectedSegmentVisual { patch } => {
+                let visual = self.apply_segment_visual_patch(patch)?;
+                Ok(TimelineEditPayload::UpdateSegmentVisual(
+                    UpdateSegmentVisualCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id: self.selected_segment_id("编辑画面")?,
+                        visual,
+                    },
+                ))
+            }
             ProjectIntent::SetSelectedSegmentKeyframe {
                 property,
                 interpolation,
@@ -1118,6 +1290,197 @@ impl ProjectSession {
                 },
             )),
         }
+    }
+
+    fn apply_text_segment_patch(
+        &self,
+        patch: TextSegmentPatch,
+    ) -> std::result::Result<TextSegment, String> {
+        let mut text = self
+            .selected_segment("编辑文字")?
+            .text
+            .clone()
+            .ok_or_else(|| "编辑文字失败：选中的片段不是文字片段".to_owned())?;
+
+        if let Some(content) = patch.content {
+            if content.trim().is_empty() {
+                return Err("编辑文字失败：文字内容不能为空".to_owned());
+            }
+            text.content = content;
+        }
+        if let Some(font_family) = patch.font_family {
+            if font_family.trim().is_empty() {
+                return Err("编辑文字失败：字体名称不能为空".to_owned());
+            }
+            text.style.font.family = font_family;
+        }
+        if let Some(font_ref) = patch.font_ref {
+            if font_ref.trim().is_empty() {
+                return Err("编辑文字失败：字体引用不能为空".to_owned());
+            }
+            text.style.font.font_ref = Some(font_ref);
+        }
+        if let Some(font_size) = patch.font_size {
+            text.style.font_size = checked_u32("字号", font_size, 1, 400)?;
+        }
+        if let Some(color) = patch.color {
+            text.style.color = color;
+        }
+        if let Some(alignment) = patch.alignment {
+            text.style.alignment = alignment;
+        }
+        if let Some(line_height_millis) = patch.line_height_millis {
+            text.style.line_height_millis = checked_u32("行高", line_height_millis, 500, 3_000)?;
+        }
+        if let Some(letter_spacing_millis) = patch.letter_spacing_millis {
+            text.style.letter_spacing_millis =
+                checked_u32("字间距", letter_spacing_millis, 0, 2_000)?;
+        }
+        text.style.stroke = apply_text_stroke_patch(
+            text.style.stroke,
+            patch.stroke_enabled,
+            patch.stroke_color,
+            patch.stroke_width,
+        )?;
+        text.style.shadow =
+            apply_text_shadow_patch(text.style.shadow, patch.shadow_enabled, patch.shadow_color);
+        text.style.background = apply_text_background_patch(
+            text.style.background,
+            patch.background_enabled,
+            patch.background_color,
+        );
+        if let Some(width_millis) = patch.text_box_width_millis {
+            text.text_box.width_millis = checked_u32("文本框宽", width_millis, 1, 1_000)?;
+        }
+        if let Some(height_millis) = patch.text_box_height_millis {
+            text.text_box.height_millis = checked_u32("文本框高", height_millis, 1, 1_000)?;
+        }
+        if let Some(x_millis) = patch.layout_x_millis {
+            text.layout_region.x_millis = checked_u32("布局 X", x_millis, 0, 1_000)?;
+        }
+        if let Some(y_millis) = patch.layout_y_millis {
+            text.layout_region.y_millis = checked_u32("布局 Y", y_millis, 0, 1_000)?;
+        }
+        if let Some(width_millis) = patch.layout_width_millis {
+            text.layout_region.width_millis = checked_u32("布局宽", width_millis, 1, 1_000)?;
+        }
+        if let Some(height_millis) = patch.layout_height_millis {
+            text.layout_region.height_millis = checked_u32("布局高", height_millis, 1, 1_000)?;
+        }
+        if text.layout_region.x_millis + text.layout_region.width_millis > 1_000
+            || text.layout_region.y_millis + text.layout_region.height_millis > 1_000
+        {
+            return Err("编辑文字失败：布局安全区域不能超出画布范围".to_owned());
+        }
+        if let Some(wrapping) = patch.wrapping {
+            text.wrapping = wrapping;
+        }
+
+        Ok(text)
+    }
+
+    fn apply_segment_visual_patch(
+        &self,
+        patch: SegmentVisualPatch,
+    ) -> std::result::Result<SegmentVisual, String> {
+        let mut visual = self.selected_segment("编辑画面")?.visual.clone();
+
+        if let Some(visible) = patch.visible {
+            visual.visible = visible;
+        }
+
+        let mut position_x = visual.transform.position.x;
+        let mut position_y = visual.transform.position.y;
+        if let Some(x) = patch.position_x {
+            position_x = checked_i32("位置 X", x, -1_000, 1_000)?;
+        }
+        if let Some(y) = patch.position_y {
+            position_y = checked_i32("位置 Y", y, -1_000, 1_000)?;
+        }
+        if let Some(delta_x) = patch.position_delta_x {
+            position_x = clamp_i32(position_x.saturating_add(delta_x), -1_000, 1_000);
+        }
+        if let Some(delta_y) = patch.position_delta_y {
+            position_y = clamp_i32(position_y.saturating_add(delta_y), -1_000, 1_000);
+        }
+        visual.transform.position = SegmentPosition {
+            x: position_x,
+            y: position_y,
+        };
+
+        if let Some(x_millis) = patch.scale_x_millis {
+            visual.transform.scale.x_millis = checked_u32("缩放 X", x_millis, 1, 3_000)?;
+        }
+        if let Some(y_millis) = patch.scale_y_millis {
+            visual.transform.scale.y_millis = checked_u32("缩放 Y", y_millis, 1, 3_000)?;
+        }
+        if let Some(rotation_degrees) = patch.rotation_degrees {
+            visual.transform.rotation.degrees = checked_i32("旋转", rotation_degrees, -360, 360)?;
+        }
+        if let Some(delta_degrees) = patch.rotation_delta_degrees {
+            visual.transform.rotation.degrees =
+                normalize_rotation_degrees(visual.transform.rotation.degrees + delta_degrees);
+        }
+        if let Some(opacity_millis) = patch.opacity_millis {
+            visual.transform.opacity.value_millis =
+                checked_u32("不透明度", opacity_millis, 0, 1_000)?;
+        }
+        if let Some(left_millis) = patch.crop_left_millis {
+            visual.transform.crop.left_millis = checked_u32("左裁剪", left_millis, 0, 999)?;
+        }
+        if let Some(right_millis) = patch.crop_right_millis {
+            visual.transform.crop.right_millis = checked_u32("右裁剪", right_millis, 0, 999)?;
+        }
+        if let Some(top_millis) = patch.crop_top_millis {
+            visual.transform.crop.top_millis = checked_u32("上裁剪", top_millis, 0, 999)?;
+        }
+        if let Some(bottom_millis) = patch.crop_bottom_millis {
+            visual.transform.crop.bottom_millis = checked_u32("下裁剪", bottom_millis, 0, 999)?;
+        }
+        if visual.transform.crop.left_millis + visual.transform.crop.right_millis >= 1_000
+            || visual.transform.crop.top_millis + visual.transform.crop.bottom_millis >= 1_000
+        {
+            return Err("编辑画面失败：左右或上下裁剪总和必须小于 1000".to_owned());
+        }
+        if let Some(fit_mode) = patch.fit_mode {
+            visual.fit_mode = fit_mode;
+        }
+        if let Some(background_kind) = patch.background_kind {
+            visual.background_filling = match background_kind {
+                SegmentBackgroundFillingPatchKind::None => SegmentBackgroundFilling::None,
+                SegmentBackgroundFillingPatchKind::Black => SegmentBackgroundFilling::Black,
+                SegmentBackgroundFillingPatchKind::Blur => SegmentBackgroundFilling::Blur,
+                SegmentBackgroundFillingPatchKind::SolidColor => {
+                    SegmentBackgroundFilling::SolidColor {
+                        color: patch.background_color.clone().unwrap_or_else(|| {
+                            match &visual.background_filling {
+                                SegmentBackgroundFilling::SolidColor { color } => color.clone(),
+                                _ => "#000000".to_owned(),
+                            }
+                        }),
+                    }
+                }
+                SegmentBackgroundFillingPatchKind::Image => match &visual.background_filling {
+                    SegmentBackgroundFilling::Image { material_id } => {
+                        SegmentBackgroundFilling::Image {
+                            material_id: material_id.clone(),
+                        }
+                    }
+                    _ => SegmentBackgroundFilling::Image { material_id: None },
+                },
+            };
+        } else if let Some(background_color) = patch.background_color {
+            if matches!(
+                visual.background_filling,
+                SegmentBackgroundFilling::SolidColor { .. }
+            ) {
+                visual.background_filling = SegmentBackgroundFilling::SolidColor {
+                    color: background_color,
+                };
+            }
+        }
+
+        Ok(visual)
     }
 
     fn selected_segment_id(&self, action: &str) -> std::result::Result<SegmentId, String> {
@@ -1193,6 +1556,79 @@ impl ProjectSession {
         }
 
         Err("Unknown timeline item selection handle".to_owned())
+    }
+
+    fn track_id_from_timeline_item_handle(
+        &self,
+        item_handle: &str,
+    ) -> std::result::Result<TrackId, String> {
+        let selection = self.selection_from_timeline_item_handle(item_handle)?;
+        if selection.segment_ids.is_empty() && selection.track_ids.len() == 1 {
+            return Ok(selection.track_ids[0].clone());
+        }
+        Err("Move target must be a timeline track selection handle".to_owned())
+    }
+
+    fn selection_for_kind_target_track(
+        &self,
+        target_track_handle: Option<&str>,
+        expected_kind: TrackKind,
+        action: &str,
+    ) -> std::result::Result<TimelineSelection, String> {
+        let Some(handle) = target_track_handle else {
+            return Ok(self.selection.clone());
+        };
+        let track_id = self.track_id_from_timeline_item_handle(handle)?;
+        let track = self
+            .draft
+            .tracks
+            .iter()
+            .find(|track| track.track_id == track_id)
+            .ok_or_else(|| format!("{action}失败：目标轨道不存在"))?;
+        if track.kind != expected_kind {
+            return Err(format!(
+                "{action}失败：目标轨道 {} 不是 {:?} 轨道",
+                track.name, expected_kind
+            ));
+        }
+        Ok(TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec![track_id],
+        })
+    }
+
+    fn selection_for_material_target_track(
+        &self,
+        target_track_handle: Option<&str>,
+        material_id: &MaterialId,
+        action: &str,
+    ) -> std::result::Result<TimelineSelection, String> {
+        let Some(handle) = target_track_handle else {
+            return Ok(self.selection.clone());
+        };
+        let track_id = self.track_id_from_timeline_item_handle(handle)?;
+        let track = self
+            .draft
+            .tracks
+            .iter()
+            .find(|track| track.track_id == track_id)
+            .ok_or_else(|| format!("{action}失败：目标轨道不存在"))?;
+        let material = self
+            .draft
+            .materials
+            .iter()
+            .find(|material| &material.material_id == material_id)
+            .ok_or_else(|| format!("{action}失败：素材不存在 {}", material_id.as_str()))?;
+        if !track_accepts_material_kind(track.kind, material.kind) {
+            return Err(format!(
+                "{action}失败：素材 {:?} 不能添加到 {:?} 轨道",
+                material.kind, track.kind
+            ));
+        }
+        Ok(TimelineSelection {
+            segment_ids: Vec::new(),
+            track_ids: vec![track_id],
+        })
     }
 
     fn selected_track_id(&self, action: &str) -> std::result::Result<TrackId, String> {
@@ -1410,6 +1846,16 @@ impl ProjectSession {
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
         }))
+    }
+}
+
+fn track_accepts_material_kind(track_kind: TrackKind, material_kind: MaterialKind) -> bool {
+    match track_kind {
+        TrackKind::Video => matches!(material_kind, MaterialKind::Video | MaterialKind::Image),
+        TrackKind::Audio => material_kind == MaterialKind::Audio,
+        TrackKind::Text => material_kind == MaterialKind::Text,
+        TrackKind::Sticker => material_kind == MaterialKind::Sticker,
+        TrackKind::Filter => matches!(material_kind, MaterialKind::Video | MaterialKind::Image),
     }
 }
 
@@ -1854,34 +2300,6 @@ fn format_timeline_time(time_us: u64) -> String {
     format!("{hours:02}:{minutes:02}:{seconds:02}.{millis:03}")
 }
 
-fn timeline_track_selection_handle(track_id: &TrackId) -> String {
-    format!(
-        "timeline-track:{}",
-        percent_encode_timeline_handle_component(track_id.as_str())
-    )
-}
-
-fn timeline_segment_selection_handle(track_id: &TrackId, segment_id: &SegmentId) -> String {
-    format!(
-        "timeline-segment:{}:{}",
-        percent_encode_timeline_handle_component(track_id.as_str()),
-        percent_encode_timeline_handle_component(segment_id.as_str())
-    )
-}
-
-fn percent_encode_timeline_handle_component(raw: &str) -> String {
-    let mut encoded = String::with_capacity(raw.len());
-    for byte in raw.as_bytes() {
-        match *byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                encoded.push(*byte as char)
-            }
-            _ => encoded.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    encoded
-}
-
 fn relative_keyframe_time(segment: &Segment, timeline_at: Microseconds) -> Microseconds {
     let segment_start = segment.target_timerange.start.get();
     let segment_duration = segment.target_timerange.duration.get();
@@ -1921,38 +2339,117 @@ fn trim_target_timerange(
     }
 }
 
-fn percent_decode_timeline_handle_component(encoded: &str) -> std::result::Result<String, ()> {
-    let bytes = encoded.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-
-    while index < bytes.len() {
-        if bytes[index] != b'%' {
-            decoded.push(bytes[index]);
-            index += 1;
-            continue;
+fn apply_text_stroke_patch(
+    current: Option<TextStroke>,
+    enabled: Option<bool>,
+    color: Option<String>,
+    width: Option<u32>,
+) -> std::result::Result<Option<TextStroke>, String> {
+    match enabled {
+        Some(false) => Ok(None),
+        Some(true) => Ok(Some(TextStroke {
+            color: color
+                .or_else(|| current.as_ref().map(|stroke| stroke.color.clone()))
+                .unwrap_or_else(|| "#000000".to_owned()),
+            width: checked_u32(
+                "描边宽度",
+                width
+                    .or_else(|| current.as_ref().map(|stroke| stroke.width))
+                    .unwrap_or(2),
+                1,
+                120,
+            )?,
+        })),
+        None => {
+            if color.is_none() && width.is_none() {
+                return Ok(current);
+            }
+            Ok(Some(TextStroke {
+                color: color
+                    .or_else(|| current.as_ref().map(|stroke| stroke.color.clone()))
+                    .unwrap_or_else(|| "#000000".to_owned()),
+                width: checked_u32(
+                    "描边宽度",
+                    width
+                        .or_else(|| current.as_ref().map(|stroke| stroke.width))
+                        .unwrap_or(2),
+                    1,
+                    120,
+                )?,
+            }))
         }
-
-        if index + 2 >= bytes.len() {
-            return Err(());
-        }
-
-        let high = percent_hex_nibble(bytes[index + 1]).ok_or(())?;
-        let low = percent_hex_nibble(bytes[index + 2]).ok_or(())?;
-        decoded.push((high << 4) | low);
-        index += 3;
     }
-
-    String::from_utf8(decoded).map_err(|_| ())
 }
 
-fn percent_hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
+fn apply_text_shadow_patch(
+    current: Option<TextShadow>,
+    enabled: Option<bool>,
+    color: Option<String>,
+) -> Option<TextShadow> {
+    match enabled {
+        Some(false) => None,
+        Some(true) => Some(TextShadow {
+            color: color
+                .or_else(|| current.as_ref().map(|shadow| shadow.color.clone()))
+                .unwrap_or_else(|| "#222222".to_owned()),
+            offset_x: current.as_ref().map(|shadow| shadow.offset_x).unwrap_or(2),
+            offset_y: current.as_ref().map(|shadow| shadow.offset_y).unwrap_or(2),
+            blur: current.as_ref().map(|shadow| shadow.blur).unwrap_or(4),
+        }),
+        None => color
+            .map(|color| TextShadow {
+                color,
+                offset_x: current.as_ref().map(|shadow| shadow.offset_x).unwrap_or(2),
+                offset_y: current.as_ref().map(|shadow| shadow.offset_y).unwrap_or(2),
+                blur: current.as_ref().map(|shadow| shadow.blur).unwrap_or(4),
+            })
+            .or(current),
     }
+}
+
+fn apply_text_background_patch(
+    current: Option<TextBackground>,
+    enabled: Option<bool>,
+    color: Option<String>,
+) -> Option<TextBackground> {
+    match enabled {
+        Some(false) => None,
+        Some(true) => Some(TextBackground {
+            color: color
+                .or_else(|| current.as_ref().map(|background| background.color.clone()))
+                .unwrap_or_else(|| "#000000".to_owned()),
+        }),
+        None => color.map(|color| TextBackground { color }).or(current),
+    }
+}
+
+fn checked_u32(label: &str, value: u32, min: u32, max: u32) -> std::result::Result<u32, String> {
+    if value < min || value > max {
+        return Err(format!("{label}必须在 {min} 到 {max} 之间"));
+    }
+    Ok(value)
+}
+
+fn checked_i32(label: &str, value: i32, min: i32, max: i32) -> std::result::Result<i32, String> {
+    if value < min || value > max {
+        return Err(format!("{label}必须在 {min} 到 {max} 之间"));
+    }
+    Ok(value)
+}
+
+fn clamp_i32(value: i32, min: i32, max: i32) -> i32 {
+    value.max(min).min(max)
+}
+
+fn normalize_rotation_degrees(value: i32) -> i32 {
+    let mut normalized = value;
+    while normalized > 180 {
+        normalized -= 360;
+    }
+    while normalized < -180 {
+        normalized += 360;
+    }
+    normalized
 }
 
 fn keyframe_value_for_segment(
@@ -2037,29 +2534,33 @@ fn default_text_segment(content: String, source: TextSegmentSource) -> TextSegme
     TextSegment {
         content,
         source,
-        style: TextStyle {
-            font_size: 36,
-            color: "#ffffff".to_owned(),
-            alignment: TextAlignment::Center,
-            line_height_millis: 1_200,
-            letter_spacing_millis: 0,
-            stroke: Some(TextStroke {
-                color: "#000000".to_owned(),
-                width: 2,
-            }),
-            shadow: Some(TextShadow {
-                color: "#222222".to_owned(),
-                offset_x: 2,
-                offset_y: 2,
-                blur: 4,
-            }),
-            ..TextStyle::default()
-        },
+        style: default_text_style(),
         text_box: TextBox::default(),
         layout_region: default_text_layout_region(source),
         wrapping: TextWrapping::default(),
         bubble: None,
         effect: None,
+    }
+}
+
+fn default_text_style() -> TextStyle {
+    TextStyle {
+        font_size: 36,
+        color: "#ffffff".to_owned(),
+        alignment: TextAlignment::Center,
+        line_height_millis: 1_200,
+        letter_spacing_millis: 0,
+        stroke: Some(TextStroke {
+            color: "#000000".to_owned(),
+            width: 2,
+        }),
+        shadow: Some(TextShadow {
+            color: "#222222".to_owned(),
+            offset_x: 2,
+            offset_y: 2,
+            blur: 4,
+        }),
+        ..TextStyle::default()
     }
 }
 

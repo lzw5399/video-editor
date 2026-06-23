@@ -32,11 +32,14 @@ import type {
   MaterialKind,
   Microseconds,
   SegmentAudio,
+  SegmentFitMode,
   SourceTimerange,
   SegmentVisual,
   SegmentVolume,
   TargetTimerange,
+  TextAlignment,
   TextSegment,
+  TextWrapping,
   TrackKind
 } from "../generated/Draft";
 
@@ -114,6 +117,9 @@ type NativeBinding = {
   getRealtimePreviewPresentationState: (
     request: RealtimePreviewSessionRequest
   ) => RealtimePreviewPresentationStateResponse;
+  hitTestRealtimePreviewTextOverlay: (
+    request: RealtimePreviewTextHitTestRequest
+  ) => RealtimePreviewTextHitTestResponse;
 };
 
 export type OpenProjectSessionRequest = {
@@ -192,14 +198,24 @@ export type ProjectIntent =
       displayName?: string | null;
       materialKindHint?: MaterialKind | null;
     }
-  | { kind: "addTimelineSegmentIntent"; materialId: MaterialId }
+  | {
+      kind: "addTimelineSegmentIntent";
+      materialId: MaterialId;
+      targetStart?: Microseconds | null;
+      targetTrackHandle?: string | null;
+    }
   | { kind: "selectTimelineItemIntent"; itemHandle: string }
-  | { kind: "moveSelectedSegmentIntent"; startAt: Microseconds }
+  | { kind: "moveSelectedSegmentIntent"; startAt: Microseconds; targetTrackHandle?: string | null }
   | { kind: "splitSelectedSegmentIntent" }
   | { kind: "trimSelectedSegmentIntent"; direction: "left" | "right"; trimAt: Microseconds }
   | { kind: "deleteSelectedSegment" }
-  | { kind: "addTextSegmentIntent"; content: string }
-  | { kind: "editSelectedText"; text: TextSegment }
+  | {
+      kind: "addTextSegmentIntent";
+      content: string;
+      targetStart?: Microseconds | null;
+      targetTrackHandle?: string | null;
+    }
+  | { kind: "editSelectedText"; patch: TextSegmentPatch }
   | {
       kind: "importSubtitleSrtIntent";
       srtContent: string;
@@ -221,7 +237,7 @@ export type ProjectIntent =
   | { kind: "setSelectedTrackMute"; muted: boolean }
   | { kind: "setSessionPlayhead"; playhead: Microseconds }
   | { kind: "updateDraftCanvasConfig"; canvasConfig: DraftCanvasConfig }
-  | { kind: "updateSelectedSegmentVisual"; visual: SegmentVisual }
+  | { kind: "updateSelectedSegmentVisual"; patch: SegmentVisualPatch }
   | {
       kind: "setSelectedSegmentKeyframe";
       property: KeyframeProperty;
@@ -231,6 +247,51 @@ export type ProjectIntent =
   | { kind: "removeSelectedSegmentKeyframe"; property: KeyframeProperty }
   | { kind: "undoTimelineEdit" }
   | { kind: "redoTimelineEdit" };
+
+export type TextSegmentPatch = {
+  content?: string;
+  fontFamily?: string;
+  fontRef?: string;
+  fontSize?: number;
+  color?: string;
+  alignment?: TextAlignment;
+  lineHeightMillis?: number;
+  letterSpacingMillis?: number;
+  strokeEnabled?: boolean;
+  strokeColor?: string;
+  strokeWidth?: number;
+  shadowEnabled?: boolean;
+  shadowColor?: string;
+  backgroundEnabled?: boolean;
+  backgroundColor?: string;
+  textBoxWidthMillis?: number;
+  textBoxHeightMillis?: number;
+  layoutXMillis?: number;
+  layoutYMillis?: number;
+  layoutWidthMillis?: number;
+  layoutHeightMillis?: number;
+  wrapping?: TextWrapping;
+};
+
+export type SegmentVisualPatch = {
+  visible?: boolean;
+  positionX?: number;
+  positionY?: number;
+  positionDeltaX?: number;
+  positionDeltaY?: number;
+  scaleXMillis?: number;
+  scaleYMillis?: number;
+  rotationDegrees?: number;
+  rotationDeltaDegrees?: number;
+  opacityMillis?: number;
+  cropLeftMillis?: number;
+  cropRightMillis?: number;
+  cropTopMillis?: number;
+  cropBottomMillis?: number;
+  fitMode?: SegmentFitMode;
+  backgroundKind?: "none" | "black" | "solidColor" | "blur" | "image";
+  backgroundColor?: string;
+};
 
 export type ExecuteProjectIntentRequest = {
   sessionId: string;
@@ -608,6 +669,9 @@ export type RealtimePreviewPresentationEvidence = {
 };
 
 export type RealtimePreviewTextOverlayEvidence = {
+  trackId: string;
+  segmentId: string;
+  selectionHandle: string;
   source: "text" | "subtitle";
   content: string;
   fontFamily: string;
@@ -627,6 +691,29 @@ export type RealtimePreviewTextOverlayEvidence = {
   visualScaleYMillis: number;
   visualRotationDegrees: number;
   visualOpacityMillis: number;
+  selected?: boolean;
+};
+
+export type RealtimePreviewTextHitTestRequest = {
+  sessionId: string;
+  point: {
+    x: number;
+    y: number;
+  };
+};
+
+export type RealtimePreviewTextHitTestResponse = {
+  hit: boolean;
+  trackId?: string | null;
+  segmentId?: string | null;
+  selectionHandle?: string | null;
+  source?: "text" | "subtitle" | null;
+  content?: string | null;
+  x?: number | null;
+  y?: number | null;
+  width?: number | null;
+  height?: number | null;
+  targetTimeMicroseconds?: number | null;
 };
 
 export type RealtimePreviewScreenRect = {
@@ -991,6 +1078,12 @@ export function getRealtimePreviewPresentationState(
   return requireLoadedBinding().getRealtimePreviewPresentationState(request);
 }
 
+export function hitTestRealtimePreviewTextOverlay(
+  request: RealtimePreviewTextHitTestRequest
+): RealtimePreviewTextHitTestResponse {
+  return requireLoadedBinding().hitTestRealtimePreviewTextOverlay(request);
+}
+
 function loadNativeBinding(): NativeBinding | null {
   if (cachedBinding !== undefined) {
     return cachedBinding;
@@ -1048,7 +1141,8 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.nextRealtimePreviewCancellationToken !== "function" ||
       typeof loaded.cancelRealtimePreviewRequest !== "function" ||
       typeof loaded.getRealtimePreviewTelemetry !== "function" ||
-      typeof loaded.getRealtimePreviewPresentationState !== "function"
+      typeof loaded.getRealtimePreviewPresentationState !== "function" ||
+      typeof loaded.hitTestRealtimePreviewTextOverlay !== "function"
     ) {
       throw new Error("Native binding does not expose the required editor and realtime preview functions");
     }
@@ -1102,7 +1196,8 @@ function loadNativeBinding(): NativeBinding | null {
       nextRealtimePreviewCancellationToken: loaded.nextRealtimePreviewCancellationToken,
       cancelRealtimePreviewRequest: loaded.cancelRealtimePreviewRequest,
       getRealtimePreviewTelemetry: loaded.getRealtimePreviewTelemetry,
-      getRealtimePreviewPresentationState: loaded.getRealtimePreviewPresentationState
+      getRealtimePreviewPresentationState: loaded.getRealtimePreviewPresentationState,
+      hitTestRealtimePreviewTextOverlay: loaded.hitTestRealtimePreviewTextOverlay
     };
     cachedLoadError = null;
     return cachedBinding;

@@ -94,7 +94,7 @@ async function openDraftParametersDialog(page: Page) {
 }
 
 test.describe("draft parameter inspector modal", () => {
-  test("cancel does not mutate draft and apply records updateDraftCanvasConfig", async () => {
+  test("draft parameter edits are realtime and finish records updateDraftCanvasConfig", async () => {
     const { app, page } = await launchWorkspaceApp();
 
     try {
@@ -109,7 +109,7 @@ test.describe("draft parameter inspector modal", () => {
       await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
       await expect(dialog.getByLabel("画布宽度")).toHaveValue("1080");
       await expect(dialog.getByLabel("画布高度")).toHaveValue("1920");
-      await dialog.getByRole("button", { name: "取消" }).click();
+      await dialog.getByRole("button", { name: "关闭", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "草稿参数" })).toHaveCount(0);
       await expect(inspector).toContainText("16:9");
       expect((await readNativeCommandObservations(app)).some((call) => call.command === "updateDraftCanvasConfig")).toBe(false);
@@ -117,8 +117,9 @@ test.describe("draft parameter inspector modal", () => {
       dialog = await openDraftParametersDialog(page);
       await dialog.getByRole("group", { name: "画布比例" }).getByRole("button", { name: "9:16" }).click();
       await dialog.getByRole("group", { name: "画布背景" }).getByRole("button", { name: "模糊填充" }).click();
-      await expect(dialog.getByRole("button", { name: "应用草稿参数" })).toBeEnabled();
-      await dialog.getByRole("button", { name: "应用草稿参数" }).click();
+      await expect(dialog.getByRole("button", { name: "应用草稿参数" })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "完成" })).toBeEnabled();
+      await dialog.getByRole("button", { name: "完成" }).click();
       await expect(page.getByRole("dialog", { name: "草稿参数" })).toHaveCount(0);
 
       await expect

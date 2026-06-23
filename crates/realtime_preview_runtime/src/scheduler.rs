@@ -46,6 +46,8 @@ pub enum RealtimePlaybackSchedulerEvidenceSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RealtimePlaybackTextOverlayEvidence {
+    pub track_id: String,
+    pub segment_id: String,
     pub source: TextSegmentSource,
     pub content: String,
     pub font_family: String,
@@ -66,6 +68,8 @@ pub struct RealtimePlaybackTextOverlayEvidence {
     pub visual_scale_y_millis: u32,
     pub visual_rotation_degrees: i32,
     pub visual_opacity_millis: u32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub selected: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,18 +82,32 @@ pub struct RealtimePlaybackSchedulerPresentation {
     pub digest: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RealtimePreviewUiChrome {
+    pub selected_segment: Option<RealtimePlaybackSelectedSegment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealtimePlaybackSelectedSegment {
+    pub track_id: String,
+    pub segment_id: String,
+}
+
 pub trait RealtimePlaybackSchedulerPresenter {
     fn present_render_graph(
         &mut self,
         graph: &RenderGraph,
         target_time: Microseconds,
         playback_generation: PlaybackGeneration,
+        ui_chrome: &RealtimePreviewUiChrome,
     ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RealtimePlaybackCadence {
     frame_duration_us: u64,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
     playback_rate: PlaybackRate,
 }
 
@@ -115,6 +133,8 @@ impl RealtimePlaybackCadence {
         }
         Ok(Self {
             frame_duration_us,
+            frame_rate_numerator: frame_rate.numerator,
+            frame_rate_denominator: frame_rate.denominator,
             playback_rate,
         })
     }
@@ -123,11 +143,38 @@ impl RealtimePlaybackCadence {
         self.frame_duration_us
     }
 
+    pub fn frame_time_us(self, frame_index: u64) -> u64 {
+        let time = u128::from(frame_index)
+            .saturating_mul(u128::from(self.frame_rate_denominator))
+            .saturating_mul(1_000_000)
+            / u128::from(self.frame_rate_numerator);
+        u64::try_from(time).unwrap_or(u64::MAX)
+    }
+
     fn media_elapsed_us(self, wall_elapsed_us: u64) -> u64 {
         let scaled = u128::from(wall_elapsed_us)
             .saturating_mul(self.playback_rate.numerator as u128)
             / u128::from(self.playback_rate.denominator);
         u64::try_from(scaled).unwrap_or(u64::MAX)
+    }
+
+    fn frame_index_at_media_elapsed_us(self, media_elapsed_us: u64) -> u64 {
+        let frame_index = u128::from(media_elapsed_us)
+            .saturating_mul(u128::from(self.frame_rate_numerator))
+            / u128::from(self.frame_rate_denominator)
+            / 1_000_000;
+        u64::try_from(frame_index).unwrap_or(u64::MAX)
+    }
+
+    fn frame_count_for_duration_us(self, duration_us: u64) -> u64 {
+        if duration_us == 0 {
+            return 0;
+        }
+        let numerator =
+            u128::from(duration_us).saturating_mul(u128::from(self.frame_rate_numerator));
+        let denominator = u128::from(self.frame_rate_denominator).saturating_mul(1_000_000);
+        let frame_count = numerator.saturating_add(denominator.saturating_sub(1)) / denominator;
+        u64::try_from(frame_count).unwrap_or(u64::MAX).max(1)
     }
 }
 
@@ -158,25 +205,25 @@ impl Error for RealtimePlaybackCadenceError {}
 
 #[derive(Debug, Clone)]
 pub struct RealtimePlaybackTimeline {
-    next_tick_time: Microseconds,
+    next_tick_frame_index: u64,
     anchor: Option<RealtimePlaybackAnchor>,
 }
 
 impl RealtimePlaybackTimeline {
     pub fn new() -> Self {
         Self {
-            next_tick_time: Microseconds::ZERO,
+            next_tick_frame_index: 0,
             anchor: None,
         }
     }
 
-    pub fn seek(&mut self, target_time: Microseconds) {
-        self.next_tick_time = target_time;
+    pub fn seek(&mut self, _target_time: Microseconds) {
+        self.next_tick_frame_index = 0;
         self.anchor = None;
     }
 
     pub fn reset(&mut self) {
-        self.next_tick_time = Microseconds::ZERO;
+        self.next_tick_frame_index = 0;
         self.anchor = None;
     }
 
@@ -219,12 +266,7 @@ impl RealtimePlaybackTimeline {
             sequence_duration,
             cadence,
         });
-        self.next_tick_time = Microseconds::new(
-            start_time
-                .get()
-                .saturating_add(cadence.frame_duration_us())
-                .min(sequence_duration.get()),
-        );
+        self.next_tick_frame_index = 1;
     }
 
     pub fn due_tick(
@@ -234,16 +276,14 @@ impl RealtimePlaybackTimeline {
         self.due_tick_at(playback_generation, Instant::now())
     }
 
-    pub fn advance_after_presented(&mut self, presented_time: Microseconds) {
+    pub fn advance_after_presented_tick(&mut self, due_tick: RealtimePlaybackDueTick) {
         let Some(anchor) = self.anchor.as_ref() else {
             return;
         };
-        self.next_tick_time = Microseconds::new(
-            presented_time
-                .get()
-                .saturating_add(anchor.cadence.frame_duration_us())
-                .min(anchor.sequence_duration.get()),
-        );
+        if anchor.playback_generation != due_tick.playback_generation {
+            return;
+        }
+        self.next_tick_frame_index = due_tick.frame_index.saturating_add(1);
     }
 
     #[cfg(test)]
@@ -262,7 +302,7 @@ impl RealtimePlaybackTimeline {
             sequence_duration,
             cadence,
         });
-        self.next_tick_time = start_time;
+        self.next_tick_frame_index = 0;
     }
 
     fn due_tick_at(
@@ -276,39 +316,49 @@ impl RealtimePlaybackTimeline {
         if anchor.playback_generation != playback_generation {
             return None;
         }
+        let playable_duration = anchor
+            .sequence_duration
+            .get()
+            .saturating_sub(anchor.start_time.get());
+        let frame_count = anchor
+            .cadence
+            .frame_count_for_duration_us(playable_duration);
+        if self.next_tick_frame_index >= frame_count {
+            return None;
+        }
 
         let elapsed_us =
             u64::try_from(now.duration_since(anchor.started_at).as_micros()).unwrap_or(u64::MAX);
-        let wall_media_time = anchor
+        let wall_elapsed_us = anchor.cadence.media_elapsed_us(elapsed_us);
+        let wall_media_time = anchor.start_time.get().saturating_add(wall_elapsed_us);
+        let next_tick_time = anchor
             .start_time
             .get()
-            .saturating_add(anchor.cadence.media_elapsed_us(elapsed_us))
-            .min(anchor.sequence_duration.get());
-        if wall_media_time < self.next_tick_time.get()
-            && self.next_tick_time.get() < anchor.sequence_duration.get()
+            .saturating_add(anchor.cadence.frame_time_us(self.next_tick_frame_index));
+        if wall_media_time < next_tick_time
+            && self.next_tick_frame_index < frame_count.saturating_sub(1)
         {
             return None;
         }
 
-        let elapsed_frames = wall_media_time.saturating_sub(anchor.start_time.get())
-            / anchor.cadence.frame_duration_us();
-        let wall_aligned_target = anchor
+        let wall_frame_index = anchor
+            .cadence
+            .frame_index_at_media_elapsed_us(wall_elapsed_us)
+            .min(frame_count.saturating_sub(1));
+        let frame_index = self.next_tick_frame_index.max(wall_frame_index);
+        let target_time = anchor
             .start_time
             .get()
-            .saturating_add(elapsed_frames.saturating_mul(anchor.cadence.frame_duration_us()))
-            .min(anchor.sequence_duration.get());
-        let target_time = self
-            .next_tick_time
-            .get()
-            .max(wall_aligned_target)
-            .min(anchor.sequence_duration.get());
-        let dropped_frames = target_time.saturating_sub(self.next_tick_time.get())
-            / anchor.cadence.frame_duration_us();
+            .saturating_add(anchor.cadence.frame_time_us(frame_index));
+        let dropped_frames = frame_index.saturating_sub(self.next_tick_frame_index);
         let schedule_lateness_ms = wall_media_time.saturating_sub(target_time) / 1_000;
         Some(RealtimePlaybackDueTick {
+            playback_generation,
+            frame_index,
             target_time: Microseconds::new(target_time),
             dropped_frames,
             schedule_lateness_ms,
+            reaches_sequence_end: frame_index.saturating_add(1) >= frame_count,
         })
     }
 }
@@ -330,9 +380,12 @@ struct RealtimePlaybackAnchor {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RealtimePlaybackDueTick {
+    pub playback_generation: PlaybackGeneration,
+    pub frame_index: u64,
     pub target_time: Microseconds,
     pub dropped_frames: u64,
     pub schedule_lateness_ms: u64,
+    pub reaches_sequence_end: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -340,6 +393,7 @@ pub struct RealtimePlaybackPresentedFrame {
     pub evidence: RealtimePlaybackSchedulerEvidence,
     pub dropped_frames: u64,
     pub schedule_lateness_ms: u64,
+    pub reached_end: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -371,6 +425,7 @@ impl Default for RealtimePlaybackPresentationQueuePolicy {
 pub struct RealtimePlaybackScheduler {
     config: RealtimePlaybackSchedulerConfig,
     draft_snapshot: Option<Draft>,
+    selected_segment: Option<RealtimePlaybackSelectedSegment>,
     last_evidence: Option<RealtimePlaybackSchedulerEvidence>,
 }
 
@@ -379,6 +434,7 @@ impl RealtimePlaybackScheduler {
         Self {
             config,
             draft_snapshot: None,
+            selected_segment: None,
             last_evidence: None,
         }
     }
@@ -390,6 +446,14 @@ impl RealtimePlaybackScheduler {
 
     pub fn update_draft_snapshot(&mut self, draft: Draft) {
         self.draft_snapshot = Some(draft);
+        self.last_evidence = None;
+    }
+
+    pub fn update_selected_segment(
+        &mut self,
+        selected_segment: Option<RealtimePlaybackSelectedSegment>,
+    ) {
+        self.selected_segment = selected_segment;
         self.last_evidence = None;
     }
 
@@ -414,10 +478,20 @@ impl RealtimePlaybackScheduler {
             preview_dimensions: self.config.preview_dimensions,
         })
         .map_err(RealtimePlaybackSchedulerError::GraphPrepare)?;
-        let active_text_overlays =
-            active_text_overlay_evidence(&prepared.graph, self.config.preview_dimensions);
-        let presentation =
-            presenter.present_render_graph(&prepared.graph, target_time, playback_generation)?;
+        let ui_chrome = RealtimePreviewUiChrome {
+            selected_segment: self.selected_segment.clone(),
+        };
+        let active_text_overlays = active_text_overlay_evidence(
+            &prepared.graph,
+            self.config.preview_dimensions,
+            ui_chrome.selected_segment.as_ref(),
+        );
+        let presentation = presenter.present_render_graph(
+            &prepared.graph,
+            target_time,
+            playback_generation,
+            &ui_chrome,
+        )?;
         if presentation.presented_frames == 0 {
             return Err(RealtimePlaybackSchedulerError::MissingPrerequisite {
                 reason: "render graph GPU compositor did not present a surface frame".to_owned(),
@@ -442,6 +516,7 @@ impl RealtimePlaybackScheduler {
 fn active_text_overlay_evidence(
     graph: &RenderGraph,
     target: OutputDimensions,
+    selected_segment: Option<&RealtimePlaybackSelectedSegment>,
 ) -> Vec<RealtimePlaybackTextOverlayEvidence> {
     graph
         .text_overlays
@@ -458,6 +533,8 @@ fn active_text_overlay_evidence(
                 text.overlay.layout_height,
             );
             RealtimePlaybackTextOverlayEvidence {
+                track_id: text.overlay.track_id.as_str().to_owned(),
+                segment_id: text.overlay.segment_id.as_str().to_owned(),
                 source: text.overlay.source,
                 content: text.overlay.content.clone(),
                 font_family: text.overlay.font_family.clone(),
@@ -477,9 +554,17 @@ fn active_text_overlay_evidence(
                 visual_scale_y_millis: text.visual.transform.scale.y_millis,
                 visual_rotation_degrees: text.visual.transform.rotation.degrees,
                 visual_opacity_millis: text.visual.transform.opacity.value_millis,
+                selected: selected_segment.is_some_and(|selected| {
+                    selected.track_id == text.overlay.track_id.as_str()
+                        && selected.segment_id == text.overlay.segment_id.as_str()
+                }),
             }
         })
         .collect()
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn text_alignment_label(alignment: draft_model::TextAlignment) -> &'static str {
@@ -580,7 +665,7 @@ mod tests {
         RealtimePlaybackCadence, RealtimePlaybackPresentationQueuePolicy,
         RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig,
         RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerPresenter,
-        RealtimePlaybackTimeline,
+        RealtimePlaybackTimeline, RealtimePreviewUiChrome,
     };
     use draft_model::{
         Draft, DraftCanvasConfig, Material, MaterialKind, MaterialMetadata, Microseconds,
@@ -664,6 +749,8 @@ mod tests {
             .expect("active text evidence is present");
 
         assert_eq!(text.source, TextSegmentSource::Subtitle);
+        assert_eq!(text.track_id, "track-text-001");
+        assert_eq!(text.segment_id, "segment-text-001");
         assert_eq!(text.content, "字幕位置证据");
         assert!(
             text.y >= 396,
@@ -715,11 +802,10 @@ mod tests {
         let due_tick = timeline
             .due_tick(generation)
             .expect("late playback should immediately present the wall-clock frame");
-        let expected_target_time = start_time
-            .get()
-            .saturating_add(15 * cadence.frame_duration_us());
+        let expected_target_time = start_time.get().saturating_add(cadence.frame_time_us(15));
 
         assert_eq!(due_tick.target_time.get(), expected_target_time);
+        assert_eq!(due_tick.frame_index, 15);
         assert_eq!(due_tick.dropped_frames, 15);
     }
 
@@ -744,7 +830,8 @@ mod tests {
             .due_tick(generation)
             .expect("prewarm elapsed time should be reflected in the media clock");
 
-        assert_eq!(due_tick.target_time.get(), 3 * cadence.frame_duration_us());
+        assert_eq!(due_tick.target_time.get(), cadence.frame_time_us(3));
+        assert_eq!(due_tick.frame_index, 3);
         assert_eq!(due_tick.dropped_frames, 2);
     }
 
@@ -772,8 +859,41 @@ mod tests {
             .due_tick(generation)
             .expect("2x playback should choose the media frame for 1s elapsed media time");
 
-        assert_eq!(due_tick.target_time.get(), 30 * cadence.frame_duration_us());
+        assert_eq!(due_tick.target_time.get(), cadence.frame_time_us(30));
+        assert_eq!(due_tick.frame_index, 30);
         assert_eq!(due_tick.dropped_frames, 30);
+    }
+
+    #[test]
+    fn playback_timeline_treats_sequence_duration_as_exclusive_end_boundary() {
+        let cadence =
+            RealtimePlaybackCadence::new(&RationalFrameRate::new(30, 1), PlaybackRate::normal())
+                .expect("30fps cadence is valid");
+        let generation = PlaybackGeneration::new(17);
+        let mut timeline = RealtimePlaybackTimeline::new();
+        timeline.start_after_prewarm_at(
+            Microseconds::ZERO,
+            generation,
+            Microseconds::new(3_000_000),
+            cadence,
+            Instant::now()
+                .checked_sub(Duration::from_millis(3_100))
+                .expect("3100ms before now is representable"),
+        );
+
+        let due_tick = timeline
+            .due_tick(generation)
+            .expect("3s 30fps playback should still present the last real frame");
+
+        assert_eq!(due_tick.frame_index, 89);
+        assert_eq!(due_tick.target_time.get(), cadence.frame_time_us(89));
+        assert!(due_tick.reaches_sequence_end);
+
+        timeline.advance_after_presented_tick(due_tick);
+        assert!(
+            timeline.due_tick(generation).is_none(),
+            "the exclusive sequence end must not be scheduled as an extra decode/present tick"
+        );
     }
 
     #[test]
@@ -817,6 +937,7 @@ mod tests {
             graph: &RenderGraph,
             target_time: Microseconds,
             playback_generation: PlaybackGeneration,
+            _ui_chrome: &RealtimePreviewUiChrome,
         ) -> Result<RealtimePlaybackSchedulerPresentation, super::RealtimePlaybackSchedulerError>
         {
             self.present_count = self.present_count.saturating_add(1);

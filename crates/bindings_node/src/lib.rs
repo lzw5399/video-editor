@@ -31,8 +31,9 @@ use crate::preview_export_service::{
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
-    RealtimePreviewSessionBindingConfig, RealtimePreviewSurfaceBindingDescriptor,
-    RealtimePreviewSurfaceBoundsBindingRequest,
+    RealtimePreviewSelectedSegmentBinding, RealtimePreviewSessionBindingConfig,
+    RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBoundsBindingRequest,
+    RealtimePreviewTextHitTestBindingRequest,
 };
 use crate::runtime_capability_service::probe_runtime_capabilities_command;
 
@@ -44,6 +45,7 @@ pub mod preview_export_service;
 pub mod project_session_service;
 pub mod realtime_preview_service;
 pub mod runtime_capability_service;
+pub mod timeline_selection;
 
 const BINDING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -495,6 +497,12 @@ pub fn update_realtime_preview_project_session_snapshot(
             &request.session_id,
             snapshot.draft,
             Some(snapshot.bundle_path),
+            snapshot
+                .selected_segment
+                .map(|selected| RealtimePreviewSelectedSegmentBinding {
+                    track_id: selected.track_id.as_str().to_owned(),
+                    segment_id: selected.segment_id.as_str().to_owned(),
+                }),
         )
     })
 }
@@ -561,6 +569,16 @@ pub fn get_realtime_preview_presentation_state(
 ) -> Result<serde_json::Value> {
     let request = parse_realtime_preview_payload::<RealtimePreviewSessionRequest>(request)?;
     with_realtime_preview_registry(|registry| registry.presentation_state(&request.session_id))
+}
+
+#[napi(js_name = "hitTestRealtimePreviewTextOverlay")]
+pub fn hit_test_realtime_preview_text_overlay(
+    request: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let request = parse_realtime_preview_payload::<RealtimePreviewTextHitTestRequest>(request)?;
+    with_realtime_preview_registry(|registry| {
+        registry.hit_test_text_overlay(&request.session_id, request.point)
+    })
 }
 
 fn ping_envelope() -> CommandResultEnvelope<PingResponse> {
@@ -1032,6 +1050,13 @@ struct RealtimePreviewSeekRequest {
 struct RealtimePreviewFrameRequest {
     session_id: String,
     frame: RealtimePreviewFrameBindingRequest,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealtimePreviewTextHitTestRequest {
+    session_id: String,
+    point: RealtimePreviewTextHitTestBindingRequest,
 }
 
 #[derive(Debug, serde::Deserialize)]

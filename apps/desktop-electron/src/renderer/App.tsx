@@ -19,6 +19,8 @@ import type {
   ProjectSessionRequest,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse,
+  SegmentVisualPatch,
+  TextSegmentPatch,
   StartProjectSessionExportRequest
 } from "../main/nativeBinding";
 import type {
@@ -39,9 +41,7 @@ import type {
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
-  SegmentVisual,
   SegmentVolume,
-  TextSegment,
   TrackKind
 } from "../generated/Draft";
 import {
@@ -145,6 +145,7 @@ type ProjectSessionClientState = {
 type RealtimePreviewProjectSessionSnapshotKey = {
   projectSessionId: string;
   revision: number;
+  selectedSegmentHandle: string | null;
 };
 type ExportCommandResultApplier = (
   current: WorkspaceState,
@@ -650,6 +651,7 @@ export function App(): React.ReactElement {
       intentKind === "addTextSegmentIntent" ||
       intentKind === "addAudioSegmentIntent" ||
       intentKind === "importSubtitleSrtIntent" ||
+      intentKind === "selectTimelineItemIntent" ||
       intentKind === "editSelectedText" ||
       intentKind === "updateSelectedSegmentVisual" ||
       intentKind === "setSelectedTrackVisibility"
@@ -1638,21 +1640,22 @@ export function App(): React.ReactElement {
     }
   }
 
-  function handleAddTextSegment(content: string): void {
-    void (async () => {
-      const playhead = normalizePlayheadTime(playheadUs);
-      const synced = await syncProjectSessionPlayhead(playhead, "定位文字播放头");
-      if (!synced) {
-        return;
-      }
-      await executeProjectTimelineIntent(
-        {
-          kind: "addTextSegmentIntent",
-          content
-        },
-        "添加文字"
-      );
-    })();
+  function handleAddTextSegment(
+    content: string,
+    placement?: { targetStart: number; targetTrackHandle: string | null }
+  ): void {
+    const targetStart = normalizePlayheadTime(placement?.targetStart ?? playheadUs);
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTextSegmentIntent",
+        content,
+        targetStart,
+        ...(placement?.targetTrackHandle === undefined || placement.targetTrackHandle === null
+          ? {}
+          : { targetTrackHandle: placement.targetTrackHandle })
+      },
+      "添加文字"
+    );
   }
 
   function handleImportSubtitleSrt(srtContent: string): void {
@@ -1703,13 +1706,13 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleEditSelectedText(text: TextSegment): void {
+  function handleEditSelectedText(patch: TextSegmentPatch): void {
     void executeProjectTimelineIntent(
       {
         kind: "editSelectedText",
-        text
+        patch
       },
-      "应用文字"
+      "编辑文字"
     );
   }
 
@@ -1830,7 +1833,7 @@ export function App(): React.ReactElement {
         fadeOutDuration: { duration: Math.max(0, Math.round(options.fadeOutDuration)) },
         effectSlots: []
       },
-      "应用音频"
+      "编辑音频"
     );
   }
 
@@ -1844,28 +1847,30 @@ export function App(): React.ReactElement {
     );
   }
 
-  function handleAddTimelineSegment(materialId: string): void {
-    void (async () => {
-      const playhead = normalizePlayheadTime(playheadUs);
-      const synced = await syncProjectSessionPlayhead(playhead, "定位添加播放头");
-      if (!synced) {
-        return;
-      }
-      await executeProjectTimelineIntent(
-        {
-          kind: "addTimelineSegmentIntent",
-          materialId
-        },
-        "添加片段"
-      );
-    })();
+  function handleAddTimelineSegment(
+    materialId: string,
+    placement?: { targetStart: number; targetTrackHandle: string | null }
+  ): void {
+    const targetStart = normalizePlayheadTime(placement?.targetStart ?? playheadUs);
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTimelineSegmentIntent",
+        materialId,
+        targetStart,
+        ...(placement?.targetTrackHandle === undefined || placement.targetTrackHandle === null
+          ? {}
+          : { targetTrackHandle: placement.targetTrackHandle })
+      },
+      "添加片段"
+    );
   }
 
-  function handleMoveSelectedSegment(startAt: number): void {
+  function handleMoveSelectedSegment(startAt: number, targetTrackHandle?: string | null): void {
     void executeProjectTimelineIntent(
       {
         kind: "moveSelectedSegmentIntent",
-        startAt: normalizePlayheadTime(startAt)
+        startAt: normalizePlayheadTime(startAt),
+        ...(targetTrackHandle === undefined || targetTrackHandle === null ? {} : { targetTrackHandle })
       },
       "移动片段"
     );
@@ -1936,19 +1941,19 @@ export function App(): React.ReactElement {
           kind: "updateDraftCanvasConfig",
           canvasConfig
         },
-        "应用草稿参数"
+        "编辑草稿参数"
       );
     })();
   }
 
-  function handleUpdateSelectedSegmentVisual(visual: SegmentVisual): void {
+  function handleUpdateSelectedSegmentVisual(patch: SegmentVisualPatch): void {
     void (async () => {
       await executeProjectTimelineIntent(
         {
           kind: "updateSelectedSegmentVisual",
-          visual
+          patch
         },
-        "应用画面"
+        "编辑画面"
       );
 
       if (workspaceRef.current.commandError === null) {
@@ -2118,9 +2123,11 @@ export function App(): React.ReactElement {
     }
 
     const currentSnapshot = realtimePreviewSnapshotRef.current;
+    const selectedSegmentHandle = workspaceRef.current.viewModel.selectedSegment?.selectionHandle ?? null;
     if (
       currentSnapshot?.projectSessionId === projectSession.sessionId &&
-      currentSnapshot.revision === projectSession.revision
+      currentSnapshot.revision === projectSession.revision &&
+      currentSnapshot.selectedSegmentHandle === selectedSegmentHandle
     ) {
       return true;
     }
@@ -2132,7 +2139,8 @@ export function App(): React.ReactElement {
       if (ok) {
         realtimePreviewSnapshotRef.current = {
           projectSessionId: projectSession.sessionId,
-          revision: projectSession.revision
+          revision: projectSession.revision,
+          selectedSegmentHandle
         };
         realtimePreviewLastSeekTargetRef.current = null;
       }
@@ -2552,6 +2560,8 @@ export function App(): React.ReactElement {
       onEditSelectedText={handleEditSelectedText}
       onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}
       onUpdateSelectedSegmentVisual={handleUpdateSelectedSegmentVisual}
+      onSelectPreviewTextOverlay={handleSelectTimelineSegment}
+      onEditPreviewTextOverlay={handleSelectTimelineSegment}
       onSetSelectedSegmentKeyframe={handleSetSelectedSegmentKeyframe}
       onRemoveSelectedSegmentKeyframe={handleRemoveSelectedSegmentKeyframe}
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}

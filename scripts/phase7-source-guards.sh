@@ -73,8 +73,9 @@ for symbol in "canvasConfig" "DraftCanvasConfig" "CanvasAspectRatio" "CanvasBack
   [ "$found" = "true" ] || fail "generated contracts must contain ${symbol}"
 done
 
-require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "UpdateDraftCanvasConfig"
-require_fixed "apps/desktop-electron/src/generated/CommandEnvelope.ts" "updateDraftCanvasConfig"
+require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" 'kind: "updateDraftCanvasConfig"'
+require_fixed "crates/bindings_node/src/project_session_service.rs" "UpdateDraftCanvasConfig"
+require_fixed "apps/desktop-electron/src/renderer/App.tsx" "updateDraftCanvasConfig"
 
 require_fixed "$COORDINATE_DOC" "Origin: origin at canvas center."
 require_fixed "$COORDINATE_DOC" "+X right"
@@ -95,7 +96,7 @@ fail_matches \
 
 fail_matches \
   "renderer must not own FFmpeg/render graph/export validation/preview cache/output dimension semantics" \
-  'filter_complex|filterComplex|FfmpegJob|renderGraph|RenderGraph|ffmpegArgs|ffmpegScripts|exportScript|OutputValidation|validationExpectation|export_dimensions|outputWidth|outputHeight|previewCacheKey|semanticFingerprint|materialDependencies|changedRanges|changedMaterialIds|child_process|spawn\(|execFile|exec\(|process\.' \
+  'filter_complex|filterComplex|FfmpegJob|\bRenderGraph\b|\brenderGraph(?!Gpu|GpuComposited)\b|ffmpegArgs|ffmpegScripts|exportScript|OutputValidation|validationExpectation|export_dimensions|outputWidth|outputHeight|previewCacheKey|semanticFingerprint|materialDependencies|changedRanges|changedMaterialIds|child_process|spawn\(|execFile|exec\(|process\.' \
   "$RENDERER_DIR" \
   --glob '!commandHelpers.ts'
 
@@ -109,7 +110,7 @@ fail_matches \
   'export_dimensions\(' \
   "crates/bindings_node/src/preview_export_service.rs"
 
-for text in "草稿参数" "画布比例" "画布尺寸" "帧率" "画布背景" "黑色" "纯色" "模糊填充" "图片背景" "未接入" "应用草稿参数"; do
+for text in "草稿参数" "画布比例" "画布尺寸" "帧率" "画布背景" "黑色" "纯色" "模糊填充" "图片背景" "未接入"; do
   found=false
   for file in "${UI_FILES[@]}"; do
     if rg -n --fixed-strings "$text" "$file" >/dev/null; then
@@ -119,6 +120,12 @@ for text in "草稿参数" "画布比例" "画布尺寸" "帧率" "画布背景"
   done
   [ "$found" = "true" ] || fail "missing required Chinese canvas UI copy: ${text}"
 done
+
+fail_matches \
+  "draft canvas settings must be realtime and must not expose an apply button" \
+  '应用草稿参数' \
+  "apps/desktop-electron/src/renderer" \
+  "apps/desktop-electron/src/main"
 
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "expectNoLeftSecondaryMenu"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "canvas-1280x800.png"

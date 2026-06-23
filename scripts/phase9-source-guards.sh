@@ -100,8 +100,7 @@ for text in \
   "安全区域" \
   "花字" \
   "气泡" \
-  "暂未接入" \
-  "应用文字"; do
+  "暂未接入"; do
   found=false
   for file in "${UI_FILES[@]}"; do
     if rg -n --fixed-strings "$text" "$file" >/dev/null; then
@@ -113,6 +112,11 @@ for text in \
 done
 
 fail_matches \
+  "text inspector edits must be realtime; renderer source must not expose an old apply-text button" \
+  '"应用文字"' \
+  "$RENDERER_DIR"
+
+fail_matches \
   "desktop UI must not leak implementation-facing Rust/SRT parser copy" \
   'Rust 解析 SRT' \
   "${UI_FILES[@]}"
@@ -121,7 +125,7 @@ require_fixed "crates/draft_commands/src/text.rs" "importSubtitleSrt"
 require_fixed "crates/draft_commands/src/text.rs" "parse_srt"
 require_fixed "crates/ffmpeg_compiler/src/job.rs" "UnsupportedTextResource"
 require_fixed "crates/ffmpeg_compiler/src/ass.rs" "UnsupportedTextResource"
-require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "command-only text edit"
+require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "text edit routes complete text inspector"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "SRT import intent path sends raw SRT"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "expectNoLeftSecondaryMenu"
 require_fixed "apps/desktop-electron/tests/workspace.spec.ts" "五大区域"

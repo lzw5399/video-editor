@@ -19,6 +19,7 @@ use crate::{
     PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnostic,
     RealtimePreviewDiagnosticDomain, RealtimePreviewGraphSupport, RealtimePreviewSupport,
+    RealtimePreviewUiChrome,
 };
 
 use super::{
@@ -27,7 +28,7 @@ use super::{
     RealtimePreviewTexture, RealtimePreviewTextureCache, RealtimePreviewTextureCacheError,
 };
 
-use super::text::{TextRasterizationError, rasterize_text_overlay};
+use super::text::{TextRasterizationError, TextRasterizationTarget, rasterize_text_overlay};
 use super::texture_cache::RealtimePreviewCachedTextLayer;
 
 pub struct RealtimePreviewCompositor {
@@ -82,8 +83,15 @@ impl RealtimePreviewCompositor {
                 let device_ref = gpu_device
                     .device()
                     .ok_or(RealtimePreviewCompositorError::WgpuDeviceUnavailable)?;
-                let pipeline_resources =
-                    self.wgpu_pipeline_resources_for_graph(device_ref, graph, target.format());
+                let queue_ref = gpu_device
+                    .queue()
+                    .ok_or(RealtimePreviewCompositorError::WgpuQueueUnavailable)?;
+                let pipeline_resources = self.wgpu_pipeline_resources_for_graph(
+                    device_ref,
+                    queue_ref,
+                    graph,
+                    target.format(),
+                )?;
                 let (pixels, submitted_draws) = render_wgpu_graph(
                     graph,
                     target,
@@ -210,17 +218,18 @@ impl RealtimePreviewCompositor {
     fn wgpu_pipeline_resources_for_graph(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         graph: &RenderGraph,
         format: super::RealtimePreviewTargetFormat,
-    ) -> Option<&RealtimePreviewWgpuPipelines> {
+    ) -> Result<Option<&RealtimePreviewWgpuPipelines>, RealtimePreviewCompositorError> {
         if graph.video_layers.is_empty() && graph.text_overlays.is_empty() {
-            return None;
+            return Ok(None);
         }
-        Some(
-            self.wgpu_pipelines
-                .entry(format)
-                .or_insert_with(|| RealtimePreviewWgpuPipelines::new(device, format)),
-        )
+        if !self.wgpu_pipelines.contains_key(&format) {
+            let resources = RealtimePreviewWgpuPipelines::new(device, queue, format)?;
+            self.wgpu_pipelines.insert(format, resources);
+        }
+        Ok(self.wgpu_pipelines.get(&format))
     }
 
     pub fn present_to_surface(
@@ -236,6 +245,7 @@ impl RealtimePreviewCompositor {
             frame_provider,
             texture_cache,
             PlaybackGeneration::initial(),
+            &RealtimePreviewUiChrome::default(),
         )
     }
 
@@ -246,6 +256,7 @@ impl RealtimePreviewCompositor {
         frame_provider: &mut impl PreviewFrameProvider,
         texture_cache: &mut RealtimePreviewTextureCache,
         playback_generation: PlaybackGeneration,
+        ui_chrome: &RealtimePreviewUiChrome,
     ) -> Result<RealtimePreviewSurfacePresentationOutput, RealtimePreviewCompositorError> {
         let gpu_device = self.device.clone();
         let device_ref = gpu_device
@@ -281,7 +292,7 @@ impl RealtimePreviewCompositor {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let pipeline_resources =
-            self.wgpu_pipeline_resources_for_graph(device_ref, graph, target.format());
+            self.wgpu_pipeline_resources_for_graph(device_ref, queue, graph, target.format())?;
         let (encoder, submitted_draws) = encode_wgpu_graph_to_view(
             graph,
             target,
@@ -294,6 +305,7 @@ impl RealtimePreviewCompositor {
             &mut support,
             playback_generation,
             pipeline_resources,
+            ui_chrome,
         )?;
         if support == RealtimePreviewGraphSupport::Unsupported {
             drop(view);
@@ -529,6 +541,7 @@ fn render_wgpu_graph(
         support,
         PlaybackGeneration::initial(),
         pipeline_resources,
+        &RealtimePreviewUiChrome::default(),
     )?;
 
     let unpadded_bytes_per_row = target.width() as usize * target.format().bytes_per_pixel();
@@ -635,6 +648,7 @@ fn encode_wgpu_graph_to_view(
     support: &mut RealtimePreviewGraphSupport,
     playback_generation: PlaybackGeneration,
     pipeline_resources: Option<&RealtimePreviewWgpuPipelines>,
+    ui_chrome: &RealtimePreviewUiChrome,
 ) -> Result<(wgpu::CommandEncoder, u32), RealtimePreviewCompositorError> {
     let clear_color = canvas_clear_color(graph)?;
     let layer_draws = if let Some(resources) = pipeline_resources {
@@ -649,6 +663,7 @@ fn encode_wgpu_graph_to_view(
             diagnostics,
             support,
             playback_generation,
+            ui_chrome,
         )?
     } else {
         Vec::new()
@@ -691,11 +706,18 @@ struct RealtimePreviewWgpuPipelines {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     external_pipeline: Option<wgpu::RenderPipeline>,
     external_bind_group_layout: Option<wgpu::BindGroupLayout>,
-    sampler: wgpu::Sampler,
+    linear_sampler: wgpu::Sampler,
+    text_sampler: wgpu::Sampler,
+    ui_chrome_border_texture: Rc<wgpu::Texture>,
+    ui_chrome_handle_texture: Rc<wgpu::Texture>,
 }
 
 impl RealtimePreviewWgpuPipelines {
-    fn new(device: &wgpu::Device, format: super::RealtimePreviewTargetFormat) -> Self {
+    fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: super::RealtimePreviewTargetFormat,
+    ) -> Result<Self, RealtimePreviewCompositorError> {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("realtime-preview-textured-quad-bind-group-layout"),
             entries: &[
@@ -775,16 +797,26 @@ impl RealtimePreviewWgpuPipelines {
             multiview_mask: None,
             cache: None,
         });
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("realtime-preview-textured-quad-sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
+        let linear_sampler = device.create_sampler(&linear_layer_sampler_descriptor());
+        let text_sampler = device.create_sampler(&text_layer_sampler_descriptor());
+        let ui_chrome_border_texture = Rc::new(create_wgpu_rgba_texture(
+            device,
+            queue,
+            1,
+            1,
+            4,
+            &[32, 199, 217, 255],
+            "realtime-preview-selection-border-texture",
+        )?);
+        let ui_chrome_handle_texture = Rc::new(create_wgpu_rgba_texture(
+            device,
+            queue,
+            1,
+            1,
+            4,
+            &[247, 251, 252, 255],
+            "realtime-preview-selection-handle-texture",
+        )?);
         let (external_pipeline, external_bind_group_layout) =
             if device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
                 let external_bind_group_layout =
@@ -853,13 +885,16 @@ impl RealtimePreviewWgpuPipelines {
                 (None, None)
             };
 
-        Self {
+        Ok(Self {
             texture_pipeline,
             texture_bind_group_layout: bind_group_layout,
             external_pipeline,
             external_bind_group_layout,
-            sampler,
-        }
+            linear_sampler,
+            text_sampler,
+            ui_chrome_border_texture,
+            ui_chrome_handle_texture,
+        })
     }
 
     fn pipeline(&self, kind: WgpuLayerPipelineKind) -> &wgpu::RenderPipeline {
@@ -870,6 +905,32 @@ impl RealtimePreviewWgpuPipelines {
                 .as_ref()
                 .expect("external texture draw should be rejected before render pass"),
         }
+    }
+}
+
+fn linear_layer_sampler_descriptor() -> wgpu::SamplerDescriptor<'static> {
+    wgpu::SamplerDescriptor {
+        label: Some("realtime-preview-linear-layer-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        ..Default::default()
+    }
+}
+
+fn text_layer_sampler_descriptor() -> wgpu::SamplerDescriptor<'static> {
+    wgpu::SamplerDescriptor {
+        label: Some("realtime-preview-text-layer-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+        ..Default::default()
     }
 }
 
@@ -919,6 +980,24 @@ enum WgpuLayerPipelineKind {
     ExternalTexture,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WgpuLayerSamplerKind {
+    Linear,
+    Text,
+}
+
+fn text_layer_sampler_kind(visual: &SegmentVisual, raster_scale: u32) -> WgpuLayerSamplerKind {
+    if raster_scale == 1
+        && visual.transform.rotation.degrees == 0
+        && visual.transform.scale.x_millis == 1_000
+        && visual.transform.scale.y_millis == 1_000
+    {
+        WgpuLayerSamplerKind::Text
+    } else {
+        WgpuLayerSamplerKind::Linear
+    }
+}
+
 fn prepare_wgpu_layer_draws(
     graph: &RenderGraph,
     target: &impl WgpuRenderTargetInfo,
@@ -930,6 +1009,7 @@ fn prepare_wgpu_layer_draws(
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
     support: &mut RealtimePreviewGraphSupport,
     playback_generation: PlaybackGeneration,
+    ui_chrome: &RealtimePreviewUiChrome,
 ) -> Result<Vec<WgpuLayerDraw>, RealtimePreviewCompositorError> {
     let mut draws = Vec::new();
     let mut layers = graph_draw_layers(graph);
@@ -979,6 +1059,10 @@ fn prepare_wgpu_layer_draws(
     if *support == RealtimePreviewGraphSupport::Unsupported {
         return Ok(Vec::new());
     }
+
+    push_wgpu_ui_chrome_draws(
+        graph, target, device, queue, resources, &mut draws, ui_chrome,
+    )?;
 
     Ok(draws)
 }
@@ -1071,6 +1155,7 @@ fn push_wgpu_video_layer_draw(
         resources,
         draws,
         texture,
+        WgpuLayerSamplerKind::Linear,
         textured_quad_vertices(target, material, visual),
     );
     Ok(())
@@ -1090,19 +1175,41 @@ fn push_wgpu_text_layer_draw(
     text: &RenderTextOverlay,
 ) -> Result<(), RealtimePreviewCompositorError> {
     let sampled = sampled_text_for(graph, text);
-    let cache_key = text_texture_cache_key(text, sampled, target.width(), target.height());
+    let raster_scale = text_raster_scale(&text.visual);
+    let target_rect = graph_canvas_rect_to_target(
+        graph.canvas.width,
+        graph.canvas.height,
+        target.width(),
+        target.height(),
+        i64::from(text.overlay.layout_region.x),
+        i64::from(text.overlay.layout_region.y),
+        text.overlay.layout_width,
+        text.overlay.layout_height,
+    );
+    let raster_target = TextRasterizationTarget {
+        x: target_rect.x,
+        y: target_rect.y,
+        width: target_rect.width,
+        height: target_rect.height,
+        canvas_to_target_scale: canvas_to_target_scale(
+            graph.canvas.width,
+            graph.canvas.height,
+            target.width(),
+            target.height(),
+        ),
+    };
+    let cache_key = text_texture_cache_key(text, sampled, raster_target, raster_scale);
     let cached = if let Some(cached) = texture_cache.cached_text_layer(&cache_key) {
         cached
     } else {
-        let rasterized =
-            match rasterize_text_overlay(text, sampled, target.width(), target.height()) {
-                Ok(layer) => layer,
-                Err(error) => {
-                    diagnostics.push(text_diagnostic(text, error));
-                    *support = RealtimePreviewGraphSupport::Unsupported;
-                    return Ok(());
-                }
-            };
+        let rasterized = match rasterize_text_overlay(text, sampled, raster_target, raster_scale) {
+            Ok(layer) => layer,
+            Err(error) => {
+                diagnostics.push(text_diagnostic(text, error));
+                *support = RealtimePreviewGraphSupport::Unsupported;
+                return Ok(());
+            }
+        };
         let texture = Rc::new(create_wgpu_rgba_texture(
             device,
             queue,
@@ -1115,40 +1222,135 @@ fn push_wgpu_text_layer_draw(
         texture_cache.insert_text_layer(
             cache_key,
             RealtimePreviewCachedTextLayer {
-                width: rasterized.width,
-                height: rasterized.height,
+                width: rasterized.logical_width,
+                height: rasterized.logical_height,
                 x: rasterized.x,
                 y: rasterized.y,
                 texture,
             },
         )
     };
-    let target_rect = graph_canvas_rect_to_target(
-        graph.canvas.width,
-        graph.canvas.height,
-        target.width(),
-        target.height(),
-        cached.x,
-        cached.y,
-        cached.width,
-        cached.height,
-    );
     push_wgpu_layer_draw(
         device,
         queue,
         resources,
         draws,
         WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
-        textured_text_rect_vertices(target, target_rect, &text.visual),
+        text_layer_sampler_kind(&text.visual, raster_scale),
+        textured_text_rect_vertices(
+            target,
+            TargetRect {
+                x: u32::try_from(cached.x).unwrap_or(u32::MAX),
+                y: u32::try_from(cached.y).unwrap_or(u32::MAX),
+                width: cached.width,
+                height: cached.height,
+            },
+            &text.visual,
+        ),
     );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_wgpu_ui_chrome_draws(
+    graph: &RenderGraph,
+    target: &impl WgpuRenderTargetInfo,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    resources: &RealtimePreviewWgpuPipelines,
+    draws: &mut Vec<WgpuLayerDraw>,
+    ui_chrome: &RealtimePreviewUiChrome,
+) -> Result<(), RealtimePreviewCompositorError> {
+    let Some(selected) = ui_chrome.selected_segment.as_ref() else {
+        return Ok(());
+    };
+    let Some(text) = graph.text_overlays.iter().find(|text| {
+        text.overlay.track_id.as_str() == selected.track_id
+            && text.overlay.segment_id.as_str() == selected.segment_id
+    }) else {
+        return Ok(());
+    };
+
+    let target_rect = graph_canvas_rect_to_target(
+        graph.canvas.width,
+        graph.canvas.height,
+        target.width(),
+        target.height(),
+        i64::from(text.overlay.layout_region.x),
+        i64::from(text.overlay.layout_region.y),
+        text.overlay.layout_width,
+        text.overlay.layout_height,
+    );
+    let geometry = text_visual_geometry(target, target_rect, &text.visual);
+    let border_texture = &resources.ui_chrome_border_texture;
+    let handle_texture = &resources.ui_chrome_handle_texture;
+
+    let thickness = 2.0;
+    let handle_size = 10.0;
+    let rotate_handle_size = 13.0;
+    let rotate_gap = 24.0;
+    let left = geometry.left - 1.0;
+    let top = geometry.top - 1.0;
+    let right = geometry.right + 1.0;
+    let bottom = geometry.bottom + 1.0;
+
+    for (rect, texture) in [
+        (
+            (left, top - thickness, right, top + thickness),
+            Rc::clone(&border_texture),
+        ),
+        (
+            (left, bottom - thickness, right, bottom + thickness),
+            Rc::clone(&border_texture),
+        ),
+        (
+            (left - thickness, top, left + thickness, bottom),
+            Rc::clone(&border_texture),
+        ),
+        (
+            (right - thickness, top, right + thickness, bottom),
+            Rc::clone(&border_texture),
+        ),
+        (
+            corner_rect(left, top, handle_size),
+            Rc::clone(&handle_texture),
+        ),
+        (
+            corner_rect(right, top, handle_size),
+            Rc::clone(&handle_texture),
+        ),
+        (
+            corner_rect(left, bottom, handle_size),
+            Rc::clone(&handle_texture),
+        ),
+        (
+            corner_rect(right, bottom, handle_size),
+            Rc::clone(&handle_texture),
+        ),
+        (
+            corner_rect(right + rotate_gap, top - rotate_gap, rotate_handle_size),
+            Rc::clone(&handle_texture),
+        ),
+    ] {
+        push_wgpu_layer_draw(
+            device,
+            queue,
+            resources,
+            draws,
+            WgpuLayerTexture::Imported(texture),
+            WgpuLayerSamplerKind::Text,
+            solid_rect_vertices_from_geometry(geometry, rect, 1.0),
+        );
+    }
+
     Ok(())
 }
 
 fn text_texture_cache_key(
     text: &RenderTextOverlay,
     sampled: Option<&render_graph::graph::RenderSampledTextOverlay>,
-    canvas_width: u32,
-    canvas_height: u32,
+    target: TextRasterizationTarget,
+    raster_scale: u32,
 ) -> String {
     let font_size = sampled
         .map(|sample| sample.font_size)
@@ -1168,7 +1370,12 @@ fn text_texture_cache_key(
         draft_model::TextAlignment::Right => "right",
     };
     format!(
-        "canvas={canvas_width}x{canvas_height};track={};segment={};material={};content={:?};font_ref={:?};font_size={font_size};color={:?};line_height={line_height_millis};letter_spacing={letter_spacing_millis};alignment={alignment};text_box={}x{};layout={}x{}+{}+{};style={:?}",
+        "target={}x{}+{}+{};target_scale={:.6};raster_scale={raster_scale};track={};segment={};material={};content={:?};font_ref={:?};font_size={font_size};color={:?};line_height={line_height_millis};letter_spacing={letter_spacing_millis};alignment={alignment};text_box={}x{};layout={}x{}+{}+{};style={:?}",
+        target.width,
+        target.height,
+        target.x,
+        target.y,
+        target.canvas_to_target_scale,
         text.overlay.track_id.as_str(),
         text.overlay.segment_id.as_str(),
         text.material_id.as_str(),
@@ -1183,6 +1390,21 @@ fn text_texture_cache_key(
         text.overlay.layout_region.y,
         text.overlay.style,
     )
+}
+
+fn text_raster_scale(visual: &SegmentVisual) -> u32 {
+    let max_scale = visual
+        .transform
+        .scale
+        .x_millis
+        .max(visual.transform.scale.y_millis);
+    if max_scale > 1_750 {
+        4
+    } else if max_scale > 1_150 || visual.transform.rotation.degrees != 0 {
+        2
+    } else {
+        1
+    }
 }
 
 fn create_wgpu_rgba_texture(
@@ -1236,6 +1458,7 @@ fn push_wgpu_layer_draw(
     resources: &RealtimePreviewWgpuPipelines,
     draws: &mut Vec<WgpuLayerDraw>,
     texture: WgpuLayerTexture,
+    sampler_kind: WgpuLayerSamplerKind,
     vertices: Vec<u8>,
 ) {
     let (layer_resources, bind_group, pipeline_kind) = match texture {
@@ -1269,7 +1492,7 @@ fn push_wgpu_layer_draw(
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&resources.sampler),
+                        resource: wgpu::BindingResource::Sampler(&resources.linear_sampler),
                     },
                 ],
             });
@@ -1297,7 +1520,10 @@ fn push_wgpu_layer_draw(
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&resources.sampler),
+                        resource: wgpu::BindingResource::Sampler(match sampler_kind {
+                            WgpuLayerSamplerKind::Linear => &resources.linear_sampler,
+                            WgpuLayerSamplerKind::Text => &resources.text_sampler,
+                        }),
                     },
                 ],
             });
@@ -1501,6 +1727,37 @@ fn textured_text_rect_vertices(
     rect: TargetRect,
     visual: &SegmentVisual,
 ) -> Vec<u8> {
+    let geometry = text_visual_geometry(target, rect, visual);
+    textured_vertices_for_geometry(
+        geometry,
+        (geometry.left, geometry.top, geometry.right, geometry.bottom),
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        geometry.opacity,
+    )
+}
+
+#[derive(Clone, Copy)]
+struct TextVisualGeometry {
+    output: Dimensions,
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+    pivot_x: f64,
+    pivot_y: f64,
+    sin: f64,
+    cos: f64,
+    opacity: f32,
+}
+
+fn text_visual_geometry(
+    target: &impl WgpuRenderTargetInfo,
+    rect: TargetRect,
+    visual: &SegmentVisual,
+) -> TextVisualGeometry {
     let output = Dimensions {
         width: target.width(),
         height: target.height(),
@@ -1535,22 +1792,100 @@ fn textured_text_rect_vertices(
     let sin = radians.sin();
     let cos = radians.cos();
     let opacity = visual.transform.opacity.value_millis.min(1_000) as f32 / 1_000.0;
-    textured_vertices_from_corners(
+    TextVisualGeometry {
         output,
+        left,
+        top,
+        right,
+        bottom,
+        pivot_x,
+        pivot_y,
+        sin,
+        cos,
+        opacity,
+    }
+}
+
+fn textured_vertices_for_geometry(
+    geometry: TextVisualGeometry,
+    rect: (f64, f64, f64, f64),
+    u0: f32,
+    v0: f32,
+    u1: f32,
+    v1: f32,
+    opacity: f32,
+) -> Vec<u8> {
+    let (left, top, right, bottom) = rect;
+    textured_vertices_from_corners(
+        geometry.output,
         [
             vertex_corner(
-                left, top, pivot_x, pivot_y, sin, cos, output, 0.0, 0.0, opacity,
+                left,
+                top,
+                geometry.pivot_x,
+                geometry.pivot_y,
+                geometry.sin,
+                geometry.cos,
+                geometry.output,
+                u0,
+                v0,
+                opacity,
             ),
             vertex_corner(
-                right, top, pivot_x, pivot_y, sin, cos, output, 1.0, 0.0, opacity,
+                right,
+                top,
+                geometry.pivot_x,
+                geometry.pivot_y,
+                geometry.sin,
+                geometry.cos,
+                geometry.output,
+                u1,
+                v0,
+                opacity,
             ),
             vertex_corner(
-                right, bottom, pivot_x, pivot_y, sin, cos, output, 1.0, 1.0, opacity,
+                right,
+                bottom,
+                geometry.pivot_x,
+                geometry.pivot_y,
+                geometry.sin,
+                geometry.cos,
+                geometry.output,
+                u1,
+                v1,
+                opacity,
             ),
             vertex_corner(
-                left, bottom, pivot_x, pivot_y, sin, cos, output, 0.0, 1.0, opacity,
+                left,
+                bottom,
+                geometry.pivot_x,
+                geometry.pivot_y,
+                geometry.sin,
+                geometry.cos,
+                geometry.output,
+                u0,
+                v1,
+                opacity,
             ),
         ],
+    )
+}
+
+fn solid_rect_vertices_from_geometry(
+    geometry: TextVisualGeometry,
+    rect: (f64, f64, f64, f64),
+    opacity: f32,
+) -> Vec<u8> {
+    textured_vertices_for_geometry(geometry, rect, 0.5, 0.5, 0.5, 0.5, opacity)
+}
+
+fn corner_rect(center_x: f64, center_y: f64, size: f64) -> (f64, f64, f64, f64) {
+    let radius = size / 2.0;
+    (
+        center_x - radius,
+        center_y - radius,
+        center_x + radius,
+        center_y + radius,
     )
 }
 
@@ -2041,6 +2376,30 @@ fn graph_canvas_rect_to_target(
     }
 }
 
+fn canvas_to_target_scale(
+    canvas_width: u32,
+    canvas_height: u32,
+    target_width: u32,
+    target_height: u32,
+) -> f32 {
+    let canvas_width = canvas_width.max(1);
+    let canvas_height = canvas_height.max(1);
+    let fitted = fit_dimensions(
+        Dimensions {
+            width: canvas_width,
+            height: canvas_height,
+        },
+        Dimensions {
+            width: target_width.max(1),
+            height: target_height.max(1),
+        },
+        SegmentFitMode::Fit,
+    );
+    let width_scale = fitted.width as f32 / canvas_width as f32;
+    let height_scale = fitted.height as f32 / canvas_height as f32;
+    width_scale.min(height_scale).max(0.001)
+}
+
 fn scale_canvas_u32(span: u32, target_span: u32, canvas_span: u32) -> u32 {
     round_div_u64(
         u64::from(span) * u64::from(target_span),
@@ -2303,6 +2662,68 @@ mod tests {
         assert!(
             (bt709[6] - bt2020[6]).abs() > 0.02,
             "BT.2020 blue chroma coefficient must not reuse BT.709"
+        );
+    }
+
+    #[test]
+    fn text_raster_scale_keeps_untransformed_text_one_to_one() {
+        let visual = SegmentVisual::default();
+        assert_eq!(
+            text_raster_scale(&visual),
+            1,
+            "CoreText text is rasterized in final target pixels; untransformed text must not be downsampled by a fixed 2x texture"
+        );
+
+        let mut scaled = SegmentVisual::default();
+        scaled.transform.scale.x_millis = 1_200;
+        assert_eq!(text_raster_scale(&scaled), 2);
+
+        let mut rotated = SegmentVisual::default();
+        rotated.transform.rotation.degrees = 12;
+        assert_eq!(text_raster_scale(&rotated), 2);
+    }
+
+    #[test]
+    fn text_sampler_uses_nearest_filtering_for_bitmap_glyph_edges() {
+        let sampler = text_layer_sampler_descriptor();
+        assert_eq!(
+            sampler.mag_filter,
+            wgpu::FilterMode::Nearest,
+            "bitmap text must not share the video layer linear sampler because it softens glyph edges"
+        );
+        assert_eq!(
+            sampler.min_filter,
+            wgpu::FilterMode::Nearest,
+            "bitmap text downsampling is controlled by raster scale, not by per-sample linear filtering"
+        );
+
+        let video_sampler = linear_layer_sampler_descriptor();
+        assert_eq!(video_sampler.mag_filter, wgpu::FilterMode::Linear);
+        assert_eq!(video_sampler.min_filter, wgpu::FilterMode::Linear);
+    }
+
+    #[test]
+    fn text_sampler_kind_only_uses_nearest_for_pixel_aligned_text() {
+        let visual = SegmentVisual::default();
+        assert_eq!(
+            text_layer_sampler_kind(&visual, 1),
+            WgpuLayerSamplerKind::Text
+        );
+
+        let mut rotated = SegmentVisual::default();
+        rotated.transform.rotation.degrees = 8;
+        assert_eq!(
+            text_layer_sampler_kind(&rotated, 2),
+            WgpuLayerSamplerKind::Linear,
+            "rotated text should use linear resampling over a higher-resolution raster texture"
+        );
+
+        let mut scaled = SegmentVisual::default();
+        scaled.transform.scale.x_millis = 1_250;
+        assert_eq!(
+            text_layer_sampler_kind(&scaled, 2),
+            WgpuLayerSamplerKind::Linear,
+            "scaled text should avoid nearest-neighbor jaggies"
         );
     }
 }

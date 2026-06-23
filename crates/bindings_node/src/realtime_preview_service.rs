@@ -30,12 +30,13 @@ use realtime_preview_runtime::{
     RealtimePlaybackPresentationQueuePolicy, RealtimePlaybackPresentedFrame,
     RealtimePlaybackScheduler, RealtimePlaybackSchedulerConfig, RealtimePlaybackSchedulerError,
     RealtimePlaybackSchedulerEvidence, RealtimePlaybackSchedulerPresentation,
-    RealtimePlaybackSchedulerPresenter, RealtimePlaybackTimeline, RealtimePreviewAudioSyncState,
+    RealtimePlaybackSchedulerPresenter, RealtimePlaybackSelectedSegment,
+    RealtimePlaybackTextOverlayEvidence, RealtimePlaybackTimeline, RealtimePreviewAudioSyncState,
     RealtimePreviewBackendUsed, RealtimePreviewCapabilityClassifier, RealtimePreviewCompositor,
     RealtimePreviewDiagnostic, RealtimePreviewError, RealtimePreviewFallbackReason,
     RealtimePreviewFramePacingSample, RealtimePreviewFramePacingTelemetry,
     RealtimePreviewFrameRequest, RealtimePreviewRuntime, RealtimePreviewSessionConfig,
-    RealtimePreviewTelemetry, TextureHandleDescriptor,
+    RealtimePreviewTelemetry, RealtimePreviewUiChrome, TextureHandleDescriptor,
     gpu::{NativeParentWindowHandle, PreviewSurfaceBounds, PreviewSurfaceDescriptor},
     gpu::{
         RealtimePreviewExternalTexturePlanes, RealtimePreviewGpuBackend, RealtimePreviewGpuDevice,
@@ -52,10 +53,17 @@ use crate::native_preview_presenter::{
     NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
     NativePreviewScreenRect, NativePreviewSurfacePlacementEvidence,
 };
+use crate::timeline_selection::timeline_segment_selection_handle;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 
 const SESSION_PREFIX: &str = "rtprev-session-";
 static NEXT_SCHEDULER_MEDIA_PIPELINE_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealtimePreviewSelectedSegmentBinding {
+    pub track_id: String,
+    pub segment_id: String,
+}
 
 thread_local! {
     static SCHEDULER_MEDIA_PIPELINES: RefCell<BTreeMap<u64, SchedulerMediaPipeline>> =
@@ -389,12 +397,17 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
         draft: Draft,
         bundle_path: Option<PathBuf>,
+        selected_segment: Option<RealtimePreviewSelectedSegmentBinding>,
     ) -> Result<RealtimePreviewGenerationBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
         self.cancel_still_frame_worker(session_id);
         self.cancel_playback_worker(session_id);
         self.with_scheduler_mut(session_id, |scheduler| {
-            scheduler.update_draft_snapshot(draft.clone(), bundle_path.clone());
+            scheduler.update_draft_snapshot(
+                draft.clone(),
+                bundle_path.clone(),
+                selected_segment.clone(),
+            );
             Ok(())
         })?;
         let generation = self
@@ -598,6 +611,45 @@ impl RealtimePreviewBindingRegistry {
                 }),
             )),
         }
+    }
+
+    pub fn hit_test_text_overlay(
+        &self,
+        session_id: &str,
+        request: RealtimePreviewTextHitTestBindingRequest,
+    ) -> Result<RealtimePreviewTextHitTestBindingResponse, RealtimePreviewBindingError> {
+        let snapshot = self.playback_snapshot(session_id)?;
+        let Some(evidence) = snapshot.evidence else {
+            return Ok(RealtimePreviewTextHitTestBindingResponse::miss());
+        };
+        let hit = evidence.active_text_overlays.iter().rev().find(|text| {
+            transformed_text_overlay_contains(
+                text,
+                evidence.width,
+                evidence.height,
+                request.x,
+                request.y,
+            )
+        });
+        let Some(text) = hit else {
+            return Ok(RealtimePreviewTextHitTestBindingResponse::miss());
+        };
+        Ok(RealtimePreviewTextHitTestBindingResponse {
+            hit: true,
+            track_id: Some(text.track_id.clone()),
+            segment_id: Some(text.segment_id.clone()),
+            selection_handle: Some(timeline_segment_selection_handle(
+                &draft_model::TrackId::new(text.track_id.clone()),
+                &draft_model::SegmentId::new(text.segment_id.clone()),
+            )),
+            source: Some(text.source),
+            content: Some(text.content.clone()),
+            x: Some(text.x),
+            y: Some(text.y),
+            width: Some(text.width),
+            height: Some(text.height),
+            target_time_microseconds: Some(evidence.target_time_microseconds),
+        })
     }
 
     fn emit_control_event(&self, session_id: &str, generation: PlaybackGeneration) {
@@ -928,12 +980,10 @@ fn run_binding_playback_loop(
             let frame_started = Instant::now();
             match scheduler.present_playback_tick(playback_generation, due_tick) {
                 Ok(frame) => {
-                    let reached_end = frame.evidence.target_time_microseconds
-                        >= scheduler.sequence_duration().get();
                     let render_duration_ms =
                         u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                     let presented_at = Instant::now();
-                    Ok(Some((frame, reached_end, render_duration_ms, presented_at)))
+                    Ok(Some((frame, render_duration_ms, presented_at)))
                 }
                 Err(error) => {
                     let transient = is_transient_playback_presentation_error(&error);
@@ -958,7 +1008,7 @@ fn run_binding_playback_loop(
         };
 
         match frame {
-            Ok(Some((frame, reached_end, render_duration_ms, presented_at))) => {
+            Ok(Some((frame, render_duration_ms, presented_at))) => {
                 if frame.evidence.presented_frames > 0 {
                     let interval_ms =
                         u64::try_from(presented_at.duration_since(last_presented_at).as_millis())
@@ -978,7 +1028,7 @@ fn run_binding_playback_loop(
                                 dropped_frame_count: frame.dropped_frames,
                             },
                         );
-                        if reached_end {
+                        if frame.reached_end {
                             let _ = runtime.pause(runtime_id);
                         }
                     }
@@ -990,7 +1040,7 @@ fn run_binding_playback_loop(
                     ));
                     last_presented_at = presented_at;
                 }
-                if reached_end {
+                if frame.reached_end {
                     if let Ok(mut scheduler) = scheduler.lock() {
                         scheduler.pause_playback();
                     }
@@ -1289,8 +1339,20 @@ impl RealtimePreviewBindingScheduler {
             .update_preview_dimensions(OutputDimensions { width, height });
     }
 
-    fn update_draft_snapshot(&mut self, draft: Draft, bundle_path: Option<PathBuf>) {
+    fn update_draft_snapshot(
+        &mut self,
+        draft: Draft,
+        bundle_path: Option<PathBuf>,
+        selected_segment: Option<RealtimePreviewSelectedSegmentBinding>,
+    ) {
         self.scheduler.update_draft_snapshot(draft.clone());
+        self.scheduler
+            .update_selected_segment(selected_segment.map(|selected| {
+                RealtimePlaybackSelectedSegment {
+                    track_id: selected.track_id,
+                    segment_id: selected.segment_id,
+                }
+            }));
         self.draft_snapshot = Some(draft);
         self.bundle_path = bundle_path;
         self.reset_media_pipeline();
@@ -1494,11 +1556,12 @@ impl RealtimePreviewBindingScheduler {
     ) -> Result<RealtimePlaybackPresentedFrame, RealtimePreviewBindingError> {
         let evidence = self.present_next_tick(due_tick.target_time, playback_generation)?;
         self.playback_timeline
-            .advance_after_presented(due_tick.target_time);
+            .advance_after_presented_tick(due_tick);
         Ok(RealtimePlaybackPresentedFrame {
             evidence,
             dropped_frames: due_tick.dropped_frames,
             schedule_lateness_ms: due_tick.schedule_lateness_ms,
+            reached_end: due_tick.reaches_sequence_end,
         })
     }
 
@@ -1863,6 +1926,7 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
         graph: &RenderGraph,
         target_time: Microseconds,
         playback_generation: PlaybackGeneration,
+        ui_chrome: &RealtimePreviewUiChrome,
     ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError> {
         let gpu_device = self.gpu_device.clone().ok_or_else(|| {
             RealtimePlaybackSchedulerError::MissingPrerequisite {
@@ -1908,6 +1972,7 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerPresenter<'_> {
                 &mut pipeline.provider,
                 &mut pipeline.texture_cache,
                 playback_generation,
+                ui_chrome,
             );
             let frame_releases = pipeline.provider.take_presented_frame_releases();
             match presentation.as_mut() {
@@ -1976,6 +2041,7 @@ impl RealtimePlaybackSchedulerPresenter for BindingSchedulerTestPresenter {
         graph: &RenderGraph,
         target_time: Microseconds,
         playback_generation: PlaybackGeneration,
+        _ui_chrome: &RealtimePreviewUiChrome,
     ) -> Result<RealtimePlaybackSchedulerPresentation, RealtimePlaybackSchedulerError> {
         Ok(RealtimePlaybackSchedulerPresentation {
             width: graph.canvas.width,
@@ -2140,6 +2206,12 @@ fn native_evidence_from_scheduler(
             .into_iter()
             .map(
                 |text| crate::native_preview_presenter::NativePreviewTextOverlayEvidence {
+                    selection_handle: timeline_segment_selection_handle(
+                        &draft_model::TrackId::new(text.track_id.clone()),
+                        &draft_model::SegmentId::new(text.segment_id.clone()),
+                    ),
+                    track_id: text.track_id,
+                    segment_id: text.segment_id,
                     source: text.source,
                     content: text.content,
                     font_family: text.font_family,
@@ -2159,10 +2231,41 @@ fn native_evidence_from_scheduler(
                     visual_scale_y_millis: text.visual_scale_y_millis,
                     visual_rotation_degrees: text.visual_rotation_degrees,
                     visual_opacity_millis: text.visual_opacity_millis,
+                    selected: text.selected,
                 },
             )
             .collect(),
     }
+}
+
+fn transformed_text_overlay_contains(
+    text: &RealtimePlaybackTextOverlayEvidence,
+    target_width: u32,
+    target_height: u32,
+    x: u32,
+    y: u32,
+) -> bool {
+    let target_width = f64::from(target_width.max(1));
+    let target_height = f64::from(target_height.max(1));
+    let scale_x = f64::from(text.visual_scale_x_millis.max(1)) / 1000.0;
+    let scale_y = f64::from(text.visual_scale_y_millis.max(1)) / 1000.0;
+    let width = f64::from(text.width.max(1)) * scale_x;
+    let height = f64::from(text.height.max(1)) * scale_y;
+    let center_x = f64::from(text.x)
+        + f64::from(text.width) / 2.0
+        + (target_width * f64::from(text.visual_position_x)) / 2000.0;
+    let center_y = f64::from(text.y) + f64::from(text.height) / 2.0
+        - (target_height * f64::from(text.visual_position_y)) / 2000.0;
+    let radians = f64::from(text.visual_rotation_degrees).to_radians();
+    let rotated_width = width * radians.cos().abs() + height * radians.sin().abs();
+    let rotated_height = width * radians.sin().abs() + height * radians.cos().abs();
+    let left = center_x - rotated_width / 2.0;
+    let top = center_y - rotated_height / 2.0;
+    let right = center_x + rotated_width / 2.0;
+    let bottom = center_y + rotated_height / 2.0;
+    let x = f64::from(x);
+    let y = f64::from(y);
+    x >= left && x < right && y >= top && y < bottom
 }
 
 fn native_surface_placement_from_runtime(
@@ -2374,6 +2477,57 @@ pub struct RealtimePreviewFrameBindingRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_reason: Option<RealtimePreviewFallbackReason>,
     pub cache_hit: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewTextHitTestBindingRequest {
+    pub x: u32,
+    pub y: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealtimePreviewTextHitTestBindingResponse {
+    pub hit: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_handle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<draft_model::TextSegmentSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_time_microseconds: Option<u64>,
+}
+
+impl RealtimePreviewTextHitTestBindingResponse {
+    fn miss() -> Self {
+        Self {
+            hit: false,
+            track_id: None,
+            segment_id: None,
+            selection_handle: None,
+            source: None,
+            content: None,
+            x: None,
+            y: None,
+            width: None,
+            height: None,
+            target_time_microseconds: None,
+        }
+    }
 }
 
 impl RealtimePreviewFrameBindingRequest {
@@ -2610,8 +2764,9 @@ mod realtime_preview_bindings {
         RealtimePreviewFrameBindingRequest, RealtimePreviewSessionBindingConfig,
         RealtimePreviewSurfaceBindingDescriptor, RealtimePreviewSurfaceBindingKind,
         RealtimePreviewSurfaceBoundsBindingRequest, RealtimePreviewTelemetryBindingResponse,
-        RealtimePreviewTextureCache, SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider,
-        SchedulerMediaPipeline, StaticImageFrame,
+        RealtimePreviewTextHitTestBindingRequest, RealtimePreviewTextureCache,
+        SCHEDULER_MEDIA_PIPELINES, SchedulerFrameProvider, SchedulerMediaPipeline,
+        StaticImageFrame, transformed_text_overlay_contains,
     };
     use crate::native_preview_presenter::{
         NativePreviewContentEvidenceSource, NativePreviewPresentationBackend,
@@ -2623,12 +2778,49 @@ mod realtime_preview_bindings {
     };
     use realtime_preview_runtime::{
         MediaIoFrameProvider, PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
-        PreviewRequestMode, RealtimePlaybackSchedulerConfig, RealtimePreviewAudioSyncState,
-        RealtimePreviewFallbackReason,
+        PreviewRequestMode, RealtimePlaybackSchedulerConfig, RealtimePlaybackTextOverlayEvidence,
+        RealtimePreviewAudioSyncState, RealtimePreviewFallbackReason,
     };
     use render_graph::OutputDimensions;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn text_overlay_hit_test_uses_transformed_visual_bounds() {
+        let text = RealtimePlaybackTextOverlayEvidence {
+            track_id: "track-text-001".to_owned(),
+            segment_id: "segment-text-001".to_owned(),
+            source: TextSegmentSource::Text,
+            content: "变换命中".to_owned(),
+            font_family: "Noto Sans CJK SC".to_owned(),
+            font_ref: None,
+            font_size: 32,
+            color: "#ffffff".to_owned(),
+            alignment: "center".to_owned(),
+            line_height_millis: 1200,
+            letter_spacing_millis: 0,
+            x: 100,
+            y: 100,
+            width: 120,
+            height: 60,
+            visual_position_x: 500,
+            visual_position_y: 0,
+            visual_scale_x_millis: 1000,
+            visual_scale_y_millis: 1000,
+            visual_rotation_degrees: 0,
+            visual_opacity_millis: 1000,
+            selected: false,
+        };
+
+        assert!(
+            transformed_text_overlay_contains(&text, 640, 360, 330, 130),
+            "hit-test must include the visual-position transformed text bounds"
+        );
+        assert!(
+            !transformed_text_overlay_contains(&text, 640, 360, 105, 105),
+            "hit-test must not keep using the stale untransformed layout bounds"
+        );
+    }
 
     fn registry_with_session() -> (RealtimePreviewBindingRegistry, String) {
         let mut registry = RealtimePreviewBindingRegistry::new();
@@ -2852,7 +3044,7 @@ mod realtime_preview_bindings {
             );
         });
 
-        scheduler.update_draft_snapshot(scheduler_video_draft(), None);
+        scheduler.update_draft_snapshot(scheduler_video_draft(), None, None);
 
         assert_ne!(
             scheduler.media_pipeline_id, previous_pipeline_id,
@@ -2884,7 +3076,7 @@ mod realtime_preview_bindings {
             )
             .expect("scheduler can validate attached compositor surface");
         registry
-            .update_draft_snapshot(&session_id, scheduler_video_draft(), None)
+            .update_draft_snapshot(&session_id, scheduler_video_draft(), None, None)
             .expect("scheduler stores accepted draft snapshot");
         registry
             .seek(&session_id, 500_000)
@@ -2945,6 +3137,32 @@ mod realtime_preview_bindings {
                 .collect::<Vec<_>>(),
             vec![(TextSegmentSource::Subtitle, "调度字幕证据")]
         );
+        let overlay = evidence
+            .active_text_overlays
+            .first()
+            .expect("text overlay evidence is required");
+        assert_eq!(overlay.track_id, "track-subtitle-001");
+        assert_eq!(overlay.segment_id, "segment-subtitle-001");
+        assert_eq!(
+            overlay.selection_handle,
+            "timeline-segment:track-subtitle-001:segment-subtitle-001"
+        );
+        let hit = registry
+            .hit_test_text_overlay(
+                &session_id,
+                RealtimePreviewTextHitTestBindingRequest {
+                    x: overlay.x.saturating_add(1),
+                    y: overlay.y.saturating_add(1),
+                },
+            )
+            .expect("text hit-test uses latest native evidence");
+        assert!(hit.hit);
+        assert_eq!(
+            hit.selection_handle.as_deref(),
+            Some(overlay.selection_handle.as_str())
+        );
+        assert_eq!(hit.track_id.as_deref(), Some("track-subtitle-001"));
+        assert_eq!(hit.segment_id.as_deref(), Some("segment-subtitle-001"));
         assert!(telemetry.presented_frame_count > 0);
         assert!(telemetry.target_time_microseconds >= 500_000);
         assert_eq!(
@@ -2972,7 +3190,7 @@ mod realtime_preview_bindings {
             )
             .expect("scheduler can validate attached compositor surface");
         registry
-            .update_draft_snapshot(&session_id, scheduler_video_draft(), None)
+            .update_draft_snapshot(&session_id, scheduler_video_draft(), None, None)
             .expect("scheduler stores accepted draft snapshot");
 
         let seek = registry
@@ -3046,7 +3264,7 @@ mod realtime_preview_bindings {
             )
             .expect("scheduler can validate attached compositor surface");
         registry
-            .update_draft_snapshot(&session_id, scheduler_video_draft(), None)
+            .update_draft_snapshot(&session_id, scheduler_video_draft(), None, None)
             .expect("scheduler stores accepted draft snapshot");
         registry
             .seek(&session_id, 250_000)

@@ -770,6 +770,13 @@
   outline-offset: -2px;
 }
 
+.segment-block.dragging {
+  border-color: #f5c542;
+  box-shadow:
+    0 0 0 1px rgba(4, 14, 16, 0.66),
+    0 5px 14px rgba(0, 0, 0, 0.24);
+}
+
 .segment-trim-handle {
   position: absolute;
   top: 0;

@@ -60,10 +60,9 @@ for text in \
   "导入字幕" \
   "SRT 内容" \
   "SRT 字幕" \
-  "应用文字" \
-  "应用画面" \
   "字幕 SRT import intent path sends raw SRT" \
-  "editTextSegment" \
+  "textPatch" \
+  "visualPatch" \
   "updateSegmentVisual"; do
   found=false
   for file in "${UI_AND_TEST_FILES[@]}"; do
@@ -74,6 +73,11 @@ for text in \
   done
   [ "$found" = "true" ] || fail "missing required SRT import/edit UI or test coverage text: ${text}"
 done
+
+fail_matches \
+  "product inspector edits must be realtime; renderer source must not expose old apply buttons" \
+  '"应用文字"|"应用画面"|"应用音频"' \
+  "$RENDERER_DIR"
 
 require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "importSubtitleSrtIntent"
 require_fixed "apps/desktop-electron/src/main/nativeBinding.ts" "editSelectedText"

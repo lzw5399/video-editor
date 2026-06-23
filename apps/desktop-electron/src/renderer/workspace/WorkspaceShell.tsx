@@ -12,7 +12,7 @@ import {
   type WorkspaceState
 } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, SegmentVisual } from "../../generated/Draft";
+import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty } from "../../generated/Draft";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
@@ -59,7 +59,9 @@ type WorkspaceShellProps = {
   onAddAudioSegment: Parameters<typeof FeaturePanel>[0]["onAddAudioSegment"];
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
-  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
+  onUpdateSelectedSegmentVisual: Parameters<typeof Inspector>[0]["onUpdateSelectedSegmentVisual"];
+  onSelectPreviewTextOverlay: (selectionHandle: string) => void;
+  onEditPreviewTextOverlay: (selectionHandle: string) => void;
   onSetSelectedSegmentKeyframe: (
     property: KeyframeProperty,
     interpolation?: KeyframeInterpolation,
@@ -144,6 +146,8 @@ export function WorkspaceShell({
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
+  onSelectPreviewTextOverlay,
+  onEditPreviewTextOverlay,
   onSetSelectedSegmentKeyframe,
   onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
@@ -167,7 +171,12 @@ export function WorkspaceShell({
   const selectedSegment = workspace.viewModel.selectedSegment;
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [topFeatureOverflowOpen, setTopFeatureOverflowOpen] = useState(false);
+  const [previewTextEditFocusVersion, setPreviewTextEditFocusVersion] = useState(0);
   const overflowActive = OVERFLOW_WORKSPACE_CATEGORIES.includes(activeCategory);
+  const handleEditPreviewTextOverlay = (selectionHandle: string): void => {
+    setPreviewTextEditFocusVersion((current) => current + 1);
+    onEditPreviewTextOverlay(selectionHandle);
+  };
   const openExportModal = (): void => {
     void (async () => {
       try {
@@ -302,6 +311,8 @@ export function WorkspaceShell({
           onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
           onRetryAudioPreview={onRetryAudioPreview}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
+          onSelectPreviewTextOverlay={onSelectPreviewTextOverlay}
+          onEditPreviewTextOverlay={handleEditPreviewTextOverlay}
         />
       </section>
 
@@ -309,6 +320,7 @@ export function WorkspaceShell({
         <Inspector
           workspace={workspace}
           playheadUs={playheadUs}
+          textEditFocusRequest={previewTextEditFocusVersion}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
@@ -333,6 +345,7 @@ export function WorkspaceShell({
           onSelectSegment={onSelectTimelineSegment}
           onSelectTrack={onSelectTimelineTrack}
           onAddSegment={onAddTimelineSegment}
+          onAddTextSegment={onAddTextSegment}
           onAddTrack={onAddTimelineTrack}
           onRenameTrack={onRenameTimelineTrack}
           onSetTrackLock={onSetTimelineTrackLock}

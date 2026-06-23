@@ -62,7 +62,9 @@ import {
   type OpenProjectSessionRequest,
   type ProjectSessionReadRequest,
   type ProjectSessionRequest,
-  type StartProjectSessionExportRequest
+  type SegmentVisualPatch,
+  type StartProjectSessionExportRequest,
+  type TextSegmentPatch
 } from "./nativeBinding";
 import { registerRealtimePreviewHost } from "./realtimePreviewHost";
 
@@ -108,6 +110,7 @@ type TestProjectSessionCall = {
   sessionId: string | null;
   expectedRevision: number | null;
   intentKind: string | null;
+  itemHandle: string | null;
   materialId: string | null;
   materialPath: string | null;
   outputPath: string | null;
@@ -117,11 +120,14 @@ type TestProjectSessionCall = {
   duration: number | null;
   canvasConfig: TestNativeCommandObservation["canvasConfig"];
   visual: SegmentVisual | null;
+  visualPatch: SegmentVisualPatch | null;
   keyframeProperty: string | null;
   keyframeAt: number | null;
+  textPatch: TextSegmentPatch | null;
   textContent: string | null;
   textSource: string | null;
   textFontRef: string | null;
+  targetTrackHandle: string | null;
   srtContent: string | null;
   timelineSemanticKeys: string[];
   hasDraftField: boolean;
@@ -714,9 +720,6 @@ function testRendererArgument(envName: string, prefix: string): string[] {
 }
 
 function setEnvFromArgument(envName: string, prefix: string): void {
-  if (process.env[envName] !== undefined) {
-    return;
-  }
   const argument = process.argv.find((value) => value.startsWith(prefix));
   if (argument === undefined) {
     return;
@@ -828,30 +831,46 @@ function recordTestProjectSessionCall(
 
   const intent = "intent" in request ? request.intent : null;
   const intentRecord = intent as Record<string, unknown> | null;
-  const text = intentRecord?.text as { content?: unknown; source?: unknown; style?: { font?: { fontRef?: unknown } } } | undefined;
+  const textPatch =
+    intentRecord?.kind === "editSelectedText" && typeof intentRecord.patch === "object" && intentRecord.patch !== null
+      ? (intentRecord.patch as TextSegmentPatch)
+      : null;
+  const intentTargetTime =
+    typeof intentRecord?.targetStart === "number"
+      ? intentRecord.targetStart
+      : typeof intentRecord?.timeOffset === "number"
+        ? intentRecord.timeOffset
+        : null;
   globalThis.__videoEditorTestProjectSessionCalls ??= [];
   globalThis.__videoEditorTestProjectSessionCalls.push({
     command,
     sessionId: "sessionId" in request ? request.sessionId : null,
     expectedRevision: "expectedRevision" in request ? request.expectedRevision : null,
     intentKind: intent?.kind ?? null,
+    itemHandle: typeof intentRecord?.itemHandle === "string" ? intentRecord.itemHandle : null,
     materialId: intent !== null && "materialId" in intent ? intent.materialId ?? null : null,
     materialPath: intent !== null && "materialPath" in intent ? intent.materialPath ?? null : null,
     outputPath: "outputPath" in request ? request.outputPath : null,
     preset: "preset" in request ? request.preset : null,
-    targetTime: "targetTime" in request ? request.targetTime : null,
+    targetTime: "targetTime" in request ? request.targetTime : intentTargetTime,
     targetTimerange: "targetTimerange" in request ? request.targetTimerange : null,
     duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
     canvasConfig:
       intentRecord?.kind === "updateDraftCanvasConfig"
         ? (intentRecord.canvasConfig as TestNativeCommandObservation["canvasConfig"])
         : null,
-    visual: intentRecord?.kind === "updateSelectedSegmentVisual" ? (intentRecord.visual as SegmentVisual) : null,
+    visual: intentRecord?.kind === "updateSelectedSegmentVisual" && "visual" in intentRecord ? (intentRecord.visual as SegmentVisual) : null,
+    visualPatch:
+      intentRecord?.kind === "updateSelectedSegmentVisual" && typeof intentRecord.patch === "object" && intentRecord.patch !== null
+        ? (intentRecord.patch as SegmentVisualPatch)
+        : null,
     keyframeProperty: typeof intentRecord?.property === "string" ? intentRecord.property : null,
     keyframeAt: typeof intentRecord?.at === "number" ? intentRecord.at : null,
-    textContent: typeof text?.content === "string" ? text.content : null,
-    textSource: typeof text?.source === "string" ? text.source : null,
-    textFontRef: typeof text?.style?.font?.fontRef === "string" ? text.style.font.fontRef : null,
+    textPatch,
+    textContent: typeof textPatch?.content === "string" ? textPatch.content : null,
+    textSource: null,
+    textFontRef: typeof textPatch?.fontRef === "string" ? textPatch.fontRef : null,
+    targetTrackHandle: typeof intentRecord?.targetTrackHandle === "string" ? intentRecord.targetTrackHandle : null,
     srtContent: typeof intentRecord?.srtContent === "string" ? intentRecord.srtContent : null,
     timelineSemanticKeys: timelineSemanticKeys(intentRecord),
     hasDraftField:

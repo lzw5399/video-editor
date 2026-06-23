@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type {
   CanvasAspectRatioPreset,
@@ -14,6 +14,7 @@ import type {
   TextAlignment,
   TextSegment
 } from "../../generated/Draft";
+import type { SegmentVisualPatch, TextSegmentPatch } from "../../main/nativeBinding";
 import {
   canvasAspectRatioFromSize,
   canvasPresetLabel,
@@ -36,10 +37,11 @@ import "./preview-inspector.css";
 type InspectorProps = {
   workspace: WorkspaceState;
   playheadUs: number;
+  textEditFocusRequest: number;
   showDeveloperDiagnostics: boolean;
-  onEditSelectedText: (text: TextSegment) => void;
+  onEditSelectedText: (patch: TextSegmentPatch) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
-  onUpdateSelectedSegmentVisual: (visual: SegmentVisual) => void;
+  onUpdateSelectedSegmentVisual: (patch: SegmentVisualPatch) => void;
   onSetSelectedSegmentKeyframe: (
     property: KeyframeProperty,
     interpolation?: KeyframeInterpolation,
@@ -125,6 +127,13 @@ type VisualFormState = {
   cropBottomMillis: string;
   backgroundKind: VisualBackgroundChoice;
   backgroundColor: string;
+};
+
+type AudioEditOptions = {
+  gainMillis: number;
+  panBalanceMillis: number;
+  fadeInDuration: number;
+  fadeOutDuration: number;
 };
 
 const DEFAULT_TEXT_STATE: TextFormState = {
@@ -220,6 +229,7 @@ const KEYFRAME_PROPERTY_GROUPS: readonly {
 export function Inspector({
   workspace,
   playheadUs,
+  textEditFocusRequest,
   showDeveloperDiagnostics,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
@@ -238,9 +248,14 @@ export function Inspector({
   const [panPercent, setPanPercent] = useState(0);
   const [fadeInUs, setFadeInUs] = useState(0);
   const [fadeOutUs, setFadeOutUs] = useState(0);
+  const textContentRef = useRef<HTMLTextAreaElement | null>(null);
+  const textCommitKeyRef = useRef<string | null>(null);
+  const audioCommitKeyRef = useRef<string | null>(null);
+  const audioHydrationSelectionRef = useRef<string | null>(null);
   const sequenceDuration = workspace.viewModel.project.sequenceDuration;
   const hasText = selected?.text !== null && selected?.text !== undefined;
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
+  const inspectorFieldsDisabled = workspace.pendingCommand !== null;
   const visibleTabs = useMemo(() => inspectorTabsForSelection(selected), [selected]);
   const effectiveActiveTab =
     selected === null || visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0];
@@ -263,6 +278,9 @@ export function Inspector({
   useEffect(() => {
     if (selected === null) {
       setTextState(DEFAULT_TEXT_STATE);
+      textCommitKeyRef.current = null;
+      audioCommitKeyRef.current = null;
+      audioHydrationSelectionRef.current = null;
       setVolumePercent(100);
       setPanPercent(0);
       setFadeInUs(0);
@@ -270,17 +288,21 @@ export function Inspector({
       return;
     }
 
-    setVolumePercent(Math.round((selected.audio?.gainMillis ?? selected.volume.levelMillis) / 10));
-    setPanPercent(Math.round((selected.audio?.panBalanceMillis ?? 0) / 10));
-    setFadeInUs(selected.audio?.fadeInDuration.duration ?? 0);
-    setFadeOutUs(selected.audio?.fadeOutDuration.duration ?? 0);
+    const selectedAudioOptions = audioOptionsFromSelected(selected);
+    setVolumePercent(Math.round(selectedAudioOptions.gainMillis / 10));
+    setPanPercent(Math.round(selectedAudioOptions.panBalanceMillis / 10));
+    setFadeInUs(selectedAudioOptions.fadeInDuration);
+    setFadeOutUs(selectedAudioOptions.fadeOutDuration);
+    audioCommitKeyRef.current = audioOptionsKey(selectedAudioOptions);
+    audioHydrationSelectionRef.current = selected.selectionHandle;
 
     if (selected.text === null || selected.text === undefined) {
       setTextState(DEFAULT_TEXT_STATE);
+      textCommitKeyRef.current = null;
       return;
     }
 
-    setTextState({
+    const nextTextState = {
       content: selected.text.content,
       fontSize: selected.text.style.fontSize,
       color: selected.text.style.color,
@@ -305,7 +327,9 @@ export function Inspector({
       layoutHeightMillis: selected.text.layoutRegion.heightMillis,
       wrapping: selected.text.wrapping,
       source: selected.text.source
-    });
+    };
+    setTextState(nextTextState);
+    textCommitKeyRef.current = textPatchKey(textPatchFromState(nextTextState));
   }, [
     selected?.segmentKey,
     selected?.volume.levelMillis,
@@ -349,43 +373,63 @@ export function Inspector({
     }
   }, [activeTab, selected]);
 
-  const text = useMemo<TextSegment>(
-    () => ({
-      content: textState.content,
-      source: textState.source,
-      style: {
-        font: {
-          family: textState.fontFamily,
-          fontRef: textState.fontRef
-        },
-        fontSize: textState.fontSize,
-        color: textState.color,
-        alignment: textState.alignment,
-        lineHeightMillis: textState.lineHeightMillis,
-        letterSpacingMillis: textState.letterSpacingMillis,
-        stroke: textState.strokeEnabled ? { color: textState.strokeColor, width: textState.strokeWidth } : null,
-        shadow: textState.shadowEnabled
-          ? { color: textState.shadowColor, offsetX: 2, offsetY: 2, blur: 4 }
-          : null,
-        background: textState.backgroundEnabled ? { color: textState.backgroundColor } : null
-      },
-      textBox: {
-        widthMillis: textState.textBoxWidthMillis,
-        heightMillis: textState.textBoxHeightMillis
-      },
-      layoutRegion: {
-        xMillis: textState.layoutXMillis,
-        yMillis: textState.layoutYMillis,
-        widthMillis: textState.layoutWidthMillis,
-        heightMillis: textState.layoutHeightMillis
-      },
-      wrapping: textState.wrapping,
-      bubble: selected?.text?.bubble ?? null,
-      effect: selected?.text?.effect ?? null
-    }),
-    [selected?.text?.bubble, selected?.text?.effect, textState]
-  );
+  useEffect(() => {
+    if (textEditFocusRequest <= 0 || selected?.text === null || selected?.text === undefined) {
+      return;
+    }
+    setActiveTab("画面");
+    window.requestAnimationFrame(() => {
+      textContentRef.current?.focus();
+      textContentRef.current?.select();
+    });
+  }, [selected?.selectionHandle, selected?.text, textEditFocusRequest]);
+
+  const textPatch = useMemo<TextSegmentPatch>(() => textPatchFromState(textState), [textState]);
   const textValidationMessage = validateTextForm(textState);
+  const audioOptions = useMemo(
+    () => audioOptionsFromState(volumePercent, panPercent, fadeInUs, fadeOutUs),
+    [fadeInUs, fadeOutUs, panPercent, volumePercent]
+  );
+
+  useEffect(() => {
+    if (!hasText || selected?.text === null || selected?.text === undefined || textValidationMessage !== null) {
+      return undefined;
+    }
+    if (workspace.pendingCommand !== null) {
+      return undefined;
+    }
+    const nextKey = textPatchKey(textPatch);
+    if (nextKey === textCommitKeyRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      textCommitKeyRef.current = nextKey;
+      onEditSelectedText(textPatch);
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [hasText, onEditSelectedText, selected?.selectionHandle, selected?.text, textPatch, textValidationMessage, workspace.pendingCommand]);
+
+  useEffect(() => {
+    if (selected === null) {
+      return undefined;
+    }
+    if (audioHydrationSelectionRef.current === selected.selectionHandle) {
+      audioHydrationSelectionRef.current = null;
+      return undefined;
+    }
+    if (workspace.pendingCommand !== null) {
+      return undefined;
+    }
+    const nextKey = audioOptionsKey(audioOptions);
+    if (nextKey === audioCommitKeyRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      audioCommitKeyRef.current = nextKey;
+      onUpdateSelectedSegmentAudio(audioOptions);
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [audioOptions, onUpdateSelectedSegmentAudio, selected, workspace.pendingCommand]);
 
   return (
     <div className="inspector-content">
@@ -470,7 +514,9 @@ export function Inspector({
                     <label className="field-row compact-row textarea-row">
                       <span>文字内容</span>
                       <textarea
+                        ref={textContentRef}
                         value={textState.content}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const content = event.currentTarget.value;
                           setTextState((current) => ({ ...current, content }));
@@ -486,6 +532,7 @@ export function Inspector({
                         aria-label="字体"
                         list="inspector-bundled-fonts"
                         value={textState.fontFamily}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const fontFamily = event.currentTarget.value;
                           const font = BUNDLED_TEXT_FONTS.find((entry) => entry.family === fontFamily);
@@ -504,6 +551,7 @@ export function Inspector({
                       min={1}
                       max={400}
                       step={1}
+                      disabled={inspectorFieldsDisabled}
                       action={renderKeyframeButton("textFontSize", "字号")}
                       onChange={(fontSize) => setTextState((current) => ({ ...current, fontSize }))}
                     />
@@ -514,6 +562,7 @@ export function Inspector({
                           aria-label="颜色"
                           type="color"
                           value={textState.color}
+                          disabled={inspectorFieldsDisabled}
                           onChange={(event) => {
                             const color = event.currentTarget.value;
                             setTextState((current) => ({ ...current, color }));
@@ -532,6 +581,7 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.strokeEnabled}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const strokeEnabled = event.currentTarget.checked;
                           setTextState((current) => ({ ...current, strokeEnabled }));
@@ -545,7 +595,7 @@ export function Inspector({
                         aria-label="描边颜色"
                         type="color"
                         value={textState.strokeColor}
-                        disabled={!textState.strokeEnabled}
+                        disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
                         onChange={(event) => {
                           const strokeColor = event.currentTarget.value;
                           setTextState((current) => ({ ...current, strokeColor }));
@@ -558,13 +608,14 @@ export function Inspector({
                       min={1}
                       max={120}
                       step={1}
-                      disabled={!textState.strokeEnabled}
+                      disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
                       onChange={(strokeWidth) => setTextState((current) => ({ ...current, strokeWidth }))}
                     />
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.shadowEnabled}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const shadowEnabled = event.currentTarget.checked;
                           setTextState((current) => ({ ...current, shadowEnabled }));
@@ -578,7 +629,7 @@ export function Inspector({
                         aria-label="阴影颜色"
                         type="color"
                         value={textState.shadowColor}
-                        disabled={!textState.shadowEnabled}
+                        disabled={inspectorFieldsDisabled || !textState.shadowEnabled}
                         onChange={(event) => {
                           const shadowColor = event.currentTarget.value;
                           setTextState((current) => ({ ...current, shadowColor }));
@@ -589,6 +640,7 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.backgroundEnabled}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const backgroundEnabled = event.currentTarget.checked;
                           setTextState((current) => ({ ...current, backgroundEnabled }));
@@ -602,7 +654,7 @@ export function Inspector({
                         aria-label="背景颜色"
                         type="color"
                         value={textState.backgroundColor}
-                        disabled={!textState.backgroundEnabled}
+                        disabled={inspectorFieldsDisabled || !textState.backgroundEnabled}
                         onChange={(event) => {
                           const backgroundColor = event.currentTarget.value;
                           setTextState((current) => ({ ...current, backgroundColor }));
@@ -617,6 +669,7 @@ export function Inspector({
                             key={value}
                             type="button"
                             className={textState.alignment === value ? "active" : ""}
+                            disabled={inspectorFieldsDisabled}
                             onClick={() => setTextState((current) => ({ ...current, alignment: value }))}
                           >
                             {value === "left" ? "左" : value === "center" ? "中" : "右"}
@@ -637,6 +690,7 @@ export function Inspector({
                       min={1}
                       max={1000}
                       step={10}
+                      disabled={inspectorFieldsDisabled}
                       onChange={(textBoxWidthMillis) => setTextState((current) => ({ ...current, textBoxWidthMillis }))}
                     />
                     <TextNumberField
@@ -645,12 +699,14 @@ export function Inspector({
                       min={1}
                       max={1000}
                       step={10}
+                      disabled={inspectorFieldsDisabled}
                       onChange={(textBoxHeightMillis) => setTextState((current) => ({ ...current, textBoxHeightMillis }))}
                     />
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.wrapping === "auto"}
+                        disabled={inspectorFieldsDisabled}
                         onChange={(event) => {
                           const wrapping = event.currentTarget.checked ? "auto" : "none";
                           setTextState((current) => ({ ...current, wrapping }));
@@ -664,6 +720,7 @@ export function Inspector({
                       min={500}
                       max={3000}
                       step={50}
+                      disabled={inspectorFieldsDisabled}
                       action={renderKeyframeButton("textLineHeight", "行高")}
                       onChange={(lineHeightMillis) => setTextState((current) => ({ ...current, lineHeightMillis }))}
                     />
@@ -673,6 +730,7 @@ export function Inspector({
                       min={0}
                       max={2000}
                       step={50}
+                      disabled={inspectorFieldsDisabled}
                       action={renderKeyframeButton("textLetterSpacing", "字间距")}
                       onChange={(letterSpacingMillis) => setTextState((current) => ({ ...current, letterSpacingMillis }))}
                     />
@@ -691,6 +749,7 @@ export function Inspector({
                         min={0}
                         max={1000}
                         step={10}
+                        disabled={inspectorFieldsDisabled}
                         action={renderKeyframeButton("textLayoutX", "布局 X")}
                         onChange={(layoutXMillis) => setTextState((current) => ({ ...current, layoutXMillis }))}
                       />
@@ -700,6 +759,7 @@ export function Inspector({
                         min={0}
                         max={1000}
                         step={10}
+                        disabled={inspectorFieldsDisabled}
                         action={renderKeyframeButton("textLayoutY", "布局 Y")}
                         onChange={(layoutYMillis) => setTextState((current) => ({ ...current, layoutYMillis }))}
                       />
@@ -709,6 +769,7 @@ export function Inspector({
                         min={1}
                         max={1000}
                         step={10}
+                        disabled={inspectorFieldsDisabled}
                         action={renderKeyframeButton("textLayoutWidth", "布局宽")}
                         onChange={(layoutWidthMillis) => setTextState((current) => ({ ...current, layoutWidthMillis }))}
                       />
@@ -718,23 +779,12 @@ export function Inspector({
                         min={1}
                         max={1000}
                         step={10}
+                        disabled={inspectorFieldsDisabled}
                         action={renderKeyframeButton("textLayoutHeight", "布局高")}
                         onChange={(layoutHeightMillis) => setTextState((current) => ({ ...current, layoutHeightMillis }))}
                       />
                     </div>
                     {textValidationMessage === null ? null : <p className="canvas-validation-error">{textValidationMessage}</p>}
-                    <button
-                      type="button"
-                      className="primary-action wide-action"
-                      onClick={() => {
-                        if (textValidationMessage === null) {
-                          onEditSelectedText(text);
-                        }
-                      }}
-                      disabled={workspace.pendingCommand !== null || textValidationMessage !== null}
-                    >
-                      应用文字
-                    </button>
                   </section>
 
                 </>
@@ -808,21 +858,6 @@ export function Inspector({
                 />
                 <span>轨道静音</span>
               </label>
-              <button
-                type="button"
-                className="secondary-action wide-action"
-                onClick={() =>
-                  onUpdateSelectedSegmentAudio({
-                    gainMillis: volumePercent * 10,
-                    panBalanceMillis: panPercent * 10,
-                    fadeInDuration: fadeInUs,
-                    fadeOutDuration: fadeOutUs
-                  })
-                }
-                disabled={workspace.pendingCommand !== null}
-              >
-                应用音频
-              </button>
             </section>
           ) : null}
 
@@ -859,20 +894,39 @@ function CanvasDraftSettings({
   const project = workspace.viewModel.project;
   const acceptedConfig = project.canvasConfig;
   const acceptedConfigKey = useMemo(() => JSON.stringify(acceptedConfig), [acceptedConfig]);
+  const canvasCommitKeyRef = useRef<string>(acceptedConfigKey);
   const [canvasState, setCanvasState] = useState<CanvasFormState>(() => canvasFormFromConfig(acceptedConfig));
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
-    setCanvasState(canvasFormFromConfig(acceptedConfig));
-  }, [acceptedConfigKey]);
+    canvasCommitKeyRef.current = acceptedConfigKey;
+    if (!modalOpen) {
+      setCanvasState(canvasFormFromConfig(acceptedConfig));
+    }
+  }, [acceptedConfig, acceptedConfigKey, modalOpen]);
 
-  const candidate = buildCanvasConfigFromForm(canvasState);
-  const validationMessage = validateCanvasForm(canvasState);
+  const candidate = useMemo(() => buildCanvasConfigFromForm(canvasState), [canvasState]);
+  const candidateKey = candidate === null ? null : JSON.stringify(candidate);
+  const validationMessage = useMemo(() => validateCanvasForm(canvasState), [canvasState]);
   const changed = candidate !== null && !canvasConfigsEqual(candidate, acceptedConfig);
   const pending = workspace.pendingCommand !== null;
-  const canApply = candidate !== null && validationMessage === null && changed && !pending;
+  const canFinish = validationMessage === null && !pending;
   const displayConfig = candidate ?? acceptedConfig;
   const backgroundStatus = formatCanvasBackgroundStatus(displayConfig);
+
+  useEffect(() => {
+    if (!modalOpen || candidate === null || candidateKey === null || validationMessage !== null || pending) {
+      return undefined;
+    }
+    if (!changed || candidateKey === canvasCommitKeyRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      canvasCommitKeyRef.current = candidateKey;
+      onUpdateDraftCanvasConfig(candidate);
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [candidate, candidateKey, changed, modalOpen, onUpdateDraftCanvasConfig, pending, validationMessage]);
 
   function selectPreset(preset: CanvasPresetChoice): void {
     if (preset === "custom") {
@@ -918,11 +972,19 @@ function CanvasDraftSettings({
     setModalOpen(false);
   }
 
-  function applyCanvasConfig(): void {
-    if (candidate !== null && validationMessage === null) {
+  function finishModal(): void {
+    if (
+      candidate !== null &&
+      candidateKey !== null &&
+      validationMessage === null &&
+      changed &&
+      !pending &&
+      candidateKey !== canvasCommitKeyRef.current
+    ) {
+      canvasCommitKeyRef.current = candidateKey;
       onUpdateDraftCanvasConfig(candidate);
-      setModalOpen(false);
     }
+    setModalOpen(false);
   }
 
   return (
@@ -1131,10 +1193,10 @@ function CanvasDraftSettings({
 
             <div className="canvas-modal-actions">
               <button type="button" className="secondary-action" onClick={closeModal}>
-                取消
+                关闭
               </button>
-              <button type="button" className="primary-action" disabled={!canApply} onClick={applyCanvasConfig}>
-                应用草稿参数
+              <button type="button" className="primary-action" disabled={!canFinish} onClick={finishModal}>
+                完成
               </button>
             </div>
           </div>
@@ -1564,6 +1626,64 @@ function validateTextForm(state: TextFormState): string | null {
   return null;
 }
 
+function textPatchFromState(state: TextFormState): TextSegmentPatch {
+  return {
+    content: state.content,
+    fontFamily: state.fontFamily,
+    ...(state.fontRef === null ? {} : { fontRef: state.fontRef }),
+    fontSize: state.fontSize,
+    color: state.color,
+    alignment: state.alignment,
+    lineHeightMillis: state.lineHeightMillis,
+    letterSpacingMillis: state.letterSpacingMillis,
+    strokeEnabled: state.strokeEnabled,
+    strokeColor: state.strokeColor,
+    strokeWidth: state.strokeWidth,
+    shadowEnabled: state.shadowEnabled,
+    shadowColor: state.shadowColor,
+    backgroundEnabled: state.backgroundEnabled,
+    backgroundColor: state.backgroundColor,
+    textBoxWidthMillis: state.textBoxWidthMillis,
+    textBoxHeightMillis: state.textBoxHeightMillis,
+    layoutXMillis: state.layoutXMillis,
+    layoutYMillis: state.layoutYMillis,
+    layoutWidthMillis: state.layoutWidthMillis,
+    layoutHeightMillis: state.layoutHeightMillis,
+    wrapping: state.wrapping
+  };
+}
+
+function textPatchKey(patch: TextSegmentPatch): string {
+  return JSON.stringify(patch);
+}
+
+function audioOptionsFromSelected(selected: SelectedSegmentView): AudioEditOptions {
+  return {
+    gainMillis: selected.audio?.gainMillis ?? selected.volume.levelMillis,
+    panBalanceMillis: selected.audio?.panBalanceMillis ?? 0,
+    fadeInDuration: selected.audio?.fadeInDuration.duration ?? 0,
+    fadeOutDuration: selected.audio?.fadeOutDuration.duration ?? 0
+  };
+}
+
+function audioOptionsFromState(
+  volumePercent: number,
+  panPercent: number,
+  fadeInUs: number,
+  fadeOutUs: number
+): AudioEditOptions {
+  return {
+    gainMillis: volumePercent * 10,
+    panBalanceMillis: panPercent * 10,
+    fadeInDuration: fadeInUs,
+    fadeOutDuration: fadeOutUs
+  };
+}
+
+function audioOptionsKey(options: AudioEditOptions): string {
+  return JSON.stringify(options);
+}
+
 function isIntegerInRange(value: number, min: number, max: number): boolean {
   return Number.isSafeInteger(value) && value >= min && value <= max;
 }
@@ -1577,19 +1697,37 @@ function SegmentVisualControls({
   visual: SegmentVisual;
   pending: boolean;
   renderKeyframeButton: (property: KeyframeProperty, label: string) => React.ReactElement;
-  onUpdateVisual: (visual: SegmentVisual) => void;
+  onUpdateVisual: (patch: SegmentVisualPatch) => void;
 }): React.ReactElement {
   const visualKey = useMemo(() => JSON.stringify(visual), [visual]);
   const [visualState, setVisualState] = useState<VisualFormState>(() => visualFormFromVisual(visual));
+  const visualCommitKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setVisualState(visualFormFromVisual(visual));
+    const nextVisualState = visualFormFromVisual(visual);
+    setVisualState(nextVisualState);
+    const canonicalPatch = buildVisualPatchFromForm(nextVisualState);
+    visualCommitKeyRef.current = canonicalPatch === null ? null : visualPatchKey(canonicalPatch);
   }, [visualKey]);
 
-  const candidate = buildVisualFromForm(visual, visualState);
+  const patch = buildVisualPatchFromForm(visualState);
   const validationMessage = validateVisualForm(visualState);
-  const changed = candidate !== null && !visualValuesEqual(candidate, visual);
-  const canApply = candidate !== null && validationMessage === null && changed && !pending;
+  const changed = patch !== null && visualPatchChangesVisual(visual, patch);
+
+  useEffect(() => {
+    if (patch === null || validationMessage !== null || !changed || pending) {
+      return undefined;
+    }
+    const nextKey = visualPatchKey(patch);
+    if (nextKey === visualCommitKeyRef.current) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      visualCommitKeyRef.current = nextKey;
+      onUpdateVisual(patch);
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [changed, onUpdateVisual, patch, pending, validationMessage]);
 
   function updateVisualField(field: keyof VisualFormState, value: string | boolean): void {
     setVisualState((current) => ({ ...current, [field]: value }));
@@ -1767,18 +1905,6 @@ function SegmentVisualControls({
 
       {validationMessage === null ? null : <p className="canvas-validation-error">{validationMessage}</p>}
 
-      <button
-        type="button"
-        className="primary-action wide-action"
-        onClick={() => {
-          if (candidate !== null && validationMessage === null) {
-            onUpdateVisual(candidate);
-          }
-        }}
-        disabled={!canApply}
-      >
-        应用画面
-      </button>
     </div>
   );
 }
@@ -2075,7 +2201,7 @@ function visualFormFromVisual(visual: SegmentVisual): VisualFormState {
   };
 }
 
-function buildVisualFromForm(base: SegmentVisual, state: VisualFormState): SegmentVisual | null {
+function buildVisualPatchFromForm(state: VisualFormState): SegmentVisualPatch | null {
   const positionX = parseIntegerInRange(state.positionX, -1000, 1000);
   const positionY = parseIntegerInRange(state.positionY, -1000, 1000);
   const scaleXMillis = parseIntegerInRange(state.scaleXMillis, 1, 3000);
@@ -2112,23 +2238,19 @@ function buildVisualFromForm(base: SegmentVisual, state: VisualFormState): Segme
 
   return {
     visible: state.visible,
-    transform: {
-      position: { x: positionX, y: positionY },
-      scale: { xMillis: scaleXMillis, yMillis: scaleYMillis },
-      rotation: { degrees: rotationDegrees },
-      opacity: { valueMillis: opacityMillis },
-      crop: {
-        leftMillis: cropLeftMillis,
-        rightMillis: cropRightMillis,
-        topMillis: cropTopMillis,
-        bottomMillis: cropBottomMillis
-      },
-      anchor: base.transform.anchor
-    },
+    positionX,
+    positionY,
+    scaleXMillis,
+    scaleYMillis,
+    rotationDegrees,
+    opacityMillis,
+    cropLeftMillis,
+    cropRightMillis,
+    cropTopMillis,
+    cropBottomMillis,
     fitMode: state.fitMode,
-    backgroundFilling: visualBackgroundFromForm(base.backgroundFilling, state),
-    blendMode: base.blendMode,
-    mask: base.mask
+    backgroundKind: state.backgroundKind,
+    ...(state.backgroundKind === "solidColor" ? { backgroundColor: state.backgroundColor.trim() } : {})
   };
 }
 
@@ -2180,85 +2302,33 @@ function validateVisualForm(state: VisualFormState): string | null {
   return null;
 }
 
-function visualBackgroundFromForm(base: SegmentBackgroundFilling, state: VisualFormState): SegmentBackgroundFilling {
-  if (state.backgroundKind === "solidColor") {
-    return {
-      kind: "solidColor",
-      color: state.backgroundColor.trim()
-    };
-  }
-
-  if (state.backgroundKind === "black") {
-    return { kind: "black" };
-  }
-
-  if (state.backgroundKind === "blur") {
-    return { kind: "blur" };
-  }
-
-  if (state.backgroundKind === "image") {
-    return base.kind === "image" ? base : { kind: "image", materialId: null };
-  }
-
-  return { kind: "none" };
-}
-
 function canvasConfigsEqual(left: DraftCanvasConfig, right: DraftCanvasConfig): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function visualValuesEqual(left: SegmentVisual, right: SegmentVisual): boolean {
+function visualPatchChangesVisual(visual: SegmentVisual, patch: SegmentVisualPatch): boolean {
   return (
-    left.visible === right.visible &&
-    left.fitMode === right.fitMode &&
-    left.transform.position.x === right.transform.position.x &&
-    left.transform.position.y === right.transform.position.y &&
-    left.transform.scale.xMillis === right.transform.scale.xMillis &&
-    left.transform.scale.yMillis === right.transform.scale.yMillis &&
-    left.transform.rotation.degrees === right.transform.rotation.degrees &&
-    left.transform.opacity.valueMillis === right.transform.opacity.valueMillis &&
-    left.transform.crop.leftMillis === right.transform.crop.leftMillis &&
-    left.transform.crop.rightMillis === right.transform.crop.rightMillis &&
-    left.transform.crop.topMillis === right.transform.crop.topMillis &&
-    left.transform.crop.bottomMillis === right.transform.crop.bottomMillis &&
-    left.transform.anchor.xMillis === right.transform.anchor.xMillis &&
-    left.transform.anchor.yMillis === right.transform.anchor.yMillis &&
-    visualBackgroundsEqual(left.backgroundFilling, right.backgroundFilling) &&
-    visualBlendModesEqual(left.blendMode, right.blendMode) &&
-    visualMasksEqual(left.mask, right.mask)
+    patch.visible !== visual.visible ||
+    patch.fitMode !== visual.fitMode ||
+    patch.positionX !== visual.transform.position.x ||
+    patch.positionY !== visual.transform.position.y ||
+    patch.scaleXMillis !== visual.transform.scale.xMillis ||
+    patch.scaleYMillis !== visual.transform.scale.yMillis ||
+    patch.rotationDegrees !== visual.transform.rotation.degrees ||
+    patch.opacityMillis !== visual.transform.opacity.valueMillis ||
+    patch.cropLeftMillis !== visual.transform.crop.leftMillis ||
+    patch.cropRightMillis !== visual.transform.crop.rightMillis ||
+    patch.cropTopMillis !== visual.transform.crop.topMillis ||
+    patch.cropBottomMillis !== visual.transform.crop.bottomMillis ||
+    patch.backgroundKind !== visual.backgroundFilling.kind ||
+    (patch.backgroundKind === "solidColor" &&
+      visual.backgroundFilling.kind === "solidColor" &&
+      patch.backgroundColor !== visual.backgroundFilling.color)
   );
 }
 
-function visualBackgroundsEqual(left: SegmentBackgroundFilling, right: SegmentBackgroundFilling): boolean {
-  if (left.kind !== right.kind) {
-    return false;
-  }
-
-  if (left.kind === "solidColor" && right.kind === "solidColor") {
-    return left.color === right.color;
-  }
-
-  if (left.kind === "image" && right.kind === "image") {
-    return (left.materialId ?? null) === (right.materialId ?? null);
-  }
-
-  return true;
-}
-
-function visualBlendModesEqual(left: SegmentVisual["blendMode"], right: SegmentVisual["blendMode"]): boolean {
-  if (left.kind !== right.kind) {
-    return false;
-  }
-
-  return left.kind !== "unsupported" || right.kind !== "unsupported" || left.name === right.name;
-}
-
-function visualMasksEqual(left: SegmentVisual["mask"], right: SegmentVisual["mask"]): boolean {
-  if (left.kind !== right.kind) {
-    return false;
-  }
-
-  return left.kind !== "unsupported" || right.kind !== "unsupported" || left.name === right.name;
+function visualPatchKey(patch: SegmentVisualPatch): string {
+  return JSON.stringify(patch);
 }
 
 function frameRatePresetFromConfig(config: DraftCanvasConfig): string {
