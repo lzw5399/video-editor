@@ -4,6 +4,7 @@ members = [
   "crates/draft_commands",
   "crates/engine_core",
   "crates/render_graph",
+  "crates/task_runtime",
   "crates/realtime_preview_runtime",
   "crates/audio_engine",
   "crates/audio_output_desktop",
