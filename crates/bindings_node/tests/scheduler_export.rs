@@ -7,8 +7,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bindings_node::{cancel_export, execute_command, get_export_job_status};
 use draft_model::{
-    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground,
-    Draft, DraftCanvasConfig, ExportJobPhase, ExportPreset, Material, MaterialKind, Microseconds,
+    CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, Draft,
+    DraftCanvasConfig, ExportJobPhase, ExportPreset, Material, MaterialKind, Microseconds,
     RationalFrameRate, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
 };
 use media_runtime::replace_configured_bundled_runtime_directory_for_tests;
@@ -76,8 +76,14 @@ fn scheduler_export_start_status_completion_and_validation_report_scheduler_tele
         .to_owned();
     assert_eq!(started["data"]["scheduler"]["jobId"], job_id);
     assert_eq!(started["data"]["scheduler"]["domain"], "export");
-    assert_eq!(started["data"]["scheduler"]["resourceClass"], "ffmpegProcess");
-    assert_eq!(started["data"]["scheduler"]["validationResourceClass"], "validationProbe");
+    assert_eq!(
+        started["data"]["scheduler"]["resourceClass"],
+        "ffmpegProcess"
+    );
+    assert_eq!(
+        started["data"]["scheduler"]["validationResourceClass"],
+        "validationProbe"
+    );
     assert!(
         started["data"]["scheduler"]["startedCount"]
             .as_u64()
@@ -271,10 +277,7 @@ fn scheduler_export_interactive_lanes_start_under_export_saturation() {
         "{snapshot:#?}"
     );
     assert!(
-        snapshot
-            .queue_latency_us
-            .p95
-            .is_some_and(|p95| p95 <= 3),
+        snapshot.queue_latency_us.p95.is_some_and(|p95| p95 <= 3),
         "{snapshot:#?}"
     );
 }

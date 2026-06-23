@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
+use std::time::Instant;
 
 use draft_model::{
     DirtyDomain, DirtyRange, Draft, ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase,
@@ -35,6 +36,12 @@ use render_graph::{
     ExportMp4Preset, OutputDimensions, RenderAudioCodec, RenderContainer, RenderGraphPlan,
     RenderOutputProfile, RenderVideoCodec, build_render_graph,
 };
+use serde::Serialize;
+use task_runtime::{
+    CompletionFreshness, JobCompletion, JobDomain, JobEnvelope, JobId, JobPriority, JobResult,
+    JobResultKind, ResourceClass, SchedulerTelemetrySnapshot, TaskCancellationToken,
+    TaskRuntimeConfig,
+};
 
 #[derive(Debug)]
 pub enum PreviewCommandError {
@@ -49,6 +56,7 @@ pub enum ExportCommandError {
     Compile(FfmpegCompileError),
     Runtime(FfmpegRuntimeError),
     Validation(OutputValidationError),
+    Scheduler(String),
     UnknownJob(String),
     Io(String),
 }
@@ -108,6 +116,7 @@ impl fmt::Display for ExportCommandError {
             Self::InvalidOutputPath(message)
             | Self::Engine(message)
             | Self::RenderGraph(message)
+            | Self::Scheduler(message)
             | Self::UnknownJob(message)
             | Self::Io(message) => write!(formatter, "{message}"),
             Self::Compile(error) => write!(formatter, "export compile failed: {}", error.message),
@@ -208,17 +217,144 @@ pub fn invalidate_preview_cache_command(
 }
 
 #[derive(Clone)]
-struct ExportJobEntry {
+struct SchedulerExportEntry {
     status: ExportJobStatusResponse,
-    cancel_token: CancelToken,
+    export_job_id: JobId,
+    export_cancel_token: CancelToken,
+    export_task_token: TaskCancellationToken,
+    validation_job_id: Option<JobId>,
+    validation_task_token: Option<TaskCancellationToken>,
 }
 
 #[derive(Clone, Default)]
-pub struct ExportJobRegistry {
-    entries: Arc<Mutex<BTreeMap<String, ExportJobEntry>>>,
+pub struct SchedulerExportService {
+    state: Arc<Mutex<SchedulerExportState>>,
 }
 
-impl ExportJobRegistry {
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SchedulerExportStatusResponse {
+    #[serde(flatten)]
+    pub status: ExportJobStatusResponse,
+    pub scheduler: SchedulerExportTelemetry,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SchedulerExportTelemetry {
+    pub job_id: String,
+    pub domain: JobDomain,
+    pub priority: JobPriority,
+    pub resource_class: ResourceClass,
+    pub validation_resource_class: ResourceClass,
+    pub submitted_count: u64,
+    pub admitted_count: u64,
+    pub started_count: u64,
+    pub completed_count: u64,
+    pub rejected_count: u64,
+    pub canceled_count: u64,
+    pub current_queue_depth: usize,
+    pub max_queue_depth: usize,
+    pub resource_saturation_count: u64,
+    pub queue_latency_us: task_runtime::SchedulerTelemetrySummary,
+    pub wait_time_us: task_runtime::SchedulerTelemetrySummary,
+    pub run_time_us: task_runtime::SchedulerTelemetrySummary,
+    pub job_duration_us: task_runtime::SchedulerTelemetrySummary,
+    pub resource_usage: Vec<task_runtime::ResourceUsageSnapshot>,
+    pub resource_saturation: Vec<task_runtime::ResourceSaturationSnapshot>,
+}
+
+struct SchedulerExportState {
+    scheduler: task_runtime::JobScheduler,
+    entries: BTreeMap<String, SchedulerExportEntry>,
+    pending: BTreeMap<JobId, ScheduledExportWork>,
+    started_at: Instant,
+    next_token_id: u64,
+}
+
+impl Default for SchedulerExportState {
+    fn default() -> Self {
+        Self {
+            scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            entries: BTreeMap::new(),
+            pending: BTreeMap::new(),
+            started_at: Instant::now(),
+            next_token_id: 1,
+        }
+    }
+}
+
+enum ScheduledExportWork {
+    Export {
+        prepared: PreparedExportJob,
+        runtime: RuntimeConfig,
+        validation_executor: BoxedValidationExecutor,
+    },
+    Validation {
+        export_job_id: String,
+        runtime: RuntimeConfig,
+        output_path: PathBuf,
+        validation: OutputValidationExpectation,
+        validation_executor: BoxedValidationExecutor,
+    },
+}
+
+struct BoxedValidationExecutor {
+    inner: Box<dyn FfmpegExecutor + Send>,
+}
+
+impl BoxedValidationExecutor {
+    fn new<E>(executor: E) -> Self
+    where
+        E: FfmpegExecutor + Send + 'static,
+    {
+        Self {
+            inner: Box::new(executor),
+        }
+    }
+}
+
+impl FfmpegExecutor for BoxedValidationExecutor {
+    fn executor_name(&self) -> &'static str {
+        self.inner.executor_name()
+    }
+
+    fn can_execute(&self, binary: &Path) -> bool {
+        self.inner.can_execute(binary)
+    }
+
+    fn run_version_probe(&self, binary: &Path) -> std::io::Result<std::process::Output> {
+        self.inner.run_version_probe(binary)
+    }
+
+    fn run(
+        &self,
+        binary: &Path,
+        args: &[std::ffi::OsString],
+    ) -> std::io::Result<std::process::Output> {
+        self.inner.run(binary, args)
+    }
+}
+
+enum StartedExportWork {
+    Export {
+        job_id: String,
+        prepared: PreparedExportJob,
+        runtime: RuntimeConfig,
+        cancel_token: CancelToken,
+        validation_executor: BoxedValidationExecutor,
+    },
+    Validation {
+        validation_job_id: JobId,
+        export_job_id: String,
+        runtime: RuntimeConfig,
+        output_path: PathBuf,
+        validation: OutputValidationExpectation,
+        validation_executor: BoxedValidationExecutor,
+    },
+}
+
+impl SchedulerExportService {
     pub fn new() -> Self {
         Self::default()
     }
@@ -227,7 +363,7 @@ impl ExportJobRegistry {
         &self,
         runtime: RuntimeConfig,
         payload: StartExportCommandPayload,
-    ) -> Result<ExportJobStatusResponse, ExportCommandError> {
+    ) -> Result<SchedulerExportStatusResponse, ExportCommandError> {
         self.start_export_with_validation_executor(
             runtime,
             payload,
@@ -240,92 +376,262 @@ impl ExportJobRegistry {
         runtime: RuntimeConfig,
         payload: StartExportCommandPayload,
         validation_executor: E,
-    ) -> Result<ExportJobStatusResponse, ExportCommandError>
+    ) -> Result<SchedulerExportStatusResponse, ExportCommandError>
     where
         E: FfmpegExecutor + Send + 'static,
     {
         let prepared = prepare_export_job(&runtime, payload)?;
-        let cancel_token = CancelToken::new();
+        let response_job_id = prepared.job_id.clone();
+        let export_job_id = JobId::new(prepared.job_id.clone());
+        let export_cancel_token = CancelToken::new();
         let initial_status = ExportJobStatusResponse {
             job_id: prepared.job_id.clone(),
-            phase: ExportJobPhase::Running,
+            phase: ExportJobPhase::Queued,
             output_path: prepared.output_path.display().to_string(),
             preset: prepared.preset,
             progress_per_mille: Some(0),
             out_time: Some(Microseconds::ZERO),
-            log_summary: Some("导出任务已启动".to_owned()),
+            log_summary: Some("导出任务已进入调度器队列".to_owned()),
             validation: None,
             diagnostic: None,
             dirty_facts: prepared.dirty_facts.clone(),
         };
 
-        self.entries.lock().expect("export registry lock").insert(
-            prepared.job_id.clone(),
-            ExportJobEntry {
-                status: initial_status.clone(),
-                cancel_token: cancel_token.clone(),
-            },
-        );
+        {
+            let mut state = self.state.lock().expect("scheduler export lock");
+            let export_task_token = state.next_task_token();
+            let submitted_at_us = state.now_us();
+            let envelope = JobEnvelope::new(
+                export_job_id.clone(),
+                JobDomain::Export,
+                JobPriority::UserVisible,
+                ResourceClass::FfmpegProcess,
+                export_task_token.clone(),
+                submitted_at_us,
+            );
+            state.scheduler.submit(envelope).map_err(|error| {
+                ExportCommandError::Scheduler(format!("scheduler export queue rejected: {error}"))
+            })?;
+            state.entries.insert(
+                prepared.job_id.clone(),
+                SchedulerExportEntry {
+                    status: initial_status.clone(),
+                    export_job_id: export_job_id.clone(),
+                    export_cancel_token: export_cancel_token.clone(),
+                    export_task_token,
+                    validation_job_id: None,
+                    validation_task_token: None,
+                },
+            );
+            state.pending.insert(
+                export_job_id,
+                ScheduledExportWork::Export {
+                    prepared,
+                    runtime,
+                    validation_executor: BoxedValidationExecutor::new(validation_executor),
+                },
+            );
+        }
 
-        let registry = self.clone();
-        thread::spawn(move || {
-            registry.run_export_thread(prepared, runtime, cancel_token, validation_executor);
-        });
-
-        Ok(initial_status)
+        self.start_ready_jobs()?;
+        self.status(&response_job_id)
     }
 
-    pub fn status(&self, job_id: &str) -> Result<ExportJobStatusResponse, ExportCommandError> {
-        self.entries
-            .lock()
-            .expect("export registry lock")
-            .get(job_id)
-            .map(|entry| entry.status.clone())
-            .ok_or_else(|| {
+    pub fn status(
+        &self,
+        job_id: &str,
+    ) -> Result<SchedulerExportStatusResponse, ExportCommandError> {
+        let state = self.state.lock().expect("scheduler export lock");
+        let entry = state.entries.get(job_id).ok_or_else(|| {
+            ExportCommandError::UnknownJob(format!("unknown export job id: {job_id}"))
+        })?;
+        Ok(state.binding_status(entry))
+    }
+
+    pub fn cancel(
+        &self,
+        job_id: &str,
+    ) -> Result<SchedulerExportStatusResponse, ExportCommandError> {
+        {
+            let mut state = self.state.lock().expect("scheduler export lock");
+            let now_us = state.now_us();
+            let entry = state.entries.get_mut(job_id).ok_or_else(|| {
                 ExportCommandError::UnknownJob(format!("unknown export job id: {job_id}"))
-            })
-    }
-
-    pub fn cancel(&self, job_id: &str) -> Result<ExportJobStatusResponse, ExportCommandError> {
-        let cancel_token = {
-            let entries = self.entries.lock().expect("export registry lock");
-            entries
-                .get(job_id)
-                .map(|entry| entry.cancel_token.clone())
-                .ok_or_else(|| {
-                    ExportCommandError::UnknownJob(format!("unknown export job id: {job_id}"))
-                })?
-        };
-        cancel_token.cancel();
-        self.update_status(job_id, |status| {
-            if !matches!(
-                status.phase,
-                ExportJobPhase::Completed
-                    | ExportJobPhase::Failed
-                    | ExportJobPhase::ValidationFailed
-                    | ExportJobPhase::Cancelled
-            ) {
+            })?;
+            entry.export_cancel_token.cancel();
+            entry.export_task_token.cancel();
+            if let Some(token) = entry.validation_task_token.as_ref() {
+                token.cancel();
+            }
+            let export_job_id = entry.export_job_id.clone();
+            let validation_job_id = entry.validation_job_id.clone();
+            state.pending.remove(&export_job_id);
+            if let Some(validation_job_id) = validation_job_id.as_ref() {
+                state.pending.remove(validation_job_id);
+            }
+            let _ = state.scheduler.cancel_at(&export_job_id, now_us);
+            if let Some(validation_job_id) = validation_job_id.as_ref() {
+                let _ = state.scheduler.cancel_at(validation_job_id, now_us);
+            }
+            state.update_status_if_not_terminal(job_id, |status| {
                 status.phase = ExportJobPhase::Cancelled;
-                status.log_summary = Some("正在取消导出".to_owned());
+                status.log_summary = Some("导出任务已取消".to_owned());
                 status.diagnostic = Some(ExportDiagnostic {
                     kind: ExportDiagnosticKind::Cancelled,
                     message: "已请求取消导出任务".to_owned(),
                     stdout_summary: None,
                     stderr_summary: None,
                 });
-            }
-        })?;
+            })?;
+        }
+        self.start_ready_jobs()?;
         self.status(job_id)
     }
 
-    fn run_export_thread(
+    fn start_ready_jobs(&self) -> Result<(), ExportCommandError> {
+        let mut started = Vec::new();
+        {
+            let mut state = self.state.lock().expect("scheduler export lock");
+            loop {
+                let now_us = state.now_us();
+                let Some(envelope) = state.scheduler.start_next(now_us).map_err(|error| {
+                    ExportCommandError::Scheduler(format!("scheduler export start failed: {error}"))
+                })?
+                else {
+                    break;
+                };
+                let Some(work) = state.pending.remove(&envelope.job_id) else {
+                    let completed_at_us = state.now_us();
+                    let _ = state.scheduler.complete_with_commit(
+                        &envelope.job_id,
+                        JobResult::new(envelope.job_id.clone(), JobResultKind::Failed),
+                        completed_at_us,
+                        CompletionFreshness::none(),
+                        |_| {},
+                    );
+                    continue;
+                };
+                match work {
+                    ScheduledExportWork::Export {
+                        prepared,
+                        runtime,
+                        validation_executor,
+                    } => {
+                        let job_id = prepared.job_id.clone();
+                        let cancel_token = state
+                            .entries
+                            .get(&job_id)
+                            .map(|entry| entry.export_cancel_token.clone())
+                            .ok_or_else(|| {
+                                ExportCommandError::UnknownJob(format!(
+                                    "unknown export job id: {job_id}"
+                                ))
+                            })?;
+                        state.update_status_if_not_terminal(&job_id, |status| {
+                            status.phase = ExportJobPhase::Running;
+                            status.log_summary = Some("导出调度器已启动 FFmpeg 任务".to_owned());
+                        })?;
+                        started.push(StartedExportWork::Export {
+                            job_id,
+                            prepared,
+                            runtime,
+                            cancel_token,
+                            validation_executor,
+                        });
+                    }
+                    ScheduledExportWork::Validation {
+                        export_job_id,
+                        runtime,
+                        output_path,
+                        validation,
+                        validation_executor,
+                    } => {
+                        state.update_status_if_not_terminal(&export_job_id, |status| {
+                            status.phase = ExportJobPhase::Validating;
+                            status.progress_per_mille = Some(1000);
+                            status.log_summary = Some("导出完成，正在校验输出".to_owned());
+                        })?;
+                        started.push(StartedExportWork::Validation {
+                            validation_job_id: envelope.job_id,
+                            export_job_id,
+                            runtime,
+                            output_path,
+                            validation,
+                            validation_executor,
+                        });
+                    }
+                }
+            }
+        }
+
+        for work in started {
+            match work {
+                StartedExportWork::Export {
+                    job_id,
+                    prepared,
+                    runtime,
+                    cancel_token,
+                    validation_executor,
+                } => {
+                    let service = self.clone();
+                    thread::Builder::new()
+                        .name("task-runtime-export-driver".to_owned())
+                        .spawn(move || {
+                            service.run_scheduled_export(
+                                job_id,
+                                prepared,
+                                runtime,
+                                cancel_token,
+                                validation_executor,
+                            );
+                        })
+                        .map_err(|error| {
+                            ExportCommandError::Io(format!(
+                                "failed to start scheduler export driver: {error}"
+                            ))
+                        })?;
+                }
+                StartedExportWork::Validation {
+                    validation_job_id,
+                    export_job_id,
+                    runtime,
+                    output_path,
+                    validation,
+                    validation_executor,
+                } => {
+                    let service = self.clone();
+                    thread::Builder::new()
+                        .name("task-runtime-export-validation".to_owned())
+                        .spawn(move || {
+                            service.run_scheduled_validation(
+                                validation_job_id,
+                                export_job_id,
+                                runtime,
+                                output_path,
+                                validation,
+                                validation_executor,
+                            );
+                        })
+                        .map_err(|error| {
+                            ExportCommandError::Io(format!(
+                                "failed to start scheduler export validation: {error}"
+                            ))
+                        })?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn run_scheduled_export(
         &self,
+        job_id: String,
         prepared: PreparedExportJob,
         runtime: RuntimeConfig,
         cancel_token: CancelToken,
-        validation_executor: impl FfmpegExecutor,
+        validation_executor: BoxedValidationExecutor,
     ) {
-        let job_id = prepared.job_id.clone();
         let runtime_result =
             media_runtime::run_export_job(&prepared.runtime_job, &cancel_token, |event| {
                 self.apply_runtime_event(&job_id, event)
@@ -333,34 +639,12 @@ impl ExportJobRegistry {
 
         match runtime_result {
             Ok(result) if result.state == FfmpegJobState::Completed => {
-                if cancel_token.is_cancelled() {
-                    return;
-                }
-                self.mark_validating(&job_id, &result);
-                match validate_rendered_output(
-                    &validation_executor,
-                    &runtime,
-                    &prepared.output_path,
-                    &prepared.validation,
-                ) {
-                    Ok(report) => {
-                        let validation = export_validation_report(report);
-                        let _ = self.update_status_if_not_terminal(&job_id, |status| {
-                            status.phase = ExportJobPhase::Completed;
-                            status.progress_per_mille = Some(1000);
-                            status.log_summary = Some("导出完成，输出校验通过".to_owned());
-                            status.validation = Some(validation);
-                            status.diagnostic = None;
-                        });
-                    }
-                    Err(error) => {
-                        let diagnostic = export_validation_diagnostic(&error);
-                        let _ = self.update_status_if_not_terminal(&job_id, |status| {
-                            status.phase = ExportJobPhase::ValidationFailed;
-                            status.log_summary = Some("导出完成，但输出校验未通过".to_owned());
-                            status.diagnostic = Some(diagnostic);
-                        });
-                    }
+                let accepted = self.complete_scheduler_job(
+                    &JobId::new(job_id.clone()),
+                    JobResult::completed(JobId::new(job_id.clone())),
+                );
+                if accepted && !cancel_token.is_cancelled() {
+                    self.enqueue_validation(prepared, runtime, validation_executor);
                 }
             }
             Ok(result) if result.state == FfmpegJobState::Cancelled => {
@@ -370,6 +654,10 @@ impl ExportJobRegistry {
                     stdout_summary: result.stdout_summary.clone(),
                     stderr_summary: result.stderr_summary.clone(),
                 };
+                let _ = self.complete_scheduler_job(
+                    &JobId::new(job_id.clone()),
+                    JobResult::new(JobId::new(job_id.clone()), JobResultKind::Failed),
+                );
                 let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Cancelled;
                     status.progress_per_mille = result
@@ -381,6 +669,7 @@ impl ExportJobRegistry {
                     status.log_summary = bounded_export_log(&result);
                     status.diagnostic = Some(diagnostic);
                 });
+                let _ = self.start_ready_jobs();
             }
             Ok(result) => {
                 let diagnostic = ExportDiagnostic {
@@ -389,21 +678,149 @@ impl ExportJobRegistry {
                     stdout_summary: result.stdout_summary.clone(),
                     stderr_summary: result.stderr_summary.clone(),
                 };
+                let _ = self.complete_scheduler_job(
+                    &JobId::new(job_id.clone()),
+                    JobResult::new(JobId::new(job_id.clone()), JobResultKind::Failed),
+                );
                 let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Failed;
                     status.log_summary = bounded_export_log(&result);
                     status.diagnostic = Some(diagnostic);
                 });
+                let _ = self.start_ready_jobs();
             }
             Err(error) => {
                 let diagnostic = export_runtime_diagnostic(&error);
+                let _ = self.complete_scheduler_job(
+                    &JobId::new(job_id.clone()),
+                    JobResult::new(JobId::new(job_id.clone()), JobResultKind::Failed),
+                );
                 let _ = self.update_status_if_not_terminal(&job_id, |status| {
                     status.phase = ExportJobPhase::Failed;
                     status.log_summary = Some("导出运行失败".to_owned());
                     status.diagnostic = Some(diagnostic);
                 });
+                let _ = self.start_ready_jobs();
             }
         }
+    }
+
+    fn enqueue_validation(
+        &self,
+        prepared: PreparedExportJob,
+        runtime: RuntimeConfig,
+        validation_executor: BoxedValidationExecutor,
+    ) {
+        let export_job_id = prepared.job_id.clone();
+        let validation_job_id = JobId::new(format!("{export_job_id}:validation"));
+        let output_path = prepared.output_path.clone();
+        let validation = prepared.validation.clone();
+        {
+            let mut state = self.state.lock().expect("scheduler export lock");
+            if state.is_terminal(&export_job_id) {
+                return;
+            }
+            let submitted_at_us = state.now_us();
+            let token = state.next_task_token();
+            let envelope = JobEnvelope::new(
+                validation_job_id.clone(),
+                JobDomain::Export,
+                JobPriority::Background,
+                ResourceClass::ValidationProbe,
+                token.clone(),
+                submitted_at_us,
+            );
+            if state.scheduler.submit(envelope).is_err() {
+                let _ = state.update_status_if_not_terminal(&export_job_id, |status| {
+                    status.phase = ExportJobPhase::Failed;
+                    status.log_summary = Some("导出输出校验未能进入调度器".to_owned());
+                    status.diagnostic = Some(ExportDiagnostic {
+                        kind: ExportDiagnosticKind::RuntimeFailed,
+                        message: "scheduler export validation queue rejected".to_owned(),
+                        stdout_summary: None,
+                        stderr_summary: None,
+                    });
+                });
+                return;
+            }
+            if let Some(entry) = state.entries.get_mut(&export_job_id) {
+                entry.validation_job_id = Some(validation_job_id.clone());
+                entry.validation_task_token = Some(token);
+            }
+            state.pending.insert(
+                validation_job_id,
+                ScheduledExportWork::Validation {
+                    export_job_id,
+                    runtime,
+                    output_path,
+                    validation,
+                    validation_executor,
+                },
+            );
+        }
+        let _ = self.start_ready_jobs();
+    }
+
+    fn run_scheduled_validation(
+        &self,
+        validation_job_id: JobId,
+        export_job_id: String,
+        runtime: RuntimeConfig,
+        output_path: PathBuf,
+        validation: OutputValidationExpectation,
+        validation_executor: BoxedValidationExecutor,
+    ) {
+        let result =
+            validate_rendered_output(&validation_executor, &runtime, &output_path, &validation);
+        match result {
+            Ok(report) => {
+                let validation = export_validation_report(report);
+                let accepted = self.complete_scheduler_job(
+                    &validation_job_id,
+                    JobResult::completed(validation_job_id.clone()),
+                );
+                if accepted {
+                    let _ = self.update_status_if_not_terminal(&export_job_id, |status| {
+                        status.phase = ExportJobPhase::Completed;
+                        status.progress_per_mille = Some(1000);
+                        status.log_summary = Some("导出完成，输出校验通过".to_owned());
+                        status.validation = Some(validation);
+                        status.diagnostic = None;
+                    });
+                }
+            }
+            Err(error) => {
+                let diagnostic = export_validation_diagnostic(&error);
+                let accepted = self.complete_scheduler_job(
+                    &validation_job_id,
+                    JobResult::new(validation_job_id.clone(), JobResultKind::Failed),
+                );
+                if accepted {
+                    let _ = self.update_status_if_not_terminal(&export_job_id, |status| {
+                        status.phase = ExportJobPhase::ValidationFailed;
+                        status.log_summary = Some("导出完成，但输出校验未通过".to_owned());
+                        status.diagnostic = Some(diagnostic);
+                    });
+                }
+            }
+        }
+        let _ = self.start_ready_jobs();
+    }
+
+    fn complete_scheduler_job(&self, job_id: &JobId, result: JobResult) -> bool {
+        let mut accepted = false;
+        let completion = {
+            let mut state = self.state.lock().expect("scheduler export lock");
+            let completed_at_us = state.now_us();
+            state.scheduler.complete_with_commit(
+                job_id,
+                result,
+                completed_at_us,
+                CompletionFreshness::none(),
+                |_| accepted = true,
+            )
+        };
+        matches!(completion, Ok(JobCompletion::Accepted { .. })) && accepted
     }
 
     fn apply_runtime_event(&self, job_id: &str, event: FfmpegJobEvent) {
@@ -436,41 +853,83 @@ impl ExportJobRegistry {
         }
     }
 
-    fn mark_validating(&self, job_id: &str, result: &FfmpegJobResult) {
-        let _ = self.update_status_if_not_terminal(job_id, |status| {
-            status.phase = ExportJobPhase::Validating;
-            status.progress_per_mille = Some(1000);
-            status.out_time = result
-                .final_progress
-                .map(|progress| Microseconds::new(progress.out_time_microseconds));
-            status.log_summary = Some("导出完成，正在校验输出".to_owned());
-        });
-    }
-
     fn update_status_if_not_terminal(
         &self,
         job_id: &str,
         update: impl FnOnce(&mut ExportJobStatusResponse),
     ) -> Result<(), ExportCommandError> {
-        self.update_status(job_id, |status| {
-            if is_terminal_export_phase(status.phase) {
-                return;
-            }
-            update(status);
-        })
+        let mut state = self.state.lock().expect("scheduler export lock");
+        state.update_status_if_not_terminal(job_id, update)
+    }
+}
+
+impl SchedulerExportState {
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
     }
 
-    fn update_status(
-        &self,
+    fn next_task_token(&mut self) -> TaskCancellationToken {
+        let token = TaskCancellationToken::new(self.next_token_id);
+        self.next_token_id = self.next_token_id.saturating_add(1);
+        token
+    }
+
+    fn binding_status(&self, entry: &SchedulerExportEntry) -> SchedulerExportStatusResponse {
+        SchedulerExportStatusResponse {
+            status: entry.status.clone(),
+            scheduler: scheduler_export_telemetry(
+                entry.export_job_id.as_str(),
+                self.scheduler.telemetry_snapshot(),
+            ),
+        }
+    }
+
+    fn update_status_if_not_terminal(
+        &mut self,
         job_id: &str,
         update: impl FnOnce(&mut ExportJobStatusResponse),
     ) -> Result<(), ExportCommandError> {
-        let mut entries = self.entries.lock().expect("export registry lock");
-        let entry = entries.get_mut(job_id).ok_or_else(|| {
+        let entry = self.entries.get_mut(job_id).ok_or_else(|| {
             ExportCommandError::UnknownJob(format!("unknown export job id: {job_id}"))
         })?;
-        update(&mut entry.status);
+        if !is_terminal_export_phase(entry.status.phase) {
+            update(&mut entry.status);
+        }
         Ok(())
+    }
+
+    fn is_terminal(&self, job_id: &str) -> bool {
+        self.entries
+            .get(job_id)
+            .is_some_and(|entry| is_terminal_export_phase(entry.status.phase))
+    }
+}
+
+fn scheduler_export_telemetry(
+    job_id: &str,
+    snapshot: SchedulerTelemetrySnapshot,
+) -> SchedulerExportTelemetry {
+    SchedulerExportTelemetry {
+        job_id: job_id.to_owned(),
+        domain: JobDomain::Export,
+        priority: JobPriority::UserVisible,
+        resource_class: ResourceClass::FfmpegProcess,
+        validation_resource_class: ResourceClass::ValidationProbe,
+        submitted_count: snapshot.submitted_count,
+        admitted_count: snapshot.admitted_count,
+        started_count: snapshot.started_count,
+        completed_count: snapshot.completed_count,
+        rejected_count: snapshot.rejected_count,
+        canceled_count: snapshot.canceled_count,
+        current_queue_depth: snapshot.current_queue_depth,
+        max_queue_depth: snapshot.max_queue_depth,
+        resource_saturation_count: snapshot.resource_saturation_count,
+        queue_latency_us: snapshot.queue_latency_us,
+        wait_time_us: snapshot.wait_time_us,
+        run_time_us: snapshot.run_time_us,
+        job_duration_us: snapshot.job_duration_us,
+        resource_usage: snapshot.resource_usage,
+        resource_saturation: snapshot.resource_saturation,
     }
 }
 
@@ -484,9 +943,9 @@ fn is_terminal_export_phase(phase: ExportJobPhase) -> bool {
     )
 }
 
-pub fn global_export_registry() -> &'static ExportJobRegistry {
-    static REGISTRY: OnceLock<ExportJobRegistry> = OnceLock::new();
-    REGISTRY.get_or_init(ExportJobRegistry::new)
+pub fn global_export_registry() -> &'static SchedulerExportService {
+    static REGISTRY: OnceLock<SchedulerExportService> = OnceLock::new();
+    REGISTRY.get_or_init(SchedulerExportService::new)
 }
 
 struct PreparedExportJob {
@@ -790,14 +1249,14 @@ pub fn export_error_diagnostic(error: &ExportCommandError) -> ExportDiagnostic {
         },
         ExportCommandError::Runtime(error) => export_runtime_diagnostic(error),
         ExportCommandError::Validation(error) => export_validation_diagnostic(error),
-        ExportCommandError::UnknownJob(message) | ExportCommandError::Io(message) => {
-            ExportDiagnostic {
-                kind: ExportDiagnosticKind::RuntimeFailed,
-                message: message.clone(),
-                stdout_summary: None,
-                stderr_summary: None,
-            }
-        }
+        ExportCommandError::Scheduler(message)
+        | ExportCommandError::UnknownJob(message)
+        | ExportCommandError::Io(message) => ExportDiagnostic {
+            kind: ExportDiagnosticKind::RuntimeFailed,
+            message: message.clone(),
+            stdout_summary: None,
+            stderr_summary: None,
+        },
     }
 }
 

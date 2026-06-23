@@ -239,6 +239,14 @@ impl JobScheduler {
     }
 
     pub fn cancel(&mut self, job_id: &JobId) -> Result<JobCancellationState, SchedulerRejected> {
+        self.cancel_at(job_id, 0)
+    }
+
+    pub fn cancel_at(
+        &mut self,
+        job_id: &JobId,
+        cancelled_at_us: u64,
+    ) -> Result<JobCancellationState, SchedulerRejected> {
         if let Some(index) = self
             .queue
             .iter()
@@ -248,20 +256,24 @@ impl JobScheduler {
                 .queue
                 .remove(index)
                 .expect("selected queued index must exist");
+            let wait_time_us = cancelled_at_us.saturating_sub(queued.envelope.submitted_at_us);
             queued.envelope.cancellation_token.cancel();
             self.terminal
                 .insert(queued.envelope.job_id, TerminalJobState::Cancelled);
-            self.telemetry.record_canceled();
+            self.telemetry.record_canceled_wait(wait_time_us);
             self.record_queue_depth();
             return Ok(JobCancellationState::Queued);
         }
 
         if let Some(running) = self.running.remove(job_id) {
+            let run_time_us = cancelled_at_us.saturating_sub(running.started_at_us);
+            let job_duration_us = cancelled_at_us.saturating_sub(running.envelope.submitted_at_us);
             running.envelope.cancellation_token.cancel();
             self.release_resource(running.envelope.resource_class);
             self.terminal
                 .insert(running.envelope.job_id, TerminalJobState::Cancelled);
-            self.telemetry.record_canceled();
+            self.telemetry
+                .record_canceled_running(run_time_us, job_duration_us);
             return Ok(JobCancellationState::Running);
         }
 

@@ -226,6 +226,21 @@ impl SchedulerTelemetry {
         self.canceled_count = self.canceled_count.saturating_add(1);
     }
 
+    pub(crate) fn record_canceled_wait(&mut self, wait_time_us: u64) {
+        self.record_canceled();
+        push_sample(&mut self.wait_time_samples, wait_time_us, self.sample_limit);
+    }
+
+    pub(crate) fn record_canceled_running(&mut self, run_time_us: u64, job_duration_us: u64) {
+        self.record_canceled();
+        push_sample(&mut self.run_time_samples, run_time_us, self.sample_limit);
+        push_sample(
+            &mut self.job_duration_samples,
+            job_duration_us,
+            self.sample_limit,
+        );
+    }
+
     pub(crate) fn record_stale_rejected(&mut self) {
         self.stale_rejected_count = self.stale_rejected_count.saturating_add(1);
     }
