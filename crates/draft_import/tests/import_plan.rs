@@ -9,9 +9,8 @@ use draft_model::{
     Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
     MainTrackMagnet, Material, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
     RationalFrameRate, Segment, SegmentAudio, SegmentPosition, SegmentScale, SegmentTransform,
-    SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextFont,
-    TextLayoutRegion, TextSegment, TextStyle, TextWrapping, Track, TrackKind, Transition,
-    validate_draft,
+    SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextFont, TextLayoutRegion,
+    TextSegment, TextStyle, TextWrapping, Track, TrackKind, Transition, validate_draft,
 };
 use serde_json::json;
 
@@ -49,7 +48,10 @@ fn draft_import_plan_accepts_canonical_canvas_material_tracks_audio_text_and_key
     assert_eq!(visual_segment.keyframes.len(), 2);
     assert_eq!(visual_segment.visual.transform.position.x, 120);
     assert_eq!(
-        visual_segment.transition.as_ref().map(|transition| transition.name.as_str()),
+        visual_segment
+            .transition
+            .as_ref()
+            .map(|transition| transition.name.as_str()),
         Some("dissolve")
     );
 
@@ -59,11 +61,7 @@ fn draft_import_plan_accepts_canonical_canvas_material_tracks_audio_text_and_key
         .expect("text import should preserve canonical text segment");
     assert_eq!(text_segment.content, "导入标题");
     assert_eq!(
-        text_segment
-            .style
-            .font
-            .font_ref
-            .as_deref(),
+        text_segment.style.font.font_ref.as_deref(),
         Some(draft_model::BUNDLED_TEXT_FONT_REF)
     );
 
@@ -90,7 +88,10 @@ fn draft_import_plan_rejects_remote_runtime_refs_and_raw_provider_semantics() {
     let remote_error = validate_import_plan(&remote_plan)
         .expect_err("remote material refs must be rejected before session mutation");
     assert!(
-        matches!(remote_error, DraftImportPlanValidationError::RemoteRuntimeRef { .. }),
+        matches!(
+            remote_error,
+            DraftImportPlanValidationError::RemoteRuntimeRef { .. }
+        ),
         "expected remote runtime ref error, got {remote_error:?}"
     );
 
@@ -114,10 +115,12 @@ fn draft_import_plan_rejects_remote_runtime_refs_and_raw_provider_semantics() {
     }
 
     let mut formula_leak = valid_draft_import_plan();
-    formula_leak.tracks[0].track.segments[0].filters.push(draft_model::Filter {
-        name: "provider-formula".to_owned(),
-        parameters: [("rawFormula".to_owned(), "{\"kaipai\":true}".to_owned())].into(),
-    });
+    formula_leak.tracks[0].track.segments[0]
+        .filters
+        .push(draft_model::Filter {
+            name: "provider-formula".to_owned(),
+            parameters: [("rawFormula".to_owned(), "{\"kaipai\":true}".to_owned())].into(),
+        });
     let formula_error = validate_import_plan(&formula_leak)
         .expect_err("raw provider formula fields must not enter canonical filters");
     assert!(
@@ -132,7 +135,9 @@ fn draft_import_plan_rejects_remote_runtime_refs_and_raw_provider_semantics() {
 #[test]
 fn draft_import_plan_rejects_invalid_shape_before_project_session_mutation() {
     let mut zero_duration = valid_draft_import_plan();
-    zero_duration.tracks[0].track.segments[0].target_timerange.duration = Microseconds::ZERO;
+    zero_duration.tracks[0].track.segments[0]
+        .target_timerange
+        .duration = Microseconds::ZERO;
     assert!(
         matches!(
             validate_import_plan(&zero_duration),
@@ -184,7 +189,9 @@ fn valid_draft_import_plan() -> DraftImportPlan {
         draft_id: "draft-import-alpha".into(),
         draft_name: "导入模板 Alpha".to_owned(),
         canvas_config: DraftCanvasConfig {
-            aspect_ratio: CanvasAspectRatio::preset(draft_model::CanvasAspectRatioPreset::Ratio9x16),
+            aspect_ratio: CanvasAspectRatio::preset(
+                draft_model::CanvasAspectRatioPreset::Ratio9x16,
+            ),
             width: 1080,
             height: 1920,
             frame_rate: RationalFrameRate::new(30, 1),
@@ -404,7 +411,8 @@ fn supported_report_item(
             kind: target_kind,
             id: Some(id.to_owned()),
         }),
-        message: "Canonical import plan field mapped without provider runtime semantics.".to_owned(),
+        message: "Canonical import plan field mapped without provider runtime semantics."
+            .to_owned(),
         details: None,
         provenance: vec![ExternalProvenanceRef {
             source_kind: "kaipaiOfflineBundle".to_owned(),

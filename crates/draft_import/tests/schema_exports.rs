@@ -7,7 +7,7 @@ use std::{
 use draft_import::{
     AdaptationCategory, AdaptationReport, AdaptationReportItem, AdaptationReportSchemaVersion,
     AdaptationReportSummary, AdaptationSeverity, AdaptationStatus, AdaptationTargetKind,
-    AdaptationTargetRef, ExternalProvenanceRef,
+    AdaptationTargetRef, DraftImportPlan, ExternalProvenanceRef,
 };
 use schemars::schema_for;
 use serde_json::json;
@@ -54,9 +54,24 @@ fn schema_exports_generated_adaptation_report_contracts_from_rust() {
     assert_or_update_contract_file(generated_ts_path, &template_import_ts);
 }
 
+#[test]
+fn schema_exports_generated_draft_import_plan_contract_from_rust() {
+    let root = project_root();
+    let schema_path = root.join("schemas/draft-import-plan.schema.json");
+
+    let schema_json = draft_import_plan_schema_json();
+    assert_draft_import_plan_schema_rejects_unknown_top_level_fields(&schema_json);
+    assert_or_update_contract_file(&schema_path, &format!("{schema_json}\n"));
+}
+
 fn adaptation_report_schema_json() -> String {
     let schema = schema_for!(AdaptationReport);
     serde_json::to_string_pretty(&schema).expect("adaptation report schema should serialize")
+}
+
+fn draft_import_plan_schema_json() -> String {
+    let schema = schema_for!(DraftImportPlan);
+    serde_json::to_string_pretty(&schema).expect("draft import plan schema should serialize")
 }
 
 fn assert_schema_includes_required_statuses(schema_json: &str) {
@@ -108,6 +123,26 @@ fn assert_schema_rejects_unknown_report_item_fields(schema_json: &str) {
     );
 }
 
+fn assert_draft_import_plan_schema_rejects_unknown_top_level_fields(schema_json: &str) {
+    let schema_value: serde_json::Value =
+        serde_json::from_str(schema_json).expect("draft import plan schema should parse");
+    let schema =
+        jsonschema::validator_for(&schema_value).expect("draft import plan schema should compile");
+
+    schema
+        .validate(&draft_import_plan_value(None))
+        .expect("baseline draft import plan should validate");
+    assert!(
+        schema
+            .validate(&draft_import_plan_value(Some((
+                "templateId",
+                json!("external-template")
+            ))))
+            .is_err(),
+        "draft import plan schema should reject unknown provider-only top-level fields"
+    );
+}
+
 fn report_value(extra_item_field: Option<(&str, serde_json::Value)>) -> serde_json::Value {
     let mut item = json!({
         "status": "supported",
@@ -144,6 +179,144 @@ fn report_value(extra_item_field: Option<(&str, serde_json::Value)>) -> serde_js
         },
         "items": [item]
     })
+}
+
+fn draft_import_plan_value(
+    extra_top_level_field: Option<(&str, serde_json::Value)>,
+) -> serde_json::Value {
+    let mut plan = json!({
+        "schemaVersion": 1,
+        "importId": "template-alpha",
+        "draftId": "draft-alpha",
+        "draftName": "导入模板 Alpha",
+        "canvasConfig": {
+            "aspectRatio": {
+                "kind": "preset",
+                "preset": "ratio16x9"
+            },
+            "width": 1920,
+            "height": 1080,
+            "frameRate": {
+                "numerator": 30,
+                "denominator": 1
+            },
+            "background": {
+                "kind": "black"
+            },
+            "adaptationPolicy": "manual"
+        },
+        "materials": [{
+            "material": {
+                "materialId": "material-main-video",
+                "kind": "video",
+                "uri": "resources/template-import/template-alpha/videos/main/source.mp4",
+                "displayName": "source.mp4",
+                "metadata": {
+                    "duration": 5000000,
+                    "width": 1920,
+                    "height": 1080,
+                    "frameRate": {
+                        "numerator": 30,
+                        "denominator": 1
+                    },
+                    "hasVideo": true,
+                    "hasAudio": true,
+                    "audioSampleRate": 48000,
+                    "audioChannels": 2
+                },
+                "status": "available"
+            }
+        }],
+        "tracks": [{
+            "zOrder": 0,
+            "track": {
+                "trackId": "track-main-video",
+                "kind": "video",
+                "name": "主视频",
+                "muted": false,
+                "locked": false,
+                "visible": true,
+                "segments": [{
+                    "segmentId": "segment-main-video",
+                    "materialId": "material-main-video",
+                    "sourceTimerange": {
+                        "start": 0,
+                        "duration": 5000000
+                    },
+                    "targetTimerange": {
+                        "start": 0,
+                        "duration": 5000000
+                    },
+                    "mainTrackMagnet": {
+                        "enabled": true
+                    },
+                    "keyframes": [],
+                    "filters": [],
+                    "volume": {
+                        "levelMillis": 1000
+                    },
+                    "audio": {
+                        "gainMillis": 1000,
+                        "panBalanceMillis": 0,
+                        "fadeInDuration": {
+                            "duration": 0
+                        },
+                        "fadeOutDuration": {
+                            "duration": 0
+                        },
+                        "effectSlots": []
+                    },
+                    "visual": {
+                        "visible": true,
+                        "transform": {
+                            "position": {
+                                "x": 0,
+                                "y": 0
+                            },
+                            "scale": {
+                                "xMillis": 1000,
+                                "yMillis": 1000
+                            },
+                            "rotation": {
+                                "degrees": 0
+                            },
+                            "opacity": {
+                                "valueMillis": 1000
+                            },
+                            "crop": {
+                                "leftMillis": 0,
+                                "rightMillis": 0,
+                                "topMillis": 0,
+                                "bottomMillis": 0
+                            },
+                            "anchor": {
+                                "xMillis": 500,
+                                "yMillis": 500
+                            }
+                        },
+                        "fitMode": "fit",
+                        "backgroundFilling": {
+                            "kind": "none"
+                        },
+                        "blendMode": {
+                            "kind": "normal"
+                        },
+                        "mask": {
+                            "kind": "none"
+                        }
+                    }
+                }]
+            }
+        }]
+    });
+
+    if let Some((field, value)) = extra_top_level_field {
+        plan.as_object_mut()
+            .expect("draft import plan should be an object")
+            .insert(field.to_owned(), value);
+    }
+
+    plan
 }
 
 fn export_decl<T>() -> String
