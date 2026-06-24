@@ -830,14 +830,16 @@ fn visual_diagnostics_for(
         )),
     }
 
-    if visual.transform.rotation.degrees != 0 {
+    if visual.transform.rotation.degrees != 0
+        && (visual.transform.anchor.x_millis != 500 || visual.transform.anchor.y_millis != 500)
+    {
         diagnostics.push(render_visual_diagnostic(
             &track_id,
             &segment_id,
             &material_id,
-            "rotation",
+            "rotationAnchor",
             RenderIntentSupport::Unsupported,
-            "segment rotation is unsupported until anchor-aware FFmpeg rotation is implemented",
+            "static rotation is supported only for center-anchor segment transforms",
         ));
     }
     if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {

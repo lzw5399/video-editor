@@ -379,6 +379,8 @@ fn compile_visual_layer(
     }
 
     let scaled_dimensions = scaled_dimensions(current_dimensions, &layer.visual.transform.scale);
+    let rotated_dimensions =
+        rotated_dimensions(scaled_dimensions, layer.visual.transform.rotation.degrees);
     let mut transform_filters = Vec::new();
     if scaled_dimensions != current_dimensions {
         transform_filters.push(format!(
@@ -386,8 +388,17 @@ fn compile_visual_layer(
             scaled_dimensions.width, scaled_dimensions.height
         ));
     }
-    if layer.visual.transform.opacity.value_millis < 1_000 {
+    let rotation_is_active = layer.visual.transform.rotation.degrees.rem_euclid(360) != 0;
+    if rotation_is_active || layer.visual.transform.opacity.value_millis < 1_000 {
         transform_filters.push("format=rgba".to_owned());
+    }
+    if rotation_is_active {
+        let angle = rotation_radians_arg(layer.visual.transform.rotation.degrees);
+        transform_filters.push(format!(
+            "rotate={angle}:ow=rotw({angle}):oh=roth({angle}):c=none"
+        ));
+    }
+    if layer.visual.transform.opacity.value_millis < 1_000 {
         transform_filters.push(format!(
             "colorchannelmixer=aa={}",
             millis_decimal(layer.visual.transform.opacity.value_millis)
@@ -404,7 +415,7 @@ fn compile_visual_layer(
 
     VisualLayerFilter {
         label,
-        placement: layer_placement(&layer.visual, output_dimensions, scaled_dimensions),
+        placement: layer_placement(&layer.visual, output_dimensions, rotated_dimensions),
         active_start,
         active_end,
         lines,
@@ -628,6 +639,36 @@ fn scaled_dimensions(dimensions: LayerDimensions, scale: &SegmentScale) -> Layer
     }
 }
 
+fn rotated_dimensions(dimensions: LayerDimensions, degrees: i32) -> LayerDimensions {
+    if degrees.rem_euclid(360) == 0 {
+        return dimensions;
+    }
+
+    let radians = f64::from(degrees).to_radians();
+    let sin = normalized_abs_trig(radians.sin());
+    let cos = normalized_abs_trig(radians.cos());
+    LayerDimensions {
+        width: ceil_dimension(
+            f64::from(dimensions.width) * cos + f64::from(dimensions.height) * sin,
+        ),
+        height: ceil_dimension(
+            f64::from(dimensions.width) * sin + f64::from(dimensions.height) * cos,
+        ),
+    }
+}
+
+fn normalized_abs_trig(value: f64) -> f64 {
+    let value = value.abs();
+    if value < 1e-9 { 0.0 } else { value }
+}
+
+fn ceil_dimension(value: f64) -> u32 {
+    if !value.is_finite() {
+        return 1;
+    }
+    value.ceil().max(1.0).min(f64::from(u32::MAX)) as u32
+}
+
 fn layer_placement(
     visual: &SegmentVisual,
     output: LayerDimensions,
@@ -658,6 +699,10 @@ fn round_div_u64(numerator: u64, denominator: u64) -> u64 {
 
 fn millis_decimal(millis: u32) -> String {
     format!("{}.{:03}", millis / 1_000, millis % 1_000)
+}
+
+fn rotation_radians_arg(degrees: i32) -> String {
+    format!("{:.6}", f64::from(degrees).to_radians())
 }
 
 fn segment_background_color_arg(background: &SegmentBackgroundFilling) -> Option<String> {

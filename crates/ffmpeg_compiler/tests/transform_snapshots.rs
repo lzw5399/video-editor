@@ -104,6 +104,25 @@ fn transform_snapshot_compiles_static_center_anchor_rotation_and_preserves_layer
 }
 
 #[test]
+fn transform_snapshot_reports_non_center_anchor_rotation_as_unsupported() {
+    let mut draft = common::compiler_draft();
+    let overlay = &mut draft.tracks[1].segments[0];
+    overlay.visual.transform.anchor = SegmentAnchor {
+        x_millis: 0,
+        y_millis: 0,
+    };
+    overlay.visual.transform.rotation = SegmentRotation { degrees: 30 };
+
+    let job = compile_ffmpeg_job(&export_plan_from_draft(draft), &compile_context())
+        .expect("non-center-anchor rotation should compile with an explicit diagnostic");
+
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "rotationAnchor"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+    }));
+}
+
+#[test]
 fn transform_fit_mode_background_fill_and_visual_diagnostics_are_preserved() {
     let mut draft = common::compiler_draft();
     let overlay_material = draft
@@ -140,16 +159,21 @@ fn transform_fit_mode_background_fill_and_visual_diagnostics_are_preserved() {
         job.filter_script
             .contains("[vsegbg1][vstage1a]overlay=x=656:y=0:shortest=1[vstage1b]")
     );
-    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
-        diagnostic.property == "rotation" && diagnostic.support == RenderIntentSupport::Unsupported
-    }));
+    assert!(job.filter_script.contains("rotate="));
+    assert!(
+        job.visual_diagnostics.iter().all(|diagnostic| {
+            diagnostic.property != "rotation"
+                || diagnostic.support != RenderIntentSupport::Unsupported
+        }),
+        "static rotation should compile instead of being reported unsupported: {:?}",
+        job.visual_diagnostics
+    );
     assert!(job.visual_diagnostics.iter().any(|diagnostic| {
         diagnostic.property == "blendMode" && diagnostic.support == RenderIntentSupport::Unsupported
     }));
     assert!(job.visual_diagnostics.iter().any(|diagnostic| {
         diagnostic.property == "mask" && diagnostic.support == RenderIntentSupport::Unsupported
     }));
-    assert!(!job.filter_script.contains("rotate="));
     assert!(!job.filter_script.contains("blend=all_mode"));
 }
 
