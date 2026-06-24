@@ -779,7 +779,7 @@ Plans:
 **Goal:** Provider-neutral template import and rendering foundation with Kaipai as an offline external adapter, producing editable `.veproj` drafts, localized resources, adaptation reports, preview/export evidence, and a backend-first desktop import/report flow.
 **Requirements**: COMP-01, COMP-02, PRODFX-05, NO-FALLBACK-01, NO-FALLBACK-02, TEST-E2E-01
 **Depends on:** Phase 16
-**Plans:** 5/10 plans executed
+**Plans:** 6/10 plans executed
 
 Plans:
 **Wave 1**
@@ -795,7 +795,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-05-PLAN.md - Add Kaipai mapper fixture and AdaptationReport snapshot setup
+- [x] 17-05-PLAN.md - Add Kaipai mapper fixture and AdaptationReport snapshot setup
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -881,6 +881,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.2 P0 Real GPU Realtime Compositor Closure | 15/15 | Complete | 2026-06-20 |
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
-| 17. Template Import Core And Kaipai Offline Adapter Foundation | 5/10 | In Progress|  |
+| 17. Template Import Core And Kaipai Offline Adapter Foundation | 6/10 | In Progress|  |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

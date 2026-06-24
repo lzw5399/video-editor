@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-03-PLAN.md
-last_updated: "2026-06-24T08:42:22.413Z"
+stopped_at: Completed 17-05-PLAN.md
+last_updated: "2026-06-24T08:59:39.950Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 154
+  completed_plans: 155
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 17 execution started
 
@@ -191,6 +191,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P04 | 11 min | 2 tasks | 14 files |
 | Phase 17 P07 | 11 min | 2 tasks | 4 files |
 | Phase 17 P03 | 10 min | 2 tasks | 9 files |
+| Phase 17 P05 | 10 min | 1 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -531,6 +532,9 @@ Recent decisions affecting current work:
 - [Phase 17]: DraftImportPlan carries canonical draft semantics only; report/provenance evidence is supplied through DraftImportApplicationInput and returned as AdaptationReport. — Preserves adapter/session boundary and keeps provider evidence out of canonical draft semantics.
 - [Phase 17]: Import track z-order is provider-neutral ordering metadata validated before application, then represented by canonical Draft track order. — Keeps external adapter level/order mapping out of render semantics while preserving deterministic layer order.
 - [Phase 17]: Import application is pure and returns Draft plus AdaptationReport; project-session persistence remains a later owner. — Maintains Rust session ownership of .veproj/project.json mutation and prevents adapters from writing project bundles directly.
+- [Phase 17]: Kaipai fixture snapshots define provider-neutral DraftImportPlan-facing outcomes and report expectations without mutating a draft or session. — Keeps adapter fixtures aligned with the Phase 17 ownership boundary before mapper implementation.
+- [Phase 17]: Native-effect fixture expectations classify provider-native effects as needsNativeEffect plus dropped filter behavior, never supported. — Unsupported proprietary effects must be explicit report diagnostics rather than fake support.
+- [Phase 17]: Mapper fixture sanitizer coverage rejects account IDs, cookies, signed URLs, credential-like fields, and remote runtime URLs through in-memory mutations. — Committed fixtures stay sanitized while unsafe provider shapes remain executable negative coverage.
 
 ### Pending Todos
 
@@ -611,6 +615,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T08:42:22.407Z
-Stopped at: Completed 17-03-PLAN.md
+Last session: 2026-06-24T08:59:39.943Z
+Stopped at: Completed 17-05-PLAN.md
 Resume file: None
