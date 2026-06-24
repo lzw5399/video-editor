@@ -229,7 +229,10 @@ const FIXTURE_CASES: &[FixtureCase] = &[
         polarity: FixturePolarity::Negative,
         input_path: "negative/native-effect.json",
         report_path: "native-effect.report.json",
-        expected_statuses: &[AdaptationStatus::NeedsNativeEffect, AdaptationStatus::Dropped],
+        expected_statuses: &[
+            AdaptationStatus::NeedsNativeEffect,
+            AdaptationStatus::Dropped,
+        ],
         expected_plan: NATIVE_EFFECT_PLAN,
     },
 ];
@@ -320,9 +323,9 @@ fn mapper_fixture_snapshots_expected_reports_match_rust_contract() {
         let actual_report: AdaptationReport = serde_json::from_str(&actual_json)
             .unwrap_or_else(|error| panic!("{} should deserialize: {error}", case.report_path));
         let expected_report = expected_report(case);
-        let expected_json =
-            serde_json::to_string_pretty(&expected_report).expect("expected report serializes")
-                + "\n";
+        let expected_json = serde_json::to_string_pretty(&expected_report)
+            .expect("expected report serializes")
+            + "\n";
 
         assert_eq!(
             actual_json, expected_json,
@@ -449,9 +452,11 @@ fn expected_report_paths(report_dir: &Path) -> BTreeSet<String> {
 }
 
 fn read_json(path: &Path) -> Value {
-    serde_json::from_slice(&fs::read(path).unwrap_or_else(|error| {
-        panic!("fixture should be readable: {}: {error}", path.display())
-    }))
+    serde_json::from_slice(
+        &fs::read(path).unwrap_or_else(|error| {
+            panic!("fixture should be readable: {}: {error}", path.display())
+        }),
+    )
     .unwrap_or_else(|error| panic!("fixture should parse as JSON: {}: {error}", path.display()))
 }
 
@@ -514,9 +519,16 @@ fn is_credential_like_key(key: &str) -> bool {
 
 fn is_remote_runtime_key(key: &str) -> bool {
     let normalized = normalized_key(key);
-    ["remoteruntimeurl", "remoterenderurl", "renderurl", "signedurl", "cdnurl", "downloadurl"]
-        .iter()
-        .any(|needle| normalized.contains(needle))
+    [
+        "remoteruntimeurl",
+        "remoterenderurl",
+        "renderurl",
+        "signedurl",
+        "cdnurl",
+        "downloadurl",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
 }
 
 fn normalized_key(key: &str) -> String {
@@ -569,7 +581,10 @@ fn assert_expected_formula_fields(case: &FixtureCase, value: &Value) {
                 value.pointer("/formula/videoClipList/0/durationMsWithSpeed"),
                 Some(&json!(4000))
             );
-            assert_eq!(value.pointer("/formula/videoClipList/0/crop/left"), Some(&json!(80)));
+            assert_eq!(
+                value.pointer("/formula/videoClipList/0/crop/left"),
+                Some(&json!(80))
+            );
             assert_eq!(
                 value.pointer("/formula/videoClipList/0/fitMode"),
                 Some(&json!("fill"))
@@ -598,7 +613,10 @@ fn assert_expected_formula_fields(case: &FixtureCase, value: &Value) {
             );
         }
         "bgm-audio" => {
-            assert_eq!(value.pointer("/formula/bgm/volumeMillis"), Some(&json!(720)));
+            assert_eq!(
+                value.pointer("/formula/bgm/volumeMillis"),
+                Some(&json!(720))
+            );
             assert_eq!(value.pointer("/formula/bgm/fadeInMs"), Some(&json!(500)));
             assert_eq!(value.pointer("/formula/bgm/fadeOutMs"), Some(&json!(800)));
         }
@@ -685,7 +703,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Segment,
                 "segment-main-video",
                 "Main video source and speed-adjusted target timeranges map to canonical integer microseconds.",
-                Some("durationMsWithSpeed=4000 maps to a 4s target range while preserving the 6s source range."),
+                Some(
+                    "durationMsWithSpeed=4000 maps to a 4s target range while preserving the 6s source range.",
+                ),
                 case.family,
                 "formula.videoClipList[0]",
             ),
@@ -698,7 +718,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Track,
                 "track-pip-overlay",
                 "PIP level maps to provider-neutral overlay z-order.",
-                Some("Kaipai level is catalog evidence only; canonical Draft track ordering carries layer order."),
+                Some(
+                    "Kaipai level is catalog evidence only; canonical Draft track ordering carries layer order.",
+                ),
                 case.family,
                 "formula.pipList[0].level",
             ),
@@ -709,7 +731,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Segment,
                 "segment-pip-overlay",
                 "PIP bounds, fit, opacity, position, scale, and static center-anchor rotation map to SegmentVisual.",
-                Some("Static center-anchor rotation is supported generically by Plan 17-07 export parity."),
+                Some(
+                    "Static center-anchor rotation is supported generically by Plan 17-07 export parity.",
+                ),
                 case.family,
                 "formula.pipList[0]",
             ),
@@ -733,7 +757,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Font,
                 "font://bundled/noto-sans-cjk-sc-regular",
                 "Requested provider font is approximated with bundled Noto Sans CJK SC fallback.",
-                Some("Font closure keeps a local fontRef and records localization fallback in the report."),
+                Some(
+                    "Font closure keeps a local fontRef and records localization fallback in the report.",
+                ),
                 case.family,
                 "formula.stickerList[0].textEditInfoList[0].fontPath",
             ),
@@ -744,7 +770,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Effect,
                 "text-effect-glow",
                 "Provider text glow effect is dropped until a local text effect exists.",
-                Some("Unsupported text effects must not be smuggled into generic filter parameters."),
+                Some(
+                    "Unsupported text effects must not be smuggled into generic filter parameters.",
+                ),
                 case.family,
                 "formula.stickerList[0].textEditInfoList[0].textEffect",
             ),
@@ -803,7 +831,9 @@ fn expected_report(case: &FixtureCase) -> AdaptationReport {
                 AdaptationTargetKind::Filter,
                 "filter-native-effect-beauty-retouch",
                 "Native effect is omitted from the canonical draft filter stack.",
-                Some("Report evidence preserves the external reference without writing native parameters to Draft."),
+                Some(
+                    "Report evidence preserves the external reference without writing native parameters to Draft.",
+                ),
                 case.family,
                 "formula.nativeEffectList[0].nativeEffectName",
             ),

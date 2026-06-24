@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
-use adapter_kaipai::{map_kaipai_bundle_to_import_plan, KaipaiFormulaBundle, KaipaiImportOptions};
-use draft_import::{validate_import_plan, AdaptationStatus, ResourceLocalizationMode};
+use adapter_kaipai::{KaipaiFormulaBundle, KaipaiImportOptions, map_kaipai_bundle_to_import_plan};
+use draft_import::{AdaptationStatus, ResourceLocalizationMode, validate_import_plan};
 use draft_model::{
     CanvasAspectRatio, CanvasBackground, MaterialKind, Microseconds, SegmentAnchor, SegmentFitMode,
     TrackKind,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

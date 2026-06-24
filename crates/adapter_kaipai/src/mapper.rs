@@ -4,12 +4,12 @@ use std::{
 };
 
 use draft_import::{
-    localize_template_resources, validate_import_plan, AdaptationCategory, AdaptationReport,
-    AdaptationReportItem, AdaptationSeverity, AdaptationStatus, AdaptationTargetKind,
-    AdaptationTargetRef, DraftImportPlan, DraftImportPlanSchemaVersion, ExternalProvenanceRef,
-    ImportMaterialPlan, ImportTrackPlan, LocalizedResource, LocalizedResourceManifest,
-    LocalizedResourceStatus, ResourceLocalizationMode, ResourceLocalizationRequest,
-    TemplateResourceKind, TemplateResourceRef,
+    AdaptationCategory, AdaptationReport, AdaptationReportItem, AdaptationSeverity,
+    AdaptationStatus, AdaptationTargetKind, AdaptationTargetRef, DraftImportPlan,
+    DraftImportPlanSchemaVersion, ExternalProvenanceRef, ImportMaterialPlan, ImportTrackPlan,
+    LocalizedResource, LocalizedResourceManifest, LocalizedResourceStatus,
+    ResourceLocalizationMode, ResourceLocalizationRequest, TemplateResourceKind,
+    TemplateResourceRef, localize_template_resources, validate_import_plan,
 };
 use draft_model::{
     AudioFade, CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset,
@@ -440,11 +440,7 @@ impl<'a> MapperState<'a> {
             })?;
             let target_duration =
                 optional_u64_field(clip, "durationMsWithSpeed").unwrap_or(source_duration);
-            self.ensure_resource_material(
-                resource_id,
-                Some(ms_to_us(source_end)),
-                canvas_config,
-            );
+            self.ensure_resource_material(resource_id, Some(ms_to_us(source_end)), canvas_config);
             if !self.material_ids.contains(resource_id) {
                 self.report_missing_resource(
                     resource_id,

@@ -6,28 +6,28 @@ use std::{
     time::Duration,
 };
 
-use adapter_kaipai::{map_kaipai_bundle_to_import_plan, KaipaiFormulaBundle, KaipaiImportOptions};
+use adapter_kaipai::{KaipaiFormulaBundle, KaipaiImportOptions, map_kaipai_bundle_to_import_plan};
 use draft_import::{
-    apply_import_plan_to_draft, AdaptationStatus, DraftImportApplicationInput,
-    ResourceLocalizationMode,
+    AdaptationStatus, DraftImportApplicationInput, ResourceLocalizationMode,
+    apply_import_plan_to_draft,
 };
-use draft_model::{bundled_text_font_path, Draft, Microseconds, TargetTimerange};
-use engine_core::{normalize_draft, resolve_render_range, EngineProfile};
-use ffmpeg_compiler::{compile_ffmpeg_job, CompileContext};
+use draft_model::{Draft, Microseconds, TargetTimerange, bundled_text_font_path};
+use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
+use ffmpeg_compiler::{CompileContext, compile_ffmpeg_job};
 use media_runtime::{
-    discover_runtime_config, run_export_job, validate_rendered_output, CancelToken, FfmpegExecutor,
-    FfmpegJobState, FfmpegRuntimeJob, OutputValidationExpectation,
-    RationalFrameRate as RuntimeFrameRate, RuntimeConfig,
+    CancelToken, FfmpegExecutor, FfmpegJobState, FfmpegRuntimeJob, OutputValidationExpectation,
+    RationalFrameRate as RuntimeFrameRate, RuntimeConfig, discover_runtime_config, run_export_job,
+    validate_rendered_output,
 };
 use media_runtime_desktop::DesktopFfmpegExecutor;
-use project_store::{open_project_bundle, save_project_bundle, StdPlatformFileSystem};
+use project_store::{StdPlatformFileSystem, open_project_bundle, save_project_bundle};
 use render_graph::{
-    build_render_graph, ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile,
+    ExportMp4Preset, OutputDimensions, RenderGraphPlan, RenderOutputProfile, build_render_graph,
 };
 use serde_json::Value;
 use testkit::render_compare::{
-    extract_rgb_frame_at, probe_phase5_render_capabilities, ComparableFrame, RenderCompareError,
-    RenderCompareResult,
+    ComparableFrame, RenderCompareError, RenderCompareResult, extract_rgb_frame_at,
+    probe_phase5_render_capabilities,
 };
 
 const EXPECTED_WIDTH: u32 = 1080;
@@ -328,8 +328,8 @@ fn run_export_to_completion(
     )
     .with_expected_duration_microseconds(EXPORT_DURATION_US)
     .with_timeout(Duration::from_secs(90));
-    let export_result = run_export_job(&runtime_job, &CancelToken::new(), |_| {})
-        .map_err(|error| {
+    let export_result =
+        run_export_job(&runtime_job, &CancelToken::new(), |_| {}).map_err(|error| {
             RenderCompareError::Runtime(format!(
                 "{error}; stderr={:?}; stdout={:?}",
                 error.stderr_summary, error.stdout_summary
