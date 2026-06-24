@@ -506,6 +506,7 @@ fn is_full_canvas_identity(visual: &SegmentVisual) -> bool {
         && visual.transform.position.y == 0
         && visual.transform.anchor.x_millis == 500
         && visual.transform.anchor.y_millis == 500
+        && visual.transform.rotation.degrees.rem_euclid(360) == 0
         && visual.transform.opacity.value_millis == 1_000
 }
 

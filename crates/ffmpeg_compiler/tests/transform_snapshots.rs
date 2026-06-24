@@ -104,6 +104,37 @@ fn transform_snapshot_compiles_static_center_anchor_rotation_and_preserves_layer
 }
 
 #[test]
+fn transform_snapshot_compiles_full_canvas_rotation_outside_identity_fast_path() {
+    let mut draft = common::compiler_draft();
+    let base_video = &mut draft.tracks[0].segments[0];
+    base_video.visual.fit_mode = SegmentFitMode::Stretch;
+    base_video.visual.transform.position = SegmentPosition { x: 0, y: 0 };
+    base_video.visual.transform.anchor = SegmentAnchor::center();
+    base_video.visual.transform.scale = SegmentScale {
+        x_millis: 1_000,
+        y_millis: 1_000,
+    };
+    base_video.visual.transform.opacity = SegmentOpacity {
+        value_millis: 1_000,
+    };
+    base_video.visual.transform.rotation = SegmentRotation { degrees: 90 };
+
+    let job = compile_ffmpeg_job(&export_plan_from_draft(draft), &compile_context())
+        .expect("full-canvas static rotation export job should compile");
+
+    assert!(
+        job.filter_script.contains("rotate="),
+        "full-canvas rotation must not be hidden by the identity fast path:\n{}",
+        job.filter_script
+    );
+    assert!(
+        job.filter_script.contains("ow=rotw") && job.filter_script.contains("oh=roth"),
+        "full-canvas rotation should expand bounds before placement:\n{}",
+        job.filter_script
+    );
+}
+
+#[test]
 fn transform_snapshot_reports_non_center_anchor_rotation_as_unsupported() {
     let mut draft = common::compiler_draft();
     let overlay = &mut draft.tracks[1].segments[0];

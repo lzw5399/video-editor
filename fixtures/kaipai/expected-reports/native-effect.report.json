@@ -3,13 +3,50 @@
   "sourceKind": "kaipaiOfflineBundle",
   "generatedAt": "2026-06-24T00:00:00Z",
   "summary": {
-    "supported": 0,
+    "supported": 2,
     "approximated": 0,
     "dropped": 1,
     "missingResource": 0,
     "needsNativeEffect": 1
   },
   "items": [
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "canvas",
+      "target": {
+        "kind": "canvas",
+        "id": "canvas-main"
+      },
+      "message": "Canvas, frame rate, and background color map to DraftCanvasConfig.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-native-effect",
+          "externalPath": "formula.videoCanvasConfig",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "segment",
+      "target": {
+        "kind": "segment",
+        "id": "segment-main-video"
+      },
+      "message": "Main video source and speed-adjusted target timeranges map to canonical integer microseconds.",
+      "details": "durationMsWithSpeed=4000 maps to a 4s target range while preserving the 4s source range.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-native-effect",
+          "externalPath": "formula.videoClipList[0]",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
     {
       "status": "needsNativeEffect",
       "severity": "warning",

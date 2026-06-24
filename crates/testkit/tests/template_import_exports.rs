@@ -122,6 +122,7 @@ const EXPORT_CASES: &[ExportFixtureCase] = &[
         import_id: "import-native-effect-export",
         sample_time_us: 500_000,
         expected_statuses: &[
+            AdaptationStatus::Supported,
             AdaptationStatus::NeedsNativeEffect,
             AdaptationStatus::Dropped,
         ],

@@ -1,4 +1,4 @@
-use artifact_store::schema::open_artifact_store;
+use artifact_store::{paths::artifact_store_db_path, schema::open_artifact_store};
 use bindings_node::{close_project_session, create_project_session, import_kaipai_formula_bundle};
 use project_store::{StdPlatformFileSystem, open_project_bundle};
 use serde_json::{Value, json};
@@ -208,6 +208,52 @@ fn project_session_import_kaipai_formula_bundle_failed_mapping_leaves_no_partial
     close_session("kaipai-import-missing-root");
 }
 
+#[test]
+fn project_session_import_kaipai_formula_bundle_cleans_copied_resources_after_index_failure() {
+    let case = ImportCase::new("index-failure-cleanup");
+    let source_root = case.seed_fixture_resources("positive/main-video.json");
+    create_session(&case, "kaipai-import-index-failure-cleanup");
+    let before = case.saved_project_json();
+    let artifact_db_path = artifact_store_db_path(&case.bundle_path);
+    fs::create_dir_all(&artifact_db_path)
+        .expect("directory at artifact DB path should force SQLite open failure");
+
+    let failed = import_kaipai_formula_bundle(json!({
+        "sessionId": "kaipai-import-index-failure-cleanup",
+        "expectedRevision": 0,
+        "bundlePath": fixture_path("positive/main-video.json"),
+        "resourceRoot": source_root,
+        "importId": "import-index-failure-cleanup",
+        "verifyResourceSha256": false
+    }))
+    .expect("index failure import should return an envelope");
+
+    assert_eq!(failed["ok"], false, "{failed:#}");
+    assert_eq!(failed["error"]["kind"], "projectIoFailed");
+    assert!(
+        failed["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("resource index"),
+        "index failure error should identify the resource index boundary: {failed:#}"
+    );
+    assert_eq!(
+        case.saved_project_json(),
+        before,
+        "failed index persistence must roll back project.json"
+    );
+    assert!(
+        !contains_regular_files(
+            &case
+                .bundle_path
+                .join("resources/template-import/import-index-failure-cleanup")
+        ),
+        "failed index persistence must remove resources copied for the aborted import"
+    );
+
+    close_session("kaipai-import-index-failure-cleanup");
+}
+
 #[derive(Debug)]
 struct ResourceRow {
     kind: String,
@@ -315,6 +361,19 @@ fn resource_rows(bundle_path: &Path) -> Vec<ResourceRow> {
         .expect("resource query should run")
         .collect::<Result<Vec<_>, _>>()
         .expect("resource rows should collect")
+}
+
+fn contains_regular_files(path: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() || (path.is_dir() && contains_regular_files(&path)) {
+            return true;
+        }
+    }
+    false
 }
 
 fn assert_project_json_is_canonical(project_json: &str) {

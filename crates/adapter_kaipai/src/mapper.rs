@@ -197,128 +197,157 @@ impl<'a> MapperState<'a> {
         formula: &Map<String, Value>,
         canvas_config: &DraftCanvasConfig,
     ) -> Result<(), AdapterKaipaiError> {
-        let family = fixture_family(formula);
-        match family {
-            FixtureFamily::MainVideo => {
-                self.map_video_clip_list(formula, canvas_config, true)?;
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Canvas,
-                    AdaptationTargetKind::Canvas,
-                    "canvas-main",
-                    "Canvas, frame rate, and background color map to DraftCanvasConfig.",
-                    None,
-                    &self.context.external_id(),
-                    "formula.videoCanvasConfig",
-                ));
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Segment,
-                    AdaptationTargetKind::Segment,
-                    "segment-main-video",
-                    "Main video source and speed-adjusted target timeranges map to canonical integer microseconds.",
-                    Some(
-                        "durationMsWithSpeed=4000 maps to a 4s target range while preserving the 6s source range.",
-                    ),
-                    &self.context.external_id(),
-                    "formula.videoClipList[0]",
-                ));
-            }
-            FixtureFamily::PipOverlay => {
-                self.map_video_clip_list(formula, canvas_config, false)?;
-                self.map_pip_list(formula, canvas_config)?;
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Track,
-                    AdaptationTargetKind::Track,
-                    "track-pip-overlay",
-                    "PIP level maps to provider-neutral overlay z-order.",
-                    Some(
-                        "Kaipai level is catalog evidence only; canonical Draft track ordering carries layer order.",
-                    ),
-                    &self.context.external_id(),
-                    "formula.pipList[0].level",
-                ));
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Segment,
-                    AdaptationTargetKind::Segment,
-                    "segment-pip-overlay",
-                    "PIP bounds, fit, opacity, position, scale, and static center-anchor rotation map to SegmentVisual.",
-                    Some("Static center-anchor rotation is supported generically by Plan 17-07 export parity."),
-                    &self.context.external_id(),
-                    "formula.pipList[0]",
-                ));
-            }
-            FixtureFamily::TextSticker => {
-                self.map_sticker_list(formula, canvas_config)?;
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Text,
-                    AdaptationTargetKind::Text,
-                    "segment-text-sticker",
-                    "Text sticker content, color, stroke, shadow, layout, and wrapping map to TextSegment.",
-                    None,
-                    &self.context.external_id(),
-                    "formula.stickerList[0].textEditInfoList[0]",
-                ));
-                self.report_items.push(report_item(
-                    AdaptationStatus::Approximated,
-                    AdaptationSeverity::Warning,
-                    AdaptationCategory::Font,
-                    AdaptationTargetKind::Font,
-                    draft_model::BUNDLED_TEXT_FONT_REF,
-                    "Requested provider font is approximated with bundled Noto Sans CJK SC fallback.",
-                    Some("Font closure keeps a local fontRef and records localization fallback in the report."),
-                    &self.context.external_id(),
-                    "formula.stickerList[0].textEditInfoList[0].fontPath",
-                ));
-                self.report_items.push(report_item(
-                    AdaptationStatus::Dropped,
-                    AdaptationSeverity::Warning,
-                    AdaptationCategory::Text,
-                    AdaptationTargetKind::Effect,
-                    "text-effect-glow",
-                    "Provider text glow effect is dropped until a local text effect exists.",
-                    Some("Unsupported text effects must not be smuggled into generic filter parameters."),
-                    &self.context.external_id(),
-                    "formula.stickerList[0].textEditInfoList[0].textEffect",
-                ));
-            }
-            FixtureFamily::BgmAudio => {
-                self.map_bgm(formula)?;
-                self.report_items.push(report_item(
-                    AdaptationStatus::Supported,
-                    AdaptationSeverity::Info,
-                    AdaptationCategory::Audio,
-                    AdaptationTargetKind::Audio,
-                    "segment-bgm-audio",
-                    "BGM material, gain, fade-in, and fade-out map to canonical SegmentAudio.",
-                    None,
-                    &self.context.external_id(),
-                    "formula.bgm",
-                ));
-            }
-            FixtureFamily::MissingResource => {
-                self.report_missing_stickers(formula)?;
-            }
-            FixtureFamily::NativeEffect => {
-                self.map_video_clip_list(formula, canvas_config, false)?;
-                self.report_native_effects(formula)?;
-            }
-            FixtureFamily::Generic => {
-                self.map_video_clip_list(formula, canvas_config, false)?;
-                self.map_pip_list(formula, canvas_config)?;
-                self.map_sticker_list(formula, canvas_config)?;
-                self.map_bgm(formula)?;
-            }
+        if !array_field(formula, "videoClipList").is_empty() {
+            self.map_video_clip_list(formula, canvas_config, true)?;
+            self.report_canvas_support();
+            self.report_main_video_support(formula);
+        }
+        if !array_field(formula, "pipList").is_empty() {
+            self.map_pip_list(formula, canvas_config)?;
+            self.report_pip_support();
+        }
+        if !array_field(formula, "stickerList").is_empty() {
+            self.map_sticker_list(formula, canvas_config)?;
+            self.report_text_sticker_support_if_present(formula);
+        }
+        if formula.contains_key("bgm") {
+            self.map_bgm(formula)?;
+            self.report_bgm_support();
+        }
+        if formula.contains_key("nativeEffectList") {
+            self.report_native_effects(formula)?;
         }
         Ok(())
+    }
+
+    fn report_canvas_support(&mut self) {
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Canvas,
+            AdaptationTargetKind::Canvas,
+            "canvas-main",
+            "Canvas, frame rate, and background color map to DraftCanvasConfig.",
+            None,
+            &self.context.external_id(),
+            "formula.videoCanvasConfig",
+        ));
+    }
+
+    fn report_main_video_support(&mut self, formula: &Map<String, Value>) {
+        let details = main_video_timerange_report_details(formula);
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Segment,
+            AdaptationTargetKind::Segment,
+            "segment-main-video",
+            "Main video source and speed-adjusted target timeranges map to canonical integer microseconds.",
+            details.as_deref(),
+            &self.context.external_id(),
+            "formula.videoClipList[0]",
+        ));
+    }
+
+    fn report_pip_support(&mut self) {
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Track,
+            AdaptationTargetKind::Track,
+            "track-pip-overlay",
+            "PIP level maps to provider-neutral overlay z-order.",
+            Some(
+                "Kaipai level is catalog evidence only; canonical Draft track ordering carries layer order.",
+            ),
+            &self.context.external_id(),
+            "formula.pipList[0].level",
+        ));
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Segment,
+            AdaptationTargetKind::Segment,
+            "segment-pip-overlay",
+            "PIP bounds, fit, opacity, position, scale, and static center-anchor rotation map to SegmentVisual.",
+            Some("Static center-anchor rotation is supported generically by Plan 17-07 export parity."),
+            &self.context.external_id(),
+            "formula.pipList[0]",
+        ));
+    }
+
+    fn report_text_sticker_support_if_present(&mut self, formula: &Map<String, Value>) {
+        let Some(first_text_info) =
+            array_field(formula, "stickerList")
+                .iter()
+                .find_map(|sticker| {
+                    array_field_from_value(sticker, "textEditInfoList")
+                        .first()
+                        .copied()
+                })
+        else {
+            return;
+        };
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Text,
+            AdaptationTargetKind::Text,
+            "segment-text-sticker",
+            "Text sticker content, color, stroke, shadow, layout, and wrapping map to TextSegment.",
+            None,
+            &self.context.external_id(),
+            "formula.stickerList[0].textEditInfoList[0]",
+        ));
+        if optional_string_field(&first_text_info, "fontPath").is_some() {
+            self.report_items.push(report_item(
+                AdaptationStatus::Approximated,
+                AdaptationSeverity::Warning,
+                AdaptationCategory::Font,
+                AdaptationTargetKind::Font,
+                draft_model::BUNDLED_TEXT_FONT_REF,
+                "Requested provider font is approximated with bundled Noto Sans CJK SC fallback.",
+                Some("Font closure keeps a local fontRef and records localization fallback in the report."),
+                &self.context.external_id(),
+                "formula.stickerList[0].textEditInfoList[0].fontPath",
+            ));
+        }
+        if let Some(effect_name) = optional_string_field(&first_text_info, "textEffect") {
+            let message = format!(
+                "Provider text {} effect is dropped until a local text effect exists.",
+                safe_stem(effect_name, "provider")
+            );
+            self.report_items.push(report_item(
+                AdaptationStatus::Dropped,
+                AdaptationSeverity::Warning,
+                AdaptationCategory::Text,
+                AdaptationTargetKind::Effect,
+                &format!(
+                    "text-effect-{}",
+                    safe_stem(effect_name, "provider-text-effect")
+                ),
+                &message,
+                Some(
+                    "Unsupported text effects must not be smuggled into generic filter parameters.",
+                ),
+                &self.context.external_id(),
+                "formula.stickerList[0].textEditInfoList[0].textEffect",
+            ));
+        }
+    }
+
+    fn report_bgm_support(&mut self) {
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Audio,
+            AdaptationTargetKind::Audio,
+            "segment-bgm-audio",
+            "BGM material, gain, fade-in, and fade-out map to canonical SegmentAudio.",
+            None,
+            &self.context.external_id(),
+            "formula.bgm",
+        ));
     }
 
     fn ensure_material(
@@ -666,40 +695,6 @@ impl<'a> MapperState<'a> {
         Ok(())
     }
 
-    fn report_missing_stickers(
-        &mut self,
-        formula: &Map<String, Value>,
-    ) -> Result<(), AdapterKaipaiError> {
-        for (index, sticker) in array_field(formula, "stickerList").iter().enumerate() {
-            let path = format!("formula.stickerList[{index}]");
-            let resource_id = string_field(sticker, &path, "resourceId")?;
-            let segment_id = string_field(sticker, &path, "segmentId")?;
-            self.report_items.push(report_item(
-                AdaptationStatus::MissingResource,
-                AdaptationSeverity::Error,
-                AdaptationCategory::Resource,
-                AdaptationTargetKind::Resource,
-                resource_id,
-                "Referenced sticker resource is absent from the sanitized offline bundle.",
-                Some("Mapper must report the missing resource and skip the dependent segment."),
-                &self.context.external_id(),
-                &format!("{path}.resourceId"),
-            ));
-            self.report_items.push(report_item(
-                AdaptationStatus::Dropped,
-                AdaptationSeverity::Warning,
-                AdaptationCategory::Sticker,
-                AdaptationTargetKind::Sticker,
-                segment_id,
-                "Sticker segment is dropped because its material cannot be localized.",
-                None,
-                &self.context.external_id(),
-                &path,
-            ));
-        }
-        Ok(())
-    }
-
     fn report_native_effects(
         &mut self,
         formula: &Map<String, Value>,
@@ -768,42 +763,6 @@ impl<'a> MapperState<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FixtureFamily {
-    MainVideo,
-    PipOverlay,
-    TextSticker,
-    BgmAudio,
-    MissingResource,
-    NativeEffect,
-    Generic,
-}
-
-fn fixture_family(formula: &Map<String, Value>) -> FixtureFamily {
-    if formula.contains_key("nativeEffectList") {
-        FixtureFamily::NativeEffect
-    } else if let Some(stickers) = formula.get("stickerList").and_then(Value::as_array) {
-        if stickers
-            .iter()
-            .any(|sticker| !array_field_from_value(sticker, "textEditInfoList").is_empty())
-        {
-            FixtureFamily::TextSticker
-        } else if !stickers.is_empty() {
-            FixtureFamily::MissingResource
-        } else {
-            FixtureFamily::Generic
-        }
-    } else if formula.contains_key("bgm") {
-        FixtureFamily::BgmAudio
-    } else if formula.contains_key("pipList") {
-        FixtureFamily::PipOverlay
-    } else if formula.contains_key("videoClipList") {
-        FixtureFamily::MainVideo
-    } else {
-        FixtureFamily::Generic
-    }
-}
-
 fn template_resource_refs(
     bundle: &KaipaiFormulaBundle,
     verify_sha256: bool,
@@ -819,6 +778,29 @@ fn template_resource_refs(
             display_name: Some(resource.display_name.clone()),
         })
         .collect()
+}
+
+fn main_video_timerange_report_details(formula: &Map<String, Value>) -> Option<String> {
+    let clip = array_field(formula, "videoClipList").first().copied()?;
+    let source_start = optional_u64_field(clip, "startAtMs")?;
+    let source_end = optional_u64_field(clip, "endAtMs")?;
+    let source_duration = source_end.checked_sub(source_start)?;
+    let target_duration =
+        optional_u64_field(clip, "durationMsWithSpeed").unwrap_or(source_duration);
+    Some(format!(
+        "durationMsWithSpeed={} maps to a {} target range while preserving the {} source range.",
+        target_duration,
+        format_report_duration_ms(target_duration),
+        format_report_duration_ms(source_duration)
+    ))
+}
+
+fn format_report_duration_ms(duration_ms: u64) -> String {
+    if duration_ms % 1_000 == 0 {
+        format!("{}s", duration_ms / 1_000)
+    } else {
+        format!("{duration_ms}ms")
+    }
 }
 
 fn template_resource_kind(kind: FormulaResourceKind) -> TemplateResourceKind {

@@ -190,6 +190,7 @@ fn offline_mapper_reports_missing_resources_and_native_effects_without_hiding_su
     assert_statuses(
         &native.report.items,
         &[
+            AdaptationStatus::Supported,
             AdaptationStatus::NeedsNativeEffect,
             AdaptationStatus::Dropped,
         ],
@@ -204,6 +205,125 @@ fn offline_mapper_reports_missing_resources_and_native_effects_without_hiding_su
         "native effects must never be classified as supported"
     );
     assert_no_provider_runtime_refs(&serde_json::to_value(&native.plan).unwrap());
+}
+
+#[test]
+fn offline_mapper_maps_mixed_formula_sections_cumulatively() {
+    let mut value = read_fixture_value("positive/pip-overlay.json");
+    let text = read_fixture_value("positive/text-sticker.json");
+    let bgm = read_fixture_value("positive/bgm-audio.json");
+    let native = read_fixture_value("negative/native-effect.json");
+
+    value["formula"]["stickerList"] = text["formula"]["stickerList"].clone();
+    value["formula"]["stickerList"][0]["textEditInfoList"][0]
+        .as_object_mut()
+        .expect("text fixture should be an object")
+        .remove("textEffect");
+    value["formula"]["bgm"] = bgm["formula"]["bgm"].clone();
+    value["formula"]["nativeEffectList"] = native["formula"]["nativeEffectList"].clone();
+    value["directMaterials"]
+        .as_array_mut()
+        .expect("fixture direct materials should be an array")
+        .extend(
+            bgm["directMaterials"]
+                .as_array()
+                .expect("BGM direct materials should be an array")
+                .iter()
+                .cloned(),
+        );
+    value["resources"]
+        .as_array_mut()
+        .expect("fixture resources should be an array")
+        .extend(
+            text["resources"]
+                .as_array()
+                .expect("text resources should be an array")
+                .iter()
+                .chain(
+                    bgm["resources"]
+                        .as_array()
+                        .expect("BGM resources should be an array")
+                        .iter(),
+                )
+                .cloned(),
+        );
+
+    let bundle =
+        KaipaiFormulaBundle::from_json_value(value).expect("mixed sanitized fixture should parse");
+    let mapped = map_bundle(bundle, "offline-mixed-template");
+
+    validate_import_plan(&mapped.plan).expect("mixed import plan should validate");
+    let material_ids = mapped
+        .plan
+        .materials
+        .iter()
+        .map(|material| material.material.material_id.as_str())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        material_ids,
+        BTreeSet::from([
+            "material-main-video",
+            "material-pip-overlay",
+            "material-text-sticker",
+            "material-bgm-audio",
+        ])
+    );
+    assert_eq!(
+        mapped
+            .plan
+            .tracks
+            .iter()
+            .map(|track| (
+                track.track.track_id.as_str(),
+                track.track.kind,
+                track.z_order
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("track-main-video", TrackKind::Video, 0),
+            ("track-pip-overlay", TrackKind::Video, 20),
+            ("track-text-sticker", TrackKind::Text, 30),
+            ("track-bgm-audio", TrackKind::Audio, 100),
+        ]
+    );
+    assert!(
+        mapped
+            .plan
+            .tracks
+            .iter()
+            .find(|track| track.track.track_id.as_str() == "track-text-sticker")
+            .and_then(|track| track.track.segments[0].text.as_ref())
+            .is_some(),
+        "mixed template should preserve supported text sticker content"
+    );
+    assert!(
+        mapped
+            .plan
+            .tracks
+            .iter()
+            .flat_map(|track| &track.track.segments)
+            .all(|segment| segment.filters.is_empty()),
+        "native effects must stay out of canonical draft filters"
+    );
+    assert_statuses(
+        &mapped.report.items,
+        &[
+            AdaptationStatus::Supported,
+            AdaptationStatus::Approximated,
+            AdaptationStatus::NeedsNativeEffect,
+            AdaptationStatus::Dropped,
+        ],
+    );
+    assert!(
+        mapped
+            .report
+            .items
+            .iter()
+            .filter(|item| item.status == AdaptationStatus::Dropped)
+            .all(|item| item.category == draft_import::AdaptationCategory::Segment),
+        "the mixed fixture removes provider text effects, so dropped report items should only describe native effect omission"
+    );
+    assert_no_provider_runtime_refs(&serde_json::to_value(&mapped.plan).unwrap());
 }
 
 #[test]

@@ -100,7 +100,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
 
     await importTemplateThroughProductPanel(app, page);
     await expectTemplateReportSummary(page, {
-      "已支持": 0,
+      "已支持": 2,
       "近似还原": 0,
       "已舍弃": 1,
       "缺少资源": 0,

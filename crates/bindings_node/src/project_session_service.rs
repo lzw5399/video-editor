@@ -40,7 +40,7 @@ use project_store::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -2258,6 +2258,7 @@ impl ProjectSession {
                 ));
             }
         };
+        let localized_resource_files = localized_resource_file_refs(&mapped.localized_resources);
         let localized_resources = localized_resource_refs(&mapped.localized_resources);
         let applied = match apply_import_plan_to_draft(DraftImportApplicationInput {
             plan: mapped.plan,
@@ -2267,6 +2268,7 @@ impl ProjectSession {
         }) {
             Ok(applied) => applied,
             Err(error) => {
+                cleanup_localized_resource_files(&self.bundle_path, &localized_resource_files);
                 return crate::to_js_value(crate::error_envelope(
                     CommandErrorKind::InvalidPayload,
                     format!("Draft import plan validation failed: {error}"),
@@ -2291,12 +2293,17 @@ impl ProjectSession {
                 Err(error) => {
                     let _ = save_project_bundle(&fs, &target_bundle_path, &previous_draft);
                     let _ = index_draft_resources(&target_bundle_path, &previous_draft);
+                    cleanup_localized_resource_files(
+                        &target_bundle_path,
+                        &localized_resource_files,
+                    );
                     Err(ProjectSessionImportPersistError::ArtifactStore(error))
                 }
             }
         }) {
             Ok(saved) => saved,
             Err(ProjectSessionImportPersistError::ProjectStore(error)) => {
+                cleanup_localized_resource_files(&self.bundle_path, &localized_resource_files);
                 return project_session_store_error(command, error);
             }
             Err(ProjectSessionImportPersistError::ArtifactStore(error)) => {
@@ -3183,6 +3190,54 @@ fn localized_resource_refs(
             )
         })
         .collect()
+}
+
+fn localized_resource_file_refs(manifest: &LocalizedResourceManifest) -> Vec<String> {
+    manifest
+        .resources
+        .iter()
+        .filter(|resource| resource.status == LocalizedResourceStatus::Available)
+        .filter_map(|resource| resource.project_relative_ref.clone())
+        .filter(|project_relative_ref| is_template_import_resource_ref(project_relative_ref))
+        .collect()
+}
+
+fn cleanup_localized_resource_files(bundle_path: &Path, project_relative_refs: &[String]) {
+    for project_relative_ref in project_relative_refs {
+        if !is_template_import_resource_ref(project_relative_ref) {
+            continue;
+        }
+        let path = bundle_path.join(project_relative_ref);
+        if path.is_file() {
+            let _ = fs::remove_file(&path);
+            prune_empty_template_import_dirs(bundle_path, path.parent());
+        }
+    }
+}
+
+fn prune_empty_template_import_dirs(bundle_path: &Path, start: Option<&Path>) {
+    let stop = bundle_path.join("resources").join("template-import");
+    let mut current = start;
+    while let Some(path) = current {
+        if path == stop || !path.starts_with(&stop) {
+            break;
+        }
+        if fs::remove_dir(path).is_err() {
+            break;
+        }
+        current = path.parent();
+    }
+}
+
+fn is_template_import_resource_ref(project_relative_ref: &str) -> bool {
+    if !project_relative_ref.starts_with("resources/template-import/") {
+        return false;
+    }
+    let path = Path::new(project_relative_ref);
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
 fn localized_resource_kind(kind: LocalizedResourceIndexKind) -> ResourceKind {
