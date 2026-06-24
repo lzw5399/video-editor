@@ -1256,7 +1256,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
       letterSpacingMillis: 60
     });
     const titleDragVisual = await dragSelectedPreviewTextOverlay(page, app, "预览拖动标题 Sans", 72, 34);
-    const titleRotateVisual = await rotateSelectedPreviewTextOverlay(page, app, "预览拖动标题 Sans", 48, -72);
+    const titleRotateVisual = await rotateSelectedPreviewTextOverlay(page, app, "预览拖动标题 Sans", 72, 96);
     await updateSelectedVisualThroughInspector(page, app, {
       positionX: titleRotateVisual.transform.position.x,
       positionY: titleRotateVisual.transform.position.y,
@@ -2409,7 +2409,7 @@ async function rotateSelectedPreviewTextOverlay(
     timeoutMs: 8_000
   });
   const beforeOverlay = overlayByContent(beforeEvidence.activeTextOverlays, expectedContent);
-  const rotateHandle = page.getByLabel("旋转文字");
+  const rotateHandle = page.getByRole("button", { name: "旋转文字", exact: true });
   await expect(rotateHandle, "selected text must expose a draggable rotate interaction target").toBeVisible({
     timeout: 10_000
   });

@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   USER_JOURNEY_MOVING_VIDEO,
   addMaterialToTimeline,
+  addTextThroughProductPanel,
+  capturePreviewEvidence,
   expectNoProductFallbackCalls,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
@@ -87,6 +89,76 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       "data-interaction-source",
       "rust-provisional"
     );
+  } finally {
+    await app.close();
+  }
+});
+
+test("preview text rotate handle changes native compositor rotation evidence", async () => {
+  const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
+  const textContent = "聚合旋转文字";
+
+  try {
+    await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addTextThroughProductPanel(page, app, textContent);
+
+    const beforeOverlay = await waitForTextOverlayEvidence(page, textContent);
+    const beforeCalls = await readProjectSessionCalls(app);
+    const beforeIndex = beforeCalls.length;
+    const baseRevision = latestResultRevision(beforeCalls);
+    expect(baseRevision, "text rotate setup must produce a canonical project revision").not.toBeNull();
+
+    const rotateHandle = page.getByRole("button", { name: "旋转文字", exact: true });
+    await expect(rotateHandle, "selected text must expose the product rotate affordance").toBeVisible({ timeout: 10_000 });
+    const box = await rotateHandle.boundingBox();
+    expect(box, "preview rotate handle must be measurable").not.toBeNull();
+
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width / 2 + 72, box!.y + box!.height / 2 + 96, { steps: 8 });
+
+    await expect
+      .poll(async () => interactionCommandsSince(app, beforeIndex), { timeout: 10_000 })
+      .toEqual(expect.arrayContaining(["beginProjectInteraction", "updateProjectInteraction"]));
+
+    const liveCalls = callsSince(await readProjectSessionCalls(app), beforeIndex);
+    expect(commandCount(liveCalls, "commitProjectInteraction"), "rotate drag must not commit before pointer-up").toBe(0);
+    expect(
+      liveCalls.some((call) => call.command === "executeProjectIntent" && call.intentKind === "updateSelectedSegmentVisual"),
+      "rotate drag must not route live samples through canonical updateSelectedSegmentVisual"
+    ).toBe(false);
+    for (const update of liveCalls.filter((call) => call.command === "updateProjectInteraction")) {
+      expect(update.interactionKind).toBe("selectedSegmentVisual");
+      expect(update.resultRevision).toBe(baseRevision);
+      expect(update.revisionUnchanged).toBe(true);
+      expect(update.visualPatch?.rotationDegrees, "rotate samples must send idempotent absolute rotation").toEqual(expect.any(Number));
+      expect(update.visualPatch?.rotationDeltaDegrees, "rotate samples must not send cumulative rotation deltas").toBeUndefined();
+    }
+    expectCoalescedInteractionTelemetry(liveCalls, "selectedSegmentVisual", "preview text rotate");
+
+    await page.mouse.up();
+
+    await expect
+      .poll(async () => commandCount(callsSince(await readProjectSessionCalls(app), beforeIndex), "commitProjectInteraction"), {
+        timeout: 10_000
+      })
+      .toBe(1);
+    const committedCalls = callsSince(await readProjectSessionCalls(app), beforeIndex);
+    const commit = committedCalls.findLast((call) => call.command === "commitProjectInteraction");
+    expect(commit?.interactionKind).toBe("selectedSegmentVisual");
+    expect(commit?.resultRevision).toBe((baseRevision ?? 0) + 1);
+    await expectRealtimeHostInteractionRefresh(app, "preview text rotate");
+    const afterOverlay = await waitForTextOverlayRotationChangedEvidence(
+      page,
+      textContent,
+      beforeOverlay.visualRotationDegrees
+    );
+    expect(
+      Math.abs(afterOverlay.visualRotationDegrees - beforeOverlay.visualRotationDegrees),
+      "native renderGraphGpuComposited text overlay rotation must change after handle drag"
+    ).toBeGreaterThan(4);
+    await expectInteractionQueueLatencyWithinBudget(page, "preview text rotate");
   } finally {
     await app.close();
   }
@@ -205,6 +277,67 @@ async function expectInteractionQueueLatencyWithinBudget(page: Page, label: stri
   );
   expect(telemetry.coalescedCount, `${label} must expose coalescing telemetry`).toBeGreaterThanOrEqual(0);
   expect(telemetry.staleRejectedCount, `${label} must expose stale generation rejection telemetry`).toBeGreaterThanOrEqual(0);
+}
+
+type ActiveTextOverlayEvidence = NonNullable<
+  NonNullable<
+    NonNullable<Awaited<ReturnType<typeof capturePreviewEvidence>>["hostState"]>["contentEvidence"]
+  >["activeTextOverlays"]
+>[number];
+
+async function waitForTextOverlayEvidence(page: Page, expectedContent: string): Promise<ActiveTextOverlayEvidence> {
+  const deadline = Date.now() + 10_000;
+  let lastEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const previewEvidence = await capturePreviewEvidence(page);
+    const evidence = previewEvidence.hostState?.contentEvidence;
+    const overlay = evidence?.activeTextOverlays?.find((candidate) => candidate.content === expectedContent);
+    lastEvidence = {
+      source: evidence?.source ?? null,
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0,
+      activeTextOverlays: evidence?.activeTextOverlays ?? [],
+      expectedContent
+    };
+    if (evidence?.source === "renderGraphGpuComposited" && overlay !== undefined) {
+      return overlay;
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`Timed out waiting for text overlay evidence: ${JSON.stringify(lastEvidence)}`);
+}
+
+async function waitForTextOverlayRotationChangedEvidence(
+  page: Page,
+  expectedContent: string,
+  previousRotationDegrees: number
+): Promise<ActiveTextOverlayEvidence> {
+  const deadline = Date.now() + 10_000;
+  let lastEvidence: unknown = null;
+
+  while (Date.now() < deadline) {
+    const previewEvidence = await capturePreviewEvidence(page);
+    const evidence = previewEvidence.hostState?.contentEvidence;
+    const overlay = evidence?.activeTextOverlays?.find((candidate) => candidate.content === expectedContent);
+    lastEvidence = {
+      source: evidence?.source ?? null,
+      targetTimeMicroseconds: evidence?.targetTimeMicroseconds ?? 0,
+      activeTextOverlays: evidence?.activeTextOverlays ?? [],
+      expectedContent,
+      previousRotationDegrees
+    };
+    if (
+      evidence?.source === "renderGraphGpuComposited" &&
+      overlay !== undefined &&
+      overlay.visualRotationDegrees !== previousRotationDegrees
+    ) {
+      return overlay;
+    }
+    await page.waitForTimeout(200);
+  }
+
+  throw new Error(`Timed out waiting for text overlay rotation evidence: ${JSON.stringify(lastEvidence)}`);
 }
 
 function latestResultRevision(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): number | null {
