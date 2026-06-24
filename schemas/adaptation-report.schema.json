@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AdaptationReport",
+  "type": "object",
+  "properties": {
+    "generatedAt": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AdaptationReportItem"
+      }
+    },
+    "provenanceDigest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/AdaptationReportSchemaVersion"
+    },
+    "sourceKind": {
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/AdaptationReportSummary"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceKind",
+    "generatedAt",
+    "summary",
+    "items"
+  ],
+  "$defs": {
+    "AdaptationCategory": {
+      "type": "string",
+      "enum": [
+        "sourceMedia",
+        "canvas",
+        "material",
+        "track",
+        "segment",
+        "text",
+        "sticker",
+        "audio",
+        "animation",
+        "transition",
+        "resource",
+        "font",
+        "nativeEffect"
+      ]
+    },
+    "AdaptationReportItem": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/AdaptationCategory"
+        },
+        "details": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExternalProvenanceRef"
+          }
+        },
+        "severity": {
+          "$ref": "#/$defs/AdaptationSeverity"
+        },
+        "status": {
+          "$ref": "#/$defs/AdaptationStatus"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdaptationTargetRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "severity",
+        "category",
+        "message"
+      ]
+    },
+    "AdaptationReportSchemaVersion": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "AdaptationReportSummary": {
+      "type": "object",
+      "properties": {
+        "approximated": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "dropped": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "missingResource": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "needsNativeEffect": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "supported": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "supported",
+        "approximated",
+        "dropped",
+        "missingResource",
+        "needsNativeEffect"
+      ]
+    },
+    "AdaptationSeverity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "AdaptationStatus": {
+      "type": "string",
+      "enum": [
+        "supported",
+        "approximated",
+        "dropped",
+        "missingResource",
+        "needsNativeEffect"
+      ]
+    },
+    "AdaptationTargetKind": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "canvas",
+        "material",
+        "track",
+        "segment",
+        "text",
+        "sticker",
+        "audio",
+        "keyframe",
+        "filter",
+        "transition",
+        "resource",
+        "font",
+        "effect"
+      ]
+    },
+    "AdaptationTargetRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/AdaptationTargetKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
+    },
+    "ExternalProvenanceRef": {
+      "type": "object",
+      "properties": {
+        "externalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "externalPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceKind": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sourceKind"
+      ]
+    }
+  }
+}

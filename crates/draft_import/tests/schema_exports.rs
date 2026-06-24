@@ -98,7 +98,12 @@ fn assert_schema_rejects_unknown_report_item_fields(schema_json: &str) {
         .expect("baseline report fixture should validate");
 
     assert!(
-        schema.validate(&report_value(Some(("templateId", json!("external-template"))))).is_err(),
+        schema
+            .validate(&report_value(Some((
+                "templateId",
+                json!("external-template")
+            ))))
+            .is_err(),
         "report item schema should reject unknown provider-only item fields"
     );
 }
