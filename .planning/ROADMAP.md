@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15.1: P0 Basic Editing Chain Repair** - Production playback, baseline text/audio preview parity, first-material canvas adaptation, multitrack editing, and full user-chain acceptance before scheduler work (completed 2026-06-20)
 - [x] **Phase 15.2: P0 Real GPU Realtime Compositor Closure** - Connect the real render-graph GPU compositor to desktop playback for mainstream editing behavior, backed by user-level E2E gates and no-fallback success rules (completed 2026-06-20 after 15.2-07 product playback UAT reclose)
 - [x] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (completed 2026-06-20)
-- [ ] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets
+- [x] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets (completed 2026-06-24)
 - [ ] **Phase 17: Template Import Core And Kaipai Offline Adapter Foundation** - Provider-neutral template import foundation with Kaipai as an offline external adapter
 - [ ] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
@@ -761,11 +761,18 @@ Plans:
   4. Thread-pool/resource limits are explicit, configurable for desktop development, and ready to map onto mobile/server runtimes.
   5. Performance telemetry records queue latency, job duration, cancellation, fallback, cache hit rate, first-frame time, and dropped-frame budgets.
 
-**Plans**: TBD
+**Plans**: 8/8 plans complete
 
 Plans:
 
-- [ ] TBD - Plan after Phase 15.3 completion
+- [x] 16-01-PLAN.md - Define scheduler boundary freshness and `PlaybackGeneration` contracts
+- [x] 16-01B-PLAN.md - Implement scheduler core contracts, queues, telemetry, and starvation fixtures
+- [x] 16-02-PLAN.md - Route preview and audio work through scheduler isolation
+- [x] 16-03-PLAN.md - Route export work through scheduler admission, cancellation, and telemetry
+- [x] 16-04-PLAN.md - Route artifact, probe, and filesystem IO work through scheduler boundaries
+- [x] 16-05-PLAN.md - Expose scheduler status, telemetry, and diagnostics through product-safe APIs
+- [x] 16-06-PLAN.md - Add scheduler source guards and packaged product stress evidence
+- [x] 16-07-PLAN.md - Run aggregate Phase 16 verification and closeout
 
 ### Phase 17: Template Import Core And Kaipai Offline Adapter Foundation
 
@@ -845,7 +852,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.1 P0 Basic Editing Chain Repair | 6/6 | Complete | 2026-06-20 |
 | 15.2 P0 Real GPU Realtime Compositor Closure | 15/15 | Complete | 2026-06-20 |
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
-| 16. Task Scheduler, Job Isolation, And Performance Telemetry | TBD | Not planned | - |
+| 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | TBD | Not planned | - |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | TBD | Not planned | - |
 | 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

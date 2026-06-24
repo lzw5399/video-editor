@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 17
-current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
+current_phase_name: Template Import Core And Kaipai Offline Adapter Foundation
 status: planning
-stopped_at: Completed quick task 260623-ui-reference-material-thumbnails
-last_updated: "2026-06-23T16:27:24.199Z"
-last_activity: 2026-06-23
-last_activity_desc: "Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks"
+stopped_at: Completed 15.3-07-PLAN.md
+last_updated: "2026-06-24T05:35:31.055Z"
+last_activity: 2026-06-24
+last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
   total_phases: 24
-  completed_phases: 20
+  completed_phases: 21
   total_plans: 149
-  completed_plans: 146
-  percent: 83
+  completed_plans: 149
+  percent: 88
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — READY TO PLAN
-Plan: TBD
+Phase: 17 — Template Import Core And Kaipai Offline Adapter Foundation
+Plan: Not started
 Status: Phase 17 inserted and ready for later research/planning; core template import/rendering capabilities stay provider-neutral and Kaipai remains an external offline adapter.
-Last activity: 2026-06-23 -- Completed quick task 260623-ui-reference-material-thumbnails: Material bin thumbnails now come from Rust project-session artifact status and bundled-FFmpeg derived refs; UI reference captures static, playing, and narrow evidence without artifact command mocks
+Last activity: 2026-06-24 — Phase 16 complete, transitioned to Phase 17
 
 Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-neutral template import plus a Kaipai offline adapter foundation, with former Phase 17/18 shifted to Phase 18/19.
 
@@ -39,7 +39,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 
 **Velocity:**
 
-- Total plans completed: 112
+- Total plans completed: 120
 - Average duration: 9 min
 - Total execution time: 1019 min
 
@@ -61,6 +61,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | 12 | 9 | 181 min | 20 min |
 | 13 | 8 | 108 min | 14 min |
 | 14 | 7 | - | - |
+| 16 | 8 | - | - |
 
 **Recent Trend:**
 
