@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 17.1
 current_phase_name: Interaction Session And Template Import Main-Chain Hardening
 status: executing
-stopped_at: Completed 17.1-05-PLAN.md
-last_updated: "2026-06-24T21:18:49.328Z"
+stopped_at: Completed 17.1-06-PLAN.md
+last_updated: "2026-06-24T22:03:30.103Z"
 last_activity: 2026-06-25
 last_activity_desc: Completed Phase 17.1 Plan 05 template report navigation and UI surface corrections
 progress:
   total_phases: 25
-  completed_phases: 22
+  completed_phases: 23
   total_plans: 165
-  completed_plans: 164
-  percent: 99
+  completed_plans: 165
+  percent: 92
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17.1 — Interaction Session And Template Import Main-Chain Hardening
-Plan: 5 of 6 complete; next 17.1-06
+Plan: 6 of 6 complete; next 17.1-06
 Status: Ready to execute
 Last activity: 2026-06-25 — Completed Phase 17.1 Plan 05 template report navigation and UI surface corrections
 
@@ -200,6 +200,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks
 | Phase 17.1 P03 | resumed | 3 tasks | 18 files |
 | Phase 17.1 P04 | 85 min | 4 tasks | 14 files |
 | Phase 17.1 P05 | resumed | 3 tasks | 13 files |
+| Phase 17.1 P06 | 31 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -571,6 +572,9 @@ Recent decisions affecting current work:
 - [Phase 17.1]: Unsupported feature categories render as product unavailable gates. — Sticker, effect, transition, filter, adjustment, and digital-human surfaces are visible navigation categories but do not have production preview/export backing yet.
 - [Phase 17.1]: The plan-level ui-regression command is backed by a wrapper over ui-reference-regression. — The phase plan named tests/ui-regression.spec.ts while the repo's established regression suite is ui-reference-regression.spec.ts.
 - [Phase 17.1]: Inspector product units are converted at the React control boundary. — The UI displays percent and degree values while preserving existing Rust integer draft semantics and command payloads.
+- [Phase 17.1]: The Phase 17.1 desktop aggregate uses Playwright --workers=1 because packaged Electron/native preview tests share heavy runtime state and previously overloaded under parallel execution.
+- [Phase 17.1]: Transition, fade, and direct crop handles are validated as product-gated surfaces until production Rust semantics, preview, export, and undo behavior exist.
+- [Phase 17.1]: The validation matrix treats each supported interaction row as auditable only when it names implementation path, test command, no-save/no-undo behavior, preview evidence, stale/cancel behavior, and product UI state.
 
 ### Pending Todos
 
@@ -652,6 +656,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T21:18:49.319Z
-Stopped at: Completed 17.1-05-PLAN.md
+Last session: 2026-06-24T22:02:55.322Z
+Stopped at: Completed 17.1-06-PLAN.md
 Resume file: None
