@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 
 import type { Material } from "../../generated/Draft";
+import type {
+  AdaptationCategory,
+  AdaptationReport,
+  AdaptationReportItem,
+  AdaptationStatus,
+  AdaptationTargetKind
+} from "../../generated/TemplateImport";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   WORKSPACE_CATEGORY_META,
@@ -22,12 +29,14 @@ import { MATERIAL_DRAG_DATA_TYPE, TEXT_SEGMENT_DRAG_DATA_TYPE } from "./dragType
 type FeaturePanelProps = {
   category: WorkspaceCategory;
   workspace: WorkspaceState;
+  templateImportReport: AdaptationReport | null;
   showDeveloperDiagnostics: boolean;
   bundlePath: string;
   materialPath: string;
   onBundlePathChange: (value: string) => void;
   onMaterialPathChange: (value: string) => void;
   onImportMaterial: () => void;
+  onImportTemplateBundle: () => void;
   onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -59,7 +68,7 @@ type MediaSourceSection = {
   active: boolean;
   disabled: boolean;
 };
-type ShowcaseCategory = Exclude<WorkspaceCategory, "媒体" | "音频" | "文字" | "字幕">;
+type ShowcaseCategory = Exclude<WorkspaceCategory, "媒体" | "音频" | "文字" | "字幕" | "模板">;
 type ShowcasePanelSpec = {
   rail: readonly string[];
   cards: readonly string[];
@@ -101,10 +110,6 @@ const SHOWCASE_PANEL_SPECS: Record<ShowcaseCategory, ShowcasePanelSpec> = {
     rail: ["基础", "HSL", "曲线", "LUT"],
     cards: ["自定义调节", "亮度", "对比度", "饱和度"]
   },
-  模板: {
-    rail: ["推荐", "我的", "口播", "收藏"],
-    cards: ["智能成片", "包装片头", "节奏卡点", "字幕包装"]
-  },
   数字人: {
     rail: ["形象", "声音", "口型", "收藏"],
     cards: ["数字人形象", "声音配置", "口型驱动", "场景模板"]
@@ -122,6 +127,8 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
     content = <CaptionsPanel {...props} />;
   } else if (props.category === "音频") {
     content = <AudioPanel {...props} />;
+  } else if (props.category === "模板") {
+    content = <TemplatePanel {...props} />;
   } else {
     content = <ShowcaseCategoryPanel category={props.category as ShowcaseCategory} />;
   }
@@ -131,6 +138,147 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
       <div className="resource-content-panel">{content}</div>
     </div>
   );
+}
+
+const TEMPLATE_REPORT_STATUSES: readonly AdaptationStatus[] = [
+  "supported",
+  "approximated",
+  "dropped",
+  "missingResource",
+  "needsNativeEffect"
+];
+const TEMPLATE_REPORT_STATUS_LABELS: Record<AdaptationStatus, string> = {
+  supported: "已支持",
+  approximated: "近似还原",
+  dropped: "已舍弃",
+  missingResource: "缺少资源",
+  needsNativeEffect: "需本地效果"
+};
+const TEMPLATE_REPORT_CATEGORY_LABELS: Record<AdaptationCategory, string> = {
+  sourceMedia: "源素材",
+  canvas: "画布",
+  material: "素材",
+  track: "轨道",
+  segment: "片段",
+  text: "文字",
+  sticker: "贴纸",
+  audio: "音频",
+  animation: "动画",
+  transition: "转场",
+  resource: "资源",
+  font: "字体",
+  nativeEffect: "本地效果"
+};
+const TEMPLATE_REPORT_TARGET_LABELS: Record<AdaptationTargetKind, string> = {
+  draft: "草稿",
+  canvas: "画布",
+  material: "素材",
+  track: "轨道",
+  segment: "片段",
+  text: "文本",
+  sticker: "贴纸",
+  audio: "音频",
+  keyframe: "关键帧",
+  filter: "滤镜",
+  transition: "转场",
+  resource: "资源",
+  font: "字体",
+  effect: "效果"
+};
+
+function TemplatePanel({
+  workspace,
+  templateImportReport,
+  onImportTemplateBundle
+}: FeaturePanelProps): React.ReactElement {
+  const pending = workspace.pendingCommand !== null;
+
+  return (
+    <div className="feature-panel-content template-feature-panel">
+      <div className="panel-header template-panel-header">
+        <h2>智能包装</h2>
+        <button
+          type="button"
+          className="primary-action template-import-action"
+          aria-label="导入离线模板"
+          onClick={onImportTemplateBundle}
+          disabled={pending}
+        >
+          <span className="app-icon-mask" style={iconMaskStyle("categoryTemplate")} aria-hidden="true" />
+          <span>导入模板</span>
+        </button>
+      </div>
+
+      <section className="template-report-panel" aria-label="模板适配报告">
+        <div className="template-report-header">
+          <h3>模板适配报告</h3>
+          <span>{templateImportReport === null ? "等待导入" : "本地导入"}</span>
+        </div>
+        <div className="template-report-summary" aria-label="适配状态统计">
+          {TEMPLATE_REPORT_STATUSES.map((status) => (
+            <span className={`template-report-chip status-${status}`} key={status}>
+              {TEMPLATE_REPORT_STATUS_LABELS[status]} {templateImportReport?.summary[status] ?? 0}
+            </span>
+          ))}
+        </div>
+        {templateImportReport === null ? (
+          <p className="template-report-empty">选择离线模板后显示适配结果。</p>
+        ) : (
+          <div className="template-report-list" aria-label="适配条目">
+            {templateImportReport.items.slice(0, 8).map((item, index) => (
+              <TemplateReportRow item={item} key={`${item.status}-${item.category}-${index}`} />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function TemplateReportRow({ item }: { item: AdaptationReportItem }): React.ReactElement {
+  return (
+    <article className={`template-report-row status-${item.status}`} aria-label={`适配条目 ${TEMPLATE_REPORT_STATUS_LABELS[item.status]}`}>
+      <span className="template-report-row-status">{TEMPLATE_REPORT_STATUS_LABELS[item.status]}</span>
+      <div className="template-report-row-copy">
+        <strong>{templateReportItemCopy(item)}</strong>
+        <span>
+          {TEMPLATE_REPORT_CATEGORY_LABELS[item.category]}
+          {item.target?.kind === undefined ? "" : ` · ${TEMPLATE_REPORT_TARGET_LABELS[item.target.kind]}`}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function templateReportItemCopy(item: AdaptationReportItem): string {
+  if (item.status === "missingResource") {
+    return "资源缺失，相关片段已跳过";
+  }
+  if (item.status === "needsNativeEffect") {
+    return "本地效果能力待补齐";
+  }
+  if (item.status === "supported" && item.category === "text") {
+    return "文本已接入本地草稿";
+  }
+  if (item.status === "approximated" && item.category === "font") {
+    return "字体已使用本地替代";
+  }
+  if (item.status === "dropped" && item.category === "text") {
+    return "文字效果未写入草稿";
+  }
+  if (item.status === "dropped" && item.category === "segment") {
+    return "片段已跳过";
+  }
+  if (item.status === "supported") {
+    return `${TEMPLATE_REPORT_CATEGORY_LABELS[item.category]}已接入本地草稿`;
+  }
+  if (item.status === "approximated") {
+    return `${TEMPLATE_REPORT_CATEGORY_LABELS[item.category]}已用本地能力近似还原`;
+  }
+  if (item.status === "dropped") {
+    return `${TEMPLATE_REPORT_CATEGORY_LABELS[item.category]}未写入草稿`;
+  }
+  return "此项已记录";
 }
 
 function MaterialPanel({

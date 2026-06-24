@@ -337,7 +337,7 @@ impl<'a> MapperState<'a> {
             kind,
             MaterialKind::Video | MaterialKind::Image | MaterialKind::Sticker
         );
-        let has_audio = matches!(kind, MaterialKind::Video | MaterialKind::Audio);
+        let has_audio = matches!(kind, MaterialKind::Audio);
         let width = if has_video {
             self.context
                 .bundle

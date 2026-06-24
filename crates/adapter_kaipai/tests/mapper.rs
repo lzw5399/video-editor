@@ -39,7 +39,7 @@ fn offline_mapper_maps_main_video_to_provider_neutral_import_plan() {
     assert_eq!(material.metadata.width, Some(1080));
     assert_eq!(material.metadata.height, Some(1920));
     assert!(material.metadata.has_video);
-    assert!(material.metadata.has_audio);
+    assert!(!material.metadata.has_audio);
 
     assert_eq!(mapped.plan.tracks.len(), 1);
     assert_eq!(mapped.plan.tracks[0].z_order, 0);

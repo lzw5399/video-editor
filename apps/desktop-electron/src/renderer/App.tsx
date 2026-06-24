@@ -9,6 +9,7 @@ import type {
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
+  ImportKaipaiFormulaBundleRequest,
   OpenProjectSessionRequest,
   ProjectSessionImportMaterialResponse,
   ProjectSessionIntentResponse,
@@ -17,6 +18,7 @@ import type {
   ProjectSessionOpenResponse,
   ProjectSessionReadRequest,
   ProjectSessionRequest,
+  ProjectSessionTemplateImportResponse,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse,
   SegmentVisualPatch,
@@ -47,6 +49,7 @@ import type {
   SegmentVolume,
   TrackKind
 } from "../generated/Draft";
+import type { AdaptationReport } from "../generated/TemplateImport";
 import {
   commandErrorMessage,
   runtimeDiagnosticsFromError,
@@ -95,6 +98,9 @@ type VideoEditorCoreApi = {
   executeProjectIntent: <T = ProjectSessionIntentResponse>(
     request: ExecuteProjectIntentRequest
   ) => Promise<CommandResultEnvelope<T>>;
+  importKaipaiFormulaBundle: (
+    request: ImportKaipaiFormulaBundleRequest
+  ) => Promise<CommandResultEnvelope<ProjectSessionTemplateImportResponse>>;
   listProjectSessionMaterials: (request: ProjectSessionReadRequest) => Promise<CommandResultEnvelope<ProjectSessionMaterialsResponse>>;
   listProjectSessionMissingMaterials: (
     request: ProjectSessionReadRequest
@@ -142,9 +148,15 @@ type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
 };
+type TemplateBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+  resourceRoot: string | null;
+};
 type VideoEditorPlatformApi = {
   createProjectBundle: () => Promise<ProjectBundlePickerResponse>;
   openProjectBundle: () => Promise<ProjectBundlePickerResponse>;
+  openTemplateBundle: () => Promise<TemplateBundlePickerResponse>;
   openMaterialFiles: () => Promise<OpenMaterialFilesResponse>;
 };
 type ProjectSessionClientState = {
@@ -195,6 +207,11 @@ const AUDIO_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
   exportLogSummary: "音频已更新，请重新开始导出"
 };
 
+const TEMPLATE_IMPORT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
+  previewStatusLabel: "模板已导入，预览待刷新",
+  exportLogSummary: "模板已导入，请重新开始导出"
+};
+
 declare global {
   interface Window {
     videoEditorAppConfig?: {
@@ -216,6 +233,7 @@ export function App(): React.ReactElement {
     createInitialWorkspaceState(startupProjectState)
   );
   const [activeCategory, setActiveCategory] = useState<WorkspaceCategory>("媒体");
+  const [templateImportReport, setTemplateImportReport] = useState<AdaptationReport | null>(null);
   const [bundlePath, setBundlePath] = useState(
     startupOpenProjectBundlePath ?? (startupFixture === "demo" ? "/tmp/phase-04-demo.veproj" : "/tmp/video-editor-workspace.veproj")
   );
@@ -1690,6 +1708,114 @@ export function App(): React.ReactElement {
     }
   }
 
+  async function handleImportTemplateBundle(): Promise<void> {
+    if (commandInFlightRef.current) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("上一个操作仍在执行，请等待剪辑核心返回")
+      }));
+      return;
+    }
+
+    const platform = window.videoEditorPlatform;
+    if (platform === undefined) {
+      setWorkspace((current) => ({
+        ...current,
+        commandError: commandErrorMessage("当前环境没有系统文件选择器，无法导入离线模板")
+      }));
+      return;
+    }
+
+    try {
+      const selection = await platform.openTemplateBundle();
+      if (selection.canceled) {
+        return;
+      }
+      const selectedBundlePath = selection.bundlePath?.trim() ?? "";
+      const selectedResourceRoot = selection.resourceRoot?.trim() ?? "";
+      if (selectedBundlePath.length === 0 || selectedResourceRoot.length === 0) {
+        setWorkspace((current) => ({
+          ...current,
+          commandError: commandErrorMessage("请选择离线模板文件和资源目录")
+        }));
+        return;
+      }
+
+      commandInFlightRef.current = true;
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          pendingCommand: "导入模板",
+          commandError: null
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+
+      const syncedSession = await syncProjectSessionBeforeMutation("导入模板");
+      if (syncedSession === null) {
+        return;
+      }
+
+      const result = await window.videoEditorCore.importKaipaiFormulaBundle({
+        sessionId: syncedSession.sessionId,
+        expectedRevision: syncedSession.revision,
+        bundlePath: selectedBundlePath,
+        resourceRoot: selectedResourceRoot,
+        importId: templateImportIdFromPath(selectedBundlePath)
+      });
+      if (!result.ok || result.data === null) {
+        const next = {
+          ...workspaceRef.current,
+          pendingCommand: null,
+          commandError: commandErrorMessage(result)
+        };
+        workspaceRef.current = next;
+        setWorkspace(next);
+        return;
+      }
+
+      projectSessionRef.current = {
+        sessionId: result.data.sessionId,
+        revision: result.data.revision
+      };
+      setBundlePath(result.data.bundlePath);
+
+      let materials = workspaceRef.current.materials;
+      try {
+        materials = await listProjectSessionMaterials(result.data.sessionId, result.data.revision);
+      } catch {
+        materials = [];
+      }
+
+      setTemplateImportReport(result.data.adaptationReport);
+      const next = {
+        ...workspaceRef.current,
+        viewModel: result.data.viewModel,
+        materials,
+        pendingCommand: null,
+        commandError: null,
+        preview: clearDerivedPreviewState(workspaceRef.current.preview, TEMPLATE_IMPORT_DERIVED_STATE_COPY),
+        export: clearDerivedExportState(workspaceRef.current.export, TEMPLATE_IMPORT_DERIVED_STATE_COPY.exportLogSummary)
+      };
+      workspaceRef.current = next;
+      realtimePreviewSnapshotRef.current = null;
+      setWorkspace(next);
+      refreshRealtimePreviewAt(selectedSegmentStart(result.data) ?? 0);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const next = {
+        ...workspaceRef.current,
+        pendingCommand: null,
+        commandError: commandErrorMessage(message)
+      };
+      workspaceRef.current = next;
+      setWorkspace(next);
+    } finally {
+      commandInFlightRef.current = false;
+    }
+  }
+
   async function handleRefreshMaterials(): Promise<void> {
     setWorkspace((current) => ({
       ...current,
@@ -2630,9 +2756,10 @@ export function App(): React.ReactElement {
   }
 
   return (
-        <WorkspaceShell
+          <WorkspaceShell
           workspace={workspace}
           activeCategory={activeCategory}
+          templateImportReport={templateImportReport}
       showDeveloperDiagnostics={showDeveloperDiagnostics}
       bundlePath={bundlePath}
       materialPath={materialPath}
@@ -2655,6 +2782,7 @@ export function App(): React.ReactElement {
       onRetryAudioPreview={handleRetryAudioPreview}
       onSelectAudioOutputDevice={handleSelectAudioOutputDevice}
       onImportMaterial={handleImportMaterial}
+          onImportTemplateBundle={handleImportTemplateBundle}
           onImportMaterialFromPath={handleImportMaterialFromPath}
           onRefreshMaterials={handleRefreshMaterials}
           onListMissingMaterials={handleListMissingMaterials}
@@ -2932,6 +3060,18 @@ function normalizePlayheadTime(value: number): number {
 
 function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
   return response.viewModel.selectedSegment?.targetTimerange.start ?? null;
+}
+
+function templateImportIdFromPath(bundlePath: string): string {
+  const pathSegments = bundlePath.split(/[\\/]/).filter(Boolean);
+  const fileName = pathSegments[pathSegments.length - 1] ?? "offline-template";
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  const safeStem = stem
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `desktop-${safeStem.length === 0 ? "offline-template" : safeStem}`;
 }
 
 function isFrameAlignedSequenceEnd(

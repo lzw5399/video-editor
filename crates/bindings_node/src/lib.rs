@@ -17,8 +17,8 @@ use napi::Env;
 use napi::bindgen_prelude::Result;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
-use project_store::{ProjectStoreError, ProjectStoreWarning};
-use std::path::PathBuf;
+use project_store::{ProjectStoreError, ProjectStoreWarning, resolve_material_uri};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use crate::artifact_store_service::handle_artifact_store_command;
@@ -773,8 +773,19 @@ fn start_project_session_export_command(
             ));
         }
     };
+    let draft =
+        match draft_with_export_resolved_material_uris(snapshot.draft, &snapshot.bundle_path) {
+            Ok(draft) => draft,
+            Err(message) => {
+                return to_js_value(error_envelope(
+                    CommandErrorKind::InvalidProject,
+                    message,
+                    Some("startProjectSessionExport".to_string()),
+                ));
+            }
+        };
     let payload = StartExportCommandPayload {
-        draft: snapshot.draft,
+        draft,
         output_path: request.output_path,
         preset: request.preset,
         dirty_facts: None,
@@ -783,6 +794,26 @@ fn start_project_session_export_command(
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(export_error_envelope("startProjectSessionExport", error)),
     }
+}
+
+fn draft_with_export_resolved_material_uris(
+    mut draft: draft_model::Draft,
+    bundle_path: &Path,
+) -> std::result::Result<draft_model::Draft, String> {
+    for material in &mut draft.materials {
+        let Some(resolved_path) =
+            resolve_material_uri(bundle_path, &material.uri).map_err(|error| {
+                format!(
+                    "Project material URI failed to resolve for export (materialId={}): {error}",
+                    material.material_id.as_str()
+                )
+            })?
+        else {
+            continue;
+        };
+        material.uri = resolved_path.to_string_lossy().into_owned();
+    }
+    Ok(draft)
 }
 
 fn get_export_job_status_command(

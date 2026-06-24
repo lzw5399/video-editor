@@ -13,6 +13,7 @@ import {
 } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty } from "../../generated/Draft";
+import type { AdaptationReport } from "../../generated/TemplateImport";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
@@ -22,6 +23,7 @@ import { Timeline } from "./Timeline";
 type WorkspaceShellProps = {
   workspace: WorkspaceState;
   activeCategory: WorkspaceCategory;
+  templateImportReport: AdaptationReport | null;
   showDeveloperDiagnostics: boolean;
   bundlePath: string;
   materialPath: string;
@@ -44,6 +46,7 @@ type WorkspaceShellProps = {
   onRetryAudioPreview: () => void;
   onSelectAudioOutputDevice: (deviceSelectionId: string) => void;
   onImportMaterial: () => void;
+  onImportTemplateBundle: () => void;
   onImportMaterialFromPath: () => void;
   onRefreshMaterials: () => void;
   onListMissingMaterials: () => void;
@@ -108,6 +111,7 @@ const OVERFLOW_WORKSPACE_CATEGORIES = WORKSPACE_CATEGORIES.slice(PRIMARY_CATEGOR
 export function WorkspaceShell({
   workspace,
   activeCategory,
+  templateImportReport,
   showDeveloperDiagnostics,
   bundlePath,
   materialPath,
@@ -130,6 +134,7 @@ export function WorkspaceShell({
   onRetryAudioPreview,
   onSelectAudioOutputDevice,
   onImportMaterial,
+  onImportTemplateBundle,
   onImportMaterialFromPath,
   onRefreshMaterials,
   onListMissingMaterials,
@@ -257,12 +262,14 @@ export function WorkspaceShell({
         <FeaturePanel
           category={activeCategory}
           workspace={workspace}
+          templateImportReport={templateImportReport}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           bundlePath={bundlePath}
           materialPath={materialPath}
           onBundlePathChange={onBundlePathChange}
           onMaterialPathChange={onMaterialPathChange}
           onImportMaterial={onImportMaterial}
+          onImportTemplateBundle={onImportTemplateBundle}
           onImportMaterialFromPath={onImportMaterialFromPath}
           onRefreshMaterials={onRefreshMaterials}
           onListMissingMaterials={onListMissingMaterials}

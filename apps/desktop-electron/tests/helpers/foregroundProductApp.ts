@@ -173,6 +173,12 @@ function testSwitchesFromEnv(env: NodeJS.ProcessEnv): string[] {
       `--video-editor-test-pick-open-project-bundle=${encodeURIComponent(env.VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE)}`
     );
   }
+  if (env.VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE !== undefined) {
+    switches.push(`--video-editor-test-open-template-bundle=${encodeURIComponent(env.VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE)}`);
+  }
+  if (env.VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT !== undefined) {
+    switches.push(`--video-editor-test-template-resource-root=${encodeURIComponent(env.VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT)}`);
+  }
   return switches;
 }
 
