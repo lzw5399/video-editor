@@ -829,7 +829,7 @@ Plans:
   6. Product UI corrections normalize inspector units, make preview/timeline handles discoverable and usable, hide or gate unsupported visible controls, and pass screenshot-backed regression at 1280x800 and 1120x720.
   7. Source guards and product E2E reject DOM-only ghost preview, fallback/mock/artifact success, repeated canonical command loops for high-frequency samples, stale frame presentation, and unsupported visible controls.
 
-**Plans:** 6/6 plans complete
+**Plans:** 7/7 plans complete
 
 Plans:
 
@@ -856,6 +856,10 @@ Plans:
 **Wave 6** *(blocked on Waves 3, 4, and 5 completion)*
 
 - [x] 17.1-06-PLAN.md - Add aggregate source guards, E2E, performance gates, and validation
+
+**Wave 7** *(gap closure after verification)*
+
+- [x] 17.1-07-PLAN.md - Close preview rotate native evidence and timeline hit-testing verifier gaps
 
 ### Phase 18: Mobile/Server Binding Architecture And Runtime Ports
 
