@@ -135,8 +135,11 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
       ])
     );
     expect(importCalls).toHaveLength(3);
-    const latestImportCall = importCalls[importCalls.length - 1];
-    expect(latestImportCall).toEqual(
+    const latestDeltaImportCall = [...importCalls]
+      .reverse()
+      .find((call) => call.resultOk === true && call.resultDeltaCommand === "importTemplate");
+    expect(latestDeltaImportCall, "template import must record the Rust response delta facts").toBeDefined();
+    expect(latestDeltaImportCall).toEqual(
       expect.objectContaining({
         resultEventKinds: expect.arrayContaining(["templateImported"]),
         resultDeltaCommand: "importTemplate",

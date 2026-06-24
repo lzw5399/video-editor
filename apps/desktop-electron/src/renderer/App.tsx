@@ -34,7 +34,9 @@ import type {
   ArtifactMaintenanceResult,
   ArtifactQuotaStatus,
   ArtifactStatusSummary,
+  CommandDelta,
   CommandResultEnvelope,
+  DirtyDomain,
   ExportJobStatusResponse,
   RuntimeCapabilityReport,
   WaveformDisplayPeaksResponse
@@ -177,6 +179,7 @@ type ArtifactCommandResultApplier<T> = (
   current: WorkspaceState,
   result: CommandResultEnvelope<T>
 ) => WorkspaceState;
+type ProjectSessionPreviewMutationResponse = Pick<ProjectSessionTimelineIntentResponse, "delta" | "viewModel">;
 type DerivedStateInvalidationCopy = {
   previewStatusLabel: string;
   exportLogSummary: string;
@@ -205,11 +208,6 @@ const KEYFRAME_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
 const AUDIO_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
   previewStatusLabel: "音频已更新，预览待刷新",
   exportLogSummary: "音频已更新，请重新开始导出"
-};
-
-const TEMPLATE_IMPORT_DERIVED_STATE_COPY: DerivedStateInvalidationCopy = {
-  previewStatusLabel: "模板已导入，预览待刷新",
-  exportLogSummary: "模板已导入，请重新开始导出"
 };
 
 declare global {
@@ -745,11 +743,11 @@ export function App(): React.ReactElement {
     const result = await executeProjectSessionIntent<ProjectSessionTimelineIntentResponse>(
       intent,
       pendingCommand,
-      (current, result) => applyProjectSessionTimelineResult(current, result, intent.kind)
+      applyProjectSessionTimelineResult
     );
 
-    if (result !== null && result.ok && result.data !== null && previewAffectingIntentNeedsRefresh(intent.kind)) {
-      const previewTarget = previewRefreshTarget(intent.kind, result.data);
+    if (result !== null && result.ok && result.data !== null) {
+      const previewTarget = previewRefreshTargetFromDelta(result.data);
       if (previewTarget !== null) {
         refreshRealtimePreviewAt(previewTarget);
       }
@@ -758,37 +756,16 @@ export function App(): React.ReactElement {
     return result;
   }
 
-  function previewAffectingIntentNeedsRefresh(intentKind: ExecuteProjectIntentRequest["intent"]["kind"]): boolean {
-    return (
-      intentKind === "addTimelineSegmentIntent" ||
-      intentKind === "addTextSegmentIntent" ||
-      intentKind === "addAudioSegmentIntent" ||
-      intentKind === "importSubtitleSrtIntent" ||
-      intentKind === "selectTimelineItemIntent" ||
-      intentKind === "editSelectedText" ||
-      intentKind === "updateSelectedSegmentVisual" ||
-      intentKind === "setSelectedTrackVisibility"
-    );
-  }
-
-  function previewRefreshTarget(
-    intentKind: ExecuteProjectIntentRequest["intent"]["kind"],
-    result: ProjectSessionTimelineIntentResponse
-  ): number | null {
-    if (
-      intentKind === "addTimelineSegmentIntent" ||
-      intentKind === "addTextSegmentIntent" ||
-      intentKind === "addAudioSegmentIntent"
-    ) {
-      return selectedSegmentStart(result);
+  function previewRefreshTargetFromDelta(response: ProjectSessionPreviewMutationResponse): number | null {
+    if (!commandDeltaAffectsRealtimePreview(response.delta)) {
+      return null;
     }
-    return playheadRef.current;
+    return previewRefreshRangeTarget(response.delta) ?? selectedSegmentStart(response) ?? playheadRef.current;
   }
 
   function applyProjectSessionTimelineResult(
     current: WorkspaceState,
-    result: CommandResultEnvelope<ProjectSessionTimelineIntentResponse>,
-    intentKind: ExecuteProjectIntentRequest["intent"]["kind"]
+    result: CommandResultEnvelope<ProjectSessionTimelineIntentResponse>
   ): WorkspaceState {
     const errorMessage = result.ok && result.data !== null ? null : commandErrorMessage(result);
 
@@ -799,66 +776,82 @@ export function App(): React.ReactElement {
       commandError: errorMessage
     };
 
-    if (
-      result.ok &&
-      result.data !== null &&
-      (intentKind === "updateSelectedSegmentVisual" || intentKind === "setSelectedTrackVisibility")
-    ) {
-      return {
-        ...next,
-        preview: clearDerivedPreviewState(current.preview, VISUAL_DERIVED_STATE_COPY),
-        export: clearDerivedExportState(current.export, VISUAL_DERIVED_STATE_COPY.exportLogSummary)
-      };
-    }
-
-    if (
-      result.ok &&
-      result.data !== null &&
-      (intentKind === "addTextSegmentIntent" || intentKind === "editSelectedText" || intentKind === "importSubtitleSrtIntent")
-    ) {
-      return {
-        ...next,
-        preview: clearDerivedPreviewState(current.preview, TEXT_DERIVED_STATE_COPY),
-        export: clearDerivedExportState(current.export, TEXT_DERIVED_STATE_COPY.exportLogSummary)
-      };
-    }
-
-    if (
-      result.ok &&
-      result.data !== null &&
-      (intentKind === "setSelectedSegmentKeyframe" || intentKind === "removeSelectedSegmentKeyframe")
-    ) {
-      return {
-        ...next,
-        preview: clearDerivedPreviewState(current.preview, KEYFRAME_DERIVED_STATE_COPY),
-        export: clearDerivedExportState(current.export, KEYFRAME_DERIVED_STATE_COPY.exportLogSummary)
-      };
-    }
-
-    if (
-      result.ok &&
-      result.data !== null &&
-      (intentKind === "setSelectedSegmentVolume" ||
-        intentKind === "updateSelectedSegmentAudio" ||
-        intentKind === "setSelectedTrackMute" ||
-        intentKind === "addAudioSegmentIntent")
-    ) {
-      return {
-        ...next,
-        preview: clearDerivedPreviewState(current.preview, AUDIO_DERIVED_STATE_COPY),
-        export: clearDerivedExportState(current.export, AUDIO_DERIVED_STATE_COPY.exportLogSummary)
-      };
-    }
-
-    if (result.ok && result.data !== null && intentKind === "updateDraftCanvasConfig") {
-      return {
-        ...next,
-        preview: clearDerivedPreviewState(current.preview),
-        export: clearDerivedExportState(current.export)
-      };
+    if (result.ok && result.data !== null) {
+      return applyProjectSessionCommandDelta(current, next, result.data.delta);
     }
 
     return next;
+  }
+
+  function applyProjectSessionCommandDelta(
+    current: WorkspaceState,
+    next: WorkspaceState,
+    delta: CommandDelta
+  ): WorkspaceState {
+    if (!commandDeltaInvalidatesDerivedState(delta)) {
+      return next;
+    }
+    const copy = derivedStateInvalidationCopyFromDelta(delta);
+    return {
+      ...next,
+      preview: clearDerivedPreviewState(current.preview, copy),
+      export: clearDerivedExportState(current.export, copy.exportLogSummary)
+    };
+  }
+
+  function commandDeltaAffectsRealtimePreview(delta: CommandDelta): boolean {
+    const domains = commandDeltaDomainSet(delta);
+    return domains.has("preview") || domains.has("graphSnapshot") || domains.has("previewCache");
+  }
+
+  function commandDeltaInvalidatesDerivedState(delta: CommandDelta): boolean {
+    if (delta.invalidation.fullDraft) {
+      return true;
+    }
+    const domains = commandDeltaDomainSet(delta);
+    return (
+      domains.has("preview") ||
+      domains.has("exportPrep") ||
+      domains.has("audio") ||
+      domains.has("thumbnail") ||
+      domains.has("waveform") ||
+      domains.has("proxy") ||
+      domains.has("graphSnapshot") ||
+      domains.has("previewCache")
+    );
+  }
+
+  function commandDeltaDomainSet(delta: CommandDelta): Set<DirtyDomain> {
+    return new Set<DirtyDomain>([...delta.changedDomains, ...delta.invalidation.consumerDomains]);
+  }
+
+  function previewRefreshRangeTarget(delta: CommandDelta): number | null {
+    const preferredRange =
+      delta.changedRanges.find((range) => range.source === "current") ??
+      delta.changedRanges.find((range) => range.source === "previousAndCurrent") ??
+      delta.changedRanges.find((range) => range.source === "fullDraft") ??
+      delta.changedRanges[0];
+    if (preferredRange === undefined) {
+      return null;
+    }
+    return normalizePlayheadTime(preferredRange.targetTimerange.start);
+  }
+
+  function derivedStateInvalidationCopyFromDelta(delta: CommandDelta): DerivedStateInvalidationCopy {
+    const domains = commandDeltaDomainSet(delta);
+    if (delta.changedEntities.some((entity) => entity.kind === "keyframe")) {
+      return KEYFRAME_DERIVED_STATE_COPY;
+    }
+    if (domains.has("audio") || domains.has("waveform")) {
+      return AUDIO_DERIVED_STATE_COPY;
+    }
+    if (domains.has("text")) {
+      return TEXT_DERIVED_STATE_COPY;
+    }
+    if (domains.has("visual") || domains.has("effect") || domains.has("filter") || domains.has("transition")) {
+      return VISUAL_DERIVED_STATE_COPY;
+    }
+    return CANVAS_DERIVED_STATE_COPY;
   }
 
   async function executeExportJobControl(
@@ -1794,19 +1787,22 @@ export function App(): React.ReactElement {
       }
 
       setTemplateImportReport(result.data.adaptationReport);
-      const next = {
-        ...workspaceRef.current,
+      const currentWorkspace = workspaceRef.current;
+      const nextBase = {
+        ...currentWorkspace,
         viewModel: result.data.viewModel,
         materials,
         pendingCommand: null,
-        commandError: null,
-        preview: clearDerivedPreviewState(workspaceRef.current.preview, TEMPLATE_IMPORT_DERIVED_STATE_COPY),
-        export: clearDerivedExportState(workspaceRef.current.export, TEMPLATE_IMPORT_DERIVED_STATE_COPY.exportLogSummary)
+        commandError: null
       };
+      const next = applyProjectSessionCommandDelta(currentWorkspace, nextBase, result.data.delta);
       workspaceRef.current = next;
       realtimePreviewSnapshotRef.current = null;
       setWorkspace(next);
-      refreshRealtimePreviewAt(selectedSegmentStart(result.data) ?? 0);
+      const previewTarget = previewRefreshTargetFromDelta(result.data);
+      if (previewTarget !== null) {
+        refreshRealtimePreviewAt(previewTarget);
+      }
     } catch (error: unknown) {
       setTemplateImportReport(null);
       const message = error instanceof Error ? error.message : String(error);
@@ -3064,7 +3060,7 @@ function normalizePlayheadTime(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
-function selectedSegmentStart(response: ProjectSessionTimelineIntentResponse): number | null {
+function selectedSegmentStart(response: Pick<ProjectSessionTimelineIntentResponse, "viewModel">): number | null {
   return response.viewModel.selectedSegment?.targetTimerange.start ?? null;
 }
 
