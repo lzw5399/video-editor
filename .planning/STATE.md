@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-06-PLAN.md
-last_updated: "2026-06-24T09:47:27.153Z"
+stopped_at: Completed 17-08-PLAN.md
+last_updated: "2026-06-24T10:22:25.831Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 157
+  completed_plans: 158
   percent: 99
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 17 execution started
 
@@ -194,6 +194,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P05 | 10 min | 1 tasks | 15 files |
 | Phase 17 P10 | 16 min | 2 tasks | 7 files |
 | Phase 17 P06 | 17 min | 2 tasks | 7 files |
+| Phase 17 P08 | 28 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -545,6 +546,9 @@ Recent decisions affecting current work:
 - [Phase 17]: Localized resource index rows are persisted through artifact_store resource_index with a transaction-backed helper, not direct SQLite writes from bindings_node.
 - [Phase 17]: Import replaces the session draft and resets command state, selection, and playhead so stale handles cannot survive a template import.
 - [Phase 17]: Phase 17 source guards keep provider-specific terms blocked except for the explicit importKaipaiFormulaBundle boundary.
+- [Phase 17]: Imported template fixture acceptance is tied to real preview/export product-path evidence plus adaptation report classifications; successful file creation alone is insufficient.
+- [Phase 17]: Test execution may resolve localized bundle-relative resources to filesystem paths, but persisted .veproj/project.json remains canonical and provider/runtime-ref free.
+- [Phase 17]: Phase 17 source guards now fail raw provider formula semantics, remote runtime/render URLs, Android/live provider dependencies, and fallback success evidence.
 
 ### Pending Todos
 
@@ -625,6 +629,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T09:47:27.145Z
-Stopped at: Completed 17-06-PLAN.md
+Last session: 2026-06-24T10:22:25.823Z
+Stopped at: Completed 17-08-PLAN.md
 Resume file: None

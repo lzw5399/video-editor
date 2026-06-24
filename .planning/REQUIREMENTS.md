@@ -378,9 +378,9 @@
 | PRODFX-02 | Phase 18 | Planned |
 | PRODFX-03 | Phase 18 | Planned |
 | PRODFX-04 | Phase 18 | Planned |
-| PRODFX-05 | Phase 18 | Planned |
-| COMP-01 | Post-MVP | Deferred |
-| COMP-02 | Post-MVP | Deferred |
+| PRODFX-05 | Phase 17 | Complete |
+| COMP-01 | Phase 17 | Complete |
+| COMP-02 | Phase 17 | Complete |
 | COMP-03 | Post-MVP | Deferred |
 | PLAT-01 | Phase 17 | Planned |
 | PLAT-02 | Phase 17 | Planned |
