@@ -484,22 +484,19 @@ All factual claims in this research were verified from project files, old branch
 |---|-------|---------|---------------|
 | - | None. | - | - |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should Phase 17 implement generic static export rotation parity or classify rotated imports as degraded?** [VERIFIED: 17-CONTEXT.md D-26-D-28]
+1. **RESOLVED: Phase 17 implements generic static export rotation parity before rotated imports are classified as supported.** [VERIFIED: 17-CONTEXT.md D-26-D-28; VERIFIED: 17-07-PLAN.md]
    - What we know: GPU preview has center-anchor rotation math, while FFmpeg compiler tests still expect rotation to be unsupported. [VERIFIED: crates/realtime_preview_runtime/src/gpu/compositor.rs; VERIFIED: crates/ffmpeg_compiler/tests/transform_snapshots.rs]
-   - What's unclear: Whether the planner wants to spend Phase 17 scope closing this export gap or report rotation as approximated/degraded. [VERIFIED: 17-CONTEXT.md D-02, D-26-D-28]
-   - Recommendation: Add a generic static rotation export parity task before claiming rotation support; keep animated rotation as degraded unless a later retiming/effects plan expands it. [VERIFIED: crates/ffmpeg_compiler/tests/transform_snapshots.rs; VERIFIED: 17-CONTEXT.md D-23-D-28]
+   - Resolution: Plan 17-07 closes the generic static center-anchor export parity gap in `ffmpeg_compiler` and parity tests. Animated rotation and complex transform curves remain reported as approximated/dropped unless a later production retiming/effects phase expands support. [VERIFIED: 17-07-PLAN.md; VERIFIED: 17-CONTEXT.md D-23-D-28]
 
-2. **Where should provider-neutral report schemas live?** [VERIFIED: 17-CONTEXT.md D-31-D-33]
+2. **RESOLVED: Provider-neutral report and import-plan schemas live in `crates/draft_import`.** [VERIFIED: 17-CONTEXT.md D-11-D-13, D-31-D-33; VERIFIED: 17-01-PLAN.md; VERIFIED: 17-03-PLAN.md]
    - What we know: `draft_model` owns canonical draft semantics, and context allows report types shared at the import boundary. [VERIFIED: AGENTS.md; VERIFIED: 17-CONTEXT.md D-04, D-31-D-33]
-   - What's unclear: Whether to create a new import crate or place report transport types in an existing schema-generation crate. [VERIFIED: crates/draft_model/tests/schema_exports.rs]
-   - Recommendation: Prefer a new provider-neutral import crate/module that depends on `draft_model`, with its own schema export tests. [VERIFIED: 17-CONTEXT.md D-11-D-13]
+   - Resolution: Plans use a provider-neutral `crates/draft_import` crate for `AdaptationReport`, `DraftImportPlan`, resource localization, validation, and schema exports. `adapter_kaipai` depends on that boundary instead of putting provider formulas in core/render/session crates. [VERIFIED: 17-01-PLAN.md; VERIFIED: 17-02-PLAN.md; VERIFIED: 17-03-PLAN.md; VERIFIED: 17-04-PLAN.md]
 
-3. **Which real Kaipai fixtures can be safely committed after sanitization?** [VERIFIED: 17-CONTEXT.md D-16, D-39]
+3. **RESOLVED: Start with sanitized old-branch fixtures; newer real-provider samples require manual sanitization approval before commit.** [VERIFIED: 17-CONTEXT.md D-16, D-39; VERIFIED: 17-04-PLAN.md; VERIFIED: 17-VALIDATION.md]
    - What we know: Old branch fixtures are sanitized and deterministic, and old tests check credential-like fields. [VERIFIED: git show origin/work/kaipai-adapter-poc:fixtures/kaipai/positive/sanitized-formula-bundle.json; VERIFIED: git show origin/work/kaipai-adapter-poc:crates/adapter_kaipai/tests/fixtures.rs]
-   - What's unclear: Whether there are newer real formulas/resources beyond the old branch corpus that should become Phase 17 goldens. [VERIFIED: 17-CONTEXT.md D-39]
-   - Recommendation: Start with old fixtures, then require a human sanitization checkpoint before adding any newer real-provider samples. [VERIFIED: 17-CONTEXT.md D-16]
+   - Resolution: Plans start from old sanitized fixtures and add fixture secret scanners. `17-VALIDATION.md` keeps a manual-only verification gate for any new real Kaipai sample so tokens, account IDs, signed URLs, cookies, and personal media are reviewed before commit. [VERIFIED: 17-04-PLAN.md; VERIFIED: 17-05-PLAN.md; VERIFIED: 17-VALIDATION.md]
 
 ## Environment Availability
 
