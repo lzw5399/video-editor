@@ -1,0 +1,334 @@
+import { expect, test, type Page } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { copyFile, mkdir, readFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
+
+import {
+  USER_JOURNEY_LONG_MOVING_VIDEO,
+  USER_JOURNEY_OVERLAY_IMAGE,
+  activateProductJourneyApp,
+  capturePreviewEvidence,
+  captureVisiblePreviewEvidence,
+  clickPreviewPlay,
+  expectNoProductFallbackCalls,
+  launchProductJourneyApp,
+  readNativeCommandObservations,
+  readProjectSessionCalls,
+  readRealtimePreviewHostCalls,
+  readTimelineSegments,
+  requestProjectSessionPreviewFrameCount,
+  waitForCompositedPreviewEvidence,
+  waitForProductPlaybackSuccess,
+  type ProductJourneyAppController
+} from "./helpers/userJourney";
+
+test.describe.configure({ timeout: 120_000 });
+
+const REPO_ROOT = join(process.cwd(), "../..");
+const KAIPAI_FIXTURE_ROOT = join(REPO_ROOT, "fixtures/kaipai");
+const BUNDLED_TEXT_FONT = join(REPO_ROOT, "assets/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf");
+const FORBIDDEN_PROJECT_JSON_TOKENS = [
+  "templateId",
+  "recipeId",
+  "formulaTaskId",
+  "formulaRequestId",
+  "rawFormula",
+  "\"formula\"",
+  "safeArea",
+  "remoteRuntimeUrl",
+  "remoteRenderUrl",
+  "renderUrl",
+  "http://",
+  "https://",
+  "kaipai",
+  "provider"
+] as const;
+const FORBIDDEN_REPORT_COPY = [
+  "formula.",
+  "resources/",
+  "externalId",
+  "externalPath",
+  "provenance",
+  "token",
+  "secret",
+  "http://",
+  "https://"
+] as const;
+
+type TemplatePickerSelection = {
+  bundlePath: string;
+  resourceRoot: string;
+};
+
+type TemplateResourceRef = {
+  uri: string;
+  kind: string;
+};
+
+test("product user imports offline Kaipai template, sees report copy, previews, saves cleanly, and exports", async () => {
+  const projectBundlePath = join(
+    tmpdir(),
+    `video-editor-template-import-${Date.now()}-${Math.random().toString(16).slice(2)}.veproj`
+  );
+  const missingResource = await prepareTemplateFixture("missing-resource", "negative/missing-resource.json", {
+    missingUris: ["resources/stickers/redacted-background.png"]
+  });
+  const textSticker = await prepareTemplateFixture("text-sticker", "positive/text-sticker.json");
+  const nativeEffect = await prepareTemplateFixture("native-effect", "negative/native-effect.json");
+  const outputPath = join(dirname(projectBundlePath), "template-import-export.mp4");
+  const { app, page } = await launchProductJourneyApp([], {
+    VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
+    VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE: JSON.stringify([missingResource, textSticker, nativeEffect])
+  });
+
+  try {
+    await importTemplateThroughProductPanel(app, page);
+    await expectTemplateReportSummary(page, {
+      "已支持": 0,
+      "近似还原": 0,
+      "已舍弃": 1,
+      "缺少资源": 1,
+      "需本地效果": 0
+    });
+    await expect(page.getByText("资源缺失，相关片段已跳过")).toBeVisible();
+
+    await importTemplateThroughProductPanel(app, page);
+    await expectTemplateReportSummary(page, {
+      "已支持": 1,
+      "近似还原": 1,
+      "已舍弃": 1,
+      "缺少资源": 0,
+      "需本地效果": 0
+    });
+    await expect(page.getByText("文本已接入本地草稿")).toBeVisible();
+    await expect(page.getByText("字体已使用本地替代")).toBeVisible();
+    await expect(page.getByText("文字效果未写入草稿")).toBeVisible();
+
+    await importTemplateThroughProductPanel(app, page);
+    await expectTemplateReportSummary(page, {
+      "已支持": 0,
+      "近似还原": 0,
+      "已舍弃": 1,
+      "缺少资源": 0,
+      "需本地效果": 1
+    });
+    await expect(page.getByText("本地效果能力待补齐")).toBeVisible();
+    await expect(page.getByText("片段已跳过")).toBeVisible();
+
+    const reportText = (await page.getByLabel("模板适配报告").textContent()) ?? "";
+    for (const forbidden of FORBIDDEN_REPORT_COPY) {
+      expect(reportText, `template report must not expose ${forbidden}`).not.toContain(forbidden);
+    }
+
+    await expect
+      .poll(async () => (await readTimelineSegments(page)).length, { timeout: 30_000 })
+      .toBeGreaterThan(0);
+    const importCalls = await readTemplateImportCalls(app);
+    expect(importCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "importKaipaiFormulaBundle",
+          expectedRevision: expect.any(Number),
+          hasDraftField: false,
+          resultOk: true
+        })
+      ])
+    );
+    expect(importCalls).toHaveLength(3);
+
+    const firstFrame = await waitForCompositedPreviewEvidence(page, app, 12_000, -1);
+    expect(firstFrame.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");
+    expect(firstFrame.hostState?.fallbackActive).toBe(false);
+
+    const visibleBefore = await captureVisiblePreviewEvidence(page, app);
+    const before = await capturePreviewEvidence(page);
+    const frameRequestsBeforePlay = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+    await activateProductJourneyApp(app, page);
+    await clickPreviewPlay(page);
+    await waitForProductPlaybackSuccess(page, app, before, visibleBefore, frameRequestsBeforePlay, 15_000);
+    expect(requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app))).toBe(frameRequestsBeforePlay);
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+
+    const projectJson = await readFile(join(projectBundlePath, "project.json"), "utf8");
+    assertProjectJsonIsCanonical(projectJson);
+
+    await exportProductProject(page, app, outputPath);
+    expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
+  } finally {
+    await app.close();
+    await unlink(outputPath).catch(() => undefined);
+  }
+});
+
+async function prepareTemplateFixture(
+  family: string,
+  fixturePath: string,
+  options: { missingUris?: string[] } = {}
+): Promise<TemplatePickerSelection> {
+  const bundlePath = join(KAIPAI_FIXTURE_ROOT, fixturePath);
+  const resourceRoot = join(
+    tmpdir(),
+    `video-editor-template-import-${family}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
+  const fixture = JSON.parse(await readFile(bundlePath, "utf8")) as unknown;
+  const missingUris = new Set(options.missingUris ?? []);
+
+  for (const resource of collectTemplateResourceRefs(fixture)) {
+    if (missingUris.has(resource.uri)) {
+      continue;
+    }
+    await seedTemplateResource(resourceRoot, resource);
+  }
+
+  return { bundlePath, resourceRoot };
+}
+
+function collectTemplateResourceRefs(value: unknown): TemplateResourceRef[] {
+  const refs = new Map<string, string>();
+  if (isRecord(value)) {
+    collectTemplateResourceRef(value.sourceMedia, refs);
+    if (Array.isArray(value.directMaterials)) {
+      for (const material of value.directMaterials) {
+        collectTemplateResourceRef(material, refs);
+      }
+    }
+    if (Array.isArray(value.resources)) {
+      for (const resource of value.resources) {
+        collectTemplateResourceRef(resource, refs);
+      }
+    }
+  }
+
+  return Array.from(refs, ([uri, kind]) => ({ uri, kind }));
+}
+
+function collectTemplateResourceRef(value: unknown, refs: Map<string, string>): void {
+  if (!isRecord(value) || typeof value.uri !== "string" || typeof value.kind !== "string") {
+    return;
+  }
+  refs.set(value.uri, value.kind);
+}
+
+async function seedTemplateResource(resourceRoot: string, resource: TemplateResourceRef): Promise<void> {
+  const outputPath = join(resourceRoot, resource.uri);
+  await mkdir(dirname(outputPath), { recursive: true });
+  if (existsSync(outputPath)) {
+    return;
+  }
+
+  if (resource.kind === "video") {
+    await copyFile(USER_JOURNEY_LONG_MOVING_VIDEO, outputPath);
+    return;
+  }
+  if (resource.kind === "image" || resource.kind === "sticker") {
+    await copyFile(USER_JOURNEY_OVERLAY_IMAGE, outputPath);
+    return;
+  }
+  if (resource.kind === "font") {
+    await copyFile(BUNDLED_TEXT_FONT, outputPath);
+    return;
+  }
+
+  throw new Error(`Unsupported template fixture resource ${resource.kind} at ${resource.uri}`);
+}
+
+async function importTemplateThroughProductPanel(app: ProductJourneyAppController, page: Page): Promise<void> {
+  const nextCount = (await readTemplateImportCalls(app)).length + 1;
+  await selectTemplateCategory(page);
+  const importButton = page.getByRole("button", { name: "导入离线模板" });
+  await expect(importButton, "template panel must expose the offline import command").toBeVisible({ timeout: 5_000 });
+  await importButton.click();
+  await expect.poll(async () => (await readTemplateImportCalls(app)).length, { timeout: 30_000 }).toBeGreaterThanOrEqual(nextCount);
+  await expect
+    .poll(async () => {
+      const calls = await readTemplateImportCalls(app);
+      const latest = calls[calls.length - 1];
+      if (latest?.resultOk === true) {
+        return "ok";
+      }
+      if (latest?.resultOk === false) {
+        return `failed:${latest.resultErrorKind ?? "unknown"}:${latest.resultErrorMessage ?? ""}`;
+      }
+      return "pending";
+    }, { timeout: 30_000 })
+    .toBe("ok");
+  await expect(page.getByLabel("模板适配报告")).toBeVisible();
+}
+
+async function selectTemplateCategory(page: Page): Promise<void> {
+  const visibleButton = page.getByRole("button", { name: "智能包装" });
+  if ((await visibleButton.count()) > 0 && await visibleButton.first().isVisible()) {
+    await visibleButton.first().click();
+    return;
+  }
+
+  await page.getByRole("button", { name: "更多功能" }).click();
+  await page.getByRole("menuitemradio", { name: "智能包装" }).click();
+}
+
+async function expectTemplateReportSummary(page: Page, counts: Record<string, number>): Promise<void> {
+  const panel = page.getByLabel("模板适配报告");
+  await expect(panel).toBeVisible();
+  for (const [label, count] of Object.entries(counts)) {
+    await expect(panel.getByText(new RegExp(`${label}\\s+${count}`))).toBeVisible();
+  }
+}
+
+async function readTemplateImportCalls(app: ProductJourneyAppController): Promise<Array<Record<string, unknown>>> {
+  const calls = (await readProjectSessionCalls(app)) as unknown as Array<Record<string, unknown>>;
+  return calls.filter((call) => call.command === "importKaipaiFormulaBundle");
+}
+
+async function exportProductProject(page: Page, app: ProductJourneyAppController, outputPath: string): Promise<void> {
+  await unlink(outputPath).catch(() => undefined);
+  const nextStartCount = commandCount(await readNativeCommandObservations(app), "startExport") + 1;
+  await page.getByLabel("产品操作").getByRole("button", { name: "导出", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "导出" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("输出路径").fill(outputPath);
+  await expect(dialog.getByRole("button", { name: "开始导出" })).toBeEnabled({ timeout: 20_000 });
+  await dialog.getByRole("button", { name: "开始导出" }).click();
+  await expect
+    .poll(async () => commandCount(await readNativeCommandObservations(app), "startExport"), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(nextStartCount);
+
+  const statusButton = dialog.getByRole("button", { name: "查询导出状态" });
+  await expect(statusButton).toBeEnabled({ timeout: 20_000 });
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const progressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+    if (progressText.includes("已完成")) {
+      break;
+    }
+    if (await statusButton.isEnabled()) {
+      await statusButton.click();
+    }
+    await page.waitForTimeout(500);
+  }
+
+  const finalProgressText = (await dialog.getByLabel("导出进度").textContent()) ?? "";
+  const exportLogText = (await dialog.getByLabel("导出状态", { exact: true }).textContent()) ?? "";
+  const validationText = (await dialog.getByLabel("输出校验").textContent()) ?? "";
+  expect(
+    finalProgressText,
+    `template import export must complete: ${JSON.stringify({ finalProgressText, exportLogText, validationText })}`
+  ).toContain("已完成");
+  expect(existsSync(outputPath), `product export should create ${outputPath}`).toBe(true);
+}
+
+function commandCount(calls: Array<{ command: string }>, command: string): number {
+  return calls.filter((call) => call.command === command).length;
+}
+
+function assertProjectJsonIsCanonical(projectJson: string): void {
+  const parsed = JSON.parse(projectJson) as unknown;
+  expect(isRecord(parsed) && Array.isArray(parsed.materials), "project JSON should contain canonical materials").toBe(true);
+  const serialized = JSON.stringify(parsed);
+  for (const forbidden of FORBIDDEN_PROJECT_JSON_TOKENS) {
+    expect(serialized, `project.json must not leak ${forbidden}`).not.toContain(forbidden);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
