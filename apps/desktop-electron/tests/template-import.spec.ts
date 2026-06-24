@@ -13,6 +13,7 @@ import {
   readNativeCommandObservations,
   readProjectSessionCalls,
   readRealtimePreviewHostCalls,
+  readTaskRuntimeTelemetry,
   readTimelineSegments,
   waitForCompositedPreviewEvidence,
   type ProductJourneyAppController
@@ -51,6 +52,7 @@ const FORBIDDEN_REPORT_COPY = [
   "https://"
 ] as const;
 const TEMPLATE_CATEGORY_LABEL = "模板导入";
+const TEMPLATE_NAVIGATION_QUEUE_LATENCY_BUDGET_US = 2_000_000;
 
 type TemplatePickerSelection = {
   bundlePath: string;
@@ -134,6 +136,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
       seekCountAfterRapidNavigation - seekCountBeforeRapidNavigation,
       "rapid report row navigation should coalesce preview seeks instead of seeking every intermediate row"
     ).toBeLessThanOrEqual(2);
+    await expectTemplateNavigationQueueLatencyWithinBudget(page);
 
     const reportText = (await page.getByLabel("模板适配报告").textContent()) ?? "";
     for (const forbidden of FORBIDDEN_REPORT_COPY) {
@@ -408,6 +411,16 @@ async function expectLatestPreviewSeek(app: ProductJourneyAppController, targetT
       { timeout: 10_000 }
     )
     .toBe(targetTimeMicroseconds);
+}
+
+async function expectTemplateNavigationQueueLatencyWithinBudget(page: Page): Promise<void> {
+  const telemetry = await readTaskRuntimeTelemetry(page);
+  expect(
+    telemetry.queueLatencyUs.p95 ?? 0,
+    "template report navigation queue latency p95 must stay within the interaction budget"
+  ).toBeLessThanOrEqual(TEMPLATE_NAVIGATION_QUEUE_LATENCY_BUDGET_US);
+  expect(telemetry.coalescedCount, "template navigation must expose coalescing telemetry").toBeGreaterThanOrEqual(0);
+  expect(telemetry.staleRejectedCount, "template navigation must expose stale generation rejection telemetry").toBeGreaterThanOrEqual(0);
 }
 
 async function expectTemplateStatusRowsUseDistinctBorders(page: Page, statuses: string[]): Promise<void> {

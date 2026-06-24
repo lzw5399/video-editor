@@ -3,11 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   USER_JOURNEY_MOVING_VIDEO,
   addVideoTrack,
-  dragMaterialToTimeline,
+  addMaterialToTimeline,
+  expectNoProductFallbackCalls,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   readProjectSessionCalls,
   readRealtimePreviewHostCalls,
+  readTaskRuntimeTelemetry,
   readTimelineSegments,
   seekTimelinePlayhead,
   type ProductJourneyAppController
@@ -15,12 +17,14 @@ import {
 
 test.describe.configure({ timeout: 90_000 });
 
+const INTERACTION_QUEUE_LATENCY_BUDGET_US = 2_000_000;
+
 test("timeline move, cross-track move, and trim stream Rust provisional interactions", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await addVideoTrack(page, app);
     await page.getByRole("button", { name: /片段 p0-moving-testsrc\.mp4/ }).click();
 
@@ -66,6 +70,7 @@ test("timeline move, cross-track move, and trim stream Rust provisional interact
       expect(update.revisionUnchanged).toBe(true);
       expect(update.resultDeltaCommand).toBe("moveSegment");
     }
+    expectCoalescedInteractionTelemetry(liveMoveCalls, "timelineMoveTrim", "timeline cross-track move");
     await expect(segment).toHaveAttribute("data-interaction-source", "rust-provisional");
     await expect(segment).toHaveAttribute("data-interaction-kind", "timelineMoveTrim");
 
@@ -83,6 +88,7 @@ test("timeline move, cross-track move, and trim stream Rust provisional interact
       committedMoveCalls.some((call) => call.command === "executeProjectIntent" && call.intentKind === "moveSelectedSegmentIntent"),
       "timeline drag commit must use commitProjectInteraction rather than executeProjectIntent"
     ).toBe(false);
+    await expectRealtimeHostInteractionRefresh(app, "timeline cross-track move");
 
     await expect
       .poll(async () => (await readTimelineSegments(page, /p0-moving-testsrc\.mp4/)).at(0)?.trackName ?? "", {
@@ -112,12 +118,15 @@ test("timeline move, cross-track move, and trim stream Rust provisional interact
       expect(update.revisionUnchanged).toBe(true);
       expect(update.resultDeltaCommand).toBe("trimSegment");
     }
+    expectCoalescedInteractionTelemetry(liveTrimCalls, "timelineMoveTrim", "timeline trim");
     await page.mouse.up();
     await expect
       .poll(async () => commandCount(callsSince(await readProjectSessionCalls(app), beforeTrimIndex), "commitProjectInteraction"), {
         timeout: 10_000
       })
       .toBe(1);
+    await expectRealtimeHostInteractionRefresh(app, "timeline trim");
+    await expectInteractionQueueLatencyWithinBudget(page, "timeline move/trim");
   } finally {
     await app.close();
   }
@@ -128,7 +137,7 @@ test("playhead scrub uses a coalesced navigation interaction without draft revis
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     const beforeCalls = await readProjectSessionCalls(app);
     const beforeIndex = beforeCalls.length;
     const baseRevision = latestResultRevision(beforeCalls);
@@ -160,6 +169,7 @@ test("playhead scrub uses a coalesced navigation interaction without draft revis
     expect(latestUpdate?.coalescedThrough, "scrub should expose coalescing through latest accepted target").toBe(
       latestUpdate?.acceptedSequence
     );
+    expectCoalescedInteractionTelemetry(liveCalls, "playheadScrub", "playhead scrub");
 
     await page.mouse.up();
     await expect
@@ -175,6 +185,7 @@ test("playhead scrub uses a coalesced navigation interaction without draft revis
 
     const hostSeeks = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek");
     expect(hostSeeks.at(-1)?.targetTimeMicroseconds, "scrub must seek realtime preview through the scheduler host").toBeGreaterThan(0);
+    await expectInteractionQueueLatencyWithinBudget(page, "playhead scrub");
   } finally {
     await app.close();
   }
@@ -185,7 +196,7 @@ test("keyframe markers and keyed value edits use segment-relative Rust keyframe 
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await openVisualInspector(page);
     await page.getByRole("spinbutton", { name: "位置 X", exact: true }).fill("120");
     await page.getByRole("spinbutton", { name: "位置 X", exact: true }).blur();
@@ -213,6 +224,7 @@ test("keyframe markers and keyed value edits use segment-relative Rust keyframe 
       expect(update.revisionUnchanged).toBe(true);
       expect(update.resultDeltaCommand).toBe("setSegmentKeyframe");
     }
+    expectCoalescedInteractionTelemetry(liveMarkerCalls, "keyframeEdit", "keyframe marker drag");
     await page.mouse.up();
     await expect
       .poll(async () => commandCount(callsSince(await readProjectSessionCalls(app), beforeMarkerIndex), "commitProjectInteraction"), {
@@ -240,7 +252,9 @@ test("keyframe markers and keyed value edits use segment-relative Rust keyframe 
       liveValueCalls.some((call) => call.command === "updateProjectInteraction" && call.interactionKind === "keyframeEdit"),
       "keyed property value drag must use keyframeEdit interactions"
     ).toBe(true);
+    expectCoalescedInteractionTelemetry(liveValueCalls, "keyframeEdit", "keyframe value drag");
     await page.mouse.up();
+    await expectInteractionQueueLatencyWithinBudget(page, "keyframe marker/value interactions");
   } finally {
     await app.close();
   }
@@ -251,7 +265,7 @@ test("focused keyframe deletion does not require exact playhead equality", async
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await openVisualInspector(page);
     await page.getByRole("button", { name: "添加不透明度关键帧" }).first().click();
     await expect(page.getByLabel(/p0-moving-testsrc\.mp4 不透明度关键帧/)).toBeVisible({ timeout: 10_000 });
@@ -300,6 +314,43 @@ function callsSince(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>, 
 
 function commandCount(calls: Array<Record<string, any>>, command: string): number {
   return calls.filter((call) => call.command === command).length;
+}
+
+function expectCoalescedInteractionTelemetry(calls: Array<Record<string, any>>, kind: string, label: string): void {
+  const updates = calls.filter((call) => call.command === "updateProjectInteraction" && call.interactionKind === kind);
+  expect(updates.length, `${label} must record interaction update telemetry`).toBeGreaterThan(0);
+  const latest = updates.at(-1);
+  expect(latest?.acceptedSequence, `${label} must record accepted monotonic samples`).toBeGreaterThanOrEqual(1);
+  expect(latest?.coalescedThrough, `${label} must expose coalesced-through sample telemetry`).toBeGreaterThanOrEqual(
+    latest?.acceptedSequence ?? 0
+  );
+}
+
+async function expectRealtimeHostInteractionRefresh(app: ProductJourneyAppController, label: string): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        (await readRealtimePreviewHostCalls(app)).some(
+          (call) => call.kind === "updateProjectSessionSnapshot" && typeof call.interactionId === "string"
+        ),
+      { timeout: 5_000 }
+    )
+    .toBe(true);
+  const hostCalls = await readRealtimePreviewHostCalls(app);
+  expect(
+    hostCalls.some((call) => call.kind === "updateProjectSessionSnapshot" && typeof call.interactionId === "string"),
+    `${label} must refresh the realtime host with an interaction snapshot`
+  ).toBe(true);
+  expectNoProductFallbackCalls(hostCalls);
+}
+
+async function expectInteractionQueueLatencyWithinBudget(page: Page, label: string): Promise<void> {
+  const telemetry = await readTaskRuntimeTelemetry(page);
+  expect(telemetry.queueLatencyUs.p95 ?? 0, `${label} queue latency p95 must stay within the interaction budget`).toBeLessThanOrEqual(
+    INTERACTION_QUEUE_LATENCY_BUDGET_US
+  );
+  expect(telemetry.coalescedCount, `${label} must expose coalescing telemetry`).toBeGreaterThanOrEqual(0);
+  expect(telemetry.staleRejectedCount, `${label} must expose stale generation rejection telemetry`).toBeGreaterThanOrEqual(0);
 }
 
 function latestResultRevision(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): number | null {

@@ -2,21 +2,26 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   USER_JOURNEY_MOVING_VIDEO,
-  dragMaterialToTimeline,
+  addMaterialToTimeline,
+  expectNoProductFallbackCalls,
   importMaterialThroughProductPicker,
   launchProductJourneyApp,
   readProjectSessionCalls,
+  readRealtimePreviewHostCalls,
+  readTaskRuntimeTelemetry,
   type ProductJourneyAppController
 } from "./helpers/userJourney";
 
 test.describe.configure({ timeout: 90_000 });
+
+const INTERACTION_QUEUE_LATENCY_BUDGET_US = 2_000_000;
 
 test("preview canvas drag streams Rust provisional updates and commits once", async () => {
   const { app, page } = await launchProductJourneyApp([USER_JOURNEY_MOVING_VIDEO]);
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     const beforeCalls = await readProjectSessionCalls(app);
     const beforeIndex = beforeCalls.length;
     const baseRevision = latestResultRevision(beforeCalls);
@@ -47,6 +52,7 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       expect(update.revisionUnchanged).toBe(true);
       expect(update.resultDeltaCommand).toBe("updateSegmentVisual");
     }
+    expectCoalescedInteractionTelemetry(liveCalls, "selectedSegmentVisual", "preview drag");
     await expect(outline).toHaveAttribute("data-interaction-source", "rust-provisional");
     await expect(outline).toHaveAttribute("data-interaction-kind", "selectedSegmentVisual");
 
@@ -65,6 +71,8 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       committedCalls.some((call) => call.command === "executeProjectIntent" && call.intentKind === "updateSelectedSegmentVisual"),
       "preview drag commit must use commitProjectInteraction rather than executeProjectIntent"
     ).toBe(false);
+    await expectRealtimeHostInteractionRefresh(app, "preview drag");
+    await expectInteractionQueueLatencyWithinBudget(page, "preview drag");
 
     await page.getByRole("button", { name: "撤销" }).click();
     await expect
@@ -89,7 +97,7 @@ test("inspector visual slider uses Rust interaction sessions instead of debounce
 
   try {
     await importMaterialThroughProductPicker(app, page, USER_JOURNEY_MOVING_VIDEO);
-    await dragMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
+    await addMaterialToTimeline(app, page, USER_JOURNEY_MOVING_VIDEO);
     await openVisualInspector(page);
     const beforeCalls = await readProjectSessionCalls(app);
     const beforeIndex = beforeCalls.length;
@@ -119,6 +127,7 @@ test("inspector visual slider uses Rust interaction sessions instead of debounce
       expect(update.resultRevision).toBe(baseRevision);
       expect(update.revisionUnchanged).toBe(true);
     }
+    expectCoalescedInteractionTelemetry(liveCalls, "selectedSegmentVisual", "inspector visual slider");
 
     await page.mouse.up();
 
@@ -132,6 +141,8 @@ test("inspector visual slider uses Rust interaction sessions instead of debounce
       committedCalls.some((call) => call.command === "executeProjectIntent" && call.intentKind === "updateSelectedSegmentVisual"),
       "slider commit must use commitProjectInteraction rather than executeProjectIntent"
     ).toBe(false);
+    await expectRealtimeHostInteractionRefresh(app, "inspector visual slider");
+    await expectInteractionQueueLatencyWithinBudget(page, "inspector visual slider");
   } finally {
     await app.close();
   }
@@ -157,6 +168,43 @@ function callsSince(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>, 
 
 function commandCount(calls: Array<Record<string, any>>, command: string): number {
   return calls.filter((call) => call.command === command).length;
+}
+
+function expectCoalescedInteractionTelemetry(calls: Array<Record<string, any>>, kind: string, label: string): void {
+  const updates = calls.filter((call) => call.command === "updateProjectInteraction" && call.interactionKind === kind);
+  expect(updates.length, `${label} must record interaction update telemetry`).toBeGreaterThan(0);
+  const latest = updates.at(-1);
+  expect(latest?.acceptedSequence, `${label} must record accepted monotonic samples`).toBeGreaterThanOrEqual(1);
+  expect(latest?.coalescedThrough, `${label} must expose coalesced-through sample telemetry`).toBeGreaterThanOrEqual(
+    latest?.acceptedSequence ?? 0
+  );
+}
+
+async function expectRealtimeHostInteractionRefresh(app: ProductJourneyAppController, label: string): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        (await readRealtimePreviewHostCalls(app)).some(
+          (call) => call.kind === "updateProjectSessionSnapshot" && typeof call.interactionId === "string"
+        ),
+      { timeout: 5_000 }
+    )
+    .toBe(true);
+  const hostCalls = await readRealtimePreviewHostCalls(app);
+  expect(
+    hostCalls.some((call) => call.kind === "updateProjectSessionSnapshot" && typeof call.interactionId === "string"),
+    `${label} must refresh the realtime host with an interaction snapshot`
+  ).toBe(true);
+  expectNoProductFallbackCalls(hostCalls);
+}
+
+async function expectInteractionQueueLatencyWithinBudget(page: Page, label: string): Promise<void> {
+  const telemetry = await readTaskRuntimeTelemetry(page);
+  expect(telemetry.queueLatencyUs.p95 ?? 0, `${label} queue latency p95 must stay within the interaction budget`).toBeLessThanOrEqual(
+    INTERACTION_QUEUE_LATENCY_BUDGET_US
+  );
+  expect(telemetry.coalescedCount, `${label} must expose coalescing telemetry`).toBeGreaterThanOrEqual(0);
+  expect(telemetry.staleRejectedCount, `${label} must expose stale generation rejection telemetry`).toBeGreaterThanOrEqual(0);
 }
 
 function latestResultRevision(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): number | null {
