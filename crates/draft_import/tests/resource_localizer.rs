@@ -24,10 +24,14 @@ fn resource_localizer_copies_assets_under_template_import_resources() {
     let source_root = temp.join("source-bundle");
     let bundle_path = temp.join("localized.veproj");
     fs::create_dir_all(source_root.join("assets/fonts")).expect("source font dir should create");
-    fs::create_dir_all(source_root.join("assets/stickers")).expect("source sticker dir should create");
+    fs::create_dir_all(source_root.join("assets/stickers"))
+        .expect("source sticker dir should create");
     fs::create_dir_all(&bundle_path).expect("bundle dir should create");
-    fs::write(source_root.join("assets/fonts/main.ttf"), b"local-font-fixture")
-        .expect("font fixture should write");
+    fs::write(
+        source_root.join("assets/fonts/main.ttf"),
+        b"local-font-fixture",
+    )
+    .expect("font fixture should write");
     fs::write(
         source_root.join("assets/stickers/overlay.png"),
         b"local-sticker-fixture",
@@ -74,7 +78,11 @@ fn resource_localizer_copies_assets_under_template_import_resources() {
         font.resource_index_ref.project_relative_ref.as_deref(),
         font.project_relative_ref.as_deref()
     );
-    assert!(bundle_path.join(font.project_relative_ref.as_ref().unwrap()).is_file());
+    assert!(
+        bundle_path
+            .join(font.project_relative_ref.as_ref().unwrap())
+            .is_file()
+    );
 
     let sticker = localized(&result.manifest.resources, "sticker-overlay");
     assert_eq!(sticker.status, LocalizedResourceStatus::Available);
@@ -88,7 +96,11 @@ fn resource_localizer_copies_assets_under_template_import_resources() {
         sticker.resource_index_ref.kind,
         LocalizedResourceIndexKind::Material
     );
-    assert!(bundle_path.join(sticker.project_relative_ref.as_ref().unwrap()).is_file());
+    assert!(
+        bundle_path
+            .join(sticker.project_relative_ref.as_ref().unwrap())
+            .is_file()
+    );
 }
 
 #[test]
@@ -98,8 +110,11 @@ fn resource_localizer_reports_missing_and_sha256_mismatch_without_partial_output
     let bundle_path = temp.join("localized.veproj");
     fs::create_dir_all(source_root.join("assets/fonts")).expect("source font dir should create");
     fs::create_dir_all(&bundle_path).expect("bundle dir should create");
-    fs::write(source_root.join("assets/fonts/main.ttf"), b"local-font-fixture")
-        .expect("font fixture should write");
+    fs::write(
+        source_root.join("assets/fonts/main.ttf"),
+        b"local-font-fixture",
+    )
+    .expect("font fixture should write");
 
     let result = localize_template_resources(ResourceLocalizationRequest {
         bundle_path: bundle_path.clone(),
@@ -136,7 +151,9 @@ fn resource_localizer_reports_missing_and_sha256_mismatch_without_partial_output
     assert_resource_diagnostic(&result, "font-mismatch", "sha256");
     assert!(
         !bundle_path
-            .join("resources/template-import/template-beta/fonts/font-mismatch/assets/fonts/main.ttf")
+            .join(
+                "resources/template-import/template-beta/fonts/font-mismatch/assets/fonts/main.ttf"
+            )
             .exists(),
         "sha mismatch must not copy a partial resource"
     );
@@ -149,8 +166,11 @@ fn resource_localizer_rejects_traversal_remote_urls_and_duplicate_destinations()
     let bundle_path = temp.join("localized.veproj");
     fs::create_dir_all(source_root.join("assets/video")).expect("source video dir should create");
     fs::create_dir_all(&bundle_path).expect("bundle dir should create");
-    fs::write(source_root.join("assets/video/clip.mp4"), b"local-video-fixture")
-        .expect("video fixture should write");
+    fs::write(
+        source_root.join("assets/video/clip.mp4"),
+        b"local-video-fixture",
+    )
+    .expect("video fixture should write");
 
     let result = localize_template_resources(ResourceLocalizationRequest {
         bundle_path: bundle_path.clone(),
@@ -206,7 +226,9 @@ fn resource_localizer_rejects_traversal_remote_urls_and_duplicate_destinations()
     assert_resource_diagnostic(&result, "remote-video", "remote");
     assert_resource_diagnostic(&result, "duplicate-video", "duplicate");
     assert!(
-        !bundle_path.join("resources/template-import/template-gamma/stickers/traversal-sticker/outside.png").exists(),
+        !bundle_path
+            .join("resources/template-import/template-gamma/stickers/traversal-sticker/outside.png")
+            .exists(),
         "traversal output must not be created"
     );
     assert!(
@@ -323,7 +345,10 @@ fn resource_localizer_fixture_scan_rejects_credentials_and_signed_urls() {
         .expect("committed resource fixtures should not contain secret-like evidence");
 
     for (name, bytes) in [
-        ("credential-key.json", br#"{"access_token":"redacted"}"#.as_slice()),
+        (
+            "credential-key.json",
+            br#"{"access_token":"redacted"}"#.as_slice(),
+        ),
         (
             "signed-url.json",
             br#"{"resource":"https://example.invalid/a.mp4?X-Amz-Signature=redacted"}"#.as_slice(),
@@ -373,13 +398,10 @@ fn assert_resource_diagnostic(
         .find(|item| {
             item.status == AdaptationStatus::MissingResource
                 && item.category == AdaptationCategory::Resource
-                && item
-                    .target
-                    .as_ref()
-                    .is_some_and(|target| {
-                        target.kind == AdaptationTargetKind::Resource
-                            && target.id.as_deref() == Some(stable_id)
-                    })
+                && item.target.as_ref().is_some_and(|target| {
+                    target.kind == AdaptationTargetKind::Resource
+                        && target.id.as_deref() == Some(stable_id)
+                })
         })
         .unwrap_or_else(|| panic!("resource diagnostic should exist for {stable_id}"));
 
@@ -442,7 +464,11 @@ fn scan_resource_fixture_bytes(name: &str, bytes: &[u8]) -> Result<(), String> {
         "expires=",
         "x-security-token=",
     ];
-    if text.contains("http") && signed_url_markers.iter().any(|needle| text.contains(needle)) {
+    if text.contains("http")
+        && signed_url_markers
+            .iter()
+            .any(|needle| text.contains(needle))
+    {
         return Err(format!("{name}: signed resource URL shape"));
     }
     Ok(())
