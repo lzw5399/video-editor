@@ -13,14 +13,14 @@ use draft_import::{
 use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
     AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload, AudioEffectSlot,
-    AudioFade, AudioPanBalance, CommandDelta, CommandDeltaName, CommandErrorKind, CommandState,
-    DeleteSegmentCommandPayload, Draft, DraftCanvasConfig, EditTextSegmentCommandPayload,
-    ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
-    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload,
-    RationalFrameRate, RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment,
-    SegmentAudio, SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentPosition,
-    SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
+    AudioFade, AudioPanBalance, ChangedEntity, CommandDelta, CommandDeltaName, CommandErrorKind,
+    CommandEvent, CommandState, DeleteSegmentCommandPayload, DirtyDomain, Draft, DraftCanvasConfig,
+    EditTextSegmentCommandPayload, ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId,
+    MaterialKind, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MoveSegmentCommandPayload, RationalFrameRate, RemoveSegmentKeyframeCommandPayload,
+    RenameTrackCommandPayload, Segment, SegmentAudio, SegmentBackgroundFilling, SegmentFitMode,
+    SegmentId, SegmentPosition, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
     SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
     SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
     SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBackground,
@@ -386,6 +386,8 @@ struct ProjectSessionTemplateImportResponse {
     revision: u64,
     #[serde(rename = "viewModel")]
     view_model: ProjectSessionViewModel,
+    events: Vec<draft_model::CommandEvent>,
+    delta: draft_model::CommandDelta,
     adaptation_report: draft_import::AdaptationReport,
     bundle_path: String,
     project_json_path: String,
@@ -2322,6 +2324,11 @@ impl ProjectSession {
         self.command_state = CommandState::empty();
         self.selection = TimelineSelection::empty();
         self.playhead = Microseconds::ZERO;
+        let delta = template_import_delta(&self.draft);
+        let events = vec![CommandEvent {
+            kind: "templateImported".to_owned(),
+            message: None,
+        }];
 
         crate::to_js_value(crate::ok_envelope(ProjectSessionTemplateImportResponse {
             session_id: self.session_id.clone(),
@@ -2331,6 +2338,8 @@ impl ProjectSession {
                 &self.command_state,
                 &self.selection,
             ),
+            events,
+            delta,
             adaptation_report: applied.report,
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
@@ -3272,6 +3281,59 @@ fn sanitize_template_import_id(value: &str) -> String {
         .collect::<String>()
         .trim_matches('-')
         .to_owned()
+}
+
+fn template_import_delta(draft: &Draft) -> CommandDelta {
+    let mut changed_entities = vec![
+        ChangedEntity::Draft {
+            draft_id: draft.draft_id.clone(),
+        },
+        ChangedEntity::Canvas {
+            draft_id: draft.draft_id.clone(),
+        },
+    ];
+    for material in &draft.materials {
+        changed_entities.push(ChangedEntity::Material {
+            material_id: material.material_id.clone(),
+        });
+    }
+    for track in &draft.tracks {
+        changed_entities.push(ChangedEntity::Track {
+            track_id: track.track_id.clone(),
+        });
+        for segment in &track.segments {
+            changed_entities.push(ChangedEntity::Segment {
+                track_id: track.track_id.clone(),
+                segment_id: segment.segment_id.clone(),
+            });
+        }
+    }
+
+    CommandDelta::full_draft(
+        CommandDeltaName::ImportTemplate,
+        changed_entities,
+        vec![
+            DirtyDomain::Track,
+            DirtyDomain::Timing,
+            DirtyDomain::Visual,
+            DirtyDomain::Text,
+            DirtyDomain::Audio,
+            DirtyDomain::Material,
+            DirtyDomain::Canvas,
+            DirtyDomain::OutputProfile,
+        ],
+        vec![
+            DirtyDomain::Preview,
+            DirtyDomain::ExportPrep,
+            DirtyDomain::Audio,
+            DirtyDomain::Thumbnail,
+            DirtyDomain::Waveform,
+            DirtyDomain::Proxy,
+            DirtyDomain::GraphSnapshot,
+            DirtyDomain::PreviewCache,
+        ],
+        "template imported",
+    )
 }
 
 fn project_session_store_error(

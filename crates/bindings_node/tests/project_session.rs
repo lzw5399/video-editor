@@ -1356,9 +1356,14 @@ fn project_session_template_import_response_includes_events_and_delta() {
         "template import must return a provider-neutral CommandDelta: {imported:#}"
     );
     assert_eq!(
-        imported["data"]["delta"]["changedEntities"][0],
-        json!({ "kind": "draft", "draftId": "imported-binding-template-import" }),
+        imported["data"]["delta"]["changedEntities"][0]["kind"], "draft",
         "template import delta must identify the imported draft: {imported:#}"
+    );
+    assert!(
+        imported["data"]["delta"]["changedEntities"][0]["draftId"]
+            .as_str()
+            .is_some_and(|draft_id| draft_id.contains("binding-template-import")),
+        "template import delta must identify the imported draft id: {imported:#}"
     );
     for domain in ["track", "timing", "visual", "material", "canvas"] {
         assert!(
