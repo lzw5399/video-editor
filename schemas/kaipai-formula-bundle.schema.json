@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KaipaiFormulaBundle",
+  "type": "object",
+  "properties": {
+    "directMaterials": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DirectMaterialRef"
+      }
+    },
+    "formula": true,
+    "kind": {
+      "$ref": "#/$defs/FormulaBundleKind"
+    },
+    "provenance": {
+      "$ref": "#/$defs/FormulaProvenance"
+    },
+    "recognizerResult": {
+      "$ref": "#/$defs/RecognizerResult"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FormulaResourceRef"
+      }
+    },
+    "safeArea": {
+      "$ref": "#/$defs/SafeAreaEvidence"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/FormulaBundleSchemaVersion"
+    },
+    "sourceMedia": {
+      "$ref": "#/$defs/FormulaSourceMedia"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "provenance",
+    "sourceMedia",
+    "recognizerResult",
+    "safeArea",
+    "directMaterials",
+    "formula",
+    "resources"
+  ],
+  "$defs": {
+    "DirectMaterialRef": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/FormulaResourceKind"
+        },
+        "materialId": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "materialId",
+        "kind",
+        "uri",
+        "displayName"
+      ]
+    },
+    "FormulaBundleKind": {
+      "type": "string",
+      "enum": [
+        "formulaBundle"
+      ]
+    },
+    "FormulaBundleSchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "FormulaProvenance": {
+      "type": "object",
+      "properties": {
+        "capturedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formulaRequestId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formulaTaskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "recipeId": {
+          "type": "string"
+        },
+        "templateId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "templateId",
+        "recipeId"
+      ]
+    },
+    "FormulaResourceKind": {
+      "type": "string",
+      "enum": [
+        "video",
+        "image",
+        "audio",
+        "font",
+        "sticker"
+      ]
+    },
+    "FormulaResourceRef": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/FormulaResourceKind"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resourceId",
+        "kind",
+        "uri",
+        "displayName"
+      ]
+    },
+    "FormulaSourceMedia": {
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/FormulaResourceKind"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resourceId",
+        "kind",
+        "uri"
+      ]
+    },
+    "RecognizerResult": {
+      "type": "object",
+      "properties": {
+        "wordList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RecognizerWord"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "wordList"
+      ]
+    },
+    "RecognizerWord": {
+      "type": "object",
+      "properties": {
+        "endMs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "startMs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "startMs",
+        "endMs"
+      ]
+    },
+    "SafeAreaEvidence": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/SafeAreaStatus"
+        },
+        "value": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source",
+        "value"
+      ]
+    },
+    "SafeAreaStatus": {
+      "type": "string",
+      "enum": [
+        "detected",
+        "provided",
+        "unavailable"
+      ]
+    }
+  }
+}

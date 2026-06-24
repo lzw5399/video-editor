@@ -17,10 +17,8 @@ pub struct KaipaiFormulaBundle {
     pub source_media: FormulaSourceMedia,
     pub recognizer_result: RecognizerResult,
     pub safe_area: SafeAreaEvidence,
-    #[serde(default)]
     pub direct_materials: Vec<DirectMaterialRef>,
     pub formula: Value,
-    #[serde(default)]
     pub resources: Vec<FormulaResourceRef>,
 }
 
