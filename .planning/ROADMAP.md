@@ -875,11 +875,24 @@ Plans:
   5. Server runtime can open `.veproj`, resolve materials, run render/export jobs, and report progress without Electron.
   6. ABI, serialization, and binding smoke tests protect contract drift across desktop, mobile contracts, and server rendering.
 
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
 
-- [ ] TBD - Plan after Phase 17.1 completion
+**Wave 1**
+
+- [ ] 18-01-PLAN.md — Establish shared `editor_runtime` session, export, and handle authority
+- [ ] 18-02-PLAN.md — Add Phase 18 source, ABI, mobile contract, and aggregate guard scaffolding
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 18-03-PLAN.md — Thin `bindings_node` into a desktop adapter over `editor_runtime`
+- [ ] 18-04-PLAN.md — Add portable `bindings_c` ABI, generated header, and handle smoke tests
+- [ ] 18-05-PLAN.md — Add Electron-free `server_runtime` export/progress/cancel path
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 18-06-PLAN.md — Document mobile contracts, update runtime boundaries, and close aggregate gates
 
 ### Phase 19: Production Effects, Retiming, And Transition Semantics
 
