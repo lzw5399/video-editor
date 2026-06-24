@@ -7,7 +7,7 @@ status: completed
 stopped_at: Completed 17-09-PLAN.md
 last_updated: "2026-06-24T11:16:29.701Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 17 marked complete
+last_activity_desc: Phase 17 template import UI audit follow-up completed
 progress:
   total_phases: 24
   completed_phases: 22
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 Phase: 17 — COMPLETE
 Plan: 10 of 10
 Status: Phase 17 complete
-Last activity: 2026-06-24 — Phase 17 marked complete
+Last activity: 2026-06-24 — Phase 17 template import UI audit follow-up completed
 
 Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-neutral template import plus a Kaipai offline adapter foundation, with former Phase 17/18 shifted to Phase 18/19.
 
@@ -577,6 +577,7 @@ None.
 
 | Date | Task | Summary |
 |------|------|---------|
+| 2026-06-24 | 260624-s40-phase-17-template-import-ui-audit-follow | Fixed template import UI audit follow-up items: renamed the entry to 模板导入, cleared stale reports, exposed all adaptation rows with severity ordering and distinct status treatment, updated desktop/category tests, and revalidated Phase 17 gates. |
 | 2026-06-23 | 260623-ui-reference-playing-state-gate | Added UI reference playing-state screenshots that start playback, wait for native render-graph compositor evidence to advance, verify non-black native pixels, and capture full workspace plus preview monitor crops alongside static and narrow evidence. |
 | 2026-06-23 | 260623-text-reopen-preview-parity | Added an opened-project product journey launcher and a real video/audio/text/SRT E2E proving edited fonts, subtitle cues, preview-drag movement, rotation, scale, and opacity survive `.veproj` save/close/reopen and still render through native preview without DOM/artifact fallback. |
 | 2026-06-23 | 260623-ui-reference-portrait-preview-fixture | Switched UI reference workspace screenshots to the committed portrait preview fixture, derived fixture selectors from basenames, tightened preview shell containment, and revalidated build, UI reference regression, screenshot evidence, and diff checks. |

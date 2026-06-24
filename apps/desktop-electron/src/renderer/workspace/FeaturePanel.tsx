@@ -141,11 +141,11 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
 }
 
 const TEMPLATE_REPORT_STATUSES: readonly AdaptationStatus[] = [
-  "supported",
-  "approximated",
-  "dropped",
   "missingResource",
-  "needsNativeEffect"
+  "needsNativeEffect",
+  "dropped",
+  "approximated",
+  "supported"
 ];
 const TEMPLATE_REPORT_STATUS_LABELS: Record<AdaptationStatus, string> = {
   supported: "已支持",
@@ -168,6 +168,13 @@ const TEMPLATE_REPORT_CATEGORY_LABELS: Record<AdaptationCategory, string> = {
   resource: "资源",
   font: "字体",
   nativeEffect: "本地效果"
+};
+const TEMPLATE_REPORT_STATUS_PRIORITY: Record<AdaptationStatus, number> = {
+  missingResource: 0,
+  needsNativeEffect: 1,
+  dropped: 2,
+  approximated: 3,
+  supported: 4
 };
 const TEMPLATE_REPORT_TARGET_LABELS: Record<AdaptationTargetKind, string> = {
   draft: "草稿",
@@ -192,11 +199,30 @@ function TemplatePanel({
   onImportTemplateBundle
 }: FeaturePanelProps): React.ReactElement {
   const pending = workspace.pendingCommand !== null;
+  const importingTemplate = workspace.pendingCommand === "导入模板";
+  const templateImportFailed = !importingTemplate && templateImportReport === null && workspace.commandError !== null;
+  const reportItems = useMemo(
+    () =>
+      [...(templateImportReport?.items ?? [])].sort((left, right) => {
+        const byStatus = TEMPLATE_REPORT_STATUS_PRIORITY[left.status] - TEMPLATE_REPORT_STATUS_PRIORITY[right.status];
+        if (byStatus !== 0) {
+          return byStatus;
+        }
+        return left.category.localeCompare(right.category);
+      }),
+    [templateImportReport]
+  );
+  const reportStateLabel = importingTemplate ? "导入中" : templateImportReport === null ? "等待导入" : "本地导入";
+  const emptyCopy = importingTemplate
+    ? "正在解析离线模板文件和本地资源目录。"
+    : templateImportFailed
+      ? "导入未完成，请重新选择离线模板文件和资源目录。"
+      : "选择离线模板文件和资源目录后显示适配结果。";
 
   return (
     <div className="feature-panel-content template-feature-panel">
       <div className="panel-header template-panel-header">
-        <h2>智能包装</h2>
+        <h2>模板导入</h2>
         <button
           type="button"
           className="primary-action template-import-action"
@@ -205,14 +231,14 @@ function TemplatePanel({
           disabled={pending}
         >
           <span className="app-icon-mask" style={iconMaskStyle("categoryTemplate")} aria-hidden="true" />
-          <span>导入模板</span>
+          <span>{importingTemplate ? "导入中" : "导入模板"}</span>
         </button>
       </div>
 
       <section className="template-report-panel" aria-label="模板适配报告">
         <div className="template-report-header">
           <h3>模板适配报告</h3>
-          <span>{templateImportReport === null ? "等待导入" : "本地导入"}</span>
+          <span>{reportStateLabel}</span>
         </div>
         <div className="template-report-summary" aria-label="适配状态统计">
           {TEMPLATE_REPORT_STATUSES.map((status) => (
@@ -222,13 +248,18 @@ function TemplatePanel({
           ))}
         </div>
         {templateImportReport === null ? (
-          <p className="template-report-empty">选择离线模板后显示适配结果。</p>
+          <p className={templateImportFailed ? "template-report-empty status-error" : "template-report-empty"}>
+            {emptyCopy}
+          </p>
         ) : (
-          <div className="template-report-list" aria-label="适配条目">
-            {templateImportReport.items.slice(0, 8).map((item, index) => (
-              <TemplateReportRow item={item} key={`${item.status}-${item.category}-${index}`} />
-            ))}
-          </div>
+          <>
+            <div className="template-report-list" aria-label="适配条目">
+              {reportItems.map((item, index) => (
+                <TemplateReportRow item={item} key={`${item.status}-${item.category}-${index}`} />
+              ))}
+            </div>
+            <p className="template-report-count">共 {templateImportReport.items.length} 条适配记录</p>
+          </>
         )}
       </section>
     </div>
@@ -238,7 +269,10 @@ function TemplatePanel({
 function TemplateReportRow({ item }: { item: AdaptationReportItem }): React.ReactElement {
   return (
     <article className={`template-report-row status-${item.status}`} aria-label={`适配条目 ${TEMPLATE_REPORT_STATUS_LABELS[item.status]}`}>
-      <span className="template-report-row-status">{TEMPLATE_REPORT_STATUS_LABELS[item.status]}</span>
+      <span className="template-report-row-status">
+        <span className="template-report-status-dot" aria-hidden="true" />
+        <span>{TEMPLATE_REPORT_STATUS_LABELS[item.status]}</span>
+      </span>
       <div className="template-report-row-copy">
         <strong>{templateReportItemCopy(item)}</strong>
         <span>

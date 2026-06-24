@@ -1719,6 +1719,7 @@ export function App(): React.ReactElement {
 
     const platform = window.videoEditorPlatform;
     if (platform === undefined) {
+      setTemplateImportReport(null);
       setWorkspace((current) => ({
         ...current,
         commandError: commandErrorMessage("当前环境没有系统文件选择器，无法导入离线模板")
@@ -1734,6 +1735,7 @@ export function App(): React.ReactElement {
       const selectedBundlePath = selection.bundlePath?.trim() ?? "";
       const selectedResourceRoot = selection.resourceRoot?.trim() ?? "";
       if (selectedBundlePath.length === 0 || selectedResourceRoot.length === 0) {
+        setTemplateImportReport(null);
         setWorkspace((current) => ({
           ...current,
           commandError: commandErrorMessage("请选择离线模板文件和资源目录")
@@ -1742,6 +1744,7 @@ export function App(): React.ReactElement {
       }
 
       commandInFlightRef.current = true;
+      setTemplateImportReport(null);
       setWorkspace((current) => {
         const next = {
           ...current,
@@ -1754,6 +1757,7 @@ export function App(): React.ReactElement {
 
       const syncedSession = await syncProjectSessionBeforeMutation("导入模板");
       if (syncedSession === null) {
+        setTemplateImportReport(null);
         return;
       }
 
@@ -1765,6 +1769,7 @@ export function App(): React.ReactElement {
         importId: templateImportIdFromPath(selectedBundlePath)
       });
       if (!result.ok || result.data === null) {
+        setTemplateImportReport(null);
         const next = {
           ...workspaceRef.current,
           pendingCommand: null,
@@ -1803,6 +1808,7 @@ export function App(): React.ReactElement {
       setWorkspace(next);
       refreshRealtimePreviewAt(selectedSegmentStart(result.data) ?? 0);
     } catch (error: unknown) {
+      setTemplateImportReport(null);
       const message = error instanceof Error ? error.message : String(error);
       const next = {
         ...workspaceRef.current,

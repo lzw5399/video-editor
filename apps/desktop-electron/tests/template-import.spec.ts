@@ -50,6 +50,7 @@ const FORBIDDEN_REPORT_COPY = [
   "http://",
   "https://"
 ] as const;
+const TEMPLATE_CATEGORY_LABEL = "模板导入";
 
 type TemplatePickerSelection = {
   bundlePath: string;
@@ -85,6 +86,8 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
       "需本地效果": 0
     });
     await expect(page.getByText("资源缺失，相关片段已跳过")).toBeVisible();
+    await expectTemplateReportRows(page, ["missingResource", "dropped"]);
+    await expectTemplateStatusRowsUseDistinctBorders(page, ["missingResource", "dropped"]);
 
     await importTemplateThroughProductPanel(app, page);
     await expectTemplateReportSummary(page, {
@@ -97,6 +100,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     await expect(page.getByText("文本已接入本地草稿")).toBeVisible();
     await expect(page.getByText("字体已使用本地替代")).toBeVisible();
     await expect(page.getByText("文字效果未写入草稿")).toBeVisible();
+    await expectTemplateReportRows(page, ["dropped", "approximated", "supported"]);
 
     await importTemplateThroughProductPanel(app, page);
     await expectTemplateReportSummary(page, {
@@ -108,6 +112,8 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     });
     await expect(page.getByText("本地效果能力待补齐")).toBeVisible();
     await expect(page.getByText("片段已跳过")).toBeVisible();
+    await expectTemplateReportRows(page, ["needsNativeEffect", "dropped", "supported", "supported"]);
+    await expectTemplateStatusRowsUseDistinctBorders(page, ["needsNativeEffect", "dropped", "supported"]);
 
     const reportText = (await page.getByLabel("模板适配报告").textContent()) ?? "";
     for (const forbidden of FORBIDDEN_REPORT_COPY) {
@@ -258,6 +264,8 @@ function applyTemplateResourceSha256(value: unknown, sha256ByUri: Map<string, st
 async function importTemplateThroughProductPanel(app: ProductJourneyAppController, page: Page): Promise<void> {
   const nextCount = (await readTemplateImportCalls(app)).length + 1;
   await selectTemplateCategory(page);
+  await expect(page.getByRole("heading", { name: TEMPLATE_CATEGORY_LABEL })).toBeVisible();
+  await expect(page.getByText("智能包装")).toHaveCount(0);
   const importButton = page.getByRole("button", { name: "导入离线模板" });
   await expect(importButton, "template panel must expose the offline import command").toBeVisible({ timeout: 5_000 });
   await importButton.click();
@@ -279,14 +287,14 @@ async function importTemplateThroughProductPanel(app: ProductJourneyAppControlle
 }
 
 async function selectTemplateCategory(page: Page): Promise<void> {
-  const visibleButton = page.getByRole("button", { name: "智能包装" });
+  const visibleButton = page.getByRole("button", { name: TEMPLATE_CATEGORY_LABEL });
   if ((await visibleButton.count()) > 0 && await visibleButton.first().isVisible()) {
     await visibleButton.first().click();
     return;
   }
 
   await page.getByRole("button", { name: "更多功能" }).click();
-  await page.getByRole("menuitemradio", { name: "智能包装" }).click();
+  await page.getByRole("menuitemradio", { name: TEMPLATE_CATEGORY_LABEL }).click();
 }
 
 async function expectTemplateReportSummary(page: Page, counts: Record<string, number>): Promise<void> {
@@ -295,6 +303,31 @@ async function expectTemplateReportSummary(page: Page, counts: Record<string, nu
   for (const [label, count] of Object.entries(counts)) {
     await expect(panel.getByText(new RegExp(`${label}\\s+${count}`))).toBeVisible();
   }
+}
+
+async function expectTemplateReportRows(page: Page, expectedStatuses: string[]): Promise<void> {
+  const panel = page.getByLabel("模板适配报告");
+  const rows = panel.locator(".template-report-row");
+  await expect(rows).toHaveCount(expectedStatuses.length);
+  await expect(panel.getByText(`共 ${expectedStatuses.length} 条适配记录`)).toBeVisible();
+
+  const actualStatuses = await rows.evaluateAll((elements) =>
+    elements.map((element) => {
+      const statusClass = Array.from(element.classList).find((className) => className.startsWith("status-"));
+      return statusClass?.slice("status-".length) ?? "";
+    })
+  );
+  expect(actualStatuses).toEqual(expectedStatuses);
+}
+
+async function expectTemplateStatusRowsUseDistinctBorders(page: Page, statuses: string[]): Promise<void> {
+  const panel = page.getByLabel("模板适配报告");
+  const borderColors = await Promise.all(
+    statuses.map((status) =>
+      panel.locator(`.template-report-row.status-${status}`).first().evaluate((element) => getComputedStyle(element).borderTopColor)
+    )
+  );
+  expect(new Set(borderColors).size).toBe(statuses.length);
 }
 
 async function readTemplateImportCalls(app: ProductJourneyAppController): Promise<Array<Record<string, unknown>>> {

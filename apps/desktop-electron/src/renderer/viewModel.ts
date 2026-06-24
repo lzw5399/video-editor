@@ -74,7 +74,7 @@ export const WORKSPACE_CATEGORY_META: Record<WorkspaceCategory, WorkspaceCategor
   字幕: { label: "字幕" },
   滤镜: { label: "滤镜" },
   调节: { label: "调节" },
-  模板: { label: "智能包装" },
+  模板: { label: "模板导入" },
   数字人: { label: "数字人" }
 };
 

@@ -990,7 +990,7 @@ h2 {
 
 .template-report-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -1021,23 +1021,34 @@ h2 {
   color: #e3d56b;
 }
 
-.template-report-chip.status-dropped,
-.template-report-chip.status-missingResource,
+.template-report-chip.status-dropped {
+  border-color: #644c2c;
+  color: #efc079;
+}
+
+.template-report-chip.status-missingResource {
+  border-color: #6a3936;
+  color: #f3aaa5;
+}
+
 .template-report-chip.status-needsNativeEffect {
-  border-color: #62413f;
-  color: #f0a49e;
+  border-color: #604783;
+  color: #d9c0ff;
 }
 
 .template-report-list {
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-height: 312px;
+  overflow: auto;
+  padding-right: 3px;
 }
 
 .template-report-row {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: minmax(78px, 92px) minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
   min-width: 0;
   min-height: 44px;
@@ -1047,7 +1058,36 @@ h2 {
   background: #1c1c19;
 }
 
+.template-report-row.status-supported {
+  border-color: #274f42;
+  background: #1b2420;
+}
+
+.template-report-row.status-approximated {
+  border-color: #514b2c;
+  background: #242317;
+}
+
+.template-report-row.status-dropped {
+  border-color: #604522;
+  background: #261f15;
+}
+
+.template-report-row.status-missingResource {
+  border-color: #673534;
+  background: #271817;
+}
+
+.template-report-row.status-needsNativeEffect {
+  border-color: #4b3a63;
+  background: #211b2a;
+}
+
 .template-report-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 2px;
   overflow: hidden;
   color: #c8c4ba;
   font-size: 12px;
@@ -1055,6 +1095,54 @@ h2 {
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.template-report-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #9f9b92;
+}
+
+.template-report-row.status-supported .template-report-row-status {
+  color: #9ee6c4;
+}
+
+.template-report-row.status-supported .template-report-status-dot {
+  background: #68c59d;
+}
+
+.template-report-row.status-approximated .template-report-row-status {
+  color: #e3d56b;
+}
+
+.template-report-row.status-approximated .template-report-status-dot {
+  background: #d6c64c;
+}
+
+.template-report-row.status-dropped .template-report-row-status {
+  color: #efc079;
+}
+
+.template-report-row.status-dropped .template-report-status-dot {
+  background: #d99642;
+}
+
+.template-report-row.status-missingResource .template-report-row-status {
+  color: #f3aaa5;
+}
+
+.template-report-row.status-missingResource .template-report-status-dot {
+  background: #e3726c;
+}
+
+.template-report-row.status-needsNativeEffect .template-report-row-status {
+  color: #d9c0ff;
+}
+
+.template-report-row.status-needsNativeEffect .template-report-status-dot {
+  background: #a37ce0;
 }
 
 .template-report-row-copy {
@@ -1067,8 +1155,8 @@ h2 {
 .template-report-row-copy span,
 .template-report-empty {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .template-report-row-copy strong {
@@ -1076,7 +1164,7 @@ h2 {
   font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .template-report-row-copy span,
@@ -1084,6 +1172,20 @@ h2 {
   color: #9f9b92;
   font-size: 12px;
   line-height: 1.4;
+  white-space: normal;
+}
+
+.template-report-empty.status-error {
+  color: #f3aaa5;
+}
+
+.template-report-count {
+  margin: 0;
+  overflow: hidden;
+  color: #8f8a80;
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

@@ -54,7 +54,7 @@ const FORBIDDEN_DEFAULT_COPY =
   /FFmpeg|ffprobe|backend|Mock|runtime|fallback|telemetry|artifact|cache|diagnostic|debug|requestProjectSessionPreviewFrame|生成预览片段|运行环境|运行时|资源维护|草稿包路径|缓存|产物|诊断|日志|宿主|备用|渲染图|\/tmp\/|\.veproj\/derived/i;
 const FORBIDDEN_REFERENCE_MEDIA_COPY = /素材丢失|解析失败|素材解析失败|素材解析失败，请检查文件格式或重新导入/;
 const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
-const OVERFLOW_TOP_CATEGORIES = ["智能包装", "滤镜", "调节", "数字人"] as const;
+const OVERFLOW_TOP_CATEGORIES = ["模板导入", "滤镜", "调节", "数字人"] as const;
 const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
 const execFileAsync = promisify(execFile);
 

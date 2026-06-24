@@ -97,9 +97,9 @@ type WindowChromeMetrics = {
 };
 
 const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
-const OVERFLOW_TOP_CATEGORIES = ["智能包装", "滤镜", "调节", "数字人"] as const;
+const OVERFLOW_TOP_CATEGORIES = ["模板导入", "滤镜", "调节", "数字人"] as const;
 const WORKSPACE_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
-const SHOWCASE_CATEGORIES = ["贴纸", "特效", "转场", "智能包装", "滤镜", "调节", "数字人"] as const;
+const SHOWCASE_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "数字人"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
@@ -871,6 +871,13 @@ test("workspace panels switch categories without losing Chinese empty states", a
     await expect(page.getByLabel("素材面板")).not.toContainText("字幕暂未开放");
     await expect(page.getByLabel("字幕 导入字幕")).toContainText("导入字幕");
     await expect(page.getByLabel("SRT 内容")).toBeVisible();
+
+    await selectTopFeatureCategory(page, "模板导入");
+    await expect(page.getByRole("heading", { name: "模板导入" })).toBeVisible();
+    await expectNoLeftSecondaryMenu(page);
+    await expect(page.getByRole("button", { name: "导入离线模板" })).toBeVisible();
+    await expect(page.getByLabel("模板适配报告")).toContainText("选择离线模板文件和资源目录后显示适配结果。");
+    await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
 
     for (const category of SHOWCASE_CATEGORIES) {
       await selectTopFeatureCategory(page, category);
