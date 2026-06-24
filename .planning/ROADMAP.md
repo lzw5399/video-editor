@@ -835,7 +835,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 17.1-01-PLAN.md - Harden template import response and delta-driven preview invalidation
+- [x] 17.1-01-PLAN.md - Harden template import response and delta-driven preview invalidation
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -845,7 +845,7 @@ Plans:
 
 - [ ] 17.1-03-PLAN.md - Wire preview canvas and inspector high-frequency interactions
 
-**Wave 4** *(blocked on Wave 2 completion)*
+**Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 17.1-04-PLAN.md - Wire timeline, playhead scrub, and keyframe interactions
 
