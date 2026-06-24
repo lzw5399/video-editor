@@ -7,6 +7,7 @@ name = "adapter_kaipai"
 version = "0.1.0"
 dependencies = [
  "draft_import",
+ "draft_model",
  "jsonschema",
  "schemars",
  "serde",
