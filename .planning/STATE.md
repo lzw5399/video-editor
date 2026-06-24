@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-05-PLAN.md
-last_updated: "2026-06-24T08:59:39.950Z"
+stopped_at: Completed 17-10-PLAN.md
+last_updated: "2026-06-24T09:24:05.574Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 155
+  completed_plans: 156
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 17 execution started
 
@@ -192,6 +192,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P07 | 11 min | 2 tasks | 4 files |
 | Phase 17 P03 | 10 min | 2 tasks | 9 files |
 | Phase 17 P05 | 10 min | 1 tasks | 15 files |
+| Phase 17 P10 | 16 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -535,6 +536,10 @@ Recent decisions affecting current work:
 - [Phase 17]: Kaipai fixture snapshots define provider-neutral DraftImportPlan-facing outcomes and report expectations without mutating a draft or session. — Keeps adapter fixtures aligned with the Phase 17 ownership boundary before mapper implementation.
 - [Phase 17]: Native-effect fixture expectations classify provider-native effects as needsNativeEffect plus dropped filter behavior, never supported. — Unsupported proprietary effects must be explicit report diagnostics rather than fake support.
 - [Phase 17]: Mapper fixture sanitizer coverage rejects account IDs, cookies, signed URLs, credential-like fields, and remote runtime URLs through in-memory mutations. — Committed fixtures stay sanitized while unsafe provider shapes remain executable negative coverage.
+- [Phase 17]: Kaipai offline mapper output is DraftImportPlan plus AdaptationReport; it does not mutate Draft/session state directly. — Preserves the adapter/session ownership boundary from Phase 17 Plan 10.
+- [Phase 17]: Localized project-relative resource refs are required before material-backed segments enter the import plan. — Prevents remote/runtime resource refs from becoming canonical draft semantics.
+- [Phase 17]: Kaipai level maps to provider-neutral ImportTrackPlan z-order and sorted Draft track order. — Keeps provider layer evidence out of render semantics while preserving deterministic overlay order.
+- [Phase 17]: Native effects and provider text effects are reported as needsNativeEffect/dropped or dropped, never hidden as supported canonical filters. — Unsupported provider behavior remains explicit report diagnostics.
 
 ### Pending Todos
 
@@ -615,6 +620,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T08:59:39.943Z
-Stopped at: Completed 17-05-PLAN.md
+Last session: 2026-06-24T09:24:05.364Z
+Stopped at: Completed 17-10-PLAN.md
 Resume file: None
