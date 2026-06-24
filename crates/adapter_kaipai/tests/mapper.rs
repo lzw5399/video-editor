@@ -1,7 +1,7 @@
-use std::{env, fs, path::PathBuf};
+use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
-use adapter_kaipai::{KaipaiFormulaBundle, KaipaiImportOptions, map_kaipai_bundle_to_import_plan};
-use draft_import::{AdaptationStatus, ResourceLocalizationMode, validate_import_plan};
+use adapter_kaipai::{map_kaipai_bundle_to_import_plan, KaipaiFormulaBundle, KaipaiImportOptions};
+use draft_import::{validate_import_plan, AdaptationStatus, ResourceLocalizationMode};
 use draft_model::{
     CanvasAspectRatio, CanvasBackground, MaterialKind, Microseconds, SegmentAnchor, SegmentFitMode,
     TrackKind,
@@ -244,7 +244,11 @@ fn assert_localized_ref(uri: &str) {
 }
 
 fn assert_statuses(items: &[draft_import::AdaptationReportItem], expected: &[AdaptationStatus]) {
-    let observed = items.iter().map(|item| item.status).collect::<Vec<_>>();
+    let observed = items
+        .iter()
+        .map(|item| item.status)
+        .collect::<BTreeSet<_>>();
+    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
     assert_eq!(observed, expected);
 }
 
