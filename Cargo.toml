@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/draft_model",
+  "crates/draft_import",
   "crates/draft_commands",
   "crates/engine_core",
   "crates/render_graph",
