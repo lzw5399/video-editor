@@ -916,7 +916,10 @@ export async function updateSelectedVisualThroughInspector(
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
   const frameRequestsBefore = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
+  const projectCallsBefore = (await readProjectSessionCalls(app)).length;
   await clickTimelineRulerAt(page, targetTimeUs);
+  await page.waitForTimeout(100);
+  await waitForPlayheadScrubToSettle(app, projectCallsBefore);
   if (!(await waitForTimecodeNear(page, targetTimeUs, 2_000))) {
     const seekInput = page.getByLabel("预览时间");
     if ((await seekInput.count()) > 0) {
@@ -1102,17 +1105,35 @@ async function clickTimelineRulerAt(page: Page, targetTimeUs: number): Promise<v
   const ratio = Math.max(0, Math.min(1, targetTimeUs / Math.max(1, timelineDuration)));
   const clientX = rulerBox.x + rulerBox.width * ratio;
   const clientY = rulerBox.y + rulerBox.height / 2;
-  await page.mouse.click(clientX, clientY);
-  await ruler.dispatchEvent("pointerdown", {
-    clientX,
-    clientY,
-    button: 0,
-    buttons: 1,
-    pointerId: 1,
-    pointerType: "mouse",
-    bubbles: true,
-    cancelable: true
-  });
+  await page.mouse.move(clientX, clientY);
+  await page.mouse.down();
+  await page.mouse.up();
+}
+
+async function waitForPlayheadScrubToSettle(app: ProductJourneyAppController, startIndex: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const calls = (await readProjectSessionCalls(app)).slice(startIndex);
+        const begins = calls.filter(
+          (call) => call.command === "beginProjectInteraction" && call.interactionKind === "playheadScrub"
+        ).length;
+        const updates = calls.filter(
+          (call) => call.command === "updateProjectInteraction" && call.interactionKind === "playheadScrub"
+        ).length;
+        const terminals = calls.filter(
+          (call) =>
+            (call.command === "commitProjectInteraction" || call.command === "cancelProjectInteraction") &&
+            call.interactionKind === "playheadScrub"
+        ).length;
+        if (begins === 0 && updates === 0) {
+          return "settled";
+        }
+        return terminals >= begins ? "settled" : `pending:${begins}:${terminals}`;
+      },
+      { timeout: 10_000 }
+    )
+    .toBe("settled");
 }
 
 async function inferTimelineDurationFromRuler(page: Page): Promise<number> {

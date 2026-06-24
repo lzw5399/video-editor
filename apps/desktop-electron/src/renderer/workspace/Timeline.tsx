@@ -52,8 +52,15 @@ type TimelineDragPreviewState = {
   baseTrackSelectionHandle: string;
 };
 
+type TimelineKeyframeDragPreviewState = {
+  property: TimelineKeyframeEditPayload["property"];
+  baseAt: number;
+  at: number;
+};
+
 type TimelineMoveTrimPayload = Extract<ProjectInteractionPayload, { kind: "timelineMoveTrim" }>;
 type TimelinePlayheadScrubPayload = Extract<ProjectInteractionPayload, { kind: "playheadScrub" }>;
+type TimelineKeyframeEditPayload = Extract<ProjectInteractionPayload, { kind: "keyframeEdit" }>;
 
 type TimelineTrackDropTarget = {
   selectionHandle: string;
@@ -226,13 +233,15 @@ export function Timeline({
   const finishPlayheadScrub = useCallback(
     (event: ReactPointerEvent<HTMLElement>, action: "commit" | "cancel") => {
       const scrub = scrubRef.current;
-      if (scrub === null || scrub.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      if (scrub === null || scrub.pointerId !== event.pointerId) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       queuePlayheadScrubUpdate(scrub, playheadScrubPayloadFromClientX(scrub, event.clientX));
-      event.currentTarget.releasePointerCapture(event.pointerId);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
       void finishPlayheadScrubInteraction(scrub, action);
     },
     [playheadScrubPayloadFromClientX, queuePlayheadScrubUpdate]
@@ -899,6 +908,7 @@ function TimelineSegmentBlock({
   const showKeyframeStrip = segment.selected || segment.duration >= 700_000;
   const showAudioWaveform = segment.visualKind === "audio";
   const [dragPreview, setDragPreview] = useState<TimelineDragPreviewState | null>(null);
+  const [keyframeDragPreview, setKeyframeDragPreview] = useState<TimelineKeyframeDragPreviewState | null>(null);
   const dragRef = useRef<{
     mode: "move" | "trim-left" | "trim-right";
     pointerId: number;
@@ -916,6 +926,22 @@ function TimelineSegmentBlock({
     updateInFlight: boolean;
     rafId: number | null;
     pendingPayload: TimelineMoveTrimPayload | null;
+  } | null>(null);
+  const keyframeDragRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    laneWidth: number;
+    baseAt: number;
+    duration: number;
+    property: TimelineKeyframeEditPayload["property"];
+    moved: boolean;
+    interactionId: string | null;
+    sequence: number;
+    beginPromise: Promise<void>;
+    updateInFlight: boolean;
+    rafId: number | null;
+    pendingPayload: TimelineKeyframeEditPayload | null;
+    cleanup: () => void;
   } | null>(null);
   const suppressClickRef = useRef(false);
   const segmentStyle = buildTimelineSegmentBlockStyle(segment, timelineDuration, dragPreview);
@@ -948,6 +974,18 @@ function TimelineSegmentBlock({
     (event: ReactPointerEvent<HTMLElement>, mode: "move" | "trim-left" | "trim-right") => {
       if (event.button !== 0 || pending) {
         return;
+      }
+      if (mode === "move") {
+        const keyframeTarget = keyframeMarkerTargetAtPoint(
+          event.currentTarget,
+          event.clientX,
+          event.clientY,
+          segment.keyframeMarkers
+        );
+        if (keyframeTarget !== null) {
+          beginKeyframeMarkerInteraction(event, keyframeTarget.marker, keyframeTarget.strip);
+          return;
+        }
       }
       const lane = event.currentTarget.closest(".segment-lane");
       if (!(lane instanceof HTMLElement)) {
@@ -1010,6 +1048,7 @@ function TimelineSegmentBlock({
       pending,
       projectInteractions,
       segment.duration,
+      segment.keyframeMarkers,
       segment.selected,
       segment.selectionHandle,
       segment.start,
@@ -1193,8 +1232,195 @@ function TimelineSegmentBlock({
     }
   }
 
+  function beginKeyframeMarkerInteraction(
+    event: ReactPointerEvent<HTMLElement>,
+    marker: TimelineSegmentView["keyframeMarkers"][number],
+    stripElement?: HTMLElement
+  ): void {
+    if (event.button !== 0 || pending) {
+      return;
+    }
+    const strip = stripElement ?? event.currentTarget.closest(".segment-keyframe-strip");
+    if (!(strip instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!segment.selected) {
+      onSelectSegment?.(segment.selectionHandle);
+    }
+    const laneWidth = Math.max(1, strip.getBoundingClientRect().width);
+    const interaction: NonNullable<typeof keyframeDragRef.current> = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      laneWidth,
+      baseAt: marker.at,
+      duration: Math.max(1, segment.duration),
+      property: marker.property,
+      moved: false,
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null,
+      cleanup: () => undefined
+    };
+    const handleMove = (pointerEvent: PointerEvent) => updateKeyframeMarkerPointer(pointerEvent, interaction);
+    const handleEnd = (pointerEvent: PointerEvent) => completeKeyframeMarkerPointer(pointerEvent, interaction);
+    interaction.cleanup = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleEnd);
+      window.removeEventListener("pointercancel", handleEnd);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleEnd);
+    window.addEventListener("pointercancel", handleEnd);
+    interaction.beginPromise = projectInteractions.begin("keyframeEdit").then((begin) => {
+      if (keyframeDragRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      onInteractionEvidenceChange({
+        kind: "keyframeEdit",
+        generation: begin.generation
+      });
+      flushKeyframeMarkerUpdate(interaction);
+    });
+    keyframeDragRef.current = interaction;
+  }
+
+  function updateKeyframeMarkerPointer(
+    event: PointerEvent,
+    interaction: NonNullable<typeof keyframeDragRef.current>
+  ): void {
+    if (interaction.pointerId !== event.pointerId || keyframeDragRef.current !== interaction) {
+      return;
+    }
+    const payload = keyframeMarkerPayloadFromPointer(interaction, event.clientX);
+    interaction.moved = true;
+    queueKeyframeMarkerUpdate(interaction, payload);
+  }
+
+  function completeKeyframeMarkerPointer(
+    event: PointerEvent,
+    interaction: NonNullable<typeof keyframeDragRef.current>
+  ): void {
+    if (interaction.pointerId !== event.pointerId || keyframeDragRef.current !== interaction) {
+      return;
+    }
+    event.preventDefault();
+    interaction.cleanup();
+    const finalPayload = keyframeMarkerPayloadFromPointer(interaction, event.clientX);
+    if (finalPayload.at !== interaction.baseAt) {
+      interaction.moved = true;
+    }
+    if (!interaction.moved) {
+      setKeyframeDragPreview(null);
+      void finishKeyframeMarkerInteraction(interaction, "cancel");
+      return;
+    }
+    queueKeyframeMarkerUpdate(interaction, finalPayload);
+    void finishKeyframeMarkerInteraction(interaction, "commit");
+  }
+
+  function keyframeMarkerPayloadFromPointer(
+    interaction: NonNullable<typeof keyframeDragRef.current>,
+    clientX: number
+  ): TimelineKeyframeEditPayload {
+    const deltaUs = Math.round(((clientX - interaction.startClientX) / interaction.laneWidth) * interaction.duration);
+    return {
+      kind: "keyframeEdit",
+      property: interaction.property,
+      fromAt: interaction.baseAt,
+      at: clamp(interaction.baseAt + deltaUs, 0, interaction.duration)
+    };
+  }
+
+  function queueKeyframeMarkerUpdate(
+    interaction: NonNullable<typeof keyframeDragRef.current>,
+    payload: TimelineKeyframeEditPayload
+  ): void {
+    setKeyframeDragPreview({
+      property: interaction.property,
+      baseAt: interaction.baseAt,
+      at: payload.at
+    });
+    interaction.pendingPayload = payload;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushKeyframeMarkerUpdate(interaction);
+    });
+  }
+
+  function flushKeyframeMarkerUpdate(interaction: NonNullable<typeof keyframeDragRef.current>): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPayload === null) {
+      return;
+    }
+    const payload = interaction.pendingPayload;
+    interaction.pendingPayload = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, payload).then((update) => {
+      interaction.updateInFlight = false;
+      if (update !== null) {
+        onInteractionEvidenceChange({
+          kind: "keyframeEdit",
+          generation: update.generation
+        });
+      }
+      if (keyframeDragRef.current !== interaction) {
+        return;
+      }
+      flushKeyframeMarkerUpdate(interaction);
+    });
+  }
+
+  async function finishKeyframeMarkerInteraction(
+    interaction: NonNullable<typeof keyframeDragRef.current>,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPayload !== null) {
+      flushKeyframeMarkerUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (interaction.interactionId === null) {
+      setKeyframeDragPreview(null);
+      onInteractionEvidenceChange(null);
+      if (keyframeDragRef.current === interaction) {
+        keyframeDragRef.current = null;
+      }
+      return;
+    }
+    if (action === "commit") {
+      await projectInteractions.commit(interaction.interactionId);
+    } else {
+      await projectInteractions.cancel(interaction.interactionId);
+    }
+    setKeyframeDragPreview(null);
+    onInteractionEvidenceChange(null);
+    if (keyframeDragRef.current === interaction) {
+      keyframeDragRef.current = null;
+    }
+  }
+
   const rustProvisionalActive =
-    segment.selected && interactionEvidence?.kind === "timelineMoveTrim" ? interactionEvidence : null;
+    segment.selected && (interactionEvidence?.kind === "timelineMoveTrim" || interactionEvidence?.kind === "keyframeEdit")
+      ? interactionEvidence
+      : null;
 
   return (
     <button
@@ -1238,16 +1464,39 @@ function TimelineSegmentBlock({
         <AudioWaveform waveform={waveform} materialId={segment.waveformMaterialId} />
       ) : null}
       {segment.keyframeMarkers.length > 0 && showKeyframeStrip ? (
-        <span className="segment-keyframe-strip" aria-label="关键帧标记">
+        <span
+          className="segment-keyframe-strip"
+          aria-label="关键帧标记"
+          onPointerDown={(event) => {
+            const segmentElement = event.currentTarget.parentElement;
+            if (segmentElement === null) {
+              return;
+            }
+            const target = keyframeMarkerTargetAtPoint(
+              segmentElement,
+              event.clientX,
+              event.clientY,
+              segment.keyframeMarkers
+            );
+            if (target !== null) {
+              beginKeyframeMarkerInteraction(event, target.marker, target.strip);
+            }
+          }}
+        >
           {segment.keyframeMarkers.map((marker) => (
             <span
               key={marker.markerKey}
               className="segment-keyframe-marker"
               style={{
-                left: `${marker.positionPerMille / 10}%`
+                left: keyframeMarkerLeftPercent(marker, segment.duration, keyframeDragPreview)
               }}
               title={marker.title}
               aria-label={marker.ariaLabel}
+              onPointerDown={(event) => beginKeyframeMarkerInteraction(event, marker)}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
             />
           ))}
         </span>
@@ -1374,6 +1623,49 @@ function AudioWaveform({
       ) : null}
     </span>
   );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function keyframeMarkerTargetAtPoint(
+  segmentElement: HTMLElement,
+  clientX: number,
+  clientY: number,
+  markers: TimelineSegmentView["keyframeMarkers"]
+): { marker: TimelineSegmentView["keyframeMarkers"][number]; strip: HTMLElement } | null {
+  const strip = segmentElement.querySelector<HTMLElement>(".segment-keyframe-strip");
+  if (strip === null || markers.length === 0) {
+    return null;
+  }
+  const rect = strip.getBoundingClientRect();
+  if (clientY < rect.top || clientY > rect.bottom || clientX < rect.left || clientX > rect.right) {
+    return null;
+  }
+  let nearest: TimelineSegmentView["keyframeMarkers"][number] | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const marker of markers) {
+    const markerX = rect.left + (marker.positionPerMille / 1000) * rect.width;
+    const distance = Math.abs(markerX - clientX);
+    if (distance < nearestDistance) {
+      nearest = marker;
+      nearestDistance = distance;
+    }
+  }
+  return nearest !== null && nearestDistance <= 12 ? { marker: nearest, strip } : null;
+}
+
+function keyframeMarkerLeftPercent(
+  marker: TimelineSegmentView["keyframeMarkers"][number],
+  duration: number,
+  preview: TimelineKeyframeDragPreviewState | null
+): string {
+  if (preview !== null && preview.property === marker.property && preview.baseAt === marker.at) {
+    const position = (clamp(preview.at, 0, Math.max(1, duration)) / Math.max(1, duration)) * 100;
+    return `${position}%`;
+  }
+  return `${marker.positionPerMille / 10}%`;
 }
 
 function TrackStateButton({

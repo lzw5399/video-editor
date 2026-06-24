@@ -859,7 +859,7 @@ export function App(): React.ReactElement {
       setBundlePath(result.data.bundlePath);
       setWorkspace((current) => {
         const viewModel =
-          payload.kind === "timelineMoveTrim"
+          payload.kind === "timelineMoveTrim" || payload.kind === "keyframeEdit"
             ? current.viewModel
             : result.data.provisionalViewModel;
         const next = {

@@ -270,6 +270,14 @@ enum ProjectIntent {
         interpolation: KeyframeInterpolation,
         easing: KeyframeEasing,
     },
+    EditSelectedSegmentKeyframe {
+        property: KeyframeProperty,
+        at: Microseconds,
+        from_at: Option<Microseconds>,
+        value: Option<KeyframeValue>,
+        interpolation: Option<KeyframeInterpolation>,
+        easing: Option<KeyframeEasing>,
+    },
     RemoveSelectedSegmentKeyframe {
         property: KeyframeProperty,
     },
@@ -310,6 +318,18 @@ enum ProjectInteractionPayload {
         #[serde(default, rename = "targetTrackHandle")]
         target_track_handle: Option<String>,
     },
+    KeyframeEdit {
+        property: KeyframeProperty,
+        at: Microseconds,
+        #[serde(default, rename = "fromAt")]
+        from_at: Option<Microseconds>,
+        #[serde(default)]
+        value: Option<KeyframeValue>,
+        #[serde(default)]
+        interpolation: Option<KeyframeInterpolation>,
+        #[serde(default)]
+        easing: Option<KeyframeEasing>,
+    },
 }
 
 impl ProjectInteractionPayload {
@@ -328,14 +348,15 @@ impl ProjectInteractionPayload {
             ProjectInteractionPayload::TimelineMoveTrim { .. } => {
                 ProjectInteractionKind::TimelineMoveTrim
             }
+            ProjectInteractionPayload::KeyframeEdit { .. } => ProjectInteractionKind::KeyframeEdit,
         }
     }
 
     fn into_project_intent(self) -> std::result::Result<ProjectIntent, String> {
         match self {
-            ProjectInteractionPayload::SelectedSegmentVisual { patch } => Ok(
-                ProjectIntent::UpdateSelectedSegmentVisual { patch }
-            ),
+            ProjectInteractionPayload::SelectedSegmentVisual { patch } => {
+                Ok(ProjectIntent::UpdateSelectedSegmentVisual { patch })
+            }
             ProjectInteractionPayload::SelectedText { patch } => {
                 Ok(ProjectIntent::EditSelectedText { patch })
             }
@@ -362,33 +383,45 @@ impl ProjectInteractionPayload {
                 target_track_handle,
             } => match mode {
                 TimelineMoveTrimInteractionMode::Move => {
-                    let start_at = start_at.ok_or_else(|| {
-                        "时间线移动交互缺少 startAt".to_owned()
-                    })?;
+                    let start_at =
+                        start_at.ok_or_else(|| "时间线移动交互缺少 startAt".to_owned())?;
                     Ok(ProjectIntent::MoveSelectedSegmentIntent {
                         start_at,
                         target_track_handle,
                     })
                 }
                 TimelineMoveTrimInteractionMode::TrimLeft => {
-                    let trim_at = trim_at.ok_or_else(|| {
-                        "时间线左裁剪交互缺少 trimAt".to_owned()
-                    })?;
+                    let trim_at =
+                        trim_at.ok_or_else(|| "时间线左裁剪交互缺少 trimAt".to_owned())?;
                     Ok(ProjectIntent::TrimSelectedSegmentIntent {
                         direction: TrimSegmentDirection::Left,
                         trim_at,
                     })
                 }
                 TimelineMoveTrimInteractionMode::TrimRight => {
-                    let trim_at = trim_at.ok_or_else(|| {
-                        "时间线右裁剪交互缺少 trimAt".to_owned()
-                    })?;
+                    let trim_at =
+                        trim_at.ok_or_else(|| "时间线右裁剪交互缺少 trimAt".to_owned())?;
                     Ok(ProjectIntent::TrimSelectedSegmentIntent {
                         direction: TrimSegmentDirection::Right,
                         trim_at,
                     })
                 }
             },
+            ProjectInteractionPayload::KeyframeEdit {
+                property,
+                at,
+                from_at,
+                value,
+                interpolation,
+                easing,
+            } => Ok(ProjectIntent::EditSelectedSegmentKeyframe {
+                property,
+                at,
+                from_at,
+                value,
+                interpolation,
+                easing,
+            }),
         }
     }
 }
@@ -786,6 +819,8 @@ struct TimelineSegmentViewModel {
 #[serde(rename_all = "camelCase")]
 struct TimelineKeyframeMarkerViewModel {
     marker_key: String,
+    property: KeyframeProperty,
+    at: Microseconds,
     position_per_mille: u32,
     title: String,
     aria_label: String,
@@ -1108,9 +1143,12 @@ fn project_session_snapshot_for_preview(
         ));
     }
     if let Some(interaction_id) = interaction_id {
-        let active = session.active_interactions.get(interaction_id).ok_or_else(|| {
-            format!("Project interaction not found for preview snapshot: {interaction_id}")
-        })?;
+        let active = session
+            .active_interactions
+            .get(interaction_id)
+            .ok_or_else(|| {
+                format!("Project interaction not found for preview snapshot: {interaction_id}")
+            })?;
         let draft = active.provisional_draft.clone().ok_or_else(|| {
             format!("Project interaction {interaction_id} has no provisional draft snapshot")
         })?;
@@ -1816,17 +1854,16 @@ impl ProjectSessionRegistry {
             return error;
         }
 
-        let provisional =
-            match session.provisional_interaction_payload(&request.payload) {
-                Ok(response) => response,
-                Err(message) => {
-                    return project_interaction_error(
-                        "updateProjectInteraction",
-                        CommandErrorKind::InvalidTimelineEdit,
-                        message,
-                    );
-                }
-            };
+        let provisional = match session.provisional_interaction_payload(&request.payload) {
+            Ok(response) => response,
+            Err(message) => {
+                return project_interaction_error(
+                    "updateProjectInteraction",
+                    CommandErrorKind::InvalidTimelineEdit,
+                    message,
+                );
+            }
+        };
         let provisional_view_model = provisional.view_model.clone();
         let provisional_delta = provisional.delta.clone();
         let Some(active) = session.active_interactions.get_mut(&request.interaction_id) else {
@@ -2126,7 +2163,10 @@ impl ProjectSession {
                     &self.command_state,
                     &self.selection,
                 ),
-                delta: CommandDelta::none(CommandDeltaName::SeekAudioPreview, "playhead scrub update"),
+                delta: CommandDelta::none(
+                    CommandDeltaName::SeekAudioPreview,
+                    "playhead scrub update",
+                ),
                 draft: self.draft.clone(),
                 selection: self.selection.clone(),
             }),
@@ -2546,13 +2586,45 @@ impl ProjectSession {
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
                         segment_id,
+                        replace_at: None,
+                        keyframe,
+                    },
+                ))
+            }
+            ProjectIntent::EditSelectedSegmentKeyframe {
+                property,
+                at,
+                from_at,
+                value,
+                interpolation,
+                easing,
+            } => {
+                let (segment_id, replace_at, keyframe) = self.keyframe_edit_for_selected_segment(
+                    property,
+                    at,
+                    from_at,
+                    value,
+                    interpolation,
+                    easing,
+                )?;
+                Ok(TimelineEditPayload::SetSegmentKeyframe(
+                    SetSegmentKeyframeCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id,
+                        replace_at,
                         keyframe,
                     },
                 ))
             }
             ProjectIntent::RemoveSelectedSegmentKeyframe { property } => {
                 let segment = self.selected_segment("删除关键帧")?;
-                let relative_at = relative_keyframe_time(segment, self.playhead);
+                let relative_at = nearest_keyframe_time(
+                    segment,
+                    &property,
+                    relative_keyframe_time(segment, self.playhead),
+                )?;
                 Ok(TimelineEditPayload::RemoveSegmentKeyframe(
                     RemoveSegmentKeyframeCommandPayload {
                         draft: self.draft.clone(),
@@ -2986,6 +3058,66 @@ impl ProjectSession {
                 value,
                 interpolation,
                 easing,
+            },
+        ))
+    }
+
+    fn keyframe_edit_for_selected_segment(
+        &self,
+        property: KeyframeProperty,
+        at: Microseconds,
+        from_at: Option<Microseconds>,
+        value: Option<KeyframeValue>,
+        interpolation: Option<KeyframeInterpolation>,
+        easing: Option<KeyframeEasing>,
+    ) -> std::result::Result<(SegmentId, Option<Microseconds>, Keyframe), String> {
+        let segment = self.selected_segment("编辑关键帧")?;
+        if at > segment.target_timerange.duration {
+            return Err(format!(
+                "编辑关键帧失败：关键帧时间 {} 超出片段时长 {}",
+                at.get(),
+                segment.target_timerange.duration.get()
+            ));
+        }
+        if let Some(source_at) = from_at {
+            if source_at > segment.target_timerange.duration {
+                return Err(format!(
+                    "编辑关键帧失败：源关键帧时间 {} 超出片段时长 {}",
+                    source_at.get(),
+                    segment.target_timerange.duration.get()
+                ));
+            }
+        }
+
+        let source_keyframe = from_at.and_then(|source_at| {
+            segment
+                .keyframes
+                .iter()
+                .find(|keyframe| keyframe.property == property && keyframe.at == source_at)
+        });
+        let resolved_value = if let Some(value) = value {
+            value
+        } else if let Some(source_keyframe) = source_keyframe {
+            source_keyframe.value.clone()
+        } else {
+            keyframe_value_for_segment(segment, &property)?
+        };
+        let resolved_interpolation = interpolation
+            .or_else(|| source_keyframe.map(|keyframe| keyframe.interpolation))
+            .unwrap_or(KeyframeInterpolation::Linear);
+        let resolved_easing = easing
+            .or_else(|| source_keyframe.map(|keyframe| keyframe.easing))
+            .unwrap_or(KeyframeEasing::None);
+
+        Ok((
+            segment.segment_id.clone(),
+            from_at,
+            Keyframe {
+                at,
+                property,
+                value: resolved_value,
+                interpolation: resolved_interpolation,
+                easing: resolved_easing,
             },
         ))
     }
@@ -3598,6 +3730,8 @@ fn timeline_keyframe_markers(
             let easing_label = format_keyframe_easing(keyframe.easing);
             TimelineKeyframeMarkerViewModel {
                 marker_key: format!("{:?}-{}", keyframe.property, keyframe.at.get()),
+                property: keyframe.property.clone(),
+                at: keyframe.at,
                 position_per_mille,
                 title: format!("{property_label}关键帧 {time_label} · {easing_label}"),
                 aria_label: format!("{segment_label} {property_label}关键帧 {time_label}"),
@@ -3753,6 +3887,20 @@ fn relative_keyframe_time(segment: &Segment, timeline_at: Microseconds) -> Micro
     let segment_duration = segment.target_timerange.duration.get();
     let relative = timeline_at.get().saturating_sub(segment_start);
     Microseconds::new(relative.min(segment_duration))
+}
+
+fn nearest_keyframe_time(
+    segment: &Segment,
+    property: &KeyframeProperty,
+    relative_at: Microseconds,
+) -> std::result::Result<Microseconds, String> {
+    segment
+        .keyframes
+        .iter()
+        .filter(|keyframe| &keyframe.property == property)
+        .min_by_key(|keyframe| keyframe.at.get().abs_diff(relative_at.get()))
+        .map(|keyframe| keyframe.at)
+        .ok_or_else(|| format!("删除关键帧失败：当前属性 {:?} 没有关键帧", property))
 }
 
 fn trim_target_timerange(

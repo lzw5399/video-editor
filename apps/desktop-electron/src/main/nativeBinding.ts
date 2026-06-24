@@ -26,6 +26,7 @@ import type {
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
+  KeyframeValue,
   Keyframe,
   Material,
   MaterialId,
@@ -413,6 +414,15 @@ export type ProjectInteractionPayload =
       startAt?: Microseconds | null;
       trimAt?: Microseconds | null;
       targetTrackHandle?: string | null;
+    }
+  | {
+      kind: "keyframeEdit";
+      property: KeyframeProperty;
+      at: Microseconds;
+      fromAt?: Microseconds | null;
+      value?: KeyframeValue | null;
+      interpolation?: KeyframeInterpolation | null;
+      easing?: KeyframeEasing | null;
     };
 
 export type BeginProjectInteractionRequest = {
@@ -641,6 +651,8 @@ export type TimelineSegmentViewModel = {
 
 export type TimelineKeyframeMarkerViewModel = {
   markerKey: string;
+  property: KeyframeProperty;
+  at: Microseconds;
   positionPerMille: number;
   title: string;
   ariaLabel: string;

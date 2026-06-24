@@ -730,21 +730,25 @@
 .segment-keyframe-strip {
   position: absolute;
   right: 4px;
-  bottom: 3px;
+  bottom: 0;
   left: 4px;
   z-index: 2;
-  height: 8px;
+  height: 16px;
   overflow: hidden;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .segment-keyframe-marker {
   position: absolute;
-  bottom: 1px;
-  width: 6px;
-  height: 6px;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
   border: 1px solid rgba(6, 19, 20, 0.76);
+  border-radius: 2px;
   background: #d6a23f;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
   transform: translateX(-50%) rotate(45deg);
 }
 

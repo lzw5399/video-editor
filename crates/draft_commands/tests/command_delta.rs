@@ -464,6 +464,7 @@ fn visual_keyframe_delta_covers_segment_influence_ranges() {
         &visual_updated.command_state,
         &visual_updated.selection,
         "video-segment".into(),
+        None,
         keyframe.clone(),
     )
     .expect("keyframe set should commit");

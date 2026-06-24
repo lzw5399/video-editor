@@ -358,6 +358,7 @@ pub fn execute_timeline_edit(
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
+            payload.replace_at,
             payload.keyframe,
         ),
         TimelineEditPayload::RemoveSegmentKeyframe(payload) => remove_segment_keyframe(

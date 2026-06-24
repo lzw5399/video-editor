@@ -659,6 +659,8 @@ pub struct SetSegmentKeyframeCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
+    #[serde(default, rename = "replaceAt")]
+    pub replace_at: Option<Microseconds>,
     pub keyframe: Keyframe,
 }
 

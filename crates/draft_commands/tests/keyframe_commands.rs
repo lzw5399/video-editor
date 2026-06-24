@@ -27,6 +27,7 @@ fn set_keyframe_adds_replaces_sorts_and_preserves_selection() {
         &state,
         &selection,
         "video-segment".into(),
+        None,
         opacity_at_mid.clone(),
     )
     .expect("valid keyframe should commit");
@@ -57,6 +58,7 @@ fn set_keyframe_adds_replaces_sorts_and_preserves_selection() {
         &added.command_state,
         &added.selection,
         "video-segment".into(),
+        None,
         position_at_head.clone(),
     )
     .expect("second keyframe should commit");
@@ -75,6 +77,7 @@ fn set_keyframe_adds_replaces_sorts_and_preserves_selection() {
         &sorted.command_state,
         &sorted.selection,
         "video-segment".into(),
+        None,
         opacity_replacement.clone(),
     )
     .expect("same property/time should replace");
@@ -130,6 +133,7 @@ fn keyframe_commands_are_undoable_and_redoable() {
         &state,
         &selection,
         "video-segment".into(),
+        None,
         keyframe(
             500_000,
             KeyframeProperty::VisualOpacity,
@@ -162,6 +166,7 @@ fn invalid_keyframe_commands_reject_without_partial_mutation() {
         &state,
         &selection,
         "video-segment".into(),
+        None,
         keyframe(
             500_000,
             KeyframeProperty::VisualOpacity,
@@ -179,6 +184,7 @@ fn invalid_keyframe_commands_reject_without_partial_mutation() {
         &state,
         &selection,
         "video-segment".into(),
+        None,
         keyframe(
             500_000,
             KeyframeProperty::VisualOpacity,
@@ -198,6 +204,7 @@ fn invalid_keyframe_commands_reject_without_partial_mutation() {
         &state,
         &selection,
         "video-segment".into(),
+        None,
         keyframe(
             2_000_000,
             KeyframeProperty::VisualOpacity,
@@ -232,6 +239,7 @@ fn execute_timeline_edit_routes_keyframe_commands() {
             command_state: state,
             selection,
             segment_id: "video-segment".into(),
+            replace_at: None,
             keyframe: keyframe.clone(),
         },
     ))

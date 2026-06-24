@@ -297,6 +297,7 @@ fn audio_commands_dirty_domains_cover_gain_pan_fades_keyframes_and_effect_slots(
         &update.command_state,
         &update.selection,
         "audio-segment".into(),
+        None,
         Keyframe {
             at: Microseconds::new(250_000),
             property: KeyframeProperty::Volume,

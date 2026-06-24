@@ -8,13 +8,14 @@ import type {
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
+  KeyframeValue,
   SegmentBackgroundFilling,
   SegmentFitMode,
   SegmentVisual,
   TextAlignment,
   TextSegment
 } from "../../generated/Draft";
-import type { SegmentVisualPatch, TextSegmentPatch } from "../../main/nativeBinding";
+import type { ProjectInteractionPayload, SegmentVisualPatch, TextSegmentPatch } from "../../main/nativeBinding";
 import type { ProjectInteractionController } from "./projectInteraction";
 import {
   canvasAspectRatioFromSize,
@@ -139,12 +140,13 @@ type AudioEditOptions = {
 };
 
 type VisualInteractionState = {
+  kind: "selectedSegmentVisual" | "keyframeEdit";
   interactionId: string | null;
   sequence: number;
   beginPromise: Promise<void>;
   updateInFlight: boolean;
   rafId: number | null;
-  pendingPatch: SegmentVisualPatch | null;
+  pendingPayload: ProjectInteractionPayload | null;
 };
 
 type TextInteractionState = {
@@ -758,7 +760,9 @@ export function Inspector({
                   {renderKeyframeButton("visualPositionX", "位置 X")}
                 </div>
                 <SegmentVisualControls
+                  selected={selected}
                   visual={selected.visual}
+                  playheadAt={playheadUs}
                   pending={workspace.pendingCommand !== null}
                   renderKeyframeButton={renderKeyframeButton}
                   projectInteractions={projectInteractions}
@@ -1558,6 +1562,7 @@ function AnimationInspectorTab({
   const activeFocusedProperty = visibleProperties.includes(focusedProperty) ? focusedProperty : visibleProperties[0];
   const supportedFocused = isSupportedPropertyForSegment(selected, activeFocusedProperty);
   const focusedKeyframes = selected.keyframes.filter((keyframe) => keyframe.property === activeFocusedProperty);
+  const nearestFocusedKeyframe = nearestKeyframeForProperty(selected, activeFocusedProperty, playheadAt);
   const segmentName = selected.material?.displayName ?? "未关联素材";
 
   return (
@@ -1617,6 +1622,7 @@ function AnimationInspectorTab({
             selected={selected}
             playheadAt={playheadAt}
             pending={pending}
+            allowNearestRemove={true}
             onSet={() => onSetKeyframe(activeFocusedProperty)}
             onRemove={() => onRemoveKeyframe(activeFocusedProperty)}
             onFocusProperty={() => onFocusProperty(activeFocusedProperty)}
@@ -1630,7 +1636,7 @@ function AnimationInspectorTab({
               <KeyframeDetailRow
                 key={`${keyframe.property}-${keyframe.at}`}
                 keyframe={keyframe}
-                active={selected.targetTimerange.start + keyframe.at === playheadAt}
+                active={nearestFocusedKeyframe?.at === keyframe.at}
                 pending={pending}
                 onRemove={() => onRemoveKeyframe(keyframe.property)}
               />
@@ -1716,6 +1722,7 @@ function KeyframeButton({
   selected = null,
   playheadAt = 0,
   pending = false,
+  allowNearestRemove = false,
   deferredLabel,
   onSet,
   onRemove,
@@ -1726,6 +1733,7 @@ function KeyframeButton({
   selected?: SelectedSegmentView | null;
   playheadAt?: number;
   pending?: boolean;
+  allowNearestRemove?: boolean;
   deferredLabel?: string;
   onSet?: () => void;
   onRemove?: () => void;
@@ -1752,7 +1760,7 @@ function KeyframeButton({
   const propertyKeyframes = selected.keyframes.filter((keyframe) => keyframe.property === property);
   const activeKeyframe = propertyKeyframes.find(
     (keyframe) => selected.targetTimerange.start + keyframe.at === playheadAt
-  );
+  ) ?? (allowNearestRemove ? nearestKeyframeForProperty(selected, property, playheadAt) ?? undefined : undefined);
   const disabled = pending;
 
   if (activeKeyframe !== undefined) {
@@ -1800,6 +1808,95 @@ function KeyframeButton({
       <span aria-hidden="true">◇+</span>
     </button>
   );
+}
+
+function shouldUseKeyframeValueInteraction(
+  selected: SelectedSegmentView,
+  property: KeyframeProperty | undefined
+): property is KeyframeProperty {
+  return property !== undefined && selected.keyframes.some((keyframe) => keyframe.property === property);
+}
+
+function inspectorVisualInteractionPayload(
+  selected: SelectedSegmentView,
+  playheadAt: number,
+  state: VisualFormState,
+  property: KeyframeProperty | undefined
+): ProjectInteractionPayload | null {
+  if (shouldUseKeyframeValueInteraction(selected, property)) {
+    const keyframe = nearestKeyframeForProperty(selected, property, playheadAt);
+    const value = keyframeValueForVisualProperty(property, state);
+    if (keyframe === null || value === null) {
+      return null;
+    }
+    return {
+      kind: "keyframeEdit",
+      property,
+      at: keyframe.at,
+      fromAt: keyframe.at,
+      value,
+      interpolation: keyframe.interpolation,
+      easing: keyframe.easing
+    };
+  }
+
+  const patch = buildVisualPatchFromForm(state);
+  return patch === null ? null : { kind: "selectedSegmentVisual", patch };
+}
+
+function nearestKeyframeForProperty(
+  selected: SelectedSegmentView,
+  property: KeyframeProperty,
+  playheadAt: number
+): Keyframe | null {
+  const relativePlayhead = Math.max(
+    0,
+    Math.min(selected.targetTimerange.duration, playheadAt - selected.targetTimerange.start)
+  );
+  let nearest: Keyframe | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const keyframe of selected.keyframes) {
+    if (keyframe.property !== property) {
+      continue;
+    }
+    const distance = Math.abs(keyframe.at - relativePlayhead);
+    if (distance < nearestDistance) {
+      nearest = keyframe;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+function keyframeValueForVisualProperty(property: KeyframeProperty, state: VisualFormState): KeyframeValue | null {
+  switch (property) {
+    case "visualPositionX": {
+      const value = parseIntegerInRange(state.positionX, -1000, 1000);
+      return value === null ? null : { kind: "int", value };
+    }
+    case "visualPositionY": {
+      const value = parseIntegerInRange(state.positionY, -1000, 1000);
+      return value === null ? null : { kind: "int", value };
+    }
+    case "visualScaleX": {
+      const value = parseIntegerInRange(state.scaleXMillis, 1, 3000);
+      return value === null ? null : { kind: "uint", value };
+    }
+    case "visualScaleY": {
+      const value = parseIntegerInRange(state.scaleYMillis, 1, 3000);
+      return value === null ? null : { kind: "uint", value };
+    }
+    case "visualRotation": {
+      const value = parseIntegerInRange(state.rotationDegrees, -360, 360);
+      return value === null ? null : { kind: "int", value };
+    }
+    case "visualOpacity": {
+      const value = parseIntegerInRange(state.opacityMillis, 0, 1000);
+      return value === null ? null : { kind: "uint", value };
+    }
+    default:
+      return null;
+  }
 }
 
 function TextNumberField({
@@ -2017,13 +2114,17 @@ function isIntegerInRange(value: number, min: number, max: number): boolean {
 }
 
 function SegmentVisualControls({
+  selected,
   visual,
+  playheadAt,
   pending,
   renderKeyframeButton,
   projectInteractions,
   onUpdateVisual
 }: {
+  selected: SelectedSegmentView;
   visual: SegmentVisual;
+  playheadAt: number;
   pending: boolean;
   renderKeyframeButton: (property: KeyframeProperty, label: string) => React.ReactElement;
   projectInteractions: ProjectInteractionController;
@@ -2045,15 +2146,15 @@ function SegmentVisualControls({
   const validationMessage = validateVisualForm(visualState);
   const changed = patch !== null && visualPatchChangesVisual(visual, patch);
 
-function updateVisualField(
-  field: keyof VisualFormState,
-  value: string | boolean,
-  options: { provisional?: boolean } = {}
+  function updateVisualField(
+    field: keyof VisualFormState,
+    value: string | boolean,
+    options: { provisional?: boolean; keyframeProperty?: KeyframeProperty } = {}
   ): void {
     setVisualState((current) => {
       const next = { ...current, [field]: value };
       if (options.provisional) {
-        queueInspectorVisualUpdate(next);
+        queueInspectorVisualUpdate(next, options.keyframeProperty);
       }
       return next;
     });
@@ -2093,20 +2194,22 @@ function updateVisualField(
     });
   }
 
-  function beginInspectorVisualInteraction(): VisualInteractionState {
+  function beginInspectorVisualInteraction(property?: KeyframeProperty): VisualInteractionState {
     const existing = visualInteractionRef.current;
     if (existing !== null) {
       return existing;
     }
+    const kind = shouldUseKeyframeValueInteraction(selected, property) ? "keyframeEdit" : "selectedSegmentVisual";
     const interaction: VisualInteractionState = {
+      kind,
       interactionId: null,
       sequence: 0,
       beginPromise: Promise.resolve(),
       updateInFlight: false,
       rafId: null,
-      pendingPatch: null
+      pendingPayload: null
     };
-    interaction.beginPromise = projectInteractions.begin("selectedSegmentVisual").then((begin) => {
+    interaction.beginPromise = projectInteractions.begin(kind).then((begin) => {
       if (visualInteractionRef.current !== interaction || begin === null) {
         return;
       }
@@ -2117,13 +2220,16 @@ function updateVisualField(
     return interaction;
   }
 
-  function queueInspectorVisualUpdate(state: VisualFormState): void {
-    const nextPatch = buildVisualPatchFromForm(state);
-    if (nextPatch === null || validateVisualForm(state) !== null || pending) {
+  function queueInspectorVisualUpdate(state: VisualFormState, property?: KeyframeProperty): void {
+    const payload = inspectorVisualInteractionPayload(selected, playheadAt, state, property);
+    if (payload === null || validateVisualForm(state) !== null || pending) {
       return;
     }
-    const interaction = beginInspectorVisualInteraction();
-    interaction.pendingPatch = nextPatch;
+    const interaction = beginInspectorVisualInteraction(property);
+    if (interaction.kind !== payload.kind) {
+      return;
+    }
+    interaction.pendingPayload = payload;
     if (interaction.rafId !== null) {
       return;
     }
@@ -2134,17 +2240,14 @@ function updateVisualField(
   }
 
   function flushInspectorVisualUpdate(interaction: VisualInteractionState): void {
-    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPatch === null) {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPayload === null) {
       return;
     }
-    const nextPatch = interaction.pendingPatch;
-    interaction.pendingPatch = null;
+    const payload = interaction.pendingPayload;
+    interaction.pendingPayload = null;
     interaction.updateInFlight = true;
     interaction.sequence += 1;
-    void projectInteractions.update(interaction.interactionId, interaction.sequence, {
-      kind: "selectedSegmentVisual",
-      patch: nextPatch
-    }).then(() => {
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, payload).then(() => {
       interaction.updateInFlight = false;
       if (visualInteractionRef.current !== interaction) {
         return;
@@ -2166,9 +2269,9 @@ function updateVisualField(
     while (interaction.updateInFlight) {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     }
-    if (interaction.pendingPatch !== null) {
+    if (interaction.pendingPayload !== null) {
       flushInspectorVisualUpdate(interaction);
-      while (interaction.updateInFlight || interaction.pendingPatch !== null) {
+      while (interaction.updateInFlight || interaction.pendingPayload !== null) {
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
     }
@@ -2177,7 +2280,7 @@ function updateVisualField(
       return;
     }
     if (action === "commit") {
-      const nextPatch = buildVisualPatchFromForm(visualState);
+      const nextPatch = interaction.kind === "selectedSegmentVisual" ? buildVisualPatchFromForm(visualState) : null;
       if (nextPatch !== null) {
         visualCommitKeyRef.current = visualPatchKey(nextPatch);
       }
@@ -2209,13 +2312,14 @@ function updateVisualField(
         firstValue={visualState.positionX}
         secondValue={visualState.positionY}
         disabled={pending}
-        onFirstPreviewChange={(value) => updateVisualField("positionX", value, { provisional: true })}
-        onSecondPreviewChange={(value) => updateVisualField("positionY", value, { provisional: true })}
+        onFirstPreviewChange={(value) => updateVisualField("positionX", value, { provisional: true, keyframeProperty: "visualPositionX" })}
+        onSecondPreviewChange={(value) => updateVisualField("positionY", value, { provisional: true, keyframeProperty: "visualPositionY" })}
         onFirstValueChange={(value) => updateVisualFieldDraft("positionX", value)}
         onSecondValueChange={(value) => updateVisualFieldDraft("positionY", value)}
         onFirstCommit={commitVisualFieldEdit}
         onSecondCommit={commitVisualFieldEdit}
-        onInteractionStart={beginInspectorVisualInteraction}
+        onFirstInteractionStart={() => beginInspectorVisualInteraction("visualPositionX")}
+        onSecondInteractionStart={() => beginInspectorVisualInteraction("visualPositionY")}
         onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
         onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         firstAction={renderKeyframeButton("visualPositionX", "位置 X")}
@@ -2232,13 +2336,14 @@ function updateVisualField(
         firstValue={visualState.scaleXMillis}
         secondValue={visualState.scaleYMillis}
         disabled={pending}
-        onFirstPreviewChange={(value) => updateVisualField("scaleXMillis", value, { provisional: true })}
-        onSecondPreviewChange={(value) => updateVisualField("scaleYMillis", value, { provisional: true })}
+        onFirstPreviewChange={(value) => updateVisualField("scaleXMillis", value, { provisional: true, keyframeProperty: "visualScaleX" })}
+        onSecondPreviewChange={(value) => updateVisualField("scaleYMillis", value, { provisional: true, keyframeProperty: "visualScaleY" })}
         onFirstValueChange={(value) => updateVisualFieldDraft("scaleXMillis", value)}
         onSecondValueChange={(value) => updateVisualFieldDraft("scaleYMillis", value)}
         onFirstCommit={commitVisualFieldEdit}
         onSecondCommit={commitVisualFieldEdit}
-        onInteractionStart={beginInspectorVisualInteraction}
+        onFirstInteractionStart={() => beginInspectorVisualInteraction("visualScaleX")}
+        onSecondInteractionStart={() => beginInspectorVisualInteraction("visualScaleY")}
         onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
         onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         firstAction={renderKeyframeButton("visualScaleX", "缩放 X")}
@@ -2252,10 +2357,10 @@ function updateVisualField(
         step={1}
         value={visualState.rotationDegrees}
         disabled={pending}
-        onPreviewChange={(value) => updateVisualField("rotationDegrees", value, { provisional: true })}
+        onPreviewChange={(value) => updateVisualField("rotationDegrees", value, { provisional: true, keyframeProperty: "visualRotation" })}
         onValueChange={(value) => updateVisualFieldDraft("rotationDegrees", value)}
         onCommit={commitVisualFieldEdit}
-        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionStart={() => beginInspectorVisualInteraction("visualRotation")}
         onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
         onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         action={renderKeyframeButton("visualRotation", "旋转")}
@@ -2268,10 +2373,10 @@ function updateVisualField(
         step={10}
         value={visualState.opacityMillis}
         disabled={pending}
-        onPreviewChange={(value) => updateVisualField("opacityMillis", value, { provisional: true })}
+        onPreviewChange={(value) => updateVisualField("opacityMillis", value, { provisional: true, keyframeProperty: "visualOpacity" })}
         onValueChange={(value) => updateVisualFieldDraft("opacityMillis", value)}
         onCommit={commitVisualFieldEdit}
-        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionStart={() => beginInspectorVisualInteraction("visualOpacity")}
         onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
         onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         action={renderKeyframeButton("visualOpacity", "不透明度")}
@@ -2410,7 +2515,8 @@ function VisualPairControl({
   onSecondValueChange,
   onFirstCommit,
   onSecondCommit,
-  onInteractionStart,
+  onFirstInteractionStart,
+  onSecondInteractionStart,
   onInteractionCommit,
   onInteractionCancel,
   firstAction,
@@ -2431,7 +2537,8 @@ function VisualPairControl({
   onSecondValueChange: (value: string) => void;
   onFirstCommit: () => void;
   onSecondCommit: () => void;
-  onInteractionStart: () => void;
+  onFirstInteractionStart: () => void;
+  onSecondInteractionStart: () => void;
   onInteractionCommit: () => void;
   onInteractionCancel: () => void;
   firstAction?: ReactNode;
@@ -2452,7 +2559,7 @@ function VisualPairControl({
           onPreviewChange={onFirstPreviewChange}
           onValueChange={onFirstValueChange}
           onCommit={onFirstCommit}
-          onInteractionStart={onInteractionStart}
+          onInteractionStart={onFirstInteractionStart}
           onInteractionCommit={onInteractionCommit}
           onInteractionCancel={onInteractionCancel}
           action={firstAction}
@@ -2468,7 +2575,7 @@ function VisualPairControl({
           onPreviewChange={onSecondPreviewChange}
           onValueChange={onSecondValueChange}
           onCommit={onSecondCommit}
-          onInteractionStart={onInteractionStart}
+          onInteractionStart={onSecondInteractionStart}
           onInteractionCommit={onInteractionCommit}
           onInteractionCancel={onInteractionCancel}
           action={secondAction}

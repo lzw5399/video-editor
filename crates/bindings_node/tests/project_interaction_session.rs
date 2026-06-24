@@ -210,8 +210,11 @@ fn project_interaction_session_commit_revalidates_and_saves_once() {
 #[test]
 fn project_interaction_session_timeline_move_trim_validates_and_commits_once() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    let bundle_path = temp_dir.path().join("interaction-timeline-move-trim.veproj");
-    let revision = open_session_with_selected_segment(&bundle_path, "interaction-timeline-move-trim");
+    let bundle_path = temp_dir
+        .path()
+        .join("interaction-timeline-move-trim.veproj");
+    let revision =
+        open_session_with_selected_segment(&bundle_path, "interaction-timeline-move-trim");
 
     let invalid_begin = begin_project_interaction(json!({
         "sessionId": "interaction-timeline-move-trim",
@@ -298,7 +301,10 @@ fn project_interaction_session_timeline_move_trim_validates_and_commits_once() {
     assert_eq!(committed["ok"], true, "{committed:#}");
     assert_eq!(committed["data"]["revision"], revision + 1);
     assert_eq!(committed["data"]["delta"]["command"], "moveSegment");
-    assert_eq!(committed["data"]["viewModel"]["editControls"]["canUndo"], true);
+    assert_eq!(
+        committed["data"]["viewModel"]["editControls"]["canUndo"],
+        true
+    );
     let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
         .expect("committed move should save canonical project.json");
     assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 0);
@@ -341,7 +347,10 @@ fn project_interaction_session_timeline_move_trim_validates_and_commits_once() {
     assert_eq!(trimmed["ok"], true, "{trimmed:#}");
     assert_eq!(trimmed["data"]["revision"], trim_revision);
     assert_eq!(trimmed["data"]["revisionUnchanged"], true);
-    assert_eq!(trimmed["data"]["provisionalDelta"]["command"], "trimSegment");
+    assert_eq!(
+        trimmed["data"]["provisionalDelta"]["command"],
+        "trimSegment"
+    );
     assert_eq!(project_json_bytes(&bundle_path), before_trim_update);
 
     let trim_commit = commit_project_interaction(json!({
@@ -371,6 +380,218 @@ fn project_interaction_session_timeline_move_trim_validates_and_commits_once() {
     );
 
     close_project_session(json!({ "sessionId": "interaction-timeline-move-trim" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_interaction_session_keyframe_edit_updates_and_moves_segment_relative_keyframes() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("interaction-keyframe-edit.veproj");
+    let revision = open_session_with_selected_segment(&bundle_path, "interaction-keyframe-edit");
+
+    let begin = begin_keyframe_interaction("interaction-keyframe-edit", revision);
+    let interaction_id = begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let before_update = project_json_bytes(&bundle_path);
+
+    let updated = update_project_interaction(json!({
+        "sessionId": "interaction-keyframe-edit",
+        "expectedRevision": revision,
+        "interactionId": interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "keyframeEdit",
+            "property": "visualPositionX",
+            "at": 400_000,
+            "value": { "kind": "int", "value": 120 },
+            "interpolation": "linear",
+            "easing": "none"
+        }
+    }))
+    .expect("keyframe update should return an envelope");
+    assert_eq!(updated["ok"], true, "{updated:#}");
+    assert_eq!(updated["data"]["kind"], "keyframeEdit");
+    assert_eq!(updated["data"]["revision"], revision);
+    assert_eq!(updated["data"]["revisionUnchanged"], true);
+    assert_eq!(
+        updated["data"]["provisionalDelta"]["command"],
+        "setSegmentKeyframe"
+    );
+    assert_eq!(
+        updated["data"]["provisionalViewModel"]["selectedSegment"]["keyframes"][0]["at"],
+        400_000
+    );
+    assert_eq!(
+        project_json_bytes(&bundle_path),
+        before_update,
+        "keyframe interaction update must not save project.json"
+    );
+
+    let committed = commit_project_interaction(json!({
+        "sessionId": "interaction-keyframe-edit",
+        "expectedRevision": revision,
+        "interactionId": updated["data"]["interactionId"]
+    }))
+    .expect("keyframe commit should return an envelope");
+    assert_eq!(committed["ok"], true, "{committed:#}");
+    assert_eq!(committed["data"]["revision"], revision + 1);
+    assert_eq!(committed["data"]["acceptedSequence"], 1);
+    assert_eq!(committed["data"]["delta"]["command"], "setSegmentKeyframe");
+    assert_eq!(
+        committed["data"]["viewModel"]["editControls"]["canUndo"],
+        true
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("committed keyframe should save canonical project.json");
+    let keyframes = &reopened.bundle.draft.tracks[0].segments[0].keyframes;
+    assert_eq!(keyframes.len(), 1);
+    assert_eq!(keyframes[0].at.get(), 400_000);
+    assert_eq!(
+        serde_json::to_value(&keyframes[0].value).expect("keyframe value should serialize"),
+        json!({ "kind": "int", "value": 120 })
+    );
+
+    let move_revision = committed["data"]["revision"]
+        .as_u64()
+        .expect("commit should return revision");
+    let move_begin = begin_keyframe_interaction("interaction-keyframe-edit", move_revision);
+    let move_interaction_id = move_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let moved = update_project_interaction(json!({
+        "sessionId": "interaction-keyframe-edit",
+        "expectedRevision": move_revision,
+        "interactionId": move_interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "keyframeEdit",
+            "property": "visualPositionX",
+            "fromAt": 400_000,
+            "at": 700_000
+        }
+    }))
+    .expect("keyframe marker move should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+    assert_eq!(moved["data"]["revisionUnchanged"], true);
+    let move_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-keyframe-edit",
+        "expectedRevision": move_revision,
+        "interactionId": moved["data"]["interactionId"]
+    }))
+    .expect("keyframe marker move commit should return an envelope");
+    assert_eq!(move_commit["ok"], true, "{move_commit:#}");
+    let reopened_move = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("moved keyframe should save canonical project.json");
+    let moved_keyframes = &reopened_move.bundle.draft.tracks[0].segments[0].keyframes;
+    assert_eq!(
+        moved_keyframes.len(),
+        1,
+        "marker drag should move, not copy"
+    );
+    assert_eq!(moved_keyframes[0].at.get(), 700_000);
+    assert_eq!(
+        serde_json::to_value(&moved_keyframes[0].value).expect("keyframe value should serialize"),
+        json!({ "kind": "int", "value": 120 })
+    );
+
+    let duplicate_revision = move_commit["data"]["revision"]
+        .as_u64()
+        .expect("move commit should return revision");
+    add_keyframe_via_interaction(
+        "interaction-keyframe-edit",
+        duplicate_revision,
+        "visualPositionX",
+        800_000,
+        json!({ "kind": "int", "value": 240 }),
+    );
+    let duplicate_revision = duplicate_revision + 1;
+    let duplicate_begin =
+        begin_keyframe_interaction("interaction-keyframe-edit", duplicate_revision);
+    let duplicate_interaction_id = duplicate_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let duplicate = update_project_interaction(json!({
+        "sessionId": "interaction-keyframe-edit",
+        "expectedRevision": duplicate_revision,
+        "interactionId": duplicate_interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "keyframeEdit",
+            "property": "visualPositionX",
+            "fromAt": 700_000,
+            "at": 800_000
+        }
+    }))
+    .expect("duplicate keyframe marker move should return an envelope");
+    assert_eq!(duplicate["ok"], false, "{duplicate:#}");
+    assert!(
+        duplicate["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("duplicate keyframe")
+    );
+
+    close_project_session(json!({ "sessionId": "interaction-keyframe-edit" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_interaction_session_removes_nearest_keyframe_without_exact_playhead_match() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir
+        .path()
+        .join("interaction-keyframe-nearest-delete.veproj");
+    let revision =
+        open_session_with_selected_segment(&bundle_path, "interaction-keyframe-nearest-delete");
+    add_keyframe_via_interaction(
+        "interaction-keyframe-nearest-delete",
+        revision,
+        "visualOpacity",
+        0,
+        json!({ "kind": "uint", "value": 700 }),
+    );
+    let revision = revision + 1;
+
+    let playhead = execute_project_intent(json!({
+        "sessionId": "interaction-keyframe-nearest-delete",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "setSessionPlayhead",
+            "playhead": 120_000
+        }
+    }))
+    .expect("setSessionPlayhead should return an envelope");
+    assert_eq!(playhead["ok"], true, "{playhead:#}");
+    assert_eq!(playhead["data"]["revision"], revision);
+
+    let removed = execute_project_intent(json!({
+        "sessionId": "interaction-keyframe-nearest-delete",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "removeSelectedSegmentKeyframe",
+            "property": "visualOpacity"
+        }
+    }))
+    .expect("nearest keyframe remove should return an envelope");
+    assert_eq!(removed["ok"], true, "{removed:#}");
+    assert_eq!(removed["data"]["revision"], revision + 1);
+    assert_eq!(removed["data"]["delta"]["command"], "removeSegmentKeyframe");
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("removed keyframe should save canonical project.json");
+    assert!(
+        reopened.bundle.draft.tracks[0].segments[0]
+            .keyframes
+            .is_empty(),
+        "near-but-not-exact delete should remove the focused property keyframe"
+    );
+
+    close_project_session(json!({ "sessionId": "interaction-keyframe-nearest-delete" }))
         .expect("closeProjectSession should return an envelope");
 }
 
@@ -471,6 +692,55 @@ fn begin_visual_interaction(session_id: &str, revision: u64) -> Value {
     .expect("beginProjectInteraction should return an envelope");
     assert_eq!(begin["ok"], true, "{begin:#}");
     begin
+}
+
+fn begin_keyframe_interaction(session_id: &str, revision: u64) -> Value {
+    let begin = begin_project_interaction(json!({
+        "sessionId": session_id,
+        "expectedRevision": revision,
+        "kind": "keyframeEdit"
+    }))
+    .expect("beginProjectInteraction should return an envelope");
+    assert_eq!(begin["ok"], true, "{begin:#}");
+    begin
+}
+
+fn add_keyframe_via_interaction(
+    session_id: &str,
+    revision: u64,
+    property: &str,
+    at: u64,
+    value: Value,
+) -> Value {
+    let begin = begin_keyframe_interaction(session_id, revision);
+    let interaction_id = begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let updated = update_project_interaction(json!({
+        "sessionId": session_id,
+        "expectedRevision": revision,
+        "interactionId": interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "keyframeEdit",
+            "property": property,
+            "at": at,
+            "value": value,
+            "interpolation": "linear",
+            "easing": "none"
+        }
+    }))
+    .expect("keyframe update should return an envelope");
+    assert_eq!(updated["ok"], true, "{updated:#}");
+    let committed = commit_project_interaction(json!({
+        "sessionId": session_id,
+        "expectedRevision": revision,
+        "interactionId": updated["data"]["interactionId"]
+    }))
+    .expect("keyframe commit should return an envelope");
+    assert_eq!(committed["ok"], true, "{committed:#}");
+    committed
 }
 
 fn project_json_bytes(bundle_path: &std::path::Path) -> Vec<u8> {

@@ -17,6 +17,7 @@ pub fn set_segment_keyframe(
     command_state: &CommandState,
     selection: &TimelineSelection,
     segment_id: SegmentId,
+    replace_at: Option<Microseconds>,
     keyframe: Keyframe,
 ) -> Result<TimelineCommandResponse, TimelineCommandError> {
     let mut next_draft = draft.clone();
@@ -26,6 +27,37 @@ pub fn set_segment_keyframe(
     let at = keyframe.at;
 
     let segment_keyframes = &mut next_draft.tracks[track_index].segments[segment_index].keyframes;
+    if let Some(replace_at) = replace_at.filter(|replace_at| *replace_at != keyframe.at) {
+        if segment_keyframes
+            .iter()
+            .any(|existing| existing.property == keyframe.property && existing.at == keyframe.at)
+        {
+            return Err(TimelineCommandError::new(
+                TimelineCommandErrorKind::DraftValidationFailed {
+                    message: format!(
+                        "duplicate keyframe for {:?} at {}",
+                        keyframe.property,
+                        keyframe.at.get()
+                    ),
+                },
+            ));
+        }
+        let Some(index) = segment_keyframes.iter().position(|existing| {
+            existing.property == keyframe.property && existing.at == replace_at
+        }) else {
+            return Err(TimelineCommandError::new(
+                TimelineCommandErrorKind::DraftValidationFailed {
+                    message: format!(
+                        "source keyframe {:?} at {} not found on segment {:?}",
+                        keyframe.property,
+                        replace_at.get(),
+                        segment_id
+                    ),
+                },
+            ));
+        };
+        segment_keyframes.remove(index);
+    }
     if let Some(existing) = segment_keyframes
         .iter_mut()
         .find(|existing| existing.property == keyframe.property && existing.at == keyframe.at)
