@@ -88,6 +88,9 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     await expect(page.getByText("资源缺失，相关片段已跳过")).toBeVisible();
     await expectTemplateReportRows(page, ["missingResource", "dropped"]);
     await expectTemplateStatusRowsUseDistinctBorders(page, ["missingResource", "dropped"]);
+    await clickTemplateReportRow(page, "missingResource", /资源缺失/);
+    await expectTemplateReportFocusState(page, /仅查看报告/);
+    await expectNoSelectedTimelineSegment(page);
 
     await importTemplateThroughProductPanel(app, page);
     await expectTemplateReportSummary(page, {
@@ -101,6 +104,10 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     await expect(page.getByText("字体已使用本地替代")).toBeVisible();
     await expect(page.getByText("文字效果未写入草稿")).toBeVisible();
     await expectTemplateReportRows(page, ["dropped", "approximated", "supported"]);
+    await clickTemplateReportRow(page, "supported", /文本已接入本地草稿/);
+    await expectTemplateReportFocusState(page, /已定位/);
+    await expectSelectedTimelineSegment(page, { targetStartUs: 600_000 });
+    await expectLatestPreviewSeek(app, 600_000);
 
     await importTemplateThroughProductPanel(app, page);
     await expectTemplateReportSummary(page, {
@@ -114,6 +121,19 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     await expect(page.getByText("片段已跳过")).toBeVisible();
     await expectTemplateReportRows(page, ["needsNativeEffect", "dropped", "supported", "supported"]);
     await expectTemplateStatusRowsUseDistinctBorders(page, ["needsNativeEffect", "dropped", "supported"]);
+    await clickTemplateReportRow(page, "needsNativeEffect", /本地效果能力待补齐/);
+    await expectTemplateReportFocusState(page, /仅查看报告/);
+    await expectSelectedTimelineSegment(page, { targetStartUs: 600_000 });
+    const seekCountBeforeRapidNavigation = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek").length;
+    await navigateTemplateReportRowsWithKeyboard(page, 3);
+    await expectTemplateReportFocusState(page, /已定位/);
+    await expectSelectedTimelineSegment(page, { targetStartUs: 0 });
+    await expectLatestPreviewSeek(app, 0);
+    const seekCountAfterRapidNavigation = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek").length;
+    expect(
+      seekCountAfterRapidNavigation - seekCountBeforeRapidNavigation,
+      "rapid report row navigation should coalesce preview seeks instead of seeking every intermediate row"
+    ).toBeLessThanOrEqual(2);
 
     const reportText = (await page.getByLabel("模板适配报告").textContent()) ?? "";
     for (const forbidden of FORBIDDEN_REPORT_COPY) {
@@ -332,6 +352,62 @@ async function expectTemplateReportRows(page: Page, expectedStatuses: string[]):
     })
   );
   expect(actualStatuses).toEqual(expectedStatuses);
+}
+
+async function clickTemplateReportRow(page: Page, status: string, label: RegExp): Promise<void> {
+  const panel = page.getByLabel("模板适配报告");
+  const row = panel.locator(`.template-report-row.status-${status}`).filter({ hasText: label }).first();
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(row).toHaveAttribute("aria-current", "true");
+}
+
+async function navigateTemplateReportRowsWithKeyboard(page: Page, arrowDownCount: number): Promise<void> {
+  const panel = page.getByLabel("模板适配报告");
+  const firstRow = panel.locator(".template-report-row").first();
+  await expect(firstRow).toBeVisible();
+  await firstRow.focus();
+  for (let index = 0; index < arrowDownCount; index += 1) {
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(panel.locator(".template-report-row").nth(arrowDownCount)).toHaveAttribute("aria-current", "true");
+}
+
+async function expectTemplateReportFocusState(page: Page, label: RegExp): Promise<void> {
+  await expect(page.getByLabel("模板报告定位状态").getByText(label)).toBeVisible({ timeout: 10_000 });
+}
+
+async function expectNoSelectedTimelineSegment(page: Page): Promise<void> {
+  await expect
+    .poll(async () => (await readTimelineSegments(page)).filter((segment) => segment.selected).length, { timeout: 10_000 })
+    .toBe(0);
+}
+
+async function expectSelectedTimelineSegment(
+  page: Page,
+  expected: { targetStartUs: number }
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const selected = (await readTimelineSegments(page)).find((segment) => segment.selected);
+        return selected?.targetStartUs ?? null;
+      },
+      { timeout: 10_000 }
+    )
+    .toBe(expected.targetStartUs);
+}
+
+async function expectLatestPreviewSeek(app: ProductJourneyAppController, targetTimeMicroseconds: number): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        (await readRealtimePreviewHostCalls(app))
+          .filter((call) => call.kind === "seek")
+          .at(-1)?.targetTimeMicroseconds ?? null,
+      { timeout: 10_000 }
+    )
+    .toBe(targetTimeMicroseconds);
 }
 
 async function expectTemplateStatusRowsUseDistinctBorders(page: Page, statuses: string[]): Promise<void> {
