@@ -158,7 +158,7 @@ fn template_import_exports_render_fixture_outputs_with_report_evidence() -> Rend
             .join("exports")
             .join(format!("{}.mp4", case.family));
         let export_job = compile_export_job(
-            &imported.draft,
+            &imported.export_draft,
             &capabilities,
             &export_path,
             case.sample_time_us,
@@ -210,6 +210,7 @@ fn import_fixture(
     let bundle_path = case_root.join("imported.veproj");
     let source_root = case_root.join("source");
     fs::create_dir_all(&source_root)?;
+    fs::create_dir_all(&bundle_path)?;
 
     let value = read_fixture_value(case.input_path)?;
     seed_fixture_resources(&value, &source_root, executor, runtime)?;
@@ -242,6 +243,7 @@ fn import_fixture(
     let project_json = fs::read_to_string(saved.project_json_path)?;
 
     Ok(ImportedFixture {
+        export_draft: draft_with_resolved_resource_uris(&applied.draft, &bundle_path),
         draft: applied.draft,
         report: applied.report,
         project_json,
@@ -250,8 +252,22 @@ fn import_fixture(
 
 struct ImportedFixture {
     draft: Draft,
+    export_draft: Draft,
     report: draft_import::AdaptationReport,
     project_json: String,
+}
+
+fn draft_with_resolved_resource_uris(draft: &Draft, bundle_path: &Path) -> Draft {
+    let mut draft = draft.clone();
+    for material in &mut draft.materials {
+        if material.uri.starts_with("resources/") {
+            material.uri = bundle_path
+                .join(&material.uri)
+                .to_string_lossy()
+                .into_owned();
+        }
+    }
+    draft
 }
 
 fn compile_export_job(
@@ -313,7 +329,12 @@ fn run_export_to_completion(
     .with_expected_duration_microseconds(EXPORT_DURATION_US)
     .with_timeout(Duration::from_secs(90));
     let export_result = run_export_job(&runtime_job, &CancelToken::new(), |_| {})
-        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+        .map_err(|error| {
+            RenderCompareError::Runtime(format!(
+                "{error}; stderr={:?}; stdout={:?}",
+                error.stderr_summary, error.stdout_summary
+            ))
+        })?;
     if export_result.state != FfmpegJobState::Completed {
         return Err(RenderCompareError::Assertion(format!(
             "expected export job to complete, got {:?}",
@@ -590,7 +611,7 @@ fn generate_video_fixture(
             "lavfi",
             "-i",
             &format!(
-                "color=c={color}:size=320x568:rate={EXPECTED_FPS}:duration={GENERATED_MEDIA_SECONDS}"
+                "color=c={color}:size={EXPECTED_WIDTH}x{EXPECTED_HEIGHT}:rate={EXPECTED_FPS}:duration={GENERATED_MEDIA_SECONDS}"
             ),
             "-f",
             "lavfi",
@@ -649,7 +670,7 @@ fn generate_image_fixture(
             "-f",
             "lavfi",
             "-i",
-            &format!("color=c={color}:size=320x568:duration=1"),
+            &format!("color=c={color}:size={EXPECTED_WIDTH}x{EXPECTED_HEIGHT}:duration=1"),
             "-frames:v",
             "1",
         ],

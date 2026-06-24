@@ -2537,13 +2537,16 @@ dependencies = [
 name = "testkit"
 version = "0.1.0"
 dependencies = [
+ "adapter_kaipai",
  "audio_engine",
+ "draft_import",
  "draft_model",
  "engine_core",
  "ffmpeg_compiler",
  "media_runtime",
  "media_runtime_desktop",
  "preview_service",
+ "project_store",
  "realtime_preview_runtime",
  "render_graph",
  "serde",

@@ -34,7 +34,7 @@ fn offline_mapper_maps_main_video_to_provider_neutral_import_plan() {
     assert_localized_ref(&material.uri);
     assert_eq!(
         material.metadata.duration,
-        Some(Microseconds::new(6_000_000))
+        Some(Microseconds::new(7_000_000))
     );
     assert_eq!(material.metadata.width, Some(1080));
     assert_eq!(material.metadata.height, Some(1920));
@@ -79,6 +79,14 @@ fn offline_mapper_maps_main_video_to_provider_neutral_import_plan() {
 fn offline_mapper_maps_pip_sticker_text_audio_and_reports_degradations() {
     let pip = map_fixture("positive/pip-overlay.json", "offline-pip-overlay");
     validate_import_plan(&pip.plan).expect("mapped PIP plan should validate");
+    let pip_material = pip
+        .plan
+        .materials
+        .iter()
+        .find(|material| material.material.material_id.as_str() == "material-pip-overlay")
+        .expect("PIP material should exist");
+    assert_eq!(pip_material.material.metadata.width, Some(1080));
+    assert_eq!(pip_material.material.metadata.height, Some(1920));
     assert_eq!(
         pip.plan
             .tracks

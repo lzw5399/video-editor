@@ -338,6 +338,26 @@ impl<'a> MapperState<'a> {
             MaterialKind::Video | MaterialKind::Image | MaterialKind::Sticker
         );
         let has_audio = matches!(kind, MaterialKind::Video | MaterialKind::Audio);
+        let width = if has_video {
+            self.context
+                .bundle
+                .source_media
+                .width
+                .filter(|_| self.context.bundle.source_media.resource_id == material_id)
+                .or(Some(canvas_config.width))
+        } else {
+            None
+        };
+        let height = if has_video {
+            self.context
+                .bundle
+                .source_media
+                .height
+                .filter(|_| self.context.bundle.source_media.resource_id == material_id)
+                .or(Some(canvas_config.height))
+        } else {
+            None
+        };
         self.materials.push(ImportMaterialPlan {
             material: Material {
                 material_id: material_id.to_owned().into(),
@@ -346,24 +366,8 @@ impl<'a> MapperState<'a> {
                 display_name,
                 metadata: MaterialMetadata {
                     duration,
-                    width: if has_video {
-                        self.context
-                            .bundle
-                            .source_media
-                            .width
-                            .filter(|_| self.context.bundle.source_media.resource_id == material_id)
-                    } else {
-                        None
-                    },
-                    height: if has_video {
-                        self.context
-                            .bundle
-                            .source_media
-                            .height
-                            .filter(|_| self.context.bundle.source_media.resource_id == material_id)
-                    } else {
-                        None
-                    },
+                    width,
+                    height,
                     frame_rate: if has_video {
                         Some(canvas_config.frame_rate.clone())
                     } else {
@@ -438,7 +442,7 @@ impl<'a> MapperState<'a> {
                 optional_u64_field(clip, "durationMsWithSpeed").unwrap_or(source_duration);
             self.ensure_resource_material(
                 resource_id,
-                Some(ms_to_us(source_duration)),
+                Some(ms_to_us(source_end)),
                 canvas_config,
             );
             if !self.material_ids.contains(resource_id) {

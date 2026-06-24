@@ -97,7 +97,9 @@ fn template_import_preview_uses_realtime_render_graph_without_fallback_evidence(
         );
         assert_no_realtime_fallback_evidence(case.family, &report);
         assert!(
-            !prepared.graph.video_layers.is_empty() || !prepared.graph.audio_mixes.is_empty(),
+            !prepared.graph.video_layers.is_empty()
+                || !prepared.graph.text_overlays.is_empty()
+                || !prepared.graph.audio_mixes.is_empty(),
             "{} imported fixture should produce render-graph preview work",
             case.family
         );
@@ -200,6 +202,7 @@ fn import_fixture(
     let bundle_path = case_root.join("imported.veproj");
     let source_root = case_root.join("source");
     fs::create_dir_all(&source_root).expect("source root should create");
+    fs::create_dir_all(&bundle_path).expect("bundle path should create before localization");
 
     let value = read_fixture_value(case.input_path);
     seed_fixture_resources(&value, &source_root, executor, runtime);
@@ -337,7 +340,7 @@ fn generate_video_fixture(
             "-f",
             "lavfi",
             "-i",
-            &format!("color=c={color}:size=320x568:rate=30:duration={GENERATED_MEDIA_SECONDS}"),
+            &format!("color=c={color}:size=1080x1920:rate=30:duration={GENERATED_MEDIA_SECONDS}"),
             "-f",
             "lavfi",
             "-i",
@@ -395,7 +398,7 @@ fn generate_image_fixture(
             "-f",
             "lavfi",
             "-i",
-            &format!("color=c={color}:size=320x568:duration=1"),
+            &format!("color=c={color}:size=1080x1920:duration=1"),
             "-frames:v",
             "1",
         ],
