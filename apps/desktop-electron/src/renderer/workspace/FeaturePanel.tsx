@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent
+} from "react";
 
 import type { Material } from "../../generated/Draft";
 import type {
@@ -62,6 +70,7 @@ type FeaturePanelProps = {
     fadeOutDuration: number;
   }) => void;
   onSetSelectedTrackMute: (itemHandle: string, muted: boolean) => void;
+  onNavigateTemplateReportItem: (target: TemplateReportRowNavigationTarget) => void;
 };
 
 type MaterialFilter = "全部" | "视频" | "图片" | "音频" | "丢失";
@@ -89,6 +98,28 @@ type AudioPanelInteractionState = {
   updateInFlight: boolean;
   rafId: number | null;
   pendingOptions: AudioPanelOptions | null;
+};
+export type TemplateReportRowNavigationTarget =
+  | {
+      kind: "timeline";
+      itemHandle: string;
+      targetTime: number | null;
+      label: string;
+    }
+  | {
+      kind: "material";
+      materialId: string;
+      label: string;
+    }
+  | {
+      kind: "reportOnly";
+      label: string;
+    };
+
+type TemplateReportFocusState = {
+  rowKey: string;
+  label: string;
+  navigable: boolean;
 };
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
@@ -207,8 +238,10 @@ const TEMPLATE_REPORT_TARGET_LABELS: Record<AdaptationTargetKind, string> = {
 function TemplatePanel({
   workspace,
   templateImportReport,
-  onImportTemplateBundle
+  onImportTemplateBundle,
+  onNavigateTemplateReportItem
 }: FeaturePanelProps): React.ReactElement {
+  const [focusState, setFocusState] = useState<TemplateReportFocusState | null>(null);
   const pending = workspace.pendingCommand !== null;
   const importingTemplate = workspace.pendingCommand === "导入模板";
   const templateImportFailed = !importingTemplate && templateImportReport === null && workspace.commandError !== null;
@@ -229,6 +262,20 @@ function TemplatePanel({
     : templateImportFailed
       ? "导入未完成，请重新选择离线模板文件和资源目录。"
       : "选择离线模板文件和资源目录后显示适配结果。";
+  useEffect(() => {
+    setFocusState(null);
+  }, [templateImportReport]);
+
+  function navigateReportItem(item: AdaptationReportItem, index: number): void {
+    const rowKey = templateReportRowKey(item, index);
+    const target = templateReportNavigationTarget(item, workspace);
+    setFocusState({
+      rowKey,
+      label: target.label,
+      navigable: target.kind !== "reportOnly"
+    });
+    onNavigateTemplateReportItem(target);
+  }
 
   return (
     <div className="feature-panel-content template-feature-panel">
@@ -266,9 +313,32 @@ function TemplatePanel({
           <>
             <div className="template-report-list" aria-label="适配条目">
               {reportItems.map((item, index) => (
-                <TemplateReportRow item={item} key={`${item.status}-${item.category}-${index}`} />
+                <TemplateReportRow
+                  focused={focusState?.rowKey === templateReportRowKey(item, index)}
+                  item={item}
+                  itemIndex={index}
+                  key={templateReportRowKey(item, index)}
+                  onNavigate={navigateReportItem}
+                />
               ))}
             </div>
+            <p
+              className={
+                focusState === null
+                  ? "template-report-focus-state"
+                  : focusState.navigable
+                    ? "template-report-focus-state is-navigable"
+                    : "template-report-focus-state is-report-only"
+              }
+              aria-label="模板报告定位状态"
+              aria-live="polite"
+            >
+              {focusState === null
+                ? "选择适配条目后显示定位状态。"
+                : focusState.navigable
+                  ? `已定位：${focusState.label}`
+                  : `仅查看报告：${focusState.label}`}
+            </p>
             <p className="template-report-count">共 {templateImportReport.items.length} 条适配记录</p>
           </>
         )}
@@ -277,9 +347,48 @@ function TemplatePanel({
   );
 }
 
-function TemplateReportRow({ item }: { item: AdaptationReportItem }): React.ReactElement {
+function TemplateReportRow({
+  focused,
+  item,
+  itemIndex,
+  onNavigate
+}: {
+  focused: boolean;
+  item: AdaptationReportItem;
+  itemIndex: number;
+  onNavigate: (item: AdaptationReportItem, index: number) => void;
+}): React.ReactElement {
+  function handleKeyboardNavigation(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    const rows = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(".template-report-row") ?? []
+    );
+    const currentIndex = rows.indexOf(event.currentTarget);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = Math.max(0, Math.min(rows.length - 1, currentIndex + direction));
+      rows[nextIndex]?.focus();
+      rows[nextIndex]?.click();
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const nextIndex = event.key === "Home" ? 0 : rows.length - 1;
+      rows[nextIndex]?.focus();
+      rows[nextIndex]?.click();
+      return;
+    }
+  }
+
   return (
-    <article className={`template-report-row status-${item.status}`} aria-label={`适配条目 ${TEMPLATE_REPORT_STATUS_LABELS[item.status]}`}>
+    <button
+      type="button"
+      className={`template-report-row status-${item.status}`}
+      aria-current={focused ? "true" : undefined}
+      aria-label={`适配条目 ${TEMPLATE_REPORT_STATUS_LABELS[item.status]}`}
+      onClick={() => onNavigate(item, itemIndex)}
+      onKeyDown={handleKeyboardNavigation}
+    >
       <span className="template-report-row-status">
         <span className="template-report-status-dot" aria-hidden="true" />
         <span>{TEMPLATE_REPORT_STATUS_LABELS[item.status]}</span>
@@ -291,8 +400,83 @@ function TemplateReportRow({ item }: { item: AdaptationReportItem }): React.Reac
           {item.target?.kind === undefined ? "" : ` · ${TEMPLATE_REPORT_TARGET_LABELS[item.target.kind]}`}
         </span>
       </div>
-    </article>
+    </button>
   );
+}
+
+function templateReportRowKey(item: AdaptationReportItem, index: number): string {
+  return [
+    item.status,
+    item.category,
+    item.target?.kind ?? "none",
+    item.target?.id ?? "none",
+    index.toString()
+  ].join(":");
+}
+
+function templateReportNavigationTarget(
+  item: AdaptationReportItem,
+  workspace: WorkspaceState
+): TemplateReportRowNavigationTarget {
+  const target = item.target;
+  const targetId = target?.id?.trim() ?? "";
+  if (target === undefined || target === null || targetId.length === 0) {
+    return { kind: "reportOnly", label: templateReportItemCopy(item) };
+  }
+
+  const timelineSegmentTargetKinds: readonly AdaptationTargetKind[] = ["segment", "text", "sticker", "audio"];
+  if (timelineSegmentTargetKinds.includes(target.kind)) {
+    for (const row of workspace.viewModel.timeline.rows) {
+      const segment = row.segments.find((candidate) => candidate.segmentKey === targetId);
+      if (segment !== undefined) {
+        return {
+          kind: "timeline",
+          itemHandle: segment.selectionHandle,
+          targetTime: segment.start,
+          label: `${TEMPLATE_REPORT_TARGET_LABELS[target.kind]} ${segment.label}`
+        };
+      }
+    }
+  }
+
+  if (target.kind === "track") {
+    const row = workspace.viewModel.timeline.rows.find(
+      (candidate) => timelineHandleLastComponent(candidate.selectionHandle) === targetId
+    );
+    if (row !== undefined) {
+      return {
+        kind: "timeline",
+        itemHandle: row.selectionHandle,
+        targetTime: row.segments[0]?.start ?? null,
+        label: `轨道 ${row.name}`
+      };
+    }
+  }
+
+  if (target.kind === "material" || target.kind === "resource" || target.kind === "font") {
+    const material = workspace.materials.find((candidate) => candidate.materialId === targetId);
+    if (material !== undefined) {
+      return {
+        kind: "material",
+        materialId: material.materialId,
+        label: `素材 ${material.displayName}`
+      };
+    }
+  }
+
+  return { kind: "reportOnly", label: templateReportItemCopy(item) };
+}
+
+function timelineHandleLastComponent(handle: string): string | null {
+  const component = handle.split(":").at(-1);
+  if (component === undefined || component.length === 0) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(component);
+  } catch {
+    return null;
+  }
 }
 
 function templateReportItemCopy(item: AdaptationReportItem): string {

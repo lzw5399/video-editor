@@ -123,7 +123,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     await expectTemplateStatusRowsUseDistinctBorders(page, ["needsNativeEffect", "dropped", "supported"]);
     await clickTemplateReportRow(page, "needsNativeEffect", /本地效果能力待补齐/);
     await expectTemplateReportFocusState(page, /仅查看报告/);
-    await expectSelectedTimelineSegment(page, { targetStartUs: 600_000 });
+    await expectNoSelectedTimelineSegment(page);
     const seekCountBeforeRapidNavigation = (await readRealtimePreviewHostCalls(app)).filter((call) => call.kind === "seek").length;
     await navigateTemplateReportRowsWithKeyboard(page, 3);
     await expectTemplateReportFocusState(page, /已定位/);

@@ -91,6 +91,7 @@ import {
   type WorkspaceState
 } from "./viewModel";
 import { WorkspaceShell } from "./workspace/WorkspaceShell";
+import type { TemplateReportRowNavigationTarget } from "./workspace/FeaturePanel";
 import type { RealtimePreviewHostState } from "./workspace/PreviewMonitor";
 import type { ProjectInteractionController } from "./workspace/projectInteraction";
 
@@ -278,6 +279,9 @@ export function App(): React.ReactElement {
   const realtimePreviewSnapshotRef = useRef<RealtimePreviewProjectSessionSnapshotKey | null>(null);
   const realtimePreviewLastSeekTargetRef = useRef<number | null>(null);
   const activeProjectInteractionRef = useRef<ActiveProjectInteractionClientState | null>(null);
+  const pendingTemplateReportNavigationRef = useRef<TemplateReportRowNavigationTarget | null>(null);
+  const templateReportNavigationTimerRef = useRef<number | null>(null);
+  const templateReportNavigationRunningRef = useRef(false);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -286,6 +290,15 @@ export function App(): React.ReactElement {
   useEffect(() => {
     playheadRef.current = playheadUs;
   }, [playheadUs]);
+
+  useEffect(
+    () => () => {
+      if (templateReportNavigationTimerRef.current !== null) {
+        window.clearTimeout(templateReportNavigationTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -785,6 +798,79 @@ export function App(): React.ReactElement {
     }
 
     return result;
+  }
+
+  function handleNavigateTemplateReportItem(target: TemplateReportRowNavigationTarget): void {
+    if (target.kind === "reportOnly") {
+      return;
+    }
+    if (target.kind === "material") {
+      setActiveCategory("媒体");
+      return;
+    }
+
+    pendingTemplateReportNavigationRef.current = target;
+    scheduleTemplateReportNavigationFlush();
+  }
+
+  function scheduleTemplateReportNavigationFlush(): void {
+    if (templateReportNavigationTimerRef.current !== null) {
+      return;
+    }
+    templateReportNavigationTimerRef.current = window.setTimeout(() => {
+      templateReportNavigationTimerRef.current = null;
+      void flushTemplateReportNavigation();
+    }, 40);
+  }
+
+  async function flushTemplateReportNavigation(): Promise<void> {
+    if (templateReportNavigationRunningRef.current) {
+      return;
+    }
+    templateReportNavigationRunningRef.current = true;
+    try {
+      while (pendingTemplateReportNavigationRef.current !== null) {
+        const target = pendingTemplateReportNavigationRef.current;
+        pendingTemplateReportNavigationRef.current = null;
+        if (target.kind !== "timeline") {
+          if (target.kind === "material") {
+            setActiveCategory("媒体");
+          }
+          continue;
+        }
+
+        const selected = await executeProjectSessionIntent<ProjectSessionTimelineIntentResponse>(
+          {
+            kind: "selectTimelineItemIntent",
+            itemHandle: target.itemHandle
+          },
+          "定位模板报告",
+          applyProjectSessionTimelineResult
+        );
+        if (selected === null || !selected.ok || selected.data === null || target.targetTime === null) {
+          continue;
+        }
+        await seekTemplateReportNavigationTarget(target.targetTime);
+      }
+    } finally {
+      templateReportNavigationRunningRef.current = false;
+      if (pendingTemplateReportNavigationRef.current !== null) {
+        scheduleTemplateReportNavigationFlush();
+      }
+    }
+  }
+
+  async function seekTemplateReportNavigationTarget(targetTime: number): Promise<void> {
+    const normalizedTarget = normalizePlayheadTime(targetTime);
+    setPlaybackRunning(false);
+    setPlayheadUs(normalizedTarget);
+    playheadRef.current = normalizedTarget;
+    await syncProjectSessionPlayhead(normalizedTarget, "定位模板报告播放头", { reportBusy: false });
+    const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot();
+    if (snapshotReady) {
+      await seekRealtimePreviewHost(normalizedTarget);
+    }
+    await handleSeekAudioPreview(normalizedTarget);
   }
 
   async function beginProjectInteractionSession(
@@ -3020,10 +3106,10 @@ export function App(): React.ReactElement {
   }
 
   return (
-          <WorkspaceShell
-          workspace={workspace}
-          activeCategory={activeCategory}
-          templateImportReport={templateImportReport}
+    <WorkspaceShell
+      workspace={workspace}
+      activeCategory={activeCategory}
+      templateImportReport={templateImportReport}
       showDeveloperDiagnostics={showDeveloperDiagnostics}
       bundlePath={bundlePath}
       materialPath={materialPath}
@@ -3047,18 +3133,18 @@ export function App(): React.ReactElement {
       onRetryAudioPreview={handleRetryAudioPreview}
       onSelectAudioOutputDevice={handleSelectAudioOutputDevice}
       onImportMaterial={handleImportMaterial}
-          onImportTemplateBundle={handleImportTemplateBundle}
-          onImportMaterialFromPath={handleImportMaterialFromPath}
-          onRefreshMaterials={handleRefreshMaterials}
-          onListMissingMaterials={handleListMissingMaterials}
-          onRefreshArtifactStatus={handleRefreshArtifactStatus}
-          onCancelArtifactGeneration={(jobId) => handleArtifactTaskAction("cancel", jobId)}
-          onRetryArtifactGeneration={(jobId) => handleArtifactTaskAction("retry", jobId)}
-          onResumeArtifactGeneration={(jobId) => handleArtifactTaskAction("resume", jobId)}
-          onPrepareArtifactCleanup={handlePrepareArtifactCleanup}
-          onConfirmArtifactCleanup={handleConfirmArtifactCleanup}
-          onDismissResourceNotice={handleDismissResourceNotice}
-          onAddTextSegment={handleAddTextSegment}
+      onImportTemplateBundle={handleImportTemplateBundle}
+      onImportMaterialFromPath={handleImportMaterialFromPath}
+      onRefreshMaterials={handleRefreshMaterials}
+      onListMissingMaterials={handleListMissingMaterials}
+      onRefreshArtifactStatus={handleRefreshArtifactStatus}
+      onCancelArtifactGeneration={(jobId) => handleArtifactTaskAction("cancel", jobId)}
+      onRetryArtifactGeneration={(jobId) => handleArtifactTaskAction("retry", jobId)}
+      onResumeArtifactGeneration={(jobId) => handleArtifactTaskAction("resume", jobId)}
+      onPrepareArtifactCleanup={handlePrepareArtifactCleanup}
+      onConfirmArtifactCleanup={handleConfirmArtifactCleanup}
+      onDismissResourceNotice={handleDismissResourceNotice}
+      onAddTextSegment={handleAddTextSegment}
       onImportSubtitleSrt={handleImportSubtitleSrt}
       onAddAudioSegment={handleAddAudioSegment}
       onEditSelectedText={handleEditSelectedText}
@@ -3071,6 +3157,7 @@ export function App(): React.ReactElement {
       onSetSelectedSegmentVolume={handleSetSelectedSegmentVolume}
       onUpdateSelectedSegmentAudio={handleUpdateSelectedSegmentAudio}
       onSetSelectedTrackMute={handleSetSelectedTrackMute}
+      onNavigateTemplateReportItem={handleNavigateTemplateReportItem}
       onSelectTimelineSegment={handleSelectTimelineSegment}
       onSelectTimelineTrack={handleSelectTimelineTrack}
       onAddTimelineSegment={handleAddTimelineSegment}

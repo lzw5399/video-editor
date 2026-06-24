@@ -15,7 +15,7 @@ import type { ExportPreset } from "../../generated/CommandEnvelope";
 import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty } from "../../generated/Draft";
 import type { AdaptationReport } from "../../generated/TemplateImport";
 import { appIconUrls, type AppIconName } from "../assets/icons";
-import { FeaturePanel } from "./FeaturePanel";
+import { FeaturePanel, type TemplateReportRowNavigationTarget } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor, type RealtimePreviewHostState } from "./PreviewMonitor";
 import type { ProjectInteractionController } from "./projectInteraction";
@@ -76,6 +76,7 @@ type WorkspaceShellProps = {
   onSetSelectedSegmentVolume: Parameters<typeof FeaturePanel>[0]["onSetSelectedSegmentVolume"];
   onUpdateSelectedSegmentAudio: Parameters<typeof FeaturePanel>[0]["onUpdateSelectedSegmentAudio"];
   onSetSelectedTrackMute: Parameters<typeof FeaturePanel>[0]["onSetSelectedTrackMute"];
+  onNavigateTemplateReportItem: (target: TemplateReportRowNavigationTarget) => void;
   onSelectTimelineSegment: Parameters<typeof Timeline>[0]["onSelectSegment"];
   onSelectTimelineTrack: Parameters<typeof Timeline>[0]["onSelectTrack"];
   onAddTimelineSegment: Parameters<typeof Timeline>[0]["onAddSegment"];
@@ -161,6 +162,7 @@ export function WorkspaceShell({
   onSetSelectedSegmentVolume,
   onUpdateSelectedSegmentAudio,
   onSetSelectedTrackMute,
+  onNavigateTemplateReportItem,
   onSelectTimelineSegment,
   onSelectTimelineTrack,
   onAddTimelineSegment,
@@ -292,6 +294,7 @@ export function WorkspaceShell({
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onUpdateSelectedSegmentAudio={onUpdateSelectedSegmentAudio}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
+          onNavigateTemplateReportItem={onNavigateTemplateReportItem}
         />
       </section>
 

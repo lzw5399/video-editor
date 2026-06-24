@@ -1050,12 +1050,23 @@ h2 {
   grid-template-columns: minmax(78px, 92px) minmax(0, 1fr);
   align-items: start;
   gap: 8px;
+  width: 100%;
   min-width: 0;
   min-height: 44px;
   padding: 7px 8px;
   border: 1px solid #343431;
   border-radius: 5px;
   background: #1c1c19;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-report-row:hover,
+.template-report-row:focus-visible,
+.template-report-row[aria-current="true"] {
+  border-color: #20c7d9;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(32, 199, 217, 0.42);
 }
 
 .template-report-row.status-supported {
@@ -1177,6 +1188,31 @@ h2 {
 
 .template-report-empty.status-error {
   color: #f3aaa5;
+}
+
+.template-report-focus-state {
+  min-width: 0;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid #343431;
+  border-radius: 5px;
+  overflow: hidden;
+  color: #aaa59b;
+  background: #1b1b18;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-report-focus-state.is-navigable {
+  border-color: #28634f;
+  color: #9ee6c4;
+}
+
+.template-report-focus-state.is-report-only {
+  border-color: #604783;
+  color: #d9c0ff;
 }
 
 .template-report-count {
