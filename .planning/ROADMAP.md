@@ -776,14 +776,22 @@ Plans:
 
 ### Phase 17: Template Import Core And Kaipai Offline Adapter Foundation
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Provider-neutral template import and rendering foundation with Kaipai as an offline external adapter, producing editable `.veproj` drafts, localized resources, adaptation reports, preview/export evidence, and a backend-first desktop import/report flow.
+**Requirements**: COMP-01, COMP-02, PRODFX-05, NO-FALLBACK-01, NO-FALLBACK-02, TEST-E2E-01
 **Depends on:** Phase 16
-**Plans:** 0 plans
+**Plans:** 9 plans
 
 Plans:
 
-- [ ] TBD (run $gsd-plan-phase 17 to break down)
+- [ ] 17-01-PLAN.md - Create Wave 0 provider-neutral report contracts and source guards
+- [ ] 17-02-PLAN.md - Localize offline template resources into `.veproj/resources`
+- [ ] 17-03-PLAN.md - Define and validate provider-neutral DraftImportPlan
+- [ ] 17-04-PLAN.md - Add current-main offline Kaipai bundle contract and sanitized fixtures
+- [ ] 17-05-PLAN.md - Map Kaipai fixture subset to DraftImportPlan and AdaptationReport snapshots
+- [ ] 17-06-PLAN.md - Apply imported plans atomically through project-session API
+- [ ] 17-07-PLAN.md - Close generic static rotation export parity
+- [ ] 17-08-PLAN.md - Prove imported fixtures through preview/export and aggregate gates
+- [ ] 17-09-PLAN.md - Add desktop template import entry, report panel, and product E2E
 
 ### Phase 18: Mobile/Server Binding Architecture And Runtime Ports
 
