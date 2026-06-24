@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 17
-current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
-status: executing
-stopped_at: Completed 17-08-PLAN.md
-last_updated: "2026-06-24T10:22:25.831Z"
+status: completed
+stopped_at: Completed 17-09-PLAN.md
+last_updated: "2026-06-24T11:16:29.701Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 17 execution started
+last_activity_desc: Phase 17 marked complete
 progress:
   total_phases: 24
-  completed_phases: 21
+  completed_phases: 22
   total_plans: 159
-  completed_plans: 158
-  percent: 99
+  completed_plans: 159
+  percent: 92
+current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 9 of 10
-Status: Ready to execute
-Last activity: 2026-06-24 — Phase 17 execution started
+Phase: 17 — COMPLETE
+Plan: 10 of 10
+Status: Phase 17 complete
+Last activity: 2026-06-24 — Phase 17 marked complete
 
 Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-neutral template import plus a Kaipai offline adapter foundation, with former Phase 17/18 shifted to Phase 18/19.
 
@@ -195,6 +195,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P10 | 16 min | 2 tasks | 7 files |
 | Phase 17 P06 | 17 min | 2 tasks | 7 files |
 | Phase 17 P08 | 28 min | 2 tasks | 10 files |
+| Phase 17-template-import-core-and-kaipai-offline-adapter-foundation P09 | 30min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -549,6 +550,10 @@ Recent decisions affecting current work:
 - [Phase 17]: Imported template fixture acceptance is tied to real preview/export product-path evidence plus adaptation report classifications; successful file creation alone is insufficient.
 - [Phase 17]: Test execution may resolve localized bundle-relative resources to filesystem paths, but persisted .veproj/project.json remains canonical and provider/runtime-ref free.
 - [Phase 17]: Phase 17 source guards now fail raw provider formula semantics, remote runtime/render URLs, Android/live provider dependencies, and fallback success evidence.
+- [Phase 17]: 17-09: Desktop template import uses an explicit native bridge and IPC channel instead of a generic command envelope.
+- [Phase 17]: 17-09: Template report UI renders bounded product copy from Rust AdaptationReport data and hides raw provider diagnostics/provenance.
+- [Phase 17]: 17-09: Project-session export resolves bundle-relative material URIs against the canonical .veproj path before FFmpeg compilation without rewriting project.json.
+- [Phase 17]: 17-09: Kaipai video imports no longer imply audio streams unless the resource is explicitly audio.
 
 ### Pending Todos
 
@@ -629,6 +634,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T10:22:25.823Z
-Stopped at: Completed 17-08-PLAN.md
+Last session: 2026-06-24T11:15:55.982Z
+Stopped at: Completed 17-09-PLAN.md
 Resume file: None
