@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-10-PLAN.md
-last_updated: "2026-06-24T09:24:05.574Z"
+stopped_at: Completed 17-06-PLAN.md
+last_updated: "2026-06-24T09:47:27.153Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 156
-  percent: 88
+  completed_plans: 157
+  percent: 99
 ---
 
 # Project State
@@ -193,6 +193,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P03 | 10 min | 2 tasks | 9 files |
 | Phase 17 P05 | 10 min | 1 tasks | 15 files |
 | Phase 17 P10 | 16 min | 2 tasks | 7 files |
+| Phase 17 P06 | 17 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -540,6 +541,10 @@ Recent decisions affecting current work:
 - [Phase 17]: Localized project-relative resource refs are required before material-backed segments enter the import plan. — Prevents remote/runtime resource refs from becoming canonical draft semantics.
 - [Phase 17]: Kaipai level maps to provider-neutral ImportTrackPlan z-order and sorted Draft track order. — Keeps provider layer evidence out of render semantics while preserving deterministic overlay order.
 - [Phase 17]: Native effects and provider text effects are reported as needsNativeEffect/dropped or dropped, never hidden as supported canonical filters. — Unsupported provider behavior remains explicit report diagnostics.
+- [Phase 17]: Project session owns offline Kaipai import application, expected-revision checks, save, view-model response, and revision increment.
+- [Phase 17]: Localized resource index rows are persisted through artifact_store resource_index with a transaction-backed helper, not direct SQLite writes from bindings_node.
+- [Phase 17]: Import replaces the session draft and resets command state, selection, and playhead so stale handles cannot survive a template import.
+- [Phase 17]: Phase 17 source guards keep provider-specific terms blocked except for the explicit importKaipaiFormulaBundle boundary.
 
 ### Pending Todos
 
@@ -620,6 +625,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T09:24:05.364Z
-Stopped at: Completed 17-10-PLAN.md
+Last session: 2026-06-24T09:47:27.145Z
+Stopped at: Completed 17-06-PLAN.md
 Resume file: None
