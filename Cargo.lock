@@ -523,6 +523,7 @@ dependencies = [
 name = "draft_import"
 version = "0.1.0"
 dependencies = [
+ "draft_model",
  "jsonschema",
  "schemars",
  "serde",
