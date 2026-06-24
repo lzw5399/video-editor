@@ -159,6 +159,7 @@ type RealtimePreviewHostRecord = {
   appFocused?: boolean;
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  interactionId?: string | null;
   nativeEventKind?: string;
   droppedFrameCount?: number;
   durationMs?: number;
@@ -238,10 +239,13 @@ function installRealtimePreviewHostIpc(assertAllowedSender: SenderAssertion): vo
     hostForEvent(event).unsubscribeTelemetry(event.sender);
     return { ok: true };
   });
-  ipcMain.handle("realtimePreviewHost:updateProjectSessionSnapshot", (event, projectSessionId: string, expectedRevision: number) => {
-    assertAllowedSender(event);
-    return hostForEvent(event).updateProjectSessionSnapshot(projectSessionId, expectedRevision);
-  });
+  ipcMain.handle(
+    "realtimePreviewHost:updateProjectSessionSnapshot",
+    (event, projectSessionId: string, expectedRevision: number, interactionId?: string | null) => {
+      assertAllowedSender(event);
+      return hostForEvent(event).updateProjectSessionSnapshot(projectSessionId, expectedRevision, interactionId ?? null);
+    }
+  );
   ipcMain.handle("realtimePreviewHost:seek", (event, targetTimeMicroseconds: number) => {
     assertAllowedSender(event);
     return hostForEvent(event).seek(targetTimeMicroseconds);
@@ -343,6 +347,7 @@ export class RealtimePreviewHost {
   private presentationState: RealtimePreviewPresentationStateResponse | null = null;
   private lastFrame: RealtimePreviewFrameResponse | null = null;
   private lastContentEvidence: RealtimePreviewHostContentEvidence | null = null;
+  private lastPresentedEvent: { playbackGeneration: number; targetTimeMicroseconds: number } | null = null;
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private lastPresentationSnapshotRefreshAt = 0;
   private closed = false;
@@ -455,6 +460,12 @@ export class RealtimePreviewHost {
     if (event.kind === "framePresented") {
       this.presentedNativeEventCount += 1;
       this.droppedNativeFrameCount += event.droppedFrameCount ?? 0;
+      if (typeof event.targetTimeMicroseconds === "number") {
+        this.lastPresentedEvent = {
+          playbackGeneration: event.playbackGeneration,
+          targetTimeMicroseconds: event.targetTimeMicroseconds
+        };
+      }
     }
     recordRealtimePreviewHostCall({
       kind: "nativePreviewEvent",
@@ -469,7 +480,11 @@ export class RealtimePreviewHost {
     this.publishTelemetryState(this.shouldRefreshPresentationForNativeEvent(event));
   }
 
-  updateProjectSessionSnapshot(projectSessionId: string, expectedRevision: number): RealtimePreviewHostDisplayState {
+  updateProjectSessionSnapshot(
+    projectSessionId: string,
+    expectedRevision: number,
+    interactionId: string | null = null
+  ): RealtimePreviewHostDisplayState {
     try {
       this.ensureSession();
       if (this.sessionId === null) {
@@ -481,16 +496,20 @@ export class RealtimePreviewHost {
       const response = updateRealtimePreviewProjectSessionSnapshot({
         sessionId: this.sessionId,
         projectSessionId,
-        expectedRevision: sanitizeExpectedRevision(expectedRevision)
+        expectedRevision: sanitizeExpectedRevision(expectedRevision),
+        ...(interactionId === null ? {} : { interactionId })
       });
       this.playbackGeneration = response.playbackGeneration;
       recordRealtimePreviewHostCall({
         kind: "updateProjectSessionSnapshot",
+        interactionId,
         playbackGeneration: response.playbackGeneration
       });
       this.fallbackLabel = null;
       this.refreshPreviewState();
-      return this.state("实时预览会话快照已更新");
+      const state = this.state("实时预览会话快照已更新");
+      this.publishCachedState(state);
+      return state;
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
       return this.state("实时预览不可用");
@@ -539,7 +558,9 @@ export class RealtimePreviewHost {
           this.publishCachedState(this.state("实时预览不可用"));
         }
       }
-      return this.state("实时预览已寻帧");
+      const state = this.state("实时预览已寻帧");
+      this.publishCachedState(state);
+      return state;
     } catch (error) {
       this.fallbackLabel = attachFailureLabel(error);
       return this.state("实时预览不可用");
@@ -983,6 +1004,13 @@ export class RealtimePreviewHost {
 
   private hasPresentedTarget(playbackGeneration: number, targetTimeMicroseconds: number): boolean {
     if (this.playbackGeneration !== playbackGeneration || !this.hasProductionCompositedPresenter()) {
+      return false;
+    }
+    if (
+      this.lastPresentedEvent === null ||
+      this.lastPresentedEvent.playbackGeneration !== playbackGeneration ||
+      !presentationTargetMatches(this.lastPresentedEvent.targetTimeMicroseconds, targetTimeMicroseconds)
+    ) {
       return false;
     }
     return presentationTargetMatches(this.lastContentEvidence?.targetTimeMicroseconds, targetTimeMicroseconds);

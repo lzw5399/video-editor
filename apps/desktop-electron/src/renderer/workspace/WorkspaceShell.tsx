@@ -18,6 +18,7 @@ import { appIconUrls, type AppIconName } from "../assets/icons";
 import { FeaturePanel } from "./FeaturePanel";
 import { Inspector } from "./Inspector";
 import { PreviewMonitor, type RealtimePreviewHostState } from "./PreviewMonitor";
+import type { ProjectInteractionController } from "./projectInteraction";
 import { Timeline } from "./Timeline";
 
 type WorkspaceShellProps = {
@@ -29,6 +30,7 @@ type WorkspaceShellProps = {
   materialPath: string;
   playheadUs: number;
   playbackRunning: boolean;
+  projectInteractions: ProjectInteractionController;
   onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
   onCategoryChange: (category: WorkspaceCategory) => void;
   onBundlePathChange: (value: string) => void;
@@ -117,6 +119,7 @@ export function WorkspaceShell({
   materialPath,
   playheadUs,
   playbackRunning,
+  projectInteractions,
   onRealtimePreviewHostStateChange,
   onCategoryChange,
   onBundlePathChange,
@@ -263,6 +266,7 @@ export function WorkspaceShell({
           category={activeCategory}
           workspace={workspace}
           templateImportReport={templateImportReport}
+          projectInteractions={projectInteractions}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           bundlePath={bundlePath}
           materialPath={materialPath}
@@ -311,13 +315,13 @@ export function WorkspaceShell({
           playheadUs={playheadUs}
           timelineDurationUs={workspace.viewModel.timeline.duration}
           playbackRunning={playbackRunning}
+          projectInteractions={projectInteractions}
           onRealtimePreviewHostStateChange={onRealtimePreviewHostStateChange}
           onPlayheadChange={onPlayheadChange}
           onTogglePlayback={onTogglePlayback}
           onStopPlayback={onStopPlayback}
           onProbeRuntimeCapabilities={onProbeRuntimeCapabilities}
           onRetryAudioPreview={onRetryAudioPreview}
-          onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
           onSelectPreviewTextOverlay={onSelectPreviewTextOverlay}
           onEditPreviewTextOverlay={handleEditPreviewTextOverlay}
         />
@@ -329,6 +333,7 @@ export function WorkspaceShell({
           playheadUs={playheadUs}
           textEditFocusRequest={previewTextEditFocusVersion}
           showDeveloperDiagnostics={showDeveloperDiagnostics}
+          projectInteractions={projectInteractions}
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}

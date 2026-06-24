@@ -72,6 +72,7 @@ import {
   type ExecuteProjectIntentRequest,
   type ImportKaipaiFormulaBundleRequest,
   type OpenProjectSessionRequest,
+  type ProjectInteractionPayload,
   type ProjectSessionReadRequest,
   type ProjectSessionRequest,
   type SegmentVisualPatch,
@@ -142,6 +143,10 @@ type TestProjectSessionCall = {
   targetTime: number | null;
   targetTimerange: { start: number; duration: number } | null;
   duration: number | null;
+  interactionId: string | null;
+  interactionKind: string | null;
+  interactionSequence: number | null;
+  interactionPayloadKind: string | null;
   canvasConfig: TestNativeCommandObservation["canvasConfig"];
   visual: SegmentVisual | null;
   visualPatch: SegmentVisualPatch | null;
@@ -166,6 +171,9 @@ type TestProjectSessionCall = {
   resultDeltaChangedRangeSources: string[];
   resultDeltaFullDraft: boolean | null;
   resultDeltaConsumerDomains: string[];
+  revisionUnchanged: boolean | null;
+  acceptedSequence: number | null;
+  coalescedThrough: number | null;
 };
 
 type TestWindowMetrics = {
@@ -1137,6 +1145,17 @@ function recordTestProjectSessionCall(
     intentRecord?.kind === "editSelectedText" && typeof intentRecord.patch === "object" && intentRecord.patch !== null
       ? (intentRecord.patch as TextSegmentPatch)
       : null;
+  const interactionPayload =
+    "payload" in request && typeof request.payload === "object" && request.payload !== null
+      ? (request.payload as ProjectInteractionPayload)
+      : null;
+  const interactionPayloadRecord = interactionPayload as Record<string, unknown> | null;
+  const interactionTextPatch =
+    interactionPayloadRecord?.kind === "selectedText" &&
+    typeof interactionPayloadRecord.patch === "object" &&
+    interactionPayloadRecord.patch !== null
+      ? (interactionPayloadRecord.patch as TextSegmentPatch)
+      : null;
   const intentTargetTime =
     typeof intentRecord?.targetStart === "number"
       ? intentRecord.targetStart
@@ -1163,6 +1182,15 @@ function recordTestProjectSessionCall(
     targetTime: "targetTime" in request ? request.targetTime : intentTargetTime,
     targetTimerange: "targetTimerange" in request ? request.targetTimerange : null,
     duration: typeof intentRecord?.duration === "number" ? intentRecord.duration : null,
+    interactionId: "interactionId" in request && typeof request.interactionId === "string" ? request.interactionId : null,
+    interactionKind:
+      "kind" in request && typeof request.kind === "string"
+        ? request.kind
+        : typeof interactionPayloadRecord?.kind === "string"
+          ? interactionPayloadRecord.kind
+          : null,
+    interactionSequence: "sequence" in request && typeof request.sequence === "number" ? request.sequence : null,
+    interactionPayloadKind: typeof interactionPayloadRecord?.kind === "string" ? interactionPayloadRecord.kind : null,
     canvasConfig:
       intentRecord?.kind === "updateDraftCanvasConfig"
         ? (intentRecord.canvasConfig as TestNativeCommandObservation["canvasConfig"])
@@ -1171,13 +1199,27 @@ function recordTestProjectSessionCall(
     visualPatch:
       intentRecord?.kind === "updateSelectedSegmentVisual" && typeof intentRecord.patch === "object" && intentRecord.patch !== null
         ? (intentRecord.patch as SegmentVisualPatch)
+        : interactionPayloadRecord?.kind === "selectedSegmentVisual" &&
+            typeof interactionPayloadRecord.patch === "object" &&
+            interactionPayloadRecord.patch !== null
+          ? (interactionPayloadRecord.patch as SegmentVisualPatch)
         : null,
     keyframeProperty: typeof intentRecord?.property === "string" ? intentRecord.property : null,
     keyframeAt: typeof intentRecord?.at === "number" ? intentRecord.at : null,
-    textPatch,
-    textContent: typeof textPatch?.content === "string" ? textPatch.content : null,
+    textPatch: textPatch ?? interactionTextPatch,
+    textContent:
+      typeof textPatch?.content === "string"
+        ? textPatch.content
+        : typeof interactionTextPatch?.content === "string"
+          ? interactionTextPatch.content
+          : null,
     textSource: null,
-    textFontRef: typeof textPatch?.fontRef === "string" ? textPatch.fontRef : null,
+    textFontRef:
+      typeof textPatch?.fontRef === "string"
+        ? textPatch.fontRef
+        : typeof interactionTextPatch?.fontRef === "string"
+          ? interactionTextPatch.fontRef
+          : null,
     targetTrackHandle: typeof intentRecord?.targetTrackHandle === "string" ? intentRecord.targetTrackHandle : null,
     srtContent: typeof intentRecord?.srtContent === "string" ? intentRecord.srtContent : null,
     timelineSemanticKeys: timelineSemanticKeys(intentRecord),
@@ -1194,7 +1236,10 @@ function recordTestProjectSessionCall(
     resultDeltaChangedDomains: [],
     resultDeltaChangedRangeSources: [],
     resultDeltaFullDraft: null,
-    resultDeltaConsumerDomains: []
+    resultDeltaConsumerDomains: [],
+    revisionUnchanged: null,
+    acceptedSequence: null,
+    coalescedThrough: null
   };
   globalThis.__videoEditorTestProjectSessionCalls.push(observation);
   return globalThis.__videoEditorTestProjectSessionCalls.length - 1;
@@ -1219,6 +1264,35 @@ function recordTestProjectSessionResult(index: number | null, result: CommandRes
   observation.resultDeltaChangedRangeSources = projectSessionResultDeltaChangedRangeSources(result.data);
   observation.resultDeltaFullDraft = projectSessionResultDeltaFullDraft(result.data);
   observation.resultDeltaConsumerDomains = projectSessionResultDeltaConsumerDomains(result.data);
+  observation.revisionUnchanged = projectSessionResultBoolean(result.data, "revisionUnchanged");
+  observation.acceptedSequence = projectSessionResultNumber(result.data, "acceptedSequence");
+  observation.coalescedThrough = projectSessionResultNumber(result.data, "coalescedThrough");
+  observation.interactionId = observation.interactionId ?? projectSessionResultString(result.data, "interactionId");
+  observation.interactionKind = observation.interactionKind ?? projectSessionResultString(result.data, "kind");
+}
+
+function projectSessionResultBoolean(data: unknown, key: string): boolean | null {
+  if (typeof data !== "object" || data === null || !(key in data)) {
+    return null;
+  }
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function projectSessionResultNumber(data: unknown, key: string): number | null {
+  if (typeof data !== "object" || data === null || !(key in data)) {
+    return null;
+  }
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : null;
+}
+
+function projectSessionResultString(data: unknown, key: string): string | null {
+  if (typeof data !== "object" || data === null || !(key in data)) {
+    return null;
+  }
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : null;
 }
 
 function projectSessionResultEventKinds(data: unknown): string[] {
@@ -1281,10 +1355,11 @@ function projectSessionResultDeltaConsumerDomains(data: unknown): string[] {
 }
 
 function projectSessionResultDelta(data: unknown): Record<string, unknown> | null {
-  if (typeof data !== "object" || data === null || !("delta" in data)) {
+  if (typeof data !== "object" || data === null) {
     return null;
   }
-  const delta = (data as { delta?: unknown }).delta;
+  const record = data as { delta?: unknown; provisionalDelta?: unknown };
+  const delta = record.provisionalDelta ?? record.delta;
   return typeof delta === "object" && delta !== null ? (delta as Record<string, unknown>) : null;
 }
 

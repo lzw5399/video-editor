@@ -1,4 +1,4 @@
-import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, readFile, unlink } from "node:fs/promises";
@@ -53,6 +53,14 @@ type NativeCommandObservation = {
   sessionId?: string | null;
   projectSessionId?: string | null;
   expectedRevision?: number | null;
+  interactionId?: string | null;
+  interactionKind?: string | null;
+  interactionSequence?: number | null;
+  interactionPayloadKind?: string | null;
+  resultOk?: boolean | null;
+  resultRevision?: number | null;
+  resultDeltaCommand?: string | null;
+  revisionUnchanged?: boolean | null;
   hasDraftField?: boolean;
   deviceSelectionId?: string | null;
   maxPeakBins?: number | null;
@@ -63,6 +71,10 @@ type ProjectSessionCall = {
     | "createProjectSession"
     | "openProjectSession"
     | "executeProjectIntent"
+    | "beginProjectInteraction"
+    | "updateProjectInteraction"
+    | "commitProjectInteraction"
+    | "cancelProjectInteraction"
     | "importKaipaiFormulaBundle"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
@@ -79,6 +91,10 @@ type ProjectSessionCall = {
   targetTime?: number | null;
   targetTimerange?: { start: number; duration: number } | null;
   duration?: number | null;
+  interactionId?: string | null;
+  interactionKind?: string | null;
+  interactionSequence?: number | null;
+  interactionPayloadKind?: string | null;
   visual?: NativeCommandObservation["visual"] | null;
   visualPatch?: Record<string, unknown> | null;
   textPatch?: Record<string, unknown> | null;
@@ -100,6 +116,9 @@ type ProjectSessionCall = {
   resultDeltaChangedRangeSources?: string[];
   resultDeltaFullDraft?: boolean | null;
   resultDeltaConsumerDomains?: string[];
+  revisionUnchanged?: boolean | null;
+  acceptedSequence?: number | null;
+  coalescedThrough?: number | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -116,6 +135,7 @@ type RealtimePreviewHostCall = {
   };
   targetTimeMicroseconds?: number;
   playbackGeneration?: number;
+  interactionId?: string | null;
   durationMs?: number;
   presentedFrameCount?: number;
   droppedFrameCount?: number;
@@ -873,26 +893,37 @@ export async function updateSelectedVisualThroughInspector(
   const rotation = edit.rotation ?? 8;
   const opacity = edit.opacity ?? 820;
   const fitMode = edit.fitMode ?? "填充";
-  const nextCount = (await countCommand(app, "updateSelectedSegmentVisual")) + 1;
   const visualTab = page.getByRole("tab", { name: "画面" });
   if ((await visualTab.count()) > 0) {
     await visualTab.click();
   }
   const visualForm = page.getByLabel("画面基础表单");
-  await visualForm.getByLabel("位置 X", { exact: true }).fill(String(positionX));
-  await visualForm.getByLabel("位置 Y", { exact: true }).fill(String(positionY));
-  await visualForm.getByLabel("缩放 X", { exact: true }).fill(String(scaleX));
-  await visualForm.getByLabel("缩放 Y", { exact: true }).fill(String(scaleY));
-  await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).fill(String(rotation));
-  await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).fill(String(opacity));
-  await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: fitMode }).click();
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByLabel("位置 X", { exact: true }), positionX);
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByLabel("位置 Y", { exact: true }), positionY);
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByLabel("缩放 X", { exact: true }), scaleX);
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByLabel("缩放 Y", { exact: true }), scaleY);
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByRole("spinbutton", { name: "旋转", exact: true }), rotation);
+  await fillVisualNumberAndWaitForEdit(app, visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }), opacity);
+  const fitButton = visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: fitMode });
+  const fitWasSelected = (await fitButton.getAttribute("aria-pressed")) === "true";
+  const fitEditCount = await visualEditCommandCount(app);
+  await fitButton.click();
+  if (!fitWasSelected) {
+    await waitForVisualEditCommandCount(app, fitEditCount + 1);
+  }
   await expect(visualForm.getByRole("button", { name: "应用画面" })).toHaveCount(0);
-  await waitForCommandCount(app, "updateSelectedSegmentVisual", nextCount);
 }
 
 export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppController, targetTimeUs: number): Promise<void> {
   const frameRequestsBefore = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
   await clickTimelineRulerAt(page, targetTimeUs);
+  if (!(await waitForTimecodeNear(page, targetTimeUs, 2_000))) {
+    const seekInput = page.getByLabel("预览时间");
+    if ((await seekInput.count()) > 0) {
+      await seekInput.fill(String(targetTimeUs));
+      await seekInput.blur();
+    }
+  }
   await expect
     .poll(async () => parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? ""), {
       timeout: 10_000
@@ -907,6 +938,21 @@ export async function seekTimelinePlayhead(page: Page, app: ProductJourneyAppCon
     requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app)),
     "product seek must not fall back to preview artifact frame requests"
   ).toBe(frameRequestsBefore);
+}
+
+async function waitForTimecodeNear(page: Page, targetTimeUs: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const current = parseTimecodeToMicroseconds((await page.getByLabel("当前时间码").textContent()) ?? "");
+    if (
+      current >= targetTimeUs - TIMELINE_RULER_CLICK_TOLERANCE_US &&
+      current <= targetTimeUs + TIMELINE_RULER_CLICK_TOLERANCE_US
+    ) {
+      return true;
+    }
+    await page.waitForTimeout(100);
+  }
+  return false;
 }
 
 export async function splitSelectedSegment(page: Page, app: ProductJourneyAppController, splitAtUs: number): Promise<void> {
@@ -1052,8 +1098,42 @@ async function clickTimelineRulerAt(page: Page, targetTimeUs: number): Promise<v
   if (rulerBox === null) {
     throw new Error("Timeline ruler is not visible for seek interaction");
   }
-  const ratio = Math.max(0, Math.min(1, targetTimeUs / 10_000_000));
-  await page.mouse.click(rulerBox.x + rulerBox.width * ratio, rulerBox.y + rulerBox.height / 2);
+  const timelineDuration = await inferTimelineDurationFromRuler(page);
+  const ratio = Math.max(0, Math.min(1, targetTimeUs / Math.max(1, timelineDuration)));
+  const clientX = rulerBox.x + rulerBox.width * ratio;
+  const clientY = rulerBox.y + rulerBox.height / 2;
+  await page.mouse.click(clientX, clientY);
+  await ruler.dispatchEvent("pointerdown", {
+    clientX,
+    clientY,
+    button: 0,
+    buttons: 1,
+    pointerId: 1,
+    pointerType: "mouse",
+    bubbles: true,
+    cancelable: true
+  });
+}
+
+async function inferTimelineDurationFromRuler(page: Page): Promise<number> {
+  const ticks = await page.locator(".ruler-track .ruler-tick").evaluateAll((elements) =>
+    elements.map((element) => {
+      const tick = element as HTMLElement;
+      return {
+        label: tick.textContent ?? "",
+        left: tick.style.left
+      };
+    })
+  );
+  const durationCandidates = ticks.flatMap((tick) => {
+    const percent = Number(tick.left.replace("%", ""));
+    const timeUs = parseTimecodeToMicroseconds(tick.label);
+    if (!Number.isFinite(percent) || percent <= 0 || timeUs <= 0) {
+      return [];
+    }
+    return [Math.round(timeUs / (percent / 100))];
+  });
+  return durationCandidates.length > 0 ? Math.max(...durationCandidates) : 10_000_000;
 }
 
 async function dragSelectedSegmentBy(page: Page, deltaUs: number, targetTrackName?: string): Promise<void> {
@@ -1180,7 +1260,11 @@ export async function readNativeCommandObservations(app: ProductJourneyAppContro
       .filter(
         (call) =>
           (call.command === "executeProjectIntent" && call.intentKind !== null) ||
-          call.command === "startProjectSessionExport"
+          call.command === "startProjectSessionExport" ||
+          call.command === "beginProjectInteraction" ||
+          call.command === "updateProjectInteraction" ||
+          call.command === "commitProjectInteraction" ||
+          call.command === "cancelProjectInteraction"
       )
       .map(projectSessionCallToNativeObservation)
   ];
@@ -1365,6 +1449,33 @@ async function countCommand(app: ProductJourneyAppController, command: string): 
   return (await readNativeCommandObservations(app)).filter((call) => call.command === command).length;
 }
 
+async function visualEditCommandCount(app: ProductJourneyAppController): Promise<number> {
+  return (await readNativeCommandObservations(app)).filter(
+    (call) =>
+      call.command === "updateSelectedSegmentVisual" ||
+      (call.command === "commitProjectInteraction" && call.interactionKind === "selectedSegmentVisual" && call.resultOk === true)
+  ).length;
+}
+
+async function waitForVisualEditCommandCount(app: ProductJourneyAppController, expectedCount: number): Promise<void> {
+  await expect.poll(async () => visualEditCommandCount(app), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
+}
+
+async function fillVisualNumberAndWaitForEdit(
+  app: ProductJourneyAppController,
+  input: Locator,
+  value: number
+): Promise<void> {
+  const nextValue = String(value);
+  const previousValue = await input.inputValue();
+  const nextCount = (await visualEditCommandCount(app)) + 1;
+  await input.fill(nextValue);
+  await input.blur();
+  if (previousValue !== nextValue) {
+    await waitForVisualEditCommandCount(app, nextCount);
+  }
+}
+
 async function countProjectSessionCommand(app: ProductJourneyAppController, command: ProjectSessionCall["command"]): Promise<number> {
   return (await readProjectSessionCalls(app)).filter((call) => call.command === command).length;
 }
@@ -1377,7 +1488,7 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
   const command =
     call.command === "startProjectSessionExport"
       ? "startExport"
-      : (call.intentKind ?? "executeProjectIntent");
+      : (call.intentKind ?? call.command);
   return {
     command,
     kind: command,
@@ -1396,6 +1507,17 @@ function projectSessionCallToNativeObservation(call: ProjectSessionCall): Native
     outputPath: call.outputPath ?? null,
     preset: call.preset ?? null,
     sessionId: call.sessionId,
+    projectSessionId: call.sessionId,
+    expectedRevision: call.expectedRevision,
+    interactionId: call.interactionId ?? null,
+    interactionKind: call.interactionKind ?? null,
+    interactionSequence: call.interactionSequence ?? null,
+    interactionPayloadKind: call.interactionPayloadKind ?? null,
+    resultOk: call.resultOk ?? null,
+    resultRevision: call.resultRevision ?? null,
+    resultDeltaCommand: call.resultDeltaCommand ?? null,
+    revisionUnchanged: call.revisionUnchanged ?? null,
+    hasDraftField: call.hasDraftField,
     deviceSelectionId: null,
     maxPeakBins: null
   };

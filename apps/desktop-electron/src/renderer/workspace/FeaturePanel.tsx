@@ -25,11 +25,13 @@ import {
   type WorkspaceState
 } from "../viewModel";
 import { MATERIAL_DRAG_DATA_TYPE, TEXT_SEGMENT_DRAG_DATA_TYPE } from "./dragTypes";
+import type { ProjectInteractionController } from "./projectInteraction";
 
 type FeaturePanelProps = {
   category: WorkspaceCategory;
   workspace: WorkspaceState;
   templateImportReport: AdaptationReport | null;
+  projectInteractions: ProjectInteractionController;
   showDeveloperDiagnostics: boolean;
   bundlePath: string;
   materialPath: string;
@@ -78,6 +80,15 @@ type AudioPanelOptions = {
   panBalanceMillis: number;
   fadeInDuration: number;
   fadeOutDuration: number;
+};
+
+type AudioPanelInteractionState = {
+  interactionId: string | null;
+  sequence: number;
+  beginPromise: Promise<void>;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingOptions: AudioPanelOptions | null;
 };
 
 const MATERIAL_FILTERS: readonly MaterialFilter[] = ["全部", "视频", "图片", "音频", "丢失"];
@@ -589,6 +600,7 @@ function DeferredTextCapabilityCard({ title, detail }: { title: string; detail: 
 
 function AudioPanel({
   workspace,
+  projectInteractions,
   onAddAudioSegment,
   onSelectAudioOutputDevice,
   onSetSelectedSegmentVolume,
@@ -607,6 +619,7 @@ function AudioPanel({
   const selectedMaterialId = materialId || (audioMaterials[0]?.materialId ?? "");
   const audioCommitKeyRef = useRef<string | null>(null);
   const audioHydrationSelectionRef = useRef<string | null>(null);
+  const audioInteractionRef = useRef<AudioPanelInteractionState | null>(null);
   const audioOptions = useMemo(
     () => audioPanelOptionsFromState(volumePercent, panPercent, fadeInSeconds, fadeOutSeconds),
     [fadeInSeconds, fadeOutSeconds, panPercent, volumePercent]
@@ -635,27 +648,142 @@ function AudioPanel({
     selectedSegment?.audio?.fadeOutDuration.duration
   ]);
 
-  useEffect(() => {
-    if (selectedSegment === null) {
-      return undefined;
+  function updateAudioPanelState(
+    patch: Partial<{ volumePercent: number; panPercent: number; fadeInSeconds: number; fadeOutSeconds: number }>,
+    options: { provisional?: boolean } = {}
+  ): void {
+    const nextVolumePercent = patch.volumePercent ?? volumePercent;
+    const nextPanPercent = patch.panPercent ?? panPercent;
+    const nextFadeInSeconds = patch.fadeInSeconds ?? fadeInSeconds;
+    const nextFadeOutSeconds = patch.fadeOutSeconds ?? fadeOutSeconds;
+    if (patch.volumePercent !== undefined) {
+      setVolumePercent(patch.volumePercent);
     }
-    if (audioHydrationSelectionRef.current === selectedSegment.selectionHandle) {
-      audioHydrationSelectionRef.current = null;
-      return undefined;
+    if (patch.panPercent !== undefined) {
+      setPanPercent(patch.panPercent);
     }
-    if (workspace.pendingCommand !== null) {
-      return undefined;
+    if (patch.fadeInSeconds !== undefined) {
+      setFadeInSeconds(patch.fadeInSeconds);
+    }
+    if (patch.fadeOutSeconds !== undefined) {
+      setFadeOutSeconds(patch.fadeOutSeconds);
+    }
+    const nextOptions = audioPanelOptionsFromState(
+      nextVolumePercent,
+      nextPanPercent,
+      nextFadeInSeconds,
+      nextFadeOutSeconds
+    );
+    if (options.provisional) {
+      queueAudioPanelUpdate(nextOptions);
+    }
+  }
+
+  function commitAudioPanelEdit(): void {
+    if (selectedSegment === null || workspace.pendingCommand !== null) {
+      return;
     }
     const nextKey = audioPanelOptionsKey(audioOptions);
     if (nextKey === audioCommitKeyRef.current) {
-      return undefined;
+      return;
     }
-    const timeout = window.setTimeout(() => {
-      audioCommitKeyRef.current = nextKey;
-      onUpdateSelectedSegmentAudio(audioOptions);
-    }, 160);
-    return () => window.clearTimeout(timeout);
-  }, [audioOptions, onUpdateSelectedSegmentAudio, selectedSegment, workspace.pendingCommand]);
+    audioCommitKeyRef.current = nextKey;
+    onUpdateSelectedSegmentAudio(audioOptions);
+  }
+
+  function beginAudioPanelInteraction(): AudioPanelInteractionState {
+    const existing = audioInteractionRef.current;
+    if (existing !== null) {
+      return existing;
+    }
+    const interaction: AudioPanelInteractionState = {
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingOptions: null
+    };
+    interaction.beginPromise = projectInteractions.begin("selectedSegmentAudio").then((begin) => {
+      if (audioInteractionRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      flushAudioPanelUpdate(interaction);
+    });
+    audioInteractionRef.current = interaction;
+    return interaction;
+  }
+
+  function queueAudioPanelUpdate(options: AudioPanelOptions): void {
+    if (selectedSegment === null || workspace.pendingCommand !== null) {
+      return;
+    }
+    const interaction = beginAudioPanelInteraction();
+    interaction.pendingOptions = options;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushAudioPanelUpdate(interaction);
+    });
+  }
+
+  function flushAudioPanelUpdate(interaction: AudioPanelInteractionState): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingOptions === null) {
+      return;
+    }
+    const nextOptions = interaction.pendingOptions;
+    interaction.pendingOptions = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, {
+      kind: "selectedSegmentAudio",
+      gainMillis: Math.max(0, Math.min(4000, Math.round(nextOptions.gainMillis))),
+      panBalanceMillis: Math.max(-1000, Math.min(1000, Math.round(nextOptions.panBalanceMillis))),
+      fadeInDuration: { duration: Math.max(0, Math.round(nextOptions.fadeInDuration)) },
+      fadeOutDuration: { duration: Math.max(0, Math.round(nextOptions.fadeOutDuration)) },
+      effectSlots: []
+    }).then(() => {
+      interaction.updateInFlight = false;
+      if (audioInteractionRef.current !== interaction) {
+        return;
+      }
+      flushAudioPanelUpdate(interaction);
+    });
+  }
+
+  async function finishAudioPanelInteraction(action: "commit" | "cancel"): Promise<void> {
+    const interaction = audioInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingOptions !== null) {
+      flushAudioPanelUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingOptions !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    audioInteractionRef.current = null;
+    if (interaction.interactionId === null) {
+      return;
+    }
+    if (action === "commit") {
+      audioCommitKeyRef.current = audioPanelOptionsKey(audioOptions);
+      await projectInteractions.commit(interaction.interactionId);
+      return;
+    }
+    await projectInteractions.cancel(interaction.interactionId);
+  }
 
   return (
     <div className="feature-panel-content">
@@ -720,7 +848,10 @@ function AudioPanel({
             max="400"
             step="5"
             value={volumePercent}
-            onChange={(event) => setVolumePercent(toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400))}
+            onChange={(event) =>
+              updateAudioPanelState({ volumePercent: toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400) })
+            }
+            onBlur={commitAudioPanelEdit}
           />
         </label>
         <label className="field-row">
@@ -731,7 +862,15 @@ function AudioPanel({
             max="100"
             step="5"
             value={panPercent}
-            onChange={(event) => setPanPercent(toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100))}
+            onPointerDown={beginAudioPanelInteraction}
+            onPointerUp={() => void finishAudioPanelInteraction("commit")}
+            onPointerCancel={() => void finishAudioPanelInteraction("cancel")}
+            onChange={(event) =>
+              updateAudioPanelState(
+                { panPercent: toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100) },
+                { provisional: true }
+              )
+            }
           />
         </label>
         <label className="field-row">
@@ -742,7 +881,12 @@ function AudioPanel({
             min="0"
             step="0.1"
             value={fadeInSeconds}
-            onChange={(event) => setFadeInSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, fadeInSeconds, 0, 60))}
+            onChange={(event) =>
+              updateAudioPanelState({
+                fadeInSeconds: toBoundedSeconds(event.currentTarget.valueAsNumber, fadeInSeconds, 0, 60)
+              })
+            }
+            onBlur={commitAudioPanelEdit}
           />
         </label>
         <label className="field-row">
@@ -753,7 +897,12 @@ function AudioPanel({
             min="0"
             step="0.1"
             value={fadeOutSeconds}
-            onChange={(event) => setFadeOutSeconds(toBoundedSeconds(event.currentTarget.valueAsNumber, fadeOutSeconds, 0, 60))}
+            onChange={(event) =>
+              updateAudioPanelState({
+                fadeOutSeconds: toBoundedSeconds(event.currentTarget.valueAsNumber, fadeOutSeconds, 0, 60)
+              })
+            }
+            onBlur={commitAudioPanelEdit}
           />
         </label>
         <div className="button-row">

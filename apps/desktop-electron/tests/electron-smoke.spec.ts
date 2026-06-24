@@ -139,12 +139,17 @@ test("renderer reaches Rust binding only through the typed preload bridge", asyn
         "createProjectSession",
         "openProjectSession",
         "executeProjectIntent",
+        "beginProjectInteraction",
+        "updateProjectInteraction",
+        "commitProjectInteraction",
+        "cancelProjectInteraction",
+        "importKaipaiFormulaBundle",
         "listProjectSessionMaterials",
         "listProjectSessionMissingMaterials",
         "startProjectSessionExport",
         "closeProjectSession"
       ]),
-      platformKeys: ["createProjectBundle", "openProjectBundle", "openMaterialFiles"],
+      platformKeys: ["createProjectBundle", "openProjectBundle", "openTemplateBundle", "openMaterialFiles"],
       openMaterialFiles: "function"
     });
 

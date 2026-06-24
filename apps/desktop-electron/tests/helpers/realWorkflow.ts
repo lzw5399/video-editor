@@ -237,7 +237,7 @@ async function addVisualSegment(page: Page, app: ElectronApplication, materialNa
   await expect(materialRow).toBeVisible({ timeout: 20_000 });
   await materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` }).click();
   await waitForProjectSessionIntentCount(page, app, "addTimelineSegmentIntent", nextCount);
-  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) }).last()).toBeVisible();
 }
 
 async function addOverlayVideoTrack(page: Page, app: ElectronApplication): Promise<void> {

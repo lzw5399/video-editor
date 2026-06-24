@@ -15,6 +15,7 @@ import type {
   TextSegment
 } from "../../generated/Draft";
 import type { SegmentVisualPatch, TextSegmentPatch } from "../../main/nativeBinding";
+import type { ProjectInteractionController } from "./projectInteraction";
 import {
   canvasAspectRatioFromSize,
   canvasPresetLabel,
@@ -39,6 +40,7 @@ type InspectorProps = {
   playheadUs: number;
   textEditFocusRequest: number;
   showDeveloperDiagnostics: boolean;
+  projectInteractions: ProjectInteractionController;
   onEditSelectedText: (patch: TextSegmentPatch) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: (patch: SegmentVisualPatch) => void;
@@ -136,6 +138,33 @@ type AudioEditOptions = {
   fadeOutDuration: number;
 };
 
+type VisualInteractionState = {
+  interactionId: string | null;
+  sequence: number;
+  beginPromise: Promise<void>;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingPatch: SegmentVisualPatch | null;
+};
+
+type TextInteractionState = {
+  interactionId: string | null;
+  sequence: number;
+  beginPromise: Promise<void>;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingPatch: TextSegmentPatch | null;
+};
+
+type AudioInteractionState = {
+  interactionId: string | null;
+  sequence: number;
+  beginPromise: Promise<void>;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingOptions: AudioEditOptions | null;
+};
+
 const DEFAULT_TEXT_STATE: TextFormState = {
   content: "",
   fontSize: 36,
@@ -231,6 +260,7 @@ export function Inspector({
   playheadUs,
   textEditFocusRequest,
   showDeveloperDiagnostics,
+  projectInteractions,
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
@@ -250,8 +280,11 @@ export function Inspector({
   const [fadeOutUs, setFadeOutUs] = useState(0);
   const textContentRef = useRef<HTMLTextAreaElement | null>(null);
   const textCommitKeyRef = useRef<string | null>(null);
+  const textInteractionRef = useRef<TextInteractionState | null>(null);
   const audioCommitKeyRef = useRef<string | null>(null);
+  const audioDraftOptionsRef = useRef<AudioEditOptions>(audioOptionsFromState(100, 0, 0, 0));
   const audioHydrationSelectionRef = useRef<string | null>(null);
+  const audioInteractionRef = useRef<AudioInteractionState | null>(null);
   const sequenceDuration = workspace.viewModel.project.sequenceDuration;
   const hasText = selected?.text !== null && selected?.text !== undefined;
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
@@ -279,7 +312,9 @@ export function Inspector({
     if (selected === null) {
       setTextState(DEFAULT_TEXT_STATE);
       textCommitKeyRef.current = null;
+      textInteractionRef.current = null;
       audioCommitKeyRef.current = null;
+      audioDraftOptionsRef.current = audioOptionsFromState(100, 0, 0, 0);
       audioHydrationSelectionRef.current = null;
       setVolumePercent(100);
       setPanPercent(0);
@@ -293,12 +328,14 @@ export function Inspector({
     setPanPercent(Math.round(selectedAudioOptions.panBalanceMillis / 10));
     setFadeInUs(selectedAudioOptions.fadeInDuration);
     setFadeOutUs(selectedAudioOptions.fadeOutDuration);
+    audioDraftOptionsRef.current = selectedAudioOptions;
     audioCommitKeyRef.current = audioOptionsKey(selectedAudioOptions);
     audioHydrationSelectionRef.current = selected.selectionHandle;
 
     if (selected.text === null || selected.text === undefined) {
       setTextState(DEFAULT_TEXT_STATE);
       textCommitKeyRef.current = null;
+      textInteractionRef.current = null;
       return;
     }
 
@@ -386,50 +423,274 @@ export function Inspector({
 
   const textPatch = useMemo<TextSegmentPatch>(() => textPatchFromState(textState), [textState]);
   const textValidationMessage = validateTextForm(textState);
-  const audioOptions = useMemo(
-    () => audioOptionsFromState(volumePercent, panPercent, fadeInUs, fadeOutUs),
-    [fadeInUs, fadeOutUs, panPercent, volumePercent]
-  );
-
-  useEffect(() => {
-    if (!hasText || selected?.text === null || selected?.text === undefined || textValidationMessage !== null) {
-      return undefined;
+  function commitTextState(state: TextFormState = textState): void {
+    if (!hasText || selected?.text === null || selected?.text === undefined || validateTextForm(state) !== null) {
+      return;
     }
     if (workspace.pendingCommand !== null) {
-      return undefined;
+      return;
     }
-    const nextKey = textPatchKey(textPatch);
+    const nextPatch = textPatchFromState(state);
+    const nextKey = textPatchKey(nextPatch);
     if (nextKey === textCommitKeyRef.current) {
-      return undefined;
+      return;
     }
-    const timeout = window.setTimeout(() => {
-      textCommitKeyRef.current = nextKey;
-      onEditSelectedText(textPatch);
-    }, 160);
-    return () => window.clearTimeout(timeout);
-  }, [hasText, onEditSelectedText, selected?.selectionHandle, selected?.text, textPatch, textValidationMessage, workspace.pendingCommand]);
+    textCommitKeyRef.current = nextKey;
+    onEditSelectedText(nextPatch);
+  }
 
-  useEffect(() => {
-    if (selected === null) {
-      return undefined;
+  function updateTextState(
+    patch: Partial<TextFormState>,
+    options: { provisional?: boolean } = {}
+  ): void {
+    setTextState((current) => {
+      const next = { ...current, ...patch };
+      if (options.provisional) {
+        queueInspectorTextUpdate(next);
+      }
+      return next;
+    });
+  }
+
+  function updateAndCommitTextState(patch: Partial<TextFormState>): void {
+    const next = { ...textState, ...patch };
+    setTextState(next);
+    commitTextState(next);
+  }
+
+  function finishOrCommitTextFieldEdit(): void {
+    if (textInteractionRef.current !== null) {
+      void finishInspectorTextInteraction("commit");
+      return;
     }
-    if (audioHydrationSelectionRef.current === selected.selectionHandle) {
-      audioHydrationSelectionRef.current = null;
-      return undefined;
+    commitTextState();
+  }
+
+  function beginInspectorTextInteraction(): TextInteractionState {
+    const existing = textInteractionRef.current;
+    if (existing !== null) {
+      return existing;
     }
-    if (workspace.pendingCommand !== null) {
-      return undefined;
+    const interaction: TextInteractionState = {
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPatch: null
+    };
+    interaction.beginPromise = projectInteractions.begin("selectedText").then((begin) => {
+      if (textInteractionRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      flushInspectorTextUpdate(interaction);
+    });
+    textInteractionRef.current = interaction;
+    return interaction;
+  }
+
+  function queueInspectorTextUpdate(state: TextFormState): void {
+    if (!hasText || selected === null || workspace.pendingCommand !== null || validateTextForm(state) !== null) {
+      return;
     }
-    const nextKey = audioOptionsKey(audioOptions);
+    const interaction = beginInspectorTextInteraction();
+    interaction.pendingPatch = textPatchFromState(state);
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushInspectorTextUpdate(interaction);
+    });
+  }
+
+  function flushInspectorTextUpdate(interaction: TextInteractionState): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPatch === null) {
+      return;
+    }
+    const nextPatch = interaction.pendingPatch;
+    interaction.pendingPatch = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, {
+      kind: "selectedText",
+      patch: nextPatch
+    }).then(() => {
+      interaction.updateInFlight = false;
+      if (textInteractionRef.current !== interaction) {
+        return;
+      }
+      flushInspectorTextUpdate(interaction);
+    });
+  }
+
+  async function finishInspectorTextInteraction(action: "commit" | "cancel"): Promise<void> {
+    const interaction = textInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPatch !== null) {
+      flushInspectorTextUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingPatch !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    textInteractionRef.current = null;
+    if (interaction.interactionId === null || interaction.sequence === 0) {
+      if (action === "commit") {
+        commitTextState();
+      }
+      return;
+    }
+    if (action === "commit") {
+      textCommitKeyRef.current = textPatchKey(textPatchFromState(textState));
+      await projectInteractions.commit(interaction.interactionId);
+      return;
+    }
+    await projectInteractions.cancel(interaction.interactionId);
+  }
+
+  function updateAudioState(
+    patch: Partial<{ volumePercent: number; panPercent: number; fadeInUs: number; fadeOutUs: number }>,
+    options: { provisional?: boolean } = {}
+  ): void {
+    const nextVolumePercent = patch.volumePercent ?? volumePercent;
+    const nextPanPercent = patch.panPercent ?? panPercent;
+    const nextFadeInUs = patch.fadeInUs ?? fadeInUs;
+    const nextFadeOutUs = patch.fadeOutUs ?? fadeOutUs;
+    if (patch.volumePercent !== undefined) {
+      setVolumePercent(patch.volumePercent);
+    }
+    if (patch.panPercent !== undefined) {
+      setPanPercent(patch.panPercent);
+    }
+    if (patch.fadeInUs !== undefined) {
+      setFadeInUs(patch.fadeInUs);
+    }
+    if (patch.fadeOutUs !== undefined) {
+      setFadeOutUs(patch.fadeOutUs);
+    }
+    const nextOptions = audioOptionsFromState(nextVolumePercent, nextPanPercent, nextFadeInUs, nextFadeOutUs);
+    audioDraftOptionsRef.current = nextOptions;
+    if (options.provisional) {
+      queueInspectorAudioUpdate(nextOptions);
+    }
+  }
+
+  function commitAudioFieldEdit(options: AudioEditOptions = audioDraftOptionsRef.current): void {
+    if (selected === null || workspace.pendingCommand !== null) {
+      return;
+    }
+    const nextKey = audioOptionsKey(options);
     if (nextKey === audioCommitKeyRef.current) {
-      return undefined;
+      return;
     }
-    const timeout = window.setTimeout(() => {
-      audioCommitKeyRef.current = nextKey;
-      onUpdateSelectedSegmentAudio(audioOptions);
-    }, 160);
-    return () => window.clearTimeout(timeout);
-  }, [audioOptions, onUpdateSelectedSegmentAudio, selected, workspace.pendingCommand]);
+    audioCommitKeyRef.current = nextKey;
+    onUpdateSelectedSegmentAudio(options);
+  }
+
+  function beginInspectorAudioInteraction(): AudioInteractionState {
+    const existing = audioInteractionRef.current;
+    if (existing !== null) {
+      return existing;
+    }
+    const interaction: AudioInteractionState = {
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingOptions: null
+    };
+    interaction.beginPromise = projectInteractions.begin("selectedSegmentAudio").then((begin) => {
+      if (audioInteractionRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      flushInspectorAudioUpdate(interaction);
+    });
+    audioInteractionRef.current = interaction;
+    return interaction;
+  }
+
+  function queueInspectorAudioUpdate(options: AudioEditOptions): void {
+    if (selected === null || workspace.pendingCommand !== null) {
+      return;
+    }
+    const interaction = beginInspectorAudioInteraction();
+    interaction.pendingOptions = options;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushInspectorAudioUpdate(interaction);
+    });
+  }
+
+  function flushInspectorAudioUpdate(interaction: AudioInteractionState): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingOptions === null) {
+      return;
+    }
+    const nextOptions = interaction.pendingOptions;
+    interaction.pendingOptions = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, {
+      kind: "selectedSegmentAudio",
+      gainMillis: Math.max(0, Math.min(4000, Math.round(nextOptions.gainMillis))),
+      panBalanceMillis: Math.max(-1000, Math.min(1000, Math.round(nextOptions.panBalanceMillis))),
+      fadeInDuration: { duration: Math.max(0, Math.round(nextOptions.fadeInDuration)) },
+      fadeOutDuration: { duration: Math.max(0, Math.round(nextOptions.fadeOutDuration)) },
+      effectSlots: []
+    }).then(() => {
+      interaction.updateInFlight = false;
+      if (audioInteractionRef.current !== interaction) {
+        return;
+      }
+      flushInspectorAudioUpdate(interaction);
+    });
+  }
+
+  async function finishInspectorAudioInteraction(action: "commit" | "cancel"): Promise<void> {
+    const interaction = audioInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingOptions !== null) {
+      flushInspectorAudioUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingOptions !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    audioInteractionRef.current = null;
+    if (interaction.interactionId === null) {
+      return;
+    }
+    if (action === "commit") {
+      audioCommitKeyRef.current = audioOptionsKey(audioDraftOptionsRef.current);
+      await projectInteractions.commit(interaction.interactionId);
+      return;
+    }
+    await projectInteractions.cancel(interaction.interactionId);
+  }
 
   return (
     <div className="inspector-content">
@@ -500,6 +761,7 @@ export function Inspector({
                   visual={selected.visual}
                   pending={workspace.pendingCommand !== null}
                   renderKeyframeButton={renderKeyframeButton}
+                  projectInteractions={projectInteractions}
                   onUpdateVisual={onUpdateSelectedSegmentVisual}
                 />
               </section>
@@ -517,11 +779,12 @@ export function Inspector({
                         ref={textContentRef}
                         value={textState.content}
                         disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const content = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, content }));
-                        }}
-                      />
+	                        onChange={(event) => {
+	                          const content = event.currentTarget.value;
+	                          updateTextState({ content });
+	                        }}
+	                        onBlur={() => commitTextState()}
+	                      />
                     </label>
                     <dl className="inspector-list compact">
                       <InspectorDatum label="字幕来源" value={textState.source === "subtitle" ? "SRT 字幕" : "默认文字"} />
@@ -533,12 +796,13 @@ export function Inspector({
                         list="inspector-bundled-fonts"
                         value={textState.fontFamily}
                         disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const fontFamily = event.currentTarget.value;
-                          const font = BUNDLED_TEXT_FONTS.find((entry) => entry.family === fontFamily);
-                          setTextState((current) => ({ ...current, fontFamily, fontRef: font?.fontRef ?? null }));
-                        }}
-                      />
+	                        onChange={(event) => {
+	                          const fontFamily = event.currentTarget.value;
+	                          const font = BUNDLED_TEXT_FONTS.find((entry) => entry.family === fontFamily);
+	                          updateTextState({ fontFamily, fontRef: font?.fontRef ?? null });
+	                        }}
+	                        onBlur={() => commitTextState()}
+	                      />
                       <datalist id="inspector-bundled-fonts">
                         {BUNDLED_TEXT_FONTS.map((font) => (
                           <option key={font.fontRef} value={font.family} />
@@ -551,10 +815,12 @@ export function Inspector({
                       min={1}
                       max={400}
                       step={1}
-                      disabled={inspectorFieldsDisabled}
-                      action={renderKeyframeButton("textFontSize", "字号")}
-                      onChange={(fontSize) => setTextState((current) => ({ ...current, fontSize }))}
-                    />
+	                      disabled={inspectorFieldsDisabled}
+	                      action={renderKeyframeButton("textFontSize", "字号")}
+	                      onChange={(fontSize) => updateTextState({ fontSize }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                     <label className="field-row compact-row color-row">
                       <span>颜色</span>
                       <span className="field-with-action">
@@ -562,12 +828,15 @@ export function Inspector({
                           aria-label="颜色"
                           type="color"
                           value={textState.color}
-                          disabled={inspectorFieldsDisabled}
-                          onChange={(event) => {
-                            const color = event.currentTarget.value;
-                            setTextState((current) => ({ ...current, color }));
-                          }}
-                        />
+	                          disabled={inspectorFieldsDisabled}
+	                          onChange={(event) => {
+	                            const color = event.currentTarget.value;
+	                            updateTextState({ color }, { provisional: true });
+	                          }}
+	                          onPointerUp={finishOrCommitTextFieldEdit}
+	                          onPointerCancel={() => void finishInspectorTextInteraction("cancel")}
+	                          onBlur={finishOrCommitTextFieldEdit}
+	                        />
                         {renderKeyframeButton("textColor", "颜色")}
                       </span>
                     </label>
@@ -581,12 +850,12 @@ export function Inspector({
                       <input
                         type="checkbox"
                         checked={textState.strokeEnabled}
-                        disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const strokeEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, strokeEnabled }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        onChange={(event) => {
+	                          const strokeEnabled = event.currentTarget.checked;
+	                          updateAndCommitTextState({ strokeEnabled });
+	                        }}
+	                      />
                       <span>描边</span>
                     </label>
                     <label className="field-row compact-row color-row">
@@ -595,32 +864,37 @@ export function Inspector({
                         aria-label="描边颜色"
                         type="color"
                         value={textState.strokeColor}
-                        disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
-                        onChange={(event) => {
-                          const strokeColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, strokeColor }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
+	                        onChange={(event) => {
+	                          const strokeColor = event.currentTarget.value;
+	                          updateTextState({ strokeColor }, { provisional: true });
+	                        }}
+	                        onPointerUp={finishOrCommitTextFieldEdit}
+	                        onPointerCancel={() => void finishInspectorTextInteraction("cancel")}
+	                        onBlur={finishOrCommitTextFieldEdit}
+	                      />
                     </label>
                     <TextNumberField
                       label="描边宽度"
                       value={textState.strokeWidth}
                       min={1}
                       max={120}
-                      step={1}
-                      disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
-                      onChange={(strokeWidth) => setTextState((current) => ({ ...current, strokeWidth }))}
-                    />
+	                      step={1}
+	                      disabled={inspectorFieldsDisabled || !textState.strokeEnabled}
+	                      onChange={(strokeWidth) => updateTextState({ strokeWidth }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.shadowEnabled}
-                        disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const shadowEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, shadowEnabled }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        onChange={(event) => {
+	                          const shadowEnabled = event.currentTarget.checked;
+	                          updateAndCommitTextState({ shadowEnabled });
+	                        }}
+	                      />
                       <span>阴影</span>
                     </label>
                     <label className="field-row compact-row color-row">
@@ -629,23 +903,26 @@ export function Inspector({
                         aria-label="阴影颜色"
                         type="color"
                         value={textState.shadowColor}
-                        disabled={inspectorFieldsDisabled || !textState.shadowEnabled}
-                        onChange={(event) => {
-                          const shadowColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, shadowColor }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled || !textState.shadowEnabled}
+	                        onChange={(event) => {
+	                          const shadowColor = event.currentTarget.value;
+	                          updateTextState({ shadowColor }, { provisional: true });
+	                        }}
+	                        onPointerUp={finishOrCommitTextFieldEdit}
+	                        onPointerCancel={() => void finishInspectorTextInteraction("cancel")}
+	                        onBlur={finishOrCommitTextFieldEdit}
+	                      />
                     </label>
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.backgroundEnabled}
-                        disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const backgroundEnabled = event.currentTarget.checked;
-                          setTextState((current) => ({ ...current, backgroundEnabled }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        onChange={(event) => {
+	                          const backgroundEnabled = event.currentTarget.checked;
+	                          updateAndCommitTextState({ backgroundEnabled });
+	                        }}
+	                      />
                       <span>背景</span>
                     </label>
                     <label className="field-row compact-row color-row">
@@ -654,12 +931,15 @@ export function Inspector({
                         aria-label="背景颜色"
                         type="color"
                         value={textState.backgroundColor}
-                        disabled={inspectorFieldsDisabled || !textState.backgroundEnabled}
-                        onChange={(event) => {
-                          const backgroundColor = event.currentTarget.value;
-                          setTextState((current) => ({ ...current, backgroundColor }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled || !textState.backgroundEnabled}
+	                        onChange={(event) => {
+	                          const backgroundColor = event.currentTarget.value;
+	                          updateTextState({ backgroundColor }, { provisional: true });
+	                        }}
+	                        onPointerUp={finishOrCommitTextFieldEdit}
+	                        onPointerCancel={() => void finishInspectorTextInteraction("cancel")}
+	                        onBlur={finishOrCommitTextFieldEdit}
+	                      />
                     </label>
                     <div className="field-row compact-row">
                       <span>对齐</span>
@@ -668,10 +948,10 @@ export function Inspector({
                           <button
                             key={value}
                             type="button"
-                            className={textState.alignment === value ? "active" : ""}
-                            disabled={inspectorFieldsDisabled}
-                            onClick={() => setTextState((current) => ({ ...current, alignment: value }))}
-                          >
+	                            className={textState.alignment === value ? "active" : ""}
+	                            disabled={inspectorFieldsDisabled}
+	                            onClick={() => updateAndCommitTextState({ alignment: value })}
+	                          >
                             {value === "left" ? "左" : value === "center" ? "中" : "右"}
                           </button>
                         ))}
@@ -689,29 +969,33 @@ export function Inspector({
                       value={textState.textBoxWidthMillis}
                       min={1}
                       max={1000}
-                      step={10}
-                      disabled={inspectorFieldsDisabled}
-                      onChange={(textBoxWidthMillis) => setTextState((current) => ({ ...current, textBoxWidthMillis }))}
-                    />
+	                      step={10}
+	                      disabled={inspectorFieldsDisabled}
+	                      onChange={(textBoxWidthMillis) => updateTextState({ textBoxWidthMillis }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                     <TextNumberField
                       label="高度"
                       value={textState.textBoxHeightMillis}
                       min={1}
                       max={1000}
-                      step={10}
-                      disabled={inspectorFieldsDisabled}
-                      onChange={(textBoxHeightMillis) => setTextState((current) => ({ ...current, textBoxHeightMillis }))}
-                    />
+	                      step={10}
+	                      disabled={inspectorFieldsDisabled}
+	                      onChange={(textBoxHeightMillis) => updateTextState({ textBoxHeightMillis }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                     <label className="toggle-row compact-toggle">
                       <input
                         type="checkbox"
                         checked={textState.wrapping === "auto"}
-                        disabled={inspectorFieldsDisabled}
-                        onChange={(event) => {
-                          const wrapping = event.currentTarget.checked ? "auto" : "none";
-                          setTextState((current) => ({ ...current, wrapping }));
-                        }}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        onChange={(event) => {
+	                          const wrapping = event.currentTarget.checked ? "auto" : "none";
+	                          updateAndCommitTextState({ wrapping });
+	                        }}
+	                      />
                       <span>自动换行</span>
                     </label>
                     <TextNumberField
@@ -720,20 +1004,24 @@ export function Inspector({
                       min={500}
                       max={3000}
                       step={50}
-                      disabled={inspectorFieldsDisabled}
-                      action={renderKeyframeButton("textLineHeight", "行高")}
-                      onChange={(lineHeightMillis) => setTextState((current) => ({ ...current, lineHeightMillis }))}
-                    />
+	                      disabled={inspectorFieldsDisabled}
+	                      action={renderKeyframeButton("textLineHeight", "行高")}
+	                      onChange={(lineHeightMillis) => updateTextState({ lineHeightMillis }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                     <TextNumberField
                       label="字间距"
                       value={textState.letterSpacingMillis}
                       min={0}
                       max={2000}
                       step={50}
-                      disabled={inspectorFieldsDisabled}
-                      action={renderKeyframeButton("textLetterSpacing", "字间距")}
-                      onChange={(letterSpacingMillis) => setTextState((current) => ({ ...current, letterSpacingMillis }))}
-                    />
+	                      disabled={inspectorFieldsDisabled}
+	                      action={renderKeyframeButton("textLetterSpacing", "字间距")}
+	                      onChange={(letterSpacingMillis) => updateTextState({ letterSpacingMillis }, { provisional: true })}
+	                      onCommit={finishOrCommitTextFieldEdit}
+	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                    />
                   </section>
 
                   <section className="inspector-section" aria-label="布局">
@@ -749,40 +1037,48 @@ export function Inspector({
                         min={0}
                         max={1000}
                         step={10}
-                        disabled={inspectorFieldsDisabled}
-                        action={renderKeyframeButton("textLayoutX", "布局 X")}
-                        onChange={(layoutXMillis) => setTextState((current) => ({ ...current, layoutXMillis }))}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        action={renderKeyframeButton("textLayoutX", "布局 X")}
+	                        onChange={(layoutXMillis) => updateTextState({ layoutXMillis }, { provisional: true })}
+	                        onCommit={finishOrCommitTextFieldEdit}
+	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                      />
                       <TextNumberField
                         label="Y"
                         value={textState.layoutYMillis}
                         min={0}
                         max={1000}
                         step={10}
-                        disabled={inspectorFieldsDisabled}
-                        action={renderKeyframeButton("textLayoutY", "布局 Y")}
-                        onChange={(layoutYMillis) => setTextState((current) => ({ ...current, layoutYMillis }))}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        action={renderKeyframeButton("textLayoutY", "布局 Y")}
+	                        onChange={(layoutYMillis) => updateTextState({ layoutYMillis }, { provisional: true })}
+	                        onCommit={finishOrCommitTextFieldEdit}
+	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                      />
                       <TextNumberField
                         label="宽"
                         value={textState.layoutWidthMillis}
                         min={1}
                         max={1000}
                         step={10}
-                        disabled={inspectorFieldsDisabled}
-                        action={renderKeyframeButton("textLayoutWidth", "布局宽")}
-                        onChange={(layoutWidthMillis) => setTextState((current) => ({ ...current, layoutWidthMillis }))}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        action={renderKeyframeButton("textLayoutWidth", "布局宽")}
+	                        onChange={(layoutWidthMillis) => updateTextState({ layoutWidthMillis }, { provisional: true })}
+	                        onCommit={finishOrCommitTextFieldEdit}
+	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                      />
                       <TextNumberField
                         label="高"
                         value={textState.layoutHeightMillis}
                         min={1}
                         max={1000}
                         step={10}
-                        disabled={inspectorFieldsDisabled}
-                        action={renderKeyframeButton("textLayoutHeight", "布局高")}
-                        onChange={(layoutHeightMillis) => setTextState((current) => ({ ...current, layoutHeightMillis }))}
-                      />
+	                        disabled={inspectorFieldsDisabled}
+	                        action={renderKeyframeButton("textLayoutHeight", "布局高")}
+	                        onChange={(layoutHeightMillis) => updateTextState({ layoutHeightMillis }, { provisional: true })}
+	                        onCommit={finishOrCommitTextFieldEdit}
+	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
+	                      />
                     </div>
                     {textValidationMessage === null ? null : <p className="canvas-validation-error">{textValidationMessage}</p>}
                   </section>
@@ -810,7 +1106,16 @@ export function Inspector({
                     max="400"
                     step="5"
                     value={volumePercent}
-                    onChange={(event) => setVolumePercent(toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400))}
+                    onPointerDown={beginInspectorAudioInteraction}
+                    onPointerUp={() => void finishInspectorAudioInteraction("commit")}
+                    onPointerCancel={() => void finishInspectorAudioInteraction("cancel")}
+                    onBlur={() => void finishInspectorAudioInteraction("commit")}
+                    onChange={(event) =>
+                      updateAudioState(
+                        { volumePercent: toBoundedNumber(event.currentTarget.valueAsNumber, volumePercent, 0, 400) },
+                        { provisional: true }
+                      )
+                    }
                   />
                   {renderKeyframeButton("volume", "音量")}
                 </span>
@@ -824,7 +1129,16 @@ export function Inspector({
                   max="100"
                   step="5"
                   value={panPercent}
-                  onChange={(event) => setPanPercent(toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100))}
+                  onPointerDown={beginInspectorAudioInteraction}
+                  onPointerUp={() => void finishInspectorAudioInteraction("commit")}
+                  onPointerCancel={() => void finishInspectorAudioInteraction("cancel")}
+                  onBlur={() => void finishInspectorAudioInteraction("commit")}
+                  onChange={(event) =>
+                    updateAudioState(
+                      { panPercent: toBoundedNumber(event.currentTarget.valueAsNumber, panPercent, -100, 100) },
+                      { provisional: true }
+                    )
+                  }
                 />
               </label>
               <label className="field-row compact-row">
@@ -833,9 +1147,17 @@ export function Inspector({
                   aria-label="淡入"
                   type="number"
                   min="0"
-                  step="10000"
-                  value={fadeInUs}
-                  onChange={(event) => setFadeInUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeInUs, 0, 60_000_000))}
+                  step="0.1"
+                  value={microsecondsToSeconds(fadeInUs)}
+                  onChange={(event) =>
+                    updateAudioState(
+                      {
+                        fadeInUs: secondsToNonNegativeMicroseconds(toBoundedFloat(event.currentTarget.valueAsNumber, 0, 0, 60))
+                      },
+                      { provisional: true }
+                    )
+                  }
+                  onBlur={() => void finishInspectorAudioInteraction("commit")}
                 />
               </label>
               <label className="field-row compact-row">
@@ -844,9 +1166,17 @@ export function Inspector({
                   aria-label="淡出"
                   type="number"
                   min="0"
-                  step="10000"
-                  value={fadeOutUs}
-                  onChange={(event) => setFadeOutUs(toBoundedNumber(event.currentTarget.valueAsNumber, fadeOutUs, 0, 60_000_000))}
+                  step="0.1"
+                  value={microsecondsToSeconds(fadeOutUs)}
+                  onChange={(event) =>
+                    updateAudioState(
+                      {
+                        fadeOutUs: secondsToNonNegativeMicroseconds(toBoundedFloat(event.currentTarget.valueAsNumber, 0, 0, 60))
+                      },
+                      { provisional: true }
+                    )
+                  }
+                  onBlur={() => void finishInspectorAudioInteraction("commit")}
                 />
               </label>
               <label className="toggle-row compact-toggle">
@@ -913,20 +1243,6 @@ function CanvasDraftSettings({
   const canFinish = validationMessage === null && !pending;
   const displayConfig = candidate ?? acceptedConfig;
   const backgroundStatus = formatCanvasBackgroundStatus(displayConfig);
-
-  useEffect(() => {
-    if (!modalOpen || candidate === null || candidateKey === null || validationMessage !== null || pending) {
-      return undefined;
-    }
-    if (!changed || candidateKey === canvasCommitKeyRef.current) {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => {
-      canvasCommitKeyRef.current = candidateKey;
-      onUpdateDraftCanvasConfig(candidate);
-    }, 160);
-    return () => window.clearTimeout(timeout);
-  }, [candidate, candidateKey, changed, modalOpen, onUpdateDraftCanvasConfig, pending, validationMessage]);
 
   function selectPreset(preset: CanvasPresetChoice): void {
     if (preset === "custom") {
@@ -1494,7 +1810,9 @@ function TextNumberField({
   step,
   disabled = false,
   action,
-  onChange
+  onChange,
+  onCommit,
+  onCancel
 }: {
   label: string;
   value: number;
@@ -1504,6 +1822,8 @@ function TextNumberField({
   disabled?: boolean;
   action?: ReactNode;
   onChange: (value: number) => void;
+  onCommit?: () => void;
+  onCancel?: () => void;
 }): React.ReactElement {
   return (
     <div className={action === undefined ? "field-row compact-row text-number-row" : "field-row compact-row text-number-row with-action"}>
@@ -1517,6 +1837,14 @@ function TextNumberField({
         value={Number.isFinite(value) ? value : ""}
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
+        onPointerUp={onCommit}
+        onPointerCancel={onCancel}
+        onBlur={onCommit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
       />
       {action}
     </div>
@@ -1692,16 +2020,19 @@ function SegmentVisualControls({
   visual,
   pending,
   renderKeyframeButton,
+  projectInteractions,
   onUpdateVisual
 }: {
   visual: SegmentVisual;
   pending: boolean;
   renderKeyframeButton: (property: KeyframeProperty, label: string) => React.ReactElement;
+  projectInteractions: ProjectInteractionController;
   onUpdateVisual: (patch: SegmentVisualPatch) => void;
 }): React.ReactElement {
   const visualKey = useMemo(() => JSON.stringify(visual), [visual]);
   const [visualState, setVisualState] = useState<VisualFormState>(() => visualFormFromVisual(visual));
   const visualCommitKeyRef = useRef<string | null>(null);
+  const visualInteractionRef = useRef<VisualInteractionState | null>(null);
 
   useEffect(() => {
     const nextVisualState = visualFormFromVisual(visual);
@@ -1714,23 +2045,146 @@ function SegmentVisualControls({
   const validationMessage = validateVisualForm(visualState);
   const changed = patch !== null && visualPatchChangesVisual(visual, patch);
 
-  useEffect(() => {
-    if (patch === null || validationMessage !== null || !changed || pending) {
-      return undefined;
-    }
-    const nextKey = visualPatchKey(patch);
-    if (nextKey === visualCommitKeyRef.current) {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => {
-      visualCommitKeyRef.current = nextKey;
-      onUpdateVisual(patch);
-    }, 160);
-    return () => window.clearTimeout(timeout);
-  }, [changed, onUpdateVisual, patch, pending, validationMessage]);
+function updateVisualField(
+  field: keyof VisualFormState,
+  value: string | boolean,
+  options: { provisional?: boolean } = {}
+  ): void {
+    setVisualState((current) => {
+      const next = { ...current, [field]: value };
+      if (options.provisional) {
+        queueInspectorVisualUpdate(next);
+      }
+      return next;
+    });
+  }
 
-  function updateVisualField(field: keyof VisualFormState, value: string | boolean): void {
+  function updateVisualFieldDraft(field: keyof VisualFormState, value: string | boolean): void {
     setVisualState((current) => ({ ...current, [field]: value }));
+  }
+
+  function commitVisualState(state: VisualFormState = visualState): void {
+    const nextPatch = buildVisualPatchFromForm(state);
+    if (
+      nextPatch === null ||
+      validateVisualForm(state) !== null ||
+      !visualPatchChangesVisual(visual, nextPatch) ||
+      pending
+    ) {
+      return;
+    }
+    const nextKey = visualPatchKey(nextPatch);
+    if (nextKey === visualCommitKeyRef.current) {
+      return;
+    }
+    visualCommitKeyRef.current = nextKey;
+    onUpdateVisual(nextPatch);
+  }
+
+  function commitVisualFieldEdit(): void {
+    commitVisualState();
+  }
+
+  function updateAndCommitVisualField(field: keyof VisualFormState, value: string | boolean): void {
+    setVisualState((current) => {
+      const next = { ...current, [field]: value };
+      commitVisualState(next);
+      return next;
+    });
+  }
+
+  function beginInspectorVisualInteraction(): VisualInteractionState {
+    const existing = visualInteractionRef.current;
+    if (existing !== null) {
+      return existing;
+    }
+    const interaction: VisualInteractionState = {
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPatch: null
+    };
+    interaction.beginPromise = projectInteractions.begin("selectedSegmentVisual").then((begin) => {
+      if (visualInteractionRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      flushInspectorVisualUpdate(interaction);
+    });
+    visualInteractionRef.current = interaction;
+    return interaction;
+  }
+
+  function queueInspectorVisualUpdate(state: VisualFormState): void {
+    const nextPatch = buildVisualPatchFromForm(state);
+    if (nextPatch === null || validateVisualForm(state) !== null || pending) {
+      return;
+    }
+    const interaction = beginInspectorVisualInteraction();
+    interaction.pendingPatch = nextPatch;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushInspectorVisualUpdate(interaction);
+    });
+  }
+
+  function flushInspectorVisualUpdate(interaction: VisualInteractionState): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPatch === null) {
+      return;
+    }
+    const nextPatch = interaction.pendingPatch;
+    interaction.pendingPatch = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, {
+      kind: "selectedSegmentVisual",
+      patch: nextPatch
+    }).then(() => {
+      interaction.updateInFlight = false;
+      if (visualInteractionRef.current !== interaction) {
+        return;
+      }
+      flushInspectorVisualUpdate(interaction);
+    });
+  }
+
+  async function finishInspectorVisualInteraction(action: "commit" | "cancel"): Promise<void> {
+    const interaction = visualInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPatch !== null) {
+      flushInspectorVisualUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingPatch !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    visualInteractionRef.current = null;
+    if (interaction.interactionId === null) {
+      return;
+    }
+    if (action === "commit") {
+      const nextPatch = buildVisualPatchFromForm(visualState);
+      if (nextPatch !== null) {
+        visualCommitKeyRef.current = visualPatchKey(nextPatch);
+      }
+      await projectInteractions.commit(interaction.interactionId);
+      return;
+    }
+    await projectInteractions.cancel(interaction.interactionId);
   }
 
   return (
@@ -1739,7 +2193,7 @@ function SegmentVisualControls({
         <input
           type="checkbox"
           checked={visualState.visible}
-          onChange={(event) => updateVisualField("visible", event.currentTarget.checked)}
+          onChange={(event) => updateAndCommitVisualField("visible", event.currentTarget.checked)}
           disabled={pending}
         />
         <span>显示画面</span>
@@ -1755,8 +2209,15 @@ function SegmentVisualControls({
         firstValue={visualState.positionX}
         secondValue={visualState.positionY}
         disabled={pending}
-        onFirstChange={(value) => updateVisualField("positionX", value)}
-        onSecondChange={(value) => updateVisualField("positionY", value)}
+        onFirstPreviewChange={(value) => updateVisualField("positionX", value, { provisional: true })}
+        onSecondPreviewChange={(value) => updateVisualField("positionY", value, { provisional: true })}
+        onFirstValueChange={(value) => updateVisualFieldDraft("positionX", value)}
+        onSecondValueChange={(value) => updateVisualFieldDraft("positionY", value)}
+        onFirstCommit={commitVisualFieldEdit}
+        onSecondCommit={commitVisualFieldEdit}
+        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
+        onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         firstAction={renderKeyframeButton("visualPositionX", "位置 X")}
         secondAction={renderKeyframeButton("visualPositionY", "位置 Y")}
       />
@@ -1771,8 +2232,15 @@ function SegmentVisualControls({
         firstValue={visualState.scaleXMillis}
         secondValue={visualState.scaleYMillis}
         disabled={pending}
-        onFirstChange={(value) => updateVisualField("scaleXMillis", value)}
-        onSecondChange={(value) => updateVisualField("scaleYMillis", value)}
+        onFirstPreviewChange={(value) => updateVisualField("scaleXMillis", value, { provisional: true })}
+        onSecondPreviewChange={(value) => updateVisualField("scaleYMillis", value, { provisional: true })}
+        onFirstValueChange={(value) => updateVisualFieldDraft("scaleXMillis", value)}
+        onSecondValueChange={(value) => updateVisualFieldDraft("scaleYMillis", value)}
+        onFirstCommit={commitVisualFieldEdit}
+        onSecondCommit={commitVisualFieldEdit}
+        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
+        onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         firstAction={renderKeyframeButton("visualScaleX", "缩放 X")}
         secondAction={renderKeyframeButton("visualScaleY", "缩放 Y")}
       />
@@ -1784,7 +2252,12 @@ function SegmentVisualControls({
         step={1}
         value={visualState.rotationDegrees}
         disabled={pending}
-        onChange={(value) => updateVisualField("rotationDegrees", value)}
+        onPreviewChange={(value) => updateVisualField("rotationDegrees", value, { provisional: true })}
+        onValueChange={(value) => updateVisualFieldDraft("rotationDegrees", value)}
+        onCommit={commitVisualFieldEdit}
+        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
+        onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         action={renderKeyframeButton("visualRotation", "旋转")}
       />
 
@@ -1795,7 +2268,12 @@ function SegmentVisualControls({
         step={10}
         value={visualState.opacityMillis}
         disabled={pending}
-        onChange={(value) => updateVisualField("opacityMillis", value)}
+        onPreviewChange={(value) => updateVisualField("opacityMillis", value, { provisional: true })}
+        onValueChange={(value) => updateVisualFieldDraft("opacityMillis", value)}
+        onCommit={commitVisualFieldEdit}
+        onInteractionStart={beginInspectorVisualInteraction}
+        onInteractionCommit={() => void finishInspectorVisualInteraction("commit")}
+        onInteractionCancel={() => void finishInspectorVisualInteraction("cancel")}
         action={renderKeyframeButton("visualOpacity", "不透明度")}
       />
 
@@ -1808,7 +2286,7 @@ function SegmentVisualControls({
               type="button"
               className={visualState.fitMode === fitMode ? "active" : ""}
               aria-pressed={visualState.fitMode === fitMode}
-              onClick={() => updateVisualField("fitMode", fitMode)}
+              onClick={() => updateAndCommitVisualField("fitMode", fitMode)}
               disabled={pending}
             >
               {FIT_MODE_LABELS[fitMode]}
@@ -1828,7 +2306,8 @@ function SegmentVisualControls({
             step={10}
             value={visualState.cropLeftMillis}
             disabled={pending}
-            onChange={(value) => updateVisualField("cropLeftMillis", value)}
+            onChange={(value) => updateVisualFieldDraft("cropLeftMillis", value)}
+            onCommit={commitVisualFieldEdit}
           />
           <VisualCompactNumber
             label="右"
@@ -1838,7 +2317,8 @@ function SegmentVisualControls({
             step={10}
             value={visualState.cropRightMillis}
             disabled={pending}
-            onChange={(value) => updateVisualField("cropRightMillis", value)}
+            onChange={(value) => updateVisualFieldDraft("cropRightMillis", value)}
+            onCommit={commitVisualFieldEdit}
           />
           <VisualCompactNumber
             label="上"
@@ -1848,7 +2328,8 @@ function SegmentVisualControls({
             step={10}
             value={visualState.cropTopMillis}
             disabled={pending}
-            onChange={(value) => updateVisualField("cropTopMillis", value)}
+            onChange={(value) => updateVisualFieldDraft("cropTopMillis", value)}
+            onCommit={commitVisualFieldEdit}
           />
           <VisualCompactNumber
             label="下"
@@ -1858,7 +2339,8 @@ function SegmentVisualControls({
             step={10}
             value={visualState.cropBottomMillis}
             disabled={pending}
-            onChange={(value) => updateVisualField("cropBottomMillis", value)}
+            onChange={(value) => updateVisualFieldDraft("cropBottomMillis", value)}
+            onCommit={commitVisualFieldEdit}
           />
         </div>
       </div>
@@ -1872,7 +2354,7 @@ function SegmentVisualControls({
               type="button"
               className={visualState.backgroundKind === backgroundKind ? "active" : ""}
               aria-pressed={visualState.backgroundKind === backgroundKind}
-              onClick={() => updateVisualField("backgroundKind", backgroundKind)}
+              onClick={() => updateAndCommitVisualField("backgroundKind", backgroundKind)}
               disabled={pending || backgroundKind === "image"}
             >
               {VISUAL_BACKGROUND_LABELS[backgroundKind]}
@@ -1889,14 +2371,17 @@ function SegmentVisualControls({
               aria-label="背景填充颜色"
               type="color"
               value={isHexColor(visualState.backgroundColor) ? visualState.backgroundColor : "#000000"}
-              onChange={(event) => updateVisualField("backgroundColor", event.currentTarget.value)}
+              onChange={(event) => updateVisualFieldDraft("backgroundColor", event.currentTarget.value)}
+              onPointerUp={commitVisualFieldEdit}
+              onBlur={commitVisualFieldEdit}
               disabled={pending}
             />
             <input
               aria-label="背景填充色值"
               type="text"
               value={visualState.backgroundColor}
-              onChange={(event) => updateVisualField("backgroundColor", event.currentTarget.value)}
+              onChange={(event) => updateVisualFieldDraft("backgroundColor", event.currentTarget.value)}
+              onBlur={commitVisualFieldEdit}
               disabled={pending}
             />
           </span>
@@ -1919,8 +2404,15 @@ function VisualPairControl({
   firstValue,
   secondValue,
   disabled,
-  onFirstChange,
-  onSecondChange,
+  onFirstPreviewChange,
+  onSecondPreviewChange,
+  onFirstValueChange,
+  onSecondValueChange,
+  onFirstCommit,
+  onSecondCommit,
+  onInteractionStart,
+  onInteractionCommit,
+  onInteractionCancel,
   firstAction,
   secondAction
 }: {
@@ -1933,8 +2425,15 @@ function VisualPairControl({
   firstValue: string;
   secondValue: string;
   disabled: boolean;
-  onFirstChange: (value: string) => void;
-  onSecondChange: (value: string) => void;
+  onFirstPreviewChange: (value: string) => void;
+  onSecondPreviewChange: (value: string) => void;
+  onFirstValueChange: (value: string) => void;
+  onSecondValueChange: (value: string) => void;
+  onFirstCommit: () => void;
+  onSecondCommit: () => void;
+  onInteractionStart: () => void;
+  onInteractionCommit: () => void;
+  onInteractionCancel: () => void;
   firstAction?: ReactNode;
   secondAction?: ReactNode;
 }): React.ReactElement {
@@ -1950,7 +2449,12 @@ function VisualPairControl({
           step={step}
           value={firstValue}
           disabled={disabled}
-          onChange={onFirstChange}
+          onPreviewChange={onFirstPreviewChange}
+          onValueChange={onFirstValueChange}
+          onCommit={onFirstCommit}
+          onInteractionStart={onInteractionStart}
+          onInteractionCommit={onInteractionCommit}
+          onInteractionCancel={onInteractionCancel}
           action={firstAction}
         />
         <VisualRangeNumber
@@ -1961,7 +2465,12 @@ function VisualPairControl({
           step={step}
           value={secondValue}
           disabled={disabled}
-          onChange={onSecondChange}
+          onPreviewChange={onSecondPreviewChange}
+          onValueChange={onSecondValueChange}
+          onCommit={onSecondCommit}
+          onInteractionStart={onInteractionStart}
+          onInteractionCommit={onInteractionCommit}
+          onInteractionCancel={onInteractionCancel}
           action={secondAction}
         />
       </div>
@@ -1976,7 +2485,12 @@ function VisualSingleControl({
   step,
   value,
   disabled,
-  onChange,
+  onPreviewChange,
+  onValueChange,
+  onCommit,
+  onInteractionStart,
+  onInteractionCommit,
+  onInteractionCancel,
   action
 }: {
   label: string;
@@ -1985,7 +2499,12 @@ function VisualSingleControl({
   step: number;
   value: string;
   disabled: boolean;
-  onChange: (value: string) => void;
+  onPreviewChange: (value: string) => void;
+  onValueChange: (value: string) => void;
+  onCommit: () => void;
+  onInteractionStart: () => void;
+  onInteractionCommit: () => void;
+  onInteractionCancel: () => void;
   action?: ReactNode;
 }): React.ReactElement {
   return (
@@ -1999,7 +2518,12 @@ function VisualSingleControl({
         step={step}
         value={value}
         disabled={disabled}
-        onChange={onChange}
+        onPreviewChange={onPreviewChange}
+        onValueChange={onValueChange}
+        onCommit={onCommit}
+        onInteractionStart={onInteractionStart}
+        onInteractionCommit={onInteractionCommit}
+        onInteractionCancel={onInteractionCancel}
         action={action}
       />
     </div>
@@ -2014,7 +2538,12 @@ function VisualRangeNumber({
   step,
   value,
   disabled,
-  onChange,
+  onPreviewChange,
+  onValueChange,
+  onCommit,
+  onInteractionStart,
+  onInteractionCommit,
+  onInteractionCancel,
   action
 }: {
   label: string;
@@ -2024,7 +2553,12 @@ function VisualRangeNumber({
   step: number;
   value: string;
   disabled: boolean;
-  onChange: (value: string) => void;
+  onPreviewChange: (value: string) => void;
+  onValueChange: (value: string) => void;
+  onCommit: () => void;
+  onInteractionStart: () => void;
+  onInteractionCommit: () => void;
+  onInteractionCancel: () => void;
   action?: ReactNode;
 }): React.ReactElement {
   const rangeValue = clamp(Number.parseInt(value, 10) || 0, min, max);
@@ -2040,7 +2574,10 @@ function VisualRangeNumber({
         max={max}
         step={step}
         value={rangeValue}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onPointerDown={() => onInteractionStart()}
+        onPointerUp={() => onInteractionCommit()}
+        onPointerCancel={() => onInteractionCancel()}
+        onChange={(event) => onPreviewChange(event.currentTarget.value)}
         disabled={disabled}
       />
       <input
@@ -2050,7 +2587,13 @@ function VisualRangeNumber({
         max={max}
         step={step}
         value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onChange={(event) => onValueChange(event.currentTarget.value)}
+        onBlur={onCommit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
         disabled={disabled}
       />
       {action}
@@ -2066,7 +2609,8 @@ function VisualCompactNumber({
   step,
   value,
   disabled,
-  onChange
+  onChange,
+  onCommit
 }: {
   label: string;
   ariaLabel: string;
@@ -2076,6 +2620,7 @@ function VisualCompactNumber({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  onCommit?: () => void;
 }): React.ReactElement {
   return (
     <label className="visual-compact-number">
@@ -2088,6 +2633,12 @@ function VisualCompactNumber({
         step={step}
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
+        onBlur={onCommit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
         disabled={disabled}
       />
     </label>
@@ -2365,6 +2916,18 @@ function clamp(value: number, min: number, max: number): number {
 function toBoundedNumber(value: number, fallback: number, min: number, max: number): number {
   const rounded = Math.round(Number.isFinite(value) ? value : fallback);
   return clamp(rounded, min, max);
+}
+
+function toBoundedFloat(value: number, fallback: number, min: number, max: number): number {
+  return clamp(Number.isFinite(value) ? value : fallback, min, max);
+}
+
+function microsecondsToSeconds(value: number): number {
+  return Math.round((Math.max(0, value) / 1_000_000) * 10) / 10;
+}
+
+function secondsToNonNegativeMicroseconds(value: number): number {
+  return Math.max(0, Math.round(value * 1_000_000));
 }
 
 function isHexColor(value: string): boolean {

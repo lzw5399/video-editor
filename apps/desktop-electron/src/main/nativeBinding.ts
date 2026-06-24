@@ -712,6 +712,7 @@ export type RealtimePreviewProjectSessionSnapshotRequest = {
   sessionId: string;
   projectSessionId: string;
   expectedRevision: number;
+  interactionId?: string | null;
 };
 
 export type RealtimePreviewSeekRequest = {

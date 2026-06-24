@@ -124,11 +124,12 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     updateHostRect: (rect: RealtimePreviewHostRect) => ipcRenderer.invoke("realtimePreviewHost:updateRect", sanitizeHostRect(rect)),
     detachSurface: () => ipcRenderer.invoke("realtimePreviewHost:detachSurface"),
     subscribeTelemetry: subscribeRealtimePreviewTelemetry,
-    updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number) =>
+    updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number, interactionId?: string | null) =>
       ipcRenderer.invoke(
         "realtimePreviewHost:updateProjectSessionSnapshot",
         sanitizeProjectSessionId(projectSessionId),
-        sanitizeExpectedRevision(expectedRevision)
+        sanitizeExpectedRevision(expectedRevision),
+        interactionId === null || interactionId === undefined ? null : sanitizeProjectSessionId(interactionId)
       ),
     seek: (targetTimeMicroseconds: number) =>
       ipcRenderer.invoke("realtimePreviewHost:seek", sanitizeTargetTimeMicroseconds(targetTimeMicroseconds)),

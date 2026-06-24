@@ -535,6 +535,7 @@ pub fn update_realtime_preview_project_session_snapshot(
     let snapshot = project_session_service::realtime_preview_snapshot(
         &request.project_session_id,
         request.expected_revision,
+        request.interaction_id.as_deref(),
     )
     .map_err(napi::Error::from_reason)?;
     with_realtime_preview_registry(|registry| {
@@ -1115,6 +1116,8 @@ struct RealtimePreviewProjectSessionSnapshotRequest {
     session_id: String,
     project_session_id: String,
     expected_revision: u64,
+    #[serde(default)]
+    interaction_id: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]

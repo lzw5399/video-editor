@@ -42,6 +42,14 @@ type NativeCommandObservation = {
   sessionId?: string | null;
   projectSessionId?: string | null;
   expectedRevision?: number | null;
+  interactionId?: string | null;
+  interactionKind?: string | null;
+  interactionSequence?: number | null;
+  interactionPayloadKind?: string | null;
+  resultRevision?: number | null;
+  resultOk?: boolean | null;
+  resultDeltaCommand?: string | null;
+  revisionUnchanged?: boolean | null;
   hasDraftField?: boolean;
 };
 
@@ -66,6 +74,14 @@ type ProjectSessionCall = {
   textFontRef?: string | null;
   srtContent?: string | null;
   targetTrackHandle?: string | null;
+  interactionId?: string | null;
+  interactionKind?: string | null;
+  interactionSequence?: number | null;
+  interactionPayloadKind?: string | null;
+  resultRevision?: number | null;
+  resultOk?: boolean | null;
+  resultDeltaCommand?: string | null;
+  revisionUnchanged?: boolean | null;
   hasDraftField?: boolean;
 };
 
@@ -215,33 +231,33 @@ async function resetNativeCommandObservations(app: ElectronApplication, page: Pa
 }
 
 async function readNativeCommandObservations(app: ElectronApplication): Promise<NativeCommandObservation[]> {
-  const [directNativeObservations, projectCalls] = await Promise.all([
-    app.evaluate(() => {
-      return (
+  const { directNativeObservations, projectCalls } = await app.evaluate(() => {
+    return {
+      directNativeObservations:
         (globalThis as typeof globalThis & { __videoEditorTestNativeCommandObservations?: NativeCommandObservation[] })
-          .__videoEditorTestNativeCommandObservations ?? []
-      );
-    }),
-    app.evaluate(() => {
-      return (
+          .__videoEditorTestNativeCommandObservations ?? [],
+      projectCalls:
         (globalThis as typeof globalThis & { __videoEditorTestProjectSessionCalls?: ProjectSessionCall[] })
           .__videoEditorTestProjectSessionCalls ?? []
-      );
-    })
-  ]);
+    };
+  });
   return [
     ...directNativeObservations,
     ...projectCalls
       .filter(
         (call) =>
           call.command === "startProjectSessionExport" ||
-          call.intentKind !== null
+          call.intentKind !== null ||
+          call.command === "beginProjectInteraction" ||
+          call.command === "updateProjectInteraction" ||
+          call.command === "commitProjectInteraction" ||
+          call.command === "cancelProjectInteraction"
       )
       .map((call) => {
         const command =
           call.command === "startProjectSessionExport"
             ? "startExport"
-            : (call.intentKind ?? "executeProjectIntent");
+            : (call.intentKind ?? call.command);
         return {
           command,
           kind: command,
@@ -266,6 +282,14 @@ async function readNativeCommandObservations(app: ElectronApplication): Promise<
           sessionId: call.sessionId ?? null,
           projectSessionId: call.projectSessionId ?? call.sessionId ?? null,
           expectedRevision: call.expectedRevision ?? null,
+          interactionId: call.interactionId ?? null,
+          interactionKind: call.interactionKind ?? null,
+          interactionSequence: call.interactionSequence ?? null,
+          interactionPayloadKind: call.interactionPayloadKind ?? null,
+          resultRevision: call.resultRevision ?? null,
+          resultOk: call.resultOk ?? null,
+          resultDeltaCommand: call.resultDeltaCommand ?? null,
+          revisionUnchanged: call.revisionUnchanged ?? null,
           hasDraftField: call.hasDraftField
         };
       })
@@ -283,8 +307,47 @@ async function readRealtimePreviewHostCalls(app: ElectronApplication): Promise<R
 
 async function expectCommandCall(app: ElectronApplication, command: string): Promise<void> {
   await expect
-    .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === command))
+    .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === command), { timeout: 20_000 })
     .toBe(true);
+}
+
+async function expectLatestSelectedTextPatch(app: ElectronApplication, patch: Record<string, unknown>): Promise<void> {
+  await expect
+    .poll(async () => {
+      const selectedTextUpdate = (await readNativeCommandObservations(app)).findLast(
+        (call) =>
+          call.command === "updateProjectInteraction" &&
+          call.interactionKind === "selectedText" &&
+          call.resultOk === true
+      );
+      return selectedTextUpdate?.textPatch ?? null;
+    })
+    .toMatchObject(patch);
+}
+
+async function expectLatestAudioInteraction(app: ElectronApplication): Promise<void> {
+  await expect
+    .poll(async () => {
+      const audioUpdate = (await readNativeCommandObservations(app)).findLast(
+        (call) =>
+          call.command === "commitProjectInteraction" &&
+          call.interactionKind === "selectedSegmentAudio" &&
+          call.resultOk === true
+      );
+      return audioUpdate?.kind ?? null;
+    })
+    .toBe("commitProjectInteraction");
+}
+
+async function expectLatestVisualPatch(app: ElectronApplication, patch: Record<string, unknown>): Promise<void> {
+  await expect
+    .poll(async () => {
+      const visualCall = (await readNativeCommandObservations(app)).findLast(
+        (call) => call.command === "updateSelectedSegmentVisual" && call.resultOk === true
+      );
+      return visualCall?.visualPatch ?? null;
+    })
+    .toMatchObject(patch);
 }
 
 async function openExportDialog(page: Page): Promise<Locator> {
@@ -749,6 +812,14 @@ async function dragWorkspaceMaterialToTimeline(page: Page, materialName: string)
   await materialRow.dragTo(timelineDropTarget);
 }
 
+async function addWorkspaceMaterialToTimeline(page: Page, materialName: string): Promise<void> {
+  const materialRow = page.getByRole("article", { name: `素材 ${materialName}` });
+  const addButton = materialRow.getByRole("button", { name: `添加 ${materialName} 到时间线` });
+
+  await expect(materialRow).toBeVisible({ timeout: 20_000 });
+  await addButton.evaluate((button) => (button as HTMLButtonElement).click());
+}
+
 test("Chinese editor workspace opens with required regions and material states", async () => {
   const { app, page } = await launchWorkspaceApp();
 
@@ -901,7 +972,7 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
 
     await expectNoLeftSecondaryMenu(page);
     await expectCompactScrollbarBaseline();
-    await expect(page.getByLabel("默认文字")).toContainText("默认文字");
+    await expect(page.getByRole("region", { name: "默认文字" })).toContainText("默认文字");
     await expect(page.getByLabel("素材面板")).not.toContainText("SRT 内容");
     await expect(page.getByLabel("素材面板")).not.toContainText("导入字幕");
     await expect(page.getByLabel("花字")).toContainText("模板");
@@ -910,7 +981,7 @@ test("文字 panel keeps contextual cards, deferred states, compact scrollbars, 
 
     const resourcePanel = page.getByLabel("素材面板");
     for (const label of ["默认文字", "花字", "气泡"]) {
-      await expectLocatorInsideHorizontalContainer(resourcePanel, page.getByLabel(label), `文字面板 ${label}`);
+      await expectLocatorInsideHorizontalContainer(resourcePanel, page.getByRole("region", { name: label }), `文字面板 ${label}`);
     }
   } finally {
     await app.close();
@@ -949,34 +1020,121 @@ test("text edit routes complete text inspector changes through project session i
     await expect(textSection).toContainText("字幕来源");
     await textSection.scrollIntoViewIfNeeded();
     await textSection.locator("textarea").fill("开场标题 已修改");
+    await textSection.locator("textarea").blur();
     await textSection.locator('input[aria-label="字体"]').fill("PingFang SC");
+    await textSection.locator('input[aria-label="字体"]').blur();
     await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill("48");
+    await textSection.getByRole("spinbutton", { name: "字号", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { fontSize: 48 });
     await textSection.locator('input[aria-label="颜色"]').fill("#18c7ff");
+    await textSection.locator('input[aria-label="颜色"]').blur();
+    await expectLatestSelectedTextPatch(app, { color: "#18c7ff" });
     await styleSection.scrollIntoViewIfNeeded();
     await styleSection.getByRole("checkbox", { name: "描边", exact: true }).check();
+    await expect
+      .poll(async () =>
+        (await readNativeCommandObservations(app)).findLast(
+          (call) => call.command === "editSelectedText" && call.resultOk === true
+        )?.textPatch ?? null
+      )
+      .toMatchObject({ strokeEnabled: true });
     await styleSection.locator('input[aria-label="描边颜色"]').fill("#111111");
+    await styleSection.locator('input[aria-label="描边颜色"]').blur();
+    await expectLatestSelectedTextPatch(app, { strokeColor: "#111111" });
     await styleSection.getByRole("spinbutton", { name: "描边宽度", exact: true }).fill("5");
+    await styleSection.getByRole("spinbutton", { name: "描边宽度", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { strokeWidth: 5 });
     await styleSection.getByRole("checkbox", { name: "阴影", exact: true }).check();
+    await expect
+      .poll(async () =>
+        (await readNativeCommandObservations(app)).findLast(
+          (call) => call.command === "editSelectedText" && call.resultOk === true
+        )?.textPatch ?? null
+      )
+      .toMatchObject({ shadowEnabled: true });
     await styleSection.locator('input[aria-label="阴影颜色"]').fill("#333333");
+    await styleSection.locator('input[aria-label="阴影颜色"]').blur();
+    await expectLatestSelectedTextPatch(app, { shadowColor: "#333333" });
     await styleSection.getByRole("checkbox", { name: "背景", exact: true }).check();
+    await expect
+      .poll(async () =>
+        (await readNativeCommandObservations(app)).findLast(
+          (call) => call.command === "editSelectedText" && call.resultOk === true
+        )?.textPatch ?? null
+      )
+      .toMatchObject({ backgroundEnabled: true });
     await styleSection.locator('input[aria-label="背景颜色"]').fill("#202020");
+    await styleSection.locator('input[aria-label="背景颜色"]').blur();
+    await expectLatestSelectedTextPatch(app, { backgroundColor: "#202020" });
     await styleSection.getByRole("button", { name: "右", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await readNativeCommandObservations(app)).findLast(
+          (call) => call.command === "editSelectedText" && call.resultOk === true
+        )?.textPatch ?? null
+      )
+      .toMatchObject({ alignment: "right" });
     await textBoxSection.scrollIntoViewIfNeeded();
     await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).fill("1300");
+    await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { lineHeightMillis: 1300 });
     await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).fill("120");
+    await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { letterSpacingMillis: 120 });
     await layoutSection.scrollIntoViewIfNeeded();
     await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).fill("120");
+    await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { layoutXMillis: 120 });
     await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).fill("180");
+    await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { layoutYMillis: 180 });
     await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).fill("760");
+    await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).blur();
+    await expectLatestSelectedTextPatch(app, { layoutWidthMillis: 760 });
     await expect(layoutSection.getByRole("button", { name: "应用文字" })).toHaveCount(0);
     await expect
       .poll(async () => {
         const editTextCall = (await readNativeCommandObservations(app)).findLast(
-          (call) => call.command === "editSelectedText"
+          (call) => call.command === "editSelectedText" && call.resultOk === true
         );
         return editTextCall?.textContent ?? null;
       })
       .toBe("开场标题 已修改");
+    await expect
+      .poll(async () => {
+        const selectedTextUpdate = (await readNativeCommandObservations(app)).findLast(
+          (call) =>
+            call.command === "updateProjectInteraction" &&
+            call.interactionKind === "selectedText" &&
+            call.resultOk === true
+        );
+        return selectedTextUpdate?.textPatch ?? null;
+      })
+      .toMatchObject({
+        content: "开场标题 已修改",
+        fontSize: 48,
+        color: "#18c7ff",
+        strokeEnabled: true,
+        strokeColor: "#111111",
+        strokeWidth: 5,
+        shadowEnabled: true,
+        shadowColor: "#333333",
+        backgroundEnabled: true,
+        backgroundColor: "#202020",
+        alignment: "right",
+        lineHeightMillis: 1300,
+        letterSpacingMillis: 120,
+        layoutXMillis: 120,
+        layoutYMillis: 180,
+        layoutWidthMillis: 760
+      });
+    await expect
+      .poll(async () =>
+        (await readNativeCommandObservations(app)).filter(
+          (call) => call.command === "commitProjectInteraction" && call.interactionKind === "selectedText"
+        ).length
+      )
+      .toBeGreaterThan(0);
 
     const previewText = page.getByLabel("预览文字");
     await expect(previewText).toContainText("开场标题 已修改");
@@ -991,9 +1149,20 @@ test("text edit routes complete text inspector changes through project session i
     const calls = await readNativeCommandObservations(app);
     const addTextCall = calls.find((call) => call.command === "addTextSegmentIntent");
     const editTextCall = calls.findLast((call) => call.command === "editSelectedText");
+    const selectedTextUpdate = calls.findLast(
+      (call) =>
+        call.command === "updateProjectInteraction" &&
+        call.interactionKind === "selectedText" &&
+        call.resultOk === true
+    );
     expect(addTextCall?.hasDraftField).toBe(false);
     await expect(page.locator('[aria-label="时间线"]')).toContainText("00:00:00.000 / 00:00:03.000");
     expect(editTextCall?.textContent).toBe("开场标题 已修改");
+    expect(selectedTextUpdate?.textPatch).toMatchObject({
+      fontSize: 48,
+      letterSpacingMillis: 120,
+      layoutWidthMillis: 760
+    });
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(1);
   } finally {
     await app.close();
@@ -1037,19 +1206,23 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     await expect(page.getByLabel("画面基础表单")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "音频" }).click();
-    await page.getByLabel("音频参数").getByRole("slider", { name: "音量" }).fill("135");
-    await page.getByLabel("音频参数").getByRole("slider", { name: "声像" }).fill("-20");
-    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "淡入" }).fill("450000");
-    await page.getByLabel("音频参数").getByRole("spinbutton", { name: "淡出" }).fill("300000");
+    const audioSection = page.getByLabel("音频参数");
+    await audioSection.getByRole("slider", { name: "音量" }).fill("135");
+    await audioSection.getByRole("slider", { name: "音量" }).blur();
+    await expectLatestAudioInteraction(app);
+    await page.waitForTimeout(50);
+    await audioSection.getByRole("slider", { name: "声像" }).fill("-20");
+    await audioSection.getByRole("slider", { name: "声像" }).blur();
+    await expectLatestAudioInteraction(app);
+    await page.waitForTimeout(50);
+    await audioSection.getByRole("spinbutton", { name: "淡入" }).fill("0.45");
+    await audioSection.getByRole("spinbutton", { name: "淡入" }).blur();
+    await expectLatestAudioInteraction(app);
+    await page.waitForTimeout(50);
+    await audioSection.getByRole("spinbutton", { name: "淡出" }).fill("0.3");
+    await audioSection.getByRole("spinbutton", { name: "淡出" }).blur();
+    await expectLatestAudioInteraction(app);
     await expect(page.getByLabel("音频参数").getByRole("button", { name: "应用音频" })).toHaveCount(0);
-    await expect
-      .poll(async () => {
-        const audioCall = (await readNativeCommandObservations(app)).findLast(
-          (call) => call.command === "updateSelectedSegmentAudio"
-        );
-        return audioCall?.targetTimerange ?? audioCall?.kind ?? null;
-      })
-      .not.toBeNull();
     await expect(page.getByLabel("音频参数").getByRole("slider", { name: "音量" })).toHaveValue("135");
     await expect(page.getByLabel("音频参数").getByRole("slider", { name: "声像" })).toHaveValue("-20");
 
@@ -1060,7 +1233,7 @@ test("音频 add/volume/mute commands update accepted timeline and inspector sta
     const calls = await readNativeCommandObservations(app);
     await expect(page.locator('[aria-label="时间线"]')).toContainText("00:00:08.000");
     expect(calls.map((call) => call.command)).toEqual(
-      expect.arrayContaining(["addAudioSegmentIntent", "updateSelectedSegmentAudio", "setSelectedTrackMute"])
+      expect.arrayContaining(["addAudioSegmentIntent", "updateProjectInteraction", "commitProjectInteraction", "setSelectedTrackMute"])
     );
   } finally {
     await app.close();
@@ -1106,6 +1279,7 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
     await expect(textSection).toContainText("SRT 字幕");
 
     await textSection.locator("textarea").fill("第一句字幕 已校对");
+    await textSection.locator("textarea").blur();
     await expect(page.getByRole("button", { name: "应用文字" })).toHaveCount(0);
     await expect
       .poll(async () => {
@@ -1119,11 +1293,12 @@ test("字幕 SRT import intent path sends raw SRT once without renderer-created 
 
     const visualForm = page.getByLabel("画面基础表单");
     await visualForm.getByLabel("位置 X", { exact: true }).fill("80");
+    await visualForm.getByLabel("位置 X", { exact: true }).blur();
     await expect(visualForm.getByRole("button", { name: "应用画面" })).toHaveCount(0);
     await expect
       .poll(async () => {
         const visualCall = (await readNativeCommandObservations(app)).findLast(
-          (call) => call.command === "updateSelectedSegmentVisual"
+          (call) => call.command === "updateSelectedSegmentVisual" && call.resultOk === true
         );
         return visualCall?.visualPatch?.positionX ?? null;
       })
@@ -1187,10 +1362,7 @@ test("command-only timeline edit calls generated command and applies Rust respon
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
     const callsBeforeAdd = await readNativeCommandObservations(app);
     await seekWorkspaceTimelinePlayhead(page, 8_000_000);
-    await page.getByRole("button", { name: "添加片段" }).evaluate((button) => {
-      (button as HTMLButtonElement).click();
-      (button as HTMLButtonElement).click();
-    });
+    await addWorkspaceMaterialToTimeline(page, "城市街景.mp4");
     await expectCommandCall(app, "addTimelineSegmentIntent");
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(2);
     await expect(page.locator('[aria-label="时间线"]')).toContainText("00:00:08.000 / 00:00:12.000");
@@ -1228,7 +1400,7 @@ test("multitrack controls add target rename lock visibility and mute through Rus
     await expect(page.getByRole("button", { name: "选择轨道 视频轨道 2" })).toHaveAttribute("aria-pressed", "true");
 
     await seekWorkspaceTimelinePlayhead(page, 8_000_000);
-    await page.getByRole("button", { name: "添加片段" }).click();
+    await addWorkspaceMaterialToTimeline(page, "城市街景.mp4");
     await expectCommandCall(app, "addTimelineSegmentIntent");
     await expect(page.locator(".track-row.video").nth(1).getByRole("button", { name: /片段 城市街景\.mp4/ })).toBeVisible();
 
@@ -1291,6 +1463,7 @@ test("material import routes through project session intent observations", async
 
 test("auto canvas adopts the first imported portrait material without renderer-owned canvas math", async () => {
   const { app, page } = await launchWorkspaceApp({
+    showDeveloperDiagnostics: true,
     env: {
       VIDEO_EDITOR_TEST_WORKSPACE_FIXTURE: "blank",
       VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES: JSON.stringify([PORTRAIT_VIDEO_FIXTURE])
@@ -1301,11 +1474,17 @@ test("auto canvas adopts the first imported portrait material without renderer-o
     await resetNativeCommandObservations(app, page);
 
     await expect(page.getByText("还没有素材")).toBeVisible();
-    await page.getByRole("button", { name: "导入素材" }).click();
+    await page.waitForTimeout(500);
+    await page.getByLabel("素材路径").fill(PORTRAIT_VIDEO_FIXTURE);
+    await expect(page.getByLabel("素材路径")).toHaveValue(PORTRAIT_VIDEO_FIXTURE);
+    await page.getByLabel("素材路径").blur();
+    await expect(page.getByRole("button", { name: "导入路径" })).toBeEnabled();
+    await page.getByRole("button", { name: "导入路径" }).evaluate((button) => (button as HTMLButtonElement).click());
+    await page.waitForTimeout(1000);
     await expectCommandCall(app, "importMaterial");
     await expect(page.locator('[aria-label="素材 p0-portrait-testsrc.mp4"]')).toBeVisible();
 
-    await dragWorkspaceMaterialToTimeline(page, "p0-portrait-testsrc.mp4");
+    await addWorkspaceMaterialToTimeline(page, "p0-portrait-testsrc.mp4");
     await expectCommandCall(app, "addTimelineSegmentIntent");
     await expect(page.getByRole("button", { name: /片段 p0-portrait-testsrc\.mp4/ })).toBeVisible();
     await expect(page.getByLabel("预览窗口").getByRole("button", { name: "画布读数" })).toHaveAttribute(
@@ -1463,7 +1642,7 @@ test("音频预览 controls call explicit native APIs and preserve state after r
   }
 });
 
-test("音频预览 panel and inspector expose production audio controls through updateSelectedSegmentAudio intent", async () => {
+test("音频预览 panel and inspector expose production audio controls through interaction sessions", async () => {
   const { app, page } = await launchWorkspaceApp({ showDeveloperDiagnostics: true });
 
   try {
@@ -1486,16 +1665,27 @@ test("音频预览 panel and inspector expose production audio controls through 
     await expect(audioInspector.getByText("毫音量")).toHaveCount(0);
 
     await audioInspector.getByRole("slider", { name: "音量" }).fill("120");
+    await audioInspector.getByRole("slider", { name: "音量" }).blur();
+    await expectLatestAudioInteraction(app);
     await audioInspector.getByRole("slider", { name: "声像" }).fill("-20");
-    await audioInspector.getByRole("spinbutton", { name: "淡入" }).fill("300000");
-    await audioInspector.getByRole("spinbutton", { name: "淡出" }).fill("500000");
+    await audioInspector.getByRole("slider", { name: "声像" }).blur();
+    await expectLatestAudioInteraction(app);
+    await audioInspector.getByRole("spinbutton", { name: "淡入" }).fill("0.3");
+    await audioInspector.getByRole("spinbutton", { name: "淡入" }).blur();
+    await expectLatestAudioInteraction(app);
+    await audioInspector.getByRole("spinbutton", { name: "淡出" }).fill("0.5");
+    await audioInspector.getByRole("spinbutton", { name: "淡出" }).blur();
+    await expectLatestAudioInteraction(app);
     await expect(audioInspector.getByRole("button", { name: "应用音频" })).toHaveCount(0);
-    await expect
-      .poll(async () => (await readNativeCommandObservations(app)).some((call) => call.command === "updateSelectedSegmentAudio"))
-      .toBe(true);
 
     const calls = await readNativeCommandObservations(app);
-    expect(calls.map((call) => call.command)).toContain("updateSelectedSegmentAudio");
+    expect(calls.map((call) => call.command)).toEqual(
+      expect.arrayContaining(["updateProjectInteraction", "commitProjectInteraction"])
+    );
+    expect(
+      calls.some((call) => call.command === "updateSelectedSegmentAudio"),
+      "audio inspector high-frequency controls must not use the old canonical command path"
+    ).toBe(false);
   } finally {
     await app.close();
   }
@@ -1562,6 +1752,8 @@ test("native preview host bridge keeps handles in main and exposes narrow teleme
     });
 
     expect(bridgeShape).toEqual([
+      "detachSurface",
+      "hitTestTextOverlay",
       "pause",
       "play",
       "seek",
@@ -2186,17 +2378,39 @@ test("画面变换 command-only transform 通过 Rust command 更新 UI 并清�
     await expect(visualForm.getByRole("button", { name: "应用画面" })).toHaveCount(0);
 
     await visualForm.getByLabel("位置 X", { exact: true }).fill("160");
+    await visualForm.getByLabel("位置 X", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { positionX: 160 });
     await visualForm.getByLabel("位置 Y", { exact: true }).fill("-90");
+    await visualForm.getByLabel("位置 Y", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { positionY: -90 });
     await visualForm.getByLabel("缩放 X", { exact: true }).fill("1250");
+    await visualForm.getByLabel("缩放 X", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { scaleXMillis: 1250 });
     await visualForm.getByLabel("缩放 Y", { exact: true }).fill("850");
+    await visualForm.getByLabel("缩放 Y", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { scaleYMillis: 850 });
     await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).fill("12");
+    await visualForm.getByRole("spinbutton", { name: "旋转", exact: true }).blur();
+    await expectLatestVisualPatch(app, { rotationDegrees: 12 });
     await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).fill("760");
+    await visualForm.getByRole("spinbutton", { name: "不透明度", exact: true }).blur();
+    await expectLatestVisualPatch(app, { opacityMillis: 760 });
     await visualForm.getByLabel("裁剪 左", { exact: true }).fill("80");
+    await visualForm.getByLabel("裁剪 左", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { cropLeftMillis: 80 });
     await visualForm.getByLabel("裁剪 右", { exact: true }).fill("40");
+    await visualForm.getByLabel("裁剪 右", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { cropRightMillis: 40 });
     await visualForm.getByLabel("裁剪 上", { exact: true }).fill("30");
+    await visualForm.getByLabel("裁剪 上", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { cropTopMillis: 30 });
     await visualForm.getByLabel("裁剪 下", { exact: true }).fill("20");
+    await visualForm.getByLabel("裁剪 下", { exact: true }).blur();
+    await expectLatestVisualPatch(app, { cropBottomMillis: 20 });
     await visualForm.getByRole("group", { name: "适应方式" }).getByRole("button", { name: "填充" }).click();
+    await expectLatestVisualPatch(app, { fitMode: "fill" });
     await visualForm.getByRole("group", { name: "背景填充" }).getByRole("button", { name: "黑色" }).click();
+    await expectLatestVisualPatch(app, { backgroundKind: "black" });
     await expect
       .poll(async () => {
         const visualCall = (await readNativeCommandObservations(app)).findLast(
@@ -2297,9 +2511,14 @@ test("concurrent material commands are blocked while a timeline edit is pending"
 
     await expect(page.getByRole("button", { name: /片段 城市街景\.mp4/ })).toHaveCount(1);
     await page.evaluate(() => {
-      const findButton = (label: string): HTMLButtonElement => {
+      const findButton = (label: string, fallbackMatcher?: (button: HTMLButtonElement) => boolean): HTMLButtonElement => {
         const button = Array.from(document.querySelectorAll("button")).find(
-          (candidate) => candidate.textContent?.trim() === label
+          (candidate) =>
+            candidate instanceof HTMLButtonElement &&
+            (candidate.textContent?.trim() === label ||
+              candidate.getAttribute("aria-label") === label ||
+              candidate.getAttribute("title") === label ||
+              fallbackMatcher?.(candidate) === true)
         );
 
         if (!(button instanceof HTMLButtonElement)) {
@@ -2309,7 +2528,7 @@ test("concurrent material commands are blocked while a timeline edit is pending"
         return button;
       };
 
-      findButton("添加片段").click();
+      findButton("添加片段", (button) => button.getAttribute("aria-label")?.startsWith("添加 城市街景.mp4 到时间线") === true).click();
       findButton("导入素材").click();
     });
 
@@ -2403,7 +2622,7 @@ test("预览区域在 1280x800 和 1120x720 保持比例并保存截图", async 
 });
 
 test("导出控制通过显式导出 API 更新导出状态并保存截图", async () => {
-  const { app, page } = await launchWorkspaceApp({ startup: "newProject" });
+  const { app, page } = await launchWorkspaceApp();
 
   try {
     await resetNativeCommandObservations(app, page);

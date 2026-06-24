@@ -45,7 +45,7 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       expect(update.interactionKind).toBe("selectedSegmentVisual");
       expect(update.resultRevision).toBe(baseRevision);
       expect(update.revisionUnchanged).toBe(true);
-      expect(update.resultDeltaCommand).toBe("updateSelectedSegmentVisual");
+      expect(update.resultDeltaCommand).toBe("updateSegmentVisual");
     }
     await expect(outline).toHaveAttribute("data-interaction-source", "rust-provisional");
     await expect(outline).toHaveAttribute("data-interaction-kind", "selectedSegmentVisual");

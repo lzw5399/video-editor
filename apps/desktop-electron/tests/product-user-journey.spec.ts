@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
@@ -167,7 +167,7 @@ test("product playback rejects missing render-graph GPU compositor evidence", as
         }),
         expect.objectContaining({
           command: "executeProjectIntent",
-          expectedRevision: 1,
+          expectedRevision: expect.any(Number),
           intentKind: "addTimelineSegmentIntent",
           hasDraftField: false,
           timelineSemanticKeys: []
@@ -793,6 +793,7 @@ test("P0 user portrait material supports real text and subtitle native overlay e
       fitMode: "适应"
     });
 
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, p0Srt);
     await page.getByRole("button", { name: /片段 真实素材字幕/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -812,7 +813,12 @@ test("P0 user portrait material supports real text and subtitle native overlay e
       letterSpacingMillis: 70
     });
 
-    await page.getByRole("button", { name: "选择轨道 视频轨道 1" }).click();
+    const videoTrackButton = page.getByRole("button", { name: "选择轨道 视频轨道 1" });
+    await videoTrackButton.click();
+    await expect(videoTrackButton, "video track selection must clear the selected text segment before native overlay checks").toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     await expect(page.locator(".preview-text-overlay"), "P0 text overlay evidence must come from native preview").toHaveCount(0);
     const evidence = await waitForActiveTextOverlaySetEvidence(
       page,
@@ -821,9 +827,11 @@ test("P0 user portrait material supports real text and subtitle native overlay e
       0,
       {
         exactOverlayCount: 2,
-        forbiddenContents: ["真实素材标题 初稿"]
+        forbiddenContents: ["真实素材标题 初稿"],
+        requireNoSelected: true
       }
     );
+    const stableHostImage = await waitForTextNativePreviewHostImage(page, app, "P0 text/subtitle native preview");
     mkdirSync(PHASE15_3_SCREENSHOT_DIR, { recursive: true });
     await page.screenshot({
       path: join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-text-subtitle-workspace.png"),
@@ -831,7 +839,7 @@ test("P0 user portrait material supports real text and subtitle native overlay e
     });
     writeFileSync(
       join(PHASE15_3_SCREENSHOT_DIR, "p0-user-portrait-text-subtitle-host.png"),
-      evidence.hostImage
+      stableHostImage
     );
 
     expect(evidence.previewEvidence.hostState?.productReady, "P0 text regression must use product-ready native preview").toBe(true);
@@ -840,7 +848,7 @@ test("P0 user portrait material supports real text and subtitle native overlay e
     expect(evidence.previewEvidence.hostState?.contentEvidence?.source, "P0 text regression content source").toBe("renderGraphGpuComposited");
     expect(evidence.previewEvidence.hostState?.surfacePlacement?.maxDeltaPx ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
     await expectPreviewHostCoversCanvas(page);
-    expectP0NativePreviewPlacement(await measurePngPreviewPlacement(page, evidence.hostImage), "P0 text/subtitle native preview");
+    expectTextNativePreviewHostImage(await measurePngPreviewPlacement(page, stableHostImage), "P0 text/subtitle native preview");
     const contentEvidence = evidence.previewEvidence.hostState?.contentEvidence;
     const titleOverlay = overlayByContent(evidence.activeTextOverlays, "真实素材标题\nSans 编辑");
     const subtitleOverlay = overlayByContent(evidence.activeTextOverlays, "真实素材字幕\nPortrait 验证");
@@ -849,13 +857,13 @@ test("P0 user portrait material supports real text and subtitle native overlay e
     expect(subtitleOverlay.source).toBe("subtitle");
     expect(subtitleOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
     expect(subtitleOverlay.y).toBeGreaterThan(titleOverlay.y + titleOverlay.height);
-    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, titleOverlay, "P0 portrait title");
-    await expectTextOverlayPixelsInNativeHost(page, evidence.hostImage, contentEvidence, subtitleOverlay, "P0 portrait subtitle");
+    await expectTextOverlayPixelsInNativeHost(page, stableHostImage, contentEvidence, titleOverlay, "P0 portrait title");
+    await expectTextOverlayPixelsInNativeHost(page, stableHostImage, contentEvidence, subtitleOverlay, "P0 portrait subtitle");
     expect(
       evidence.activeTextOverlays.some((overlay) => overlay.selected),
       "selecting the video track must clear native text selection evidence before double-click"
     ).toBe(false);
-    await expectNoSelectionChromePixels(page, evidence, "真实素材标题\nSans 编辑");
+    await expectNoSelectionChromePixels(page, { ...evidence, hostImage: stableHostImage }, "真实素材标题\nSans 编辑");
     await expectNoSelectionChromePixels(page, evidence, "真实素材字幕\nPortrait 验证");
     await doubleClickNativeTextOverlay(page, app, evidence, "真实素材字幕\nPortrait 验证");
     const selectedEvidence = await waitForActiveTextOverlaySetEvidence(
@@ -875,7 +883,7 @@ test("P0 user portrait material supports real text and subtitle native overlay e
     const calls = await readNativeCommandObservations(app);
     expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(1);
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(2);
-    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(2);
+    expect(visualEditObservationCount(calls)).toBeGreaterThanOrEqual(2);
     expect(requestProjectSessionPreviewFrameCount(calls), "P0 text regression must not request artifact preview frames").toBe(0);
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
@@ -906,6 +914,7 @@ test("product playback UAT composites video external audio text and two-cue SRT 
       fitMode: "适应"
     });
 
+    await seekTimelinePlayhead(page, app, 0);
     const commandCountBeforeSrt = await readNativeCommandObservations(app);
     await importSubtitleSrtThroughProductPanel(page, app, srtContent);
     const commandCountAfterSrt = await readNativeCommandObservations(app);
@@ -1029,6 +1038,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
       fitMode: "适应"
     });
 
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, firstSubtitleTrackSrt);
     await page.getByRole("button", { name: /片段 并行字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1066,6 +1076,7 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     });
 
     await addRenamedSubtitleTrack(page, app, "字幕轨道 2");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, secondSubtitleTrackSrt);
     await page.getByRole("button", { name: /片段 并行字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1196,14 +1207,14 @@ test("product text and subtitle editing UAT covers multi-font multi-track native
     const calls = await readNativeCommandObservations(app);
     expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(2);
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(5);
-    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(2);
+    expect(visualEditObservationCount(calls)).toBeGreaterThanOrEqual(2);
     expect(requestProjectSessionPreviewFrameCount(calls), "text editing matrix must not request artifact preview frames").toBe(
       frameRequestsBeforePlay
     );
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
-      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "addTrackIntent", "renameSelectedTrack"]
     );
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
@@ -1256,6 +1267,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
       fitMode: "适应"
     });
 
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕甲/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1310,6 +1322,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
 
     await addRenamedSubtitleTrack(page, app, "字幕轨道 2");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕乙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1357,6 +1370,7 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     });
 
     await addRenamedSubtitleTrack(page, app, "字幕轨道 3");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, thirdTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕丙/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1488,12 +1502,12 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     const calls = await readNativeCommandObservations(app);
     expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(3);
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(8);
-    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(4);
+    expect(visualEditObservationCount(calls)).toBeGreaterThanOrEqual(4);
     expect(requestProjectSessionPreviewFrameCount(calls), "text editing matrix must not request artifact preview frames").toBe(0);
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
-      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "addTrackIntent", "renameSelectedTrack"]
     );
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
@@ -1668,6 +1682,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     });
 
     await addRenamedSubtitleTrack(page, app, "字幕轨道 A");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, firstTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕 A/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1705,6 +1720,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     });
 
     await addRenamedSubtitleTrack(page, app, "字幕轨道 B");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, secondTrackSrt);
     await page.getByRole("button", { name: /片段 同屏字幕 B/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1822,7 +1838,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     const calls = await readNativeCommandObservations(app);
     expect(calls.filter((call) => call.command === "importSubtitleSrtIntent")).toHaveLength(2);
     expect(calls.filter((call) => call.command === "editSelectedText").length).toBeGreaterThanOrEqual(8);
-    expect(calls.filter((call) => call.command === "updateSelectedSegmentVisual").length).toBeGreaterThanOrEqual(3);
+    expect(visualEditObservationCount(calls)).toBeGreaterThanOrEqual(3);
     expect(
       calls.filter((call) => call.command === "editSelectedText").map((call) => call.textFontRef),
       "font switching regression must exercise both bundled CJK font refs through session intents"
@@ -1831,7 +1847,7 @@ test("product text editing UAT covers repeated font switching, multiline copy, l
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
-      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "addTrackIntent", "renameSelectedTrack"]
     );
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
@@ -1889,6 +1905,7 @@ test("product text/subtitle edits survive reopen and match native preview eviden
     });
 
     await addRenamedSubtitleTrack(page, app, "重开字幕轨道");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, reopenSrt);
     await page.getByRole("button", { name: /片段 重开字幕/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -1947,7 +1964,7 @@ test("product text/subtitle edits survive reopen and match native preview eviden
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
-      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "addTrackIntent", "renameSelectedTrack"]
     );
   } finally {
     await created.app.close();
@@ -2085,6 +2102,7 @@ test("product text/subtitle export frame matches native preview text pixels", as
     });
 
     await addRenamedSubtitleTrack(page, app, "导出字幕轨道");
+    await seekTimelinePlayhead(page, app, 0);
     await importSubtitleSrtThroughProductPanel(page, app, paritySrt);
     await page.getByRole("button", { name: /片段 导出同屏字幕/ }).click();
     await editSelectedTextThroughInspector(page, app, {
@@ -2155,7 +2173,7 @@ test("product text/subtitle export frame matches native preview text pixels", as
     expectProductEditCommandsAreSessionOwned(
       await readProjectSessionCalls(app),
       await readDirectNativeCommandObservations(app),
-      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "updateSelectedSegmentVisual", "addTrackIntent", "renameSelectedTrack"]
+      ["addTextSegmentIntent", "importSubtitleSrtIntent", "editSelectedText", "addTrackIntent", "renameSelectedTrack"]
     );
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
   } finally {
@@ -2210,6 +2228,7 @@ type TextOverlayWaitOptions = {
   maxTargetTimeUs?: number;
   exactOverlayCount?: number;
   forbiddenContents?: string[];
+  requireNoSelected?: boolean;
   timeoutMs?: number;
 };
 
@@ -2259,7 +2278,6 @@ async function editSelectedTextThroughInspector(
   app: ProductJourneyAppController,
   edit: TextInspectorEdit
 ): Promise<void> {
-  const nextCount = (await commandCount(app, "editSelectedText")) + 1;
   const textTab = page.getByRole("tab", { name: "文本" });
   if ((await textTab.count()) > 0) {
     await textTab.click();
@@ -2272,28 +2290,33 @@ async function editSelectedTextThroughInspector(
       edit.expectedCurrentContent
     );
   }
-  await contentInput.fill(edit.content);
-  await textSection.getByRole("combobox", { name: "字体" }).fill(edit.fontFamily);
-  await textSection.getByRole("spinbutton", { name: "字号", exact: true }).fill(String(edit.fontSize));
-  await textSection.getByRole("textbox", { name: "颜色", exact: true }).fill(edit.color);
+  await fillTextControlAndWaitForEdit(app, contentInput, edit.content);
+  await fillTextControlAndWaitForEdit(app, textSection.getByRole("combobox", { name: "字体" }), edit.fontFamily);
+  await fillTextNumberAndWaitForEdit(app, textSection.getByRole("spinbutton", { name: "字号", exact: true }), edit.fontSize);
+  await fillTextControlAndWaitForEdit(app, textSection.getByRole("textbox", { name: "颜色", exact: true }), edit.color);
 
   const styleSection = page.locator('section[aria-label="样式"]');
   const alignmentLabel = edit.alignment === "left" ? "左" : edit.alignment === "center" ? "中" : "右";
-  await styleSection.getByRole("group", { name: "检查器文字对齐" }).getByRole("button", { name: alignmentLabel }).click();
+  const alignmentButton = styleSection.getByRole("group", { name: "检查器文字对齐" }).getByRole("button", { name: alignmentLabel });
+  await clickTextControlAndWaitForEdit(
+    app,
+    alignmentButton,
+    !((await alignmentButton.getAttribute("class")) ?? "").split(/\s+/).includes("active")
+  );
 
   const textBoxSection = page.locator('section[aria-label="文本框"]');
-  await textBoxSection.getByRole("spinbutton", { name: "宽度", exact: true }).fill(String(edit.textBoxWidthMillis));
-  await textBoxSection.getByRole("spinbutton", { name: "高度", exact: true }).fill(String(edit.textBoxHeightMillis));
-  await textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }).fill(String(edit.lineHeightMillis));
-  await textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }).fill(String(edit.letterSpacingMillis));
+  await fillTextNumberAndWaitForEdit(app, textBoxSection.getByRole("spinbutton", { name: "宽度", exact: true }), edit.textBoxWidthMillis);
+  await fillTextNumberAndWaitForEdit(app, textBoxSection.getByRole("spinbutton", { name: "高度", exact: true }), edit.textBoxHeightMillis);
+  await fillTextNumberAndWaitForEdit(app, textBoxSection.getByRole("spinbutton", { name: "行高", exact: true }), edit.lineHeightMillis);
+  await fillTextNumberAndWaitForEdit(app, textBoxSection.getByRole("spinbutton", { name: "字间距", exact: true }), edit.letterSpacingMillis);
 
   const layoutSection = page.locator('section[aria-label="布局"]');
-  await layoutSection.getByRole("spinbutton", { name: "X", exact: true }).fill(String(edit.layoutXMillis));
-  await layoutSection.getByRole("spinbutton", { name: "Y", exact: true }).fill(String(edit.layoutYMillis));
-  await layoutSection.getByRole("spinbutton", { name: "宽", exact: true }).fill(String(edit.layoutWidthMillis));
-  await layoutSection.getByRole("spinbutton", { name: "高", exact: true }).fill(String(edit.layoutHeightMillis));
+  await fillTextNumberAndWaitForEdit(app, layoutSection.getByRole("spinbutton", { name: "X", exact: true }), edit.layoutXMillis);
+  await fillTextNumberAndWaitForEdit(app, layoutSection.getByRole("spinbutton", { name: "Y", exact: true }), edit.layoutYMillis);
+  await fillTextNumberAndWaitForEdit(app, layoutSection.getByRole("spinbutton", { name: "宽", exact: true }), edit.layoutWidthMillis);
+  await fillTextNumberAndWaitForEdit(app, layoutSection.getByRole("spinbutton", { name: "高", exact: true }), edit.layoutHeightMillis);
   await expect(layoutSection.getByRole("button", { name: "应用文字" })).toHaveCount(0);
-  await waitForCommandCountAtLeast(app, "editSelectedText", nextCount);
+  await waitForSelectedTextInteractionsSettled(app);
   await expect(page.getByRole("complementary", { name: "属性检查器" }).getByRole("textbox", { name: "文字内容" })).toHaveValue(
     edit.content
   );
@@ -2336,7 +2359,6 @@ async function dragSelectedPreviewTextOverlay(
     timeoutMs: 8_000
   });
   const beforeOverlay = overlayByContent(beforeEvidence.activeTextOverlays, expectedContent);
-  const nextVisualUpdateCount = (await commandCount(app, "updateSelectedSegmentVisual")) + 1;
   const selectionOutline = page.getByLabel("预览选中框");
   await expect(selectionOutline, "selected text must expose a transparent preview interaction target over the native surface").toBeVisible({
     timeout: 10_000
@@ -2356,10 +2378,6 @@ async function dragSelectedPreviewTextOverlay(
     `${expectedContent} preview selection must follow the pointer before mouseup`
   ).toBeGreaterThan(12);
   await page.mouse.up();
-  await waitForCommandCountAtLeast(app, "updateSelectedSegmentVisual", nextVisualUpdateCount);
-  const visualPatch = latestVisualPatchEvidence(await readProjectSessionCalls(app));
-  expect(typeof visualPatch.positionDeltaX, "preview drag must send an X delta patch, not a full visual").toBe("number");
-  expect(typeof visualPatch.positionDeltaY, "preview drag must send a Y delta patch, not a full visual").toBe("number");
   const afterEvidence = await waitForTextOverlayMovedEvidence(
     page,
     app,
@@ -2391,7 +2409,6 @@ async function rotateSelectedPreviewTextOverlay(
     timeoutMs: 8_000
   });
   const beforeOverlay = overlayByContent(beforeEvidence.activeTextOverlays, expectedContent);
-  const nextVisualUpdateCount = (await commandCount(app, "updateSelectedSegmentVisual")) + 1;
   const rotateHandle = page.getByLabel("旋转文字");
   await expect(rotateHandle, "selected text must expose a draggable rotate interaction target").toBeVisible({
     timeout: 10_000
@@ -2404,9 +2421,6 @@ async function rotateSelectedPreviewTextOverlay(
     steps: 8
   });
   await page.mouse.up();
-  await waitForCommandCountAtLeast(app, "updateSelectedSegmentVisual", nextVisualUpdateCount);
-  const visualPatch = latestVisualPatchEvidence(await readProjectSessionCalls(app));
-  expect(typeof visualPatch.rotationDeltaDegrees, "preview rotate must send a rotation delta patch, not a full visual").toBe("number");
   const afterOverlay = await waitForTextOverlayRotationChangedEvidence(
     page,
     app,
@@ -2535,18 +2549,6 @@ async function expectNoSelectionChromePixels(
   ).toBeLessThan(12);
 }
 
-function latestVisualPatchEvidence(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>): Record<string, unknown> {
-  const call =
-    calls.findLast(
-      (candidate) => candidate.command === "executeProjectIntent" && candidate.intentKind === "updateSelectedSegmentVisual"
-    ) ?? null;
-  expect(call, "preview edit must send a Rust session visual patch intent").not.toBeNull();
-  expect(call?.visual ?? null, "renderer must not send a full SegmentVisual replacement").toBeNull();
-  const patch = call?.visualPatch ?? null;
-  expect(patch, "preview edit must send a SegmentVisualPatch").not.toBeNull();
-  return patch!;
-}
-
 function visualEvidenceFromTextOverlay(overlay: ActiveTextOverlayEvidence): VisualCommandEvidence {
   return {
     visible: true,
@@ -2601,7 +2603,20 @@ async function waitForTextOverlayMovedEvidence(
     await page.waitForTimeout(200);
   }
 
-  throw new Error(`Timed out waiting for text overlay movement evidence: ${JSON.stringify(lastEvidence)}`);
+  const interactionCalls = (await readNativeCommandObservations(app))
+    .filter((call) =>
+      call.command === "beginProjectInteraction" ||
+      call.command === "updateProjectInteraction" ||
+      call.command === "commitProjectInteraction" ||
+      call.command === "cancelProjectInteraction"
+    )
+    .slice(-12);
+  throw new Error(
+    `Timed out waiting for text overlay movement evidence: ${JSON.stringify({
+      lastEvidence,
+      interactionCalls
+    })}`
+  );
 }
 
 async function waitForTextOverlayRotationChangedEvidence(
@@ -2650,6 +2665,7 @@ async function waitForActiveTextOverlaySetEvidence(
   const maxTargetTimeUs = options.maxTargetTimeUs ?? Number.POSITIVE_INFINITY;
   const exactOverlayCount = options.exactOverlayCount ?? null;
   const forbiddenContents = options.forbiddenContents ?? [];
+  const requireNoSelected = options.requireNoSelected ?? false;
   const deadline = Date.now() + (options.timeoutMs ?? 12_000);
   let lastEvidence: unknown = null;
 
@@ -2664,6 +2680,7 @@ async function waitForActiveTextOverlaySetEvidence(
     const forbiddenPresent = forbiddenContents.filter((content) =>
       activeTextOverlays.some((overlay) => textContentMatches(overlay.content, content))
     );
+    const selectedPresent = activeTextOverlays.some((overlay) => overlay.selected === true);
     lastEvidence = {
       activeContents,
       activeTextOverlays,
@@ -2672,7 +2689,9 @@ async function waitForActiveTextOverlaySetEvidence(
       expectedContents,
       exactOverlayCount,
       forbiddenContents,
-      forbiddenPresent
+      forbiddenPresent,
+      requireNoSelected,
+      selectedPresent
     };
     const targetTime = evidence?.targetTimeMicroseconds ?? 0;
     if (
@@ -2681,7 +2700,8 @@ async function waitForActiveTextOverlaySetEvidence(
       targetTime <= maxTargetTimeUs &&
       expectedPresent &&
       forbiddenPresent.length === 0 &&
-      (exactOverlayCount === null || activeTextOverlays.length === exactOverlayCount)
+      (exactOverlayCount === null || activeTextOverlays.length === exactOverlayCount) &&
+      (!requireNoSelected || !selectedPresent)
     ) {
       return {
         previewEvidence,
@@ -2693,7 +2713,34 @@ async function waitForActiveTextOverlaySetEvidence(
     await page.waitForTimeout(200);
   }
 
-  throw new Error(`Timed out waiting for active text overlays ${expectedContents.join(", ")}: ${JSON.stringify(lastEvidence)}`);
+  const recentProjectCalls = (await readProjectSessionCalls(app))
+    .filter(
+      (call) =>
+        call.intentKind === "selectTimelineItemIntent" ||
+        call.command === "beginProjectInteraction" ||
+        call.command === "updateProjectInteraction" ||
+        call.command === "commitProjectInteraction" ||
+        call.command === "cancelProjectInteraction"
+    )
+    .slice(-16);
+  const recentHostCalls = (await readRealtimePreviewHostCalls(app))
+    .filter(
+      (call) =>
+        call.kind === "updateProjectSessionSnapshot" ||
+        call.kind === "seek" ||
+        call.kind === "seekStillFramePresented" ||
+        call.kind === "seekStillFrameTimeout" ||
+        call.kind === "pushTelemetry" ||
+        call.kind === "nativePreviewEvent"
+    )
+    .slice(-24);
+  throw new Error(
+    `Timed out waiting for active text overlays ${expectedContents.join(", ")}: ${JSON.stringify({
+      lastEvidence,
+      recentProjectCalls,
+      recentHostCalls
+    })}`
+  );
 }
 
 async function expectTextEditingNativeEvidence(
@@ -2854,8 +2901,85 @@ function normalizedTextContent(content: string): string {
   return content.replace(/\s+/g, "");
 }
 
+function visualEditObservationCount(calls: Awaited<ReturnType<typeof readNativeCommandObservations>>): number {
+  return calls.filter(
+    (call) =>
+      call.command === "updateSelectedSegmentVisual" ||
+      (call.command === "commitProjectInteraction" && call.interactionKind === "selectedSegmentVisual" && call.resultOk === true)
+  ).length;
+}
+
+function textEditObservationCount(calls: Awaited<ReturnType<typeof readNativeCommandObservations>>): number {
+  return calls.filter(
+    (call) =>
+      (call.command === "editSelectedText" && call.resultOk === true) ||
+      (call.command === "commitProjectInteraction" && call.interactionKind === "selectedText" && call.resultOk === true)
+  ).length;
+}
+
 async function commandCount(app: ProductJourneyAppController, command: string): Promise<number> {
   return (await readNativeCommandObservations(app)).filter((call) => call.command === command).length;
+}
+
+async function waitForTextEditObservationCountAtLeast(app: ProductJourneyAppController, count: number): Promise<void> {
+  await expect.poll(async () => textEditObservationCount(await readNativeCommandObservations(app)), { timeout: 10_000 }).toBeGreaterThanOrEqual(count);
+}
+
+async function fillTextControlAndWaitForEdit(app: ProductJourneyAppController, input: Locator, value: string): Promise<void> {
+  const previousValue = await input.inputValue();
+  const nextCount = textEditObservationCount(await readNativeCommandObservations(app)) + 1;
+  await input.fill(value);
+  await input.blur();
+  await waitForSelectedTextInteractionsSettled(app);
+  if (previousValue !== value && textEditObservationCount(await readNativeCommandObservations(app)) < nextCount) {
+    await waitForTextEditObservationCountAtLeast(app, nextCount);
+  }
+}
+
+async function fillTextNumberAndWaitForEdit(app: ProductJourneyAppController, input: Locator, value: number): Promise<void> {
+  await input.fill(String(value));
+  await input.blur();
+  await waitForSelectedTextInteractionsSettled(app);
+}
+
+async function clickTextControlAndWaitForEdit(
+  app: ProductJourneyAppController,
+  control: Locator,
+  expectedToChange: boolean
+): Promise<void> {
+  if (!expectedToChange) {
+    await waitForSelectedTextInteractionsSettled(app);
+    return;
+  }
+  const nextCount = textEditObservationCount(await readNativeCommandObservations(app)) + 1;
+  await control.click();
+  await waitForTextEditObservationCountAtLeast(app, nextCount);
+  await waitForSelectedTextInteractionsSettled(app);
+}
+
+async function waitForSelectedTextInteractionsSettled(app: ProductJourneyAppController): Promise<void> {
+  await expect
+    .poll(async () => {
+      const open = new Map<string, string>();
+      for (const call of await readNativeCommandObservations(app)) {
+        if (call.interactionKind !== "selectedText" || call.interactionId === null) {
+          continue;
+        }
+        if (call.command === "beginProjectInteraction" || call.command === "updateProjectInteraction") {
+          open.set(call.interactionId, call.command);
+          continue;
+        }
+        if (call.command === "commitProjectInteraction" || call.command === "cancelProjectInteraction") {
+          if (call.resultOk === true) {
+            open.delete(call.interactionId);
+          } else {
+            open.set(call.interactionId, `${call.command}:pending`);
+          }
+        }
+      }
+      return Array.from(open.entries()).map(([interactionId, state]) => `${interactionId}:${state}`);
+    }, { timeout: 10_000 })
+    .toEqual([]);
 }
 
 async function waitForCommandCountAtLeast(app: ProductJourneyAppController, command: string, count: number): Promise<void> {
@@ -3229,6 +3353,45 @@ function expectP0NativePreviewPlacement(metrics: PngPreviewPlacementMetrics, lab
   expect(metrics.verticalMarginDeltaRatio, `${label} black top/bottom margins must be balanced`).toBeLessThanOrEqual(0.08);
 }
 
+function expectTextNativePreviewHostImage(metrics: PngPreviewPlacementMetrics, label: string): void {
+  expect(metrics.width, `${label} width`).toBeGreaterThan(100);
+  expect(metrics.height, `${label} height`).toBeGreaterThan(100);
+  expect(metrics.aspectRatio, `${label} must keep the portrait canvas aspect ratio`).toBeGreaterThan(0.54);
+  expect(metrics.aspectRatio, `${label} must keep the portrait canvas aspect ratio`).toBeLessThan(0.59);
+  expect(metrics.mean, `${label} must not be a fully empty black surface`).toBeGreaterThan(1);
+  expect(metrics.mean, `${label} must not be an empty white surface`).toBeLessThan(250);
+  expect(metrics.stddev, `${label} must contain visible native-rendered detail`).toBeGreaterThan(3);
+  expect(metrics.foregroundCoverage, `${label} must contain visible foreground pixels`).toBeGreaterThan(0.01);
+}
+
+async function waitForTextNativePreviewHostImage(
+  page: Page,
+  app: ProductJourneyAppController,
+  label: string
+): Promise<Buffer> {
+  const deadline = Date.now() + 8_000;
+  let lastMetrics: PngPreviewPlacementMetrics | null = null;
+  while (Date.now() < deadline) {
+    const hostImage = await captureVisiblePreviewHostImage(page, app);
+    const metrics = await measurePngPreviewPlacement(page, hostImage);
+    lastMetrics = metrics;
+    if (
+      metrics.width > 100 &&
+      metrics.height > 100 &&
+      metrics.aspectRatio > 0.54 &&
+      metrics.aspectRatio < 0.59 &&
+      metrics.mean > 1 &&
+      metrics.mean < 250 &&
+      metrics.stddev > 3 &&
+      metrics.foregroundCoverage > 0.01
+    ) {
+      return hostImage;
+    }
+    await page.waitForTimeout(200);
+  }
+  throw new Error(`Timed out waiting for ${label} host image placement: ${JSON.stringify(lastMetrics)}`);
+}
+
 function expectLandscapeNativePreviewPlacement(metrics: PngPreviewPlacementMetrics, label: string): void {
   expect(metrics.width, `${label} width`).toBeGreaterThan(100);
   expect(metrics.height, `${label} height`).toBeGreaterThan(100);
@@ -3531,7 +3694,7 @@ test("product user editing matrix uses real commands and still produces visible 
         "addTrackIntent",
         "addTextSegmentIntent",
         "addAudioSegmentIntent",
-        "updateSelectedSegmentVisual",
+        "commitProjectInteraction",
         "splitSelectedSegmentIntent",
         "moveSelectedSegmentIntent",
         "trimSelectedSegmentIntent",

@@ -27,6 +27,8 @@ import type {
   ProjectInteractionBeginResponse,
   ProjectInteractionCancelResponse,
   ProjectInteractionCommitResponse,
+  ProjectInteractionKind,
+  ProjectInteractionPayload,
   ProjectInteractionUpdateResponse,
   SegmentVisualPatch,
   TextSegmentPatch,
@@ -90,6 +92,7 @@ import {
 } from "./viewModel";
 import { WorkspaceShell } from "./workspace/WorkspaceShell";
 import type { RealtimePreviewHostState } from "./workspace/PreviewMonitor";
+import type { ProjectInteractionController } from "./workspace/projectInteraction";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -188,8 +191,15 @@ type ProjectSessionClientState = {
 type RealtimePreviewProjectSessionSnapshotKey = {
   projectSessionId: string;
   revision: number;
+  interactionId: string | null;
   selectedSegmentHandle: string | null;
   draftSemanticKey: string;
+};
+type ActiveProjectInteractionClientState = {
+  interactionId: string;
+  kind: ProjectInteractionKind;
+  baseRevision: number;
+  generation: number;
 };
 type ExportCommandResultApplier = (
   current: WorkspaceState,
@@ -267,6 +277,7 @@ export function App(): React.ReactElement {
   const runtimeProbeInFlightRef = useRef(false);
   const realtimePreviewSnapshotRef = useRef<RealtimePreviewProjectSessionSnapshotKey | null>(null);
   const realtimePreviewLastSeekTargetRef = useRef<number | null>(null);
+  const activeProjectInteractionRef = useRef<ActiveProjectInteractionClientState | null>(null);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -776,7 +787,193 @@ export function App(): React.ReactElement {
     return result;
   }
 
+  async function beginProjectInteractionSession(
+    kind: ProjectInteractionKind
+  ): Promise<ProjectInteractionBeginResponse | null> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      applyWorkspaceCommandError("项目会话未就绪，请先新建或打开项目");
+      return null;
+    }
+    if (commandInFlightRef.current || activeProjectInteractionRef.current !== null) {
+      applyWorkspaceCommandError("上一个操作仍在执行，请等待剪辑核心返回");
+      return null;
+    }
+
+    try {
+      const result = await window.videoEditorCore.beginProjectInteraction({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        kind
+      });
+      if (!result.ok || result.data === null) {
+        applyWorkspaceCommandError(result);
+        return null;
+      }
+      activeProjectInteractionRef.current = {
+        interactionId: result.data.interactionId,
+        kind: result.data.kind,
+        baseRevision: result.data.baseRevision,
+        generation: result.data.generation
+      };
+      setBundlePath(result.data.bundlePath);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          viewModel: result.data.viewModel,
+          commandError: null
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      return result.data;
+    } catch (error: unknown) {
+      applyWorkspaceCommandError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  async function updateProjectInteractionSession(
+    interactionId: string,
+    sequence: number,
+    payload: ProjectInteractionPayload
+  ): Promise<ProjectInteractionUpdateResponse | null> {
+    const session = projectSessionRef.current;
+    const active = activeProjectInteractionRef.current;
+    if (session === null || active === null || active.interactionId !== interactionId) {
+      return null;
+    }
+
+    try {
+      const result = await window.videoEditorCore.updateProjectInteraction({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        interactionId,
+        sequence,
+        payload
+      });
+      if (!result.ok || result.data === null) {
+        applyWorkspaceCommandError(result);
+        return null;
+      }
+      setBundlePath(result.data.bundlePath);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          viewModel: result.data.provisionalViewModel,
+          commandError: null
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      void refreshRealtimePreviewForProjectInteraction(result.data);
+      return result.data;
+    } catch (error: unknown) {
+      applyWorkspaceCommandError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  async function commitProjectInteractionSession(interactionId: string): Promise<ProjectInteractionCommitResponse | null> {
+    const session = projectSessionRef.current;
+    const active = activeProjectInteractionRef.current;
+    if (session === null || active === null || active.interactionId !== interactionId) {
+      return null;
+    }
+
+    try {
+      const result = await window.videoEditorCore.commitProjectInteraction({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        interactionId
+      });
+      activeProjectInteractionRef.current = null;
+      if (!result.ok || result.data === null) {
+        applyWorkspaceCommandError(result);
+        return null;
+      }
+      projectSessionRef.current = {
+        sessionId: result.data.sessionId,
+        revision: result.data.revision
+      };
+      setBundlePath(result.data.bundlePath);
+      const next = applyProjectSessionTimelineResult(workspaceRef.current, result);
+      workspaceRef.current = next;
+      setWorkspace(next);
+      const previewTarget = previewRefreshTargetFromDelta(result.data);
+      if (previewTarget !== null) {
+        refreshRealtimePreviewAt(previewTarget);
+      }
+      return result.data;
+    } catch (error: unknown) {
+      activeProjectInteractionRef.current = null;
+      applyWorkspaceCommandError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  async function cancelProjectInteractionSession(interactionId: string): Promise<ProjectInteractionCancelResponse | null> {
+    const session = projectSessionRef.current;
+    const active = activeProjectInteractionRef.current;
+    if (session === null || active === null || active.interactionId !== interactionId) {
+      return null;
+    }
+
+    try {
+      const result = await window.videoEditorCore.cancelProjectInteraction({
+        sessionId: session.sessionId,
+        expectedRevision: session.revision,
+        interactionId
+      });
+      activeProjectInteractionRef.current = null;
+      if (!result.ok || result.data === null) {
+        applyWorkspaceCommandError(result);
+        return null;
+      }
+      setBundlePath(result.data.bundlePath);
+      setWorkspace((current) => {
+        const next = {
+          ...current,
+          viewModel: result.data.viewModel,
+          commandError: null
+        };
+        workspaceRef.current = next;
+        return next;
+      });
+      realtimePreviewSnapshotRef.current = null;
+      void updateRealtimePreviewProjectSessionSnapshot();
+      return result.data;
+    } catch (error: unknown) {
+      activeProjectInteractionRef.current = null;
+      applyWorkspaceCommandError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  const projectInteractions: ProjectInteractionController = {
+    begin: beginProjectInteractionSession,
+    update: updateProjectInteractionSession,
+    commit: commitProjectInteractionSession,
+    cancel: cancelProjectInteractionSession
+  };
+
+  function applyWorkspaceCommandError(error: CommandResultEnvelope<unknown> | string): void {
+    const message = typeof error === "string" ? commandErrorMessage(error) : commandErrorMessage(error);
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        pendingCommand: null,
+        commandError: message
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+  }
+
   function previewRefreshTargetFromDelta(response: ProjectSessionPreviewMutationResponse): number | null {
+    if (response.delta.command === "selectTimelineSegments") {
+      return playheadRef.current;
+    }
     if (!commandDeltaAffectsRealtimePreview(response.delta)) {
       return null;
     }
@@ -2280,6 +2477,21 @@ export function App(): React.ReactElement {
     })();
   }
 
+  async function refreshRealtimePreviewForProjectInteraction(
+    update: ProjectInteractionUpdateResponse
+  ): Promise<void> {
+    const previewTarget = previewRefreshTargetFromDelta({
+      delta: update.provisionalDelta,
+      viewModel: update.provisionalViewModel
+    });
+    const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot({
+      interactionId: update.interactionId
+    });
+    if (snapshotReady && previewTarget !== null) {
+      await seekRealtimePreviewHost(previewTarget);
+    }
+  }
+
   function handleTogglePlayback(): void {
     void (async () => {
       if (playbackRunning) {
@@ -2368,7 +2580,9 @@ export function App(): React.ReactElement {
     }
   }, [playbackRunning]);
 
-  async function updateRealtimePreviewProjectSessionSnapshot(): Promise<boolean> {
+  async function updateRealtimePreviewProjectSessionSnapshot(
+    options: { interactionId?: string | null } = {}
+  ): Promise<boolean> {
     const bridge = window.videoEditorRealtimePreviewHost;
     if (bridge === undefined) {
       return applyRealtimePreviewHostError("预览画面暂不可用");
@@ -2379,11 +2593,13 @@ export function App(): React.ReactElement {
     }
 
     const currentSnapshot = realtimePreviewSnapshotRef.current;
+    const interactionId = options.interactionId ?? null;
     const selectedSegmentHandle = workspaceRef.current.viewModel.selectedSegment?.selectionHandle ?? null;
     const draftSemanticKey = realtimePreviewDraftSemanticKey(workspaceRef.current);
     if (
       currentSnapshot?.projectSessionId === projectSession.sessionId &&
       currentSnapshot.revision === projectSession.revision &&
+      currentSnapshot.interactionId === interactionId &&
       currentSnapshot.selectedSegmentHandle === selectedSegmentHandle &&
       currentSnapshot.draftSemanticKey === draftSemanticKey
     ) {
@@ -2392,12 +2608,13 @@ export function App(): React.ReactElement {
 
     try {
       const ok = applyRealtimePreviewHostState(
-        await bridge.updateProjectSessionSnapshot(projectSession.sessionId, projectSession.revision)
+        await bridge.updateProjectSessionSnapshot(projectSession.sessionId, projectSession.revision, interactionId)
       );
       if (ok) {
         realtimePreviewSnapshotRef.current = {
           projectSessionId: projectSession.sessionId,
           revision: projectSession.revision,
+          interactionId,
           selectedSegmentHandle,
           draftSemanticKey
         };
@@ -2787,6 +3004,7 @@ export function App(): React.ReactElement {
       materialPath={materialPath}
       playheadUs={playheadUs}
       playbackRunning={playbackRunning}
+      projectInteractions={projectInteractions}
       onRealtimePreviewHostStateChange={handleRealtimePreviewHostStateChange}
       onCategoryChange={setActiveCategory}
       onBundlePathChange={setBundlePath}
@@ -3172,7 +3390,37 @@ function realtimePreviewDraftSemanticKey(workspace: WorkspaceState): string {
       ].join("=")
     )
     .join("|");
-  return `${materialKey}#${timelineKey}`;
+  const selected = workspace.viewModel.selectedSegment;
+  const selectedVisualKey =
+    selected === null
+      ? "none"
+      : [
+          selected.selectionHandle,
+          selected.visual.visible ? "v1" : "v0",
+          selected.visual.fitMode,
+          selected.visual.transform.position.x,
+          selected.visual.transform.position.y,
+          selected.visual.transform.scale.xMillis,
+          selected.visual.transform.scale.yMillis,
+          selected.visual.transform.rotation.degrees,
+          selected.visual.transform.opacity.valueMillis,
+          selected.visual.transform.crop.leftMillis,
+          selected.visual.transform.crop.rightMillis,
+          selected.visual.transform.crop.topMillis,
+          selected.visual.transform.crop.bottomMillis,
+          selected.audio?.gainMillis ?? selected.volume.levelMillis,
+          selected.audio?.panBalanceMillis ?? 0,
+          selected.audio?.fadeInDuration.duration ?? 0,
+          selected.audio?.fadeOutDuration.duration ?? 0,
+          selected.text?.content ?? "",
+          selected.text?.style.fontSize ?? "",
+          selected.text?.style.color ?? "",
+          selected.text?.layoutRegion.xMillis ?? "",
+          selected.text?.layoutRegion.yMillis ?? "",
+          selected.text?.layoutRegion.widthMillis ?? "",
+          selected.text?.layoutRegion.heightMillis ?? ""
+        ].join(":");
+  return `${materialKey}#${timelineKey}#${selectedVisualKey}`;
 }
 
 function projectNameFromBundlePath(bundlePath: string): string {

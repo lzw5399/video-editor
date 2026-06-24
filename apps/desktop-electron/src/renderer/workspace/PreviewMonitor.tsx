@@ -9,6 +9,7 @@ import {
 
 import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
 import type { SegmentVisualPatch } from "../../main/nativeBinding";
+import type { ProjectInteractionController, ProjectInteractionEvidence } from "./projectInteraction";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   canvasBackgroundTone,
@@ -55,13 +56,13 @@ type PreviewMonitorProps = {
   playheadUs?: number;
   timelineDurationUs: number;
   playbackRunning: boolean;
+  projectInteractions: ProjectInteractionController;
   onRealtimePreviewHostStateChange: (state: RealtimePreviewHostState) => void;
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
   onProbeRuntimeCapabilities: () => void;
   onRetryAudioPreview: () => void;
-  onUpdateSelectedSegmentVisual: (patch: SegmentVisualPatch) => void;
   onSelectPreviewTextOverlay: (selectionHandle: string) => void;
   onEditPreviewTextOverlay: (selectionHandle: string) => void;
 };
@@ -215,7 +216,11 @@ export type RealtimePreviewHostApi = {
   updateHostRect: (rect: RealtimePreviewHostRect) => Promise<RealtimePreviewHostState>;
   detachSurface: () => Promise<RealtimePreviewHostState>;
   subscribeTelemetry: (listener: (state: RealtimePreviewHostState) => void) => () => void;
-  updateProjectSessionSnapshot: (projectSessionId: string, expectedRevision: number) => Promise<RealtimePreviewHostState>;
+  updateProjectSessionSnapshot: (
+    projectSessionId: string,
+    expectedRevision: number,
+    interactionId?: string | null
+  ) => Promise<RealtimePreviewHostState>;
   seek: (targetTimeMicroseconds: number) => Promise<RealtimePreviewHostState>;
   play: () => Promise<RealtimePreviewHostState>;
   pause: () => Promise<RealtimePreviewHostState>;
@@ -233,10 +238,32 @@ type PreviewDragState = {
   canvasWidth: number;
   canvasHeight: number;
   moved: boolean;
+  sequence: number;
+  beginPromise: Promise<void>;
+  interactionId: string | null;
+  interactionGeneration: number | null;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingPayload: SegmentVisualPatch | null;
+  pendingMetrics: PreviewDragMetrics | null;
+  acceptedMoveDeltaX: number;
+  acceptedMoveDeltaY: number;
+  acceptedRotationDeltaDegrees: number;
   centerClientX?: number;
   centerClientY?: number;
   startAngleDegrees?: number;
 };
+
+type PreviewDragMetrics =
+  | {
+      mode: "move";
+      deltaClientX: number;
+      deltaClientY: number;
+    }
+  | {
+      mode: "rotate";
+      deltaDegrees: number;
+    };
 
 type PreviewDragPreviewState =
   | {
@@ -326,9 +353,9 @@ export function PreviewMonitor({
   onPlayheadChange,
   onTogglePlayback,
   onStopPlayback,
+  projectInteractions,
   onProbeRuntimeCapabilities,
   onRetryAudioPreview,
-  onUpdateSelectedSegmentVisual,
   onSelectPreviewTextOverlay,
   onEditPreviewTextOverlay
 }: PreviewMonitorProps): React.ReactElement {
@@ -339,6 +366,7 @@ export function PreviewMonitor({
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const [canvasFitSize, setCanvasFitSize] = useState<CanvasFitSize | null>(null);
   const [previewDragPreview, setPreviewDragPreview] = useState<PreviewDragPreviewState | null>(null);
+  const [previewInteractionEvidence, setPreviewInteractionEvidence] = useState<ProjectInteractionEvidence | null>(null);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const safeTimelineDurationUs = Math.max(0, Math.round(timelineDurationUs));
   const frameStepUs = frameDurationUs(canvasConfig);
@@ -406,7 +434,7 @@ export function PreviewMonitor({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    previewDragRef.current = {
+    const drag: PreviewDragState = {
       mode: "move",
       pointerId: event.pointerId,
       startClientX: event.clientX,
@@ -415,8 +443,22 @@ export function PreviewMonitor({
       lastClientY: event.clientY,
       canvasWidth: canvasRect.width,
       canvasHeight: canvasRect.height,
-      moved: false
+      moved: false,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      interactionId: null,
+      interactionGeneration: null,
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null,
+      pendingMetrics: null,
+      acceptedMoveDeltaX: 0,
+      acceptedMoveDeltaY: 0,
+      acceptedRotationDeltaDegrees: 0
     };
+    drag.beginPromise = beginPreviewTransformInteraction(drag);
+    previewDragRef.current = drag;
+    setPreviewInteractionEvidence(null);
     setPreviewDragPreview({ mode: "move", deltaClientX: 0, deltaClientY: 0 });
   }
 
@@ -441,7 +483,7 @@ export function PreviewMonitor({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    previewDragRef.current = {
+    const drag: PreviewDragState = {
       mode: "rotate",
       pointerId: event.pointerId,
       startClientX: event.clientX,
@@ -451,10 +493,24 @@ export function PreviewMonitor({
       canvasWidth: canvasRect.width,
       canvasHeight: canvasRect.height,
       moved: false,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      interactionId: null,
+      interactionGeneration: null,
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null,
+      pendingMetrics: null,
+      acceptedMoveDeltaX: 0,
+      acceptedMoveDeltaY: 0,
+      acceptedRotationDeltaDegrees: 0,
       centerClientX,
       centerClientY,
       startAngleDegrees: pointerAngleDegrees(event.clientX, event.clientY, centerClientX, centerClientY)
     };
+    drag.beginPromise = beginPreviewTransformInteraction(drag);
+    previewDragRef.current = drag;
+    setPreviewInteractionEvidence(null);
     setPreviewDragPreview({ mode: "rotate", deltaDegrees: 0 });
   }
 
@@ -470,19 +526,21 @@ export function PreviewMonitor({
       drag.moved ||
       Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) > 2;
     if (drag.mode === "rotate") {
-      const centerClientX = drag.centerClientX ?? drag.startClientX;
-      const centerClientY = drag.centerClientY ?? drag.startClientY;
-      const startAngle =
-        drag.startAngleDegrees ?? pointerAngleDegrees(drag.startClientX, drag.startClientY, centerClientX, centerClientY);
-      const currentAngle = pointerAngleDegrees(event.clientX, event.clientY, centerClientX, centerClientY);
-      setPreviewDragPreview({ mode: "rotate", deltaDegrees: normalizeRotationDegrees(currentAngle - startAngle) });
+      const metrics = previewRotateMetrics(drag, event.clientX, event.clientY);
+      setPreviewDragPreview({
+        mode: "rotate",
+        deltaDegrees: normalizeRotationDegrees(metrics.deltaDegrees - drag.acceptedRotationDeltaDegrees)
+      });
+      queuePreviewTransformUpdate(drag, previewVisualPatchFromMetrics(drag, metrics), metrics);
       return;
     }
+    const metrics = previewMoveMetrics(drag, event.clientX, event.clientY);
     setPreviewDragPreview({
       mode: "move",
-      deltaClientX: event.clientX - drag.startClientX,
-      deltaClientY: event.clientY - drag.startClientY
+      deltaClientX: metrics.deltaClientX - drag.acceptedMoveDeltaX,
+      deltaClientY: metrics.deltaClientY - drag.acceptedMoveDeltaY
     });
+    queuePreviewTransformUpdate(drag, previewVisualPatchFromMetrics(drag, metrics), metrics);
   }
 
   function handlePreviewDragPointerUp(event: ReactPointerEvent<HTMLElement>): void {
@@ -490,37 +548,157 @@ export function PreviewMonitor({
     if (drag === null || drag.pointerId !== event.pointerId) {
       return;
     }
-    previewDragRef.current = null;
-    setPreviewDragPreview(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (!drag.moved) {
-      return;
-    }
-
-    if (drag.mode === "rotate") {
-      const centerClientX = drag.centerClientX ?? drag.startClientX;
-      const centerClientY = drag.centerClientY ?? drag.startClientY;
-      const startAngle =
-        drag.startAngleDegrees ?? pointerAngleDegrees(drag.startClientX, drag.startClientY, centerClientX, centerClientY);
-      const currentAngle = pointerAngleDegrees(drag.lastClientX, drag.lastClientY, centerClientX, centerClientY);
-      const deltaDegrees = normalizeRotationDegrees(currentAngle - startAngle);
-      onUpdateSelectedSegmentVisual({ rotationDeltaDegrees: Math.round(deltaDegrees) });
-      return;
-    }
-
-    const deltaX = Math.round(((drag.lastClientX - drag.startClientX) * 2000) / drag.canvasWidth);
-    const deltaY = Math.round(((drag.lastClientY - drag.startClientY) * 2000) / drag.canvasHeight);
-    onUpdateSelectedSegmentVisual({ positionDeltaX: deltaX, positionDeltaY: -deltaY });
+    void finishPreviewTransformInteraction(drag, drag.moved ? "commit" : "cancel");
   }
 
   function handlePreviewDragPointerCancel(event: ReactPointerEvent<HTMLElement>): void {
     const drag = previewDragRef.current;
     if (drag !== null && drag.pointerId === event.pointerId) {
+      void finishPreviewTransformInteraction(drag, "cancel");
+    }
+  }
+
+  async function beginPreviewTransformInteraction(drag: PreviewDragState): Promise<void> {
+    const begin = await projectInteractions.begin("selectedSegmentVisual");
+    if (previewDragRef.current !== drag) {
+      if (begin !== null) {
+        void projectInteractions.cancel(begin.interactionId);
+      }
+      return;
+    }
+    if (begin === null) {
+      if (drag.rafId !== null) {
+        window.cancelAnimationFrame(drag.rafId);
+        drag.rafId = null;
+      }
+      drag.pendingPayload = null;
+      drag.pendingMetrics = null;
       previewDragRef.current = null;
       setPreviewDragPreview(null);
+      setPreviewInteractionEvidence(null);
+      return;
     }
+    drag.interactionId = begin.interactionId;
+    drag.interactionGeneration = begin.generation;
+    flushPreviewTransformUpdate(drag);
+  }
+
+  function queuePreviewTransformUpdate(
+    drag: PreviewDragState,
+    payload: SegmentVisualPatch,
+    metrics: PreviewDragMetrics
+  ): void {
+    drag.pendingPayload = payload;
+    drag.pendingMetrics = metrics;
+    if (drag.rafId !== null) {
+      return;
+    }
+    drag.rafId = window.requestAnimationFrame(() => {
+      drag.rafId = null;
+      flushPreviewTransformUpdate(drag);
+    });
+  }
+
+  function flushPreviewTransformUpdate(drag: PreviewDragState): void {
+    if (drag.updateInFlight || drag.interactionId === null || drag.pendingPayload === null || drag.pendingMetrics === null) {
+      return;
+    }
+    const payload = drag.pendingPayload;
+    const metrics = drag.pendingMetrics;
+    drag.pendingPayload = null;
+    drag.pendingMetrics = null;
+    drag.updateInFlight = true;
+    const sequence = drag.sequence + 1;
+    drag.sequence = sequence;
+    void projectInteractions.update(drag.interactionId, sequence, {
+      kind: "selectedSegmentVisual",
+      patch: payload
+    }).then((update) => {
+      drag.updateInFlight = false;
+      if (previewDragRef.current !== drag || update === null) {
+        return;
+      }
+      drag.interactionGeneration = update.generation;
+      acceptPreviewDragMetrics(drag, metrics);
+      setPreviewInteractionEvidence({ kind: update.kind, generation: update.generation });
+      reconcilePreviewDragAffordance(drag);
+      flushPreviewTransformUpdate(drag);
+    });
+  }
+
+  async function finishPreviewTransformInteraction(
+    drag: PreviewDragState,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (drag.rafId !== null) {
+      window.cancelAnimationFrame(drag.rafId);
+      drag.rafId = null;
+    }
+    setPreviewDragPreview(null);
+    await drag.beginPromise;
+    if (drag.interactionId === null) {
+      if (previewDragRef.current === drag) {
+        previewDragRef.current = null;
+      }
+      setPreviewInteractionEvidence(null);
+      return;
+    }
+    if (action === "commit" && drag.moved) {
+      const finalMetrics =
+        drag.mode === "rotate"
+          ? previewRotateMetrics(drag, drag.lastClientX, drag.lastClientY)
+          : previewMoveMetrics(drag, drag.lastClientX, drag.lastClientY);
+      const finalPayload = previewVisualPatchFromMetrics(drag, finalMetrics);
+      drag.pendingPayload = finalPayload;
+      drag.pendingMetrics = finalMetrics;
+      while (drag.updateInFlight) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      flushPreviewTransformUpdate(drag);
+      while (drag.updateInFlight || drag.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      await projectInteractions.commit(drag.interactionId);
+      if (previewDragRef.current === drag) {
+        previewDragRef.current = null;
+      }
+      setPreviewInteractionEvidence(null);
+      return;
+    }
+    await projectInteractions.cancel(drag.interactionId);
+    if (previewDragRef.current === drag) {
+      previewDragRef.current = null;
+    }
+    setPreviewInteractionEvidence(null);
+  }
+
+  function acceptPreviewDragMetrics(drag: PreviewDragState, metrics: PreviewDragMetrics): void {
+    if (metrics.mode === "move") {
+      drag.acceptedMoveDeltaX = metrics.deltaClientX;
+      drag.acceptedMoveDeltaY = metrics.deltaClientY;
+      return;
+    }
+    drag.acceptedRotationDeltaDegrees = metrics.deltaDegrees;
+  }
+
+  function reconcilePreviewDragAffordance(drag: PreviewDragState): void {
+    if (drag.mode === "rotate") {
+      const metrics = previewRotateMetrics(drag, drag.lastClientX, drag.lastClientY);
+      const deltaDegrees = normalizeRotationDegrees(metrics.deltaDegrees - drag.acceptedRotationDeltaDegrees);
+      setPreviewDragPreview(Math.abs(deltaDegrees) > 0 ? { mode: "rotate", deltaDegrees } : null);
+      return;
+    }
+    const metrics = previewMoveMetrics(drag, drag.lastClientX, drag.lastClientY);
+    const deltaClientX = metrics.deltaClientX - drag.acceptedMoveDeltaX;
+    const deltaClientY = metrics.deltaClientY - drag.acceptedMoveDeltaY;
+    setPreviewDragPreview(
+      Math.abs(deltaClientX) + Math.abs(deltaClientY) > 0
+        ? { mode: "move", deltaClientX, deltaClientY }
+        : null
+    );
   }
 
   function handlePreviewCanvasClick(event: ReactMouseEvent<HTMLDivElement>): void {
@@ -758,6 +936,9 @@ export function PreviewMonitor({
             data-selection-handle={selectionOverlay.selectionHandle ?? selectedSegment.selectionHandle}
             data-overlay-source={selectionOverlay.source}
             data-fit-mode={selectedSegment.visual.fitMode}
+            data-interaction-source={previewInteractionEvidence === null ? undefined : "rust-provisional"}
+            data-interaction-kind={previewInteractionEvidence?.kind}
+            data-interaction-generation={previewInteractionEvidence?.generation}
             style={selectionOverlay.style}
             onPointerDown={handlePreviewDragPointerDown}
             onPointerMove={handlePreviewDragPointerMove}
@@ -1258,6 +1439,40 @@ function normalizeRotationDegrees(value: number): number {
     normalized += 360;
   }
   return normalized;
+}
+
+function previewMoveMetrics(drag: PreviewDragState, clientX: number, clientY: number): PreviewDragMetrics {
+  return {
+    mode: "move",
+    deltaClientX: clientX - drag.startClientX,
+    deltaClientY: clientY - drag.startClientY
+  };
+}
+
+function previewRotateMetrics(drag: PreviewDragState, clientX: number, clientY: number): PreviewDragMetrics {
+  const centerClientX = drag.centerClientX ?? drag.startClientX;
+  const centerClientY = drag.centerClientY ?? drag.startClientY;
+  const startAngle =
+    drag.startAngleDegrees ?? pointerAngleDegrees(drag.startClientX, drag.startClientY, centerClientX, centerClientY);
+  const currentAngle = pointerAngleDegrees(clientX, clientY, centerClientX, centerClientY);
+  return {
+    mode: "rotate",
+    deltaDegrees: normalizeRotationDegrees(currentAngle - startAngle)
+  };
+}
+
+function previewVisualPatchFromMetrics(drag: PreviewDragState, metrics: PreviewDragMetrics): SegmentVisualPatch {
+  if (metrics.mode === "rotate") {
+    return {
+      rotationDeltaDegrees: Math.round(metrics.deltaDegrees)
+    };
+  }
+  const deltaX = Math.round((metrics.deltaClientX * 2000) / Math.max(1, drag.canvasWidth));
+  const deltaY = Math.round((metrics.deltaClientY * 2000) / Math.max(1, drag.canvasHeight));
+  return {
+    positionDeltaX: deltaX,
+    positionDeltaY: -deltaY
+  };
 }
 
 function buildTextOverlayStyle(

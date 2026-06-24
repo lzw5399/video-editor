@@ -820,6 +820,16 @@ struct ActiveProjectInteraction {
     latest_payload: Option<ProjectInteractionPayload>,
     provisional_view_model: Option<ProjectSessionViewModel>,
     provisional_delta: Option<CommandDelta>,
+    provisional_draft: Option<Draft>,
+    provisional_selection: Option<TimelineSelection>,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectInteractionProvisionalResult {
+    view_model: ProjectSessionViewModel,
+    delta: CommandDelta,
+    draft: Draft,
+    selection: TimelineSelection,
 }
 
 #[derive(Debug, Clone)]
@@ -1011,13 +1021,22 @@ pub fn list_project_session_missing_materials(
 pub(crate) fn realtime_preview_snapshot(
     session_id: &str,
     expected_revision: u64,
+    interaction_id: Option<&str>,
 ) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
-    project_session_snapshot(session_id, expected_revision)
+    project_session_snapshot_for_preview(session_id, expected_revision, interaction_id)
 }
 
 pub(crate) fn project_session_snapshot(
     session_id: &str,
     expected_revision: u64,
+) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
+    project_session_snapshot_for_preview(session_id, expected_revision, None)
+}
+
+fn project_session_snapshot_for_preview(
+    session_id: &str,
+    expected_revision: u64,
+    interaction_id: Option<&str>,
 ) -> std::result::Result<ProjectSessionPreviewSnapshot, String> {
     let registry = global_project_session_registry();
     let registry = registry
@@ -1032,6 +1051,23 @@ pub(crate) fn project_session_snapshot(
             "Stale project session revision: expected {}, current {}",
             expected_revision, session.revision
         ));
+    }
+    if let Some(interaction_id) = interaction_id {
+        let active = session.active_interactions.get(interaction_id).ok_or_else(|| {
+            format!("Project interaction not found for preview snapshot: {interaction_id}")
+        })?;
+        let draft = active.provisional_draft.clone().ok_or_else(|| {
+            format!("Project interaction {interaction_id} has no provisional draft snapshot")
+        })?;
+        let selection = active
+            .provisional_selection
+            .clone()
+            .unwrap_or_else(|| session.selection.clone());
+        return Ok(ProjectSessionPreviewSnapshot {
+            selected_segment: selected_segment_for_preview(&draft, &selection),
+            draft,
+            bundle_path: session.bundle_path.clone(),
+        });
     }
     Ok(ProjectSessionPreviewSnapshot {
         draft: session.draft.clone(),
@@ -1674,6 +1710,8 @@ impl ProjectSessionRegistry {
                 latest_payload: None,
                 provisional_view_model: None,
                 provisional_delta: None,
+                provisional_draft: None,
+                provisional_selection: None,
             },
         );
 
@@ -1723,7 +1761,7 @@ impl ProjectSessionRegistry {
             return error;
         }
 
-        let (provisional_view_model, provisional_delta) =
+        let provisional =
             match session.provisional_interaction_payload(&request.payload) {
                 Ok(response) => response,
                 Err(message) => {
@@ -1734,6 +1772,8 @@ impl ProjectSessionRegistry {
                     );
                 }
             };
+        let provisional_view_model = provisional.view_model.clone();
+        let provisional_delta = provisional.delta.clone();
         let Some(active) = session.active_interactions.get_mut(&request.interaction_id) else {
             return missing_interaction_error("updateProjectInteraction", &request.interaction_id);
         };
@@ -1741,6 +1781,8 @@ impl ProjectSessionRegistry {
         active.latest_payload = Some(request.payload);
         active.provisional_view_model = Some(provisional_view_model.clone());
         active.provisional_delta = Some(provisional_delta.clone());
+        active.provisional_draft = Some(provisional.draft);
+        active.provisional_selection = Some(provisional.selection);
 
         crate::to_js_value(crate::ok_envelope(ProjectInteractionUpdateResponse {
             session_id: session.session_id.clone(),
@@ -2021,24 +2063,32 @@ impl ProjectSession {
     fn provisional_interaction_payload(
         &self,
         payload: &ProjectInteractionPayload,
-    ) -> std::result::Result<(ProjectSessionViewModel, CommandDelta), String> {
+    ) -> std::result::Result<ProjectInteractionProvisionalResult, String> {
         match payload.clone().into_project_intent() {
-            ProjectIntent::SetSessionPlayhead { .. } => Ok((
-                project_session_view_model(&self.draft, &self.command_state, &self.selection),
-                CommandDelta::none(CommandDeltaName::SeekAudioPreview, "playhead scrub update"),
-            )),
+            ProjectIntent::SetSessionPlayhead { .. } => Ok(ProjectInteractionProvisionalResult {
+                view_model: project_session_view_model(
+                    &self.draft,
+                    &self.command_state,
+                    &self.selection,
+                ),
+                delta: CommandDelta::none(CommandDeltaName::SeekAudioPreview, "playhead scrub update"),
+                draft: self.draft.clone(),
+                selection: self.selection.clone(),
+            }),
             intent => {
                 let edit_payload = self.intent_payload(intent)?;
                 let response = draft_commands::timeline::execute_timeline_edit(edit_payload)
                     .map_err(|error| error.to_string())?;
-                Ok((
-                    project_session_view_model(
+                Ok(ProjectInteractionProvisionalResult {
+                    view_model: project_session_view_model(
                         &response.draft,
                         &response.command_state,
                         &response.selection,
                     ),
-                    response.delta,
-                ))
+                    delta: response.delta,
+                    draft: response.draft,
+                    selection: response.selection,
+                })
             }
         }
     }
