@@ -406,7 +406,14 @@ export type ProjectInteractionPayload =
       fadeOutDuration?: AudioFade | null;
       effectSlots?: AudioEffectSlot[] | null;
     }
-  | { kind: "playheadScrub"; playhead: Microseconds };
+  | { kind: "playheadScrub"; playhead: Microseconds }
+  | {
+      kind: "timelineMoveTrim";
+      mode: "move" | "trimLeft" | "trimRight";
+      startAt?: Microseconds | null;
+      trimAt?: Microseconds | null;
+      targetTrackHandle?: string | null;
+    };
 
 export type BeginProjectInteractionRequest = {
   sessionId: string;
@@ -597,6 +604,7 @@ export type TimelineTrackRowViewModel = {
   selectionHandle: string;
   name: string;
   symbol: string;
+  kind: TrackKind;
   kindLabel: string;
   statusLabel: string;
   lockLabel: string;

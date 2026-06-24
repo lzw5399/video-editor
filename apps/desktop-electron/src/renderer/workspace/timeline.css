@@ -782,7 +782,7 @@
   top: 0;
   bottom: 0;
   z-index: 3;
-  width: 10px;
+  width: 16px;
   cursor: ew-resize;
   touch-action: none;
 }
@@ -806,11 +806,11 @@
 }
 
 .segment-trim-handle.left::after {
-  left: 3px;
+  left: 5px;
 }
 
 .segment-trim-handle.right::after {
-  right: 3px;
+  right: 5px;
 }
 
 .segment-block.selected .segment-trim-handle::after,

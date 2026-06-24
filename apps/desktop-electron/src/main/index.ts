@@ -1161,6 +1161,12 @@ function recordTestProjectSessionCall(
       ? intentRecord.targetStart
       : typeof intentRecord?.timeOffset === "number"
         ? intentRecord.timeOffset
+        : interactionPayloadRecord?.kind === "timelineMoveTrim" && typeof interactionPayloadRecord.startAt === "number"
+          ? interactionPayloadRecord.startAt
+        : interactionPayloadRecord?.kind === "timelineMoveTrim" && typeof interactionPayloadRecord.trimAt === "number"
+          ? interactionPayloadRecord.trimAt
+        : interactionPayloadRecord?.kind === "playheadScrub" && typeof interactionPayloadRecord.playhead === "number"
+          ? interactionPayloadRecord.playhead
         : null;
   globalThis.__videoEditorTestProjectSessionCalls ??= [];
   const observation: TestProjectSessionCall = {
@@ -1204,8 +1210,18 @@ function recordTestProjectSessionCall(
             interactionPayloadRecord.patch !== null
           ? (interactionPayloadRecord.patch as SegmentVisualPatch)
         : null,
-    keyframeProperty: typeof intentRecord?.property === "string" ? intentRecord.property : null,
-    keyframeAt: typeof intentRecord?.at === "number" ? intentRecord.at : null,
+    keyframeProperty:
+      typeof intentRecord?.property === "string"
+        ? intentRecord.property
+        : typeof interactionPayloadRecord?.property === "string"
+          ? interactionPayloadRecord.property
+          : null,
+    keyframeAt:
+      typeof intentRecord?.at === "number"
+        ? intentRecord.at
+        : typeof interactionPayloadRecord?.at === "number"
+          ? interactionPayloadRecord.at
+          : null,
     textPatch: textPatch ?? interactionTextPatch,
     textContent:
       typeof textPatch?.content === "string"
@@ -1220,7 +1236,12 @@ function recordTestProjectSessionCall(
         : typeof interactionTextPatch?.fontRef === "string"
           ? interactionTextPatch.fontRef
           : null,
-    targetTrackHandle: typeof intentRecord?.targetTrackHandle === "string" ? intentRecord.targetTrackHandle : null,
+    targetTrackHandle:
+      typeof intentRecord?.targetTrackHandle === "string"
+        ? intentRecord.targetTrackHandle
+        : typeof interactionPayloadRecord?.targetTrackHandle === "string"
+          ? interactionPayloadRecord.targetTrackHandle
+          : null,
     srtContent: typeof intentRecord?.srtContent === "string" ? intentRecord.srtContent : null,
     timelineSemanticKeys: timelineSemanticKeys(intentRecord),
     hasDraftField:

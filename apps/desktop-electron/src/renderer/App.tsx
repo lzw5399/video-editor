@@ -858,9 +858,13 @@ export function App(): React.ReactElement {
       }
       setBundlePath(result.data.bundlePath);
       setWorkspace((current) => {
+        const viewModel =
+          payload.kind === "timelineMoveTrim"
+            ? current.viewModel
+            : result.data.provisionalViewModel;
         const next = {
           ...current,
-          viewModel: result.data.provisionalViewModel,
+          viewModel,
           commandError: null
         };
         workspaceRef.current = next;

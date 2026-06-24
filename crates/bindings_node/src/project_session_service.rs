@@ -301,6 +301,15 @@ enum ProjectInteractionPayload {
     PlayheadScrub {
         playhead: Microseconds,
     },
+    TimelineMoveTrim {
+        mode: TimelineMoveTrimInteractionMode,
+        #[serde(default, rename = "startAt")]
+        start_at: Option<Microseconds>,
+        #[serde(default, rename = "trimAt")]
+        trim_at: Option<Microseconds>,
+        #[serde(default, rename = "targetTrackHandle")]
+        target_track_handle: Option<String>,
+    },
 }
 
 impl ProjectInteractionPayload {
@@ -316,16 +325,19 @@ impl ProjectInteractionPayload {
             ProjectInteractionPayload::PlayheadScrub { .. } => {
                 ProjectInteractionKind::PlayheadScrub
             }
+            ProjectInteractionPayload::TimelineMoveTrim { .. } => {
+                ProjectInteractionKind::TimelineMoveTrim
+            }
         }
     }
 
-    fn into_project_intent(self) -> ProjectIntent {
+    fn into_project_intent(self) -> std::result::Result<ProjectIntent, String> {
         match self {
-            ProjectInteractionPayload::SelectedSegmentVisual { patch } => {
+            ProjectInteractionPayload::SelectedSegmentVisual { patch } => Ok(
                 ProjectIntent::UpdateSelectedSegmentVisual { patch }
-            }
+            ),
             ProjectInteractionPayload::SelectedText { patch } => {
-                ProjectIntent::EditSelectedText { patch }
+                Ok(ProjectIntent::EditSelectedText { patch })
             }
             ProjectInteractionPayload::SelectedSegmentAudio {
                 gain_millis,
@@ -333,18 +345,60 @@ impl ProjectInteractionPayload {
                 fade_in_duration,
                 fade_out_duration,
                 effect_slots,
-            } => ProjectIntent::UpdateSelectedSegmentAudio {
+            } => Ok(ProjectIntent::UpdateSelectedSegmentAudio {
                 gain_millis,
                 pan_balance_millis,
                 fade_in_duration,
                 fade_out_duration,
                 effect_slots,
-            },
+            }),
             ProjectInteractionPayload::PlayheadScrub { playhead } => {
-                ProjectIntent::SetSessionPlayhead { playhead }
+                Ok(ProjectIntent::SetSessionPlayhead { playhead })
             }
+            ProjectInteractionPayload::TimelineMoveTrim {
+                mode,
+                start_at,
+                trim_at,
+                target_track_handle,
+            } => match mode {
+                TimelineMoveTrimInteractionMode::Move => {
+                    let start_at = start_at.ok_or_else(|| {
+                        "时间线移动交互缺少 startAt".to_owned()
+                    })?;
+                    Ok(ProjectIntent::MoveSelectedSegmentIntent {
+                        start_at,
+                        target_track_handle,
+                    })
+                }
+                TimelineMoveTrimInteractionMode::TrimLeft => {
+                    let trim_at = trim_at.ok_or_else(|| {
+                        "时间线左裁剪交互缺少 trimAt".to_owned()
+                    })?;
+                    Ok(ProjectIntent::TrimSelectedSegmentIntent {
+                        direction: TrimSegmentDirection::Left,
+                        trim_at,
+                    })
+                }
+                TimelineMoveTrimInteractionMode::TrimRight => {
+                    let trim_at = trim_at.ok_or_else(|| {
+                        "时间线右裁剪交互缺少 trimAt".to_owned()
+                    })?;
+                    Ok(ProjectIntent::TrimSelectedSegmentIntent {
+                        direction: TrimSegmentDirection::Right,
+                        trim_at,
+                    })
+                }
+            },
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum TimelineMoveTrimInteractionMode {
+    Move,
+    TrimLeft,
+    TrimRight,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -691,6 +745,7 @@ struct TimelineTrackRowViewModel {
     selection_handle: String,
     name: String,
     symbol: String,
+    kind: TrackKind,
     kind_label: String,
     status_label: String,
     lock_label: String,
@@ -2064,7 +2119,7 @@ impl ProjectSession {
         &self,
         payload: &ProjectInteractionPayload,
     ) -> std::result::Result<ProjectInteractionProvisionalResult, String> {
-        match payload.clone().into_project_intent() {
+        match payload.clone().into_project_intent()? {
             ProjectIntent::SetSessionPlayhead { .. } => Ok(ProjectInteractionProvisionalResult {
                 view_model: project_session_view_model(
                     &self.draft,
@@ -2098,7 +2153,17 @@ impl ProjectSession {
         payload: ProjectInteractionPayload,
         interaction: &DraftProjectInteractionSession,
     ) -> Result<serde_json::Value> {
-        match payload.into_project_intent() {
+        let intent = match payload.into_project_intent() {
+            Ok(intent) => intent,
+            Err(message) => {
+                return project_interaction_error(
+                    "commitProjectInteraction",
+                    CommandErrorKind::InvalidPayload,
+                    message,
+                );
+            }
+        };
+        match intent {
             ProjectIntent::SetSessionPlayhead { playhead } => {
                 self.playhead = playhead;
                 crate::to_js_value(crate::ok_envelope(ProjectInteractionCommitResponse {
@@ -3434,6 +3499,7 @@ fn timeline_track_row_view_model(
         selection_handle,
         name: track.name.clone(),
         symbol: timeline_track_symbol(track.kind).to_owned(),
+        kind: track.kind,
         kind_label: kind_label.to_owned(),
         status_label: format!("{kind_label} · {} 片段", track.segments.len()),
         lock_label: if track.locked {

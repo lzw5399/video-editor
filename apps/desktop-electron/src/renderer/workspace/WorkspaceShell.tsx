@@ -351,6 +351,7 @@ export function WorkspaceShell({
           showDeveloperDiagnostics={showDeveloperDiagnostics}
           playheadUs={playheadUs}
           playbackRunning={playbackRunning}
+          projectInteractions={projectInteractions}
           onPlayheadChange={onPlayheadChange}
           onTogglePlayback={onTogglePlayback}
           onStopPlayback={onStopPlayback}

@@ -208,6 +208,173 @@ fn project_interaction_session_commit_revalidates_and_saves_once() {
 }
 
 #[test]
+fn project_interaction_session_timeline_move_trim_validates_and_commits_once() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("interaction-timeline-move-trim.veproj");
+    let revision = open_session_with_selected_segment(&bundle_path, "interaction-timeline-move-trim");
+
+    let invalid_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "kind": "timelineMoveTrim"
+    }))
+    .expect("begin timeline interaction should return an envelope");
+    assert_eq!(invalid_begin["ok"], true, "{invalid_begin:#}");
+    let invalid_interaction_id = invalid_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let invalid_update = update_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "interactionId": invalid_interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "timelineMoveTrim",
+            "mode": "move",
+            "startAt": 250_000,
+            "targetTrackHandle": "timeline-track:audio-track"
+        }
+    }))
+    .expect("invalid cross-track update should return an envelope");
+    assert_eq!(invalid_update["ok"], false, "{invalid_update:#}");
+    assert!(
+        invalid_update["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("incompatible")
+    );
+    let canceled_invalid = cancel_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "interactionId": invalid_interaction_id
+    }))
+    .expect("cancel invalid interaction should return an envelope");
+    assert_eq!(canceled_invalid["ok"], true, "{canceled_invalid:#}");
+
+    let begin = begin_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "kind": "timelineMoveTrim"
+    }))
+    .expect("beginProjectInteraction should return an envelope");
+    assert_eq!(begin["ok"], true, "{begin:#}");
+    let interaction_id = begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return an interaction id")
+        .to_owned();
+    let before_update = project_json_bytes(&bundle_path);
+
+    let moved = update_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "interactionId": interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "timelineMoveTrim",
+            "mode": "move",
+            "startAt": 250_000,
+            "targetTrackHandle": "timeline-track:video-track-2"
+        }
+    }))
+    .expect("timeline move update should return an envelope");
+    assert_eq!(moved["ok"], true, "{moved:#}");
+    assert_eq!(moved["data"]["kind"], "timelineMoveTrim");
+    assert_eq!(moved["data"]["revision"], revision);
+    assert_eq!(moved["data"]["revisionUnchanged"], true);
+    assert_eq!(moved["data"]["provisionalDelta"]["command"], "moveSegment");
+    assert_eq!(
+        project_json_bytes(&bundle_path),
+        before_update,
+        "timeline move update must not save project.json"
+    );
+
+    let committed = commit_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": revision,
+        "interactionId": moved["data"]["interactionId"]
+    }))
+    .expect("timeline move commit should return an envelope");
+    assert_eq!(committed["ok"], true, "{committed:#}");
+    assert_eq!(committed["data"]["revision"], revision + 1);
+    assert_eq!(committed["data"]["delta"]["command"], "moveSegment");
+    assert_eq!(committed["data"]["viewModel"]["editControls"]["canUndo"], true);
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("committed move should save canonical project.json");
+    assert_eq!(reopened.bundle.draft.tracks[0].segments.len(), 0);
+    assert_eq!(reopened.bundle.draft.tracks[1].segments.len(), 1);
+    assert_eq!(
+        reopened.bundle.draft.tracks[1].segments[0]
+            .target_timerange
+            .start
+            .get(),
+        250_000
+    );
+
+    let trim_revision = committed["data"]["revision"]
+        .as_u64()
+        .expect("commit should return revision");
+    let trim_begin = begin_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": trim_revision,
+        "kind": "timelineMoveTrim"
+    }))
+    .expect("begin trim interaction should return an envelope");
+    assert_eq!(trim_begin["ok"], true, "{trim_begin:#}");
+    let trim_interaction_id = trim_begin["data"]["interactionId"]
+        .as_str()
+        .expect("begin should return trim interaction id")
+        .to_owned();
+    let before_trim_update = project_json_bytes(&bundle_path);
+    let trimmed = update_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": trim_revision,
+        "interactionId": trim_interaction_id,
+        "sequence": 1,
+        "payload": {
+            "kind": "timelineMoveTrim",
+            "mode": "trimLeft",
+            "trimAt": 300_000
+        }
+    }))
+    .expect("timeline trim update should return an envelope");
+    assert_eq!(trimmed["ok"], true, "{trimmed:#}");
+    assert_eq!(trimmed["data"]["revision"], trim_revision);
+    assert_eq!(trimmed["data"]["revisionUnchanged"], true);
+    assert_eq!(trimmed["data"]["provisionalDelta"]["command"], "trimSegment");
+    assert_eq!(project_json_bytes(&bundle_path), before_trim_update);
+
+    let trim_commit = commit_project_interaction(json!({
+        "sessionId": "interaction-timeline-move-trim",
+        "expectedRevision": trim_revision,
+        "interactionId": trimmed["data"]["interactionId"]
+    }))
+    .expect("timeline trim commit should return an envelope");
+    assert_eq!(trim_commit["ok"], true, "{trim_commit:#}");
+    assert_eq!(trim_commit["data"]["revision"], trim_revision + 1);
+    assert_eq!(trim_commit["data"]["delta"]["command"], "trimSegment");
+    let reopened_trim = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("committed trim should save canonical project.json");
+    assert_eq!(
+        reopened_trim.bundle.draft.tracks[1].segments[0]
+            .target_timerange
+            .start
+            .get(),
+        300_000
+    );
+    assert_eq!(
+        reopened_trim.bundle.draft.tracks[1].segments[0]
+            .target_timerange
+            .duration
+            .get(),
+        950_000
+    );
+
+    close_project_session(json!({ "sessionId": "interaction-timeline-move-trim" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_interaction_session_rejects_stale_base_revision() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("interaction-stale-revision.veproj");
@@ -348,6 +515,20 @@ fn timeline_draft_json() -> Value {
             "trackId": "video-track",
             "kind": "video",
             "name": "Video",
+            "muted": false,
+            "locked": false,
+            "segments": []
+        }, {
+            "trackId": "video-track-2",
+            "kind": "video",
+            "name": "Video 2",
+            "muted": false,
+            "locked": false,
+            "segments": []
+        }, {
+            "trackId": "audio-track",
+            "kind": "audio",
+            "name": "Audio",
             "muted": false,
             "locked": false,
             "segments": []

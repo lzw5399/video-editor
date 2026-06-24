@@ -2,16 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 
 import type { TrackKind } from "../../generated/Draft";
+import type { ProjectInteractionPayload } from "../../main/nativeBinding";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
   formatTimelineTime,
   segmentBlockStyle,
   type TimelineSegmentView,
+  type TimelineSegmentVisualKind,
   type TimelineTrackRow as TimelineTrackRowView,
   type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
 import { MATERIAL_DRAG_DATA_TYPE, TEXT_SEGMENT_DRAG_DATA_TYPE } from "./dragTypes";
+import type { ProjectInteractionController, ProjectInteractionEvidence } from "./projectInteraction";
 
 import "./timeline.css";
 
@@ -49,8 +52,11 @@ type TimelineDragPreviewState = {
   baseTrackSelectionHandle: string;
 };
 
+type TimelineMoveTrimPayload = Extract<ProjectInteractionPayload, { kind: "timelineMoveTrim" }>;
+
 type TimelineTrackDropTarget = {
   selectionHandle: string;
+  kind: TrackKind;
   left: number;
   right: number;
   top: number;
@@ -62,6 +68,7 @@ type TimelineProps = {
   showDeveloperDiagnostics: boolean;
   playheadUs: number;
   playbackRunning: boolean;
+  projectInteractions: ProjectInteractionController;
   onPlayheadChange: (value: number) => void;
   onTogglePlayback: () => void;
   onStopPlayback: () => void;
@@ -87,6 +94,7 @@ export function Timeline({
   showDeveloperDiagnostics,
   playheadUs,
   playbackRunning,
+  projectInteractions,
   onPlayheadChange,
   onTogglePlayback,
   onSelectSegment,
@@ -97,9 +105,7 @@ export function Timeline({
   onRenameTrack,
   onSetTrackLock,
   onSetTrackVisibility,
-  onMoveSelectedSegment,
   onSplitSelectedSegment,
-  onTrimSelectedSegment,
   onDeleteSelectedSegment,
   onSetTrackMute,
   onUndo,
@@ -110,6 +116,7 @@ export function Timeline({
   const trackContentRef = useRef<HTMLDivElement>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [materialDropActive, setMaterialDropActive] = useState(false);
+  const [timelineInteractionEvidence, setTimelineInteractionEvidence] = useState<ProjectInteractionEvidence | null>(null);
   const playheadRatio = Math.max(0, Math.min(1, Math.max(0, playheadUs) / Math.max(1, timeline.duration)));
   const playheadStyle = {
     left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
@@ -303,8 +310,9 @@ export function Timeline({
               onSetTrackLock={onSetTrackLock}
               onSetTrackVisibility={onSetTrackVisibility}
               onSetTrackMute={onSetTrackMute}
-              onMoveSelectedSegment={onMoveSelectedSegment}
-              onTrimSelectedSegment={onTrimSelectedSegment}
+              projectInteractions={projectInteractions}
+              interactionEvidence={timelineInteractionEvidence}
+              onInteractionEvidenceChange={setTimelineInteractionEvidence}
               pending={workspace.pendingCommand !== null}
             />
           ))}
@@ -353,13 +361,18 @@ function collectTimelineTrackDropTargets(root: Element | null): TimelineTrackDro
     .filter((row): row is HTMLElement => row instanceof HTMLElement)
     .flatMap((row) => {
       const selectionHandle = row.dataset.trackSelectionHandle?.trim() ?? "";
+      const kind = row.dataset.trackKind;
       if (selectionHandle.length === 0) {
+        return [];
+      }
+      if (!isTrackKind(kind)) {
         return [];
       }
       const rect = row.getBoundingClientRect();
       return [
         {
           selectionHandle,
+          kind,
           left: rect.left,
           right: rect.right,
           top: rect.top,
@@ -372,13 +385,38 @@ function collectTimelineTrackDropTargets(root: Element | null): TimelineTrackDro
 function timelineTrackHandleFromTargetsAtPoint(
   targets: readonly TimelineTrackDropTarget[],
   clientX: number,
-  clientY: number
+  clientY: number,
+  segmentVisualKind?: TimelineSegmentVisualKind
 ): string | null {
   const target = targets.find(
     (candidate) =>
-      clientX >= candidate.left && clientX <= candidate.right && clientY >= candidate.top && clientY <= candidate.bottom
+      clientX >= candidate.left &&
+      clientX <= candidate.right &&
+      clientY >= candidate.top &&
+      clientY <= candidate.bottom &&
+      (segmentVisualKind === undefined || trackKindAcceptsSegment(candidate.kind, segmentVisualKind))
   );
   return target?.selectionHandle ?? null;
+}
+
+function isTrackKind(value: string | undefined): value is TrackKind {
+  return value === "video" || value === "audio" || value === "text" || value === "sticker" || value === "filter";
+}
+
+function trackKindAcceptsSegment(trackKind: TrackKind, visualKind: TimelineSegmentVisualKind): boolean {
+  switch (visualKind) {
+    case "video":
+    case "image":
+      return trackKind === "video";
+    case "audio":
+      return trackKind === "audio";
+    case "text":
+      return trackKind === "text";
+    case "sticker":
+      return trackKind === "sticker";
+    case "filter":
+      return trackKind === "filter";
+  }
 }
 
 function TransportStrip({
@@ -605,8 +643,9 @@ function TimelineTrackRow({
   onSetTrackLock,
   onSetTrackVisibility,
   onSetTrackMute,
-  onMoveSelectedSegment,
-  onTrimSelectedSegment,
+  projectInteractions,
+  interactionEvidence,
+  onInteractionEvidenceChange,
   pending
 }: {
   row: TimelineTrackRowView;
@@ -618,8 +657,9 @@ function TimelineTrackRow({
   onSetTrackLock?: (itemHandle: string, locked: boolean) => void;
   onSetTrackVisibility?: (itemHandle: string, visible: boolean) => void;
   onSetTrackMute?: (itemHandle: string, muted: boolean) => void;
-  onMoveSelectedSegment?: (startAt: number, targetTrackHandle?: string | null) => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
+  projectInteractions: ProjectInteractionController;
+  interactionEvidence: ProjectInteractionEvidence | null;
+  onInteractionEvidenceChange: (evidence: ProjectInteractionEvidence | null) => void;
   pending: boolean;
 }): React.ReactElement {
   const [draftName, setDraftName] = useState(row.name);
@@ -642,7 +682,7 @@ function TimelineTrackRow({
   }, [onRenameTrack, row.selectionHandle, row.name]);
 
   return (
-    <div className={row.rowClassName} data-track-selection-handle={row.selectionHandle}>
+    <div className={row.rowClassName} data-track-selection-handle={row.selectionHandle} data-track-kind={row.kind}>
       <div className="track-header">
         <div className="track-header-main">
           <button
@@ -707,8 +747,9 @@ function TimelineTrackRow({
             waveform={waveform}
             timelineDuration={timelineDuration}
             onSelectSegment={onSelectSegment}
-            onMoveSelectedSegment={onMoveSelectedSegment}
-            onTrimSelectedSegment={onTrimSelectedSegment}
+            projectInteractions={projectInteractions}
+            interactionEvidence={interactionEvidence}
+            onInteractionEvidenceChange={onInteractionEvidenceChange}
             trackSelectionHandle={row.selectionHandle}
             pending={pending}
           />
@@ -723,8 +764,9 @@ function TimelineSegmentBlock({
   waveform,
   timelineDuration,
   onSelectSegment,
-  onMoveSelectedSegment,
-  onTrimSelectedSegment,
+  projectInteractions,
+  interactionEvidence,
+  onInteractionEvidenceChange,
   trackSelectionHandle,
   pending
 }: {
@@ -732,8 +774,9 @@ function TimelineSegmentBlock({
   waveform: WaveformDisplayModel;
   timelineDuration: number;
   onSelectSegment?: (itemHandle: string) => void;
-  onMoveSelectedSegment?: (startAt: number, targetTrackHandle?: string | null) => void;
-  onTrimSelectedSegment?: (direction: "left" | "right", trimAt: number) => void;
+  projectInteractions: ProjectInteractionController;
+  interactionEvidence: ProjectInteractionEvidence | null;
+  onInteractionEvidenceChange: (evidence: ProjectInteractionEvidence | null) => void;
   trackSelectionHandle: string;
   pending: boolean;
 }): React.ReactElement {
@@ -748,6 +791,15 @@ function TimelineSegmentBlock({
     laneWidth: number;
     trackTargets: TimelineTrackDropTarget[];
     moved: boolean;
+    baseStart: number;
+    baseDuration: number;
+    baseTrackSelectionHandle: string;
+    interactionId: string | null;
+    sequence: number;
+    beginPromise: Promise<void>;
+    updateInFlight: boolean;
+    rafId: number | null;
+    pendingPayload: TimelineMoveTrimPayload | null;
   } | null>(null);
   const suppressClickRef = useRef(false);
   const segmentStyle = buildTimelineSegmentBlockStyle(segment, timelineDuration, dragPreview);
@@ -789,16 +841,41 @@ function TimelineSegmentBlock({
       const trackTargets = collectTimelineTrackDropTargets(lane.closest(".track-scroll-content"));
       event.preventDefault();
       event.stopPropagation();
-      onSelectSegment?.(segment.selectionHandle);
       event.currentTarget.setPointerCapture(event.pointerId);
-      dragRef.current = {
+      if (!segment.selected) {
+        onSelectSegment?.(segment.selectionHandle);
+      }
+      const interaction = {
         mode,
         pointerId: event.pointerId,
         startClientX: event.clientX,
         startClientY: event.clientY,
         laneWidth,
         trackTargets,
-        moved: false
+        moved: false,
+        baseStart: segment.start,
+        baseDuration: segment.duration,
+        baseTrackSelectionHandle: trackSelectionHandle,
+        interactionId: null,
+        sequence: 0,
+        beginPromise: Promise.resolve(),
+        updateInFlight: false,
+        rafId: null,
+        pendingPayload: null
+      };
+      dragRef.current = {
+        ...interaction,
+        beginPromise: projectInteractions.begin("timelineMoveTrim").then((begin) => {
+          if (dragRef.current === null || dragRef.current.pointerId !== interaction.pointerId || begin === null) {
+            return;
+          }
+          dragRef.current.interactionId = begin.interactionId;
+          onInteractionEvidenceChange({
+            kind: "timelineMoveTrim",
+            generation: begin.generation
+          });
+          flushTimelineMoveTrimUpdate(dragRef.current);
+        })
       };
       setDragPreview({
         phase: "active",
@@ -811,28 +888,44 @@ function TimelineSegmentBlock({
         baseTrackSelectionHandle: trackSelectionHandle
       });
     },
-    [onSelectSegment, pending, segment.duration, segment.selectionHandle, segment.start, trackSelectionHandle]
+    [
+      onInteractionEvidenceChange,
+      onSelectSegment,
+      pending,
+      projectInteractions,
+      segment.duration,
+      segment.selected,
+      segment.selectionHandle,
+      segment.start,
+      trackSelectionHandle
+    ]
   );
 
-  const updatePointerIntent = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    if (drag === null || drag.pointerId !== event.pointerId) {
-      return;
-    }
-    if (Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) >= 3) {
-      drag.moved = true;
-    }
-    setDragPreview({
-      phase: "active",
-      mode: drag.mode,
-      deltaPx: event.clientX - drag.startClientX,
-      deltaY: drag.mode === "move" ? event.clientY - drag.startClientY : 0,
-      laneWidth: drag.laneWidth,
-      baseStart: segment.start,
-      baseDuration: segment.duration,
-      baseTrackSelectionHandle: trackSelectionHandle
-    });
-  }, [segment.duration, segment.start, trackSelectionHandle]);
+  const updatePointerIntent = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = dragRef.current;
+      if (drag === null || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      if (Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) >= 3) {
+        drag.moved = true;
+      }
+      const deltaPx = event.clientX - drag.startClientX;
+      const deltaY = drag.mode === "move" ? event.clientY - drag.startClientY : 0;
+      setDragPreview({
+        phase: "active",
+        mode: drag.mode,
+        deltaPx,
+        deltaY,
+        laneWidth: drag.laneWidth,
+        baseStart: drag.baseStart,
+        baseDuration: drag.baseDuration,
+        baseTrackSelectionHandle: drag.baseTrackSelectionHandle
+      });
+      queueTimelineMoveTrimUpdate(drag, timelineMoveTrimPayloadFromPointer(drag, event.clientX, event.clientY, timelineDuration));
+    },
+    [timelineDuration]
+  );
 
   const completePointerIntent = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -840,7 +933,6 @@ function TimelineSegmentBlock({
       if (drag === null || drag.pointerId !== event.pointerId) {
         return;
       }
-      dragRef.current = null;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
@@ -849,10 +941,11 @@ function TimelineSegmentBlock({
 
       const deltaUs = Math.round(((event.clientX - drag.startClientX) / drag.laneWidth) * Math.max(1, timelineDuration));
       const targetTrackHandle =
-        drag.mode === "move" ? timelineTrackHandleFromTargetsAtPoint(drag.trackTargets, event.clientX, event.clientY) : null;
+        drag.mode === "move" ? timelineTrackHandleFromTargetsAtPoint(drag.trackTargets, event.clientX, event.clientY, segment.visualKind) : null;
       const trackChanged = targetTrackHandle !== null && targetTrackHandle !== trackSelectionHandle;
       if (!drag.moved || (deltaUs === 0 && !trackChanged)) {
         setDragPreview(null);
+        void finishTimelineMoveTrimInteraction(drag, "cancel");
         return;
       }
       suppressClickRef.current = true;
@@ -862,31 +955,130 @@ function TimelineSegmentBlock({
         deltaPx: event.clientX - drag.startClientX,
         deltaY: drag.mode === "move" ? event.clientY - drag.startClientY : 0,
         laneWidth: drag.laneWidth,
-        baseStart: segment.start,
-        baseDuration: segment.duration,
-        baseTrackSelectionHandle: trackSelectionHandle
+        baseStart: drag.baseStart,
+        baseDuration: drag.baseDuration,
+        baseTrackSelectionHandle: drag.baseTrackSelectionHandle
       };
-
-      if (drag.mode === "move") {
-        setDragPreview(committingPreview);
-        onMoveSelectedSegment?.(segment.start + deltaUs, targetTrackHandle);
-        return;
-      }
-
-      if (drag.mode === "trim-left" && deltaUs > 0) {
-        setDragPreview(committingPreview);
-        onTrimSelectedSegment?.("left", segment.start + deltaUs);
-        return;
-      }
-      if (drag.mode === "trim-right" && deltaUs < 0) {
-        setDragPreview(committingPreview);
-        onTrimSelectedSegment?.("right", segment.start + segment.duration + deltaUs);
-        return;
-      }
-      setDragPreview(null);
+      setDragPreview(committingPreview);
+      queueTimelineMoveTrimUpdate(drag, timelineMoveTrimPayloadFromPointer(drag, event.clientX, event.clientY, timelineDuration));
+      void finishTimelineMoveTrimInteraction(drag, "commit");
     },
-    [onMoveSelectedSegment, onTrimSelectedSegment, segment.duration, segment.start, timelineDuration, trackSelectionHandle]
+    [timelineDuration, trackSelectionHandle]
   );
+
+  function timelineMoveTrimPayloadFromPointer(
+    interaction: NonNullable<typeof dragRef.current>,
+    clientX: number,
+    clientY: number,
+    duration: number
+  ): TimelineMoveTrimPayload {
+    const deltaUs = Math.round(((clientX - interaction.startClientX) / interaction.laneWidth) * Math.max(1, duration));
+    if (interaction.mode === "move") {
+      const targetTrackHandle = timelineTrackHandleFromTargetsAtPoint(
+        interaction.trackTargets,
+        clientX,
+        clientY,
+        segment.visualKind
+      );
+      return {
+        kind: "timelineMoveTrim",
+        mode: "move",
+        startAt: Math.max(0, interaction.baseStart + deltaUs),
+        targetTrackHandle
+      };
+    }
+    if (interaction.mode === "trim-left") {
+      return {
+        kind: "timelineMoveTrim",
+        mode: "trimLeft",
+        trimAt: Math.max(0, interaction.baseStart + deltaUs)
+      };
+    }
+    return {
+      kind: "timelineMoveTrim",
+      mode: "trimRight",
+      trimAt: Math.max(interaction.baseStart + 1, interaction.baseStart + interaction.baseDuration + deltaUs)
+    };
+  }
+
+  function queueTimelineMoveTrimUpdate(
+    interaction: NonNullable<typeof dragRef.current>,
+    payload: TimelineMoveTrimPayload
+  ): void {
+    interaction.pendingPayload = payload;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushTimelineMoveTrimUpdate(interaction);
+    });
+  }
+
+  function flushTimelineMoveTrimUpdate(interaction: NonNullable<typeof dragRef.current>): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPayload === null) {
+      return;
+    }
+    const payload = interaction.pendingPayload;
+    interaction.pendingPayload = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, payload).then((update) => {
+      interaction.updateInFlight = false;
+      if (update !== null) {
+        onInteractionEvidenceChange({
+          kind: "timelineMoveTrim",
+          generation: update.generation
+        });
+        setDragPreview(null);
+      }
+      if (dragRef.current !== interaction) {
+        return;
+      }
+      flushTimelineMoveTrimUpdate(interaction);
+    });
+  }
+
+  async function finishTimelineMoveTrimInteraction(
+    interaction: NonNullable<typeof dragRef.current>,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPayload !== null) {
+      flushTimelineMoveTrimUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (interaction.interactionId === null) {
+      setDragPreview(null);
+      onInteractionEvidenceChange(null);
+      if (dragRef.current === interaction) {
+        dragRef.current = null;
+      }
+      return;
+    }
+    if (action === "commit") {
+      await projectInteractions.commit(interaction.interactionId);
+    } else {
+      await projectInteractions.cancel(interaction.interactionId);
+    }
+    setDragPreview(null);
+    onInteractionEvidenceChange(null);
+    if (dragRef.current === interaction) {
+      dragRef.current = null;
+    }
+  }
+
+  const rustProvisionalActive =
+    segment.selected && interactionEvidence?.kind === "timelineMoveTrim" ? interactionEvidence : null;
 
   return (
     <button
@@ -895,6 +1087,8 @@ function TimelineSegmentBlock({
         dragPreview !== null ? " dragging" : ""
       }`}
       style={segmentStyle}
+      data-interaction-source={rustProvisionalActive !== null ? "rust-provisional" : undefined}
+      data-interaction-kind={rustProvisionalActive?.kind}
       onPointerDown={(event) => beginPointerIntent(event, "move")}
       onPointerMove={updatePointerIntent}
       onPointerUp={completePointerIntent}
