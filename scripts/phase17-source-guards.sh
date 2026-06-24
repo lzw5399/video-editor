@@ -84,11 +84,16 @@ CANONICAL_CONTRACT_PATHS=(
   "apps/desktop-electron/src/generated/TemplateImport.ts"
 )
 
+REPORT_EVIDENCE_PATHS=(
+  "fixtures/kaipai/expected-reports"
+)
+
 PROVIDER_LEAKAGE_PATTERN='\b(?:Kaipai|kaipai|CapCut|capcut|templateId|recipeId|rawFormula|formulaJson|recognizerOutput|androidWorker|AndroidWorker|dcoin)\b'
 REMOTE_RUNTIME_PATTERN='https?://|remoteRenderUrl|renderUrl|signedUrl|cdnUrl|downloadUrl'
 LIVE_PROVIDER_PATTERN='api\.kaipai|kaipai\.com|\b(?:accessToken|authorizationToken|providerToken|signedUrl|cookieHeader|AndroidWorker|androidWorker|adb|emulator)\b'
 CANONICAL_RAW_PATTERN='\b(?:templateId|recipeId|rawFormula|formulaJson|formulaBundle|recognizerOutput|providerRenderSemantic|safeArea)\b'
 FALLBACK_SUCCESS_PATTERN='\b(?:mockPreviewSuccess|artifactPreviewSuccess|cpuPreviewSuccess|androidOracleSuccess|fallbackPreviewSuccess)\b'
+REPORT_RAW_RUNTIME_PATTERN='"(?:templateId|recipeId|rawFormula|formulaJson|providerRenderSemantic|safeArea|remoteRuntimeUrl|remoteRenderUrl|renderUrl|androidWorker|AndroidWorker)"'
 
 assert_pattern_rejects \
   "provider-specific render leakage" \
@@ -136,6 +141,17 @@ require_fixed "package.json" "bash scripts/phase17-source-guards.sh"
 require_fixed "package.json" "\"test:phase17-rust\""
 require_fixed "package.json" "cargo test -p draft_import adaptation_report -- --nocapture"
 require_fixed "package.json" "cargo test -p draft_import schema_exports -- --nocapture"
+require_fixed "package.json" "\"test:phase17-export-fixtures\""
+require_fixed "package.json" "cargo test -p testkit template_import_exports -- --nocapture"
+require_fixed "package.json" "\"test:phase17-preview\""
+require_fixed "package.json" "cargo test -p testkit template_import_preview -- --nocapture"
+require_fixed "package.json" "pnpm run test:no-product-fallback"
+require_fixed "package.json" "cargo check --workspace --locked"
+require_fixed "package.json" "pnpm run test:contracts"
+require_fixed "crates/testkit/tests/template_import_exports.rs" "assert_project_json_is_canonical"
+require_fixed "crates/testkit/tests/template_import_exports.rs" "remoteRuntimeUrl"
+require_fixed "crates/testkit/tests/template_import_preview.rs" "assert_no_realtime_fallback_evidence"
+require_fixed "crates/testkit/tests/template_import_preview.rs" "RealtimePreviewGraphSupport::Supported"
 
 provider_leakage_matches="$(
   matches_for_pattern "$PROVIDER_LEAKAGE_PATTERN" "${CORE_BOUNDARY_PATHS[@]}" --glob '!*.svg' \
@@ -163,6 +179,26 @@ fail_matches \
   "canonical import/report artifacts must not expose raw provider formula fields as semantics" \
   "$CANONICAL_RAW_PATTERN" \
   "${CANONICAL_CONTRACT_PATHS[@]}"
+
+fail_matches \
+  "adaptation report evidence snapshots must not preserve raw provider runtime semantics" \
+  "$REPORT_RAW_RUNTIME_PATTERN" \
+  "${REPORT_EVIDENCE_PATHS[@]}"
+
+fail_matches \
+  "adaptation report evidence snapshots must not depend on remote render/runtime URLs" \
+  "$REMOTE_RUNTIME_PATTERN" \
+  "${REPORT_EVIDENCE_PATHS[@]}"
+
+fail_matches \
+  "adaptation report evidence snapshots must not depend on live provider APIs or Android workers" \
+  "$LIVE_PROVIDER_PATTERN" \
+  "${REPORT_EVIDENCE_PATHS[@]}"
+
+fail_matches \
+  "adaptation report evidence snapshots must not claim fallback/mock/artifact/CPU/Android success" \
+  "$FALLBACK_SUCCESS_PATTERN" \
+  "${REPORT_EVIDENCE_PATHS[@]}"
 
 fail_matches \
   "product success paths must not claim fallback/mock/artifact/CPU/Android success evidence" \
