@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 17.1
-current_phase_name: interaction-session-and-template-import-main-chain-hardening
+current_phase_name: Interaction Session And Template Import Main-Chain Hardening
 status: executing
-stopped_at: Completed 17.1-03-SUMMARY.md
-last_updated: "2026-06-24T18:50:53.963Z"
-last_activity: 2026-06-24
-last_activity_desc: Completed Phase 17.1 Plan 03 Preview and inspector interaction sessions
+stopped_at: Completed 17.1-04-SUMMARY.md
+last_updated: "2026-06-24T20:33:53.559Z"
+last_activity: 2026-06-25
+last_activity_desc: Completed Phase 17.1 Plan 04 Timeline, scrub, and keyframe interaction sessions
 progress:
   total_phases: 25
   completed_phases: 22
   total_plans: 165
-  completed_plans: 162
-  percent: 98
+  completed_plans: 163
+  percent: 99
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17.1 — Interaction Session And Template Import Main-Chain Hardening
-Plan: 3 of 6 complete; next 17.1-04
+Plan: 4 of 6 complete; next 17.1-05
 Status: Ready to execute
-Last activity: 2026-06-24 — Completed Plan 03 Preview and inspector interaction sessions
+Last activity: 2026-06-25 — Completed Phase 17.1 Plan 04 Timeline, scrub, and keyframe interaction sessions
 
 Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks Phase 18 and hardens high-frequency interaction sessions plus template-import main-chain integration before mobile/server binding work.
 
@@ -198,6 +198,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks
 | Phase 17-template-import-core-and-kaipai-offline-adapter-foundation P09 | 30min | 3 tasks | 13 files |
 | Phase 17.1 P02 | 31min | 3 tasks | 9 files |
 | Phase 17.1 P03 | resumed | 3 tasks | 18 files |
+| Phase 17.1 P04 | 85 min | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -290,6 +291,9 @@ Recent decisions affecting current work:
 - [Phase 17.1]: `ProjectInteractionSession` is owned by Rust project sessions and carries base revision, generation, accepted sequence, and coalesced-through facts. — Renderer high-frequency paths must use explicit begin/update/commit/cancel IPC instead of repeated canonical `executeProjectIntent` loops.
 - [Phase 17.1]: Interaction updates are provisional only. — Update/cancel return Rust view model/delta facts and leave project revision, `project.json`, undo, and redo unchanged; commit revalidates the last accepted sample and applies exactly one canonical command/save.
 - [Phase 17.1]: Canonical revision increments clear active interaction sessions. — Stale interaction bases cannot remain live after another draft mutation, material probe completion, template import, undo/redo, or interaction commit.
+- [Phase 17.1 Plan 04]: Timeline move, trim, keyframe marker drag, keyed inspector values, and playhead scrub now use Rust interaction sessions. — Product proof must come from Rust session/delta observations, while local marker/segment affordances are only same-frame feedback.
+- [Phase 17.1 Plan 04]: Keyframe marker moves are `setSegmentKeyframe` with `replaceAt`. — Rust preserves segment-relative integer microseconds and rejects duplicate property/time collisions instead of copying keyframes.
+- [Phase 17.1 Plan 04]: Transition/fade handles stay hidden until typed transition/fade semantics are production-backed. — Visible high-frequency controls must either use Rust sessions or be product-gated.
 - [Phase 15.3]: Normal product launch has no workspace fixture and stops at project entry; explicit test fixtures must opt into blank/demo workspace bootstrap.
 - [Phase 15.3]: Project create/open UI receives only platform-selected bundle paths, then calls Rust saveProjectBundle/openProjectBundle command envelopes.
 - [Phase 15.3]: Production icon runtime references use copied app-local SVG assets only; the root `icons/` tree remains a source reference.
@@ -643,6 +647,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T18:50:53.480Z
-Stopped at: Completed 17.1-03-SUMMARY.md
+Last session: 2026-06-24T20:33:53.553Z
+Stopped at: Completed 17.1-04-SUMMARY.md
 Resume file: None

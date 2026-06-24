@@ -829,7 +829,7 @@ Plans:
   6. Product UI corrections normalize inspector units, make preview/timeline handles discoverable and usable, hide or gate unsupported visible controls, and pass screenshot-backed regression at 1280x800 and 1120x720.
   7. Source guards and product E2E reject DOM-only ghost preview, fallback/mock/artifact success, repeated canonical command loops for high-frequency samples, stale frame presentation, and unsupported visible controls.
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 
@@ -847,7 +847,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 17.1-04-PLAN.md - Wire timeline, playhead scrub, and keyframe interactions
+- [x] 17.1-04-PLAN.md - Wire timeline, playhead scrub, and keyframe interactions
 
 **Wave 5** *(blocked on Waves 1 and 4 completion)*
 
