@@ -53,6 +53,7 @@ type TimelineDragPreviewState = {
 };
 
 type TimelineMoveTrimPayload = Extract<ProjectInteractionPayload, { kind: "timelineMoveTrim" }>;
+type TimelinePlayheadScrubPayload = Extract<ProjectInteractionPayload, { kind: "playheadScrub" }>;
 
 type TimelineTrackDropTarget = {
   selectionHandle: string;
@@ -117,7 +118,20 @@ export function Timeline({
   const [zoomPercent, setZoomPercent] = useState(100);
   const [materialDropActive, setMaterialDropActive] = useState(false);
   const [timelineInteractionEvidence, setTimelineInteractionEvidence] = useState<ProjectInteractionEvidence | null>(null);
-  const playheadRatio = Math.max(0, Math.min(1, Math.max(0, playheadUs) / Math.max(1, timeline.duration)));
+  const [scrubPreviewUs, setScrubPreviewUs] = useState<number | null>(null);
+  const scrubRef = useRef<{
+    pointerId: number;
+    laneLeft: number;
+    laneWidth: number;
+    interactionId: string | null;
+    sequence: number;
+    beginPromise: Promise<void>;
+    updateInFlight: boolean;
+    rafId: number | null;
+    pendingPayload: TimelinePlayheadScrubPayload | null;
+  } | null>(null);
+  const displayedPlayheadUs = scrubPreviewUs ?? playheadUs;
+  const playheadRatio = Math.max(0, Math.min(1, Math.max(0, displayedPlayheadUs) / Math.max(1, timeline.duration)));
   const playheadStyle = {
     left: `calc(${TIMELINE_HEADER_WIDTH_PX}px + ${playheadRatio * 100}% - ${TIMELINE_HEADER_WIDTH_PX * playheadRatio}px)`
   };
@@ -128,58 +142,154 @@ export function Timeline({
     width: `${zoomPercent}%`,
     minWidth: "100%"
   };
-  const seekFromTrackClientX = useCallback(
-    (clientX: number) => {
-      const trackContent = trackContentRef.current;
-      if (trackContent === null) {
+  const playheadScrubPayloadFromClientX = useCallback(
+    (scrub: NonNullable<typeof scrubRef.current>, clientX: number): TimelinePlayheadScrubPayload => ({
+      kind: "playheadScrub",
+      playhead: pointerTimeFromLane(clientX, scrub.laneLeft, scrub.laneWidth, timeline.duration)
+    }),
+    [timeline.duration]
+  );
+  const queuePlayheadScrubUpdate = useCallback(
+    (scrub: NonNullable<typeof scrubRef.current>, payload: TimelinePlayheadScrubPayload) => {
+      scrub.pendingPayload = payload;
+      setScrubPreviewUs(payload.playhead);
+      if (scrub.rafId !== null) {
         return;
       }
-      const box = trackContent.getBoundingClientRect();
-      const laneLeft = box.left + TIMELINE_HEADER_WIDTH_PX;
-      const laneWidth = Math.max(1, box.width - TIMELINE_HEADER_WIDTH_PX);
-      onPlayheadChange(pointerTimeFromLane(clientX, laneLeft, laneWidth, timeline.duration));
+      scrub.rafId = window.requestAnimationFrame(() => {
+        scrub.rafId = null;
+        flushPlayheadScrubUpdate(scrub);
+      });
     },
-    [onPlayheadChange, timeline.duration]
+    []
   );
+  function flushPlayheadScrubUpdate(scrub: NonNullable<typeof scrubRef.current>): void {
+    if (scrub.updateInFlight || scrub.interactionId === null || scrub.pendingPayload === null) {
+      return;
+    }
+    const payload = scrub.pendingPayload;
+    scrub.pendingPayload = null;
+    scrub.updateInFlight = true;
+    scrub.sequence += 1;
+    void projectInteractions.update(scrub.interactionId, scrub.sequence, payload).then(() => {
+      scrub.updateInFlight = false;
+      if (scrubRef.current !== scrub) {
+        return;
+      }
+      flushPlayheadScrubUpdate(scrub);
+    });
+  }
+  const beginPlayheadScrub = useCallback(
+    (event: ReactPointerEvent<HTMLElement>, laneLeft: number, laneWidth: number) => {
+      if (event.button !== 0 || workspace.pendingCommand !== null) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const scrub = {
+        pointerId: event.pointerId,
+        laneLeft,
+        laneWidth,
+        interactionId: null,
+        sequence: 0,
+        beginPromise: Promise.resolve(),
+        updateInFlight: false,
+        rafId: null,
+        pendingPayload: null
+      };
+      scrubRef.current = {
+        ...scrub,
+        beginPromise: projectInteractions.begin("playheadScrub").then((begin) => {
+          if (scrubRef.current === null || scrubRef.current.pointerId !== scrub.pointerId || begin === null) {
+            return;
+          }
+          scrubRef.current.interactionId = begin.interactionId;
+          flushPlayheadScrubUpdate(scrubRef.current);
+        })
+      };
+      queuePlayheadScrubUpdate(scrubRef.current, playheadScrubPayloadFromClientX(scrubRef.current, event.clientX));
+    },
+    [playheadScrubPayloadFromClientX, projectInteractions, queuePlayheadScrubUpdate, workspace.pendingCommand]
+  );
+  const updatePlayheadScrub = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const scrub = scrubRef.current;
+      if (scrub === null || scrub.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      event.preventDefault();
+      queuePlayheadScrubUpdate(scrub, playheadScrubPayloadFromClientX(scrub, event.clientX));
+    },
+    [playheadScrubPayloadFromClientX, queuePlayheadScrubUpdate]
+  );
+  const finishPlayheadScrub = useCallback(
+    (event: ReactPointerEvent<HTMLElement>, action: "commit" | "cancel") => {
+      const scrub = scrubRef.current;
+      if (scrub === null || scrub.pointerId !== event.pointerId || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      queuePlayheadScrubUpdate(scrub, playheadScrubPayloadFromClientX(scrub, event.clientX));
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      void finishPlayheadScrubInteraction(scrub, action);
+    },
+    [playheadScrubPayloadFromClientX, queuePlayheadScrubUpdate]
+  );
+  async function finishPlayheadScrubInteraction(
+    scrub: NonNullable<typeof scrubRef.current>,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (scrub.rafId !== null) {
+      window.cancelAnimationFrame(scrub.rafId);
+      scrub.rafId = null;
+    }
+    await scrub.beginPromise;
+    while (scrub.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (scrub.pendingPayload !== null) {
+      flushPlayheadScrubUpdate(scrub);
+      while (scrub.updateInFlight || scrub.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (scrub.interactionId !== null) {
+      if (action === "commit") {
+        await projectInteractions.commit(scrub.interactionId);
+      } else {
+        await projectInteractions.cancel(scrub.interactionId);
+      }
+    }
+    if (scrubRef.current === scrub) {
+      scrubRef.current = null;
+    }
+    setScrubPreviewUs(null);
+  }
   const handleRulerPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
         return;
       }
       const box = event.currentTarget.getBoundingClientRect();
-      onPlayheadChange(pointerTimeFromLane(event.clientX, box.left, box.width, timeline.duration));
+      beginPlayheadScrub(event, box.left, Math.max(1, box.width));
     },
-    [onPlayheadChange, timeline.duration]
+    [beginPlayheadScrub]
   );
   const handlePlayheadPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
         return;
       }
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      seekFromTrackClientX(event.clientX);
-    },
-    [seekFromTrackClientX]
-  );
-  const handlePlayheadPointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      const trackContent = trackContentRef.current;
+      if (trackContent === null) {
         return;
       }
-      seekFromTrackClientX(event.clientX);
+      const box = trackContent.getBoundingClientRect();
+      beginPlayheadScrub(event, box.left + TIMELINE_HEADER_WIDTH_PX, Math.max(1, box.width - TIMELINE_HEADER_WIDTH_PX));
     },
-    [seekFromTrackClientX]
-  );
-  const handlePlayheadPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-        return;
-      }
-      seekFromTrackClientX(event.clientX);
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    },
-    [seekFromTrackClientX]
+    [beginPlayheadScrub]
   );
   const canAcceptTimelineDrop = useCallback(
     (dataTransfer: DataTransfer) => {
@@ -267,7 +377,13 @@ export function Timeline({
       <div className="timeline-ruler-shell">
         <div className="timeline-ruler" aria-label="时间线标尺" style={zoomContentStyle}>
           <div className="timeline-header-spacer" />
-          <div className="ruler-track" onPointerDown={handleRulerPointerDown}>
+          <div
+            className="ruler-track"
+            onPointerDown={handleRulerPointerDown}
+            onPointerMove={updatePlayheadScrub}
+            onPointerUp={(event) => finishPlayheadScrub(event, "commit")}
+            onPointerCancel={(event) => finishPlayheadScrub(event, "cancel")}
+          >
             {timeline.rulerTicks.map((tick) => (
               <span className="ruler-tick" key={tick} style={{ left: `${(tick / timeline.duration) * 100}%` }}>
                 {formatTimelineTime(tick)}
@@ -294,9 +410,9 @@ export function Timeline({
             title="播放头拖动"
             style={playheadStyle}
             onPointerDown={handlePlayheadPointerDown}
-            onPointerMove={handlePlayheadPointerMove}
-            onPointerUp={handlePlayheadPointerUp}
-            onPointerCancel={handlePlayheadPointerUp}
+            onPointerMove={updatePlayheadScrub}
+            onPointerUp={(event) => finishPlayheadScrub(event, "commit")}
+            onPointerCancel={(event) => finishPlayheadScrub(event, "cancel")}
           />
           {timeline.rows.map((row) => (
             <TimelineTrackRow

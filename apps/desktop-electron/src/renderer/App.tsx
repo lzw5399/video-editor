@@ -870,7 +870,11 @@ export function App(): React.ReactElement {
         workspaceRef.current = next;
         return next;
       });
-      void refreshRealtimePreviewForProjectInteraction(result.data);
+      if (payload.kind === "playheadScrub") {
+        void seekProjectInteractionPlayhead(result.data, payload.playhead);
+      } else {
+        void refreshRealtimePreviewForProjectInteraction(result.data);
+      }
       return result.data;
     } catch (error: unknown) {
       applyWorkspaceCommandError(error instanceof Error ? error.message : String(error));
@@ -2494,6 +2498,23 @@ export function App(): React.ReactElement {
     if (snapshotReady && previewTarget !== null) {
       await seekRealtimePreviewHost(previewTarget);
     }
+  }
+
+  async function seekProjectInteractionPlayhead(
+    update: ProjectInteractionUpdateResponse,
+    targetTime: number
+  ): Promise<void> {
+    const normalizedTarget = normalizePlayheadTime(targetTime);
+    setPlaybackRunning(false);
+    setPlayheadUs(normalizedTarget);
+    playheadRef.current = normalizedTarget;
+    const snapshotReady = await updateRealtimePreviewProjectSessionSnapshot({
+      interactionId: update.interactionId
+    });
+    if (snapshotReady) {
+      await seekRealtimePreviewHost(normalizedTarget);
+    }
+    await handleSeekAudioPreview(normalizedTarget);
   }
 
   function handleTogglePlayback(): void {
