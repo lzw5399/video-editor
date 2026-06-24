@@ -860,6 +860,22 @@ h2 {
   overflow: hidden;
 }
 
+.showcase-unavailable-copy {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0 4px;
+  color: #aaa79f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.showcase-unavailable-copy strong {
+  color: #f0eee8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .showcase-rail {
   display: grid;
   align-content: start;
@@ -886,9 +902,11 @@ h2 {
   white-space: nowrap;
 }
 
-.showcase-rail button.active {
-  color: #20c7d9;
-  background: #363735;
+.showcase-rail button:disabled {
+  cursor: not-allowed;
+  color: #8d8981;
+  background: #242421;
+  opacity: 0.74;
 }
 
 .showcase-card-grid {
@@ -904,8 +922,8 @@ h2 {
 
 .showcase-card {
   display: grid;
-  grid-template-rows: 72px 18px;
-  gap: 6px;
+  grid-template-rows: 64px 18px 16px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -919,12 +937,45 @@ h2 {
     #30302d;
 }
 
+.showcase-card.unavailable {
+  color: #aaa79f;
+  opacity: 0.82;
+}
+
+.showcase-card.unavailable .showcase-card-preview {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  background: #252522;
+}
+
+.showcase-card.unavailable .showcase-card-preview::after {
+  color: #8d8981;
+  font-size: 12px;
+  font-weight: 600;
+  content: "暂不可用";
+}
+
 .showcase-card strong {
   overflow: hidden;
   color: #ece8df;
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-card.unavailable strong {
+  color: #c8c5bd;
+}
+
+.showcase-card em {
+  overflow: hidden;
+  color: #8d8981;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

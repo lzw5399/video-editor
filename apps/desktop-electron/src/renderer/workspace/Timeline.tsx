@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent
+} from "react";
 
 import type { TrackKind } from "../../generated/Draft";
 import type { ProjectInteractionPayload } from "../../main/nativeBinding";
@@ -300,6 +305,35 @@ export function Timeline({
     },
     [beginPlayheadScrub]
   );
+  const handlePlayheadKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (workspace.pendingCommand !== null) {
+        return;
+      }
+      const frameStep = Math.max(1, Math.round(1_000_000 / 30));
+      const largeStep = Math.max(frameStep, 1_000_000);
+      let nextPlayhead: number | null = null;
+      if (event.key === "ArrowLeft") {
+        nextPlayhead = displayedPlayheadUs - frameStep;
+      } else if (event.key === "ArrowRight") {
+        nextPlayhead = displayedPlayheadUs + frameStep;
+      } else if (event.key === "PageUp") {
+        nextPlayhead = displayedPlayheadUs + largeStep;
+      } else if (event.key === "PageDown") {
+        nextPlayhead = displayedPlayheadUs - largeStep;
+      } else if (event.key === "Home") {
+        nextPlayhead = 0;
+      } else if (event.key === "End") {
+        nextPlayhead = timeline.duration;
+      }
+      if (nextPlayhead === null) {
+        return;
+      }
+      event.preventDefault();
+      onPlayheadChange(Math.max(0, Math.min(timeline.duration, Math.round(nextPlayhead))));
+    },
+    [displayedPlayheadUs, onPlayheadChange, timeline.duration, workspace.pendingCommand]
+  );
   const canAcceptTimelineDrop = useCallback(
     (dataTransfer: DataTransfer) => {
       if (workspace.pendingCommand !== null) {
@@ -415,13 +449,21 @@ export function Timeline({
         <div className="track-scroll-content" ref={trackContentRef} style={zoomContentStyle}>
           <div
             className="playhead"
-            aria-hidden="true"
+            role="slider"
+            tabIndex={workspace.pendingCommand === null ? 0 : -1}
+            aria-label="播放头拖动"
+            aria-valuemin={0}
+            aria-valuemax={timeline.duration}
+            aria-valuenow={Math.round(displayedPlayheadUs)}
+            aria-valuetext={formatTimelineTime(displayedPlayheadUs)}
+            aria-disabled={workspace.pendingCommand !== null}
             title="播放头拖动"
             style={playheadStyle}
             onPointerDown={handlePlayheadPointerDown}
             onPointerMove={updatePlayheadScrub}
             onPointerUp={(event) => finishPlayheadScrub(event, "commit")}
             onPointerCancel={(event) => finishPlayheadScrub(event, "cancel")}
+            onKeyDown={handlePlayheadKeyDown}
           />
           {timeline.rows.map((row) => (
             <TimelineTrackRow
@@ -698,10 +740,10 @@ function TransportStrip({
           />
           <span>{zoomPercent}%</span>
         </div>
-        <span className="playhead-time">{formatTimelineTime(playheadUs)}</span>
-        {showDeveloperDiagnostics || workspace.pendingCommand !== null ? (
-          <span className="timeline-status">{workspace.pendingCommand ?? "等待剪辑命令"}</span>
-        ) : null}
+        <span className="playhead-time" aria-label="时间线播放头">{formatTimelineTime(playheadUs)}</span>
+        <span className="timeline-status" aria-label="时间线状态">
+          {workspace.pendingCommand ?? (showDeveloperDiagnostics ? "等待剪辑命令" : "时间线就绪")}
+        </span>
       </div>
     </div>
   );

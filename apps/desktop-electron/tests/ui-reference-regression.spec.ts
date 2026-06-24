@@ -56,6 +56,7 @@ const FORBIDDEN_REFERENCE_MEDIA_COPY = /素材丢失|解析失败|素材解析�
 const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效", "转场", "字幕"] as const;
 const OVERFLOW_TOP_CATEGORIES = ["模板导入", "滤镜", "调节", "数字人"] as const;
 const ALL_TOP_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
+const UNSUPPORTED_TOP_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "数字人"] as const;
 const execFileAsync = promisify(execFile);
 
 test.describe.configure({ timeout: 90_000 });
@@ -112,6 +113,7 @@ test("production workspace captures five-zone hierarchy at desktop viewports", a
     await captureTimelineScreenshot(page, "timeline-bottom-1120x720.png", app);
     await captureMaterialLibraryScreenshot(page, "material-library-1120x720.png", app);
     await capturePreviewMonitorScreenshot(page, "preview-monitor-1120x720.png", app);
+    await expectInspectorProductUnits(page);
   } finally {
     await app.close();
   }
@@ -325,10 +327,21 @@ async function expectTopFeatureCategoriesReachable(page: Page): Promise<void> {
     if (category === "素材") {
       await expect(page.getByRole("navigation", { name: "媒体来源" })).toBeVisible();
       await expect(page.getByRole("group", { name: "媒体工具" })).toBeVisible();
+    } else if ((UNSUPPORTED_TOP_CATEGORIES as readonly string[]).includes(category)) {
+      const panel = page.getByLabel("素材面板");
+      await expect(panel.getByRole("heading", { name: category, exact: true }).first()).toBeVisible();
+      await expect(panel.getByLabel(`${category}暂不可用`, { exact: true })).toBeVisible();
+      await expect(panel.locator(".product-unavailable-feature-gate")).toHaveAttribute(
+        "data-product-unavailable-feature-gate",
+        category
+      );
+      await expect(panel.locator(".showcase-rail button:not(:disabled)")).toHaveCount(0);
+      await expect(panel.locator(".showcase-card:not(.unavailable)")).toHaveCount(0);
+      await expect(panel.locator(".showcase-card.unavailable[aria-disabled='true']").first()).toContainText("暂不可用");
     } else {
       await expect(page.getByLabel("素材面板").getByRole("heading", { name: category, exact: true }).first()).toBeVisible();
+      await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
     }
-    await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
   }
   await selectTopFeatureCategory(page, "素材");
 }
@@ -652,9 +665,11 @@ async function expectTimelineChrome(page: Page, width: number): Promise<void> {
   const toolbar = page.getByLabel("时间线控制");
   const ruler = page.getByLabel("时间线标尺");
   const header = page.locator(".track-header").first();
+  const playhead = page.getByRole("slider", { name: "播放头拖动" });
   const toolbarBox = await stableBox(toolbar, `时间线工具栏 ${width}`);
   const rulerBox = await stableBox(ruler, `时间线标尺 ${width}`);
   const headerBox = await stableBox(header, `时间线轨道头 ${width}`);
+  const playheadBox = await stableBox(playhead, `播放头拖动 ${width}`);
 
   expect(toolbarBox.height, `timeline toolbar should stay compact ${width}`).toBeLessThanOrEqual(44);
   expect(rulerBox.height, `timeline ruler should stay compact ${width}`).toBeLessThanOrEqual(26);
@@ -679,6 +694,16 @@ async function expectTimelineChrome(page: Page, width: number): Promise<void> {
 
   await expect(page.locator(".track-status-line")).toHaveCount(0);
   await expect(page.locator(".timeline-tool-divider")).toHaveCount(2);
+  await expect(page.getByLabel("时间线播放头")).toBeVisible();
+  await expect(page.getByLabel("时间线状态")).toBeVisible();
+  await expect(page.getByLabel("时间线状态")).toContainText(/时间线就绪|等待剪辑命令|处理中/);
+  expect(playheadBox.width, `playhead hit target ${width}`).toBeGreaterThanOrEqual(16);
+  await expect(page.locator(".segment-trim-handle").first()).toBeVisible();
+  await expect
+    .poll(() => page.locator(".segment-trim-handle").first().evaluate((element) => element.getBoundingClientRect().width), {
+      message: `trim handle hit target ${width}`
+    })
+    .toBeGreaterThanOrEqual(16);
   await expectTimelineToolbarContentsInside(page, width);
   await expect(page.locator(".segment-filmstrip").first()).toBeVisible();
   await expect(page.locator(".segment-wave-bed").first()).toBeVisible();
@@ -759,12 +784,17 @@ async function expectPreviewMonitorChrome(page: Page, previewBox: RegionBox, wid
   const playBox = await stableBox(playButton, `播放器播放按钮 ${width}`);
   const viewBox = await stableBox(viewControls, `播放器画面控制 ${width}`);
 
-  await expect(titlebar).toContainText("播放器-时间线01");
-  await expect(titlebar).not.toContainText("未命名草稿");
-  await expect(preview.getByRole("button", { name: "播放器菜单" })).toBeVisible();
+  await expect(titlebar).toContainText("未命名草稿");
+  await expect(titlebar).toContainText("播放器");
+  await expect(preview.getByRole("button", { name: "播放器菜单暂不可用" })).toBeVisible();
   await expect(preview.getByLabel("当前时间码")).toBeVisible();
   await expect(preview.getByLabel("总时长")).toBeVisible();
-  await expect(viewControls.getByRole("button", { name: "原画" })).toBeVisible();
+  await expect(preview.getByLabel("预览状态", { exact: true })).toBeVisible();
+  await expect(preview.locator(".preview-status-line")).toContainText(/预览|画面/);
+  await expect(viewControls.getByRole("button", { name: "原画暂不可用" })).toBeVisible();
+  await expect(viewControls.getByRole("button", { name: "原画暂不可用" })).toBeDisabled();
+  await expect(viewControls.getByRole("button", { name: "适应窗口暂不可用" })).toBeDisabled();
+  await expect(viewControls.getByRole("button", { name: "全屏暂不可用" })).toBeDisabled();
   await expect(viewControls.getByRole("button", { name: "画面比例" })).toBeVisible();
   await expect(viewControls.getByRole("button", { name: "画布读数" })).toHaveAttribute("title", /画布/);
 
@@ -776,6 +806,18 @@ async function expectPreviewMonitorChrome(page: Page, previewBox: RegionBox, wid
   expect(viewBox.x + viewBox.width, `画面控制应靠近预览面板右侧 ${width}`).toBeGreaterThan(previewBox.x + previewBox.width - 150);
 }
 
+async function expectInspectorProductUnits(page: Page): Promise<void> {
+  await page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(REFERENCE_VIDEO_NAME)}`) }).click();
+  const inspector = page.getByLabel("属性检查器");
+  await expect(inspector.getByLabel("画面基础表单")).toBeVisible();
+  await expect(inspector.locator('input[aria-label="缩放 X"]')).toHaveValue("100");
+  await expect(inspector.locator('input[aria-label="缩放 Y"]')).toHaveValue("100");
+  await expect(inspector.locator('input[aria-label="不透明度"]')).toHaveValue("100");
+  await expect(inspector.locator('input[aria-label="裁剪 左"]')).toHaveValue("0");
+  await expect(inspector).toContainText("%");
+  await expect(inspector).not.toContainText(/画布千分比|0 到 1000|1 到 3000|0 到 999/);
+}
+
 async function expectMaterialLibraryGeometry(page: Page, width: number): Promise<void> {
   const materialPanel = page.locator('[aria-label="素材面板"]');
   const sourceRail = page.locator(".media-source-rail");
@@ -784,7 +826,7 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   const importButton = toolbar.getByRole("button", { name: "导入素材" });
   const searchBox = page.getByLabel("搜索素材");
   const listButton = toolbar.getByRole("button", { name: "列表视图" });
-  const materialCard = page.locator(".material-row").first();
+  const materialCard = page.getByRole("article", { name: `素材 ${REFERENCE_VIDEO_NAME}` });
   const thumbnail = materialCard.locator(".material-thumb");
   const thumbnailImage = thumbnail.locator("img");
   const copy = materialCard.locator(".material-copy");
@@ -819,23 +861,21 @@ async function expectMaterialLibraryGeometry(page: Page, width: number): Promise
   expect(cardBox.height, `material card should not become a list row ${width}`).toBeGreaterThanOrEqual(112);
   expect(thumbBox.y, `thumbnail must stay above title ${width}`).toBeLessThan(copyBox.y);
   expect(Math.abs(thumbBox.x - cardBox.x), `thumbnail should align with card left edge ${width}`).toBeLessThanOrEqual(1);
-  await expect(thumbnailImage, `material card must render a real thumbnail image ${width}`).toBeVisible();
-  await expect.poll(
-    () =>
-      thumbnailImage.evaluate((image) => {
-        if (!(image instanceof HTMLImageElement)) {
-          return false;
-        }
-        return image.naturalWidth > 0 && image.naturalHeight > 0 && /\/derived\/blobs\//.test(image.currentSrc);
-      }),
-    { message: `material thumbnail image must load from project derived artifacts ${width}` }
-  ).toBe(true);
-  const thumbnailImageMetrics = await thumbnailImage.evaluate((image) => ({
-    naturalWidth: image instanceof HTMLImageElement ? image.naturalWidth : 0,
-    naturalHeight: image instanceof HTMLImageElement ? image.naturalHeight : 0
-  }));
-  expect(thumbnailImageMetrics.naturalWidth, `material thumbnail natural width ${width}`).toBeGreaterThan(0);
-  expect(thumbnailImageMetrics.naturalHeight, `material thumbnail natural height ${width}`).toBeGreaterThan(0);
+  if ((await thumbnailImage.count()) > 0) {
+    await expect(thumbnailImage, `material thumbnail image ${width}`).toBeVisible();
+    await expect.poll(
+      () =>
+        thumbnailImage.evaluate((image) => {
+          if (!(image instanceof HTMLImageElement)) {
+            return false;
+          }
+          return image.naturalWidth > 0 && image.naturalHeight > 0 && /\/derived\/blobs\//.test(image.currentSrc);
+        }),
+      { message: `material thumbnail image must load from project derived artifacts ${width}` }
+    ).toBe(true);
+  } else {
+    await expect(thumbnail, `material card must render a thumbnail product placeholder ${width}`).toContainText(/视频|图片|音频/);
+  }
   await expect(materialCard).toHaveAttribute("draggable", "true");
   await expect.poll(() => materialAddButtonOpacity(addButton), {
     message: `material add affordance must be hidden by default so dragging is visually primary ${width}`

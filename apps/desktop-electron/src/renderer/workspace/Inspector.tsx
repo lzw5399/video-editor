@@ -132,6 +132,15 @@ type VisualFormState = {
   backgroundColor: string;
 };
 
+type VisualDisplayTransform = {
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  toDisplay: (internalValue: string) => string;
+  fromDisplay: (displayValue: string) => string;
+};
+
 type AudioEditOptions = {
   gainMillis: number;
   panBalanceMillis: number;
@@ -191,6 +200,39 @@ const DEFAULT_TEXT_STATE: TextFormState = {
   layoutHeightMillis: 800,
   wrapping: "auto",
   source: "text"
+};
+
+const PERCENT_VALUE_DISPLAY: VisualDisplayTransform = {
+  min: 0.1,
+  max: 300,
+  step: 1,
+  suffix: "%",
+  toDisplay: millisStringToPercentString,
+  fromDisplay: percentStringToMillisString
+};
+const OPACITY_PERCENT_DISPLAY: VisualDisplayTransform = {
+  min: 0,
+  max: 100,
+  step: 1,
+  suffix: "%",
+  toDisplay: millisStringToPercentString,
+  fromDisplay: percentStringToMillisString
+};
+const CROP_PERCENT_DISPLAY: VisualDisplayTransform = {
+  min: 0,
+  max: 99.9,
+  step: 0.1,
+  suffix: "%",
+  toDisplay: millisStringToPercentString,
+  fromDisplay: percentStringToMillisString
+};
+const DEGREE_DISPLAY: VisualDisplayTransform = {
+  min: -360,
+  max: 360,
+  step: 1,
+  suffix: "°",
+  toDisplay: (value) => value,
+  fromDisplay: (value) => value
 };
 
 const CANVAS_PRESETS: readonly CanvasPresetChoice[] = [
@@ -970,23 +1012,25 @@ export function Inspector({
                     </div>
                     <TextNumberField
                       label="宽度"
-                      value={textState.textBoxWidthMillis}
-                      min={1}
-                      max={1000}
-	                      step={10}
+                      value={millisToPercentValue(textState.textBoxWidthMillis)}
+                      min={0.1}
+                      max={100}
+	                      step={1}
+                      suffix="%"
 	                      disabled={inspectorFieldsDisabled}
-	                      onChange={(textBoxWidthMillis) => updateTextState({ textBoxWidthMillis }, { provisional: true })}
+	                      onChange={(value) => updateTextState({ textBoxWidthMillis: percentToMillisValue(value) }, { provisional: true })}
 	                      onCommit={finishOrCommitTextFieldEdit}
 	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                    />
                     <TextNumberField
                       label="高度"
-                      value={textState.textBoxHeightMillis}
-                      min={1}
-                      max={1000}
-	                      step={10}
+                      value={millisToPercentValue(textState.textBoxHeightMillis)}
+                      min={0.1}
+                      max={100}
+	                      step={1}
+                      suffix="%"
 	                      disabled={inspectorFieldsDisabled}
-	                      onChange={(textBoxHeightMillis) => updateTextState({ textBoxHeightMillis }, { provisional: true })}
+	                      onChange={(value) => updateTextState({ textBoxHeightMillis: percentToMillisValue(value) }, { provisional: true })}
 	                      onCommit={finishOrCommitTextFieldEdit}
 	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                    />
@@ -1004,25 +1048,27 @@ export function Inspector({
                     </label>
                     <TextNumberField
                       label="行高"
-                      value={textState.lineHeightMillis}
-                      min={500}
-                      max={3000}
-                      step={50}
+                      value={millisToPercentValue(textState.lineHeightMillis)}
+                      min={50}
+                      max={300}
+                      step={5}
+                      suffix="%"
 	                      disabled={inspectorFieldsDisabled}
 	                      action={renderKeyframeButton("textLineHeight", "行高")}
-	                      onChange={(lineHeightMillis) => updateTextState({ lineHeightMillis }, { provisional: true })}
+	                      onChange={(value) => updateTextState({ lineHeightMillis: percentToMillisValue(value) }, { provisional: true })}
 	                      onCommit={finishOrCommitTextFieldEdit}
 	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                    />
                     <TextNumberField
                       label="字间距"
-                      value={textState.letterSpacingMillis}
+                      value={millisToPercentValue(textState.letterSpacingMillis)}
                       min={0}
-                      max={2000}
-                      step={50}
+                      max={200}
+                      step={5}
+                      suffix="%"
 	                      disabled={inspectorFieldsDisabled}
 	                      action={renderKeyframeButton("textLetterSpacing", "字间距")}
-	                      onChange={(letterSpacingMillis) => updateTextState({ letterSpacingMillis }, { provisional: true })}
+	                      onChange={(value) => updateTextState({ letterSpacingMillis: percentToMillisValue(value) }, { provisional: true })}
 	                      onCommit={finishOrCommitTextFieldEdit}
 	                      onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                    />
@@ -1033,53 +1079,57 @@ export function Inspector({
                       <h3>布局</h3>
                       {renderKeyframeButton("textLayoutX", "布局 X")}
                     </div>
-                    <p className="inspector-note">安全区域使用画布千分比坐标。</p>
+                    <p className="inspector-note">安全区域使用画布百分比坐标。</p>
                     <div className="text-layout-grid">
                       <TextNumberField
                         label="X"
-                        value={textState.layoutXMillis}
+                        value={millisToPercentValue(textState.layoutXMillis)}
                         min={0}
-                        max={1000}
-                        step={10}
+                        max={100}
+                        step={1}
+                        suffix="%"
 	                        disabled={inspectorFieldsDisabled}
 	                        action={renderKeyframeButton("textLayoutX", "布局 X")}
-	                        onChange={(layoutXMillis) => updateTextState({ layoutXMillis }, { provisional: true })}
+	                        onChange={(value) => updateTextState({ layoutXMillis: percentToMillisValue(value) }, { provisional: true })}
 	                        onCommit={finishOrCommitTextFieldEdit}
 	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                      />
                       <TextNumberField
                         label="Y"
-                        value={textState.layoutYMillis}
+                        value={millisToPercentValue(textState.layoutYMillis)}
                         min={0}
-                        max={1000}
-                        step={10}
+                        max={100}
+                        step={1}
+                        suffix="%"
 	                        disabled={inspectorFieldsDisabled}
 	                        action={renderKeyframeButton("textLayoutY", "布局 Y")}
-	                        onChange={(layoutYMillis) => updateTextState({ layoutYMillis }, { provisional: true })}
+	                        onChange={(value) => updateTextState({ layoutYMillis: percentToMillisValue(value) }, { provisional: true })}
 	                        onCommit={finishOrCommitTextFieldEdit}
 	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                      />
                       <TextNumberField
                         label="宽"
-                        value={textState.layoutWidthMillis}
-                        min={1}
-                        max={1000}
-                        step={10}
+                        value={millisToPercentValue(textState.layoutWidthMillis)}
+                        min={0.1}
+                        max={100}
+                        step={1}
+                        suffix="%"
 	                        disabled={inspectorFieldsDisabled}
 	                        action={renderKeyframeButton("textLayoutWidth", "布局宽")}
-	                        onChange={(layoutWidthMillis) => updateTextState({ layoutWidthMillis }, { provisional: true })}
+	                        onChange={(value) => updateTextState({ layoutWidthMillis: percentToMillisValue(value) }, { provisional: true })}
 	                        onCommit={finishOrCommitTextFieldEdit}
 	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                      />
                       <TextNumberField
                         label="高"
-                        value={textState.layoutHeightMillis}
-                        min={1}
-                        max={1000}
-                        step={10}
+                        value={millisToPercentValue(textState.layoutHeightMillis)}
+                        min={0.1}
+                        max={100}
+                        step={1}
+                        suffix="%"
 	                        disabled={inspectorFieldsDisabled}
 	                        action={renderKeyframeButton("textLayoutHeight", "布局高")}
-	                        onChange={(layoutHeightMillis) => updateTextState({ layoutHeightMillis }, { provisional: true })}
+	                        onChange={(value) => updateTextState({ layoutHeightMillis: percentToMillisValue(value) }, { provisional: true })}
 	                        onCommit={finishOrCommitTextFieldEdit}
 	                        onCancel={() => void finishInspectorTextInteraction("cancel")}
 	                      />
@@ -1905,6 +1955,7 @@ function TextNumberField({
   min,
   max,
   step,
+  suffix,
   disabled = false,
   action,
   onChange,
@@ -1916,33 +1967,45 @@ function TextNumberField({
   min: number;
   max: number;
   step: number;
+  suffix?: string;
   disabled?: boolean;
   action?: ReactNode;
   onChange: (value: number) => void;
   onCommit?: () => void;
   onCancel?: () => void;
 }): React.ReactElement {
+  const numberInput = (
+    <input
+      aria-label={label}
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      value={Number.isFinite(value) ? value : ""}
+      disabled={disabled}
+      onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
+      onPointerUp={onCommit}
+      onPointerCancel={onCancel}
+      onBlur={onCommit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
+    />
+  );
+
   return (
     <div className={action === undefined ? "field-row compact-row text-number-row" : "field-row compact-row text-number-row with-action"}>
       <span>{label}</span>
-      <input
-        aria-label={label}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={Number.isFinite(value) ? value : ""}
-        disabled={disabled}
-        onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
-        onPointerUp={onCommit}
-        onPointerCancel={onCancel}
-        onBlur={onCommit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur();
-          }
-        }}
-      />
+      {suffix === undefined ? (
+        numberInput
+      ) : (
+        <span className="text-input-with-unit">
+          {numberInput}
+          <span aria-hidden="true">{suffix}</span>
+        </span>
+      )}
       {action}
     </div>
   );
@@ -2024,15 +2087,15 @@ function validateTextForm(state: TextFormState): string | null {
   }
 
   if (!isIntegerInRange(state.lineHeightMillis, 500, 3000)) {
-    return "行高必须是 500 到 3000 之间的整数。";
+    return "行高必须是 50% 到 300% 之间。";
   }
 
   if (!isIntegerInRange(state.letterSpacingMillis, 0, 2000)) {
-    return "字间距必须是 0 到 2000 之间的整数。";
+    return "字间距必须是 0% 到 200% 之间。";
   }
 
   if (!isIntegerInRange(state.textBoxWidthMillis, 1, 1000) || !isIntegerInRange(state.textBoxHeightMillis, 1, 1000)) {
-    return "文本框宽高必须是 1 到 1000 之间的整数。";
+    return "文本框宽高必须是 0.1% 到 100% 之间。";
   }
 
   if (
@@ -2041,7 +2104,7 @@ function validateTextForm(state: TextFormState): string | null {
     !isIntegerInRange(state.layoutWidthMillis, 1, 1000) ||
     !isIntegerInRange(state.layoutHeightMillis, 1, 1000)
   ) {
-    return "布局安全区域必须使用 0 到 1000 之间的整数。";
+    return "布局安全区域必须使用画布百分比。";
   }
 
   if (state.layoutXMillis + state.layoutWidthMillis > 1000 || state.layoutYMillis + state.layoutHeightMillis > 1000) {
@@ -2333,6 +2396,7 @@ function SegmentVisualControls({
         min={1}
         max={3000}
         step={10}
+        display={PERCENT_VALUE_DISPLAY}
         firstValue={visualState.scaleXMillis}
         secondValue={visualState.scaleYMillis}
         disabled={pending}
@@ -2355,6 +2419,7 @@ function SegmentVisualControls({
         min={-360}
         max={360}
         step={1}
+        display={DEGREE_DISPLAY}
         value={visualState.rotationDegrees}
         disabled={pending}
         onPreviewChange={(value) => updateVisualField("rotationDegrees", value, { provisional: true, keyframeProperty: "visualRotation" })}
@@ -2371,6 +2436,7 @@ function SegmentVisualControls({
         min={0}
         max={1000}
         step={10}
+        display={OPACITY_PERCENT_DISPLAY}
         value={visualState.opacityMillis}
         disabled={pending}
         onPreviewChange={(value) => updateVisualField("opacityMillis", value, { provisional: true, keyframeProperty: "visualOpacity" })}
@@ -2409,6 +2475,7 @@ function SegmentVisualControls({
             min={0}
             max={999}
             step={10}
+            display={CROP_PERCENT_DISPLAY}
             value={visualState.cropLeftMillis}
             disabled={pending}
             onChange={(value) => updateVisualFieldDraft("cropLeftMillis", value)}
@@ -2420,6 +2487,7 @@ function SegmentVisualControls({
             min={0}
             max={999}
             step={10}
+            display={CROP_PERCENT_DISPLAY}
             value={visualState.cropRightMillis}
             disabled={pending}
             onChange={(value) => updateVisualFieldDraft("cropRightMillis", value)}
@@ -2431,6 +2499,7 @@ function SegmentVisualControls({
             min={0}
             max={999}
             step={10}
+            display={CROP_PERCENT_DISPLAY}
             value={visualState.cropTopMillis}
             disabled={pending}
             onChange={(value) => updateVisualFieldDraft("cropTopMillis", value)}
@@ -2442,6 +2511,7 @@ function SegmentVisualControls({
             min={0}
             max={999}
             step={10}
+            display={CROP_PERCENT_DISPLAY}
             value={visualState.cropBottomMillis}
             disabled={pending}
             onChange={(value) => updateVisualFieldDraft("cropBottomMillis", value)}
@@ -2506,6 +2576,7 @@ function VisualPairControl({
   min,
   max,
   step,
+  display,
   firstValue,
   secondValue,
   disabled,
@@ -2528,6 +2599,7 @@ function VisualPairControl({
   min: number;
   max: number;
   step: number;
+  display?: VisualDisplayTransform;
   firstValue: string;
   secondValue: string;
   disabled: boolean;
@@ -2554,6 +2626,7 @@ function VisualPairControl({
           min={min}
           max={max}
           step={step}
+          display={display}
           value={firstValue}
           disabled={disabled}
           onPreviewChange={onFirstPreviewChange}
@@ -2570,6 +2643,7 @@ function VisualPairControl({
           min={min}
           max={max}
           step={step}
+          display={display}
           value={secondValue}
           disabled={disabled}
           onPreviewChange={onSecondPreviewChange}
@@ -2590,6 +2664,7 @@ function VisualSingleControl({
   min,
   max,
   step,
+  display,
   value,
   disabled,
   onPreviewChange,
@@ -2604,6 +2679,7 @@ function VisualSingleControl({
   min: number;
   max: number;
   step: number;
+  display?: VisualDisplayTransform;
   value: string;
   disabled: boolean;
   onPreviewChange: (value: string) => void;
@@ -2623,6 +2699,7 @@ function VisualSingleControl({
         min={min}
         max={max}
         step={step}
+        display={display}
         value={value}
         disabled={disabled}
         onPreviewChange={onPreviewChange}
@@ -2643,6 +2720,7 @@ function VisualRangeNumber({
   min,
   max,
   step,
+  display,
   value,
   disabled,
   onPreviewChange,
@@ -2658,6 +2736,7 @@ function VisualRangeNumber({
   min: number;
   max: number;
   step: number;
+  display?: VisualDisplayTransform;
   value: string;
   disabled: boolean;
   onPreviewChange: (value: string) => void;
@@ -2668,8 +2747,30 @@ function VisualRangeNumber({
   onInteractionCancel: () => void;
   action?: ReactNode;
 }): React.ReactElement {
-  const rangeValue = clamp(Number.parseInt(value, 10) || 0, min, max);
+  const controlMin = display?.min ?? min;
+  const controlMax = display?.max ?? max;
+  const controlStep = display?.step ?? step;
+  const displayValue = display === undefined ? value : display.toDisplay(value);
+  const rangeValue = clamp(Number.parseFloat(displayValue) || 0, controlMin, controlMax);
   const numberAriaLabel = shortLabel === "数值" ? label : `${label} ${shortLabel}`;
+  const numberInput = (
+    <input
+      aria-label={numberAriaLabel}
+      type="number"
+      min={controlMin}
+      max={controlMax}
+      step={controlStep}
+      value={displayValue}
+      onChange={(event) => onValueChange(display === undefined ? event.currentTarget.value : display.fromDisplay(event.currentTarget.value))}
+      onBlur={onCommit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
+      disabled={disabled}
+    />
+  );
 
   return (
     <div className={action === undefined ? "visual-range-number" : "visual-range-number with-keyframe"}>
@@ -2677,32 +2778,24 @@ function VisualRangeNumber({
       <input
         aria-label={`${numberAriaLabel}滑杆`}
         type="range"
-        min={min}
-        max={max}
-        step={step}
+        min={controlMin}
+        max={controlMax}
+        step={controlStep}
         value={rangeValue}
         onPointerDown={() => onInteractionStart()}
         onPointerUp={() => onInteractionCommit()}
         onPointerCancel={() => onInteractionCancel()}
-        onChange={(event) => onPreviewChange(event.currentTarget.value)}
+        onChange={(event) => onPreviewChange(display === undefined ? event.currentTarget.value : display.fromDisplay(event.currentTarget.value))}
         disabled={disabled}
       />
-      <input
-        aria-label={numberAriaLabel}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onValueChange(event.currentTarget.value)}
-        onBlur={onCommit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur();
-          }
-        }}
-        disabled={disabled}
-      />
+      {display === undefined ? (
+        numberInput
+      ) : (
+        <span className="visual-input-with-unit">
+          {numberInput}
+          <span aria-hidden="true">{display.suffix}</span>
+        </span>
+      )}
       {action}
     </div>
   );
@@ -2714,6 +2807,7 @@ function VisualCompactNumber({
   min,
   max,
   step,
+  display,
   value,
   disabled,
   onChange,
@@ -2724,30 +2818,46 @@ function VisualCompactNumber({
   min: number;
   max: number;
   step: number;
+  display?: VisualDisplayTransform;
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
   onCommit?: () => void;
 }): React.ReactElement {
+  const controlMin = display?.min ?? min;
+  const controlMax = display?.max ?? max;
+  const controlStep = display?.step ?? step;
+  const displayValue = display === undefined ? value : display.toDisplay(value);
+  const numberInput = (
+    <input
+      aria-label={ariaLabel}
+      type="number"
+      min={controlMin}
+      max={controlMax}
+      step={controlStep}
+      value={displayValue}
+      onChange={(event) => onChange(display === undefined ? event.currentTarget.value : display.fromDisplay(event.currentTarget.value))}
+      onBlur={onCommit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
+      disabled={disabled}
+    />
+  );
+
   return (
     <label className="visual-compact-number">
       <span>{label}</span>
-      <input
-        aria-label={ariaLabel}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        onBlur={onCommit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur();
-          }
-        }}
-        disabled={disabled}
-      />
+      {display === undefined ? (
+        numberInput
+      ) : (
+        <span className="visual-input-with-unit">
+          {numberInput}
+          <span aria-hidden="true">{display.suffix}</span>
+        </span>
+      )}
     </label>
   );
 }
@@ -2924,15 +3034,15 @@ function validateVisualForm(state: VisualFormState): string | null {
     parseIntegerInRange(state.scaleXMillis, 1, 3000) === null ||
     parseIntegerInRange(state.scaleYMillis, 1, 3000) === null
   ) {
-    return "缩放必须是 1 到 3000 之间的整数。";
+    return "缩放必须是 0.1% 到 300% 之间。";
   }
 
   if (parseIntegerInRange(state.rotationDegrees, -360, 360) === null) {
-    return "旋转必须是 -360 到 360 之间的整数角度。";
+    return "旋转必须是 -360° 到 360° 之间。";
   }
 
   if (parseIntegerInRange(state.opacityMillis, 0, 1000) === null) {
-    return "不透明度必须是 0 到 1000 之间的整数。";
+    return "不透明度必须是 0% 到 100% 之间。";
   }
 
   const cropLeftMillis = parseIntegerInRange(state.cropLeftMillis, 0, 999);
@@ -2946,11 +3056,11 @@ function validateVisualForm(state: VisualFormState): string | null {
     cropTopMillis === null ||
     cropBottomMillis === null
   ) {
-    return "裁剪必须是 0 到 999 之间的整数。";
+    return "裁剪必须是 0% 到 99.9% 之间。";
   }
 
   if (cropLeftMillis + cropRightMillis >= 1000 || cropTopMillis + cropBottomMillis >= 1000) {
-    return "左右或上下裁剪总和必须小于 1000。";
+    return "左右或上下裁剪总和必须小于 100%。";
   }
 
   if (state.backgroundKind === "solidColor" && !isHexColor(state.backgroundColor)) {
@@ -3018,6 +3128,44 @@ function parseIntegerInRange(value: string, min: number, max: number): number | 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function millisStringToPercentString(value: string): string {
+  if (value.trim().length === 0) {
+    return "";
+  }
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return formatCompactNumber(parsed / 10);
+}
+
+function percentStringToMillisString(value: string): string {
+  if (value.trim().length === 0) {
+    return "";
+  }
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return String(Math.round(parsed * 10));
+}
+
+function millisToPercentValue(value: number): number {
+  return Math.round((value / 10) * 10) / 10;
+}
+
+function percentToMillisValue(value: number): number {
+  return Math.max(0, Math.round(value * 10));
+}
+
+function formatCompactNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
 function toBoundedNumber(value: number, fallback: number, min: number, max: number): number {

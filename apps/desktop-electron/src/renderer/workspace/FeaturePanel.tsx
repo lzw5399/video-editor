@@ -83,6 +83,7 @@ type ShowcaseCategory = Exclude<WorkspaceCategory, "媒体" | "音频" | "文字
 type ShowcasePanelSpec = {
   rail: readonly string[];
   cards: readonly string[];
+  unavailableReason: string;
 };
 type AudioPanelOptions = {
   gainMillis: number;
@@ -134,27 +135,33 @@ const MEDIA_SOURCE_SECTIONS: readonly MediaSourceSection[] = [
 const SHOWCASE_PANEL_SPECS: Record<ShowcaseCategory, ShowcasePanelSpec> = {
   贴纸: {
     rail: ["热门", "表情", "装饰", "收藏"],
-    cards: ["基础贴纸", "情绪符号", "指示箭头", "动态装饰"]
+    cards: ["基础贴纸", "情绪符号", "指示箭头", "动态装饰"],
+    unavailableReason: "贴纸预览和导出还没有完成生产接入"
   },
   特效: {
     rail: ["热门", "画面", "氛围", "收藏"],
-    cards: ["基础光效", "速度感", "复古颗粒", "镜头闪白"]
+    cards: ["基础光效", "速度感", "复古颗粒", "镜头闪白"],
+    unavailableReason: "特效需要稳定的预览和导出支持后开放"
   },
   转场: {
     rail: ["基础", "运镜", "遮罩", "收藏"],
-    cards: ["叠化", "推拉", "闪白", "模糊转场"]
+    cards: ["叠化", "推拉", "闪白", "模糊转场"],
+    unavailableReason: "转场需要时间线语义和导出一致后开放"
   },
   滤镜: {
     rail: ["人像", "风景", "电影", "收藏"],
-    cards: ["自然", "清透", "胶片", "冷调"]
+    cards: ["自然", "清透", "胶片", "冷调"],
+    unavailableReason: "滤镜需要预览和导出颜色处理一致后开放"
   },
   调节: {
     rail: ["基础", "HSL", "曲线", "LUT"],
-    cards: ["自定义调节", "亮度", "对比度", "饱和度"]
+    cards: ["自定义调节", "亮度", "对比度", "饱和度"],
+    unavailableReason: "调节参数需要渲染链路支持后开放"
   },
   数字人: {
     rail: ["形象", "声音", "口型", "收藏"],
-    cards: ["数字人形象", "声音配置", "口型驱动", "场景模板"]
+    cards: ["数字人形象", "声音配置", "口型驱动", "场景模板"],
+    unavailableReason: "数字人能力还没有接入当前编辑器"
   }
 };
 
@@ -1109,23 +1116,43 @@ function ShowcaseCategoryPanel({ category }: { category: ShowcaseCategory }): Re
   const spec = SHOWCASE_PANEL_SPECS[category];
 
   return (
-    <div className="feature-panel-content showcase-feature-panel">
+    <div
+      className="feature-panel-content showcase-feature-panel product-unavailable-feature-gate"
+      data-product-unavailable-feature-gate={category}
+      aria-label={`${label}暂不可用`}
+    >
       <div className="panel-header showcase-panel-header">
         <h2>{label}</h2>
       </div>
-      <div className="showcase-panel-layout">
+      <p className="showcase-unavailable-copy">
+        <strong>暂不可用</strong>
+        <span>{spec.unavailableReason}</span>
+      </p>
+      <div className="showcase-panel-layout" aria-disabled="true">
         <nav className="showcase-rail" aria-label={`${label}分类`}>
-          {spec.rail.map((item, index) => (
-            <button key={item} type="button" className={index === 0 ? "active" : ""} aria-current={index === 0 ? "page" : undefined}>
+          {spec.rail.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-disabled="true"
+              title={`${item}暂不可用`}
+              disabled
+            >
               {item}
             </button>
           ))}
         </nav>
         <div className="showcase-card-grid" aria-label={`${label}资源`}>
           {spec.cards.map((item) => (
-            <article key={item} className="showcase-card" aria-label={`${label} ${item}`}>
+            <article
+              key={item}
+              className="showcase-card unavailable"
+              aria-label={`${label} ${item}暂不可用`}
+              aria-disabled="true"
+            >
               <span className="showcase-card-preview" aria-hidden="true" />
               <strong>{item}</strong>
+              <em>暂不可用</em>
             </article>
           ))}
         </div>

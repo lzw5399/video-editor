@@ -290,6 +290,7 @@ type SelectionOverlayModel = {
 
 type MonitorViewControl = {
   label: string;
+  kind: "unavailableAction" | "readout";
   className?: string;
   icon?: AppIconName;
   value?: string;
@@ -327,8 +328,6 @@ const MONITOR_CONTROLS: readonly MonitorControl[] = [
   { label: "上一帧", icon: "previewPreviousFrame" },
   { label: "下一帧", icon: "previewNextFrame" }
 ];
-
-const MONITOR_TITLE = "播放器-时间线01";
 
 export function PreviewMonitor({
   draftName,
@@ -381,11 +380,11 @@ export function PreviewMonitor({
     background: canvasConfig.background.kind === "solidColor" ? canvasConfig.background.color : "#070707"
   } as CSSProperties;
   const monitorViewControls: readonly MonitorViewControl[] = [
-    { label: "原画", className: "original-button", value: "原画" },
-    { label: "适应窗口", icon: "previewFit" },
-    { label: "画布读数", value: "画布" },
-    { label: "画面比例", className: "ratio-button", value: canvasRatio },
-    { label: "全屏", value: "全屏" }
+    { label: "原画", kind: "unavailableAction", className: "original-button", value: "原画" },
+    { label: "适应窗口", kind: "unavailableAction", icon: "previewFit" },
+    { label: "画布读数", kind: "readout", value: "画布" },
+    { label: "画面比例", kind: "readout", className: "ratio-button", value: canvasRatio },
+    { label: "全屏", kind: "unavailableAction", value: "全屏" }
   ];
   const schedulerProductStatusLabel =
     !showDeveloperDiagnostics &&
@@ -408,7 +407,7 @@ export function PreviewMonitor({
     runtimePreviewUnavailable && !playbackRunning ? "预览暂不可用" : previewControlLabel("播放", playbackRunning);
   const previewPlaybackTitle =
     runtimePreviewUnavailable && !playbackRunning
-      ? runtimeDiagnostics.statusDetail || runtimeDiagnostics.statusLabel
+      ? "预览暂不可用"
       : previewPlaybackLabel;
   const selectionOverlay = buildSelectionOverlayModel(
     selectedSegment,
@@ -909,8 +908,9 @@ export function PreviewMonitor({
   return (
     <div className={showDeveloperDiagnostics ? "preview-shell developer-diagnostics" : "preview-shell"}>
       <div className="preview-titlebar">
-        <strong title={`当前草稿：${draftName}`}>{MONITOR_TITLE}</strong>
-        <button type="button" className="preview-title-menu" aria-label="播放器菜单" title="播放器菜单" disabled>
+        <strong title={`当前草稿：${draftName}`}>{draftName}</strong>
+        <span className="preview-title-context" aria-label="播放器">播放器</span>
+        <button type="button" className="preview-title-menu" aria-label="播放器菜单暂不可用" title="播放器菜单暂不可用" disabled>
           <span className="app-icon-mask" style={iconMaskStyle("titlebarMenu")} aria-hidden="true" />
         </button>
       </div>
@@ -1056,15 +1056,20 @@ export function PreviewMonitor({
             <button
               key={control.label}
               type="button"
-              className={["preview-view-button", control.className].filter(Boolean).join(" ")}
-              aria-label={control.label}
+              className={[
+                "preview-view-button",
+                control.kind === "readout" ? "readout" : "unavailable",
+                control.className
+              ].filter(Boolean).join(" ")}
+              aria-label={control.kind === "readout" ? control.label : `${control.label}暂不可用`}
               title={
                 control.label === "画布读数"
-                  ? canvasReadout
+                  ? `画布读数：${canvasReadout}`
                   : control.label === "画面比例"
                     ? `画面比例 ${canvasRatio}`
-                    : control.value ?? control.label
+                    : `${control.label}暂不可用`
               }
+              aria-disabled="true"
               disabled
             >
               {control.icon === undefined ? (
@@ -1098,10 +1103,16 @@ export function PreviewMonitor({
         </>
       ) : null}
 
-      {showDeveloperDiagnostics ? (
-        <div className="preview-status-line" aria-live="polite">
+      <div className={showDeveloperDiagnostics ? "preview-status-line developer-diagnostics" : "preview-status-line"} aria-live="polite">
           <span className={`status-dot ${bindingStatus.kind}`} aria-hidden="true" />
           <span aria-label="预览状态">{previewStatusLabel}</span>
+          {!showDeveloperDiagnostics ? (
+            <span className="canvas-readout-chip compact" title={canvasReadout}>
+              {canvasRatio}
+            </span>
+          ) : null}
+          {showDeveloperDiagnostics ? (
+            <>
           <span className={`audio-status-chip audio-status-${audioPreview.status}`} aria-label="音频预览状态">
             {audioStatusChipText(audioPreview, audioParity)}
           </span>
@@ -1127,8 +1138,9 @@ export function PreviewMonitor({
           <span className={`canvas-background-chip ${backgroundTone}`} title={backgroundStatus}>
             {backgroundStatus}
           </span>
+            </>
+          ) : null}
         </div>
-      ) : null}
     </div>
   );
 }
@@ -1254,7 +1266,7 @@ function formatRealtimePreviewUnavailableLabel(
 function formatRealtimePreviewTelemetry(state: RealtimePreviewHostState, showDeveloperDiagnostics: boolean): string {
   const { telemetry } = state;
   if (!showDeveloperDiagnostics && !state.productReady) {
-    return "实时预览不可用：GPU 合成播放尚未接入";
+    return "预览暂不可用：当前画面暂不能实时播放";
   }
   if (telemetry === null) {
     return "等待首帧";

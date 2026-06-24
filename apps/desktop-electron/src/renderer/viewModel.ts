@@ -917,7 +917,7 @@ export function summarizeRealtimePreviewDisplay(model: RealtimePreviewDisplayMod
 
 export function summarizeRealtimePreviewProductDisplay(model: RealtimePreviewDisplayModel): string {
   if (model.backend !== "renderGraphGpu") {
-    return "实时预览不可用：GPU 合成播放尚未接入";
+    return "预览暂不可用：当前画面暂不能实时播放";
   }
 
   if (model.fallbackReason !== null) {

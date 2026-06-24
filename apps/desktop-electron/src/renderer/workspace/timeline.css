@@ -231,7 +231,9 @@
 @media (max-width: 1320px) {
   .playhead-time,
   .timeline-status {
-    display: none;
+    flex-basis: auto;
+    max-width: 72px;
+    font-size: 11px;
   }
 }
 
@@ -317,8 +319,8 @@
   top: 4px;
   bottom: 0;
   z-index: 3;
-  width: 10px;
-  margin-left: -5px;
+  width: 16px;
+  margin-left: -8px;
   background: transparent;
   cursor: ew-resize;
   pointer-events: auto;
@@ -329,7 +331,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 4px;
+  left: 7px;
   width: 2px;
   background: #20c7d9;
   content: "";
@@ -338,12 +340,17 @@
 .timeline-surface .playhead::before {
   position: absolute;
   top: -7px;
-  left: -1px;
+  left: 2px;
   width: 12px;
   height: 7px;
   border-radius: 2px 2px 0 0;
   background: #20c7d9;
   content: "";
+}
+
+.timeline-surface .playhead:focus-visible {
+  outline: 2px solid #f0eee8;
+  outline-offset: 2px;
 }
 
 .track-row {
@@ -824,7 +831,8 @@
 
 @media (max-width: 1399px) {
   .timeline-status {
-    display: none;
+    flex: 0 1 76px;
+    max-width: 76px;
   }
 }
 
@@ -868,6 +876,9 @@
 
   .playhead-time,
   .timeline-status {
-    display: none;
+    display: flex;
+    flex: 0 1 64px;
+    max-width: 64px;
+    font-size: 11px;
   }
 }

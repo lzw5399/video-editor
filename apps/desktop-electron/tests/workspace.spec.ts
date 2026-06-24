@@ -956,7 +956,12 @@ test("workspace panels switch categories without losing Chinese empty states", a
       await expectNoLeftSecondaryMenu(page);
       await expect(page.getByLabel(`${category}分类`)).toBeVisible();
       await expect(page.getByLabel(`${category}资源`)).toBeVisible();
-      await expect(page.getByLabel("素材面板")).not.toContainText(/暂未开放|暂不可用|暂未接入/);
+      await expect(page.getByLabel("素材面板")).toContainText("暂不可用");
+      await expect(page.getByLabel("素材面板").locator(".product-unavailable-feature-gate")).toHaveAttribute(
+        "data-product-unavailable-feature-gate",
+        category
+      );
+      await expect(page.getByLabel("素材面板").locator(".showcase-rail button:not(:disabled)")).toHaveCount(0);
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }
   } finally {
@@ -2190,7 +2195,7 @@ test("telemetry display model represents Rust-owned realtime and fallback diagno
   expect(summarizeRealtimePreviewDisplay(supported)).toContain("缓存 2");
   expect(summarizeRealtimePreviewDisplay(fallback)).toContain("当前请求已取消");
   expect(summarizeRealtimePreviewProductDisplay({ ...supported, backend: "renderGraphGpu" })).toBe("实时预览已接入");
-  expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("实时预览不可用：GPU 合成播放尚未接入");
+  expect(summarizeRealtimePreviewProductDisplay(fallback)).toBe("预览暂不可用：当前画面暂不能实时播放");
   expect(fallback.fallbackArtifactVisible).toBe(true);
 });
 
