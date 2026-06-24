@@ -51,28 +51,28 @@ fn formula_bundle_positive_sanitized_fixtures_parse_and_validate() {
 
 #[test]
 fn formula_bundle_rejects_unknown_top_level_fields() {
-    let error = KaipaiFormulaBundle::from_json_str(&read_fixture(
-        "negative/unknown-top-level-field.json",
-    ))
-    .expect_err("unknown top-level provider fields must be rejected");
+    let error =
+        KaipaiFormulaBundle::from_json_str(&read_fixture("negative/unknown-top-level-field.json"))
+            .expect_err("unknown top-level provider fields must be rejected");
 
     assert!(
-        error.to_string().contains("unknown field `unexpectedProviderField`"),
+        error
+            .to_string()
+            .contains("unknown field `unexpectedProviderField`"),
         "unexpected error: {error}"
     );
 }
 
 #[test]
 fn formula_bundle_rejects_unsafe_provider_evidence() {
-    let error = KaipaiFormulaBundle::from_json_str(&read_fixture(
-        "negative/unsafe-formula-evidence.json",
-    ))
-    .expect_err("unsafe formula evidence must be rejected");
+    let error =
+        KaipaiFormulaBundle::from_json_str(&read_fixture("negative/unsafe-formula-evidence.json"))
+            .expect_err("unsafe formula evidence must be rejected");
 
     assert!(
         error
             .to_string()
-            .contains("unsafe Kaipai formula evidence at `formula.sourceUrl`"),
+            .contains("unsafe Kaipai formula evidence at `safeArea.source`"),
         "unexpected error: {error}"
     );
 }
@@ -107,8 +107,7 @@ fn formula_bundle_rejects_in_memory_credentials_and_remote_refs() {
         (
             "remote direct material URI",
             patch(&base, |value| {
-                value["directMaterials"][0]["uri"] =
-                    json!("https://provider.invalid/material.mp4");
+                value["directMaterials"][0]["uri"] = json!("https://provider.invalid/material.mp4");
             }),
             "directMaterials[0].uri",
         ),

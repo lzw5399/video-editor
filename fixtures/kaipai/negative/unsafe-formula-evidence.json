@@ -26,7 +26,7 @@
   },
   "safeArea": {
     "status": "detected",
-    "source": "redacted-local-fixture",
+    "source": "provider-specific-safe-area-evidence",
     "value": {
       "left": 0.1,
       "top": 0.12,
@@ -36,7 +36,6 @@
   },
   "directMaterials": [],
   "formula": {
-    "sourceUrl": "https://provider.invalid/render.mp4",
     "videoCanvasConfig": {
       "width": 1080,
       "height": 1920,
