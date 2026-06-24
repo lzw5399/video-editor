@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiOfflineBundle",
+  "generatedAt": "2026-06-24T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "approximated": 0,
+    "dropped": 1,
+    "missingResource": 0,
+    "needsNativeEffect": 1
+  },
+  "items": [
+    {
+      "status": "needsNativeEffect",
+      "severity": "warning",
+      "category": "nativeEffect",
+      "target": {
+        "kind": "effect",
+        "id": "native-effect-beauty-retouch"
+      },
+      "message": "Provider-native beauty effect requires a local implementation before it can be represented.",
+      "details": "Native effects are never classified as supported by fixture expectations.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-native-effect",
+          "externalPath": "formula.nativeEffectList[0]",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "dropped",
+      "severity": "warning",
+      "category": "segment",
+      "target": {
+        "kind": "filter",
+        "id": "filter-native-effect-beauty-retouch"
+      },
+      "message": "Native effect is omitted from the canonical draft filter stack.",
+      "details": "Report evidence preserves the external reference without writing native parameters to Draft.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-native-effect",
+          "externalPath": "formula.nativeEffectList[0].nativeEffectName",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    }
+  ]
+}

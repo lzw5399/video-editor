@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiOfflineBundle",
+  "generatedAt": "2026-06-24T00:00:00Z",
+  "summary": {
+    "supported": 1,
+    "approximated": 1,
+    "dropped": 1,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "text",
+      "target": {
+        "kind": "text",
+        "id": "segment-text-sticker"
+      },
+      "message": "Text sticker content, color, stroke, shadow, layout, and wrapping map to TextSegment.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-text-sticker",
+          "externalPath": "formula.stickerList[0].textEditInfoList[0]",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "approximated",
+      "severity": "warning",
+      "category": "font",
+      "target": {
+        "kind": "font",
+        "id": "font://bundled/noto-sans-cjk-sc-regular"
+      },
+      "message": "Requested provider font is approximated with bundled Noto Sans CJK SC fallback.",
+      "details": "Font closure keeps a local fontRef and records localization fallback in the report.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-text-sticker",
+          "externalPath": "formula.stickerList[0].textEditInfoList[0].fontPath",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "dropped",
+      "severity": "warning",
+      "category": "text",
+      "target": {
+        "kind": "effect",
+        "id": "text-effect-glow"
+      },
+      "message": "Provider text glow effect is dropped until a local text effect exists.",
+      "details": "Unsupported text effects must not be smuggled into generic filter parameters.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-text-sticker",
+          "externalPath": "formula.stickerList[0].textEditInfoList[0].textEffect",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    }
+  ]
+}

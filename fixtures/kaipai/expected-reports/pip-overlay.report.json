@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiOfflineBundle",
+  "generatedAt": "2026-06-24T00:00:00Z",
+  "summary": {
+    "supported": 2,
+    "approximated": 0,
+    "dropped": 0,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "track",
+      "target": {
+        "kind": "track",
+        "id": "track-pip-overlay"
+      },
+      "message": "PIP level maps to provider-neutral overlay z-order.",
+      "details": "Kaipai level is catalog evidence only; canonical Draft track ordering carries layer order.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-pip-overlay",
+          "externalPath": "formula.pipList[0].level",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "segment",
+      "target": {
+        "kind": "segment",
+        "id": "segment-pip-overlay"
+      },
+      "message": "PIP bounds, fit, opacity, position, scale, and static center-anchor rotation map to SegmentVisual.",
+      "details": "Static center-anchor rotation is supported generically by Plan 17-07 export parity.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-pip-overlay",
+          "externalPath": "formula.pipList[0]",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    }
+  ]
+}

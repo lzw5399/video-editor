@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-pip-overlay-template",
+    "recipeId": "redacted-pip-overlay-recipe",
+    "formulaTaskId": "redacted-pip-overlay-task",
+    "formulaRequestId": "redacted-pip-overlay-request",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "material-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main-video.mp4",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "durationMs": 5000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 800
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "provided",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.08,
+      "top": 0.1,
+      "right": 0.92,
+      "bottom": 0.9
+    }
+  },
+  "directMaterials": [
+    {
+      "materialId": "material-main-video",
+      "kind": "video",
+      "uri": "resources/source/redacted-main-video.mp4",
+      "displayName": "redacted-main-video.mp4"
+    },
+    {
+      "materialId": "material-pip-overlay",
+      "kind": "video",
+      "uri": "resources/pip/redacted-pip-overlay.mp4",
+      "displayName": "redacted-pip-overlay.mp4"
+    }
+  ],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#000000"
+    },
+    "videoClipList": [
+      {
+        "resourceId": "material-main-video",
+        "segmentId": "segment-main-video",
+        "trackId": "track-main-video",
+        "startAtMs": 0,
+        "endAtMs": 5000,
+        "durationMsWithSpeed": 5000,
+        "targetStartMs": 0,
+        "fitMode": "fit",
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1
+      }
+    ],
+    "pipList": [
+      {
+        "resourceId": "material-pip-overlay",
+        "segmentId": "segment-pip-overlay",
+        "trackId": "track-pip-overlay",
+        "start": 1200,
+        "duration": 2600,
+        "level": 20,
+        "fitMode": "fit",
+        "relativeCenterX": 0.68,
+        "relativeCenterY": 0.32,
+        "bounds": {
+          "widthMillis": 360,
+          "heightMillis": 280
+        },
+        "scale": 0.48,
+        "rotate": 15,
+        "alpha": 0.84,
+        "videoClip": {
+          "startAtMs": 0,
+          "endAtMs": 2600
+        }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resourceId": "material-main-video",
+      "kind": "video",
+      "uri": "resources/source/redacted-main-video.mp4",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "displayName": "redacted-main-video.mp4"
+    },
+    {
+      "resourceId": "material-pip-overlay",
+      "kind": "video",
+      "uri": "resources/pip/redacted-pip-overlay.mp4",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "displayName": "redacted-pip-overlay.mp4"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-missing-resource-template",
+    "recipeId": "redacted-missing-resource-recipe",
+    "formulaTaskId": "redacted-missing-resource-task",
+    "formulaRequestId": "redacted-missing-resource-request",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "source-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main-video.mp4",
+    "sha256": "1212121212121212121212121212121212121212121212121212121212121212",
+    "durationMs": 5000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 700
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "provided",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.1,
+      "top": 0.12,
+      "right": 0.9,
+      "bottom": 0.88
+    }
+  },
+  "directMaterials": [],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#101010"
+    },
+    "stickerList": [
+      {
+        "resourceId": "missing-sticker-resource",
+        "segmentId": "segment-missing-sticker",
+        "trackId": "track-missing-sticker",
+        "start": 1000,
+        "duration": 2000,
+        "level": 30,
+        "relativeCenterX": 0.5,
+        "relativeCenterY": 0.5,
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resourceId": "available-background",
+      "kind": "image",
+      "uri": "resources/stickers/redacted-background.png",
+      "sha256": "3434343434343434343434343434343434343434343434343434343434343434",
+      "displayName": "redacted-background.png"
+    }
+  ]
+}

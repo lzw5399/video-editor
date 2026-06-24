@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiOfflineBundle",
+  "generatedAt": "2026-06-24T00:00:00Z",
+  "summary": {
+    "supported": 1,
+    "approximated": 0,
+    "dropped": 0,
+    "missingResource": 0,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "supported",
+      "severity": "info",
+      "category": "audio",
+      "target": {
+        "kind": "audio",
+        "id": "segment-bgm-audio"
+      },
+      "message": "BGM material, gain, fade-in, and fade-out map to canonical SegmentAudio.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-bgm-audio",
+          "externalPath": "formula.bgm",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    }
+  ]
+}

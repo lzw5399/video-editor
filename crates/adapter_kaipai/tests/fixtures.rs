@@ -42,13 +42,19 @@ fn formula_bundle_fixtures_do_not_contain_credentials_or_remote_urls() {
 
 fn positive_formula_fixtures() -> BTreeSet<&'static str> {
     BTreeSet::from([
+        "positive/bgm-audio.json",
+        "positive/main-video.json",
+        "positive/pip-overlay.json",
         "positive/sanitized-formula-bundle.json",
         "positive/sanitized-formula-with-direct-materials.json",
+        "positive/text-sticker.json",
     ])
 }
 
 fn negative_formula_fixtures() -> BTreeSet<&'static str> {
     BTreeSet::from([
+        "negative/missing-resource.json",
+        "negative/native-effect.json",
         "negative/unknown-top-level-field.json",
         "negative/unsafe-formula-evidence.json",
     ])

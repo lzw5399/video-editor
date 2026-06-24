@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-native-effect-template",
+    "recipeId": "redacted-native-effect-recipe",
+    "formulaTaskId": "redacted-native-effect-task",
+    "formulaRequestId": "redacted-native-effect-request",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "material-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main-video.mp4",
+    "sha256": "5656565656565656565656565656565656565656565656565656565656565656",
+    "durationMs": 4000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 700
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "detected",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.1,
+      "top": 0.12,
+      "right": 0.9,
+      "bottom": 0.88
+    }
+  },
+  "directMaterials": [
+    {
+      "materialId": "material-main-video",
+      "kind": "video",
+      "uri": "resources/source/redacted-main-video.mp4",
+      "displayName": "redacted-main-video.mp4"
+    }
+  ],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#000000"
+    },
+    "videoClipList": [
+      {
+        "resourceId": "material-main-video",
+        "segmentId": "segment-main-video",
+        "trackId": "track-main-video",
+        "startAtMs": 0,
+        "endAtMs": 4000,
+        "durationMsWithSpeed": 4000,
+        "targetStartMs": 0,
+        "fitMode": "fit",
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1
+      }
+    ],
+    "nativeEffectList": [
+      {
+        "effectId": "native-effect-beauty-retouch",
+        "nativeEffectName": "beautyRetouch",
+        "effectType": "beautyRetouch",
+        "targetSegmentId": "segment-main-video",
+        "strengthMillis": 650
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resourceId": "material-main-video",
+      "kind": "video",
+      "uri": "resources/source/redacted-main-video.mp4",
+      "sha256": "5656565656565656565656565656565656565656565656565656565656565656",
+      "displayName": "redacted-main-video.mp4"
+    }
+  ]
+}

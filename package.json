@@ -85,7 +85,7 @@
     "test:phase16-source-guards": "bash scripts/phase16-source-guards.sh",
     "test:phase16-desktop": "pnpm --filter @video-editor/desktop package:dir && pnpm --filter @video-editor/desktop exec playwright test tests/product-scheduler-stress.spec.ts --reporter=line",
     "test:phase16": "pnpm run test:phase16-rust && pnpm run test:phase16-source-guards && pnpm run test:no-product-fallback && pnpm --filter @video-editor/desktop test:runtime-diagnostics && pnpm run test:phase16-desktop && pnpm run test:contracts",
-    "test:phase17-rust": "cargo test -p draft_import adaptation_report -- --nocapture && cargo test -p draft_import draft_import_plan -- --nocapture && cargo test -p draft_import schema_exports -- --nocapture && cargo test -p draft_import resource_localizer -- --nocapture",
+    "test:phase17-rust": "cargo test -p draft_import adaptation_report -- --nocapture && cargo test -p draft_import draft_import_plan -- --nocapture && cargo test -p draft_import schema_exports -- --nocapture && cargo test -p draft_import resource_localizer -- --nocapture && cargo test -p adapter_kaipai mapper_fixture_snapshots -- --nocapture",
     "test:phase17-source-guards": "bash scripts/phase17-source-guards.sh",
     "test:phase17": "pnpm run test:phase17-rust && pnpm run test:phase17-source-guards && pnpm run test:contracts",
     "test:phase15-1-source-guards": "bash scripts/phase15-1-source-guards.sh",

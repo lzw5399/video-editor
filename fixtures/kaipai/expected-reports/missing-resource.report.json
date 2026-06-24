@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "kaipaiOfflineBundle",
+  "generatedAt": "2026-06-24T00:00:00Z",
+  "summary": {
+    "supported": 0,
+    "approximated": 0,
+    "dropped": 1,
+    "missingResource": 1,
+    "needsNativeEffect": 0
+  },
+  "items": [
+    {
+      "status": "missingResource",
+      "severity": "error",
+      "category": "resource",
+      "target": {
+        "kind": "resource",
+        "id": "missing-sticker-resource"
+      },
+      "message": "Referenced sticker resource is absent from the sanitized offline bundle.",
+      "details": "Mapper must report the missing resource and skip the dependent segment.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-missing-resource",
+          "externalPath": "formula.stickerList[0].resourceId",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    },
+    {
+      "status": "dropped",
+      "severity": "warning",
+      "category": "sticker",
+      "target": {
+        "kind": "sticker",
+        "id": "segment-missing-sticker"
+      },
+      "message": "Sticker segment is dropped because its material cannot be localized.",
+      "provenance": [
+        {
+          "sourceKind": "kaipaiOfflineBundle",
+          "externalId": "redacted-missing-resource",
+          "externalPath": "formula.stickerList[0]",
+          "note": "adapter evidence only; not canonical render semantics"
+        }
+      ]
+    }
+  ]
+}

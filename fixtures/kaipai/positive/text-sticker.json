@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-text-sticker-template",
+    "recipeId": "redacted-text-sticker-recipe",
+    "formulaTaskId": "redacted-text-sticker-task",
+    "formulaRequestId": "redacted-text-sticker-request",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "source-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main-video.mp4",
+    "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "durationMs": 5000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 700
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "detected",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.12,
+      "top": 0.1,
+      "right": 0.88,
+      "bottom": 0.88
+    }
+  },
+  "directMaterials": [],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#101010"
+    },
+    "stickerList": [
+      {
+        "resourceId": "material-text-sticker",
+        "segmentId": "segment-text-sticker",
+        "trackId": "track-text-sticker",
+        "start": 600,
+        "duration": 3200,
+        "level": 30,
+        "relativeCenterX": 0.5,
+        "relativeCenterY": 0.72,
+        "bounds": {
+          "widthMillis": 700,
+          "heightMillis": 180
+        },
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1,
+        "textEditInfoList": [
+          {
+            "text": "夏日片头",
+            "fontName": "Noto Sans CJK SC",
+            "fontPath": "resources/fonts/redacted-noto.otf",
+            "fontSize": 64,
+            "textColor": "#FFFFFF",
+            "textStrokeColor": "#101010",
+            "textStrokeWidth": 3,
+            "showShadow": true,
+            "shadowColor": "#000000",
+            "shadowBlur": 12,
+            "alignment": "center",
+            "textEffect": "glow"
+          }
+        ]
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resourceId": "font-redacted-noto",
+      "kind": "font",
+      "uri": "resources/fonts/redacted-noto.otf",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "displayName": "redacted-noto.otf"
+    }
+  ]
+}
