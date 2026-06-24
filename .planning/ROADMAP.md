@@ -37,6 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15.3: P0 Jianying-Style Production UI Convergence** - Remove debug-console UI, align the five-zone Jianying-style production workspace, modal export, focused inspector, and screenshot-backed regression before scheduler work (completed 2026-06-20)
 - [x] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets (completed 2026-06-24)
 - [x] **Phase 17: Template Import Core And Kaipai Offline Adapter Foundation** - Provider-neutral template import foundation with Kaipai as an offline external adapter (completed 2026-06-24)
+- [ ] **Phase 17.1: Interaction Session And Template Import Main-Chain Hardening** - Rust-owned high-frequency interaction sessions, delta-driven invalidation, template report navigation, and UI correction before mobile/server work
 - [ ] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
 - [ ] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
 
@@ -813,10 +814,53 @@ Plans:
 
 - [x] 17-09-PLAN.md - Add desktop template import entry, report panel, and product E2E
 
+### Phase 17.1: Interaction Session And Template Import Main-Chain Hardening (INSERTED)
+
+**Goal:** Add a Rust-owned high-frequency interaction-session path and harden template-import/report integration so preview canvas, timeline, inspector, playhead, keyframe, and template report interactions are live, coalesced, previewable, undo-safe, and command-only.
+**Requirements**: UI-04, UI-10, UI-11, UI-12, TEST-E2E-01, TEST-E2E-02, NO-FALLBACK-01, NO-FALLBACK-02, P0-GPU-02, P0-GPU-03, P0-GPU-04, P0-GPU-05, P0-EDIT-01, P0-UI-04, P0-UI-05, P0-UI-06, SCHED-01, SCHED-02, SCHED-04, ANIM-03, PRODFX-02, PRODFX-04, PRODFX-05, COMP-01, COMP-02
+**Depends on:** Phase 17
+**Success Criteria** (what must be TRUE):
+
+  1. Template import returns the same mutation response contract as timeline commands, including events and `CommandDelta`; renderer preview invalidation follows Rust delta facts instead of TypeScript intent-name switches.
+  2. Rust owns `ProjectInteractionSession` lifecycle, base revision, sequence acceptance, provisional state, stale rejection, cancel, and commit for draft-mutating high-frequency interactions.
+  3. Preview canvas transform, timeline move/trim/cross-track, inspector visual/text/audio sliders, keyframe editing, and playhead scrub are live and coalesced without saving, incrementing revision, or pushing undo during updates.
+  4. Commit applies exactly one canonical draft mutation, one revision increment, one project save/autosave decision, and one undo item.
+  5. Template adaptation report rows navigate/focus/seek through product navigation paths without exposing raw provider payloads or faking unsupported draft targets.
+  6. Product UI corrections normalize inspector units, make preview/timeline handles discoverable and usable, hide or gate unsupported visible controls, and pass screenshot-backed regression at 1280x800 and 1120x720.
+  7. Source guards and product E2E reject DOM-only ghost preview, fallback/mock/artifact success, repeated canonical command loops for high-frequency samples, stale frame presentation, and unsupported visible controls.
+
+**Plans:** 6 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 17.1-01-PLAN.md - Harden template import response and delta-driven preview invalidation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 17.1-02-PLAN.md - Add Rust ProjectInteractionSession state machine and desktop IPC
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 17.1-03-PLAN.md - Wire preview canvas and inspector high-frequency interactions
+
+**Wave 4** *(blocked on Wave 2 completion)*
+
+- [ ] 17.1-04-PLAN.md - Wire timeline, playhead scrub, and keyframe interactions
+
+**Wave 5** *(blocked on Waves 1 and 4 completion)*
+
+- [ ] 17.1-05-PLAN.md - Add template report navigation and UI surface corrections
+
+**Wave 6** *(blocked on Waves 3, 4, and 5 completion)*
+
+- [ ] 17.1-06-PLAN.md - Add aggregate source guards, E2E, performance gates, and validation
+
 ### Phase 18: Mobile/Server Binding Architecture And Runtime Ports
 
 **Goal**: Turn the desktop-first Rust core into a portable runtime surface with explicit Node-API, C ABI, future JNI/Swift contracts, server entrypoints, and reference-counted opaque handle lifetimes.
-**Depends on**: Phase 17
+**Depends on**: Phase 17.1
 **Requirements**: PLAT-01, PLAT-02, PLAT-03, BIND-01, BIND-02, BIND-03, BIND-04, BIND-05
 **Success Criteria** (what must be TRUE):
 
@@ -831,7 +875,7 @@ Plans:
 
 Plans:
 
-- [ ] TBD - Plan after Phase 17 completion
+- [ ] TBD - Plan after Phase 17.1 completion
 
 ### Phase 19: Production Effects, Retiming, And Transition Semantics
 

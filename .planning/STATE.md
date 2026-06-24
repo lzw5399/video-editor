@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 17
-status: completed
-stopped_at: Completed 17-09-PLAN.md
-last_updated: "2026-06-24T11:16:29.701Z"
+current_phase: 17.1
+status: executing
+stopped_at: Planned 17.1-06-PLAN.md
+last_updated: "2026-06-24T14:12:12.221Z"
 last_activity: 2026-06-24
-last_activity_desc: Phase 17 template import UI audit follow-up completed
+last_activity_desc: Phase 17.1 high-frequency interaction plans created
 progress:
-  total_phases: 24
+  total_phases: 25
   completed_phases: 22
-  total_plans: 159
+  total_plans: 165
   completed_plans: 159
-  percent: 92
-current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
+  percent: 88
+current_phase_name: interaction-session-and-template-import-main-chain-hardening
 ---
 
 # Project State
@@ -24,16 +24,16 @@ current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 17 — template-import-core-and-kaipai-offline-adapter-foundation
+**Current focus:** Phase 17.1 — interaction-session-and-template-import-main-chain-hardening
 
 ## Current Position
 
-Phase: 17 — COMPLETE
-Plan: 10 of 10
-Status: Phase 17 complete
-Last activity: 2026-06-24 — Phase 17 template import UI audit follow-up completed
+Phase: 17.1 — READY TO EXECUTE
+Plan: 0 of 6
+Status: Ready to execute
+Last activity: 2026-06-24 — Phase 17.1 high-frequency interaction plans created
 
-Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-neutral template import plus a Kaipai offline adapter foundation, with former Phase 17/18 shifted to Phase 18/19.
+Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks Phase 18 and hardens high-frequency interaction sessions plus template-import main-chain integration before mobile/server binding work.
 
 ## Performance Metrics
 
@@ -278,6 +278,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 - Phase 04.1 inserted after Phase 4 as urgent UI refinement before Phase 5. The phase upgrades the existing Jianying-style MVP workspace toward a higher-density Jianying Pro-like desktop workstation shell while preserving original assets, Simplified Chinese copy, and command-only Rust integration.
 - Phases 7-10 remain active completed post-MVP core editing capability expansion work: project canvas space, segment transform/compositing, complete text, and typed keyframes. Former future Phases 11-13 are archived outside active GSD until restored.
 - Phase 17 inserted after Phase 16: Template import core and Kaipai offline adapter foundation; former Phase 17/18 shifted to Phase 18/19; keep provider-neutral template/rendering capabilities separate from the external Kaipai adapter. (URGENT)
+- Phase 17.1 inserted after Phase 17: Interaction Session And Template Import Main-Chain Hardening (URGENT)
 
 ### Decisions
 
