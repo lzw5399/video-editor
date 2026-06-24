@@ -43,6 +43,47 @@ fail_matches() {
   fi
 }
 
+worker_spawn_bypass_matches() {
+  local line file line_number rest block
+  rg -n --with-filename --pcre2 '\bthread::(?:Builder::new|spawn)\s*\(' "$@" 2>/dev/null | while IFS=: read -r file line_number rest; do
+    block="$(sed -n "${line_number},$((line_number + 8))p" "$file")"
+    if printf '%s\n' "$block" | rg -q 'task-runtime-(preview-driver|audio-driver|export-driver|export-validation|artifact-driver|media-probe)'; then
+      continue
+    fi
+    printf '%s:%s:%s\n' "$file" "$line_number" "$rest"
+  done
+}
+
+fail_worker_spawn_bypasses() {
+  local message="$1"
+  shift
+  local matches
+  matches="$(worker_spawn_bypass_matches "$@" || true)"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "$message"
+  fi
+}
+
+assert_worker_spawn_guard_rejects() {
+  local tmp_dir matches
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '%s\n' 'thread::Builder::new().name("legacy-preview-worker".to_owned()).spawn(move || {})' >"$tmp_dir/LegacyWorker.rs"
+  matches="$(worker_spawn_bypass_matches "$tmp_dir" || true)"
+  if [ -z "$matches" ]; then
+    fail "worker-spawn guard did not catch injected binding-owned worker"
+  fi
+  printf '%s\n' 'thread::Builder::new().name("task-runtime-preview-driver-test".to_owned()).spawn(move || {})' >"$tmp_dir/AllowedDriver.rs"
+  matches="$(worker_spawn_bypass_matches "$tmp_dir/AllowedDriver.rs" || true)"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "worker-spawn guard rejected allowed task-runtime driver"
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
 assert_pattern_rejects() {
   local description="$1"
   local pattern="$2"
@@ -78,6 +119,7 @@ assert_pattern_rejects \
   "product scheduler stress mock success" \
   "$PRODUCT_MOCK_SUCCESS_PATTERN" \
   "const env = { VIDEO_EDITOR_TEST_MOCK_EXPORT_COMMANDS: \"1\" };"
+assert_worker_spawn_guard_rejects
 
 require_file "crates/task_runtime/src/lib.rs"
 require_file "crates/task_runtime/src/freshness.rs"
@@ -132,9 +174,8 @@ fail_matches \
   '\b(?:audio-preview-refill|AUDIO_PREVIEW_REFILL_POLL_INTERVAL|run_audio_refill_loop)\b' \
   "$BINDINGS_DIR/audio_service.rs"
 
-fail_matches \
+fail_worker_spawn_bypasses \
   "bindings must not spawn worker threads outside the Rust task runtime scheduler boundary" \
-  '\bthread::Builder::new\s*\(' \
   "$BINDINGS_DIR"
 
 fail_matches \
@@ -178,6 +219,8 @@ if [ -f "$PRODUCT_SCHEDULER_STRESS_SPEC" ]; then
   require_fixed "$PRODUCT_SCHEDULER_STRESS_SPEC" "queueLatencyUs"
   require_fixed "$PRODUCT_SCHEDULER_STRESS_SPEC" "resourceSaturationCount"
   require_fixed "$PRODUCT_SCHEDULER_STRESS_SPEC" "fallbackActive"
+  require_fixed "$PRODUCT_SCHEDULER_STRESS_SPEC" "visibleCenterHash"
+  require_fixed "$PRODUCT_SCHEDULER_STRESS_SPEC" 'VIDEO_EDITOR_TEST_MOCK_RUNTIME_CAPABILITIES: "0"'
 fi
 
 require_fixed "scripts/no-product-fallback-guards.sh" "scheduler stress success"
