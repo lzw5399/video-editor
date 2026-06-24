@@ -2,7 +2,7 @@ use draft_import::adaptation_report::{
     AdaptationCategory, AdaptationReportItem, AdaptationReportSummary, AdaptationSeverity,
     AdaptationStatus, AdaptationTargetKind, AdaptationTargetRef, ExternalProvenanceRef,
 };
-use serde_json::{Value, json};
+use serde_json::json;
 
 #[test]
 fn adaptation_report_summary_counts_every_status() {
@@ -18,7 +18,7 @@ fn adaptation_report_summary_counts_every_status() {
 }
 
 #[test]
-fn adaptation_statuses_serialize_with_public_camel_case_names() {
+fn adaptation_report_statuses_serialize_with_public_camel_case_names() {
     let cases = [
         (AdaptationStatus::Supported, "supported"),
         (AdaptationStatus::Approximated, "approximated"),
@@ -33,7 +33,7 @@ fn adaptation_statuses_serialize_with_public_camel_case_names() {
 }
 
 #[test]
-fn report_categories_cover_product_facing_import_concepts() {
+fn adaptation_report_categories_cover_product_facing_import_concepts() {
     let categories = [
         (AdaptationCategory::SourceMedia, "sourceMedia"),
         (AdaptationCategory::Canvas, "canvas"),
@@ -56,7 +56,7 @@ fn report_categories_cover_product_facing_import_concepts() {
 }
 
 #[test]
-fn provenance_preserves_external_references_without_canonical_render_fields() {
+fn adaptation_report_provenance_preserves_external_references_without_canonical_render_fields() {
     let item = AdaptationReportItem {
         status: AdaptationStatus::Approximated,
         severity: AdaptationSeverity::Warning,
