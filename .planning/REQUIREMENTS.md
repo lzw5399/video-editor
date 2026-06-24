@@ -87,7 +87,7 @@
 - [ ] **TEST-E2E-01**: Every default visible editing feature added or changed after Phase 15.1 has Playwright/Electron coverage that performs the real user workflow and verifies visible preview, timeline state, saved draft, or exported media evidence.
 - [ ] **TEST-E2E-02**: Repository-owned media fixtures cover the main product workflow matrix: video, image, audio, text, timeline edit, playback, save/reopen, and export.
 - [x] **NO-FALLBACK-01**: Product-facing success states cannot be satisfied by fallback, mock, artifact, first-frame, DOM overlay, decoded CPU probe, or legacy/native player evidence that bypasses the claimed production implementation.
-- [ ] **NO-FALLBACK-02**: Refactors remove or gate obsolete legacy implementations from normal product flows instead of preserving them as compatibility or fallback paths.
+- [x] **NO-FALLBACK-02**: Refactors remove or gate obsolete legacy implementations from normal product flows instead of preserving them as compatibility or fallback paths.
 
 ## v2 Requirements
 
