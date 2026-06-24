@@ -2,9 +2,9 @@ mod common;
 
 use draft_model::{
     Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MaterialKind,
-    Microseconds, RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop,
-    SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
-    TargetTimerange,
+    Microseconds, RationalFrameRate, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
+    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
+    SegmentScale, TargetTimerange,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, compile_ffmpeg_job};
@@ -50,6 +50,56 @@ fn transform_snapshot_compiles_crop_scale_opacity_and_normalized_position() {
             "[a0][a1]amix=inputs=2:duration=longest:normalize=0[aout]",
         ]
         .join(";\n")
+    );
+}
+
+#[test]
+fn transform_snapshot_compiles_static_center_anchor_rotation_and_preserves_layer_order() {
+    let mut draft = common::compiler_draft();
+    let overlay = &mut draft.tracks[1].segments[0];
+    overlay.visual.transform.position = SegmentPosition { x: -250, y: 125 };
+    overlay.visual.transform.anchor = SegmentAnchor::center();
+    overlay.visual.transform.scale = SegmentScale {
+        x_millis: 500,
+        y_millis: 500,
+    };
+    overlay.visual.transform.rotation = SegmentRotation { degrees: 90 };
+    overlay.visual.transform.opacity = SegmentOpacity { value_millis: 875 };
+
+    let job = compile_ffmpeg_job(&export_plan_from_draft(draft), &compile_context())
+        .expect("static center-anchor rotation export job should compile");
+
+    assert!(
+        job.visual_diagnostics.iter().all(|diagnostic| {
+            diagnostic.property != "rotation"
+                || diagnostic.support != RenderIntentSupport::Unsupported
+        }),
+        "static rotation must not be classified as unsupported: {:?}",
+        job.visual_diagnostics
+    );
+    assert!(
+        job.filter_script.contains("rotate="),
+        "static rotation should be represented in the generic export filtergraph:\n{}",
+        job.filter_script
+    );
+    assert!(
+        job.filter_script.contains("ow=rotw") && job.filter_script.contains("oh=roth"),
+        "center-anchor rotation should expand the rotated layer bounds before placement:\n{}",
+        job.filter_script
+    );
+
+    let base_overlay = job
+        .filter_script
+        .find("[vbase0][v0]overlay")
+        .expect("base video should be composed first");
+    let rotated_overlay = job
+        .filter_script
+        .find("[vbase1][v1]overlay")
+        .expect("rotated overlay should be composed after the base video");
+    assert!(
+        base_overlay < rotated_overlay,
+        "visual layers should preserve graph stack order after rotation:\n{}",
+        job.filter_script
     );
 }
 

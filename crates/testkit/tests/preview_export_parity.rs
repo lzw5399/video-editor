@@ -6,10 +6,10 @@ use std::time::Duration;
 use draft_model::{
     CanvasAdaptationPolicy, CanvasAspectRatio, CanvasBackground, CommandDelta, CommandDeltaName,
     DirtyDomain, DirtyRange, DirtyRangeSource, Draft, DraftCanvasConfig, InvalidationScope,
-    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentOpacity,
-    SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion,
-    TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track,
-    TrackKind,
+    Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentFitMode,
+    SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SourceTimerange,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, FfmpegCompileErrorKind, compile_ffmpeg_job};
@@ -146,6 +146,106 @@ fn preview_export_parity_matches_shared_render_path_for_video_audio_text() -> Re
     );
     assert_eq!(comparison.width, WIDTH);
     assert_eq!(comparison.height, HEIGHT);
+
+    Ok(())
+}
+
+#[test]
+fn preview_export_parity_static_rotation_samples_visual_layer_order() -> RenderCompareResult<()> {
+    let runtime = discover_runtime_config()
+        .map_err(|error| RenderCompareError::Runtime(format!("{error}: {}", error.remediation)))?;
+    let executor = DesktopFfmpegExecutor::with_timeout(Duration::from_secs(20));
+    let capabilities = probe_phase5_render_capabilities(&executor, &runtime)?;
+    let sandbox = tempfile::tempdir()?;
+    let video_path = sandbox.path().join("rotation-base.mp4");
+    let rotated_overlay_path = sandbox.path().join("rotation-overlay.ppm");
+    let top_overlay_path = sandbox.path().join("top-overlay.ppm");
+    generate_golden_video(&executor, &runtime, &video_path)?;
+    write_split_ppm(&rotated_overlay_path, 40, 20)?;
+    write_solid_ppm(&top_overlay_path, 12, 12, [255, 230, 0])?;
+
+    let draft = rotation_parity_draft(&video_path, &rotated_overlay_path, &top_overlay_path);
+    let preview_cache = sandbox.path().join("rotation-preview-cache");
+    let mut preview_config = PreviewServiceConfig::new(&preview_cache, &runtime.ffmpeg.path)
+        .with_compiler_capabilities(capabilities.clone());
+    preview_config.preview_frame_max_dimensions = OutputDimensions::new(WIDTH, HEIGHT);
+
+    let preview = request_preview_frame(
+        &executor,
+        &preview_config,
+        &PreviewFrameRequest {
+            draft: draft.clone(),
+            target_time: Microseconds::new(TARGET_TIME),
+        },
+    )
+    .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+
+    let export_path = sandbox.path().join("exports/rotation-export.mp4");
+    let export_job = compile_export_job(&draft, &capabilities, &export_path)?;
+    write_sidecars(&export_job)?;
+    let runtime_job = FfmpegRuntimeJob::new(
+        "phase17-static-rotation-parity-export",
+        runtime.ffmpeg.path.clone(),
+        export_job.args.clone(),
+        &export_path,
+    )
+    .with_expected_duration_microseconds(EXPORT_DURATION)
+    .with_timeout(Duration::from_secs(20));
+    let export_result = run_export_job(&runtime_job, &CancelToken::new(), |_| {})
+        .map_err(|error| RenderCompareError::Runtime(error.to_string()))?;
+    if export_result.state != FfmpegJobState::Completed {
+        return Err(RenderCompareError::Assertion(format!(
+            "expected rotation export job to complete, got {:?}",
+            export_result.state
+        )));
+    }
+
+    let preview_frame = extract_rgb_frame_at(
+        &executor,
+        &runtime,
+        &preview.artifact.path,
+        0,
+        0,
+        WIDTH,
+        HEIGHT,
+    )?;
+    let export_frame =
+        extract_rgb_frame_at(&executor, &runtime, &export_path, 0, 0, WIDTH, HEIGHT)?;
+    compare_rgb_frames(&preview_frame, &export_frame, PixelTolerance::phase5())?;
+
+    assert_color_dominant(
+        &preview_frame,
+        64,
+        45,
+        DominantColor::Green,
+        "preview should show the center-anchored 180 degree rotation on the overlay left side",
+    )?;
+    assert_color_dominant(
+        &export_frame,
+        64,
+        45,
+        DominantColor::Green,
+        "export should show the center-anchored 180 degree rotation on the overlay left side",
+    )?;
+    assert_color_dominant(
+        &export_frame,
+        96,
+        45,
+        DominantColor::Red,
+        "export should show the rotated overlay right side after center-anchor rotation",
+    )?;
+    assert_color_dominant(
+        &export_frame,
+        80,
+        45,
+        DominantColor::Yellow,
+        "top overlay should remain above the rotated overlay at the shared center",
+    )?;
+    assert!(
+        preview.ffmpeg_job.filter_script.contains("rotate=")
+            && export_job.filter_script.contains("rotate="),
+        "preview/export compiler paths should both include static rotation filters"
+    );
 
     Ok(())
 }
@@ -900,6 +1000,61 @@ fn golden_draft(video_path: &Path, audio_path: &Path) -> Draft {
     )
 }
 
+fn rotation_parity_draft(
+    video_path: &Path,
+    rotated_overlay_path: &Path,
+    top_overlay_path: &Path,
+) -> Draft {
+    let mut draft = Draft::new("draft-phase17-rotation-parity", "Phase 17 Rotation Parity");
+    draft.canvas_config = DraftCanvasConfig {
+        aspect_ratio: CanvasAspectRatio::custom(WIDTH, HEIGHT),
+        width: WIDTH,
+        height: HEIGHT,
+        frame_rate: RationalFrameRate::new(FPS, 1),
+        background: CanvasBackground::Black,
+        adaptation_policy: CanvasAdaptationPolicy::Auto,
+    };
+    draft.materials = vec![
+        video_material(video_path),
+        image_material_with_size("rotated-overlay-material", rotated_overlay_path, 40, 20),
+        image_material_with_size("top-overlay-material", top_overlay_path, 12, 12),
+    ];
+
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    video_track
+        .segments
+        .push(segment("video-a", "video-material", 0, 0, 1_000_000));
+
+    let mut rotated_overlay_track = Track::new("rotated-overlay-track", TrackKind::Video, "叠加");
+    let mut rotated_overlay = segment(
+        "rotated-overlay-a",
+        "rotated-overlay-material",
+        0,
+        0,
+        1_000_000,
+    );
+    rotated_overlay.visual.fit_mode = SegmentFitMode::Fit;
+    rotated_overlay.visual.transform.scale = SegmentScale {
+        x_millis: 250,
+        y_millis: 250,
+    };
+    rotated_overlay.visual.transform.position = SegmentPosition { x: 0, y: 0 };
+    rotated_overlay.visual.transform.rotation = SegmentRotation { degrees: 180 };
+    rotated_overlay_track.segments.push(rotated_overlay);
+
+    let mut top_overlay_track = Track::new("top-overlay-track", TrackKind::Video, "上层叠加");
+    let mut top_overlay = segment("top-overlay-a", "top-overlay-material", 0, 0, 1_000_000);
+    top_overlay.visual.fit_mode = SegmentFitMode::Fit;
+    top_overlay.visual.transform.scale = SegmentScale {
+        x_millis: 133,
+        y_millis: 133,
+    };
+    top_overlay_track.segments.push(top_overlay);
+
+    draft.tracks = vec![video_track, rotated_overlay_track, top_overlay_track];
+    draft
+}
+
 fn subtitle_parity_draft(video_path: &Path, audio_path: &Path, include_subtitles: bool) -> Draft {
     let mut draft = Draft::new("draft-phase5-srt-parity", "Phase 5 SRT Parity");
     draft.canvas_config = DraftCanvasConfig {
@@ -1076,6 +1231,20 @@ fn audio_material_with_duration(path: &Path, duration: u64) -> Material {
     material
 }
 
+fn image_material_with_size(material_id: &str, path: &Path, width: u32, height: u32) -> Material {
+    let mut material = Material::new(
+        material_id,
+        MaterialKind::Image,
+        file_uri(path),
+        material_id,
+    );
+    material.metadata.duration = Some(Microseconds::new(1_000_000));
+    material.metadata.width = Some(width);
+    material.metadata.height = Some(height);
+    material.metadata.has_video = true;
+    material
+}
+
 fn text_material() -> Material {
     text_material_with_id("text-material", "标题文字")
 }
@@ -1158,6 +1327,71 @@ fn segment(
         SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
         TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
     )
+}
+
+fn write_split_ppm(path: &Path, width: u32, height: u32) -> RenderCompareResult<()> {
+    let mut bytes = format!("P6\n{width} {height}\n255\n").into_bytes();
+    for _y in 0..height {
+        for x in 0..width {
+            if x < width / 2 {
+                bytes.extend_from_slice(&[255, 0, 0]);
+            } else {
+                bytes.extend_from_slice(&[0, 255, 0]);
+            }
+        }
+    }
+    fs::write(path, bytes)?;
+    Ok(())
+}
+
+fn write_solid_ppm(path: &Path, width: u32, height: u32, rgb: [u8; 3]) -> RenderCompareResult<()> {
+    let mut bytes = format!("P6\n{width} {height}\n255\n").into_bytes();
+    for _ in 0..width.saturating_mul(height) {
+        bytes.extend_from_slice(&rgb);
+    }
+    fs::write(path, bytes)?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum DominantColor {
+    Red,
+    Green,
+    Yellow,
+}
+
+fn assert_color_dominant(
+    frame: &ComparableFrame,
+    x: u32,
+    y: u32,
+    expected: DominantColor,
+    message: &str,
+) -> RenderCompareResult<()> {
+    if x >= frame.metadata.width || y >= frame.metadata.height {
+        return Err(RenderCompareError::Assertion(format!(
+            "{message}: sample ({x},{y}) outside frame {}x{}",
+            frame.metadata.width, frame.metadata.height
+        )));
+    }
+    let index = ((y as usize * frame.metadata.width as usize + x as usize) * 3)
+        .min(frame.rgb24.len().saturating_sub(3));
+    let rgb = [
+        frame.rgb24[index],
+        frame.rgb24[index + 1],
+        frame.rgb24[index + 2],
+    ];
+    let pass = match expected {
+        DominantColor::Red => rgb[0] > 150 && rgb[1] < 110 && rgb[2] < 110,
+        DominantColor::Green => rgb[1] > 150 && rgb[0] < 120 && rgb[2] < 120,
+        DominantColor::Yellow => rgb[0] > 150 && rgb[1] > 140 && rgb[2] < 120,
+    };
+    if !pass {
+        return Err(RenderCompareError::Assertion(format!(
+            "{message}: expected {:?}, got rgb({},{},{}) at ({x},{y})",
+            expected, rgb[0], rgb[1], rgb[2]
+        )));
+    }
+    Ok(())
 }
 
 fn file_uri(path: &Path) -> String {
