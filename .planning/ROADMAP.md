@@ -782,16 +782,35 @@ Plans:
 **Plans:** 10 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 17-01-PLAN.md - Create Wave 0 provider-neutral report contracts and source guards
 - [ ] 17-02-PLAN.md - Localize offline template resources into `.veproj/resources`
-- [ ] 17-03-PLAN.md - Define and validate provider-neutral DraftImportPlan
 - [ ] 17-04-PLAN.md - Add current-main offline Kaipai bundle contract and sanitized fixtures
-- [ ] 17-05-PLAN.md - Add Kaipai mapper fixture and AdaptationReport snapshot setup
-- [ ] 17-10-PLAN.md - Implement Kaipai fixture mapper to DraftImportPlan and AdaptationReport
-- [ ] 17-06-PLAN.md - Apply imported plans atomically through project-session API
 - [ ] 17-07-PLAN.md - Close generic static rotation export parity
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 17-03-PLAN.md - Define and validate provider-neutral DraftImportPlan
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 17-05-PLAN.md - Add Kaipai mapper fixture and AdaptationReport snapshot setup
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 17-10-PLAN.md - Implement Kaipai fixture mapper to DraftImportPlan and AdaptationReport
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 17-06-PLAN.md - Apply imported plans atomically through project-session API
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 17-08-PLAN.md - Prove imported fixtures through preview/export and aggregate gates
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 17-09-PLAN.md - Add desktop template import entry, report panel, and product E2E
 
 ### Phase 18: Mobile/Server Binding Architecture And Runtime Ports
