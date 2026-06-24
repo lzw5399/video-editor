@@ -205,6 +205,26 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     project_session_service::execute_project_intent(request)
 }
 
+#[napi(js_name = "beginProjectInteraction")]
+pub fn begin_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::begin_project_interaction(request)
+}
+
+#[napi(js_name = "updateProjectInteraction")]
+pub fn update_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::update_project_interaction(request)
+}
+
+#[napi(js_name = "commitProjectInteraction")]
+pub fn commit_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::commit_project_interaction(request)
+}
+
+#[napi(js_name = "cancelProjectInteraction")]
+pub fn cancel_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::cancel_project_interaction(request)
+}
+
 #[napi(js_name = "importKaipaiFormulaBundle")]
 pub fn import_kaipai_formula_bundle(request: serde_json::Value) -> Result<serde_json::Value> {
     project_session_service::import_kaipai_formula_bundle(request)

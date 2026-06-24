@@ -18,16 +18,17 @@ use draft_model::{
     EditTextSegmentCommandPayload, ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing,
     KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId,
     MaterialKind, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MoveSegmentCommandPayload, RationalFrameRate, RemoveSegmentKeyframeCommandPayload,
-    RenameTrackCommandPayload, Segment, SegmentAudio, SegmentBackgroundFilling, SegmentFitMode,
-    SegmentId, SegmentPosition, SegmentVisual, SegmentVolume, SelectTimelineSegmentsCommandPayload,
-    SetSegmentKeyframeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
-    SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
-    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBackground,
-    TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
-    TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    MoveSegmentCommandPayload, ProjectInteractionKind, ProjectInteractionSequenceError,
+    ProjectInteractionSession as DraftProjectInteractionSession, RationalFrameRate,
+    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
+    SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentPosition, SegmentVisual,
+    SegmentVolume, SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
+    SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload, SetTrackMuteCommandPayload,
+    SetTrackVisibilityCommandPayload, SourceTimerange, SplitSelectedSegmentIntentCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
+    TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind, TrimSegmentCommandPayload,
+    TrimSegmentDirection, UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
     UpdateSegmentVisualCommandPayload,
 };
 use media_runtime::{discover_runtime_config, run_scheduled_material_probe};
@@ -116,6 +117,40 @@ struct ExecuteProjectIntentRequest {
     session_id: String,
     expected_revision: u64,
     intent: ProjectIntent,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BeginProjectInteractionRequest {
+    session_id: String,
+    expected_revision: u64,
+    kind: ProjectInteractionKind,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UpdateProjectInteractionRequest {
+    session_id: String,
+    expected_revision: u64,
+    interaction_id: String,
+    sequence: u64,
+    payload: ProjectInteractionPayload,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CommitProjectInteractionRequest {
+    session_id: String,
+    expected_revision: u64,
+    interaction_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CancelProjectInteractionRequest {
+    session_id: String,
+    expected_revision: u64,
+    interaction_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -243,6 +278,76 @@ enum ProjectIntent {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+enum ProjectInteractionPayload {
+    SelectedSegmentVisual {
+        patch: SegmentVisualPatch,
+    },
+    SelectedText {
+        patch: TextSegmentPatch,
+    },
+    SelectedSegmentAudio {
+        #[serde(default, rename = "gainMillis")]
+        gain_millis: Option<u32>,
+        #[serde(default, rename = "panBalanceMillis")]
+        pan_balance_millis: Option<AudioPanBalance>,
+        #[serde(default, rename = "fadeInDuration")]
+        fade_in_duration: Option<AudioFade>,
+        #[serde(default, rename = "fadeOutDuration")]
+        fade_out_duration: Option<AudioFade>,
+        #[serde(default, rename = "effectSlots")]
+        effect_slots: Option<Vec<AudioEffectSlot>>,
+    },
+    PlayheadScrub {
+        playhead: Microseconds,
+    },
+}
+
+impl ProjectInteractionPayload {
+    fn interaction_kind(&self) -> ProjectInteractionKind {
+        match self {
+            ProjectInteractionPayload::SelectedSegmentVisual { .. } => {
+                ProjectInteractionKind::SelectedSegmentVisual
+            }
+            ProjectInteractionPayload::SelectedText { .. } => ProjectInteractionKind::SelectedText,
+            ProjectInteractionPayload::SelectedSegmentAudio { .. } => {
+                ProjectInteractionKind::SelectedSegmentAudio
+            }
+            ProjectInteractionPayload::PlayheadScrub { .. } => {
+                ProjectInteractionKind::PlayheadScrub
+            }
+        }
+    }
+
+    fn into_project_intent(self) -> ProjectIntent {
+        match self {
+            ProjectInteractionPayload::SelectedSegmentVisual { patch } => {
+                ProjectIntent::UpdateSelectedSegmentVisual { patch }
+            }
+            ProjectInteractionPayload::SelectedText { patch } => {
+                ProjectIntent::EditSelectedText { patch }
+            }
+            ProjectInteractionPayload::SelectedSegmentAudio {
+                gain_millis,
+                pan_balance_millis,
+                fade_in_duration,
+                fade_out_duration,
+                effect_slots,
+            } => ProjectIntent::UpdateSelectedSegmentAudio {
+                gain_millis,
+                pan_balance_millis,
+                fade_in_duration,
+                fade_out_duration,
+                effect_slots,
+            },
+            ProjectInteractionPayload::PlayheadScrub { playhead } => {
+                ProjectIntent::SetSessionPlayhead { playhead }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TextSegmentPatch {
     #[serde(default)]
@@ -356,6 +461,81 @@ struct ProjectSessionIntentResponse {
     view_model: ProjectSessionViewModel,
     events: Vec<draft_model::CommandEvent>,
     delta: draft_model::CommandDelta,
+    bundle_path: String,
+    project_json_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectInteractionBeginResponse {
+    session_id: String,
+    interaction_id: String,
+    kind: ProjectInteractionKind,
+    base_revision: u64,
+    revision: u64,
+    generation: u64,
+    accepted_sequence: u64,
+    coalesced_through: u64,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
+    bundle_path: String,
+    project_json_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectInteractionUpdateResponse {
+    session_id: String,
+    interaction_id: String,
+    kind: ProjectInteractionKind,
+    base_revision: u64,
+    revision: u64,
+    generation: u64,
+    accepted_sequence: u64,
+    coalesced_through: u64,
+    revision_unchanged: bool,
+    #[serde(rename = "provisionalViewModel")]
+    provisional_view_model: ProjectSessionViewModel,
+    #[serde(rename = "provisionalDelta")]
+    provisional_delta: CommandDelta,
+    bundle_path: String,
+    project_json_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectInteractionCommitResponse {
+    session_id: String,
+    interaction_id: String,
+    kind: ProjectInteractionKind,
+    base_revision: u64,
+    revision: u64,
+    generation: u64,
+    accepted_sequence: u64,
+    coalesced_through: u64,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
+    events: Vec<draft_model::CommandEvent>,
+    delta: draft_model::CommandDelta,
+    bundle_path: String,
+    project_json_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectInteractionCancelResponse {
+    session_id: String,
+    interaction_id: String,
+    kind: ProjectInteractionKind,
+    base_revision: u64,
+    revision: u64,
+    generation: u64,
+    accepted_sequence: u64,
+    coalesced_through: u64,
+    revision_unchanged: bool,
+    canceled: bool,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
     bundle_path: String,
     project_json_path: String,
 }
@@ -629,6 +809,17 @@ struct ProjectSession {
     command_state: CommandState,
     selection: TimelineSelection,
     playhead: Microseconds,
+    active_interactions: HashMap<String, ActiveProjectInteraction>,
+    next_interaction_id: u64,
+    next_interaction_generation: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveProjectInteraction {
+    session: DraftProjectInteractionSession,
+    latest_payload: Option<ProjectInteractionPayload>,
+    provisional_view_model: Option<ProjectSessionViewModel>,
+    provisional_delta: Option<CommandDelta>,
 }
 
 #[derive(Debug, Clone)]
@@ -708,6 +899,66 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     };
 
     with_project_session_registry(|registry| registry.execute_intent(request))
+}
+
+pub fn begin_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<BeginProjectInteractionRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid beginProjectInteraction payload: {error}"),
+                Some("beginProjectInteraction".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.begin_interaction(request))
+}
+
+pub fn update_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<UpdateProjectInteractionRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid updateProjectInteraction payload: {error}"),
+                Some("updateProjectInteraction".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.update_interaction(request))
+}
+
+pub fn commit_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<CommitProjectInteractionRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid commitProjectInteraction payload: {error}"),
+                Some("commitProjectInteraction".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.commit_interaction(request))
+}
+
+pub fn cancel_project_interaction(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<CancelProjectInteractionRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid cancelProjectInteraction payload: {error}"),
+                Some("cancelProjectInteraction".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.cancel_interaction(request))
 }
 
 pub fn import_kaipai_formula_bundle(request: serde_json::Value) -> Result<serde_json::Value> {
@@ -1078,6 +1329,7 @@ fn complete_material_probe_job(
     session.draft = saved.draft;
     session.bundle_path = saved.bundle_path;
     session.project_json_path = saved.project_json_path;
+    session.active_interactions.clear();
     true
 }
 
@@ -1168,6 +1420,9 @@ impl ProjectSessionRegistry {
             command_state: CommandState::empty(),
             selection: TimelineSelection::empty(),
             playhead: Microseconds::new(0),
+            active_interactions: HashMap::new(),
+            next_interaction_id: 0,
+            next_interaction_generation: 0,
         };
         self.sessions.insert(session_id.clone(), session);
 
@@ -1216,6 +1471,9 @@ impl ProjectSessionRegistry {
             command_state: CommandState::empty(),
             selection: TimelineSelection::empty(),
             playhead: Microseconds::new(0),
+            active_interactions: HashMap::new(),
+            next_interaction_id: 0,
+            next_interaction_generation: 0,
         };
         self.sessions.insert(session_id.clone(), session);
 
@@ -1365,6 +1623,250 @@ impl ProjectSessionRegistry {
         }
     }
 
+    fn begin_interaction(
+        &mut self,
+        request: BeginProjectInteractionRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get_mut(&request.session_id) else {
+            return project_interaction_error(
+                "beginProjectInteraction",
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+            );
+        };
+        if request.expected_revision != session.revision {
+            return stale_interaction_revision_error(
+                "beginProjectInteraction",
+                request.expected_revision,
+                session.revision,
+            );
+        }
+
+        let interaction_id = session.next_project_interaction_id();
+        let generation = session.next_project_interaction_generation();
+        let interaction = DraftProjectInteractionSession::new(
+            interaction_id.clone(),
+            request.kind,
+            session.revision,
+            generation,
+        );
+        let response = ProjectInteractionBeginResponse {
+            session_id: session.session_id.clone(),
+            interaction_id: interaction_id.clone(),
+            kind: request.kind,
+            base_revision: interaction.base_revision,
+            revision: session.revision,
+            generation: interaction.generation,
+            accepted_sequence: interaction.accepted_sequence,
+            coalesced_through: interaction.coalesced_through,
+            view_model: project_session_view_model(
+                &session.draft,
+                &session.command_state,
+                &session.selection,
+            ),
+            bundle_path: session.bundle_path.display().to_string(),
+            project_json_path: session.project_json_path.display().to_string(),
+        };
+        session.active_interactions.insert(
+            interaction_id,
+            ActiveProjectInteraction {
+                session: interaction,
+                latest_payload: None,
+                provisional_view_model: None,
+                provisional_delta: None,
+            },
+        );
+
+        crate::to_js_value(crate::ok_envelope(response))
+    }
+
+    fn update_interaction(
+        &mut self,
+        request: UpdateProjectInteractionRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get_mut(&request.session_id) else {
+            return project_interaction_error(
+                "updateProjectInteraction",
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+            );
+        };
+        if request.expected_revision != session.revision {
+            return stale_interaction_revision_error(
+                "updateProjectInteraction",
+                request.expected_revision,
+                session.revision,
+            );
+        }
+
+        let Some(active) = session.active_interactions.get(&request.interaction_id) else {
+            return missing_interaction_error("updateProjectInteraction", &request.interaction_id);
+        };
+        if let Some(error) = validate_interaction_revision(
+            "updateProjectInteraction",
+            request.expected_revision,
+            active.session.base_revision,
+        ) {
+            return error;
+        }
+        if let Some(error) = validate_interaction_kind(
+            "updateProjectInteraction",
+            active.session.kind,
+            request.payload.interaction_kind(),
+        ) {
+            return error;
+        }
+        let mut accepted = active.session.clone();
+        if let Some(error) =
+            accept_interaction_sequence("updateProjectInteraction", &mut accepted, request.sequence)
+        {
+            return error;
+        }
+
+        let (provisional_view_model, provisional_delta) =
+            match session.provisional_interaction_payload(&request.payload) {
+                Ok(response) => response,
+                Err(message) => {
+                    return project_interaction_error(
+                        "updateProjectInteraction",
+                        CommandErrorKind::InvalidTimelineEdit,
+                        message,
+                    );
+                }
+            };
+        let Some(active) = session.active_interactions.get_mut(&request.interaction_id) else {
+            return missing_interaction_error("updateProjectInteraction", &request.interaction_id);
+        };
+        active.session = accepted.clone();
+        active.latest_payload = Some(request.payload);
+        active.provisional_view_model = Some(provisional_view_model.clone());
+        active.provisional_delta = Some(provisional_delta.clone());
+
+        crate::to_js_value(crate::ok_envelope(ProjectInteractionUpdateResponse {
+            session_id: session.session_id.clone(),
+            interaction_id: accepted.interaction_id,
+            kind: accepted.kind,
+            base_revision: accepted.base_revision,
+            revision: session.revision,
+            generation: accepted.generation,
+            accepted_sequence: accepted.accepted_sequence,
+            coalesced_through: accepted.coalesced_through,
+            revision_unchanged: true,
+            provisional_view_model,
+            provisional_delta,
+            bundle_path: session.bundle_path.display().to_string(),
+            project_json_path: session.project_json_path.display().to_string(),
+        }))
+    }
+
+    fn commit_interaction(
+        &mut self,
+        request: CommitProjectInteractionRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get_mut(&request.session_id) else {
+            return project_interaction_error(
+                "commitProjectInteraction",
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+            );
+        };
+        if request.expected_revision != session.revision {
+            return stale_interaction_revision_error(
+                "commitProjectInteraction",
+                request.expected_revision,
+                session.revision,
+            );
+        }
+
+        let Some(active) = session.active_interactions.get(&request.interaction_id) else {
+            return missing_interaction_error("commitProjectInteraction", &request.interaction_id);
+        };
+        if let Some(error) = validate_interaction_revision(
+            "commitProjectInteraction",
+            request.expected_revision,
+            active.session.base_revision,
+        ) {
+            return error;
+        }
+        let interaction = active.session.clone();
+        let Some(payload) = active.latest_payload.clone() else {
+            return project_interaction_error(
+                "commitProjectInteraction",
+                CommandErrorKind::InvalidPayload,
+                format!(
+                    "Project interaction {} has no accepted update to commit",
+                    request.interaction_id
+                ),
+            );
+        };
+        if let Some(error) = validate_interaction_kind(
+            "commitProjectInteraction",
+            interaction.kind,
+            payload.interaction_kind(),
+        ) {
+            return error;
+        }
+
+        let response = session.commit_interaction_payload(payload, &interaction)?;
+        session.active_interactions.remove(&request.interaction_id);
+        Ok(response)
+    }
+
+    fn cancel_interaction(
+        &mut self,
+        request: CancelProjectInteractionRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get_mut(&request.session_id) else {
+            return project_interaction_error(
+                "cancelProjectInteraction",
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+            );
+        };
+        if request.expected_revision != session.revision {
+            return stale_interaction_revision_error(
+                "cancelProjectInteraction",
+                request.expected_revision,
+                session.revision,
+            );
+        }
+
+        let Some(active) = session.active_interactions.get(&request.interaction_id) else {
+            return missing_interaction_error("cancelProjectInteraction", &request.interaction_id);
+        };
+        if let Some(error) = validate_interaction_revision(
+            "cancelProjectInteraction",
+            request.expected_revision,
+            active.session.base_revision,
+        ) {
+            return error;
+        }
+        let active = session
+            .active_interactions
+            .remove(&request.interaction_id)
+            .expect("validated interaction should still be active");
+
+        crate::to_js_value(crate::ok_envelope(ProjectInteractionCancelResponse {
+            session_id: session.session_id.clone(),
+            interaction_id: active.session.interaction_id,
+            kind: active.session.kind,
+            base_revision: active.session.base_revision,
+            revision: session.revision,
+            generation: active.session.generation,
+            accepted_sequence: active.session.accepted_sequence,
+            coalesced_through: active.session.coalesced_through,
+            revision_unchanged: true,
+            canceled: true,
+            view_model: project_session_view_model(
+                &session.draft,
+                &session.command_state,
+                &session.selection,
+            ),
+            bundle_path: session.bundle_path.display().to_string(),
+            project_json_path: session.project_json_path.display().to_string(),
+        }))
+    }
+
     fn import_kaipai_formula_bundle(
         &mut self,
         request: ImportKaipaiFormulaBundleRequest,
@@ -1405,7 +1907,266 @@ impl ProjectSessionRegistry {
     }
 }
 
+fn project_interaction_error(
+    command: &str,
+    kind: CommandErrorKind,
+    message: String,
+) -> Result<serde_json::Value> {
+    crate::to_js_value(crate::error_envelope(
+        kind,
+        message,
+        Some(command.to_owned()),
+    ))
+}
+
+fn stale_interaction_revision_error(
+    command: &str,
+    expected_revision: u64,
+    current_revision: u64,
+) -> Result<serde_json::Value> {
+    project_interaction_error(
+        command,
+        CommandErrorKind::InvalidPayload,
+        format!(
+            "Stale project session revision: expected {}, current {}",
+            expected_revision, current_revision
+        ),
+    )
+}
+
+fn missing_interaction_error(command: &str, interaction_id: &str) -> Result<serde_json::Value> {
+    project_interaction_error(
+        command,
+        CommandErrorKind::InvalidPayload,
+        format!("Project interaction not found or no longer active: {interaction_id}"),
+    )
+}
+
+fn validate_interaction_revision(
+    command: &str,
+    expected_revision: u64,
+    base_revision: u64,
+) -> Option<Result<serde_json::Value>> {
+    if expected_revision == base_revision {
+        return None;
+    }
+    Some(project_interaction_error(
+        command,
+        CommandErrorKind::InvalidPayload,
+        format!(
+            "Stale project interaction base revision: expected {}, interaction base {}",
+            expected_revision, base_revision
+        ),
+    ))
+}
+
+fn validate_interaction_kind(
+    command: &str,
+    expected: ProjectInteractionKind,
+    received: ProjectInteractionKind,
+) -> Option<Result<serde_json::Value>> {
+    if expected == received {
+        return None;
+    }
+    Some(project_interaction_error(
+        command,
+        CommandErrorKind::InvalidPayload,
+        format!(
+            "Project interaction kind mismatch: expected {:?}, received {:?}",
+            expected, received
+        ),
+    ))
+}
+
+fn accept_interaction_sequence(
+    command: &str,
+    interaction: &mut DraftProjectInteractionSession,
+    sequence: u64,
+) -> Option<Result<serde_json::Value>> {
+    match interaction.accept_sequence(sequence) {
+        Ok(()) => None,
+        Err(ProjectInteractionSequenceError::Zero) => Some(project_interaction_error(
+            command,
+            CommandErrorKind::InvalidPayload,
+            "Project interaction sequence must start at 1".to_owned(),
+        )),
+        Err(ProjectInteractionSequenceError::Stale {
+            accepted_sequence,
+            received_sequence,
+        }) => Some(project_interaction_error(
+            command,
+            CommandErrorKind::InvalidPayload,
+            format!(
+                "Stale project interaction sequence: received {}, accepted {}",
+                received_sequence, accepted_sequence
+            ),
+        )),
+    }
+}
+
 impl ProjectSession {
+    fn next_project_interaction_id(&mut self) -> String {
+        self.next_interaction_id = self.next_interaction_id.saturating_add(1);
+        format!(
+            "{}-interaction-{}",
+            self.session_id, self.next_interaction_id
+        )
+    }
+
+    fn next_project_interaction_generation(&mut self) -> u64 {
+        self.next_interaction_generation = self.next_interaction_generation.saturating_add(1);
+        self.next_interaction_generation
+    }
+
+    fn provisional_interaction_payload(
+        &self,
+        payload: &ProjectInteractionPayload,
+    ) -> std::result::Result<(ProjectSessionViewModel, CommandDelta), String> {
+        match payload.clone().into_project_intent() {
+            ProjectIntent::SetSessionPlayhead { .. } => Ok((
+                project_session_view_model(&self.draft, &self.command_state, &self.selection),
+                CommandDelta::none(CommandDeltaName::SeekAudioPreview, "playhead scrub update"),
+            )),
+            intent => {
+                let edit_payload = self.intent_payload(intent)?;
+                let response = draft_commands::timeline::execute_timeline_edit(edit_payload)
+                    .map_err(|error| error.to_string())?;
+                Ok((
+                    project_session_view_model(
+                        &response.draft,
+                        &response.command_state,
+                        &response.selection,
+                    ),
+                    response.delta,
+                ))
+            }
+        }
+    }
+
+    fn commit_interaction_payload(
+        &mut self,
+        payload: ProjectInteractionPayload,
+        interaction: &DraftProjectInteractionSession,
+    ) -> Result<serde_json::Value> {
+        match payload.into_project_intent() {
+            ProjectIntent::SetSessionPlayhead { playhead } => {
+                self.playhead = playhead;
+                crate::to_js_value(crate::ok_envelope(ProjectInteractionCommitResponse {
+                    session_id: self.session_id.clone(),
+                    interaction_id: interaction.interaction_id.clone(),
+                    kind: interaction.kind,
+                    base_revision: interaction.base_revision,
+                    revision: self.revision,
+                    generation: interaction.generation,
+                    accepted_sequence: interaction.accepted_sequence,
+                    coalesced_through: interaction.coalesced_through,
+                    view_model: project_session_view_model(
+                        &self.draft,
+                        &self.command_state,
+                        &self.selection,
+                    ),
+                    events: Vec::new(),
+                    delta: CommandDelta::none(
+                        CommandDeltaName::SeekAudioPreview,
+                        "playhead scrub committed",
+                    ),
+                    bundle_path: self.bundle_path.display().to_string(),
+                    project_json_path: self.project_json_path.display().to_string(),
+                }))
+            }
+            intent => {
+                let edit_payload = match self.intent_payload(intent) {
+                    Ok(payload) => payload,
+                    Err(message) => {
+                        return project_interaction_error(
+                            "commitProjectInteraction",
+                            CommandErrorKind::InvalidTimelineEdit,
+                            message,
+                        );
+                    }
+                };
+                let response = match draft_commands::timeline::execute_timeline_edit(edit_payload) {
+                    Ok(response) => response,
+                    Err(error) => {
+                        return project_interaction_error(
+                            "commitProjectInteraction",
+                            CommandErrorKind::InvalidTimelineEdit,
+                            error.to_string(),
+                        );
+                    }
+                };
+                self.apply_interaction_response(response, interaction)
+            }
+        }
+    }
+
+    fn apply_interaction_response(
+        &mut self,
+        response: TimelineCommandResponse,
+        interaction: &DraftProjectInteractionSession,
+    ) -> Result<serde_json::Value> {
+        if is_selection_only_delta(&response.delta) {
+            self.command_state = response.command_state;
+            self.selection = response.selection;
+            return crate::to_js_value(crate::ok_envelope(ProjectInteractionCommitResponse {
+                session_id: self.session_id.clone(),
+                interaction_id: interaction.interaction_id.clone(),
+                kind: interaction.kind,
+                base_revision: interaction.base_revision,
+                revision: self.revision,
+                generation: interaction.generation,
+                accepted_sequence: interaction.accepted_sequence,
+                coalesced_through: interaction.coalesced_through,
+                view_model: project_session_view_model(
+                    &self.draft,
+                    &self.command_state,
+                    &self.selection,
+                ),
+                events: response.events,
+                delta: response.delta,
+                bundle_path: self.bundle_path.display().to_string(),
+                project_json_path: self.project_json_path.display().to_string(),
+            }));
+        }
+
+        let fs = StdPlatformFileSystem;
+        let saved = match run_project_io_job("interaction-commit", self.revision, || {
+            save_project_bundle(&fs, &self.bundle_path, &response.draft)
+        }) {
+            Ok(saved) => saved,
+            Err(error) => {
+                return project_session_store_error("commitProjectInteraction", error);
+            }
+        };
+        self.revision = self.revision.saturating_add(1);
+        self.draft = saved.draft;
+        self.bundle_path = saved.bundle_path;
+        self.project_json_path = saved.project_json_path;
+        self.active_interactions.clear();
+        self.command_state = response.command_state;
+        self.selection = response.selection;
+
+        crate::to_js_value(crate::ok_envelope(ProjectInteractionCommitResponse {
+            session_id: self.session_id.clone(),
+            interaction_id: interaction.interaction_id.clone(),
+            kind: interaction.kind,
+            base_revision: interaction.base_revision,
+            revision: self.revision,
+            generation: interaction.generation,
+            accepted_sequence: interaction.accepted_sequence,
+            coalesced_through: interaction.coalesced_through,
+            view_model: project_session_view_model(
+                &self.draft,
+                &self.command_state,
+                &self.selection,
+            ),
+            events: response.events,
+            delta: response.delta,
+            bundle_path: self.bundle_path.display().to_string(),
+            project_json_path: self.project_json_path.display().to_string(),
+        }))
+    }
+
     fn intent_payload(
         &self,
         intent: ProjectIntent,
@@ -2164,6 +2925,7 @@ impl ProjectSession {
         self.draft = saved.draft;
         self.bundle_path = saved.bundle_path;
         self.project_json_path = saved.project_json_path;
+        self.active_interactions.clear();
         let material = imported.material;
         let probe_job_id = match enqueue_material_probe(ScheduledMaterialProbe {
             session_id: self.session_id.clone(),
@@ -2321,6 +3083,7 @@ impl ProjectSession {
         self.draft = saved.draft;
         self.bundle_path = saved.bundle_path;
         self.project_json_path = saved.project_json_path;
+        self.active_interactions.clear();
         self.command_state = CommandState::empty();
         self.selection = TimelineSelection::empty();
         self.playhead = Microseconds::ZERO;
@@ -2378,6 +3141,7 @@ impl ProjectSession {
         self.draft = saved.draft;
         self.bundle_path = saved.bundle_path;
         self.project_json_path = saved.project_json_path;
+        self.active_interactions.clear();
         self.command_state = response.command_state;
         self.selection = response.selection;
 

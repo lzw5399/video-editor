@@ -21,11 +21,14 @@ import type { SegmentVisual } from "../generated/Draft";
 import {
   cancelAudioPreview,
   cancelArtifactGeneration,
+  cancelProjectInteraction,
   closeProjectSession,
   configureBundledRuntimeDirectory,
   createAudioPreviewSession,
   createProjectSession,
   cancelExport,
+  beginProjectInteraction,
+  commitProjectInteraction,
   executeProjectIntent,
   getAudioPreviewStatus,
   getArtifactQuotaStatus,
@@ -53,6 +56,7 @@ import {
   selectAudioOutputDevice,
   startProjectSessionExport,
   stopAudioPreview,
+  updateProjectInteraction,
   version,
   applyTaskRuntimeDevConfig,
   type AudioPreviewRequest,
@@ -60,6 +64,9 @@ import {
   type ArtifactGenerationActionRequest,
   type ArtifactQuotaRequest,
   type ArtifactStatusRequest,
+  type BeginProjectInteractionRequest,
+  type CancelProjectInteractionRequest,
+  type CommitProjectInteractionRequest,
   type CreateProjectSessionRequest,
   type ExportJobRequest,
   type ExecuteProjectIntentRequest,
@@ -72,6 +79,7 @@ import {
   type TaskRuntimeDevConfigRequest,
   type TaskRuntimeTelemetryResponse,
   type TaskRuntimeTelemetrySummary,
+  type UpdateProjectInteractionRequest,
   type TextSegmentPatch
 } from "./nativeBinding";
 import { getRealtimePreviewHostTaskRuntimeTelemetry, registerRealtimePreviewHost } from "./realtimePreviewHost";
@@ -111,6 +119,10 @@ type TestProjectSessionCall = {
     | "createProjectSession"
     | "openProjectSession"
     | "executeProjectIntent"
+    | "beginProjectInteraction"
+    | "updateProjectInteraction"
+    | "commitProjectInteraction"
+    | "cancelProjectInteraction"
     | "importKaipaiFormulaBundle"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
@@ -265,6 +277,34 @@ ipcMain.handle("core:executeProjectIntent", (event, request: ExecuteProjectInten
   assertAllowedIpcSender(event);
   const observationIndex = recordTestProjectSessionCall("executeProjectIntent", request);
   const result = executeProjectIntent(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
+});
+ipcMain.handle("core:beginProjectInteraction", (event, request: BeginProjectInteractionRequest) => {
+  assertAllowedIpcSender(event);
+  const observationIndex = recordTestProjectSessionCall("beginProjectInteraction", request);
+  const result = beginProjectInteraction(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
+});
+ipcMain.handle("core:updateProjectInteraction", (event, request: UpdateProjectInteractionRequest) => {
+  assertAllowedIpcSender(event);
+  const observationIndex = recordTestProjectSessionCall("updateProjectInteraction", request);
+  const result = updateProjectInteraction(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
+});
+ipcMain.handle("core:commitProjectInteraction", (event, request: CommitProjectInteractionRequest) => {
+  assertAllowedIpcSender(event);
+  const observationIndex = recordTestProjectSessionCall("commitProjectInteraction", request);
+  const result = commitProjectInteraction(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
+});
+ipcMain.handle("core:cancelProjectInteraction", (event, request: CancelProjectInteractionRequest) => {
+  assertAllowedIpcSender(event);
+  const observationIndex = recordTestProjectSessionCall("cancelProjectInteraction", request);
+  const result = cancelProjectInteraction(request);
   recordTestProjectSessionResult(observationIndex, result);
   return result;
 });
@@ -1078,6 +1118,10 @@ function recordTestProjectSessionCall(
     | CreateProjectSessionRequest
     | OpenProjectSessionRequest
     | ExecuteProjectIntentRequest
+    | BeginProjectInteractionRequest
+    | UpdateProjectInteractionRequest
+    | CommitProjectInteractionRequest
+    | CancelProjectInteractionRequest
     | ImportKaipaiFormulaBundleRequest
     | ProjectSessionRequest
     | ProjectSessionReadRequest

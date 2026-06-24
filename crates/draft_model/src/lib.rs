@@ -15,6 +15,7 @@ pub mod delta;
 pub mod draft;
 pub mod font_registry;
 pub mod ids;
+pub mod interaction;
 pub mod material;
 pub mod time;
 pub mod timeline;
@@ -42,6 +43,9 @@ pub use font_registry::{
     validate_bundled_font_registry,
 };
 pub use ids::{DraftId, MaterialId, SegmentId, TrackId};
+pub use interaction::{
+    ProjectInteractionKind, ProjectInteractionSequenceError, ProjectInteractionSession,
+};
 pub use material::{
     Material, MaterialKind, MaterialMetadata, MaterialStatus, RationalFrameRate, add_material,
     mark_material_available, mark_material_missing, mark_material_probe_failed, upsert_material,

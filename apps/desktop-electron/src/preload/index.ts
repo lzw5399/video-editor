@@ -6,6 +6,9 @@ import type {
   ArtifactGenerationActionRequest,
   ArtifactQuotaRequest,
   ArtifactStatusRequest,
+  BeginProjectInteractionRequest,
+  CancelProjectInteractionRequest,
+  CommitProjectInteractionRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -13,7 +16,8 @@ import type {
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
   ProjectSessionRequest,
-  StartProjectSessionExportRequest
+  StartProjectSessionExportRequest,
+  UpdateProjectInteractionRequest
 } from "../main/nativeBinding";
 
 type RealtimePreviewHostRect = {
@@ -64,6 +68,14 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
     openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
     executeProjectIntent: (request: ExecuteProjectIntentRequest) => ipcRenderer.invoke("core:executeProjectIntent", request),
+    beginProjectInteraction: (request: BeginProjectInteractionRequest) =>
+      ipcRenderer.invoke("core:beginProjectInteraction", request),
+    updateProjectInteraction: (request: UpdateProjectInteractionRequest) =>
+      ipcRenderer.invoke("core:updateProjectInteraction", request),
+    commitProjectInteraction: (request: CommitProjectInteractionRequest) =>
+      ipcRenderer.invoke("core:commitProjectInteraction", request),
+    cancelProjectInteraction: (request: CancelProjectInteractionRequest) =>
+      ipcRenderer.invoke("core:cancelProjectInteraction", request),
     importKaipaiFormulaBundle: (request: ImportKaipaiFormulaBundleRequest) =>
       ipcRenderer.invoke("core:importKaipaiFormulaBundle", request),
     listProjectSessionMaterials: (request: ProjectSessionReadRequest) =>

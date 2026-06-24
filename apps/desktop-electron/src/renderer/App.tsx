@@ -6,6 +6,9 @@ import type {
   ArtifactGenerationActionRequest,
   ArtifactQuotaRequest,
   ArtifactStatusRequest,
+  BeginProjectInteractionRequest,
+  CancelProjectInteractionRequest,
+  CommitProjectInteractionRequest,
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
@@ -21,11 +24,16 @@ import type {
   ProjectSessionTemplateImportResponse,
   ProjectSessionTimelineIntentResponse,
   ProjectSessionClosedResponse,
+  ProjectInteractionBeginResponse,
+  ProjectInteractionCancelResponse,
+  ProjectInteractionCommitResponse,
+  ProjectInteractionUpdateResponse,
   SegmentVisualPatch,
   TextSegmentPatch,
   StartProjectSessionExportRequest,
   TaskRuntimeStatusResponse,
-  TaskRuntimeTelemetryResponse
+  TaskRuntimeTelemetryResponse,
+  UpdateProjectInteractionRequest
 } from "../main/nativeBinding";
 import type {
   AudioOutputDeviceSummary,
@@ -100,6 +108,18 @@ type VideoEditorCoreApi = {
   executeProjectIntent: <T = ProjectSessionIntentResponse>(
     request: ExecuteProjectIntentRequest
   ) => Promise<CommandResultEnvelope<T>>;
+  beginProjectInteraction: (
+    request: BeginProjectInteractionRequest
+  ) => Promise<CommandResultEnvelope<ProjectInteractionBeginResponse>>;
+  updateProjectInteraction: (
+    request: UpdateProjectInteractionRequest
+  ) => Promise<CommandResultEnvelope<ProjectInteractionUpdateResponse>>;
+  commitProjectInteraction: (
+    request: CommitProjectInteractionRequest
+  ) => Promise<CommandResultEnvelope<ProjectInteractionCommitResponse>>;
+  cancelProjectInteraction: (
+    request: CancelProjectInteractionRequest
+  ) => Promise<CommandResultEnvelope<ProjectInteractionCancelResponse>>;
   importKaipaiFormulaBundle: (
     request: ImportKaipaiFormulaBundleRequest
   ) => Promise<CommandResultEnvelope<ProjectSessionTemplateImportResponse>>;

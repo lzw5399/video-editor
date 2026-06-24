@@ -68,6 +68,18 @@ type NativeBinding = {
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
   executeProjectIntent: (request: ExecuteProjectIntentRequest) => CommandResultEnvelope<ProjectSessionIntentResponse>;
+  beginProjectInteraction: (
+    request: BeginProjectInteractionRequest
+  ) => CommandResultEnvelope<ProjectInteractionBeginResponse>;
+  updateProjectInteraction: (
+    request: UpdateProjectInteractionRequest
+  ) => CommandResultEnvelope<ProjectInteractionUpdateResponse>;
+  commitProjectInteraction: (
+    request: CommitProjectInteractionRequest
+  ) => CommandResultEnvelope<ProjectInteractionCommitResponse>;
+  cancelProjectInteraction: (
+    request: CancelProjectInteractionRequest
+  ) => CommandResultEnvelope<ProjectInteractionCancelResponse>;
   importKaipaiFormulaBundle: (
     request: ImportKaipaiFormulaBundleRequest
   ) => CommandResultEnvelope<ProjectSessionTemplateImportResponse>;
@@ -373,6 +385,84 @@ export type ExecuteProjectIntentRequest = {
   sessionId: string;
   expectedRevision: number;
   intent: ProjectIntent;
+};
+
+export type ProjectInteractionKind =
+  | "selectedSegmentVisual"
+  | "selectedText"
+  | "selectedSegmentAudio"
+  | "playheadScrub"
+  | "timelineMoveTrim"
+  | "keyframeEdit";
+
+export type ProjectInteractionPayload =
+  | { kind: "selectedSegmentVisual"; patch: SegmentVisualPatch }
+  | { kind: "selectedText"; patch: TextSegmentPatch }
+  | {
+      kind: "selectedSegmentAudio";
+      gainMillis?: number | null;
+      panBalanceMillis?: AudioPanBalance | null;
+      fadeInDuration?: AudioFade | null;
+      fadeOutDuration?: AudioFade | null;
+      effectSlots?: AudioEffectSlot[] | null;
+    }
+  | { kind: "playheadScrub"; playhead: Microseconds };
+
+export type BeginProjectInteractionRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  kind: ProjectInteractionKind;
+};
+
+export type UpdateProjectInteractionRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  interactionId: string;
+  sequence: number;
+  payload: ProjectInteractionPayload;
+};
+
+export type CommitProjectInteractionRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  interactionId: string;
+};
+
+export type CancelProjectInteractionRequest = CommitProjectInteractionRequest;
+
+export type ProjectInteractionBaseResponse = {
+  sessionId: string;
+  interactionId: string;
+  kind: ProjectInteractionKind;
+  baseRevision: number;
+  revision: number;
+  generation: number;
+  acceptedSequence: number;
+  coalescedThrough: number;
+};
+
+export type ProjectInteractionBeginResponse = ProjectInteractionBaseResponse & {
+  viewModel: ProjectSessionViewModel;
+  bundlePath: string;
+  projectJsonPath: string;
+};
+
+export type ProjectInteractionUpdateResponse = ProjectInteractionBaseResponse & {
+  revisionUnchanged: true;
+  provisionalViewModel: ProjectSessionViewModel;
+  provisionalDelta: CommandDelta;
+  bundlePath: string;
+  projectJsonPath: string;
+};
+
+export type ProjectInteractionCommitResponse = ProjectInteractionBaseResponse & ProjectSessionTimelineIntentResponse;
+
+export type ProjectInteractionCancelResponse = ProjectInteractionBaseResponse & {
+  revisionUnchanged: true;
+  canceled: true;
+  viewModel: ProjectSessionViewModel;
+  bundlePath: string;
+  projectJsonPath: string;
 };
 
 export type ProjectSessionOpenResponse = {
@@ -892,6 +982,46 @@ export function executeProjectIntent(
   return binding.executeProjectIntent(request);
 }
 
+export function beginProjectInteraction(
+  request: BeginProjectInteractionRequest
+): CommandResultEnvelope<ProjectInteractionBeginResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("beginProjectInteraction");
+  }
+  return binding.beginProjectInteraction(request);
+}
+
+export function updateProjectInteraction(
+  request: UpdateProjectInteractionRequest
+): CommandResultEnvelope<ProjectInteractionUpdateResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("updateProjectInteraction");
+  }
+  return binding.updateProjectInteraction(request);
+}
+
+export function commitProjectInteraction(
+  request: CommitProjectInteractionRequest
+): CommandResultEnvelope<ProjectInteractionCommitResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("commitProjectInteraction");
+  }
+  return binding.commitProjectInteraction(request);
+}
+
+export function cancelProjectInteraction(
+  request: CancelProjectInteractionRequest
+): CommandResultEnvelope<ProjectInteractionCancelResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("cancelProjectInteraction");
+  }
+  return binding.cancelProjectInteraction(request);
+}
+
 export function importKaipaiFormulaBundle(
   request: ImportKaipaiFormulaBundleRequest
 ): CommandResultEnvelope<ProjectSessionTemplateImportResponse> {
@@ -1228,6 +1358,10 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.openProjectSession !== "function" ||
       typeof loaded.closeProjectSession !== "function" ||
       typeof loaded.executeProjectIntent !== "function" ||
+      typeof loaded.beginProjectInteraction !== "function" ||
+      typeof loaded.updateProjectInteraction !== "function" ||
+      typeof loaded.commitProjectInteraction !== "function" ||
+      typeof loaded.cancelProjectInteraction !== "function" ||
       typeof loaded.importKaipaiFormulaBundle !== "function" ||
       typeof loaded.listProjectSessionMaterials !== "function" ||
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
@@ -1287,6 +1421,10 @@ function loadNativeBinding(): NativeBinding | null {
       openProjectSession: loaded.openProjectSession,
       closeProjectSession: loaded.closeProjectSession,
       executeProjectIntent: loaded.executeProjectIntent,
+      beginProjectInteraction: loaded.beginProjectInteraction,
+      updateProjectInteraction: loaded.updateProjectInteraction,
+      commitProjectInteraction: loaded.commitProjectInteraction,
+      cancelProjectInteraction: loaded.cancelProjectInteraction,
       importKaipaiFormulaBundle: loaded.importKaipaiFormulaBundle,
       listProjectSessionMaterials: loaded.listProjectSessionMaterials,
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
