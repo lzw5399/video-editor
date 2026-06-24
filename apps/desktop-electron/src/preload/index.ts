@@ -9,6 +9,7 @@ import type {
   CreateProjectSessionRequest,
   ExportJobRequest,
   ExecuteProjectIntentRequest,
+  ImportKaipaiFormulaBundleRequest,
   OpenProjectSessionRequest,
   ProjectSessionReadRequest,
   ProjectSessionRequest,
@@ -30,6 +31,11 @@ type RealtimePreviewTelemetryListener = (state: unknown) => void;
 type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
+};
+type TemplateBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+  resourceRoot: string | null;
 };
 
 const allowedRendererUrl = readAllowedRendererUrl();
@@ -58,6 +64,8 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
     createProjectSession: (request: CreateProjectSessionRequest) => ipcRenderer.invoke("core:createProjectSession", request),
     openProjectSession: (request: OpenProjectSessionRequest) => ipcRenderer.invoke("core:openProjectSession", request),
     executeProjectIntent: (request: ExecuteProjectIntentRequest) => ipcRenderer.invoke("core:executeProjectIntent", request),
+    importKaipaiFormulaBundle: (request: ImportKaipaiFormulaBundleRequest) =>
+      ipcRenderer.invoke("core:importKaipaiFormulaBundle", request),
     listProjectSessionMaterials: (request: ProjectSessionReadRequest) =>
       ipcRenderer.invoke("core:listProjectSessionMaterials", request),
     listProjectSessionMissingMaterials: (request: ProjectSessionReadRequest) =>
@@ -97,6 +105,7 @@ if (allowedRendererUrl !== undefined && isAllowedRendererLocation(window.locatio
   contextBridge.exposeInMainWorld("videoEditorPlatform", {
     createProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:createProjectBundle"),
     openProjectBundle: (): Promise<ProjectBundlePickerResponse> => ipcRenderer.invoke("platform:openProjectBundle"),
+    openTemplateBundle: (): Promise<TemplateBundlePickerResponse> => ipcRenderer.invoke("platform:openTemplateBundle"),
     openMaterialFiles: () => ipcRenderer.invoke("platform:openMaterialFiles")
   });
   contextBridge.exposeInMainWorld("videoEditorRealtimePreviewHost", {

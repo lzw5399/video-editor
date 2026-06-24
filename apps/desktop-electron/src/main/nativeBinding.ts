@@ -42,6 +42,7 @@ import type {
   TextWrapping,
   TrackKind
 } from "../generated/Draft";
+import type { AdaptationReport } from "../generated/TemplateImport";
 
 type PingResponse = { pong: boolean };
 type VersionResponse = { coreVersion: string; contractVersion: string };
@@ -67,6 +68,9 @@ type NativeBinding = {
   openProjectSession: (request: OpenProjectSessionRequest) => CommandResultEnvelope<ProjectSessionOpenResponse>;
   closeProjectSession: (request: ProjectSessionRequest) => CommandResultEnvelope<ProjectSessionClosedResponse>;
   executeProjectIntent: (request: ExecuteProjectIntentRequest) => CommandResultEnvelope<ProjectSessionIntentResponse>;
+  importKaipaiFormulaBundle: (
+    request: ImportKaipaiFormulaBundleRequest
+  ) => CommandResultEnvelope<ProjectSessionTemplateImportResponse>;
   listProjectSessionMaterials: (request: ProjectSessionReadRequest) => CommandResultEnvelope<ProjectSessionMaterialsResponse>;
   listProjectSessionMissingMaterials: (
     request: ProjectSessionReadRequest
@@ -152,6 +156,16 @@ export type StartProjectSessionExportRequest = {
   expectedRevision: number;
   outputPath: string;
   preset: ExportPreset;
+};
+
+export type ImportKaipaiFormulaBundleRequest = {
+  sessionId: string;
+  expectedRevision: number;
+  bundlePath: string;
+  resourceRoot: string;
+  importId?: string | null;
+  generatedAt?: string | null;
+  verifyResourceSha256?: boolean | null;
 };
 
 export type ExportJobRequest = {
@@ -399,6 +413,10 @@ export type ProjectSessionTimelineIntentResponse = {
   delta: CommandDelta;
   bundlePath: string;
   projectJsonPath: string;
+};
+
+export type ProjectSessionTemplateImportResponse = ProjectSessionTimelineIntentResponse & {
+  adaptationReport: AdaptationReport;
 };
 
 export type ProjectSessionImportMaterialResponse = {
@@ -874,6 +892,16 @@ export function executeProjectIntent(
   return binding.executeProjectIntent(request);
 }
 
+export function importKaipaiFormulaBundle(
+  request: ImportKaipaiFormulaBundleRequest
+): CommandResultEnvelope<ProjectSessionTemplateImportResponse> {
+  const binding = loadNativeBinding();
+  if (binding === null) {
+    return bindingLoadError("importKaipaiFormulaBundle");
+  }
+  return binding.importKaipaiFormulaBundle(request);
+}
+
 export function listProjectSessionMaterials(
   request: ProjectSessionReadRequest
 ): CommandResultEnvelope<ProjectSessionMaterialsResponse> {
@@ -1200,6 +1228,7 @@ function loadNativeBinding(): NativeBinding | null {
       typeof loaded.openProjectSession !== "function" ||
       typeof loaded.closeProjectSession !== "function" ||
       typeof loaded.executeProjectIntent !== "function" ||
+      typeof loaded.importKaipaiFormulaBundle !== "function" ||
       typeof loaded.listProjectSessionMaterials !== "function" ||
       typeof loaded.listProjectSessionMissingMaterials !== "function" ||
       typeof loaded.startProjectSessionExport !== "function" ||
@@ -1258,6 +1287,7 @@ function loadNativeBinding(): NativeBinding | null {
       openProjectSession: loaded.openProjectSession,
       closeProjectSession: loaded.closeProjectSession,
       executeProjectIntent: loaded.executeProjectIntent,
+      importKaipaiFormulaBundle: loaded.importKaipaiFormulaBundle,
       listProjectSessionMaterials: loaded.listProjectSessionMaterials,
       listProjectSessionMissingMaterials: loaded.listProjectSessionMissingMaterials,
       startProjectSessionExport: loaded.startProjectSessionExport,

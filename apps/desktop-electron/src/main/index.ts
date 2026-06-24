@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, screen, type IpcMainInvokeEvent, type Rectangle } from "electron";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { CommandEnvelope } from "../generated/CommandEnvelope";
@@ -34,6 +34,7 @@ import {
   getTaskRuntimeTelemetry,
   getExportJobStatus,
   getWaveformDisplayPeaks,
+  importKaipaiFormulaBundle,
   listProjectSessionMaterials,
   listProjectSessionMissingMaterials,
   listAudioOutputDevices,
@@ -62,6 +63,7 @@ import {
   type CreateProjectSessionRequest,
   type ExportJobRequest,
   type ExecuteProjectIntentRequest,
+  type ImportKaipaiFormulaBundleRequest,
   type OpenProjectSessionRequest,
   type ProjectSessionReadRequest,
   type ProjectSessionRequest,
@@ -109,6 +111,7 @@ type TestProjectSessionCall = {
     | "createProjectSession"
     | "openProjectSession"
     | "executeProjectIntent"
+    | "importKaipaiFormulaBundle"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
     | "startProjectSessionExport"
@@ -119,6 +122,9 @@ type TestProjectSessionCall = {
   itemHandle: string | null;
   materialId: string | null;
   materialPath: string | null;
+  templateBundlePath: string | null;
+  templateResourceRoot: string | null;
+  importId: string | null;
   outputPath: string | null;
   preset: string | null;
   targetTime: number | null;
@@ -186,6 +192,11 @@ type ProjectBundlePickerResponse = {
   canceled: boolean;
   bundlePath: string | null;
 };
+type TemplateBundlePickerResponse = {
+  canceled: boolean;
+  bundlePath: string | null;
+  resourceRoot: string | null;
+};
 
 declare global {
   var __videoEditorTestNativeCommandObservations: TestNativeCommandObservation[] | undefined;
@@ -204,6 +215,7 @@ const showDeveloperDiagnostics =
   process.env.VIDEO_EDITOR_DEVELOPER_DIAGNOSTICS === "1" ||
   process.env.VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS === "1";
 const testObservationEnabled = process.env.VIDEO_EDITOR_TEST_RECORD_COMMANDS === "1";
+let testTemplateBundleSelectionIndex = 0;
 const rendererArguments = [
   allowedRendererUrlArgument,
   ...(showDeveloperDiagnostics ? ["--video-editor-developer-diagnostics=1"] : []),
@@ -247,6 +259,13 @@ ipcMain.handle("core:executeProjectIntent", (event, request: ExecuteProjectInten
   assertAllowedIpcSender(event);
   const observationIndex = recordTestProjectSessionCall("executeProjectIntent", request);
   const result = executeProjectIntent(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
+});
+ipcMain.handle("core:importKaipaiFormulaBundle", (event, request: ImportKaipaiFormulaBundleRequest) => {
+  assertAllowedIpcSender(event);
+  const observationIndex = recordTestProjectSessionCall("importKaipaiFormulaBundle", request);
+  const result = importKaipaiFormulaBundle(request);
   recordTestProjectSessionResult(observationIndex, result);
   return result;
 });
@@ -564,6 +583,26 @@ ipcMain.handle("platform:openMaterialFiles", async (event) => {
     filePaths: result.filePaths
   };
 });
+ipcMain.handle("platform:openTemplateBundle", async (event): Promise<TemplateBundlePickerResponse> => {
+  assertAllowedIpcSender(event);
+
+  const testSelection = readTestTemplateBundleSelection();
+  if (testSelection !== null) {
+    return testSelection;
+  }
+
+  const result = await dialog.showOpenDialog({
+    title: "导入离线模板",
+    properties: ["openFile"],
+    filters: [{ name: "离线模板 JSON", extensions: ["json"] }]
+  });
+  const bundlePath = result.filePaths[0] ?? null;
+  return {
+    canceled: result.canceled || bundlePath === null,
+    bundlePath,
+    resourceRoot: bundlePath === null ? null : dirname(bundlePath)
+  };
+});
 ipcMain.handle("platform:createProjectBundle", async (event): Promise<ProjectBundlePickerResponse> => {
   assertAllowedIpcSender(event);
 
@@ -781,6 +820,80 @@ function readTestOpenMaterialFiles(): string[] | null {
   return [];
 }
 
+function readTestTemplateBundleSelection(): TemplateBundlePickerResponse | null {
+  const raw = decodeTestArgumentValue(process.env.VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE);
+  if (raw === undefined) {
+    return null;
+  }
+
+  if (raw.trim().length === 0) {
+    return {
+      canceled: true,
+      bundlePath: null,
+      resourceRoot: null
+    };
+  }
+
+  const selections = parseTestTemplateBundleSelections(raw);
+  const selection = selections[testTemplateBundleSelectionIndex] ?? null;
+  if (selection !== null) {
+    testTemplateBundleSelectionIndex += 1;
+    return selection;
+  }
+
+  return {
+    canceled: true,
+    bundlePath: null,
+    resourceRoot: null
+  };
+}
+
+function parseTestTemplateBundleSelections(raw: string): TemplateBundlePickerResponse[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map(testTemplateBundleSelectionFromValue).filter((value): value is TemplateBundlePickerResponse => value !== null);
+    }
+    const selection = testTemplateBundleSelectionFromValue(parsed);
+    return selection === null ? [] : [selection];
+  } catch {
+    const bundlePath = raw.trim();
+    if (bundlePath.length === 0) {
+      return [];
+    }
+    return [buildTemplateBundlePickerResponse(bundlePath, readTestSinglePath("VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT"))];
+  }
+}
+
+function testTemplateBundleSelectionFromValue(value: unknown): TemplateBundlePickerResponse | null {
+  if (typeof value === "string") {
+    const bundlePath = value.trim();
+    return bundlePath.length === 0 ? null : buildTemplateBundlePickerResponse(bundlePath, readTestSinglePath("VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT"));
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.bundlePath !== "string" || record.bundlePath.trim().length === 0) {
+    return null;
+  }
+  const bundlePath = record.bundlePath.trim();
+  const resourceRoot =
+    typeof record.resourceRoot === "string" && record.resourceRoot.trim().length > 0
+      ? record.resourceRoot.trim()
+      : readTestSinglePath("VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT");
+  return buildTemplateBundlePickerResponse(bundlePath, resourceRoot);
+}
+
+function buildTemplateBundlePickerResponse(bundlePath: string, resourceRoot: string | null): TemplateBundlePickerResponse {
+  return {
+    canceled: false,
+    bundlePath,
+    resourceRoot: resourceRoot ?? dirname(bundlePath)
+  };
+}
+
 function readTestSinglePath(envName: string): string | null {
   const raw = decodeTestArgumentValue(process.env[envName]);
   if (raw === undefined) {
@@ -793,6 +906,8 @@ function hydrateTestEnvironmentFromArguments(): void {
   setEnvFromArgument("VIDEO_EDITOR_TEST_RECORD_COMMANDS", "--video-editor-test-record-commands=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_SHOW_DEVELOPER_DIAGNOSTICS", "--video-editor-test-show-developer-diagnostics=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_MATERIAL_FILES", "--video-editor-test-open-material-files=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE", "--video-editor-test-open-template-bundle=");
+  setEnvFromArgument("VIDEO_EDITOR_TEST_TEMPLATE_RESOURCE_ROOT", "--video-editor-test-template-resource-root=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_OPEN_PROJECT_BUNDLE", "--video-editor-test-open-project-bundle=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE", "--video-editor-test-new-project-bundle=");
   setEnvFromArgument("VIDEO_EDITOR_TEST_PICK_OPEN_PROJECT_BUNDLE", "--video-editor-test-pick-open-project-bundle=");
@@ -957,6 +1072,7 @@ function recordTestProjectSessionCall(
     | CreateProjectSessionRequest
     | OpenProjectSessionRequest
     | ExecuteProjectIntentRequest
+    | ImportKaipaiFormulaBundleRequest
     | ProjectSessionRequest
     | ProjectSessionReadRequest
     | StartProjectSessionExportRequest
@@ -986,6 +1102,12 @@ function recordTestProjectSessionCall(
     itemHandle: typeof intentRecord?.itemHandle === "string" ? intentRecord.itemHandle : null,
     materialId: intent !== null && "materialId" in intent ? intent.materialId ?? null : null,
     materialPath: intent !== null && "materialPath" in intent ? intent.materialPath ?? null : null,
+    templateBundlePath: command === "importKaipaiFormulaBundle" && "bundlePath" in request ? request.bundlePath : null,
+    templateResourceRoot: command === "importKaipaiFormulaBundle" && "resourceRoot" in request ? request.resourceRoot : null,
+    importId:
+      command === "importKaipaiFormulaBundle" && "importId" in request && typeof request.importId === "string"
+        ? request.importId
+        : null,
     outputPath: "outputPath" in request ? request.outputPath : null,
     preset: "preset" in request ? request.preset : null,
     targetTime: "targetTime" in request ? request.targetTime : intentTargetTime,
