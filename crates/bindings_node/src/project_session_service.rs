@@ -1,4 +1,15 @@
+use adapter_kaipai::{KaipaiFormulaBundle, KaipaiImportOptions, map_kaipai_bundle_to_import_plan};
+use artifact_store::{
+    ArtifactStoreError,
+    resource_index::{
+        ResourceKind, ResourceRef, index_draft_resources, index_draft_resources_with_extra_refs,
+    },
+};
 use draft_commands::delta::material_dependency_delta;
+use draft_import::{
+    DraftImportApplicationInput, LocalizedResourceIndexKind, LocalizedResourceManifest,
+    LocalizedResourceStatus, apply_import_plan_to_draft,
+};
 use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
     AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload, AudioEffectSlot,
@@ -28,6 +39,7 @@ use project_store::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
@@ -104,6 +116,21 @@ struct ExecuteProjectIntentRequest {
     session_id: String,
     expected_revision: u64,
     intent: ProjectIntent,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImportKaipaiFormulaBundleRequest {
+    session_id: String,
+    expected_revision: u64,
+    bundle_path: String,
+    resource_root: String,
+    #[serde(default)]
+    import_id: Option<String>,
+    #[serde(default)]
+    generated_at: Option<String>,
+    #[serde(default)]
+    verify_resource_sha256: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -352,6 +379,18 @@ struct ProjectSessionImportMaterialResponse {
     project_json_path: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectSessionTemplateImportResponse {
+    session_id: String,
+    revision: u64,
+    #[serde(rename = "viewModel")]
+    view_model: ProjectSessionViewModel,
+    adaptation_report: draft_import::AdaptationReport,
+    bundle_path: String,
+    project_json_path: String,
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -552,6 +591,12 @@ struct ScheduledMaterialProbe {
     task_token: TaskCancellationToken,
 }
 
+#[derive(Debug)]
+enum ProjectSessionImportPersistError {
+    ProjectStore(ProjectStoreError),
+    ArtifactStore(ArtifactStoreError),
+}
+
 impl Default for MaterialProbeSchedulerState {
     fn default() -> Self {
         Self {
@@ -661,6 +706,21 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     };
 
     with_project_session_registry(|registry| registry.execute_intent(request))
+}
+
+pub fn import_kaipai_formula_bundle(request: serde_json::Value) -> Result<serde_json::Value> {
+    let request = match serde_json::from_value::<ImportKaipaiFormulaBundleRequest>(request) {
+        Ok(request) => request,
+        Err(error) => {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!("Invalid importKaipaiFormulaBundle payload: {error}"),
+                Some("importKaipaiFormulaBundle".to_string()),
+            ));
+        }
+    };
+
+    with_project_session_registry(|registry| registry.import_kaipai_formula_bundle(request))
 }
 
 pub fn list_project_session_materials(request: serde_json::Value) -> Result<serde_json::Value> {
@@ -1301,6 +1361,31 @@ impl ProjectSessionRegistry {
                 session.apply_response(response)
             }
         }
+    }
+
+    fn import_kaipai_formula_bundle(
+        &mut self,
+        request: ImportKaipaiFormulaBundleRequest,
+    ) -> Result<serde_json::Value> {
+        let Some(session) = self.sessions.get_mut(&request.session_id) else {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidProject,
+                format!("Project session not found: {}", request.session_id),
+                Some("importKaipaiFormulaBundle".to_string()),
+            ));
+        };
+        if request.expected_revision != session.revision {
+            return crate::to_js_value(crate::error_envelope(
+                CommandErrorKind::InvalidPayload,
+                format!(
+                    "Stale project session revision: expected {}, current {}",
+                    request.expected_revision, session.revision
+                ),
+                Some("importKaipaiFormulaBundle".to_string()),
+            ));
+        }
+
+        session.import_kaipai_formula_bundle(request)
     }
 
     fn next_session_id(&mut self) -> String {
@@ -2116,6 +2201,130 @@ impl ProjectSession {
             ),
             events: Vec::new(),
             delta,
+            bundle_path: self.bundle_path.display().to_string(),
+            project_json_path: self.project_json_path.display().to_string(),
+        }))
+    }
+
+    fn import_kaipai_formula_bundle(
+        &mut self,
+        request: ImportKaipaiFormulaBundleRequest,
+    ) -> Result<serde_json::Value> {
+        let command = "importKaipaiFormulaBundle";
+        let formula_bundle_path = PathBuf::from(&request.bundle_path);
+        let formula_json = match fs::read_to_string(&formula_bundle_path) {
+            Ok(contents) => contents,
+            Err(error) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::InvalidPayload,
+                    format!(
+                        "Unable to read Kaipai formula bundle {}: {error}",
+                        formula_bundle_path.display()
+                    ),
+                    Some(command.to_string()),
+                ));
+            }
+        };
+        let formula_bundle = match KaipaiFormulaBundle::from_json_str(&formula_json) {
+            Ok(bundle) => bundle,
+            Err(error) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::InvalidPayload,
+                    format!("Invalid Kaipai formula bundle: {error}"),
+                    Some(command.to_string()),
+                ));
+            }
+        };
+
+        let import_id = request
+            .import_id
+            .clone()
+            .unwrap_or_else(|| default_template_import_id(&formula_bundle_path));
+        let mut options = KaipaiImportOptions::new(
+            self.bundle_path.clone(),
+            PathBuf::from(&request.resource_root),
+            import_id,
+        );
+        options.generated_at = request.generated_at.clone();
+        options.verify_resource_sha256 = request.verify_resource_sha256.unwrap_or(true);
+
+        let mapped = match map_kaipai_bundle_to_import_plan(&formula_bundle, options) {
+            Ok(mapped) => mapped,
+            Err(error) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::InvalidPayload,
+                    format!("Kaipai formula bundle mapping failed: {error}"),
+                    Some(command.to_string()),
+                ));
+            }
+        };
+        let localized_resources = localized_resource_refs(&mapped.localized_resources);
+        let applied = match apply_import_plan_to_draft(DraftImportApplicationInput {
+            plan: mapped.plan,
+            source_kind: mapped.report.source_kind,
+            generated_at: mapped.report.generated_at,
+            report_items: mapped.report.items,
+        }) {
+            Ok(applied) => applied,
+            Err(error) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::InvalidPayload,
+                    format!("Draft import plan validation failed: {error}"),
+                    Some(command.to_string()),
+                ));
+            }
+        };
+
+        let fs = StdPlatformFileSystem;
+        let previous_draft = self.draft.clone();
+        let target_bundle_path = self.bundle_path.clone();
+        let next_draft = applied.draft;
+        let saved = match run_project_io_job("import-kaipai-formula", self.revision, || {
+            let saved = save_project_bundle(&fs, &target_bundle_path, &next_draft)
+                .map_err(ProjectSessionImportPersistError::ProjectStore)?;
+            match index_draft_resources_with_extra_refs(
+                &saved.bundle_path,
+                &saved.draft,
+                localized_resources,
+            ) {
+                Ok(_) => Ok(saved),
+                Err(error) => {
+                    let _ = save_project_bundle(&fs, &target_bundle_path, &previous_draft);
+                    let _ = index_draft_resources(&target_bundle_path, &previous_draft);
+                    Err(ProjectSessionImportPersistError::ArtifactStore(error))
+                }
+            }
+        }) {
+            Ok(saved) => saved,
+            Err(ProjectSessionImportPersistError::ProjectStore(error)) => {
+                return project_session_store_error(command, error);
+            }
+            Err(ProjectSessionImportPersistError::ArtifactStore(error)) => {
+                return crate::to_js_value(crate::error_envelope(
+                    CommandErrorKind::ProjectIoFailed,
+                    format!("Failed to persist Kaipai import resource index: {error}"),
+                    Some(command.to_string()),
+                ));
+            }
+        };
+
+        self.revision = self.revision.saturating_add(1);
+        self.draft = saved.draft;
+        self.bundle_path = saved.bundle_path;
+        self.project_json_path = saved.project_json_path;
+        self.command_state = CommandState::empty();
+        self.selection = TimelineSelection::empty();
+        self.playhead = Microseconds::ZERO;
+
+        crate::to_js_value(crate::ok_envelope(ProjectSessionTemplateImportResponse {
+            session_id: self.session_id.clone(),
+            revision: self.revision,
+            view_model: project_session_view_model(
+                &self.draft,
+                &self.command_state,
+                &self.selection,
+            ),
+            adaptation_report: applied.report,
             bundle_path: self.bundle_path.display().to_string(),
             project_json_path: self.project_json_path.display().to_string(),
         }))
@@ -2954,6 +3163,60 @@ fn canonical_project_session_paths(
         });
     }
     Ok((canonical_bundle_path, canonical_project_json_path))
+}
+
+fn localized_resource_refs(
+    manifest: &LocalizedResourceManifest,
+) -> Vec<(ResourceRef, Option<String>)> {
+    manifest
+        .resources
+        .iter()
+        .filter(|resource| resource.status == LocalizedResourceStatus::Available)
+        .map(|resource| {
+            (
+                ResourceRef::new(
+                    localized_resource_kind(resource.resource_index_ref.kind),
+                    resource.resource_index_ref.resource_id.clone(),
+                    resource.resource_index_ref.stable_key.clone(),
+                ),
+                resource.project_relative_ref.clone(),
+            )
+        })
+        .collect()
+}
+
+fn localized_resource_kind(kind: LocalizedResourceIndexKind) -> ResourceKind {
+    match kind {
+        LocalizedResourceIndexKind::Material => ResourceKind::Material,
+        LocalizedResourceIndexKind::Font => ResourceKind::Font,
+        LocalizedResourceIndexKind::Effect => ResourceKind::Effect,
+        LocalizedResourceIndexKind::Filter => ResourceKind::Filter,
+        LocalizedResourceIndexKind::Transition => ResourceKind::Transition,
+    }
+}
+
+fn default_template_import_id(formula_bundle_path: &Path) -> String {
+    formula_bundle_path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .map(sanitize_template_import_id)
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "offline-template-import".to_owned())
+}
+
+fn sanitize_template_import_id(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_owned()
 }
 
 fn project_session_store_error(

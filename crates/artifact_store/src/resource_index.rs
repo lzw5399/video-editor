@@ -149,6 +149,18 @@ pub fn index_draft_resources(
     bundle_path: impl AsRef<Path>,
     draft: &Draft,
 ) -> Result<ResourceIndex, ArtifactStoreError> {
+    index_draft_resources_with_extra_refs(
+        bundle_path,
+        draft,
+        std::iter::empty::<(ResourceRef, Option<String>)>(),
+    )
+}
+
+pub fn index_draft_resources_with_extra_refs(
+    bundle_path: impl AsRef<Path>,
+    draft: &Draft,
+    extra_resources: impl IntoIterator<Item = (ResourceRef, Option<String>)>,
+) -> Result<ResourceIndex, ArtifactStoreError> {
     let bundle_path = bundle_path.as_ref();
     let store = open_artifact_store(bundle_path)?;
     let mut index = ResourceIndex::default();
@@ -181,6 +193,9 @@ pub fn index_draft_resources(
         for segment in &track.segments {
             index_segment_resources(&mut index, segment)?;
         }
+    }
+    for (resource_ref, project_relative_ref) in extra_resources {
+        upsert_resource(&mut index, resource_ref, project_relative_ref.as_deref())?;
     }
 
     persist_resource_index(store.connection(), &index, 0)?;
@@ -320,8 +335,14 @@ fn persist_resource_index(
     index: &ResourceIndex,
     now_unix_ms: i64,
 ) -> Result<(), ArtifactStoreError> {
+    let transaction =
+        conn.unchecked_transaction()
+            .map_err(|source| ArtifactStoreError::Sqlite {
+                path: "artifact-store.sqlite".into(),
+                source,
+            })?;
     for resource in index.resources() {
-        conn.execute(
+        transaction.execute(
             "INSERT INTO resource (
                 resource_id, resource_kind, stable_key, source_uri, project_relative_ref,
                 source_fingerprint, source_byte_count, status, created_at_unix_ms, updated_at_unix_ms
@@ -348,6 +369,12 @@ fn persist_resource_index(
             source,
         })?;
     }
+    transaction
+        .commit()
+        .map_err(|source| ArtifactStoreError::Sqlite {
+            path: "artifact-store.sqlite".into(),
+            source,
+        })?;
     Ok(())
 }
 

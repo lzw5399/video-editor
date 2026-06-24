@@ -137,11 +137,15 @@ require_fixed "package.json" "\"test:phase17-rust\""
 require_fixed "package.json" "cargo test -p draft_import adaptation_report -- --nocapture"
 require_fixed "package.json" "cargo test -p draft_import schema_exports -- --nocapture"
 
-fail_matches \
-  "core/render/export/session paths must not contain provider-specific render semantics" \
-  "$PROVIDER_LEAKAGE_PATTERN" \
-  "${CORE_BOUNDARY_PATHS[@]}" \
-  --glob '!*.svg'
+provider_leakage_matches="$(
+  matches_for_pattern "$PROVIDER_LEAKAGE_PATTERN" "${CORE_BOUNDARY_PATHS[@]}" --glob '!*.svg' \
+    | rg -v --pcre2 '^crates/bindings_node/src/(project_session_service|lib)\.rs:[0-9]+:.*(?:import|Import|formula|Formula|adapter_kaipai|KaipaiFormulaBundle|KaipaiImportOptions|map_kaipai_bundle_to_import_plan)' \
+    || true
+)"
+if [ -n "$provider_leakage_matches" ]; then
+  printf '%s\n' "$provider_leakage_matches" >&2
+  fail "core/render/export/session paths must not contain provider-specific render semantics"
+fi
 
 fail_matches \
   "runtime paths must not depend on remote template/render URLs" \

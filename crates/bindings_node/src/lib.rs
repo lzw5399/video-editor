@@ -205,6 +205,11 @@ pub fn execute_project_intent(request: serde_json::Value) -> Result<serde_json::
     project_session_service::execute_project_intent(request)
 }
 
+#[napi(js_name = "importKaipaiFormulaBundle")]
+pub fn import_kaipai_formula_bundle(request: serde_json::Value) -> Result<serde_json::Value> {
+    project_session_service::import_kaipai_formula_bundle(request)
+}
+
 #[napi(js_name = "listProjectSessionMaterials")]
 pub fn list_project_session_materials(request: serde_json::Value) -> Result<serde_json::Value> {
     project_session_service::list_project_session_materials(request)

@@ -11,11 +11,13 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
+adapter_kaipai = { path = "../adapter_kaipai" }
 artifact_store = { path = "../artifact_store" }
 audio_engine = { path = "../audio_engine" }
 audio_output_desktop = { path = "../audio_output_desktop" }
 blake3 = "1.8.5"
 draft_commands = { path = "../draft_commands" }
+draft_import = { path = "../draft_import" }
 draft_model = { path = "../draft_model" }
 engine_core = { path = "../engine_core" }
 ffmpeg_compiler = { path = "../ffmpeg_compiler" }

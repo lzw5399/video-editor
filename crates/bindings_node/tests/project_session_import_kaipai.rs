@@ -1,7 +1,5 @@
 use artifact_store::schema::open_artifact_store;
-use bindings_node::{
-    close_project_session, create_project_session, import_kaipai_formula_bundle,
-};
+use bindings_node::{close_project_session, create_project_session, import_kaipai_formula_bundle};
 use project_store::{StdPlatformFileSystem, open_project_bundle};
 use serde_json::{Value, json};
 use std::fs;
@@ -27,10 +25,7 @@ fn project_session_import_kaipai_formula_bundle_applies_atomically_and_indexes_m
     assert_eq!(imported["ok"], true, "{imported:#}");
     assert_eq!(imported["data"]["sessionId"], "kaipai-import-success-main");
     assert_eq!(imported["data"]["revision"], 1);
-    assert_eq!(
-        imported["data"]["viewModel"]["project"]["materialCount"],
-        1
-    );
+    assert_eq!(imported["data"]["viewModel"]["project"]["materialCount"], 1);
     assert_eq!(
         imported["data"]["adaptationReport"]["sourceKind"],
         "kaipaiOfflineBundle"
@@ -45,7 +40,10 @@ fn project_session_import_kaipai_formula_bundle_applies_atomically_and_indexes_m
 
     let reopened = open_project_bundle(&StdPlatformFileSystem, &case.bundle_path)
         .expect("successful import should save canonical project.json");
-    assert_eq!(reopened.bundle.draft.metadata.name, "导入模板 import-main-video");
+    assert_eq!(
+        reopened.bundle.draft.metadata.name,
+        "导入模板 import-main-video"
+    );
     assert_eq!(reopened.bundle.draft.materials.len(), 1);
     assert_eq!(reopened.bundle.draft.tracks.len(), 1);
     assert_eq!(case.saved_project_json(), case.saved_project_json());
@@ -56,10 +54,9 @@ fn project_session_import_kaipai_formula_bundle_applies_atomically_and_indexes_m
         rows.iter().any(|row| {
             row.kind == "material"
                 && row.stable_key == "template-import:material:material-main-video"
-                && row
-                    .project_relative_ref
-                    .as_deref()
-                    .is_some_and(|value| value.starts_with("resources/template-import/import-main-video/"))
+                && row.project_relative_ref.as_deref().is_some_and(|value| {
+                    value.starts_with("resources/template-import/import-main-video/")
+                })
                 && row.status == "ready"
         }),
         "successful import should persist localized material resource index rows: {rows:#?}"
@@ -103,10 +100,9 @@ fn project_session_import_kaipai_formula_bundle_indexes_localized_font_resources
         rows.iter().any(|row| {
             row.kind == "font"
                 && row.stable_key == "template-import:font:font-redacted-noto"
-                && row
-                    .project_relative_ref
-                    .as_deref()
-                    .is_some_and(|value| value.starts_with("resources/template-import/import-text-sticker/"))
+                && row.project_relative_ref.as_deref().is_some_and(|value| {
+                    value.starts_with("resources/template-import/import-text-sticker/")
+                })
                 && row.status == "ready"
         }),
         "successful import should persist localized font resource index rows: {rows:#?}"
@@ -258,8 +254,11 @@ impl ImportCase {
             let path = source_root.join(uri);
             fs::create_dir_all(path.parent().expect("resource path should have parent"))
                 .expect("resource directory should create");
-            fs::write(&path, format!("project session import fixture {resource_id}"))
-                .expect("resource fixture should write");
+            fs::write(
+                &path,
+                format!("project session import fixture {resource_id}"),
+            )
+            .expect("resource fixture should write");
         }
         source_root
     }
@@ -320,7 +319,10 @@ fn resource_rows(bundle_path: &Path) -> Vec<ResourceRow> {
 
 fn assert_project_json_is_canonical(project_json: &str) {
     let value: Value = serde_json::from_str(project_json).expect("project JSON should parse");
-    assert!(value.get("materials").is_some(), "project JSON should be a Draft");
+    assert!(
+        value.get("materials").is_some(),
+        "project JSON should be a Draft"
+    );
     let serialized = serde_json::to_string(&value).expect("project JSON should serialize");
     for forbidden in [
         "templateId",
