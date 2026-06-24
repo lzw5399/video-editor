@@ -226,6 +226,7 @@ ipcMain.handle("core:probeMediaRuntime", (event) => {
 });
 ipcMain.handle("core:probeRuntimeCapabilities", (event) => {
   assertAllowedIpcSender(event);
+  recordTestTaskRuntimeCall("probeRuntimeCapabilities");
   const testRuntimeCapabilitiesResponse = maybeBuildTestRuntimeCapabilitiesResponse();
   if (testRuntimeCapabilitiesResponse !== null) {
     return testRuntimeCapabilitiesResponse;
@@ -911,7 +912,13 @@ function recordTestExplicitArtifactCall(
   recordTestNativeCommandObservation(buildExplicitArtifactEnvelope(command, request));
 }
 
-function recordTestTaskRuntimeCall(command: "getTaskRuntimeStatus" | "getTaskRuntimeTelemetry" | "applyTaskRuntimeDevConfig"): void {
+function recordTestTaskRuntimeCall(
+  command:
+    | "probeRuntimeCapabilities"
+    | "getTaskRuntimeStatus"
+    | "getTaskRuntimeTelemetry"
+    | "applyTaskRuntimeDevConfig"
+): void {
   if (!testObservationEnabled) {
     return;
   }

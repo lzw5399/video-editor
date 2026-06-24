@@ -375,6 +375,13 @@ export function PreviewMonitor({
     : productPreviewStatusLabel === "画面已更新，预览待刷新"
       ? productPreviewStatusLabel
       : resourcePreviewStatusLabel ?? productPreviewStatusLabel;
+  const runtimePreviewUnavailable = !runtimeDiagnostics.canPreview;
+  const previewPlaybackLabel =
+    runtimePreviewUnavailable && !playbackRunning ? "预览暂不可用" : previewControlLabel("播放", playbackRunning);
+  const previewPlaybackTitle =
+    runtimePreviewUnavailable && !playbackRunning
+      ? runtimeDiagnostics.statusDetail || runtimeDiagnostics.statusLabel
+      : previewPlaybackLabel;
   const selectionOverlay = buildSelectionOverlayModel(
     selectedSegment,
     nativeHostState.contentEvidence,
@@ -843,7 +850,7 @@ export function PreviewMonitor({
                 }
               }}
               disabled={
-                pending && !(playbackRunning && control.label === "停止")
+                (runtimePreviewUnavailable || pending) && !(playbackRunning && control.label === "停止")
               }
             >
               <MonitorControlGlyph control={control} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
@@ -855,10 +862,10 @@ export function PreviewMonitor({
           <button
             type="button"
             className="preview-play-button"
-            aria-label={previewControlLabel("播放", playbackRunning)}
-            title={previewControlLabel("播放", playbackRunning)}
+            aria-label={previewPlaybackLabel}
+            title={previewPlaybackTitle}
             onClick={onTogglePlayback}
-            disabled={pending && !playbackRunning}
+            disabled={(runtimePreviewUnavailable || pending) && !playbackRunning}
           >
             <MonitorControlGlyph control={{ label: "播放", icon: "play", symbol: "▶" }} canvasRatio={canvasRatio} playbackRunning={playbackRunning} />
           </button>
