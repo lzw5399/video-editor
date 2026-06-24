@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-07-PLAN.md
-last_updated: "2026-06-24T08:24:08.354Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-06-24T08:42:22.413Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 153
+  completed_plans: 154
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 17 execution started
 
@@ -190,6 +190,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 17 P02 | 9 min | 2 tasks | 7 files |
 | Phase 17 P04 | 11 min | 2 tasks | 14 files |
 | Phase 17 P07 | 11 min | 2 tasks | 4 files |
+| Phase 17 P03 | 10 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -527,6 +528,9 @@ Recent decisions affecting current work:
 - [Phase 17]: Static center-anchor rotation is compiled generically in ffmpeg_compiler instead of adapter/provider code.
 - [Phase 17]: Non-center-anchor rotation and animated visual rotation remain explicit unsupported diagnostics.
 - [Phase 17]: Render graph diagnostics no longer classify supported static center-anchor rotation as unsupported.
+- [Phase 17]: DraftImportPlan carries canonical draft semantics only; report/provenance evidence is supplied through DraftImportApplicationInput and returned as AdaptationReport. — Preserves adapter/session boundary and keeps provider evidence out of canonical draft semantics.
+- [Phase 17]: Import track z-order is provider-neutral ordering metadata validated before application, then represented by canonical Draft track order. — Keeps external adapter level/order mapping out of render semantics while preserving deterministic layer order.
+- [Phase 17]: Import application is pure and returns Draft plus AdaptationReport; project-session persistence remains a later owner. — Maintains Rust session ownership of .veproj/project.json mutation and prevents adapters from writing project bundles directly.
 
 ### Pending Todos
 
@@ -607,6 +611,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T08:23:17.770Z
-Stopped at: Completed 17-07-PLAN.md
+Last session: 2026-06-24T08:42:22.407Z
+Stopped at: Completed 17-03-PLAN.md
 Resume file: None
