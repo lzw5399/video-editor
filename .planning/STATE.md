@@ -554,6 +554,8 @@ Recent decisions affecting current work:
 - [Phase 17]: 17-09: Template report UI renders bounded product copy from Rust AdaptationReport data and hides raw provider diagnostics/provenance.
 - [Phase 17]: 17-09: Project-session export resolves bundle-relative material URIs against the canonical .veproj path before FFmpeg compilation without rewriting project.json.
 - [Phase 17]: 17-09: Kaipai video imports no longer imply audio streams unless the resource is explicitly audio.
+- [Phase 17]: Review fix: Kaipai mapping is cumulative by formula section, so mixed templates preserve supported video, PIP, text, and BGM sections while native effects remain report-only degradation.
+- [Phase 17]: Review fix: failed post-localization import persistence cleans the current transaction's `resources/template-import/...` files and restores project/index state.
 
 ### Pending Todos
 
