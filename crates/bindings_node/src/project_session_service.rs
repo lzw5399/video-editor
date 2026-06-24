@@ -37,6 +37,9 @@ use task_runtime::{
     PlaybackGeneration, ResourceClass, TaskCancellationToken, TaskRuntimeConfig,
 };
 
+use crate::task_runtime_service::{
+    TaskRuntimeTelemetrySource, record_task_runtime_scheduler_snapshot,
+};
 use crate::timeline_selection::{
     percent_decode_timeline_handle_component, timeline_segment_selection_handle,
     timeline_track_selection_handle,
@@ -799,6 +802,15 @@ fn global_project_io_scheduler() -> &'static Mutex<ProjectIoSchedulerState> {
     SCHEDULER.get_or_init(|| Mutex::new(ProjectIoSchedulerState::default()))
 }
 
+pub(crate) fn record_project_session_task_runtime_telemetry_snapshots() {
+    if let Ok(state) = global_material_probe_scheduler().lock() {
+        state.record_task_runtime_telemetry();
+    }
+    if let Ok(state) = global_project_io_scheduler().lock() {
+        state.record_task_runtime_telemetry();
+    }
+}
+
 impl MaterialProbeSchedulerState {
     fn now_us(&self) -> u64 {
         u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
@@ -808,6 +820,13 @@ impl MaterialProbeSchedulerState {
         let token = TaskCancellationToken::new(self.next_token_id);
         self.next_token_id = self.next_token_id.saturating_add(1);
         token
+    }
+
+    fn record_task_runtime_telemetry(&self) {
+        record_task_runtime_scheduler_snapshot(
+            TaskRuntimeTelemetrySource::MediaProbe,
+            &self.scheduler.telemetry_snapshot(),
+        );
     }
 }
 
@@ -820,6 +839,13 @@ impl ProjectIoSchedulerState {
         let token = TaskCancellationToken::new(self.next_token_id);
         self.next_token_id = self.next_token_id.saturating_add(1);
         token
+    }
+
+    fn record_task_runtime_telemetry(&self) {
+        record_task_runtime_scheduler_snapshot(
+            TaskRuntimeTelemetrySource::ProjectIo,
+            &self.scheduler.telemetry_snapshot(),
+        );
     }
 }
 
@@ -860,8 +886,14 @@ fn enqueue_material_probe(work: ScheduledMaterialProbe) -> std::result::Result<S
             .start_next(start_at_us)
             .map_err(|error| format!("material probe scheduler start failed: {error}"))?
         {
-            Some(envelope) => Some((envelope.job_id, work)),
-            None => None,
+            Some(envelope) => {
+                state.record_task_runtime_telemetry();
+                Some((envelope.job_id, work))
+            }
+            None => {
+                state.record_task_runtime_telemetry();
+                None
+            }
         }
     };
 
@@ -902,6 +934,7 @@ fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
                 .with_expected_revision(current_revision.unwrap_or(u64::MAX)),
             |_| accepted = true,
         );
+        state.record_task_runtime_telemetry();
     }
 
     if accepted {
@@ -1005,6 +1038,7 @@ fn run_project_io_job<T>(label: &str, expected_revision: u64, operation: impl Fn
             let _ = state.scheduler.submit(envelope);
             let now_us = state.now_us();
             let _ = state.scheduler.start_next(now_us);
+            state.record_task_runtime_telemetry();
         }
     }
     let output = operation();
@@ -1024,6 +1058,7 @@ fn complete_project_io_job(job_id: JobId, expected_revision: u64) {
             CompletionFreshness::none().with_expected_revision(expected_revision),
             |_| {},
         );
+        state.record_task_runtime_telemetry();
     }
 }
 
@@ -1149,6 +1184,7 @@ impl ProjectSessionRegistry {
     }
 
     fn list_materials(&self, request: ProjectSessionReadRequest) -> Result<serde_json::Value> {
+        let _known_revision = request.expected_revision;
         let Some(session) = self.sessions.get(&request.session_id) else {
             return crate::to_js_value(crate::error_envelope(
                 CommandErrorKind::InvalidProject,
@@ -1156,16 +1192,6 @@ impl ProjectSessionRegistry {
                 Some("listProjectSessionMaterials".to_string()),
             ));
         };
-        if request.expected_revision != session.revision {
-            return crate::to_js_value(crate::error_envelope(
-                CommandErrorKind::InvalidPayload,
-                format!(
-                    "Stale project session revision: expected {}, current {}",
-                    request.expected_revision, session.revision
-                ),
-                Some("listProjectSessionMaterials".to_string()),
-            ));
-        }
 
         crate::to_js_value(crate::ok_envelope(ProjectSessionMaterialsResponse {
             session_id: session.session_id.clone(),
@@ -1180,6 +1206,7 @@ impl ProjectSessionRegistry {
         &self,
         request: ProjectSessionReadRequest,
     ) -> Result<serde_json::Value> {
+        let _known_revision = request.expected_revision;
         let Some(session) = self.sessions.get(&request.session_id) else {
             return crate::to_js_value(crate::error_envelope(
                 CommandErrorKind::InvalidProject,
@@ -1187,16 +1214,6 @@ impl ProjectSessionRegistry {
                 Some("listProjectSessionMissingMaterials".to_string()),
             ));
         };
-        if request.expected_revision != session.revision {
-            return crate::to_js_value(crate::error_envelope(
-                CommandErrorKind::InvalidPayload,
-                format!(
-                    "Stale project session revision: expected {}, current {}",
-                    request.expected_revision, session.revision
-                ),
-                Some("listProjectSessionMissingMaterials".to_string()),
-            ));
-        }
 
         let fs = StdPlatformFileSystem;
         match crate::material_service::list_missing_materials(

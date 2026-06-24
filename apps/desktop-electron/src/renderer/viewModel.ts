@@ -1027,6 +1027,27 @@ export function formatMaterialDetail(material: Material): string {
   return metadata.probeError ?? "素材信息待解析";
 }
 
+export function materialReadyForTimeline(material: Material): boolean {
+  if (material.status !== "available") {
+    return false;
+  }
+
+  if (material.kind === "video") {
+    return material.metadata.hasVideo;
+  }
+
+  if (material.kind === "audio") {
+    return material.metadata.hasAudio;
+  }
+
+  if (material.kind === "image" || material.kind === "sticker") {
+    return material.metadata.width !== null && material.metadata.width !== undefined
+      && material.metadata.height !== null && material.metadata.height !== undefined;
+  }
+
+  return true;
+}
+
 export function formatCommandError(message: string): string {
   return `操作失败：${message}。请检查素材或撤销上一步后重试。`;
 }
@@ -1198,6 +1219,10 @@ export function formatExportProgress(progressPerMille: number | null | undefined
 }
 
 export function materialStatusMessage(material: Material): string | null {
+  if (material.status === "available" && !materialReadyForTimeline(material)) {
+    return "素材分析中：完成后可添加到时间线。";
+  }
+
   if (material.status === "missing") {
     return "素材丢失：请重新定位文件后继续编辑。";
   }

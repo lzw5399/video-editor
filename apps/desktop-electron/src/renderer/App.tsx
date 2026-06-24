@@ -43,6 +43,7 @@ import type {
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
+  Material,
   SegmentVolume,
   TrackKind
 } from "../generated/Draft";
@@ -61,6 +62,7 @@ import {
   artifactPreviewStatusLabel,
   formatExportDiagnostic,
   formatCommandError,
+  materialReadyForTimeline,
   resourcePanelFromArtifactStatus,
   resourcePanelWithError,
   resourcePanelWithMaintenanceResult,
@@ -81,6 +83,8 @@ type VersionResponse = { coreVersion: string; contractVersion: string };
 
 const SEQUENCE_END_EPSILON_US = 7_000;
 const REALTIME_PREVIEW_TARGET_TOLERANCE_US = 5_000;
+const MATERIAL_READINESS_POLL_INTERVAL_MS = 250;
+const MATERIAL_READINESS_TIMEOUT_MS = 30_000;
 
 type VideoEditorCoreApi = {
   ping: () => Promise<CommandResultEnvelope<PingResponse>>;
@@ -151,6 +155,7 @@ type RealtimePreviewProjectSessionSnapshotKey = {
   projectSessionId: string;
   revision: number;
   selectedSegmentHandle: string | null;
+  draftSemanticKey: string;
 };
 type ExportCommandResultApplier = (
   current: WorkspaceState,
@@ -424,9 +429,13 @@ export function App(): React.ReactElement {
     });
 
     try {
+      const syncedSession = await syncProjectSessionBeforeMutation(pendingCommand);
+      if (syncedSession === null) {
+        return null;
+      }
       const result = await window.videoEditorCore.executeProjectIntent<T>({
-        sessionId: session.sessionId,
-        expectedRevision: session.revision,
+        sessionId: syncedSession.sessionId,
+        expectedRevision: syncedSession.revision,
         intent
       });
       if (result.ok && result.data !== null) {
@@ -608,7 +617,22 @@ export function App(): React.ReactElement {
         };
   }
 
-  async function listProjectSessionMaterials(sessionId: string, expectedRevision: number) {
+  function syncProjectSessionReadResponse(response: Pick<ProjectSessionMaterialsResponse, "sessionId" | "revision" | "bundlePath">): void {
+    const session = projectSessionRef.current;
+    if (session === null || session.sessionId !== response.sessionId) {
+      return;
+    }
+    projectSessionRef.current = {
+      sessionId: response.sessionId,
+      revision: response.revision
+    };
+    setBundlePath(response.bundlePath);
+  }
+
+  async function readProjectSessionMaterials(
+    sessionId: string,
+    expectedRevision: number
+  ): Promise<ProjectSessionMaterialsResponse> {
     const result = await window.videoEditorCore.listProjectSessionMaterials({
       sessionId,
       expectedRevision
@@ -616,7 +640,73 @@ export function App(): React.ReactElement {
     if (!result.ok || result.data === null) {
       throw new Error(result.error?.message ?? "素材列表读取失败");
     }
-    return result.data.materials;
+    syncProjectSessionReadResponse(result.data);
+    return result.data;
+  }
+
+  async function listProjectSessionMaterials(sessionId: string, expectedRevision: number) {
+    return (await readProjectSessionMaterials(sessionId, expectedRevision)).materials;
+  }
+
+  async function refreshProjectSessionMaterialsQuietly(): Promise<Material[] | null> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      return null;
+    }
+
+    const response = await readProjectSessionMaterials(session.sessionId, session.revision);
+    setWorkspace((current) => {
+      const next = {
+        ...current,
+        materials: response.materials
+      };
+      workspaceRef.current = next;
+      return next;
+    });
+    return response.materials;
+  }
+
+  async function syncProjectSessionBeforeMutation(action: string): Promise<ProjectSessionClientState | null> {
+    const session = projectSessionRef.current;
+    if (session === null) {
+      return null;
+    }
+    try {
+      await refreshProjectSessionMaterialsQuietly();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const next = {
+        ...workspaceRef.current,
+        pendingCommand: null,
+        commandError: commandErrorMessage(`${action}前同步项目状态失败：${message}`)
+      };
+      workspaceRef.current = next;
+      setWorkspace(next);
+      return null;
+    }
+    if (projectSessionRef.current?.sessionId === session.sessionId) {
+      return projectSessionRef.current;
+    }
+    const next = {
+      ...workspaceRef.current,
+      pendingCommand: null,
+      commandError: commandErrorMessage(`${action}前项目会话已切换，请重新执行操作`)
+    };
+    workspaceRef.current = next;
+    setWorkspace(next);
+    return null;
+  }
+
+  async function waitForImportedMaterialReadiness(materialId: string): Promise<void> {
+    const deadline = Date.now() + MATERIAL_READINESS_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const materials = await refreshProjectSessionMaterialsQuietly();
+      const material = materials?.find((candidate) => candidate.materialId === materialId) ?? null;
+      if (material === null || materialReadyForTimeline(material) || material.status !== "available") {
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, MATERIAL_READINESS_POLL_INTERVAL_MS));
+    }
   }
 
   async function listProjectSessionMissingMaterials(sessionId: string, expectedRevision: number) {
@@ -1376,6 +1466,10 @@ export function App(): React.ReactElement {
         };
       }
     );
+    if (result !== null && result.ok && result.data !== null) {
+      syncProjectSessionReadResponse(result.data);
+      await waitForImportedMaterialReadiness(result.data.material.materialId);
+    }
     return result !== null && result.ok && result.data !== null;
   }
 
@@ -2138,10 +2232,12 @@ export function App(): React.ReactElement {
 
     const currentSnapshot = realtimePreviewSnapshotRef.current;
     const selectedSegmentHandle = workspaceRef.current.viewModel.selectedSegment?.selectionHandle ?? null;
+    const draftSemanticKey = realtimePreviewDraftSemanticKey(workspaceRef.current);
     if (
       currentSnapshot?.projectSessionId === projectSession.sessionId &&
       currentSnapshot.revision === projectSession.revision &&
-      currentSnapshot.selectedSegmentHandle === selectedSegmentHandle
+      currentSnapshot.selectedSegmentHandle === selectedSegmentHandle &&
+      currentSnapshot.draftSemanticKey === draftSemanticKey
     ) {
       return true;
     }
@@ -2154,7 +2250,8 @@ export function App(): React.ReactElement {
         realtimePreviewSnapshotRef.current = {
           projectSessionId: projectSession.sessionId,
           revision: projectSession.revision,
-          selectedSegmentHandle
+          selectedSegmentHandle,
+          draftSemanticKey
         };
         realtimePreviewLastSeekTargetRef.current = null;
       }
@@ -2875,6 +2972,45 @@ function timelineHasAudibleMediaFrom(workspace: WorkspaceState, targetTime: numb
 
 function firstAudioMaterialId(workspace: WorkspaceState): string | null {
   return workspace.materials.find((material) => material.kind === "audio" && material.status === "available")?.materialId ?? null;
+}
+
+function realtimePreviewDraftSemanticKey(workspace: WorkspaceState): string {
+  const materialKey = workspace.materials
+    .map((material) =>
+      [
+        material.materialId,
+        material.kind,
+        material.status,
+        material.uri,
+        material.metadata.hasVideo ? "v1" : "v0",
+        material.metadata.hasAudio ? "a1" : "a0",
+        material.metadata.width ?? "w",
+        material.metadata.height ?? "h"
+      ].join(":")
+    )
+    .join("|");
+  const timelineKey = workspace.viewModel.timeline.rows
+    .map((row) =>
+      [
+        row.rowKey,
+        row.selectionHandle,
+        row.segments
+          .map((segment) =>
+            [
+              segment.segmentKey,
+              segment.selectionHandle,
+              segment.material?.materialId ?? "none",
+              segment.visualKind,
+              segment.start,
+              segment.duration,
+              segment.selected ? "s1" : "s0"
+            ].join(":")
+          )
+          .join(",")
+      ].join("=")
+    )
+    .join("|");
+  return `${materialKey}#${timelineKey}`;
 }
 
 function projectNameFromBundlePath(bundlePath: string): string {

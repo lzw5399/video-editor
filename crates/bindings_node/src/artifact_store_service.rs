@@ -40,6 +40,10 @@ use task_runtime::{
     PlaybackGeneration, ResourceClass, TaskCancellationToken, TaskRuntimeConfig,
 };
 
+use crate::task_runtime_service::{
+    TaskRuntimeTelemetrySource, record_task_runtime_scheduler_snapshot,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtifactStoreCommandKind {
     GetStatus,
@@ -252,6 +256,7 @@ impl SchedulerArtifactService {
                 .scheduler
                 .submit(envelope)
                 .map_err(|_| ArtifactBindingError::SchedulerRejected)?;
+            state.record_task_runtime_telemetry();
             state.pending.insert(
                 job_id,
                 ScheduledArtifactWork {
@@ -276,6 +281,7 @@ impl SchedulerArtifactService {
         }
         let now_us = state.now_us();
         let _ = state.scheduler.cancel_at(&job_id, now_us);
+        state.record_task_runtime_telemetry();
     }
 
     fn start_ready_jobs(&self) -> Result<(), ArtifactBindingError> {
@@ -289,6 +295,7 @@ impl SchedulerArtifactService {
                     .start_next(now_us)
                     .map_err(|_| ArtifactBindingError::SchedulerRejected)?
                 else {
+                    state.record_task_runtime_telemetry();
                     break;
                 };
                 if envelope.domain != JobDomain::ArtifactGeneration {
@@ -308,6 +315,7 @@ impl SchedulerArtifactService {
                         CompletionFreshness::none(),
                         |_| {},
                     );
+                    state.record_task_runtime_telemetry();
                 }
             }
         }
@@ -378,6 +386,7 @@ impl SchedulerArtifactService {
                 .with_expected_revision(current_revision.unwrap_or(u64::MAX)),
             |_| accepted = true,
         );
+        state.record_task_runtime_telemetry();
         matches!(completion, Ok(JobCompletion::Accepted { .. })) && accepted
     }
 }
@@ -392,11 +401,25 @@ impl SchedulerArtifactState {
         self.next_token_id = self.next_token_id.saturating_add(1);
         token
     }
+
+    fn record_task_runtime_telemetry(&self) {
+        record_task_runtime_scheduler_snapshot(
+            TaskRuntimeTelemetrySource::ArtifactGeneration,
+            &self.scheduler.telemetry_snapshot(),
+        );
+    }
 }
 
 fn global_artifact_scheduler() -> &'static SchedulerArtifactService {
     static SCHEDULER: OnceLock<SchedulerArtifactService> = OnceLock::new();
     SCHEDULER.get_or_init(SchedulerArtifactService::default)
+}
+
+pub(crate) fn record_artifact_task_runtime_telemetry_snapshot() {
+    let scheduler = global_artifact_scheduler();
+    if let Ok(state) = scheduler.state.lock() {
+        state.record_task_runtime_telemetry();
+    }
 }
 
 #[derive(Debug)]

@@ -43,6 +43,10 @@ use task_runtime::{
     TaskRuntimeConfig,
 };
 
+use crate::task_runtime_service::{
+    TaskRuntimeTelemetrySource, record_task_runtime_scheduler_snapshot,
+};
+
 #[derive(Debug)]
 pub enum PreviewCommandError {
     Service(PreviewServiceError),
@@ -359,6 +363,11 @@ impl SchedulerExportService {
         Self::default()
     }
 
+    pub fn record_task_runtime_telemetry_snapshot(&self) {
+        let state = self.state.lock().expect("scheduler export lock");
+        state.record_task_runtime_telemetry();
+    }
+
     pub fn start_export(
         &self,
         runtime: RuntimeConfig,
@@ -412,6 +421,7 @@ impl SchedulerExportService {
             state.scheduler.submit(envelope).map_err(|error| {
                 ExportCommandError::Scheduler(format!("scheduler export queue rejected: {error}"))
             })?;
+            state.record_task_runtime_telemetry();
             state.entries.insert(
                 prepared.job_id.clone(),
                 SchedulerExportEntry {
@@ -473,6 +483,7 @@ impl SchedulerExportService {
             if let Some(validation_job_id) = validation_job_id.as_ref() {
                 let _ = state.scheduler.cancel_at(validation_job_id, now_us);
             }
+            state.record_task_runtime_telemetry();
             state.update_status_if_not_terminal(job_id, |status| {
                 status.phase = ExportJobPhase::Cancelled;
                 status.log_summary = Some("导出任务已取消".to_owned());
@@ -498,6 +509,7 @@ impl SchedulerExportService {
                     ExportCommandError::Scheduler(format!("scheduler export start failed: {error}"))
                 })?
                 else {
+                    state.record_task_runtime_telemetry();
                     break;
                 };
                 let Some(work) = state.pending.remove(&envelope.job_id) else {
@@ -509,6 +521,7 @@ impl SchedulerExportService {
                         CompletionFreshness::none(),
                         |_| {},
                     );
+                    state.record_task_runtime_telemetry();
                     continue;
                 };
                 match work {
@@ -731,6 +744,7 @@ impl SchedulerExportService {
                 submitted_at_us,
             );
             if state.scheduler.submit(envelope).is_err() {
+                state.record_task_runtime_telemetry();
                 let _ = state.update_status_if_not_terminal(&export_job_id, |status| {
                     status.phase = ExportJobPhase::Failed;
                     status.log_summary = Some("导出输出校验未能进入调度器".to_owned());
@@ -743,6 +757,7 @@ impl SchedulerExportService {
                 });
                 return;
             }
+            state.record_task_runtime_telemetry();
             if let Some(entry) = state.entries.get_mut(&export_job_id) {
                 entry.validation_job_id = Some(validation_job_id.clone());
                 entry.validation_task_token = Some(token);
@@ -812,13 +827,15 @@ impl SchedulerExportService {
         let completion = {
             let mut state = self.state.lock().expect("scheduler export lock");
             let completed_at_us = state.now_us();
-            state.scheduler.complete_with_commit(
+            let completion = state.scheduler.complete_with_commit(
                 job_id,
                 result,
                 completed_at_us,
                 CompletionFreshness::none(),
                 |_| accepted = true,
-            )
+            );
+            state.record_task_runtime_telemetry();
+            completion
         };
         matches!(completion, Ok(JobCompletion::Accepted { .. })) && accepted
     }
@@ -875,6 +892,7 @@ impl SchedulerExportState {
     }
 
     fn binding_status(&self, entry: &SchedulerExportEntry) -> SchedulerExportStatusResponse {
+        self.record_task_runtime_telemetry();
         SchedulerExportStatusResponse {
             status: entry.status.clone(),
             scheduler: scheduler_export_telemetry(
@@ -902,6 +920,13 @@ impl SchedulerExportState {
         self.entries
             .get(job_id)
             .is_some_and(|entry| is_terminal_export_phase(entry.status.phase))
+    }
+
+    fn record_task_runtime_telemetry(&self) {
+        record_task_runtime_scheduler_snapshot(
+            TaskRuntimeTelemetrySource::Export,
+            &self.scheduler.telemetry_snapshot(),
+        );
     }
 }
 

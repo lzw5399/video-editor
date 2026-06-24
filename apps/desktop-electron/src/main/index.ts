@@ -68,9 +68,11 @@ import {
   type SegmentVisualPatch,
   type StartProjectSessionExportRequest,
   type TaskRuntimeDevConfigRequest,
+  type TaskRuntimeTelemetryResponse,
+  type TaskRuntimeTelemetrySummary,
   type TextSegmentPatch
 } from "./nativeBinding";
-import { registerRealtimePreviewHost } from "./realtimePreviewHost";
+import { getRealtimePreviewHostTaskRuntimeTelemetry, registerRealtimePreviewHost } from "./realtimePreviewHost";
 
 type TestNativeCommandObservation = {
   command: CommandEnvelope["command"] | "getTaskRuntimeStatus" | "getTaskRuntimeTelemetry" | "applyTaskRuntimeDevConfig";
@@ -135,6 +137,11 @@ type TestProjectSessionCall = {
   srtContent: string | null;
   timelineSemanticKeys: string[];
   hasDraftField: boolean;
+  resultOk: boolean | null;
+  resultErrorKind: string | null;
+  resultErrorMessage: string | null;
+  resultRevision: number | null;
+  resultTimelineSegmentCount: number | null;
 };
 
 type TestWindowMetrics = {
@@ -237,8 +244,10 @@ ipcMain.handle("core:openProjectSession", (event, request: OpenProjectSessionReq
 });
 ipcMain.handle("core:executeProjectIntent", (event, request: ExecuteProjectIntentRequest) => {
   assertAllowedIpcSender(event);
-  recordTestProjectSessionCall("executeProjectIntent", request);
-  return executeProjectIntent(request);
+  const observationIndex = recordTestProjectSessionCall("executeProjectIntent", request);
+  const result = executeProjectIntent(request);
+  recordTestProjectSessionResult(observationIndex, result);
+  return result;
 });
 ipcMain.handle("core:listProjectSessionMaterials", (event, request: ProjectSessionReadRequest) => {
   assertAllowedIpcSender(event);
@@ -447,7 +456,7 @@ ipcMain.handle("core:getTaskRuntimeStatus", (event) => {
 ipcMain.handle("core:getTaskRuntimeTelemetry", (event) => {
   assertAllowedIpcSender(event);
   recordTestTaskRuntimeCall("getTaskRuntimeTelemetry");
-  return getTaskRuntimeTelemetry({});
+  return mergeTaskRuntimeTelemetry(getTaskRuntimeTelemetry({}), getRealtimePreviewHostTaskRuntimeTelemetry());
 });
 if (isDevelopment && showDeveloperDiagnostics) {
   ipcMain.handle("diagnostics:applyTaskRuntimeDevConfig", (event, request: TaskRuntimeDevConfigRequest) => {
@@ -459,6 +468,69 @@ if (isDevelopment && showDeveloperDiagnostics) {
     });
   });
 }
+
+function mergeTaskRuntimeTelemetry(
+  envelope: CommandResultEnvelope<TaskRuntimeTelemetryResponse>,
+  realtimeTelemetry: ReturnType<typeof getRealtimePreviewHostTaskRuntimeTelemetry>
+): CommandResultEnvelope<TaskRuntimeTelemetryResponse> {
+  if (!envelope.ok || envelope.data === null || realtimeTelemetry === null) {
+    return envelope;
+  }
+  const data = envelope.data;
+  return {
+    ...envelope,
+    data: {
+      ...data,
+      submittedCount: Math.max(data.submittedCount, realtimeTelemetry.submittedCount),
+      admittedCount: Math.max(data.admittedCount, realtimeTelemetry.admittedCount),
+      startedCount: Math.max(data.startedCount, realtimeTelemetry.startedCount),
+      completedCount: Math.max(data.completedCount, realtimeTelemetry.completedCount),
+      rejectedCount: Math.max(data.rejectedCount, realtimeTelemetry.rejectedCount),
+      canceledCount: Math.max(data.canceledCount, realtimeTelemetry.canceledCount),
+      staleRejectedCount: Math.max(data.staleRejectedCount, realtimeTelemetry.staleRejectedCount),
+      fallbackCount: Math.max(data.fallbackCount, realtimeTelemetry.fallbackCount),
+      cacheHitCount: Math.max(data.cacheHitCount, realtimeTelemetry.cacheHitCount),
+      firstFrameTimeUs: minNullable(data.firstFrameTimeUs, realtimeTelemetry.firstFrameTimeUs),
+      droppedFrameCount: Math.max(data.droppedFrameCount, realtimeTelemetry.droppedFrameCount),
+      repeatedFrameCount: Math.max(data.repeatedFrameCount, realtimeTelemetry.repeatedFrameCount),
+      resourceSaturationCount: Math.max(data.resourceSaturationCount, realtimeTelemetry.resourceSaturationCount),
+      queueLatencyUs: mergeTaskRuntimeSummary(data.queueLatencyUs, realtimeTelemetry.queueLatencyUs)
+    }
+  };
+}
+
+function mergeTaskRuntimeSummary(
+  first: TaskRuntimeTelemetrySummary,
+  second: TaskRuntimeTelemetrySummary
+): TaskRuntimeTelemetrySummary {
+  return {
+    sampleCount: Math.max(first.sampleCount, second.sampleCount),
+    p50: maxNullable(first.p50 ?? null, second.p50 ?? null),
+    p95: maxNullable(first.p95 ?? null, second.p95 ?? null),
+    max: maxNullable(first.max ?? null, second.max ?? null)
+  };
+}
+
+function minNullable(first: number | null, second: number | null): number | null {
+  if (first === null) {
+    return second;
+  }
+  if (second === null) {
+    return first;
+  }
+  return Math.min(first, second);
+}
+
+function maxNullable(first: number | null, second: number | null): number | null {
+  if (first === null) {
+    return second;
+  }
+  if (second === null) {
+    return first;
+  }
+  return Math.max(first, second);
+}
+
 ipcMain.handle("core:closeProjectSession", (event, request: ProjectSessionRequest) => {
   assertAllowedIpcSender(event);
   recordTestProjectSessionCall("closeProjectSession", request);
@@ -881,9 +953,9 @@ function recordTestProjectSessionCall(
     | ProjectSessionRequest
     | ProjectSessionReadRequest
     | StartProjectSessionExportRequest
-): void {
+): number | null {
   if (!testObservationEnabled) {
-    return;
+    return null;
   }
 
   const intent = "intent" in request ? request.intent : null;
@@ -899,7 +971,7 @@ function recordTestProjectSessionCall(
         ? intentRecord.timeOffset
         : null;
   globalThis.__videoEditorTestProjectSessionCalls ??= [];
-  globalThis.__videoEditorTestProjectSessionCalls.push({
+  const observation: TestProjectSessionCall = {
     command,
     sessionId: "sessionId" in request ? request.sessionId : null,
     expectedRevision: "expectedRevision" in request ? request.expectedRevision : null,
@@ -932,8 +1004,63 @@ function recordTestProjectSessionCall(
     timelineSemanticKeys: timelineSemanticKeys(intentRecord),
     hasDraftField:
       Object.prototype.hasOwnProperty.call(request, "draft") ||
-      (intent !== null && Object.prototype.hasOwnProperty.call(intent, "draft"))
-  });
+      (intent !== null && Object.prototype.hasOwnProperty.call(intent, "draft")),
+    resultOk: null,
+    resultErrorKind: null,
+    resultErrorMessage: null,
+    resultRevision: null,
+    resultTimelineSegmentCount: null
+  };
+  globalThis.__videoEditorTestProjectSessionCalls.push(observation);
+  return globalThis.__videoEditorTestProjectSessionCalls.length - 1;
+}
+
+function recordTestProjectSessionResult(index: number | null, result: CommandResultEnvelope<unknown>): void {
+  if (index === null || !testObservationEnabled) {
+    return;
+  }
+  const observation = globalThis.__videoEditorTestProjectSessionCalls?.[index];
+  if (observation === undefined) {
+    return;
+  }
+  observation.resultOk = result.ok;
+  observation.resultErrorKind = result.error?.kind ?? null;
+  observation.resultErrorMessage = result.error?.message ?? null;
+  observation.resultRevision = projectSessionResultRevision(result.data);
+  observation.resultTimelineSegmentCount = projectSessionResultTimelineSegmentCount(result.data);
+}
+
+function projectSessionResultRevision(data: unknown): number | null {
+  if (typeof data !== "object" || data === null || !("revision" in data)) {
+    return null;
+  }
+  const revision = (data as { revision?: unknown }).revision;
+  return typeof revision === "number" ? revision : null;
+}
+
+function projectSessionResultTimelineSegmentCount(data: unknown): number | null {
+  if (typeof data !== "object" || data === null || !("viewModel" in data)) {
+    return null;
+  }
+  const viewModel = (data as { viewModel?: unknown }).viewModel;
+  if (typeof viewModel !== "object" || viewModel === null || !("timeline" in viewModel)) {
+    return null;
+  }
+  const timeline = (viewModel as { timeline?: unknown }).timeline;
+  if (typeof timeline !== "object" || timeline === null || !("rows" in timeline)) {
+    return null;
+  }
+  const rows = (timeline as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) {
+    return null;
+  }
+  return rows.reduce((count, row) => {
+    if (typeof row !== "object" || row === null || !("segments" in row)) {
+      return count;
+    }
+    const segments = (row as { segments?: unknown }).segments;
+    return count + (Array.isArray(segments) ? segments.length : 0);
+  }, 0);
 }
 
 function timelineSemanticKeys(intent: Record<string, unknown> | null): string[] {

@@ -689,6 +689,12 @@ export type RealtimePreviewTelemetryResponse = {
   canceledRequestCount: number;
   fallbackCount: number;
   cacheHitCount: number;
+  schedulerQueueLatencyP95Us?: number | null;
+  schedulerQueueDepth?: number;
+  schedulerResourceSaturationCount?: number;
+  schedulerRejectedCount?: number;
+  schedulerCanceledCount?: number;
+  schedulerStaleRejectedCount?: number;
   targetTimeMicroseconds: number;
   playbackGeneration: number;
   framePacing: RealtimePreviewFramePacingTelemetry;

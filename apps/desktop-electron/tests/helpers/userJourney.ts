@@ -88,6 +88,11 @@ type ProjectSessionCall = {
   targetTrackHandle?: string | null;
   timelineSemanticKeys?: string[];
   hasDraftField: boolean;
+  resultOk?: boolean | null;
+  resultErrorKind?: string | null;
+  resultErrorMessage?: string | null;
+  resultRevision?: number | null;
+  resultTimelineSegmentCount?: number | null;
 };
 
 type RealtimePreviewHostCall = {
@@ -248,6 +253,37 @@ export type TimelineSegmentSnapshot = {
   targetStartUs: number;
   targetDurationUs: number;
   selected: boolean;
+};
+
+export type TaskRuntimeTelemetrySummary = {
+  sampleCount: number;
+  p50?: number | null;
+  p95?: number | null;
+  max?: number | null;
+};
+
+export type TaskRuntimeTelemetryResponse = {
+  status: "ready" | "degraded" | "unavailable";
+  statusLabel: string;
+  submittedCount: number;
+  admittedCount: number;
+  startedCount: number;
+  completedCount: number;
+  rejectedCount: number;
+  coalescedCount: number;
+  canceledCount: number;
+  staleRejectedCount: number;
+  fallbackCount: number;
+  unavailableCount: number;
+  cacheHitCount: number;
+  firstFrameTimeUs: number | null;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  resourceSaturationCount: number;
+  queueLatencyUs: TaskRuntimeTelemetrySummary;
+  waitTimeUs: TaskRuntimeTelemetrySummary;
+  runTimeUs: TaskRuntimeTelemetrySummary;
+  jobDurationUs: TaskRuntimeTelemetrySummary;
 };
 
 export async function waitForCompositedPreviewEvidence(
@@ -672,6 +708,7 @@ export async function addMaterialToTimeline(
   await expect(addButton).toBeEnabled({ timeout: 60_000 });
   await addButton.click();
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
+  await waitForProjectSessionIntentSuccess(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
 }
@@ -704,6 +741,7 @@ export async function dragMaterialToTimeline(
     }
   });
   await waitForProjectSessionIntentCount(app, "addTimelineSegmentIntent", nextCount);
+  await waitForProjectSessionIntentSuccess(app, "addTimelineSegmentIntent", nextCount);
   await expect(page.getByRole("button", { name: new RegExp(`片段 ${escapeRegex(materialName)}`) })).toBeVisible();
   await expect(page.getByLabel("预览选中框")).toBeVisible();
 }
@@ -1153,6 +1191,49 @@ export async function readRealtimePreviewHostCalls(app: ProductJourneyAppControl
   return app.readRealtimePreviewHostCalls();
 }
 
+export async function readTaskRuntimeTelemetry(page: Page): Promise<TaskRuntimeTelemetryResponse> {
+  const result = await page.evaluate(async () => {
+    type CommandResultEnvelope<T> = {
+      ok: boolean;
+      data: T | null;
+      error: { message: string } | null;
+    };
+    type TaskRuntimeTelemetryResult = {
+      status: "ready" | "degraded" | "unavailable";
+      statusLabel: string;
+      submittedCount: number;
+      admittedCount: number;
+      startedCount: number;
+      completedCount: number;
+      rejectedCount: number;
+      coalescedCount: number;
+      canceledCount: number;
+      staleRejectedCount: number;
+      fallbackCount: number;
+      unavailableCount: number;
+      cacheHitCount: number;
+      firstFrameTimeUs: number | null;
+      droppedFrameCount: number;
+      repeatedFrameCount: number;
+      resourceSaturationCount: number;
+      queueLatencyUs: { sampleCount: number; p50?: number | null; p95?: number | null; max?: number | null };
+      waitTimeUs: { sampleCount: number; p50?: number | null; p95?: number | null; max?: number | null };
+      runTimeUs: { sampleCount: number; p50?: number | null; p95?: number | null; max?: number | null };
+      jobDurationUs: { sampleCount: number; p50?: number | null; p95?: number | null; max?: number | null };
+    };
+    const api = (window as typeof window & {
+      videoEditorCore?: {
+        getTaskRuntimeTelemetry: () => Promise<CommandResultEnvelope<TaskRuntimeTelemetryResult>>;
+      };
+    }).videoEditorCore;
+    return api?.getTaskRuntimeTelemetry();
+  });
+
+  expect(result?.ok, `getTaskRuntimeTelemetry failed: ${JSON.stringify(result?.error ?? null)}`).toBe(true);
+  expect(result?.data, "getTaskRuntimeTelemetry must return scheduler telemetry data").not.toBeNull();
+  return result.data as TaskRuntimeTelemetryResponse;
+}
+
 export function requestProjectSessionPreviewFrameCount(calls: NativeCommandObservation[]): number {
   return calls.filter((call) => call.command === "requestProjectSessionPreviewFrame").length;
 }
@@ -1246,6 +1327,31 @@ async function waitForProjectSessionIntentCount(
   expectedCount: number
 ): Promise<void> {
   await expect.poll(async () => countProjectSessionIntent(app, intentKind), { timeout: 30_000 }).toBeGreaterThanOrEqual(expectedCount);
+}
+
+async function waitForProjectSessionIntentSuccess(
+  app: ProductJourneyAppController,
+  intentKind: string,
+  expectedCount: number
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const calls = (await readProjectSessionCalls(app)).filter(
+        (call) => call.command === "executeProjectIntent" && call.intentKind === intentKind
+      );
+      if (calls.length < expectedCount) {
+        return `waiting for ${intentKind} ${calls.length}/${expectedCount}`;
+      }
+      const latest = calls[calls.length - 1];
+      if (latest.resultOk === null || latest.resultOk === undefined) {
+        return `${intentKind} pending native result`;
+      }
+      if (latest.resultOk !== true) {
+        return `${intentKind} failed: ${latest.resultErrorKind ?? "unknown"} ${latest.resultErrorMessage ?? ""}`;
+      }
+      return `ok:${latest.resultRevision ?? "unknown"}:${latest.resultTimelineSegmentCount ?? "unknown"}`;
+    }, { timeout: 30_000 })
+    .toMatch(/^ok:/);
 }
 
 async function countCommand(app: ProductJourneyAppController, command: string): Promise<number> {

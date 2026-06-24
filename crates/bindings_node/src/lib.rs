@@ -990,6 +990,18 @@ fn global_audio_preview_registry() -> &'static Mutex<AudioPreviewBindingRegistry
     REGISTRY.get_or_init(|| Mutex::new(AudioPreviewBindingRegistry::new()))
 }
 
+pub(crate) fn record_realtime_preview_task_runtime_telemetry_snapshots() {
+    if let Ok(registry) = global_realtime_preview_registry().lock() {
+        registry.record_task_runtime_telemetry_snapshots();
+    }
+}
+
+pub(crate) fn record_audio_preview_task_runtime_telemetry_snapshot() {
+    if let Ok(registry) = global_audio_preview_registry().lock() {
+        registry.record_task_runtime_telemetry_snapshot();
+    }
+}
+
 fn with_audio_preview_registry<T>(
     action: impl FnOnce(&mut AudioPreviewBindingRegistry) -> T,
 ) -> Result<T> {

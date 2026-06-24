@@ -1,9 +1,11 @@
+use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 
 use draft_model::{CommandError, CommandErrorKind, CommandResultEnvelope};
 use serde::{Deserialize, Serialize};
 use task_runtime::{
-    DiagnosticClassificationCount, DomainQueueDepth, JobScheduler, ResourceUsageSnapshot,
+    DiagnosticClassificationCount, DomainQueueDepth, JobDiagnosticClassification, JobDomain,
+    JobScheduler, ResourceClass, ResourceSaturationSnapshot, ResourceUsageSnapshot,
     SchedulerTelemetrySnapshot, SchedulerTelemetrySummary, TaskRuntimeConfig,
 };
 
@@ -31,6 +33,16 @@ pub enum TaskRuntimeStatus {
     Ready,
     Degraded,
     Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TaskRuntimeTelemetrySource {
+    InteractivePreview,
+    AudioPreview,
+    Export,
+    ArtifactGeneration,
+    MediaProbe,
+    ProjectIo,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -158,6 +170,7 @@ pub fn get_task_runtime_telemetry_command(
             );
         }
     };
+    refresh_task_runtime_scheduler_snapshots();
 
     let state = match task_runtime_service_state().lock() {
         Ok(state) => state,
@@ -169,9 +182,27 @@ pub fn get_task_runtime_telemetry_command(
             );
         }
     };
-    let snapshot = state.scheduler.telemetry_snapshot();
+    let snapshot = aggregate_task_runtime_telemetry(state.scheduler.telemetry_snapshot());
 
     ok_envelope(telemetry_response(snapshot, request.diagnostics))
+}
+
+pub fn record_task_runtime_scheduler_snapshot(
+    source: TaskRuntimeTelemetrySource,
+    snapshot: &SchedulerTelemetrySnapshot,
+) {
+    if !scheduler_snapshot_has_activity(snapshot) {
+        return;
+    }
+    if let Ok(mut snapshots) = task_runtime_scheduler_snapshots().lock() {
+        snapshots.insert(source, snapshot.clone());
+    }
+}
+
+pub fn clear_task_runtime_scheduler_snapshots() {
+    if let Ok(mut snapshots) = task_runtime_scheduler_snapshots().lock() {
+        snapshots.clear();
+    }
 }
 
 pub fn apply_task_runtime_dev_config_command(
@@ -284,6 +315,275 @@ fn telemetry_response(
     }
 }
 
+fn aggregate_task_runtime_telemetry(
+    service_snapshot: SchedulerTelemetrySnapshot,
+) -> SchedulerTelemetrySnapshot {
+    let mut aggregate = TelemetrySnapshotAccumulator::default();
+    aggregate.add_snapshot(&service_snapshot);
+    if let Ok(snapshots) = task_runtime_scheduler_snapshots().lock() {
+        for snapshot in snapshots.values() {
+            aggregate.add_snapshot(snapshot);
+        }
+    }
+    aggregate.into_snapshot()
+}
+
+fn refresh_task_runtime_scheduler_snapshots() {
+    crate::record_realtime_preview_task_runtime_telemetry_snapshots();
+    crate::record_audio_preview_task_runtime_telemetry_snapshot();
+    crate::preview_export_service::global_export_registry()
+        .record_task_runtime_telemetry_snapshot();
+    crate::artifact_store_service::record_artifact_task_runtime_telemetry_snapshot();
+    crate::project_session_service::record_project_session_task_runtime_telemetry_snapshots();
+}
+
+fn scheduler_snapshot_has_activity(snapshot: &SchedulerTelemetrySnapshot) -> bool {
+    snapshot.submitted_count > 0
+        || snapshot.admitted_count > 0
+        || snapshot.started_count > 0
+        || snapshot.completed_count > 0
+        || snapshot.rejected_count > 0
+        || snapshot.coalesced_count > 0
+        || snapshot.canceled_count > 0
+        || snapshot.stale_rejected_count > 0
+        || snapshot.fallback_count > 0
+        || snapshot.unavailable_count > 0
+        || snapshot.cache_hit_count > 0
+        || snapshot.dropped_frame_count > 0
+        || snapshot.repeated_frame_count > 0
+        || snapshot.current_queue_depth > 0
+        || snapshot.max_queue_depth > 0
+        || snapshot.resource_saturation_count > 0
+        || snapshot.queue_latency_us.sample_count > 0
+        || snapshot.wait_time_us.sample_count > 0
+        || snapshot.run_time_us.sample_count > 0
+        || snapshot.job_duration_us.sample_count > 0
+}
+
+#[derive(Debug, Default)]
+struct TelemetrySnapshotAccumulator {
+    submitted_count: u64,
+    admitted_count: u64,
+    started_count: u64,
+    completed_count: u64,
+    rejected_count: u64,
+    coalesced_count: u64,
+    canceled_count: u64,
+    stale_rejected_count: u64,
+    fallback_count: u64,
+    unavailable_count: u64,
+    cache_hit_count: u64,
+    first_frame_time_us: Option<u64>,
+    dropped_frame_count: u64,
+    repeated_frame_count: u64,
+    current_queue_depth: usize,
+    max_queue_depth: usize,
+    queue_depth_by_domain: BTreeMap<JobDomain, usize>,
+    resource_usage: BTreeMap<ResourceClass, ResourceUsageAccumulator>,
+    resource_saturation_count: u64,
+    resource_saturation: BTreeMap<ResourceClass, u64>,
+    fallback_classifications: BTreeMap<JobDiagnosticClassification, u64>,
+    unavailable_classifications: BTreeMap<JobDiagnosticClassification, u64>,
+    queue_latency_us: SchedulerSummaryAccumulator,
+    wait_time_us: SchedulerSummaryAccumulator,
+    run_time_us: SchedulerSummaryAccumulator,
+    job_duration_us: SchedulerSummaryAccumulator,
+}
+
+impl TelemetrySnapshotAccumulator {
+    fn add_snapshot(&mut self, snapshot: &SchedulerTelemetrySnapshot) {
+        self.submitted_count = self
+            .submitted_count
+            .saturating_add(snapshot.submitted_count);
+        self.admitted_count = self.admitted_count.saturating_add(snapshot.admitted_count);
+        self.started_count = self.started_count.saturating_add(snapshot.started_count);
+        self.completed_count = self
+            .completed_count
+            .saturating_add(snapshot.completed_count);
+        self.rejected_count = self.rejected_count.saturating_add(snapshot.rejected_count);
+        self.coalesced_count = self
+            .coalesced_count
+            .saturating_add(snapshot.coalesced_count);
+        self.canceled_count = self.canceled_count.saturating_add(snapshot.canceled_count);
+        self.stale_rejected_count = self
+            .stale_rejected_count
+            .saturating_add(snapshot.stale_rejected_count);
+        self.fallback_count = self.fallback_count.saturating_add(snapshot.fallback_count);
+        self.unavailable_count = self
+            .unavailable_count
+            .saturating_add(snapshot.unavailable_count);
+        self.cache_hit_count = self
+            .cache_hit_count
+            .saturating_add(snapshot.cache_hit_count);
+        self.first_frame_time_us = match (self.first_frame_time_us, snapshot.first_frame_time_us) {
+            (Some(current), Some(incoming)) => Some(current.min(incoming)),
+            (None, Some(incoming)) => Some(incoming),
+            (current, None) => current,
+        };
+        self.dropped_frame_count = self
+            .dropped_frame_count
+            .saturating_add(snapshot.dropped_frame_count);
+        self.repeated_frame_count = self
+            .repeated_frame_count
+            .saturating_add(snapshot.repeated_frame_count);
+        self.current_queue_depth = self
+            .current_queue_depth
+            .saturating_add(snapshot.current_queue_depth);
+        self.max_queue_depth = self
+            .max_queue_depth
+            .saturating_add(snapshot.max_queue_depth);
+        for item in &snapshot.queue_depth_by_domain {
+            let depth = self.queue_depth_by_domain.entry(item.domain).or_default();
+            *depth = depth.saturating_add(item.depth);
+        }
+        for item in &snapshot.resource_usage {
+            self.resource_usage
+                .entry(item.resource_class)
+                .or_default()
+                .add(item);
+        }
+        self.resource_saturation_count = self
+            .resource_saturation_count
+            .saturating_add(snapshot.resource_saturation_count);
+        for item in &snapshot.resource_saturation {
+            let count = self
+                .resource_saturation
+                .entry(item.resource_class)
+                .or_default();
+            *count = count.saturating_add(item.count);
+        }
+        for item in &snapshot.fallback_classifications {
+            let count = self
+                .fallback_classifications
+                .entry(item.classification)
+                .or_default();
+            *count = count.saturating_add(item.count);
+        }
+        for item in &snapshot.unavailable_classifications {
+            let count = self
+                .unavailable_classifications
+                .entry(item.classification)
+                .or_default();
+            *count = count.saturating_add(item.count);
+        }
+        self.queue_latency_us.add(&snapshot.queue_latency_us);
+        self.wait_time_us.add(&snapshot.wait_time_us);
+        self.run_time_us.add(&snapshot.run_time_us);
+        self.job_duration_us.add(&snapshot.job_duration_us);
+    }
+
+    fn into_snapshot(self) -> SchedulerTelemetrySnapshot {
+        SchedulerTelemetrySnapshot {
+            submitted_count: self.submitted_count,
+            admitted_count: self.admitted_count,
+            started_count: self.started_count,
+            completed_count: self.completed_count,
+            rejected_count: self.rejected_count,
+            coalesced_count: self.coalesced_count,
+            canceled_count: self.canceled_count,
+            stale_rejected_count: self.stale_rejected_count,
+            fallback_count: self.fallback_count,
+            unavailable_count: self.unavailable_count,
+            cache_hit_count: self.cache_hit_count,
+            first_frame_time_us: self.first_frame_time_us,
+            dropped_frame_count: self.dropped_frame_count,
+            repeated_frame_count: self.repeated_frame_count,
+            current_queue_depth: self.current_queue_depth,
+            max_queue_depth: self.max_queue_depth,
+            queue_depth_by_domain: self
+                .queue_depth_by_domain
+                .into_iter()
+                .map(|(domain, depth)| DomainQueueDepth { domain, depth })
+                .collect(),
+            resource_usage: self
+                .resource_usage
+                .into_iter()
+                .map(|(resource_class, usage)| ResourceUsageSnapshot {
+                    resource_class,
+                    in_flight: usage.in_flight,
+                    max_in_flight: usage.max_in_flight,
+                })
+                .collect(),
+            resource_saturation_count: self.resource_saturation_count,
+            resource_saturation: self
+                .resource_saturation
+                .into_iter()
+                .map(|(resource_class, count)| ResourceSaturationSnapshot {
+                    resource_class,
+                    count,
+                })
+                .collect(),
+            fallback_classifications: self
+                .fallback_classifications
+                .into_iter()
+                .map(|(classification, count)| DiagnosticClassificationCount {
+                    classification,
+                    count,
+                })
+                .collect(),
+            unavailable_classifications: self
+                .unavailable_classifications
+                .into_iter()
+                .map(|(classification, count)| DiagnosticClassificationCount {
+                    classification,
+                    count,
+                })
+                .collect(),
+            queue_latency_us: self.queue_latency_us.into_summary(),
+            wait_time_us: self.wait_time_us.into_summary(),
+            run_time_us: self.run_time_us.into_summary(),
+            job_duration_us: self.job_duration_us.into_summary(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct ResourceUsageAccumulator {
+    in_flight: usize,
+    max_in_flight: usize,
+}
+
+impl ResourceUsageAccumulator {
+    fn add(&mut self, snapshot: &ResourceUsageSnapshot) {
+        self.in_flight = self.in_flight.saturating_add(snapshot.in_flight);
+        self.max_in_flight = self.max_in_flight.saturating_add(snapshot.max_in_flight);
+    }
+}
+
+#[derive(Debug, Default)]
+struct SchedulerSummaryAccumulator {
+    sample_count: u64,
+    p50: Option<u64>,
+    p95: Option<u64>,
+    max: Option<u64>,
+}
+
+impl SchedulerSummaryAccumulator {
+    fn add(&mut self, summary: &SchedulerTelemetrySummary) {
+        self.sample_count = self.sample_count.saturating_add(summary.sample_count);
+        self.p50 = max_optional(self.p50, summary.p50);
+        self.p95 = max_optional(self.p95, summary.p95);
+        self.max = max_optional(self.max, summary.max);
+    }
+
+    fn into_summary(self) -> SchedulerTelemetrySummary {
+        SchedulerTelemetrySummary {
+            sample_count: self.sample_count,
+            p50: self.p50,
+            p95: self.p95,
+            max: self.max,
+        }
+    }
+}
+
+fn max_optional(current: Option<u64>, incoming: Option<u64>) -> Option<u64> {
+    match (current, incoming) {
+        (Some(current), Some(incoming)) => Some(current.max(incoming)),
+        (None, Some(incoming)) => Some(incoming),
+        (current, None) => current,
+    }
+}
+
 fn parse_request<T>(request: serde_json::Value) -> Result<T, serde_json::Error>
 where
     T: serde::de::DeserializeOwned,
@@ -320,4 +620,12 @@ fn error_envelope<T>(
 fn task_runtime_service_state() -> &'static Mutex<TaskRuntimeServiceState> {
     static STATE: OnceLock<Mutex<TaskRuntimeServiceState>> = OnceLock::new();
     STATE.get_or_init(|| Mutex::new(TaskRuntimeServiceState::default()))
+}
+
+fn task_runtime_scheduler_snapshots()
+-> &'static Mutex<BTreeMap<TaskRuntimeTelemetrySource, SchedulerTelemetrySnapshot>> {
+    static SNAPSHOTS: OnceLock<
+        Mutex<BTreeMap<TaskRuntimeTelemetrySource, SchedulerTelemetrySnapshot>>,
+    > = OnceLock::new();
+    SNAPSHOTS.get_or_init(|| Mutex::new(BTreeMap::new()))
 }

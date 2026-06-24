@@ -58,6 +58,9 @@ use crate::native_preview_presenter::{
     NativePreviewPresentationState, NativePreviewPresenter, NativePreviewPresenterError,
     NativePreviewScreenRect, NativePreviewSurfacePlacementEvidence,
 };
+use crate::task_runtime_service::{
+    TaskRuntimeTelemetrySource, record_task_runtime_scheduler_snapshot,
+};
 use crate::timeline_selection::timeline_segment_selection_handle;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 
@@ -215,6 +218,29 @@ impl RealtimePreviewBindingRegistry {
             sessions: BTreeMap::new(),
             presenters: BTreeMap::new(),
             schedulers: BTreeMap::new(),
+        }
+    }
+
+    pub fn record_task_runtime_telemetry_snapshots(&self) {
+        if let Ok(runtime) = self.runtime.lock() {
+            for runtime_id in self.sessions.values().copied() {
+                if let Ok(telemetry) = runtime.telemetry(runtime_id) {
+                    if let Some(snapshot) = telemetry.scheduler_snapshot.as_ref() {
+                        record_task_runtime_scheduler_snapshot(
+                            TaskRuntimeTelemetrySource::InteractivePreview,
+                            snapshot,
+                        );
+                    }
+                }
+            }
+        }
+        for session in self.schedulers.values() {
+            if let Ok(scheduler) = session.scheduler.lock() {
+                record_task_runtime_scheduler_snapshot(
+                    TaskRuntimeTelemetrySource::InteractivePreview,
+                    &scheduler.telemetry_snapshot(),
+                );
+            }
         }
     }
 
@@ -589,6 +615,12 @@ impl RealtimePreviewBindingRegistry {
         session_id: &str,
     ) -> Result<RealtimePreviewTelemetryBindingResponse, RealtimePreviewBindingError> {
         let runtime_id = self.runtime_session_id(session_id)?;
+        if let Ok(scheduler) = self.scheduler_handle(session_id)?.lock() {
+            record_task_runtime_scheduler_snapshot(
+                TaskRuntimeTelemetrySource::InteractivePreview,
+                &scheduler.telemetry_snapshot(),
+            );
+        }
         Ok(RealtimePreviewTelemetryBindingResponse::from_runtime(
             self.runtime_lock()?
                 .telemetry(runtime_id)
@@ -843,6 +875,10 @@ fn run_scheduler_playback_driver(
                 if let Ok(mut runtime) = runtime.lock() {
                     let _ = runtime.record_scheduler_telemetry(runtime_id, &presentation.telemetry);
                 }
+                record_task_runtime_scheduler_snapshot(
+                    TaskRuntimeTelemetrySource::InteractivePreview,
+                    &presentation.telemetry,
+                );
                 let Some(evidence) = presentation.evidence else {
                     return;
                 };
@@ -928,6 +964,10 @@ fn run_scheduler_playback_driver(
                         let _ =
                             runtime.record_scheduler_telemetry(runtime_id, &scheduled.telemetry);
                     }
+                    record_task_runtime_scheduler_snapshot(
+                        TaskRuntimeTelemetrySource::InteractivePreview,
+                        &scheduled.telemetry,
+                    );
                     if let Some(frame) = scheduled.frame {
                         let render_duration_ms =
                             u64::try_from(frame_started.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -1041,6 +1081,10 @@ fn run_scheduler_still_frame_present(
                 if let Ok(mut runtime) = runtime.lock() {
                     let _ = runtime.record_scheduler_telemetry(runtime_id, &presentation.telemetry);
                 }
+                record_task_runtime_scheduler_snapshot(
+                    TaskRuntimeTelemetrySource::InteractivePreview,
+                    &presentation.telemetry,
+                );
                 let Some(evidence) = presentation.evidence else {
                     return;
                 };
@@ -1557,6 +1601,10 @@ impl RealtimePreviewBindingScheduler {
             .task_scheduler
             .start_next(self.scheduler_now_us())
             .map_err(task_scheduler_error)?;
+        record_task_runtime_scheduler_snapshot(
+            TaskRuntimeTelemetrySource::InteractivePreview,
+            &self.task_scheduler.telemetry_snapshot(),
+        );
         match started {
             Some(started) if started.job_id == job_id => Ok(job_id),
             Some(started) => Err(RealtimePreviewBindingError::new(
@@ -1613,6 +1661,10 @@ impl RealtimePreviewBindingScheduler {
             evidence,
             telemetry,
         })
+    }
+
+    fn telemetry_snapshot(&self) -> SchedulerTelemetrySnapshot {
+        self.task_scheduler.telemetry_snapshot()
     }
 
     fn commit_presented_evidence(&mut self, evidence: RealtimePlaybackSchedulerEvidence) {

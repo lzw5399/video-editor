@@ -31,6 +31,8 @@ pub struct RealtimePreviewTelemetry {
     pub scheduler_rejected_count: u64,
     pub scheduler_canceled_count: u64,
     pub scheduler_stale_rejected_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheduler_snapshot: Option<SchedulerTelemetrySnapshot>,
     pub target_time: Microseconds,
     pub generation: PlaybackGeneration,
     pub frame_pacing: RealtimePreviewFramePacingTelemetry,
@@ -56,6 +58,7 @@ impl RealtimePreviewTelemetry {
             scheduler_rejected_count: 0,
             scheduler_canceled_count: 0,
             scheduler_stale_rejected_count: 0,
+            scheduler_snapshot: None,
             target_time,
             generation,
             frame_pacing: RealtimePreviewFramePacingTelemetry::new(),
@@ -136,6 +139,7 @@ impl RealtimePreviewTelemetry {
         self.scheduler_rejected_count = snapshot.rejected_count;
         self.scheduler_canceled_count = snapshot.canceled_count;
         self.scheduler_stale_rejected_count = snapshot.stale_rejected_count;
+        self.scheduler_snapshot = Some(snapshot.clone());
     }
 }
 

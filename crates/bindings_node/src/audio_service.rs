@@ -38,6 +38,10 @@ use task_runtime::{
     TaskRuntimeConfig,
 };
 
+use crate::task_runtime_service::{
+    TaskRuntimeTelemetrySource, record_task_runtime_scheduler_snapshot,
+};
+
 const SESSION_PREFIX: &str = "audio-session-";
 const MAX_WAVEFORM_PEAK_BINS: u16 = 512;
 const AUDIO_PREVIEW_CHUNK_DURATION: Microseconds = Microseconds(2_000_000);
@@ -83,6 +87,15 @@ impl AudioPreviewBindingRegistry {
             sessions: BTreeMap::new(),
             outputs: BTreeMap::new(),
             selected_device_id: None,
+        }
+    }
+
+    pub fn record_task_runtime_telemetry_snapshot(&self) {
+        if let Ok(scheduler) = self.scheduler.lock() {
+            record_task_runtime_scheduler_snapshot(
+                TaskRuntimeTelemetrySource::AudioPreview,
+                &scheduler.telemetry_snapshot(),
+            );
         }
     }
 
@@ -531,6 +544,7 @@ impl AudioPreviewBindingRegistry {
                 )
             })?
             .telemetry_snapshot();
+        record_task_runtime_scheduler_snapshot(TaskRuntimeTelemetrySource::AudioPreview, &snapshot);
         self.runtime
             .record_scheduler_telemetry(runtime_id, &snapshot)
             .map_err(AudioPreviewBindingError::runtime)

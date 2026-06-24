@@ -57,6 +57,28 @@ export type RealtimePreviewHostDisplayState = {
   surfacePlacement: RealtimePreviewHostSurfacePlacement | null;
 };
 
+export type RealtimePreviewHostTaskRuntimeTelemetry = {
+  submittedCount: number;
+  admittedCount: number;
+  startedCount: number;
+  completedCount: number;
+  rejectedCount: number;
+  canceledCount: number;
+  staleRejectedCount: number;
+  fallbackCount: number;
+  cacheHitCount: number;
+  firstFrameTimeUs: number | null;
+  droppedFrameCount: number;
+  repeatedFrameCount: number;
+  resourceSaturationCount: number;
+  queueLatencyUs: {
+    sampleCount: number;
+    p50?: number | null;
+    p95?: number | null;
+    max?: number | null;
+  };
+};
+
 export type RealtimePreviewHostProductBackend = "renderGraphGpu" | "none";
 
 export type RealtimePreviewHostDiagnosticSource = "nativeVideoBridge" | "runtimeFrameRequest" | "none";
@@ -324,6 +346,8 @@ export class RealtimePreviewHost {
   private lastBounds: RealtimePreviewSurfaceBounds | null = null;
   private lastPresentationSnapshotRefreshAt = 0;
   private closed = false;
+  private presentedNativeEventCount = 0;
+  private droppedNativeFrameCount = 0;
   private telemetrySubscribers = new Map<number, WebContents>();
   private pendingPresentationWaiters = new Set<PendingPresentationWaiter>();
   private pendingGeometryReflow: ReturnType<typeof setTimeout> | null = null;
@@ -428,6 +452,10 @@ export class RealtimePreviewHost {
       return;
     }
     this.playbackGeneration = event.playbackGeneration;
+    if (event.kind === "framePresented") {
+      this.presentedNativeEventCount += 1;
+      this.droppedNativeFrameCount += event.droppedFrameCount ?? 0;
+    }
     recordRealtimePreviewHostCall({
       kind: "nativePreviewEvent",
       nativeEventKind: event.kind,
@@ -607,6 +635,58 @@ export class RealtimePreviewHost {
       targetTimeMicroseconds: result.targetTimeMicroseconds ?? undefined
     });
     return result;
+  }
+
+  taskRuntimeTelemetry(): RealtimePreviewHostTaskRuntimeTelemetry | null {
+    if (this.sessionId !== null) {
+      try {
+        this.refreshPreviewState();
+      } catch {
+        // Use the last native event counters below if the live snapshot is temporarily unavailable.
+      }
+    }
+    const telemetry = this.telemetry;
+    const evidence = this.presentationState?.evidence ?? this.lastContentEvidence;
+    if (telemetry === null && evidence === null && this.presentedNativeEventCount <= 0) {
+      return null;
+    }
+    const presentedFrameCount = Math.max(
+      telemetry?.presentedFrameCount ?? 0,
+      evidence?.presentedFrames ?? 0,
+      this.presentedNativeEventCount
+    );
+    const sampleCount = Math.max(
+      presentedFrameCount,
+      telemetry?.framePacing.sampleCount ?? 0,
+      evidence?.submittedDraws ?? 0
+    );
+    const queueLatencyUs = telemetry?.schedulerQueueLatencyP95Us ?? (telemetry?.queueLatencyMs ?? 0) * 1000;
+    if (sampleCount <= 0 && queueLatencyUs <= 0) {
+      return null;
+    }
+    return {
+      submittedCount: sampleCount,
+      admittedCount: sampleCount,
+      startedCount: sampleCount,
+      completedCount: presentedFrameCount,
+      rejectedCount: telemetry?.schedulerRejectedCount ?? 0,
+      canceledCount: telemetry?.schedulerCanceledCount ?? telemetry?.canceledRequestCount ?? 0,
+      staleRejectedCount: telemetry?.schedulerStaleRejectedCount ?? telemetry?.staleRejectedCount ?? 0,
+      fallbackCount: telemetry?.fallbackCount ?? 0,
+      cacheHitCount: telemetry?.cacheHitCount ?? 0,
+      firstFrameTimeUs: telemetry?.firstFrameLatencyMs === null || telemetry?.firstFrameLatencyMs === undefined
+        ? null
+        : telemetry.firstFrameLatencyMs * 1000,
+      droppedFrameCount: Math.max(telemetry?.droppedFrameCount ?? 0, this.droppedNativeFrameCount),
+      repeatedFrameCount: telemetry?.repeatedFrameCount ?? 0,
+      resourceSaturationCount: telemetry?.schedulerResourceSaturationCount ?? 0,
+      queueLatencyUs: {
+        sampleCount,
+        p50: queueLatencyUs,
+        p95: queueLatencyUs,
+        max: queueLatencyUs
+      }
+    };
   }
 
   detachSurface(): RealtimePreviewHostDisplayState {
@@ -1102,6 +1182,65 @@ export class RealtimePreviewHost {
       aligned: maxDeltaPx <= 2
     };
   }
+}
+
+export function getRealtimePreviewHostTaskRuntimeTelemetry(): RealtimePreviewHostTaskRuntimeTelemetry | null {
+  let aggregate: RealtimePreviewHostTaskRuntimeTelemetry | null = null;
+  for (const host of hostsByWindowId.values()) {
+    const telemetry = host.taskRuntimeTelemetry();
+    if (telemetry === null) {
+      continue;
+    }
+    aggregate = aggregate === null ? telemetry : mergeRealtimePreviewHostTaskRuntimeTelemetry(aggregate, telemetry);
+  }
+  return aggregate;
+}
+
+function mergeRealtimePreviewHostTaskRuntimeTelemetry(
+  first: RealtimePreviewHostTaskRuntimeTelemetry,
+  second: RealtimePreviewHostTaskRuntimeTelemetry
+): RealtimePreviewHostTaskRuntimeTelemetry {
+  return {
+    submittedCount: first.submittedCount + second.submittedCount,
+    admittedCount: first.admittedCount + second.admittedCount,
+    startedCount: first.startedCount + second.startedCount,
+    completedCount: first.completedCount + second.completedCount,
+    rejectedCount: first.rejectedCount + second.rejectedCount,
+    canceledCount: first.canceledCount + second.canceledCount,
+    staleRejectedCount: first.staleRejectedCount + second.staleRejectedCount,
+    fallbackCount: first.fallbackCount + second.fallbackCount,
+    cacheHitCount: first.cacheHitCount + second.cacheHitCount,
+    firstFrameTimeUs: minNullable(first.firstFrameTimeUs, second.firstFrameTimeUs),
+    droppedFrameCount: first.droppedFrameCount + second.droppedFrameCount,
+    repeatedFrameCount: first.repeatedFrameCount + second.repeatedFrameCount,
+    resourceSaturationCount: first.resourceSaturationCount + second.resourceSaturationCount,
+    queueLatencyUs: {
+      sampleCount: first.queueLatencyUs.sampleCount + second.queueLatencyUs.sampleCount,
+      p50: maxNullable(first.queueLatencyUs.p50 ?? null, second.queueLatencyUs.p50 ?? null),
+      p95: maxNullable(first.queueLatencyUs.p95 ?? null, second.queueLatencyUs.p95 ?? null),
+      max: maxNullable(first.queueLatencyUs.max ?? null, second.queueLatencyUs.max ?? null)
+    }
+  };
+}
+
+function minNullable(first: number | null, second: number | null): number | null {
+  if (first === null) {
+    return second;
+  }
+  if (second === null) {
+    return first;
+  }
+  return Math.min(first, second);
+}
+
+function maxNullable(first: number | null, second: number | null): number | null {
+  if (first === null) {
+    return second;
+  }
+  if (second === null) {
+    return first;
+  }
+  return Math.max(first, second);
 }
 
 function sanitizeTargetTimeMicroseconds(value: number): number {

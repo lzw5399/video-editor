@@ -9,6 +9,7 @@ import {
   formatMaterialKind,
   formatMaterialStatus,
   formatMicroseconds,
+  materialReadyForTimeline,
   materialStatusMessage,
   type MaterialResourceStatusView,
   type ResourcePanelState,
@@ -634,7 +635,7 @@ function MaterialList({
   onAddTimelineSegment: (materialId: string) => void;
 }): React.ReactElement {
   function handleMaterialDragStart(event: ReactDragEvent<HTMLElement>, material: Material): void {
-    if (material.status !== "available") {
+    if (!materialReadyForTimeline(material)) {
       event.preventDefault();
       return;
     }
@@ -665,7 +666,7 @@ function MaterialList({
           <article
             className="material-row"
             aria-label={`素材 ${material.displayName}`}
-            draggable={material.status === "available"}
+            draggable={materialReadyForTimeline(material)}
             key={material.materialId}
             onDragStart={(event) => handleMaterialDragStart(event, material)}
           >
@@ -723,7 +724,7 @@ function MaterialThumbnail({
           event.stopPropagation();
           onAddTimelineSegment(material.materialId);
         }}
-        disabled={pending || material.status !== "available"}
+        disabled={pending || !materialReadyForTimeline(material)}
       >
         <span className="app-icon-mask" style={iconMaskStyle("timelineAdd")} aria-hidden="true" />
       </button>

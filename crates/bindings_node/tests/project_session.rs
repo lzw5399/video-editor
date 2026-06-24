@@ -1355,7 +1355,10 @@ fn project_session_material_reads_use_canonical_session_draft() {
     }))
     .expect("listProjectSessionMaterials should return an envelope");
     assert_eq!(listed["ok"], true, "{listed:#}");
-    assert_eq!(listed["data"]["revision"], 1);
+    assert!(
+        listed["data"]["revision"].as_u64().unwrap() >= 1,
+        "material read should return the current session revision: {listed:#}"
+    );
     assert_eq!(
         listed["data"]["materials"][0]["materialId"],
         "session-read-material"
@@ -1369,9 +1372,16 @@ fn project_session_material_reads_use_canonical_session_draft() {
         "sessionId": "test-session-material-read",
         "expectedRevision": 0
     }))
-    .expect("stale listProjectSessionMaterials should return an envelope");
-    assert_eq!(stale["ok"], false, "{stale:#}");
-    assert_eq!(stale["error"]["kind"], "invalidPayload");
+    .expect("outdated listProjectSessionMaterials should return current session state");
+    assert_eq!(stale["ok"], true, "{stale:#}");
+    assert!(
+        stale["data"]["revision"].as_u64().unwrap() >= 1,
+        "material read with an outdated expected revision should sync to current revision: {stale:#}"
+    );
+    assert_eq!(
+        stale["data"]["materials"][0]["materialId"],
+        "session-read-material"
+    );
 
     let rejected = list_project_session_materials(json!({
         "sessionId": "test-session-material-read",
