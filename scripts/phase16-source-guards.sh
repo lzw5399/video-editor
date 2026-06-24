@@ -133,6 +133,11 @@ fail_matches \
   "$BINDINGS_DIR/audio_service.rs"
 
 fail_matches \
+  "bindings must not spawn worker threads outside the Rust task runtime scheduler boundary" \
+  '\bthread::Builder::new\s*\(' \
+  "$BINDINGS_DIR"
+
+fail_matches \
   "bindings must not call direct FFmpeg timeout helpers instead of scheduler adapters" \
   '\bDesktopFfmpegExecutor::with_timeout\b' \
   "$BINDINGS_DIR"
