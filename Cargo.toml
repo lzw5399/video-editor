@@ -2,6 +2,7 @@
 members = [
   "crates/draft_model",
   "crates/draft_import",
+  "crates/adapter_kaipai",
   "crates/draft_commands",
   "crates/engine_core",
   "crates/render_graph",

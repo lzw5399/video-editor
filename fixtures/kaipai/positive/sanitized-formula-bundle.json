@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-template-001",
+    "recipeId": "redacted-recipe-001",
+    "formulaTaskId": "redacted-task-001",
+    "formulaRequestId": "redacted-request-001",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "source-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main.mp4",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "durationMs": 6000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 900
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "detected",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.1,
+      "top": 0.12,
+      "right": 0.9,
+      "bottom": 0.88
+    }
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-main-video",
+      "kind": "video",
+      "uri": "resources/direct/redacted-direct-main.mp4",
+      "displayName": "redacted-direct-main.mp4"
+    }
+  ],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#000000"
+    },
+    "videoClipList": [
+      {
+        "resourceId": "source-main-video",
+        "startAtMs": 0,
+        "endAtMs": 6000,
+        "durationMsWithSpeed": 6000,
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1
+      }
+    ],
+    "stickerList": [
+      {
+        "resourceId": "text-sticker-001",
+        "start": 400,
+        "duration": 2200,
+        "relativeCenterX": 0.5,
+        "relativeCenterY": 0.72,
+        "scale": 1,
+        "rotate": 0,
+        "alpha": 1,
+        "level": 10,
+        "textEditInfoList": [
+          {
+            "text": "redacted local caption",
+            "fontName": "Noto Sans CJK SC",
+            "fontPath": "resources/fonts/redacted-font.ttf",
+            "textColor": "#FFFFFF",
+            "textStrokeColor": "#000000",
+            "textStrokeWidth": 2,
+            "showShadow": true
+          }
+        ]
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resourceId": "font-redacted",
+      "kind": "font",
+      "uri": "resources/fonts/redacted-font.ttf",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "displayName": "redacted-font.ttf"
+    },
+    {
+      "resourceId": "pip-redacted-video",
+      "kind": "video",
+      "uri": "resources/pip/redacted-pip.mp4",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "displayName": "redacted-pip.mp4"
+    }
+  ]
+}

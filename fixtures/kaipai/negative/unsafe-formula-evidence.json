@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-template-unsafe",
+    "recipeId": "redacted-recipe-unsafe",
+    "formulaTaskId": "redacted-task-unsafe",
+    "formulaRequestId": "redacted-request-unsafe",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "source-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main.mp4",
+    "durationMs": 6000
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 0,
+        "endMs": 900
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "detected",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.1,
+      "top": 0.12,
+      "right": 0.9,
+      "bottom": 0.88
+    }
+  },
+  "directMaterials": [],
+  "formula": {
+    "sourceUrl": "https://provider.invalid/render.mp4",
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30
+    }
+  },
+  "resources": []
+}

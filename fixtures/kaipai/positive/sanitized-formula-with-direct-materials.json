@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "kind": "formulaBundle",
+  "provenance": {
+    "provider": "kaipai",
+    "templateId": "redacted-template-002",
+    "recipeId": "redacted-recipe-002",
+    "formulaTaskId": "redacted-task-002",
+    "formulaRequestId": "redacted-request-002",
+    "capturedAt": "2026-06-24T00:00:00Z"
+  },
+  "sourceMedia": {
+    "resourceId": "source-main-video",
+    "kind": "video",
+    "uri": "resources/source/redacted-main.mp4",
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "durationMs": 8000,
+    "width": 1080,
+    "height": 1920
+  },
+  "recognizerResult": {
+    "wordList": [
+      {
+        "text": "redacted",
+        "startMs": 120,
+        "endMs": 1020
+      },
+      {
+        "text": "fixture",
+        "startMs": 1040,
+        "endMs": 1800
+      }
+    ]
+  },
+  "safeArea": {
+    "status": "provided",
+    "source": "redacted-local-fixture",
+    "value": {
+      "left": 0.08,
+      "top": 0.1,
+      "right": 0.92,
+      "bottom": 0.9
+    }
+  },
+  "directMaterials": [
+    {
+      "materialId": "direct-main-video",
+      "kind": "video",
+      "uri": "resources/direct/redacted-direct-main.mp4",
+      "displayName": "redacted-direct-main.mp4"
+    },
+    {
+      "materialId": "direct-bgm",
+      "kind": "audio",
+      "uri": "resources/audio/redacted-bgm.m4a",
+      "displayName": "redacted-bgm.m4a"
+    }
+  ],
+  "formula": {
+    "videoCanvasConfig": {
+      "width": 1080,
+      "height": 1920,
+      "frameRate": 30,
+      "backgroundColor": "#101010"
+    },
+    "videoClipList": [
+      {
+        "resourceId": "source-main-video",
+        "startAtMs": 0,
+        "endAtMs": 8000,
+        "durationMsWithSpeed": 6400,
+        "scale": 1.05,
+        "rotate": 0,
+        "alpha": 1
+      }
+    ],
+    "pipList": [
+      {
+        "resourceId": "direct-main-video",
+        "start": 600,
+        "duration": 2600,
+        "level": 20,
+        "firstImgPath": "resources/pip/redacted-pip-poster.png",
+        "videoClip": {
+          "startAtMs": 0,
+          "endAtMs": 2600,
+          "scale": 0.42,
+          "alpha": 0.95
+        }
+      }
+    ],
+    "bgm": {
+      "resourceId": "direct-bgm",
+      "startAtMs": 0,
+      "durationMs": 6400,
+      "volume": 0.42,
+      "fadeInMs": 300,
+      "fadeOutMs": 500
+    }
+  },
+  "resources": [
+    {
+      "resourceId": "pip-poster",
+      "kind": "image",
+      "uri": "resources/pip/redacted-pip-poster.png",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "displayName": "redacted-pip-poster.png"
+    },
+    {
+      "resourceId": "bgm-redacted",
+      "kind": "audio",
+      "uri": "resources/audio/redacted-bgm.m4a",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "displayName": "redacted-bgm.m4a"
+    }
+  ]
+}
