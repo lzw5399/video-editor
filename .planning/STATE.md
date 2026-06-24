@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17.1
 current_phase_name: Interaction Session And Template Import Main-Chain Hardening
 status: executing
-stopped_at: Completed 17.1-04-SUMMARY.md
-last_updated: "2026-06-24T20:33:53.559Z"
+stopped_at: Completed 17.1-05-PLAN.md
+last_updated: "2026-06-24T21:18:49.328Z"
 last_activity: 2026-06-25
-last_activity_desc: Completed Phase 17.1 Plan 04 Timeline, scrub, and keyframe interaction sessions
+last_activity_desc: Completed Phase 17.1 Plan 05 template report navigation and UI surface corrections
 progress:
   total_phases: 25
   completed_phases: 22
   total_plans: 165
-  completed_plans: 163
+  completed_plans: 164
   percent: 99
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17.1 — Interaction Session And Template Import Main-Chain Hardening
-Plan: 4 of 6 complete; next 17.1-05
+Plan: 5 of 6 complete; next 17.1-06
 Status: Ready to execute
-Last activity: 2026-06-25 — Completed Phase 17.1 Plan 04 Timeline, scrub, and keyframe interaction sessions
+Last activity: 2026-06-25 — Completed Phase 17.1 Plan 05 template report navigation and UI surface corrections
 
 Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks Phase 18 and hardens high-frequency interaction sessions plus template-import main-chain integration before mobile/server binding work.
 
@@ -199,6 +199,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks
 | Phase 17.1 P02 | 31min | 3 tasks | 9 files |
 | Phase 17.1 P03 | resumed | 3 tasks | 18 files |
 | Phase 17.1 P04 | 85 min | 4 tasks | 14 files |
+| Phase 17.1 P05 | resumed | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -566,6 +567,10 @@ Recent decisions affecting current work:
 - [Phase 17]: 17-09: Kaipai video imports no longer imply audio streams unless the resource is explicitly audio.
 - [Phase 17]: Review fix: Kaipai mapping is cumulative by formula section, so mixed templates preserve supported video, PIP, text, and BGM sections while native effects remain report-only degradation.
 - [Phase 17]: Review fix: failed post-localization import persistence cleans the current transaction's `resources/template-import/...` files and restores project/index state.
+- [Phase 17.1]: Template report navigation resolves canonical targets from the current Rust-owned view model. — Report rows must not parse provider JSON or fabricate selection; supported rows route through selection/seek intents, unsupported rows remain report-only.
+- [Phase 17.1]: Unsupported feature categories render as product unavailable gates. — Sticker, effect, transition, filter, adjustment, and digital-human surfaces are visible navigation categories but do not have production preview/export backing yet.
+- [Phase 17.1]: The plan-level ui-regression command is backed by a wrapper over ui-reference-regression. — The phase plan named tests/ui-regression.spec.ts while the repo's established regression suite is ui-reference-regression.spec.ts.
+- [Phase 17.1]: Inspector product units are converted at the React control boundary. — The UI displays percent and degree values while preserving existing Rust integer draft semantics and command payloads.
 
 ### Pending Todos
 
@@ -647,6 +652,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T20:33:53.553Z
-Stopped at: Completed 17.1-04-SUMMARY.md
+Last session: 2026-06-24T21:18:49.319Z
+Stopped at: Completed 17.1-05-PLAN.md
 Resume file: None

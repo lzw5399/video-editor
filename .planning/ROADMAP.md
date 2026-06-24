@@ -829,7 +829,7 @@ Plans:
   6. Product UI corrections normalize inspector units, make preview/timeline handles discoverable and usable, hide or gate unsupported visible controls, and pass screenshot-backed regression at 1280x800 and 1120x720.
   7. Source guards and product E2E reject DOM-only ghost preview, fallback/mock/artifact success, repeated canonical command loops for high-frequency samples, stale frame presentation, and unsupported visible controls.
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 
@@ -851,7 +851,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 1 and 4 completion)*
 
-- [ ] 17.1-05-PLAN.md - Add template report navigation and UI surface corrections
+- [x] 17.1-05-PLAN.md - Add template report navigation and UI surface corrections
 
 **Wave 6** *(blocked on Waves 3, 4, and 5 completion)*
 
