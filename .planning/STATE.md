@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-06-24T07:48:39.977Z"
+stopped_at: Completed 17-04-PLAN.md
+last_updated: "2026-06-24T08:06:36.816Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 24
   completed_phases: 21
   total_plans: 159
-  completed_plans: 151
+  completed_plans: 152
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 17 (template-import-core-and-kaipai-offline-adapter-foundation) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 17 execution started
 
@@ -188,6 +188,7 @@ Progress: Phase 15.1, 15.2, and 15.3 are complete; Phase 17 now covers provider-
 | Phase 15.3 P08 | resumed | 3 tasks | 8 files |
 | Phase 17 P01 | 14 min | 3 tasks | 11 files |
 | Phase 17 P02 | 9 min | 2 tasks | 7 files |
+| Phase 17 P04 | 11 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -519,6 +520,9 @@ Recent decisions affecting current work:
 - [Phase 17]: Resource localization returns provider-neutral diagnostics and never preserves remote URLs as runtime refs. — Protects preview/export from remote template dependencies while preserving report evidence.
 - [Phase 17]: Localized resources use deterministic bundle-relative refs under resources/template-import/<import-id>/ with resource-index-compatible metadata. — Gives adapter/session/export code stable local refs before imported drafts depend on template assets.
 - [Phase 17]: SHA-256 validation uses the approved sha2 crate instead of copied hand-written hash code. — Avoids copying security-sensitive custom hash code from the old branch and follows the Phase 17 package audit.
+- [Phase 17]: Kaipai provider IDs, raw formula JSON, recognizer output, and safe-area evidence stay adapter-local and may only flow into provider-neutral provenance/report evidence. — Preserves the phase boundary: Kaipai is an offline external adapter crate, not core/render/session semantics.
+- [Phase 17]: Committed Kaipai fixtures are sanitized; remote URL, signed URL, and credential-like rejection is tested through in-memory mutations instead of unsafe committed data. — Keeps the fixture corpus safe while still proving the parser rejects unsafe provider evidence.
+- [Phase 17]: The formula bundle schema is generated from Rust and committed without desktop TypeScript output because no UI import/report surface is added in this plan. — Avoids exposing raw adapter input to renderer/product code before a narrow import API exists.
 
 ### Pending Todos
 
@@ -599,6 +603,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T07:48:02.579Z
-Stopped at: Completed 17-02-PLAN.md
+Last session: 2026-06-24T08:05:48.972Z
+Stopped at: Completed 17-04-PLAN.md
 Resume file: None
