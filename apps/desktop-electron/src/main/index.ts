@@ -148,6 +148,12 @@ type TestProjectSessionCall = {
   resultErrorMessage: string | null;
   resultRevision: number | null;
   resultTimelineSegmentCount: number | null;
+  resultEventKinds: string[];
+  resultDeltaCommand: string | null;
+  resultDeltaChangedDomains: string[];
+  resultDeltaChangedRangeSources: string[];
+  resultDeltaFullDraft: boolean | null;
+  resultDeltaConsumerDomains: string[];
 };
 
 type TestWindowMetrics = {
@@ -1138,7 +1144,13 @@ function recordTestProjectSessionCall(
     resultErrorKind: null,
     resultErrorMessage: null,
     resultRevision: null,
-    resultTimelineSegmentCount: null
+    resultTimelineSegmentCount: null,
+    resultEventKinds: [],
+    resultDeltaCommand: null,
+    resultDeltaChangedDomains: [],
+    resultDeltaChangedRangeSources: [],
+    resultDeltaFullDraft: null,
+    resultDeltaConsumerDomains: []
   };
   globalThis.__videoEditorTestProjectSessionCalls.push(observation);
   return globalThis.__videoEditorTestProjectSessionCalls.length - 1;
@@ -1157,6 +1169,79 @@ function recordTestProjectSessionResult(index: number | null, result: CommandRes
   observation.resultErrorMessage = result.error?.message ?? null;
   observation.resultRevision = projectSessionResultRevision(result.data);
   observation.resultTimelineSegmentCount = projectSessionResultTimelineSegmentCount(result.data);
+  observation.resultEventKinds = projectSessionResultEventKinds(result.data);
+  observation.resultDeltaCommand = projectSessionResultDeltaCommand(result.data);
+  observation.resultDeltaChangedDomains = projectSessionResultDeltaChangedDomains(result.data);
+  observation.resultDeltaChangedRangeSources = projectSessionResultDeltaChangedRangeSources(result.data);
+  observation.resultDeltaFullDraft = projectSessionResultDeltaFullDraft(result.data);
+  observation.resultDeltaConsumerDomains = projectSessionResultDeltaConsumerDomains(result.data);
+}
+
+function projectSessionResultEventKinds(data: unknown): string[] {
+  if (typeof data !== "object" || data === null || !("events" in data)) {
+    return [];
+  }
+  const events = (data as { events?: unknown }).events;
+  if (!Array.isArray(events)) {
+    return [];
+  }
+  return events
+    .map((event) => (typeof event === "object" && event !== null && "kind" in event ? (event as { kind?: unknown }).kind : null))
+    .filter((kind): kind is string => typeof kind === "string");
+}
+
+function projectSessionResultDeltaCommand(data: unknown): string | null {
+  const delta = projectSessionResultDelta(data);
+  return delta !== null && typeof delta.command === "string" ? delta.command : null;
+}
+
+function projectSessionResultDeltaChangedDomains(data: unknown): string[] {
+  const delta = projectSessionResultDelta(data);
+  if (delta === null || !Array.isArray(delta.changedDomains)) {
+    return [];
+  }
+  return delta.changedDomains.filter((domain): domain is string => typeof domain === "string");
+}
+
+function projectSessionResultDeltaChangedRangeSources(data: unknown): string[] {
+  const delta = projectSessionResultDelta(data);
+  if (delta === null || !Array.isArray(delta.changedRanges)) {
+    return [];
+  }
+  return delta.changedRanges
+    .map((range) => (typeof range === "object" && range !== null && "source" in range ? (range as { source?: unknown }).source : null))
+    .filter((source): source is string => typeof source === "string");
+}
+
+function projectSessionResultDeltaFullDraft(data: unknown): boolean | null {
+  const delta = projectSessionResultDelta(data);
+  const invalidation = delta?.invalidation;
+  if (typeof invalidation !== "object" || invalidation === null || !("fullDraft" in invalidation)) {
+    return null;
+  }
+  const fullDraft = (invalidation as { fullDraft?: unknown }).fullDraft;
+  return typeof fullDraft === "boolean" ? fullDraft : null;
+}
+
+function projectSessionResultDeltaConsumerDomains(data: unknown): string[] {
+  const delta = projectSessionResultDelta(data);
+  const invalidation = delta?.invalidation;
+  if (typeof invalidation !== "object" || invalidation === null || !("consumerDomains" in invalidation)) {
+    return [];
+  }
+  const consumerDomains = (invalidation as { consumerDomains?: unknown }).consumerDomains;
+  if (!Array.isArray(consumerDomains)) {
+    return [];
+  }
+  return consumerDomains.filter((domain): domain is string => typeof domain === "string");
+}
+
+function projectSessionResultDelta(data: unknown): Record<string, unknown> | null {
+  if (typeof data !== "object" || data === null || !("delta" in data)) {
+    return null;
+  }
+  const delta = (data as { delta?: unknown }).delta;
+  return typeof delta === "object" && delta !== null ? (delta as Record<string, unknown>) : null;
 }
 
 function projectSessionResultRevision(data: unknown): number | null {

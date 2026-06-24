@@ -135,6 +135,17 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
       ])
     );
     expect(importCalls).toHaveLength(3);
+    const latestImportCall = importCalls[importCalls.length - 1];
+    expect(latestImportCall).toEqual(
+      expect.objectContaining({
+        resultEventKinds: expect.arrayContaining(["templateImported"]),
+        resultDeltaCommand: "importTemplate",
+        resultDeltaChangedDomains: expect.arrayContaining(["track", "timing", "visual", "material", "canvas"]),
+        resultDeltaChangedRangeSources: expect.arrayContaining(["fullDraft"]),
+        resultDeltaFullDraft: true,
+        resultDeltaConsumerDomains: expect.arrayContaining(["preview", "exportPrep", "graphSnapshot", "previewCache"])
+      })
+    );
 
     const firstFrame = await waitForCompositedPreviewEvidence(page, app, 12_000, -1);
     expect(firstFrame.hostState?.contentEvidence?.source).toBe("renderGraphGpuComposited");

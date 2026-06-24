@@ -1,9 +1,9 @@
 use bindings_node::{
     close_project_session, close_realtime_preview_session, create_audio_preview_session,
     create_project_session, create_realtime_preview_session, execute_command,
-    execute_project_intent, get_audio_preview_status, list_project_session_materials,
-    list_project_session_missing_materials, open_project_session, seek_audio_preview,
-    start_project_session_export, stop_audio_preview,
+    execute_project_intent, get_audio_preview_status, import_kaipai_formula_bundle,
+    list_project_session_materials, list_project_session_missing_materials, open_project_session,
+    seek_audio_preview, start_project_session_export, stop_audio_preview,
     update_realtime_preview_project_session_snapshot,
 };
 use draft_model::{Draft, TextSegmentSource};
@@ -1316,6 +1316,92 @@ fn project_session_imports_material_then_adds_segment_without_renderer_draft() {
     );
 
     close_project_session(json!({ "sessionId": "test-session-import-add" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_template_import_response_includes_events_and_delta() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-template-import.veproj");
+    let source_root =
+        seed_template_import_fixture_resources(temp_dir.path(), "positive/main-video.json");
+
+    let created = create_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-template-import",
+        "draftId": "template-import-before-draft",
+        "draftName": "Before Template Import"
+    }))
+    .expect("createProjectSession should return an envelope");
+    assert_eq!(created["ok"], true, "{created:#}");
+
+    let imported = import_kaipai_formula_bundle(json!({
+        "sessionId": "test-session-template-import",
+        "expectedRevision": 0,
+        "bundlePath": template_import_fixture_path("positive/main-video.json"),
+        "resourceRoot": source_root,
+        "importId": "binding-template-import",
+        "generatedAt": "2026-06-24T00:00:00Z",
+        "verifyResourceSha256": false
+    }))
+    .expect("importKaipaiFormulaBundle should return an envelope");
+    assert_eq!(imported["ok"], true, "{imported:#}");
+    assert_eq!(imported["data"]["revision"], 1, "{imported:#}");
+    assert_eq!(
+        imported["data"]["events"][0]["kind"], "templateImported",
+        "template import must emit command events like other project-session mutations: {imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["delta"]["command"], "importTemplate",
+        "template import must return a provider-neutral CommandDelta: {imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["delta"]["changedEntities"][0],
+        json!({ "kind": "draft", "draftId": "imported-binding-template-import" }),
+        "template import delta must identify the imported draft: {imported:#}"
+    );
+    for domain in ["track", "timing", "visual", "material", "canvas"] {
+        assert!(
+            imported["data"]["delta"]["changedDomains"]
+                .as_array()
+                .expect("changedDomains should be an array")
+                .contains(&json!(domain)),
+            "template import delta should mark changed domain {domain}: {imported:#}"
+        );
+    }
+    assert!(
+        imported["data"]["delta"]["changedRanges"]
+            .as_array()
+            .expect("changedRanges should be an array")
+            .iter()
+            .any(|range| range["source"] == "fullDraft"),
+        "template import should dirty the full imported draft range: {imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["delta"]["invalidation"]["fullDraft"], true,
+        "template import must invalidate full draft consumers: {imported:#}"
+    );
+    for consumer_domain in [
+        "preview",
+        "exportPrep",
+        "audio",
+        "thumbnail",
+        "waveform",
+        "proxy",
+        "graphSnapshot",
+        "previewCache",
+    ] {
+        assert!(
+            imported["data"]["delta"]["invalidation"]["consumerDomains"]
+                .as_array()
+                .expect("consumerDomains should be an array")
+                .contains(&json!(consumer_domain)),
+            "template import must invalidate {consumer_domain}: {imported:#}"
+        );
+    }
+    assert_no_renderer_project_state_payload(&imported);
+
+    close_project_session(json!({ "sessionId": "test-session-template-import" }))
         .expect("closeProjectSession should return an envelope");
 }
 
@@ -2721,6 +2807,43 @@ fn text_segment_json(content: &str, source: &str) -> Value {
         "bubble": null,
         "effect": null
     })
+}
+
+fn template_import_fixture_path(path: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("fixtures/kaipai")
+        .join(path)
+}
+
+fn seed_template_import_fixture_resources(root: &Path, fixture: &str) -> PathBuf {
+    let source_root = root.join("template-source");
+    fs::create_dir_all(&source_root).expect("template import source root should create");
+    let value: Value = serde_json::from_str(
+        &fs::read_to_string(template_import_fixture_path(fixture))
+            .expect("template import fixture should be readable"),
+    )
+    .expect("template import fixture should parse");
+    for resource in value["resources"].as_array().into_iter().flatten() {
+        let uri = resource["uri"]
+            .as_str()
+            .expect("template import fixture resource should have uri");
+        let resource_id = resource["resourceId"]
+            .as_str()
+            .expect("template import fixture resource should have resourceId");
+        let path = source_root.join(uri);
+        fs::create_dir_all(
+            path.parent()
+                .expect("template resource path should have parent"),
+        )
+        .expect("template resource directory should create");
+        fs::write(
+            &path,
+            format!("project session template import fixture {resource_id}"),
+        )
+        .expect("template resource fixture should write");
+    }
+    source_root
 }
 
 fn wait_for_export_phase(job_id: &str) -> Value {

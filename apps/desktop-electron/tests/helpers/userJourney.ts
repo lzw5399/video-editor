@@ -63,6 +63,7 @@ type ProjectSessionCall = {
     | "createProjectSession"
     | "openProjectSession"
     | "executeProjectIntent"
+    | "importKaipaiFormulaBundle"
     | "listProjectSessionMaterials"
     | "listProjectSessionMissingMaterials"
     | "startProjectSessionExport"
@@ -93,6 +94,12 @@ type ProjectSessionCall = {
   resultErrorMessage?: string | null;
   resultRevision?: number | null;
   resultTimelineSegmentCount?: number | null;
+  resultEventKinds?: string[];
+  resultDeltaCommand?: string | null;
+  resultDeltaChangedDomains?: string[];
+  resultDeltaChangedRangeSources?: string[];
+  resultDeltaFullDraft?: boolean | null;
+  resultDeltaConsumerDomains?: string[];
 };
 
 type RealtimePreviewHostCall = {
