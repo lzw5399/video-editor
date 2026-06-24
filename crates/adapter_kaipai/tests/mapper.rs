@@ -6,6 +6,7 @@ use draft_model::{
     CanvasAspectRatio, CanvasBackground, MaterialKind, Microseconds, SegmentAnchor, SegmentFitMode,
     TrackKind,
 };
+use serde_json::{json, Value};
 
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -197,11 +198,64 @@ fn offline_mapper_reports_missing_resources_and_native_effects_without_hiding_su
     assert_no_provider_runtime_refs(&serde_json::to_value(&native.plan).unwrap());
 }
 
+#[test]
+fn offline_mapper_maps_simple_transition_and_visual_keyframes_generically() {
+    let mut value = read_fixture_value("positive/main-video.json");
+    value["formula"]["videoClipList"][0]["transition"] = json!({
+        "name": "dissolve",
+        "durationMs": 300
+    });
+    value["formula"]["videoClipList"][0]["keyframes"] = json!([
+        {"atMs": 0, "property": "positionX", "value": 120},
+        {"atMs": 500, "property": "scaleX", "value": 1.25},
+        {"atMs": 1000, "property": "opacity", "value": 0.5}
+    ]);
+    let bundle = KaipaiFormulaBundle::from_json_value(value).expect("mutated fixture should parse");
+    let mapped = map_bundle(bundle, "offline-main-video-animation");
+
+    validate_import_plan(&mapped.plan).expect("animated main video plan should validate");
+    let segment = &mapped.plan.tracks[0].track.segments[0];
+    let transition = segment
+        .transition
+        .as_ref()
+        .expect("simple dissolve should map to canonical transition");
+    assert_eq!(transition.name, "dissolve");
+    assert_eq!(transition.duration, Microseconds::new(300_000));
+
+    assert_eq!(segment.keyframes.len(), 3);
+    assert_eq!(
+        segment
+            .keyframes
+            .iter()
+            .map(|keyframe| (&keyframe.property, &keyframe.value, keyframe.at))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                &draft_model::KeyframeProperty::VisualPositionX,
+                &draft_model::KeyframeValue::Int { value: 120 },
+                Microseconds::ZERO,
+            ),
+            (
+                &draft_model::KeyframeProperty::VisualScaleX,
+                &draft_model::KeyframeValue::Uint { value: 1250 },
+                Microseconds::new(500_000),
+            ),
+            (
+                &draft_model::KeyframeProperty::VisualOpacity,
+                &draft_model::KeyframeValue::Uint { value: 500 },
+                Microseconds::new(1_000_000),
+            ),
+        ]
+    );
+}
+
 fn map_fixture(path: &str, import_id: &str) -> adapter_kaipai::KaipaiMappedFixture {
-    let bundle = KaipaiFormulaBundle::from_json_str(
-        &fs::read_to_string(fixture_root().join(path)).expect("fixture should be readable"),
-    )
-    .expect("fixture should parse");
+    let bundle = KaipaiFormulaBundle::from_json_str(&read_fixture_string(path))
+        .expect("fixture should parse");
+    map_bundle(bundle, import_id)
+}
+
+fn map_bundle(bundle: KaipaiFormulaBundle, import_id: &str) -> adapter_kaipai::KaipaiMappedFixture {
     let temp = temp_case_dir(import_id);
     seed_resources(&temp.source_root, &bundle);
 
@@ -215,7 +269,15 @@ fn map_fixture(path: &str, import_id: &str) -> adapter_kaipai::KaipaiMappedFixtu
     options.verify_resource_sha256 = false;
 
     map_kaipai_bundle_to_import_plan(&bundle, options)
-        .unwrap_or_else(|error| panic!("{path} should map: {error}"))
+        .unwrap_or_else(|error| panic!("{import_id} should map: {error}"))
+}
+
+fn read_fixture_string(path: &str) -> String {
+    fs::read_to_string(fixture_root().join(path)).expect("fixture should be readable")
+}
+
+fn read_fixture_value(path: &str) -> Value {
+    serde_json::from_str(&read_fixture_string(path)).expect("fixture should parse")
 }
 
 fn assert_canvas(plan: &draft_import::DraftImportPlan, expected_background: &str) {
@@ -246,10 +308,24 @@ fn assert_localized_ref(uri: &str) {
 fn assert_statuses(items: &[draft_import::AdaptationReportItem], expected: &[AdaptationStatus]) {
     let observed = items
         .iter()
-        .map(|item| item.status)
+        .map(|item| status_name(item.status))
         .collect::<BTreeSet<_>>();
-    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
+    let expected = expected
+        .iter()
+        .copied()
+        .map(status_name)
+        .collect::<BTreeSet<_>>();
     assert_eq!(observed, expected);
+}
+
+fn status_name(status: AdaptationStatus) -> &'static str {
+    match status {
+        AdaptationStatus::Supported => "supported",
+        AdaptationStatus::Approximated => "approximated",
+        AdaptationStatus::Dropped => "dropped",
+        AdaptationStatus::MissingResource => "missingResource",
+        AdaptationStatus::NeedsNativeEffect => "needsNativeEffect",
+    }
 }
 
 fn assert_no_provider_runtime_refs(value: &serde_json::Value) {
