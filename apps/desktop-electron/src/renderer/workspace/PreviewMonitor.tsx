@@ -249,6 +249,9 @@ type PreviewDragState = {
   acceptedMoveDeltaX: number;
   acceptedMoveDeltaY: number;
   acceptedRotationDeltaDegrees: number;
+  basePositionX: number;
+  basePositionY: number;
+  baseRotationDegrees: number;
   centerClientX?: number;
   centerClientY?: number;
   startAngleDegrees?: number;
@@ -453,7 +456,10 @@ export function PreviewMonitor({
       pendingMetrics: null,
       acceptedMoveDeltaX: 0,
       acceptedMoveDeltaY: 0,
-      acceptedRotationDeltaDegrees: 0
+      acceptedRotationDeltaDegrees: 0,
+      basePositionX: selectedSegment.visual.transform.position.x,
+      basePositionY: selectedSegment.visual.transform.position.y,
+      baseRotationDegrees: selectedSegment.visual.transform.rotation.degrees
     };
     drag.beginPromise = beginPreviewTransformInteraction(drag);
     previewDragRef.current = drag;
@@ -503,6 +509,9 @@ export function PreviewMonitor({
       acceptedMoveDeltaX: 0,
       acceptedMoveDeltaY: 0,
       acceptedRotationDeltaDegrees: 0,
+      basePositionX: selectedSegment.visual.transform.position.x,
+      basePositionY: selectedSegment.visual.transform.position.y,
+      baseRotationDegrees: selectedSegment.visual.transform.rotation.degrees,
       centerClientX,
       centerClientY,
       startAngleDegrees: pointerAngleDegrees(event.clientX, event.clientY, centerClientX, centerClientY)
@@ -1476,15 +1485,19 @@ function previewRotateMetrics(drag: PreviewDragState, clientX: number, clientY: 
 function previewVisualPatchFromMetrics(drag: PreviewDragState, metrics: PreviewDragMetrics): SegmentVisualPatch {
   if (metrics.mode === "rotate") {
     return {
-      rotationDeltaDegrees: Math.round(metrics.deltaDegrees)
+      rotationDegrees: normalizeRotationDegrees(drag.baseRotationDegrees + metrics.deltaDegrees)
     };
   }
   const deltaX = Math.round((metrics.deltaClientX * 2000) / Math.max(1, drag.canvasWidth));
   const deltaY = Math.round((metrics.deltaClientY * 2000) / Math.max(1, drag.canvasHeight));
   return {
-    positionDeltaX: deltaX,
-    positionDeltaY: -deltaY
+    positionX: clampPositionValue(drag.basePositionX + deltaX),
+    positionY: clampPositionValue(drag.basePositionY - deltaY)
   };
+}
+
+function clampPositionValue(value: number): number {
+  return Math.max(-1000, Math.min(1000, Math.round(value)));
 }
 
 function buildTextOverlayStyle(

@@ -1260,10 +1260,10 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     await updateSelectedVisualThroughInspector(page, app, {
       positionX: titleRotateVisual.transform.position.x,
       positionY: titleRotateVisual.transform.position.y,
-      scaleX: 1060,
-      scaleY: 980,
+      scaleX: 106,
+      scaleY: 98,
       rotation: -12,
-      opacity: 910,
+      opacity: 91,
       fitMode: "适应"
     });
 
@@ -1345,10 +1345,10 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     await updateSelectedVisualThroughInspector(page, app, {
       positionX: subtitleDragVisual.transform.position.x,
       positionY: subtitleDragVisual.transform.position.y,
-      scaleX: 1120,
-      scaleY: 1080,
+      scaleX: 112,
+      scaleY: 108,
       rotation: 16,
-      opacity: 850,
+      opacity: 85,
       fitMode: "适应"
     });
     await page.getByRole("button", { name: /片段 错峰字幕乙/ }).click();
@@ -1450,11 +1450,18 @@ test("product text editing UAT exercises preview drag, multi-font captions, and 
     expect(draggedSubtitleOverlay.visualRotationDegrees).toBe(16);
     expect(draggedSubtitleOverlay.visualScaleXMillis).toBe(1120);
     expect(thirdSameTimeOverlay.fontRef).toBe(BUNDLED_SERIF_FONT_REF);
+    const sameTimeContentEvidence = sameTimeEvidence.previewEvidence.hostState?.contentEvidence;
+    const sameTimeSubtitleBboxes = [
+      transformedTextOverlayBox(sameTimeContentEvidence, firstSameTimeOverlay),
+      transformedTextOverlayBox(sameTimeContentEvidence, draggedSubtitleOverlay),
+      transformedTextOverlayBox(sameTimeContentEvidence, thirdSameTimeOverlay)
+    ];
     expect(new Set([
-      firstSameTimeOverlay.y,
-      draggedSubtitleOverlay.y,
-      thirdSameTimeOverlay.y
-    ]).size, "same-time subtitle tracks should occupy distinct render bboxes").toBe(3);
+      ...sameTimeSubtitleBboxes.map((box) => `${Math.round(box.x)}:${Math.round(box.y)}`)
+    ]).size, `preview-dragged same-time subtitle should occupy a distinct transformed render bbox: ${JSON.stringify({
+      boxes: sameTimeSubtitleBboxes,
+      overlays: [firstSameTimeOverlay, draggedSubtitleOverlay, thirdSameTimeOverlay]
+    })}`).toBeGreaterThanOrEqual(2);
 
     await seekTimelinePlayhead(page, app, 1_650_000);
     const staggeredEvidence = await waitForActiveTextOverlaySetEvidence(
@@ -2415,9 +2422,21 @@ async function rotateSelectedPreviewTextOverlay(
   });
   const box = await rotateHandle.boundingBox();
   expect(box, "selected preview text rotate handle must have a measurable box").not.toBeNull();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  const outlineBox = await page.getByLabel("预览选中框").boundingBox();
+  expect(outlineBox, "selected preview text outline must be measurable for rotate geometry").not.toBeNull();
+  const startX = box!.x + box!.width / 2;
+  const startY = box!.y + box!.height / 2;
+  const centerX = outlineBox!.x + outlineBox!.width / 2;
+  const centerY = outlineBox!.y + outlineBox!.height / 2;
+  const startAngle = Math.atan2(startY - centerY, startX - centerX);
+  const radius = Math.max(24, Math.hypot(startX - centerX, startY - centerY));
+  const direction = deltaY === 0 ? Math.sign(deltaX || 1) : Math.sign(deltaY);
+  const targetAngle = startAngle + direction * (Math.PI / 4);
+  const targetX = centerX + Math.cos(targetAngle) * radius;
+  const targetY = centerY + Math.sin(targetAngle) * radius;
+  await rotateHandle.hover();
   await page.mouse.down();
-  await page.mouse.move(box!.x + box!.width / 2 + deltaX, box!.y + box!.height / 2 + deltaY, {
+  await page.mouse.move(targetX, targetY, {
     steps: 8
   });
   await page.mouse.up();
@@ -2650,7 +2669,20 @@ async function waitForTextOverlayRotationChangedEvidence(
     await page.waitForTimeout(200);
   }
 
-  throw new Error(`Timed out waiting for text overlay rotation evidence: ${JSON.stringify(lastEvidence)}`);
+  const interactionCalls = (await readNativeCommandObservations(app))
+    .filter((call) =>
+      call.command === "beginProjectInteraction" ||
+      call.command === "updateProjectInteraction" ||
+      call.command === "commitProjectInteraction" ||
+      call.command === "cancelProjectInteraction"
+    )
+    .slice(-12);
+  throw new Error(
+    `Timed out waiting for text overlay rotation evidence: ${JSON.stringify({
+      lastEvidence,
+      interactionCalls
+    })}`
+  );
 }
 
 async function waitForActiveTextOverlaySetEvidence(

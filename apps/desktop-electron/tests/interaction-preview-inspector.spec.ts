@@ -53,6 +53,10 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       expect(update.resultRevision).toBe(baseRevision);
       expect(update.revisionUnchanged).toBe(true);
       expect(update.resultDeltaCommand).toBe("updateSegmentVisual");
+      expect(update.visualPatch?.positionX, "preview move samples must send idempotent absolute X").toEqual(expect.any(Number));
+      expect(update.visualPatch?.positionY, "preview move samples must send idempotent absolute Y").toEqual(expect.any(Number));
+      expect(update.visualPatch?.positionDeltaX, "preview move samples must not send cumulative X deltas").toBeUndefined();
+      expect(update.visualPatch?.positionDeltaY, "preview move samples must not send cumulative Y deltas").toBeUndefined();
     }
     expectCoalescedInteractionTelemetry(liveCalls, "selectedSegmentVisual", "preview drag");
     await expect(outline).toHaveAttribute("data-interaction-source", "rust-provisional");
@@ -66,7 +70,9 @@ test("preview canvas drag streams Rust provisional updates and commits once", as
       })
       .toBe(1);
     const committedCalls = callsSince(await readProjectSessionCalls(app), beforeIndex);
-    const commit = committedCalls.findLast((call) => call.command === "commitProjectInteraction");
+    const commit = committedCalls.findLast(
+      (call) => call.command === "commitProjectInteraction" && call.interactionKind === "selectedSegmentVisual"
+    );
     expect(commit?.interactionKind).toBe("selectedSegmentVisual");
     expect(commit?.resultRevision).toBe((baseRevision ?? 0) + 1);
     expect(
@@ -123,7 +129,10 @@ test("preview text rotate handle changes native compositor rotation evidence", a
       .toEqual(expect.arrayContaining(["beginProjectInteraction", "updateProjectInteraction"]));
 
     const liveCalls = callsSince(await readProjectSessionCalls(app), beforeIndex);
-    expect(commandCount(liveCalls, "commitProjectInteraction"), "rotate drag must not commit before pointer-up").toBe(0);
+    expect(
+      interactionCommandCount(liveCalls, "commitProjectInteraction", "selectedSegmentVisual"),
+      "rotate drag must not commit before pointer-up"
+    ).toBe(0);
     expect(
       liveCalls.some((call) => call.command === "executeProjectIntent" && call.intentKind === "updateSelectedSegmentVisual"),
       "rotate drag must not route live samples through canonical updateSelectedSegmentVisual"
@@ -140,12 +149,22 @@ test("preview text rotate handle changes native compositor rotation evidence", a
     await page.mouse.up();
 
     await expect
-      .poll(async () => commandCount(callsSince(await readProjectSessionCalls(app), beforeIndex), "commitProjectInteraction"), {
-        timeout: 10_000
-      })
+      .poll(
+        async () =>
+          interactionCommandCount(
+            callsSince(await readProjectSessionCalls(app), beforeIndex),
+            "commitProjectInteraction",
+            "selectedSegmentVisual"
+          ),
+        {
+          timeout: 10_000
+        }
+      )
       .toBe(1);
     const committedCalls = callsSince(await readProjectSessionCalls(app), beforeIndex);
-    const commit = committedCalls.findLast((call) => call.command === "commitProjectInteraction");
+    const commit = committedCalls.findLast(
+      (call) => call.command === "commitProjectInteraction" && call.interactionKind === "selectedSegmentVisual"
+    );
     expect(commit?.interactionKind).toBe("selectedSegmentVisual");
     expect(commit?.resultRevision).toBe((baseRevision ?? 0) + 1);
     await expectRealtimeHostInteractionRefresh(app, "preview text rotate");
@@ -240,6 +259,10 @@ function callsSince(calls: Awaited<ReturnType<typeof readProjectSessionCalls>>, 
 
 function commandCount(calls: Array<Record<string, any>>, command: string): number {
   return calls.filter((call) => call.command === command).length;
+}
+
+function interactionCommandCount(calls: Array<Record<string, any>>, command: string, kind: string): number {
+  return calls.filter((call) => call.command === command && call.interactionKind === kind).length;
 }
 
 function expectCoalescedInteractionTelemetry(calls: Array<Record<string, any>>, kind: string, label: string): void {
