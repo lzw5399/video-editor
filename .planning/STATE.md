@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 17.1
+current_phase_name: interaction-session-and-template-import-main-chain-hardening
 status: executing
-stopped_at: Completed 17.1-01-SUMMARY.md
-last_updated: "2026-06-24T23:10:44+08:00"
+stopped_at: Completed 17.1-02-SUMMARY.md
+last_updated: "2026-06-24T23:45:44+08:00"
 last_activity: 2026-06-24
-last_activity_desc: Completed Phase 17.1 Plan 01 template import delta-driven invalidation
+last_activity_desc: Completed Phase 17.1 Plan 02 Rust-owned project interaction sessions
 progress:
   total_phases: 25
   completed_phases: 22
   total_plans: 165
-  completed_plans: 159
-  percent: 88
-current_phase_name: interaction-session-and-template-import-main-chain-hardening
+  completed_plans: 161
+  percent: 98
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 17.1 — READY TO EXECUTE
-Plan: 1 of 6 complete; next 17.1-02
+Phase: 17.1 — Interaction Session And Template Import Main-Chain Hardening
+Plan: 2 of 6 complete; next 17.1-03
 Status: Executing
-Last activity: 2026-06-24 — Completed Plan 01 template import delta-driven invalidation
+Last activity: 2026-06-24 — Completed Plan 02 Rust-owned project interaction sessions
 
 Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks Phase 18 and hardens high-frequency interaction sessions plus template-import main-chain integration before mobile/server binding work.
 
@@ -196,6 +196,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks
 | Phase 17 P06 | 17 min | 2 tasks | 7 files |
 | Phase 17 P08 | 28 min | 2 tasks | 10 files |
 | Phase 17-template-import-core-and-kaipai-offline-adapter-foundation P09 | 30min | 3 tasks | 13 files |
+| Phase 17.1 P02 | 31min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -285,6 +286,9 @@ Progress: Phase 15.1, 15.2, 15.3, 16, and 17 are complete; Phase 17.1 now blocks
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 17.1]: `ProjectInteractionSession` is owned by Rust project sessions and carries base revision, generation, accepted sequence, and coalesced-through facts. — Renderer high-frequency paths must use explicit begin/update/commit/cancel IPC instead of repeated canonical `executeProjectIntent` loops.
+- [Phase 17.1]: Interaction updates are provisional only. — Update/cancel return Rust view model/delta facts and leave project revision, `project.json`, undo, and redo unchanged; commit revalidates the last accepted sample and applies exactly one canonical command/save.
+- [Phase 17.1]: Canonical revision increments clear active interaction sessions. — Stale interaction bases cannot remain live after another draft mutation, material probe completion, template import, undo/redo, or interaction commit.
 - [Phase 15.3]: Normal product launch has no workspace fixture and stops at project entry; explicit test fixtures must opt into blank/demo workspace bootstrap.
 - [Phase 15.3]: Project create/open UI receives only platform-selected bundle paths, then calls Rust saveProjectBundle/openProjectBundle command envelopes.
 - [Phase 15.3]: Production icon runtime references use copied app-local SVG assets only; the root `icons/` tree remains a source reference.
@@ -638,6 +642,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T11:15:55.982Z
-Stopped at: Completed 17-09-PLAN.md
+Last session: 2026-06-24T15:47:06.203Z
+Stopped at: Completed 17.1-02-SUMMARY.md
 Resume file: None

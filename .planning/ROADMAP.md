@@ -829,7 +829,7 @@ Plans:
   6. Product UI corrections normalize inspector units, make preview/timeline handles discoverable and usable, hide or gate unsupported visible controls, and pass screenshot-backed regression at 1280x800 and 1120x720.
   7. Source guards and product E2E reject DOM-only ghost preview, fallback/mock/artifact success, repeated canonical command loops for high-frequency samples, stale frame presentation, and unsupported visible controls.
 
-**Plans:** 6 plans
+**Plans:** 2/6 plans executed
 
 Plans:
 
@@ -839,7 +839,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 17.1-02-PLAN.md - Add Rust ProjectInteractionSession state machine and desktop IPC
+- [x] 17.1-02-PLAN.md - Add Rust ProjectInteractionSession state machine and desktop IPC
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
