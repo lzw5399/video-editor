@@ -6,7 +6,7 @@ current_phase: 17
 current_phase_name: template-import-core-and-kaipai-offline-adapter-foundation
 status: executing
 stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-06-24T07:48:02.586Z"
+last_updated: "2026-06-24T07:48:39.977Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 17 execution started
 progress:
@@ -516,6 +516,9 @@ Recent decisions affecting current work:
 - [Phase 17]: AdaptationReport is provider-neutral and keeps external references only in provenance evidence.
 - [Phase 17]: Desktop report types are generated from Rust with ts-rs instead of hand-written TypeScript.
 - [Phase 17]: Source guards scan core/render/session/export paths while reserving provider-specific parsing for adapter crates.
+- [Phase 17]: Resource localization returns provider-neutral diagnostics and never preserves remote URLs as runtime refs. — Protects preview/export from remote template dependencies while preserving report evidence.
+- [Phase 17]: Localized resources use deterministic bundle-relative refs under resources/template-import/<import-id>/ with resource-index-compatible metadata. — Gives adapter/session/export code stable local refs before imported drafts depend on template assets.
+- [Phase 17]: SHA-256 validation uses the approved sha2 crate instead of copied hand-written hash code. — Avoids copying security-sensitive custom hash code from the old branch and follows the Phase 17 package audit.
 
 ### Pending Todos
 
