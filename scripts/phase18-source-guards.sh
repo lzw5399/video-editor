@@ -293,6 +293,10 @@ Modes:
 USAGE
 }
 
+if [ "${1:-}" = "--" ]; then
+  shift
+fi
+
 case "${1:-}" in
   --self-test)
     run_self_test
