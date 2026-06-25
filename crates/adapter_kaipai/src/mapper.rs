@@ -992,10 +992,9 @@ fn transition_from_formula(value: &Value) -> Result<Option<Transition>, AdapterK
     if !matches!(name, "fade" | "dissolve") {
         return Ok(None);
     }
-    Ok(Some(Transition {
-        name: name.to_owned(),
-        duration: ms_to_us(optional_u64_field(transition, "durationMs").unwrap_or(300)),
-    }))
+    Ok(Some(Transition::dissolve(ms_to_us(
+        optional_u64_field(transition, "durationMs").unwrap_or(300),
+    ))))
 }
 
 fn keyframes_from_formula(value: &Value) -> Result<Vec<Keyframe>, AdapterKaipaiError> {
