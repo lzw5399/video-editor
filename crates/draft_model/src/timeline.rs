@@ -6,7 +6,7 @@ use ts_rs::TS;
 
 use crate::{
     BlendModeKind, ExternalEffectReference, Filter, MaskKind, MaterialId, Microseconds, SegmentId,
-    SegmentRetiming, TrackId, Transition,
+    SegmentRetiming, TrackId, TrackTransition, Transition,
 };
 
 pub const MAX_SEGMENT_VOLUME_MILLIS: u32 = 4_000;
@@ -936,6 +936,8 @@ pub struct Track {
     #[serde(default = "default_track_visible")]
     pub visible: bool,
     pub segments: Vec<Segment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<TrackTransition>,
 }
 
 impl Track {
@@ -948,6 +950,7 @@ impl Track {
             locked: false,
             visible: true,
             segments: Vec::new(),
+            transitions: Vec::new(),
         }
     }
 }
