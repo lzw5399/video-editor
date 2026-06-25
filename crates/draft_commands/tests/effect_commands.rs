@@ -1,14 +1,18 @@
 use draft_commands::{
     TimelineCommandErrorKind,
-    effects::{apply_segment_effect, remove_segment_effect, update_segment_effect_parameter},
+    effects::{
+        apply_segment_effect, remove_segment_effect, set_segment_blend_mode, set_segment_mask,
+        update_segment_effect_parameter,
+    },
     history::{redo_timeline_edit, undo_timeline_edit},
     timeline::execute_timeline_edit,
 };
 use draft_model::{
     ApplySegmentEffectCommandPayload, CommandState, DirtyDomain, Draft, EffectParameterUpdate,
-    Filter, FilterKind, Material, MaterialKind, Microseconds, RemoveSegmentEffectCommandPayload,
-    Segment, SourceTimerange, TargetTimerange, TimelineEditPayload, TimelineSelection, Track,
-    TrackKind, UpdateSegmentEffectParameterCommandPayload,
+    ExternalEffectReference, Filter, FilterKind, Material, MaterialKind, Microseconds,
+    RemoveSegmentEffectCommandPayload, Segment, SegmentBlendMode, SegmentMask, SourceTimerange,
+    TargetTimerange, TimelineEditPayload, TimelineSelection, Track, TrackKind,
+    UpdateSegmentEffectParameterCommandPayload,
 };
 
 #[test]
@@ -258,6 +262,311 @@ fn effect_commands_update_rejects_wrong_parameter_or_missing_effect_atomically()
 
     assert_eq!(applied.draft.tracks[0].segments[0].filters.len(), 1);
     assert_eq!(applied.command_state.undo_stack.len(), 1);
+}
+
+#[test]
+fn effect_commands_set_rect_and_ellipse_masks_as_typed_undoable_semantics() {
+    let draft = draft_with_video_segment();
+    let state = CommandState::empty();
+    let selection = selected_segment_context();
+
+    let rect = set_segment_mask(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentMask::Rectangle {
+            x_millis: 100,
+            y_millis: 125,
+            width_millis: 700,
+            height_millis: 650,
+            feather_millis: 80,
+            opacity_millis: 850,
+            inverted: true,
+        },
+    )
+    .expect("supported rectangle mask should commit");
+
+    assert_eq!(rect.events[0].kind, "segmentMaskSet");
+    assert_eq!(rect.command_state.undo_stack.len(), 1);
+    assert_eq!(
+        rect.command_state.undo_stack[0].label.as_deref(),
+        Some("setSegmentMask")
+    );
+    assert!(rect.delta.changed_domains.contains(&DirtyDomain::Effect));
+    assert!(rect.delta.changed_domains.contains(&DirtyDomain::Visual));
+    assert!(matches!(
+        rect.draft.tracks[0].segments[0].visual.mask,
+        SegmentMask::Rectangle {
+            x_millis: 100,
+            y_millis: 125,
+            width_millis: 700,
+            height_millis: 650,
+            feather_millis: 80,
+            opacity_millis: 850,
+            inverted: true,
+        }
+    ));
+    assert_eq!(draft.tracks[0].segments[0].visual.mask, SegmentMask::None);
+
+    let ellipse = set_segment_mask(
+        &rect.draft,
+        &rect.command_state,
+        &rect.selection,
+        "video-segment".into(),
+        SegmentMask::Ellipse {
+            x_millis: 50,
+            y_millis: 75,
+            width_millis: 900,
+            height_millis: 850,
+            feather_millis: 25,
+            opacity_millis: 600,
+            inverted: false,
+        },
+    )
+    .expect("supported ellipse mask should commit");
+    assert_eq!(ellipse.command_state.undo_stack.len(), 2);
+    assert!(matches!(
+        ellipse.draft.tracks[0].segments[0].visual.mask,
+        SegmentMask::Ellipse {
+            opacity_millis: 600,
+            inverted: false,
+            ..
+        }
+    ));
+
+    let cleared = set_segment_mask(
+        &ellipse.draft,
+        &ellipse.command_state,
+        &ellipse.selection,
+        "video-segment".into(),
+        SegmentMask::None,
+    )
+    .expect("clearing a mask should commit through the same Rust command");
+    assert_eq!(cleared.command_state.undo_stack.len(), 3);
+    assert_eq!(cleared.draft.tracks[0].segments[0].visual.mask, SegmentMask::None);
+
+    let undone = undo_timeline_edit(&cleared.draft, &cleared.command_state, &cleared.selection)
+        .expect("mask clear should be undoable");
+    assert!(matches!(
+        undone.draft.tracks[0].segments[0].visual.mask,
+        SegmentMask::Ellipse { .. }
+    ));
+}
+
+#[test]
+fn effect_commands_set_supported_blend_modes_as_typed_undoable_semantics() {
+    let draft = draft_with_video_segment();
+    let state = CommandState::empty();
+    let selection = selected_segment_context();
+
+    let multiplied = set_segment_blend_mode(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentBlendMode::Multiply,
+    )
+    .expect("multiply blend should commit as first-party semantics");
+    assert_eq!(multiplied.events[0].kind, "segmentBlendModeSet");
+    assert_eq!(multiplied.command_state.undo_stack.len(), 1);
+    assert_eq!(
+        multiplied.command_state.undo_stack[0].label.as_deref(),
+        Some("setSegmentBlendMode")
+    );
+    assert_eq!(
+        multiplied.draft.tracks[0].segments[0].visual.blend_mode,
+        SegmentBlendMode::Multiply
+    );
+
+    let screened = set_segment_blend_mode(
+        &multiplied.draft,
+        &multiplied.command_state,
+        &multiplied.selection,
+        "video-segment".into(),
+        SegmentBlendMode::Screen,
+    )
+    .expect("screen blend should commit as first-party semantics");
+    assert_eq!(screened.command_state.undo_stack.len(), 2);
+    assert_eq!(
+        screened.draft.tracks[0].segments[0].visual.blend_mode,
+        SegmentBlendMode::Screen
+    );
+
+    let undone = undo_timeline_edit(&screened.draft, &screened.command_state, &screened.selection)
+        .expect("blend update should be undoable");
+    assert_eq!(
+        undone.draft.tracks[0].segments[0].visual.blend_mode,
+        SegmentBlendMode::Multiply
+    );
+}
+
+#[test]
+fn effect_commands_mask_blend_invalid_parameters_and_locked_tracks_reject_atomically() {
+    let draft = draft_with_video_segment();
+    let state = CommandState::empty();
+    let selection = selected_segment_context();
+
+    for (label, mask) in [
+        (
+            "x beyond normalized range",
+            SegmentMask::Rectangle {
+                x_millis: 1_001,
+                y_millis: 0,
+                width_millis: 100,
+                height_millis: 100,
+                feather_millis: 0,
+                opacity_millis: 1_000,
+                inverted: false,
+            },
+        ),
+        (
+            "mask bounds overflow",
+            SegmentMask::Rectangle {
+                x_millis: 800,
+                y_millis: 0,
+                width_millis: 250,
+                height_millis: 100,
+                feather_millis: 0,
+                opacity_millis: 1_000,
+                inverted: false,
+            },
+        ),
+        (
+            "feather beyond normalized range",
+            SegmentMask::Ellipse {
+                x_millis: 0,
+                y_millis: 0,
+                width_millis: 100,
+                height_millis: 100,
+                feather_millis: 1_001,
+                opacity_millis: 1_000,
+                inverted: false,
+            },
+        ),
+        (
+            "opacity beyond normalized range",
+            SegmentMask::Ellipse {
+                x_millis: 0,
+                y_millis: 0,
+                width_millis: 100,
+                height_millis: 100,
+                feather_millis: 0,
+                opacity_millis: 1_001,
+                inverted: false,
+            },
+        ),
+    ] {
+        let rejected = set_segment_mask(
+            &draft,
+            &state,
+            &selection,
+            "video-segment".into(),
+            mask,
+        )
+        .expect_err(label);
+        assert!(matches!(
+            rejected.kind,
+            TimelineCommandErrorKind::InvalidEffectParameter { .. }
+        ));
+        assert_eq!(draft, draft_with_video_segment(), "{label} mutated draft");
+        assert_eq!(state, CommandState::empty(), "{label} mutated state");
+        assert_eq!(selection, selected_segment_context(), "{label} mutated selection");
+    }
+
+    let mut locked = draft.clone();
+    locked.tracks[0].locked = true;
+    let locked_mask = set_segment_mask(
+        &locked,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentMask::Rectangle {
+            x_millis: 0,
+            y_millis: 0,
+            width_millis: 500,
+            height_millis: 500,
+            feather_millis: 0,
+            opacity_millis: 1_000,
+            inverted: false,
+        },
+    )
+    .expect_err("locked track must reject mask edits");
+    assert!(matches!(
+        locked_mask.kind,
+        TimelineCommandErrorKind::LockedTrack { .. }
+    ));
+
+    let locked_blend = set_segment_blend_mode(
+        &locked,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentBlendMode::Multiply,
+    )
+    .expect_err("locked track must reject blend edits");
+    assert!(matches!(
+        locked_blend.kind,
+        TimelineCommandErrorKind::LockedTrack { .. }
+    ));
+}
+
+#[test]
+fn effect_commands_external_mask_and_blend_modes_are_unsupported_diagnostics() {
+    let draft = draft_with_video_segment();
+    let state = CommandState::empty();
+    let selection = selected_segment_context();
+
+    let external_mask = set_segment_mask(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentMask::ExternalReference {
+            reference: ExternalEffectReference::new("jianying", "private-mask"),
+        },
+    )
+    .expect_err("external mask reference must not commit");
+    match external_mask.kind {
+        TimelineCommandErrorKind::UnsupportedEffect {
+            capability_id,
+            reason,
+            ..
+        } => {
+            assert_eq!(capability_id, "external:jianying:private-mask");
+            assert!(reason.contains("external"));
+        }
+        other => panic!("expected unsupported external mask diagnostic, got {other:?}"),
+    }
+
+    let external_blend = set_segment_blend_mode(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        SegmentBlendMode::ExternalReference {
+            reference: ExternalEffectReference::new("capcut", "private-blend"),
+        },
+    )
+    .expect_err("external blend reference must not commit");
+    match external_blend.kind {
+        TimelineCommandErrorKind::UnsupportedEffect {
+            capability_id,
+            reason,
+            ..
+        } => {
+            assert_eq!(capability_id, "external:capcut:private-blend");
+            assert!(reason.contains("external"));
+        }
+        other => panic!("expected unsupported external blend diagnostic, got {other:?}"),
+    }
+
+    assert_eq!(draft.tracks[0].segments[0].visual.mask, SegmentMask::None);
+    assert_eq!(
+        draft.tracks[0].segments[0].visual.blend_mode,
+        SegmentBlendMode::Normal
+    );
+    assert_eq!(state, CommandState::empty());
 }
 
 fn draft_with_video_segment() -> Draft {
