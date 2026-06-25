@@ -517,7 +517,10 @@ fn effect_stack_export_plan(filters: Vec<Filter>) -> RenderGraphPlan {
 }
 
 fn mask_blend_export_plan(mask: SegmentMask, blend_mode: SegmentBlendMode) -> RenderGraphPlan {
-    let mut draft = Draft::new("phase19-mask-blend-compiler", "Phase 19 Mask Blend Compiler");
+    let mut draft = Draft::new(
+        "phase19-mask-blend-compiler",
+        "Phase 19 Mask Blend Compiler",
+    );
     let mut material = Material::new(
         "video-material",
         MaterialKind::Video,

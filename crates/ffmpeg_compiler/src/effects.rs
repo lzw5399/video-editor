@@ -1,11 +1,12 @@
 use draft_model::{
-    AudioRetimePolicy, FilterKind, MaterialId, Microseconds, RetimeMode, SegmentId,
-    SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, TrackId, TransitionKind,
-    TransitionReference,
+    AudioRetimePolicy, ExternalEffectReference, FilterKind, MaterialId, Microseconds, RetimeMode,
+    SegmentBlendMode, SegmentId, SegmentMask, SourceTimerange, SpeedCurvePoint, SpeedRatio,
+    TargetTimerange, TrackId, TransitionKind, TransitionReference,
 };
 use render_graph::{
-    RenderAudioMixDiagnostic, RenderFilterIntent, RenderIntentSupport, RenderRetimeIntent,
-    RenderRetimeSourceMapping, RenderTransitionIntent,
+    RenderAudioMixDiagnostic, RenderBlendIntent, RenderFilterIntent, RenderIntentSupport,
+    RenderMaskIntent, RenderRetimeIntent, RenderRetimeSourceMapping, RenderTransitionIntent,
+    RenderVisualDiagnostic,
 };
 
 use crate::job::format_seconds;
@@ -14,6 +15,12 @@ use crate::job::format_seconds;
 pub struct CompiledAudioRetimeFilters {
     pub filters: Vec<String>,
     pub diagnostics: Vec<RenderAudioMixDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaskBlendExportTarget {
+    VideoLayer,
+    TextOverlay,
 }
 
 pub fn compile_dissolve_transition_filter(
@@ -85,6 +92,161 @@ fn compile_production_effect_filter(filter: &RenderFilterIntent) -> Option<Strin
         }
         FilterKind::ExternalReference { .. } => None,
     }
+}
+
+pub fn compile_phase19_mask_alpha_filters(
+    mask: &RenderMaskIntent,
+    width: u32,
+    height: u32,
+) -> Vec<String> {
+    if mask.support != RenderIntentSupport::Supported {
+        return Vec::new();
+    }
+
+    let expression = match &mask.mask {
+        SegmentMask::None | SegmentMask::ExternalReference { .. } => return Vec::new(),
+        SegmentMask::Rectangle {
+            x_millis,
+            y_millis,
+            width_millis,
+            height_millis,
+            feather_millis,
+            opacity_millis,
+            inverted,
+        } => rectangle_mask_alpha_expression(
+            MaskRect::from_millis(
+                width,
+                height,
+                *x_millis,
+                *y_millis,
+                *width_millis,
+                *height_millis,
+            ),
+            *feather_millis,
+            *opacity_millis,
+            *inverted,
+            width,
+            height,
+        ),
+        SegmentMask::Ellipse {
+            x_millis,
+            y_millis,
+            width_millis,
+            height_millis,
+            feather_millis,
+            opacity_millis,
+            inverted,
+        } => ellipse_mask_alpha_expression(
+            MaskRect::from_millis(
+                width,
+                height,
+                *x_millis,
+                *y_millis,
+                *width_millis,
+                *height_millis,
+            ),
+            *feather_millis,
+            *opacity_millis,
+            *inverted,
+        ),
+    };
+
+    vec![
+        "format=rgba".to_owned(),
+        format!("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{expression}'"),
+    ]
+}
+
+pub fn mask_blend_export_diagnostics(
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    mask: &RenderMaskIntent,
+    blend: &RenderBlendIntent,
+    target: MaskBlendExportTarget,
+) -> Vec<RenderVisualDiagnostic> {
+    let mut diagnostics = Vec::new();
+
+    match (&mask.mask, target) {
+        (SegmentMask::None, _) => {}
+        (
+            SegmentMask::ExternalReference { reference },
+            MaskBlendExportTarget::VideoLayer | MaskBlendExportTarget::TextOverlay,
+        ) => diagnostics.push(visual_export_diagnostic(
+            track_id,
+            segment_id,
+            material_id,
+            "mask",
+            RenderIntentSupport::Unsupported,
+            format!(
+                "external mask reference {} is report-only and cannot become FFmpeg export semantics",
+                external_reference_id(reference)
+            ),
+        )),
+        (_, MaskBlendExportTarget::TextOverlay) => diagnostics.push(visual_export_diagnostic(
+            track_id,
+            segment_id,
+            material_id,
+            "mask",
+            RenderIntentSupport::Unsupported,
+            "text overlay mask export is unsupported by the current ASS subtitle compiler path",
+        )),
+        (_, MaskBlendExportTarget::VideoLayer)
+            if mask.support != RenderIntentSupport::Supported =>
+        {
+            diagnostics.push(visual_export_diagnostic(
+                track_id,
+                segment_id,
+                material_id,
+                "mask",
+                mask.support,
+                mask.reason.clone(),
+            ));
+        }
+        _ => {}
+    }
+
+    match (&blend.blend_mode, target) {
+        (SegmentBlendMode::Normal, _) => {}
+        (
+            SegmentBlendMode::ExternalReference { reference },
+            MaskBlendExportTarget::VideoLayer | MaskBlendExportTarget::TextOverlay,
+        ) => diagnostics.push(visual_export_diagnostic(
+            track_id,
+            segment_id,
+            material_id,
+            "blendMode",
+            RenderIntentSupport::Unsupported,
+            format!(
+                "external blend reference {} is report-only and cannot become FFmpeg export semantics",
+                external_reference_id(reference)
+            ),
+        )),
+        (_, MaskBlendExportTarget::TextOverlay) => diagnostics.push(visual_export_diagnostic(
+            track_id,
+            segment_id,
+            material_id,
+            "blendMode",
+            RenderIntentSupport::Unsupported,
+            "text overlay blend export is unsupported by the current ASS subtitle compiler path",
+        )),
+        (SegmentBlendMode::Multiply, MaskBlendExportTarget::VideoLayer)
+        | (SegmentBlendMode::Screen, MaskBlendExportTarget::VideoLayer) => {
+            diagnostics.push(visual_export_diagnostic(
+                track_id,
+                segment_id,
+                material_id,
+                "blendMode",
+                RenderIntentSupport::Unsupported,
+                format!(
+                    "{} blend export is unsupported by the compiler until alpha-correct FFmpeg blend compositing is implemented",
+                    blend.blend_mode.display_name()
+                ),
+            ));
+        }
+    }
+
+    diagnostics
 }
 
 pub fn compile_video_retime_filters(
@@ -183,6 +345,135 @@ pub fn retimed_source_timerange_for_output(
         Microseconds::new(source_start),
         Microseconds::new(duration),
     ))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MaskRect {
+    x0: u32,
+    y0: u32,
+    x1: u32,
+    y1: u32,
+    width: u32,
+    height: u32,
+}
+
+impl MaskRect {
+    fn from_millis(
+        output_width: u32,
+        output_height: u32,
+        x_millis: u32,
+        y_millis: u32,
+        width_millis: u32,
+        height_millis: u32,
+    ) -> Self {
+        let output_width = output_width.max(1);
+        let output_height = output_height.max(1);
+        let x0 = millis_to_pixels(output_width, x_millis).min(output_width.saturating_sub(1));
+        let y0 = millis_to_pixels(output_height, y_millis).min(output_height.saturating_sub(1));
+        let width = millis_to_pixels(output_width, width_millis).max(1);
+        let height = millis_to_pixels(output_height, height_millis).max(1);
+        let x1 = x0.saturating_add(width).min(output_width);
+        let y1 = y0.saturating_add(height).min(output_height);
+        Self {
+            x0,
+            y0,
+            x1,
+            y1,
+            width: x1.saturating_sub(x0).max(1),
+            height: y1.saturating_sub(y0).max(1),
+        }
+    }
+}
+
+fn rectangle_mask_alpha_expression(
+    rect: MaskRect,
+    feather_millis: u32,
+    opacity_millis: u32,
+    inverted: bool,
+    output_width: u32,
+    output_height: u32,
+) -> String {
+    let inside = format!(
+        "between(X,{},{})*between(Y,{},{})",
+        rect.x0, rect.x1, rect.y0, rect.y1
+    );
+    let base = if feather_millis == 0 {
+        inside
+    } else {
+        let feather = feather_pixels(output_width, output_height, feather_millis);
+        format!(
+            "if({inside},min(max(min(min(X-{x0},{x1}-X),min(Y-{y0},{y1}-Y))/{feather:.6},0),1),0)",
+            x0 = rect.x0,
+            x1 = rect.x1,
+            y0 = rect.y0,
+            y1 = rect.y1,
+        )
+    };
+    mask_alpha_expression(base, opacity_millis, inverted)
+}
+
+fn ellipse_mask_alpha_expression(
+    rect: MaskRect,
+    feather_millis: u32,
+    opacity_millis: u32,
+    inverted: bool,
+) -> String {
+    let cx = f64::from(rect.x0) + f64::from(rect.width) / 2.0;
+    let cy = f64::from(rect.y0) + f64::from(rect.height) / 2.0;
+    let rx = (f64::from(rect.width) / 2.0).max(0.5);
+    let ry = (f64::from(rect.height) / 2.0).max(0.5);
+    let distance = format!(
+        "sqrt(((X-{cx:.6})*(X-{cx:.6}))/({rx:.6}*{rx:.6})+((Y-{cy:.6})*(Y-{cy:.6}))/({ry:.6}*{ry:.6}))"
+    );
+    let base = if feather_millis == 0 {
+        format!("lte({distance},1)")
+    } else {
+        let feather = decimal_from_millis(feather_millis, 0, 1_000).max(0.001);
+        format!("if(lte({distance},1),min(max((1-{distance})/{feather:.6},0),1),0)")
+    };
+    mask_alpha_expression(base, opacity_millis, inverted)
+}
+
+fn mask_alpha_expression(base_alpha: String, opacity_millis: u32, inverted: bool) -> String {
+    let opacity = decimal_from_millis(opacity_millis, 0, 1_000);
+    let shaped_alpha = if inverted {
+        format!("1-({base_alpha})")
+    } else {
+        base_alpha
+    };
+    format!("({shaped_alpha})*alpha(X,Y)*{opacity:.6}")
+}
+
+fn millis_to_pixels(size: u32, millis: u32) -> u32 {
+    let value = u64::from(size) * u64::from(millis.min(1_000));
+    u32::try_from((value + 500) / 1_000).unwrap_or(size)
+}
+
+fn feather_pixels(width: u32, height: u32, feather_millis: u32) -> f64 {
+    let shortest = width.min(height).max(1);
+    f64::from(millis_to_pixels(shortest, feather_millis).max(1))
+}
+
+fn visual_export_diagnostic(
+    track_id: &TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    property: &str,
+    support: RenderIntentSupport,
+    reason: impl Into<String>,
+) -> RenderVisualDiagnostic {
+    RenderVisualDiagnostic {
+        track_id: track_id.clone(),
+        segment_id: segment_id.clone(),
+        material_id: material_id.clone(),
+        property: property.to_owned(),
+        support,
+        reason: reason.into(),
+    }
+}
+
+fn external_reference_id(reference: &ExternalEffectReference) -> String {
+    format!("{}:{}", reference.provider, reference.effect_id)
 }
 
 fn constant_speed_setpts_filter(speed: &SpeedRatio, target_delay: Microseconds) -> String {

@@ -18,6 +18,7 @@ use render_graph::{
 use serde::{Deserialize, Serialize};
 
 use crate::ass::{TextRenderCapability, generate_ass_sidecars};
+use crate::effects::{MaskBlendExportTarget, mask_blend_export_diagnostics};
 use crate::filters::generate_filter_script;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -288,7 +289,13 @@ pub fn compile_ffmpeg_job(
     sidecars.extend(ass_sidecars);
 
     let encode_settings = encode_settings(&plan.output_profile);
-    let validation = output_validation(&plan.output_profile, filter.has_audio_output);
+    let mut visual_diagnostics = plan.graph.visual_diagnostics.clone();
+    visual_diagnostics.extend(effect_capability_diagnostics(plan));
+    let validation = output_validation(
+        &plan.output_profile,
+        filter.has_audio_output,
+        &visual_diagnostics,
+    );
     let output_kind = output_kind(&plan.output_profile);
     let args = build_args(
         &inputs,
@@ -299,9 +306,6 @@ pub fn compile_ffmpeg_job(
         validation.expected_duration,
         filter.has_audio_output,
     );
-
-    let mut visual_diagnostics = plan.graph.visual_diagnostics.clone();
-    visual_diagnostics.extend(effect_capability_diagnostics(plan));
 
     Ok(FfmpegJob {
         job_id,
@@ -330,6 +334,14 @@ fn effect_capability_diagnostics(plan: &RenderGraphPlan) -> Vec<RenderVisualDiag
                 filter,
             )
         }));
+        diagnostics.extend(mask_blend_export_diagnostics(
+            &layer.track_id,
+            &layer.segment_id,
+            &layer.material_id,
+            &layer.mask,
+            &layer.blend,
+            MaskBlendExportTarget::VideoLayer,
+        ));
         if let Some(transition) = &layer.transition {
             if let Some(diagnostic) = transition_export_diagnostic(
                 &layer.track_id,
@@ -350,6 +362,14 @@ fn effect_capability_diagnostics(plan: &RenderGraphPlan) -> Vec<RenderVisualDiag
                 filter,
             )
         }));
+        diagnostics.extend(mask_blend_export_diagnostics(
+            &overlay.overlay.track_id,
+            &overlay.overlay.segment_id,
+            &overlay.material_id,
+            &overlay.mask,
+            &overlay.blend,
+            MaskBlendExportTarget::TextOverlay,
+        ));
         if let Some(transition) = &overlay.transition {
             if let Some(diagnostic) = transition_export_diagnostic(
                 &overlay.overlay.track_id,
@@ -660,7 +680,11 @@ fn encode_settings_from_preset(
 fn output_validation(
     profile: &RenderOutputProfile,
     has_audio_output: bool,
+    visual_diagnostics: &[RenderVisualDiagnostic],
 ) -> OutputValidationExpectation {
+    let product_success = !visual_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.support == RenderIntentSupport::Unsupported);
     match profile {
         RenderOutputProfile::PreviewFrame {
             dimensions,
@@ -680,8 +704,8 @@ fn output_validation(
             target_timerange,
             ..
         } => OutputValidationExpectation {
-            must_exist: true,
-            must_be_non_empty: true,
+            must_exist: product_success,
+            must_be_non_empty: product_success,
             expected_duration: target_timerange.duration,
             expected_frame_rate: frame_rate.clone(),
             expected_width: dimensions.width,

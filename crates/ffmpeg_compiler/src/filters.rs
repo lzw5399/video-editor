@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::effects::{
     compile_audio_retime_filters, compile_dissolve_transition_filter,
-    compile_production_effect_filters, compile_video_retime_filters,
-    retimed_source_timerange_for_output,
+    compile_phase19_mask_alpha_filters, compile_production_effect_filters,
+    compile_video_retime_filters, retimed_source_timerange_for_output,
 };
 use crate::job::{
     CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegInput, FfmpegSidecar,
@@ -29,6 +29,7 @@ const PHASE19_PRODUCTION_EFFECT_COMPILER_MARKERS: &[&str] = &[
     "ProductionEffectCapabilityDecision",
     "UnsupportedProductionEffect",
     "compile_production_effect_filters",
+    "compile_phase19_mask_alpha_filters",
     "xfade",
 ];
 
@@ -347,6 +348,11 @@ fn compile_visual_layer(
             height = output_dimensions.height
         ));
         filters.extend(compile_production_effect_filters(&layer.filters));
+        filters.extend(compile_phase19_mask_alpha_filters(
+            &layer.mask,
+            output_dimensions.width,
+            output_dimensions.height,
+        ));
         return VisualLayerFilter {
             segment_id: layer.segment_id.clone(),
             label: label.clone(),
@@ -420,6 +426,20 @@ fn compile_visual_layer(
             effect_filters.join(",")
         ));
         current_label = effect_label;
+    }
+
+    let mask_filters = compile_phase19_mask_alpha_filters(
+        &layer.mask,
+        current_dimensions.width,
+        current_dimensions.height,
+    );
+    if !mask_filters.is_empty() {
+        let mask_label = format!("vstage{layer_index}mask");
+        lines.push(format!(
+            "[{current_label}]{}[{mask_label}]",
+            mask_filters.join(",")
+        ));
+        current_label = mask_label;
     }
 
     let scaled_dimensions = scaled_dimensions(current_dimensions, &layer.visual.transform.scale);

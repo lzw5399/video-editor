@@ -75,6 +75,7 @@ PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeco
 FFMPEG_RETIME_FILTER_PATTERN='\b(?:setpts|asetpts|atempo)\s*='
 FFMPEG_TRANSITION_FILTER_PATTERN='\b(?:xfade|acrossfade|transition=fade)\b'
 FFMPEG_EFFECT_FILTER_PATTERN='\b(?:gblur|eq|colorchannelmixer)\s*='
+FFMPEG_MASK_BLEND_FILTER_PATTERN='\b(?:geq\s*=|blend\s*=all_mode|alphamerge|alphaextract)\b'
 
 ELECTRON_BOUNDARY_DIRS=(
   "apps/desktop-electron/src/main"
@@ -139,6 +140,10 @@ run_self_test() {
     "non-compiler FFmpeg effect filter string" \
     "$FFMPEG_EFFECT_FILTER_PATTERN" \
     'const filter = "gblur=sigma=2.000000";'
+  assert_pattern_rejects \
+    "non-compiler FFmpeg mask/blend filter string" \
+    "$FFMPEG_MASK_BLEND_FILTER_PATTERN" \
+    'const filter = "geq=a=alpha(X,Y)";'
   echo "phase19 source guard self-test passed"
 }
 
@@ -376,8 +381,42 @@ scan_effect_filter_ownership() {
 
 require_mask_blend_files() {
   require_effect_files
+  require_file "crates/ffmpeg_compiler/src/job.rs"
+  require_fixed "crates/render_graph/src/graph.rs" "RenderMaskIntent"
+  require_fixed "crates/render_graph/src/graph.rs" "RenderBlendIntent"
+  require_fixed "crates/render_graph/src/fingerprint.rs" "RenderMaskIntent"
+  require_fixed "crates/render_graph/src/fingerprint.rs" "RenderBlendIntent"
+  require_fixed "crates/realtime_preview_runtime/src/effects.rs" "MaskBlendPreviewPass"
+  require_fixed "crates/realtime_preview_runtime/src/effects.rs" "apply_phase19_mask_blend"
+  require_fixed "crates/realtime_preview_runtime/src/effects.rs" "requires_wgpu_render_pass"
+  require_fixed "crates/realtime_preview_runtime/src/gpu/compositor.rs" "mask_alpha"
+  require_fixed "crates/realtime_preview_runtime/src/gpu/compositor.rs" "WgpuBlendMode"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "compile_phase19_mask_alpha_filters"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "mask_blend_export_diagnostics"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "alpha(X,Y)"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "alpha-correct FFmpeg blend compositing"
+  require_fixed "crates/ffmpeg_compiler/src/filters.rs" "compile_phase19_mask_alpha_filters"
+  require_fixed "crates/ffmpeg_compiler/src/job.rs" "mask_blend_export_diagnostics"
+  require_fixed "crates/render_graph/tests/production_effects.rs" "phase19_production_effects_render_graph_carries_mask_blend_intents"
+  require_fixed "crates/realtime_preview_runtime/tests/production_effects.rs" "phase19_production_effects_preview_builds_gpu_mask_blend_pass_for_first_party_visuals"
+  require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_production_effects_compiler_emits_first_party_mask_alpha_from_graph_intent"
+  require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_production_effects_compiler_reports_non_normal_blend_without_fallback_success"
+  require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_production_effects_compiler_reports_external_mask_blend_without_export_semantics"
   require_fixed "crates/realtime_preview_runtime/tests/production_effects.rs" "mask"
   require_fixed "crates/realtime_preview_runtime/tests/production_effects.rs" "blend"
+}
+
+scan_mask_blend_filter_ownership() {
+  local matches
+  matches="$(
+    rg -n --pcre2 "$FFMPEG_MASK_BLEND_FILTER_PATTERN" apps crates \
+      --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!target/**' 2>/dev/null | strip_comments || true
+  )"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "FFmpeg mask/blend filter strings must be generated only inside ffmpeg_compiler"
+  fi
 }
 
 require_ui_files() {
@@ -426,6 +465,7 @@ run_effects() {
 run_mask_blend() {
   run_effects
   require_mask_blend_files
+  scan_mask_blend_filter_ownership
   echo "phase19 source guards passed for mask-blend"
 }
 
@@ -451,6 +491,7 @@ run_full() {
   scan_retime_filter_ownership
   scan_transition_filter_ownership
   scan_effect_filter_ownership
+  scan_mask_blend_filter_ownership
   echo "phase19 source guards passed"
 }
 
