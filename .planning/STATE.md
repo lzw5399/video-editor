@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-05-PLAN.md
-last_updated: "2026-06-25T09:31:04.184Z"
+stopped_at: Completed 19-06-PLAN.md
+last_updated: "2026-06-25T10:00:58.495Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 177
+  completed_plans: 178
   percent: 95
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 6 of 15
+Plan: 7 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -215,6 +215,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P03 | 27 min | 3 tasks | 16 files |
 | Phase 19 P04 | 37 min | 3 tasks | 19 files |
 | Phase 19 P05 | 11 min | 2 tasks | 9 files |
+| Phase 19 P06 | 22 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -623,6 +624,9 @@ Recent decisions affecting current work:
 - [Phase 19]: audio_engine consumes engine_core retime mapping for DSP source samples instead of duplicating retime math. — Preserves Phase 19 Rust-owned source-time mapping and avoids an audio-only retime algorithm.
 - [Phase 19]: AudioRetimeMixIntent carries audio follow-speed support facts through DSP and preview/export parity. — Preview and export audio checks can compare typed retime facts instead of FFmpeg-only behavior.
 - [Phase 19]: Unsupported preserve-pitch and degraded speed-curve follow-speed are typed audio parity diagnostics, not silent success. — Unsupported audio retiming must fail or report degradation explicitly under PRODFX-01.
+- [Phase 19]: Plan 19-06 stores first-party transitions as track-level relationships between adjacent segment IDs while retaining the legacy segment-local field only for compatibility/report semantics.
+- [Phase 19]: Plan 19-06 rejects external provider transition references in first-party transition commands so proprietary IDs do not become internal transition semantics.
+- [Phase 19]: Plan 19-06 validates transition duration and adjacency in Rust using integer microseconds before renderer, preview, or compiler layers consume transition facts.
 
 ### Pending Todos
 
@@ -704,6 +708,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T09:31:04.177Z
-Stopped at: Completed 19-05-PLAN.md
+Last session: 2026-06-25T10:00:58.487Z
+Stopped at: Completed 19-06-PLAN.md
 Resume file: None
