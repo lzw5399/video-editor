@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-06-25T09:30:24.222Z"
+stopped_at: Completed 19-05-PLAN.md
+last_updated: "2026-06-25T09:31:04.184Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
@@ -214,6 +214,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P02 | 26 min | 3 tasks | 22 files |
 | Phase 19 P03 | 27 min | 3 tasks | 16 files |
 | Phase 19 P04 | 37 min | 3 tasks | 19 files |
+| Phase 19 P05 | 11 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -619,6 +620,9 @@ Recent decisions affecting current work:
 - [Phase 19]: 19-04: Retime source mapping remains owned by engine_core and is consumed as typed render graph intent by compiler, preview, and testkit.
 - [Phase 19]: 19-04: FFmpeg retime timestamp/audio filters are generated only in ffmpeg_compiler and guarded by the Phase 19 retiming source guard.
 - [Phase 19]: 19-04: Testkit retime parity checks semantic source mapping and typed diagnostics rather than FFmpeg-only success outside the compiler crate.
+- [Phase 19]: audio_engine consumes engine_core retime mapping for DSP source samples instead of duplicating retime math. — Preserves Phase 19 Rust-owned source-time mapping and avoids an audio-only retime algorithm.
+- [Phase 19]: AudioRetimeMixIntent carries audio follow-speed support facts through DSP and preview/export parity. — Preview and export audio checks can compare typed retime facts instead of FFmpeg-only behavior.
+- [Phase 19]: Unsupported preserve-pitch and degraded speed-curve follow-speed are typed audio parity diagnostics, not silent success. — Unsupported audio retiming must fail or report degradation explicitly under PRODFX-01.
 
 ### Pending Todos
 
@@ -700,6 +704,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T09:30:24.213Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-06-25T09:31:04.177Z
+Stopped at: Completed 19-05-PLAN.md
 Resume file: None
