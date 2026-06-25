@@ -24578,6 +24578,12 @@
         "trackId": {
           "$ref": "#/$defs/TrackId"
         },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/TrackTransition"
+          },
+          "type": "array"
+        },
         "visible": {
           "default": true,
           "type": "boolean"
@@ -24605,6 +24611,36 @@
         "filter"
       ],
       "type": "string"
+    },
+    "TrackTransition": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "fromSegmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "reference": {
+          "$ref": "#/$defs/TransitionReference"
+        },
+        "toSegmentId": {
+          "$ref": "#/$defs/SegmentId"
+        }
+      },
+      "required": [
+        "fromSegmentId",
+        "toSegmentId",
+        "reference",
+        "duration"
+      ],
+      "type": "object"
     },
     "Transition": {
       "additionalProperties": false,

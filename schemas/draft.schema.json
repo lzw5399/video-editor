@@ -22007,6 +22007,12 @@
         "trackId": {
           "$ref": "#/$defs/TrackId"
         },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TrackTransition"
+          }
+        },
         "visible": {
           "type": "boolean",
           "default": true
@@ -22033,6 +22039,37 @@
         "text",
         "sticker",
         "filter"
+      ]
+    },
+    "TrackTransition": {
+      "title": "TrackTransition",
+      "type": "object",
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Microseconds"
+        },
+        "fromSegmentId": {
+          "$ref": "#/$defs/SegmentId"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "reference": {
+          "$ref": "#/$defs/TransitionReference"
+        },
+        "toSegmentId": {
+          "$ref": "#/$defs/SegmentId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "fromSegmentId",
+        "toSegmentId",
+        "reference",
+        "duration"
       ]
     },
     "Transition": {

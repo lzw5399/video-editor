@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::Microseconds;
+use crate::{Microseconds, SegmentId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -510,6 +512,63 @@ impl Transition {
                 reference: ExternalEffectReference::new(provider, effect_id),
             },
             duration,
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        self.reference.display_name()
+    }
+
+    pub fn capability_id(&self) -> String {
+        self.reference.capability_id()
+    }
+
+    pub fn external(&self) -> Option<&ExternalEffectReference> {
+        self.reference.external_reference()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TrackTransition {
+    pub from_segment_id: SegmentId,
+    pub to_segment_id: SegmentId,
+    pub reference: TransitionReference,
+    pub duration: Microseconds,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub parameters: BTreeMap<String, String>,
+}
+
+impl TrackTransition {
+    pub fn dissolve(
+        from_segment_id: impl Into<SegmentId>,
+        to_segment_id: impl Into<SegmentId>,
+        duration: Microseconds,
+    ) -> Self {
+        Self {
+            from_segment_id: from_segment_id.into(),
+            to_segment_id: to_segment_id.into(),
+            reference: TransitionReference::dissolve(),
+            duration,
+            parameters: BTreeMap::new(),
+        }
+    }
+
+    pub fn external_reference(
+        from_segment_id: impl Into<SegmentId>,
+        to_segment_id: impl Into<SegmentId>,
+        provider: impl Into<String>,
+        effect_id: impl Into<String>,
+        duration: Microseconds,
+    ) -> Self {
+        Self {
+            from_segment_id: from_segment_id.into(),
+            to_segment_id: to_segment_id.into(),
+            reference: TransitionReference::ExternalReference {
+                reference: ExternalEffectReference::new(provider, effect_id),
+            },
+            duration,
+            parameters: BTreeMap::new(),
         }
     }
 

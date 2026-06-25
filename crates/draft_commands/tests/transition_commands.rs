@@ -6,7 +6,7 @@ use draft_model::{
 };
 
 #[test]
-fn phase19_transition_relationship_model_is_adjacent_and_typed() {
+fn transition_commands_phase19_relationship_model_is_adjacent_and_typed() {
     let mut parameters = BTreeMap::new();
     parameters.insert("curve".to_owned(), "linear".to_owned());
 
@@ -20,7 +20,10 @@ fn phase19_transition_relationship_model_is_adjacent_and_typed() {
         parameters: parameters.clone(),
     };
 
-    assert_eq!(relationship.from_segment_id, SegmentId::from("left-segment"));
+    assert_eq!(
+        relationship.from_segment_id,
+        SegmentId::from("left-segment")
+    );
     assert_eq!(relationship.to_segment_id, SegmentId::from("right-segment"));
     assert!(matches!(
         relationship.reference,
@@ -33,7 +36,7 @@ fn phase19_transition_relationship_model_is_adjacent_and_typed() {
 }
 
 #[test]
-fn phase19_track_owns_transition_relationships_not_segment_local_deltas() {
+fn transition_commands_phase19_track_owns_relationships_not_segment_local_deltas() {
     let mut track = Track::new(TrackId::from("video-1"), TrackKind::Video, "main video");
 
     track.transitions.push(TrackTransition::dissolve(
@@ -50,7 +53,7 @@ fn phase19_track_owns_transition_relationships_not_segment_local_deltas() {
 }
 
 #[test]
-fn phase19_transition_external_references_are_report_only_not_first_party_kinds() {
+fn transition_commands_phase19_external_references_are_report_only_not_first_party_kinds() {
     let relationship = TrackTransition::external_reference(
         SegmentId::from("left-segment"),
         SegmentId::from("right-segment"),
