@@ -1,8 +1,8 @@
 use draft_model::{
     AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Filter, FilterKind,
     Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId,
-    SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Track,
-    TrackKind, TrackTransition, TransitionKind, TransitionReference,
+    SegmentBlendMode, SegmentMask, SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio,
+    TargetTimerange, Track, TrackKind, TrackTransition, TransitionKind, TransitionReference,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -378,6 +378,127 @@ fn phase19_production_effects_transition_relationship_fingerprints_dirty_ranges(
     assert!(diff.dirty_domains.contains(&DirtyDomain::Transition));
 }
 
+#[test]
+fn phase19_production_effects_render_graph_carries_mask_blend_intents() {
+    let graph = graph_for(&mask_blend_draft(
+        SegmentMask::Rectangle {
+            x_millis: 120,
+            y_millis: 180,
+            width_millis: 620,
+            height_millis: 500,
+            feather_millis: 80,
+            opacity_millis: 740,
+            inverted: true,
+        },
+        SegmentBlendMode::Multiply,
+    ));
+    let layer = graph
+        .video_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("mask/blend video layer should exist");
+
+    assert_eq!(layer.mask.capability.capability_id, "mask.rectangle");
+    assert_eq!(layer.mask.support, render_graph::RenderIntentSupport::Supported);
+    assert_eq!(layer.mask.mask, layer.visual.mask);
+    assert!(
+        layer.mask.reason.contains("first-party typed mask"),
+        "mask intent should carry the registry support reason"
+    );
+    assert_eq!(layer.blend.capability.capability_id, "blend.multiply");
+    assert_eq!(
+        layer.blend.support,
+        render_graph::RenderIntentSupport::Supported
+    );
+    assert_eq!(layer.blend.blend_mode, layer.visual.blend_mode);
+    assert!(
+        layer.blend.reason.contains("first-party typed compositing"),
+        "blend intent should carry the registry support reason"
+    );
+}
+
+#[test]
+fn phase19_production_effects_mask_blend_fingerprints_change_without_segment_identity_churn() {
+    let base = snapshot_for(&mask_blend_draft(
+        SegmentMask::Rectangle {
+            x_millis: 120,
+            y_millis: 180,
+            width_millis: 620,
+            height_millis: 500,
+            feather_millis: 80,
+            opacity_millis: 740,
+            inverted: false,
+        },
+        SegmentBlendMode::Multiply,
+    ));
+    let changed_mask = snapshot_for(&mask_blend_draft(
+        SegmentMask::Rectangle {
+            x_millis: 180,
+            y_millis: 180,
+            width_millis: 620,
+            height_millis: 500,
+            feather_millis: 80,
+            opacity_millis: 740,
+            inverted: false,
+        },
+        SegmentBlendMode::Multiply,
+    ));
+    let changed_blend = snapshot_for(&mask_blend_draft(
+        SegmentMask::Rectangle {
+            x_millis: 120,
+            y_millis: 180,
+            width_millis: 620,
+            height_millis: 500,
+            feather_millis: 80,
+            opacity_millis: 740,
+            inverted: false,
+        },
+        SegmentBlendMode::Screen,
+    ));
+
+    let video_key = "draft:phase19-mask-blend-render-graph:track:video-track:segment:video-a:video";
+    let base_video = base
+        .node_fingerprint_by_key(video_key)
+        .expect("base mask/blend video fingerprint should exist");
+    let changed_mask_video = changed_mask
+        .node_fingerprint_by_key(video_key)
+        .expect("mask edits should preserve stable segment identity");
+    let changed_blend_video = changed_blend
+        .node_fingerprint_by_key(video_key)
+        .expect("blend edits should preserve stable segment identity");
+
+    assert_eq!(base_video.node_id, changed_mask_video.node_id);
+    assert_eq!(base_video.node_id, changed_blend_video.node_id);
+    assert_ne!(
+        base_video.semantic_fingerprint, changed_mask_video.semantic_fingerprint,
+        "mask geometry/opacity/inversion changes must invalidate video layer semantics"
+    );
+    assert_ne!(
+        base_video.semantic_fingerprint, changed_blend_video.semantic_fingerprint,
+        "blend mode changes must invalidate video layer semantics"
+    );
+
+    let diff = RenderGraphDiff::between(
+        &base,
+        &changed_mask,
+        &[DirtyRange {
+            target_timerange: TargetTimerange::new(
+                Microseconds::ZERO,
+                Microseconds::new(1_000_000),
+            ),
+            source: DirtyRangeSource::PreviousAndCurrent,
+        }],
+        &[DirtyDomain::Effect],
+    );
+    assert!(
+        diff.changed
+            .iter()
+            .any(|change| change.node_id.stable_key() == video_key),
+        "mask edits must dirty the affected video render segment"
+    );
+    assert!(diff.dirty_domains.contains(&DirtyDomain::Effect));
+}
+
 fn graph_for(draft: &Draft) -> render_graph::RenderGraph {
     let profile = EngineProfile::mvp_default();
     let normalized = normalize_draft(draft, &profile).expect("draft should normalize");
@@ -431,6 +552,26 @@ fn effect_stack_draft(filters: Vec<Filter>) -> Draft {
         TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
     );
     segment.filters = filters;
+    video_track.segments.push(segment);
+    draft.tracks.push(video_track);
+    draft
+}
+
+fn mask_blend_draft(mask: SegmentMask, blend_mode: SegmentBlendMode) -> Draft {
+    let mut draft = Draft::new(
+        "phase19-mask-blend-render-graph",
+        "Phase 19 Mask Blend Render Graph",
+    );
+    draft.materials.push(video_material());
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut segment = Segment::new(
+        "video-a",
+        "video-material",
+        SourceTimerange::new(Microseconds::new(100_000), Microseconds::new(3_000_000)),
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+    );
+    segment.visual.mask = mask;
+    segment.visual.blend_mode = blend_mode;
     video_track.segments.push(segment);
     draft.tracks.push(video_track);
     draft

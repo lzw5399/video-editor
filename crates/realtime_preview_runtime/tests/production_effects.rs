@@ -1,12 +1,12 @@
 use draft_model::{
     AudioRetimePolicy, Draft, Filter, FilterKind, Material, MaterialKind, MaterialMetadata,
     Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
-    SpeedRatio, TargetTimerange, Track, TrackKind, TrackTransition,
+    SpeedRatio, SegmentBlendMode, SegmentMask, TargetTimerange, Track, TrackKind, TrackTransition,
 };
 use realtime_preview_runtime::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
     RealtimePreviewGraphInput, RealtimePreviewGraphSupport, RealtimePreviewSupport,
-    effects::{EffectPreviewPass, apply_phase19_effects},
+    effects::{EffectPreviewPass, MaskBlendPreviewPass, apply_phase19_effects, apply_phase19_mask_blend},
     prepare_realtime_preview_graph,
 };
 use render_graph::OutputDimensions;
@@ -153,6 +153,94 @@ fn phase19_production_effects_preview_reports_first_party_dissolve_transition_su
 }
 
 #[test]
+fn phase19_production_effects_preview_builds_gpu_mask_blend_pass_for_first_party_visuals() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: mask_blend_preview_draft(
+            SegmentMask::Ellipse {
+                x_millis: 200,
+                y_millis: 150,
+                width_millis: 600,
+                height_millis: 520,
+                feather_millis: 75,
+                opacity_millis: 700,
+                inverted: true,
+            },
+            SegmentBlendMode::Screen,
+        ),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("mask/blend draft should prepare preview graph");
+    let layer = prepared
+        .graph
+        .video_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("mask/blend video layer should exist");
+    let pass: MaskBlendPreviewPass = apply_phase19_mask_blend(layer);
+
+    assert!(pass.requires_wgpu_render_pass);
+    assert_eq!(pass.mask.capability.capability_id, "mask.ellipse");
+    assert_eq!(pass.blend.capability.capability_id, "blend.screen");
+    assert!(matches!(pass.mask.mask, SegmentMask::Ellipse { inverted: true, .. }));
+    assert!(matches!(pass.blend.blend_mode, SegmentBlendMode::Screen));
+    assert_eq!(pass.support, RealtimePreviewSupport::Supported);
+    assert!(
+        pass.reason.contains("WGPU") && pass.reason.contains("native compositor"),
+        "mask/blend preview plan must identify the production GPU compositor path"
+    );
+
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_supported_production_effects()
+        .classify(&prepared.graph);
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
+    for expected in ["mask.ellipse", "blend.screen"] {
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.domain == RealtimePreviewDiagnosticDomain::VisualLayer
+                && diagnostic.entity_id.as_deref() == Some("video-a")
+                && !diagnostic.fallback_used
+                && diagnostic.reason.contains(expected)
+                && diagnostic.reason.contains("WGPU")
+                && matches!(diagnostic.support, RealtimePreviewSupport::Supported)
+        }));
+    }
+}
+
+#[test]
+fn phase19_production_effects_preview_rejects_external_mask_blend_success() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: mask_blend_preview_draft(
+            SegmentMask::ExternalReference {
+                reference: draft_model::ExternalEffectReference::new("jianying", "private-mask"),
+            },
+            SegmentBlendMode::ExternalReference {
+                reference: draft_model::ExternalEffectReference::new("jianying", "private-blend"),
+            },
+        ),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("external mask/blend draft should prepare preview graph");
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_supported_production_effects()
+        .classify(&prepared.graph);
+
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Unsupported);
+    for expected in ["private-mask", "private-blend"] {
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.domain == RealtimePreviewDiagnosticDomain::VisualLayer
+                && diagnostic.entity_id.as_deref() == Some("video-a")
+                && diagnostic.fallback_used
+                && matches!(
+                    diagnostic.support,
+                    RealtimePreviewSupport::Unsupported { ref reason }
+                        if reason.contains("external") && reason.contains(expected)
+                )
+        }));
+    }
+}
+
+#[test]
 fn phase19_production_effects_preview_rejects_external_transition_as_product_success() {
     let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
         draft: transition_preview_draft(TrackTransition::external_reference(
@@ -251,6 +339,19 @@ fn effect_preview_draft() -> Draft {
         Filter::basic_color_adjustment(120, 1_150, 900),
         Filter::opacity_adjustment(640),
     ];
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    track.segments.push(segment);
+    draft.tracks.push(track);
+    draft
+}
+
+fn mask_blend_preview_draft(mask: SegmentMask, blend_mode: SegmentBlendMode) -> Draft {
+    let mut draft = Draft::new("phase19-preview-mask-blend", "Phase 19 Preview Mask Blend");
+    draft.materials.push(preview_video_material());
+
+    let mut segment = preview_segment("video-a", 0, 0, 1_000_000);
+    segment.visual.mask = mask;
+    segment.visual.blend_mode = blend_mode;
     let mut track = Track::new("video-track", TrackKind::Video, "视频");
     track.segments.push(segment);
     draft.tracks.push(track);
