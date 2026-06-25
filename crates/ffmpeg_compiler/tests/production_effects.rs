@@ -1,9 +1,9 @@
 mod common;
 
 use draft_model::{
-    AudioRetimePolicy, Draft, Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode,
-    Segment, SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track, TrackKind,
-    TrackTransition,
+    AudioRetimePolicy, Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate,
+    RetimeMode, Segment, SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track,
+    TrackKind, TrackTransition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{FfmpegCompileError, compile_ffmpeg_job};
@@ -179,6 +179,89 @@ fn phase19_production_effects_compiler_reports_external_transition_without_succe
     Ok(())
 }
 
+#[test]
+fn phase19_production_effects_compiler_emits_first_party_filter_stack_from_graph_intent()
+-> Result<(), FfmpegCompileError> {
+    let plan = effect_stack_export_plan(vec![
+        Filter::gaussian_blur(250),
+        Filter::basic_color_adjustment(120, 1_250, 800),
+        Filter::opacity_adjustment(640),
+        disabled_filter(Filter::gaussian_blur(900)),
+    ]);
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        job.filter_script.contains("gblur=sigma=2.000000"),
+        "Gaussian blur must compile from typed radius_millis into compiler-owned gblur output"
+    );
+    assert!(
+        job.filter_script
+            .contains("eq=brightness=0.120000:contrast=1.250000:saturation=0.800000"),
+        "basic color adjustment must compile from typed millis into compiler-owned color output"
+    );
+    assert!(
+        job.filter_script
+            .contains("format=rgba,colorchannelmixer=aa=0.640000"),
+        "opacity adjustment must compile from typed millis into compiler-owned alpha output"
+    );
+    assert!(
+        !job.filter_script.contains("7.200000"),
+        "disabled filters must stay in the render intent but must not emit active export filters"
+    );
+
+    let blur_index = job
+        .filter_script
+        .find("gblur=sigma=2.000000")
+        .expect("blur filter should be present");
+    let color_index = job
+        .filter_script
+        .find("eq=brightness=0.120000")
+        .expect("color filter should be present");
+    let opacity_index = job
+        .filter_script
+        .find("colorchannelmixer=aa=0.640000")
+        .expect("opacity filter should be present");
+    assert!(
+        blur_index < color_index && color_index < opacity_index,
+        "effect export order must follow render graph filter order"
+    );
+    assert!(
+        !job.visual_diagnostics.iter().any(|diagnostic| {
+            diagnostic.property == "filter"
+                && diagnostic.support != RenderIntentSupport::Supported
+        }),
+        "supported first-party filters should not emit unsupported export diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn phase19_production_effects_compiler_reports_external_filter_without_export_fallback()
+-> Result<(), FfmpegCompileError> {
+    let plan = effect_stack_export_plan(vec![
+        Filter::external_reference("jianying", "private-glow"),
+        Filter::gaussian_blur(250),
+    ]);
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        !job.filter_script.contains("private-glow"),
+        "external filter identifiers must not become FFmpeg filter semantics"
+    );
+    assert!(
+        job.filter_script.contains("gblur=sigma=2.000000"),
+        "supported first-party filters should still compile when adjacent external filters are diagnostics"
+    );
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "filter"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+            && diagnostic.reason.contains("jianying:private-glow")
+    }));
+
+    Ok(())
+}
+
 fn retimed_export_plan(audio_policy: AudioRetimePolicy) -> RenderGraphPlan {
     let mut draft = common::compiler_draft();
     let material = draft
@@ -299,6 +382,44 @@ fn transition_segment(
         SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
         TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
     )
+}
+
+fn effect_stack_export_plan(filters: Vec<Filter>) -> RenderGraphPlan {
+    let mut draft = Draft::new(
+        "phase19-effect-compiler",
+        "Phase 19 Effect Compiler",
+    );
+    let mut material = Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file:///media/effect-source.mp4",
+        "Effect Source",
+    );
+    material.metadata.duration = Some(Microseconds::new(4_000_000));
+    material.metadata.width = Some(1_920);
+    material.metadata.height = Some(1_080);
+    material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    material.metadata.has_video = true;
+    material.metadata.has_audio = false;
+    draft.materials.push(material);
+
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut segment = Segment::new(
+        "video-a",
+        "video-material",
+        SourceTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+    );
+    segment.filters = filters;
+    track.segments.push(segment);
+    draft.tracks.push(track);
+
+    graph_plan_from_draft(&draft)
+}
+
+fn disabled_filter(mut filter: Filter) -> Filter {
+    filter.enabled = false;
+    filter
 }
 
 fn graph_plan_from_draft(draft: &Draft) -> RenderGraphPlan {

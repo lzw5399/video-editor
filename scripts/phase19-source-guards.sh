@@ -74,6 +74,7 @@ POINTER_SAVE_LOOP_PATTERN='\b(?:pointermove|pointerMove|mousemove|mouseMove|onPo
 PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeconds|sourceTimeSeconds|retimeSeconds|speedFloat|speedF32|speedF64|durationF32|durationF64)\b'
 FFMPEG_RETIME_FILTER_PATTERN='\b(?:setpts|asetpts|atempo)\s*='
 FFMPEG_TRANSITION_FILTER_PATTERN='\b(?:xfade|acrossfade|transition=fade)\b'
+FFMPEG_EFFECT_FILTER_PATTERN='\b(?:gblur|eq|colorchannelmixer)\s*='
 
 ELECTRON_BOUNDARY_DIRS=(
   "apps/desktop-electron/src/main"
@@ -331,13 +332,42 @@ scan_transition_filter_ownership() {
 
 require_effect_files() {
   require_file "crates/draft_model/tests/production_effects_contracts.rs"
+  require_file "crates/render_graph/src/effects.rs"
+  require_file "crates/render_graph/src/graph.rs"
+  require_file "crates/render_graph/src/fingerprint.rs"
+  require_file "crates/realtime_preview_runtime/src/effects.rs"
+  require_file "crates/ffmpeg_compiler/src/effects.rs"
+  require_file "crates/ffmpeg_compiler/src/filters.rs"
   require_file "crates/render_graph/tests/production_effects.rs"
   require_file "crates/realtime_preview_runtime/tests/production_effects.rs"
   require_file "crates/ffmpeg_compiler/tests/production_effects.rs"
   require_fixed "crates/draft_model/tests/production_effects_contracts.rs" "phase19_"
+  require_fixed "crates/render_graph/src/effects.rs" "ProductionEffectCapabilityDecision"
+  require_fixed "crates/render_graph/src/graph.rs" "RenderFilterIntent"
+  require_fixed "crates/render_graph/src/fingerprint.rs" "effect"
+  require_fixed "crates/realtime_preview_runtime/src/effects.rs" "apply_phase19_effects"
+  require_fixed "crates/realtime_preview_runtime/src/effects.rs" "requires_wgpu_render_pass"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "compile_production_effect_filters"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "gblur=sigma"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "eq=brightness"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "colorchannelmixer=aa"
+  require_fixed "crates/ffmpeg_compiler/src/filters.rs" "compile_production_effect_filters"
   require_fixed "crates/render_graph/tests/production_effects.rs" "phase19_"
   require_fixed "crates/realtime_preview_runtime/tests/production_effects.rs" "phase19_"
   require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_"
+}
+
+scan_effect_filter_ownership() {
+  local matches
+  matches="$(
+    rg -n --pcre2 "$FFMPEG_EFFECT_FILTER_PATTERN" apps crates \
+      --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!target/**' 2>/dev/null | strip_comments || true
+  )"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "FFmpeg effect filter strings must be generated only inside ffmpeg_compiler"
+  fi
 }
 
 require_mask_blend_files() {
@@ -385,6 +415,7 @@ run_transition() {
 run_effects() {
   run_wave0
   require_effect_files
+  scan_effect_filter_ownership
   echo "phase19 source guards passed for effects"
 }
 
@@ -415,6 +446,7 @@ run_full() {
   scan_pointer_save_loops
   scan_retime_filter_ownership
   scan_transition_filter_ownership
+  scan_effect_filter_ownership
   echo "phase19 source guards passed"
 }
 
