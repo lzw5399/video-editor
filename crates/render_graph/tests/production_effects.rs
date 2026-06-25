@@ -1,7 +1,8 @@
 use draft_model::{
     AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Material, MaterialKind,
-    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
-    SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind,
+    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId, SegmentRetiming, SourceTimerange,
+    SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind, TrackTransition,
+    TransitionKind, TransitionReference,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -179,6 +180,115 @@ fn phase19_production_effects_retime_fingerprints_change_without_changing_stable
     assert!(diff.dirty_domains.contains(&DirtyDomain::Effect));
 }
 
+#[test]
+fn phase19_transition_relationships_become_render_graph_intents_with_endpoint_windows() {
+    let graph = graph_for(&transition_relationship_draft(
+        TransitionReference::dissolve(),
+        Microseconds::new(300_000),
+    ));
+    let from_layer = graph
+        .video_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "left-segment")
+        .expect("from segment layer should be active");
+    let transition = from_layer
+        .transition
+        .as_ref()
+        .expect("from segment should carry relationship transition intent");
+
+    assert_eq!(transition.from_segment_id, SegmentId::from("left-segment"));
+    assert_eq!(transition.to_segment_id, SegmentId::from("right-segment"));
+    assert!(matches!(
+        transition.reference,
+        TransitionReference::FirstParty {
+            transition: TransitionKind::Dissolve
+        }
+    ));
+    assert_eq!(transition.duration, Microseconds::new(300_000));
+    assert_eq!(
+        transition.window.target_timerange,
+        TargetTimerange::new(Microseconds::new(700_000), Microseconds::new(300_000)),
+        "dissolve overlap window should cover the outgoing segment tail before the cut"
+    );
+    assert_eq!(
+        transition.window.from_target_timerange,
+        TargetTimerange::new(Microseconds::new(700_000), Microseconds::new(300_000)),
+        "from endpoint window should be the tail of the outgoing segment"
+    );
+    assert_eq!(
+        transition.window.to_target_timerange,
+        TargetTimerange::new(Microseconds::new(1_000_000), Microseconds::new(300_000)),
+        "to endpoint window should be the head of the incoming segment"
+    );
+    assert_eq!(transition.support, render_graph::RenderIntentSupport::Supported);
+    assert!(
+        transition
+            .node_id
+            .stable_key()
+            .contains("left-segment:transition:to:right-segment"),
+        "transition node identity should include both relationship endpoints"
+    );
+}
+
+#[test]
+fn phase19_transition_fingerprints_and_dirty_ranges_change_for_relationship_edits() {
+    let base = snapshot_for(&transition_relationship_draft(
+        TransitionReference::dissolve(),
+        Microseconds::new(300_000),
+    ));
+    let changed_duration = snapshot_for(&transition_relationship_draft(
+        TransitionReference::dissolve(),
+        Microseconds::new(400_000),
+    ));
+    let changed_endpoint = snapshot_for(&transition_relationship_with_endpoint("third-segment"));
+
+    let transition_key = "draft:phase19-transition-render-graph:track:video-track:segment:left-segment:transition:to:right-segment";
+    let base_transition = base
+        .node_fingerprint_by_key(transition_key)
+        .expect("base transition fingerprint should exist");
+    let changed_transition = changed_duration
+        .node_fingerprint_by_key(transition_key)
+        .expect("duration edit should preserve transition node identity");
+    assert_ne!(
+        base_transition.semantic_fingerprint, changed_transition.semantic_fingerprint,
+        "transition duration/window edits must alter semantic fingerprints"
+    );
+    assert!(
+        changed_endpoint
+            .node_fingerprint_by_key(transition_key)
+            .is_none(),
+        "changing transition endpoints must move the stable transition node identity"
+    );
+    assert!(
+        changed_endpoint
+            .node_fingerprint_by_key(
+                "draft:phase19-transition-render-graph:track:video-track:segment:left-segment:transition:to:third-segment"
+            )
+            .is_some(),
+        "new endpoint relationship should have its own stable transition node"
+    );
+
+    let diff = RenderGraphDiff::between(
+        &base,
+        &changed_duration,
+        &[DirtyRange {
+            target_timerange: TargetTimerange::new(
+                Microseconds::new(600_000),
+                Microseconds::new(400_000),
+            ),
+            source: DirtyRangeSource::PreviousAndCurrent,
+        }],
+        &[DirtyDomain::Transition],
+    );
+    assert!(
+        diff.changed
+            .iter()
+            .any(|change| change.node_id.stable_key() == transition_key),
+        "transition relationship edits must dirty the transition node"
+    );
+    assert!(diff.dirty_domains.contains(&DirtyDomain::Transition));
+}
+
 fn graph_for(draft: &Draft) -> render_graph::RenderGraph {
     let profile = EngineProfile::mvp_default();
     let normalized = normalize_draft(draft, &profile).expect("draft should normalize");
@@ -232,4 +342,76 @@ fn video_material() -> Material {
     material.metadata.has_video = true;
     material.metadata.has_audio = true;
     material
+}
+
+fn transition_relationship_draft(
+    reference: TransitionReference,
+    duration: Microseconds,
+) -> Draft {
+    let mut draft = Draft::new(
+        "phase19-transition-render-graph",
+        "Phase 19 Transition Render Graph",
+    );
+    draft.materials.push(video_material());
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    video_track.segments.push(transition_segment(
+        "left-segment",
+        0,
+        0,
+        1_000_000,
+    ));
+    video_track.segments.push(transition_segment(
+        "right-segment",
+        1_000_000,
+        1_000_000,
+        1_000_000,
+    ));
+    video_track.transitions.push(TrackTransition {
+        from_segment_id: SegmentId::from("left-segment"),
+        to_segment_id: SegmentId::from("right-segment"),
+        reference,
+        duration,
+        parameters: Default::default(),
+    });
+    draft.tracks.push(video_track);
+    draft
+}
+
+fn transition_relationship_with_endpoint(to_segment_id: &str) -> Draft {
+    let mut draft = Draft::new(
+        "phase19-transition-render-graph",
+        "Phase 19 Transition Render Graph",
+    );
+    draft.materials.push(video_material());
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    video_track
+        .segments
+        .push(transition_segment("left-segment", 0, 0, 1_000_000));
+    video_track.segments.push(transition_segment(
+        "third-segment",
+        1_000_000,
+        1_000_000,
+        1_000_000,
+    ));
+    video_track.transitions.push(TrackTransition::dissolve(
+        SegmentId::from("left-segment"),
+        SegmentId::from(to_segment_id),
+        Microseconds::new(300_000),
+    ));
+    draft.tracks.push(video_track);
+    draft
+}
+
+fn transition_segment(
+    segment_id: &str,
+    source_start: u64,
+    target_start: u64,
+    duration: u64,
+) -> Segment {
+    Segment::new(
+        segment_id,
+        "video-material",
+        SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
+        TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
+    )
 }
