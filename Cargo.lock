@@ -164,6 +164,7 @@ dependencies = [
  "draft_commands",
  "draft_import",
  "draft_model",
+ "editor_runtime",
  "engine_core",
  "ffmpeg_compiler",
  "image",
@@ -563,10 +564,16 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 name = "editor_runtime"
 version = "0.1.0"
 dependencies = [
+ "adapter_kaipai",
+ "artifact_store",
+ "draft_commands",
+ "draft_import",
  "draft_model",
  "media_runtime",
+ "media_runtime_desktop",
  "project_store",
  "serde",
+ "serde_json",
  "task_runtime",
  "tempfile",
  "thiserror 2.0.18",

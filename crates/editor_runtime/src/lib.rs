@@ -8,8 +8,11 @@
 pub mod error;
 pub mod export;
 pub mod handles;
+pub mod material_service;
 pub mod project_session;
+pub mod project_session_node;
 pub mod session;
+pub mod timeline_selection;
 
 pub use error::{RuntimeError, RuntimeErrorKind};
 pub use export::{ExportService, ProjectSessionExportJob, StartProjectSessionExportRequest};
