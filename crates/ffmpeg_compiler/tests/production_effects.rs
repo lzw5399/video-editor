@@ -1,9 +1,10 @@
 mod common;
 
 use draft_model::{
-    AudioRetimePolicy, Draft, Filter, Material, MaterialKind, Microseconds, RationalFrameRate,
-    RetimeMode, Segment, SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track,
-    TrackKind, TrackTransition,
+    AudioRetimePolicy, Draft, ExternalEffectReference, Filter, Material, MaterialKind,
+    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentBlendMode, SegmentMask,
+    SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track, TrackKind,
+    TrackTransition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{FfmpegCompileError, compile_ffmpeg_job};
@@ -261,6 +262,108 @@ fn phase19_production_effects_compiler_reports_external_filter_without_export_fa
     Ok(())
 }
 
+#[test]
+fn phase19_production_effects_compiler_emits_first_party_mask_alpha_from_graph_intent()
+-> Result<(), FfmpegCompileError> {
+    let plan = mask_blend_export_plan(
+        SegmentMask::Rectangle {
+            x_millis: 250,
+            y_millis: 250,
+            width_millis: 500,
+            height_millis: 500,
+            feather_millis: 0,
+            opacity_millis: 640,
+            inverted: false,
+        },
+        SegmentBlendMode::Normal,
+    );
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        job.filter_script.contains("format=rgba")
+            && job.filter_script.contains("geq=")
+            && job.filter_script.contains("alpha(X,Y)*0.640000"),
+        "first-party rectangle mask must compile to compiler-owned alpha semantics:\n{}",
+        job.filter_script
+    );
+    assert!(
+        job.filter_script.contains("between(X,480,1440)")
+            && job.filter_script.contains("between(Y,270,810)"),
+        "mask geometry millis should be resolved against output pixels by the compiler:\n{}",
+        job.filter_script
+    );
+    assert!(
+        !job.visual_diagnostics.iter().any(|diagnostic| {
+            diagnostic.property == "mask" && diagnostic.support != RenderIntentSupport::Supported
+        }),
+        "supported first-party masks should not be downgraded: {:?}",
+        job.visual_diagnostics
+    );
+
+    Ok(())
+}
+
+#[test]
+fn phase19_production_effects_compiler_reports_non_normal_blend_without_fallback_success()
+-> Result<(), FfmpegCompileError> {
+    let plan = mask_blend_export_plan(SegmentMask::None, SegmentBlendMode::Multiply);
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        !job.filter_script.contains("blend=all_mode=multiply"),
+        "multiply blend must not be emitted until the compiler owns alpha-correct blend compositing"
+    );
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "blendMode"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+            && diagnostic.reason.contains("compiler")
+            && diagnostic.reason.contains("multiply")
+    }));
+    assert!(
+        !job.validation.must_exist && !job.validation.must_be_non_empty,
+        "unsupported blend export must make compiled product success false"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn phase19_production_effects_compiler_reports_external_mask_blend_without_export_semantics()
+-> Result<(), FfmpegCompileError> {
+    let plan = mask_blend_export_plan(
+        SegmentMask::ExternalReference {
+            reference: ExternalEffectReference::new("jianying", "private-mask"),
+        },
+        SegmentBlendMode::ExternalReference {
+            reference: ExternalEffectReference::new("jianying", "private-blend"),
+        },
+    );
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        !job.filter_script.contains("private-mask")
+            && !job.filter_script.contains("private-blend")
+            && !job.filter_script.contains("jianying"),
+        "external mask/blend provider IDs must remain diagnostics, never FFmpeg filter semantics"
+    );
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "mask"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+            && diagnostic.reason.contains("jianying:private-mask")
+    }));
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "blendMode"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+            && diagnostic.reason.contains("jianying:private-blend")
+    }));
+    assert!(
+        !job.validation.must_exist && !job.validation.must_be_non_empty,
+        "external mask/blend export diagnostics must prevent product success"
+    );
+
+    Ok(())
+}
+
 fn retimed_export_plan(audio_policy: AudioRetimePolicy) -> RenderGraphPlan {
     let mut draft = common::compiler_draft();
     let material = draft
@@ -407,6 +510,37 @@ fn effect_stack_export_plan(filters: Vec<Filter>) -> RenderGraphPlan {
         TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
     );
     segment.filters = filters;
+    track.segments.push(segment);
+    draft.tracks.push(track);
+
+    graph_plan_from_draft(&draft)
+}
+
+fn mask_blend_export_plan(mask: SegmentMask, blend_mode: SegmentBlendMode) -> RenderGraphPlan {
+    let mut draft = Draft::new("phase19-mask-blend-compiler", "Phase 19 Mask Blend Compiler");
+    let mut material = Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file:///media/mask-blend-source.mp4",
+        "Mask Blend Source",
+    );
+    material.metadata.duration = Some(Microseconds::new(4_000_000));
+    material.metadata.width = Some(1_920);
+    material.metadata.height = Some(1_080);
+    material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    material.metadata.has_video = true;
+    material.metadata.has_audio = false;
+    draft.materials.push(material);
+
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut segment = Segment::new(
+        "video-a",
+        "video-material",
+        SourceTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+    );
+    segment.visual.mask = mask;
+    segment.visual.blend_mode = blend_mode;
     track.segments.push(segment);
     draft.tracks.push(track);
 
