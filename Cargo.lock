@@ -564,6 +564,7 @@ name = "editor_runtime"
 version = "0.1.0"
 dependencies = [
  "draft_model",
+ "media_runtime",
  "project_store",
  "serde",
  "task_runtime",

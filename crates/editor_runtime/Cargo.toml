@@ -11,6 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 draft_model = { path = "../draft_model" }
+media_runtime = { path = "../media_runtime" }
 project_store = { path = "../project_store" }
 serde = { version = "1.0.228", features = ["derive"] }
 task_runtime = { path = "../task_runtime" }
