@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-08-PLAN.md
-last_updated: "2026-06-25T10:54:40.136Z"
+stopped_at: Completed 19-09-PLAN.md
+last_updated: "2026-06-25T11:24:22.706Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 180
+  completed_plans: 181
   percent: 96
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 9 of 15
+Plan: 10 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -218,6 +218,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P06 | 22 min | 2 tasks | 14 files |
 | Phase 19 P07 | 21 min | 2 tasks | 13 files |
 | Phase 19 P08 | 9 min | 1 tasks | 9 files |
+| Phase 19 P09 | 18 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -636,6 +637,9 @@ Recent decisions affecting current work:
 - [Phase 19]: Effect edits commit only when the Phase 19 capability registry reports first-party preview and export support. — Keeps unsupported and degraded effects from becoming product-success semantics.
 - [Phase 19]: External provider effects stay explicit unsupported diagnostics and cannot be applied as supported first-party effects. — Preserves the adapter/report boundary for proprietary provider references.
 - [Phase 19]: Effect command parameter updates use typed integer millisecond payloads rather than renderer-owned parameter maps. — Keeps persisted effect semantics typed and Rust-owned under PRODFX-03.
+- [Phase 19]: Supported first-party filter intents are the only effects that emit realtime GPU preview passes or FFmpeg export filters.
+- [Phase 19]: Gaussian blur, basic color adjustment, and opacity adjustment share typed milliscale parameter normalization between preview and export.
+- [Phase 19]: External/degraded effects remain diagnostics and source guards reject FFmpeg effect strings outside ffmpeg_compiler.
 
 ### Pending Todos
 
@@ -717,6 +721,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T10:53:54.187Z
-Stopped at: Completed 19-08-PLAN.md
+Last session: 2026-06-25T11:24:22.699Z
+Stopped at: Completed 19-09-PLAN.md
 Resume file: None
