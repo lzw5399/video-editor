@@ -22,27 +22,42 @@ use task_runtime::{
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
-fn scheduler_export_source_guard_blocks_legacy_registry_threads() {
+fn scheduler_export_source_guard_blocks_adapter_owned_export_authority() {
     let source = include_str!("../src/preview_export_service.rs");
 
-    for forbidden in ["ExportJobRegistry", "thread::spawn(move ||)"] {
+    assert!(
+        source.contains("editor_runtime"),
+        "export binding must delegate export lifecycle authority to editor_runtime"
+    );
+
+    for forbidden in [
+        "ExportJobRegistry",
+        "SchedulerExportService",
+        "SchedulerExportState",
+        "prepare_export_job(",
+        "run_scheduled_export(",
+        "run_scheduled_validation(",
+        "build_render_graph(",
+        "compile_ffmpeg_job(",
+        "media_runtime::run_export_job",
+        "thread::spawn(move ||)",
+    ] {
         assert!(
             !source.contains(forbidden),
-            "export binding must not keep binding-owned unbounded worker policy: {forbidden}"
+            "export binding must not keep adapter-owned export semantics: {forbidden}"
         );
     }
 
     for required in [
-        "task_runtime::JobScheduler",
-        "JobDomain::Export",
-        "JobPriority::UserVisible",
-        "ResourceClass::FfmpegProcess",
-        "ResourceClass::ValidationProbe",
-        "media_runtime::run_export_job",
+        "editor_runtime::",
+        "global_export_registry",
+        "start_export(",
+        "status(",
+        "cancel(",
     ] {
         assert!(
             source.contains(required),
-            "export binding must expose scheduler-backed admission evidence: {required}"
+            "export binding must preserve explicit Node transport delegation: {required}"
         );
     }
 }
