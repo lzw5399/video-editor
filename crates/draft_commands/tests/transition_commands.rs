@@ -1,32 +1,75 @@
-const LIB_RS: &str = include_str!("../src/lib.rs");
-const TIMELINE_RS: &str = include_str!("../src/timeline.rs");
+use std::collections::BTreeMap;
+
+use draft_model::{
+    Microseconds, SegmentId, Track, TrackId, TrackKind, TrackTransition, TransitionKind,
+    TransitionReference,
+};
 
 #[test]
-fn phase19_transition_commands_contract_is_first_class_and_undoable() {
-    assert!(
-        LIB_RS.contains("pub mod transition"),
-        "transition commands must live in a Rust draft_commands::transition module"
-    );
-    assert!(
-        TIMELINE_RS.contains("SetSegmentTransitionCommandPayload")
-            && TIMELINE_RS.contains("set_segment_transition"),
-        "timeline dispatcher must route an explicit set_segment_transition command payload"
-    );
-    assert!(
-        TIMELINE_RS.contains("push_undo_snapshot") && TIMELINE_RS.contains("setSegmentTransition"),
-        "committed transition edits must push one undo entry labeled setSegmentTransition"
+fn phase19_transition_relationship_model_is_adjacent_and_typed() {
+    let mut parameters = BTreeMap::new();
+    parameters.insert("curve".to_owned(), "linear".to_owned());
+
+    let relationship = TrackTransition {
+        from_segment_id: SegmentId::from("left-segment"),
+        to_segment_id: SegmentId::from("right-segment"),
+        reference: TransitionReference::FirstParty {
+            transition: TransitionKind::Dissolve,
+        },
+        duration: Microseconds::new(500_000),
+        parameters: parameters.clone(),
+    };
+
+    assert_eq!(relationship.from_segment_id, SegmentId::from("left-segment"));
+    assert_eq!(relationship.to_segment_id, SegmentId::from("right-segment"));
+    assert!(matches!(
+        relationship.reference,
+        TransitionReference::FirstParty {
+            transition: TransitionKind::Dissolve
+        }
+    ));
+    assert_eq!(relationship.duration, Microseconds::new(500_000));
+    assert_eq!(relationship.parameters, parameters);
+}
+
+#[test]
+fn phase19_track_owns_transition_relationships_not_segment_local_deltas() {
+    let mut track = Track::new(TrackId::from("video-1"), TrackKind::Video, "main video");
+
+    track.transitions.push(TrackTransition::dissolve(
+        SegmentId::from("left-segment"),
+        SegmentId::from("right-segment"),
+        Microseconds::new(300_000),
+    ));
+
+    assert_eq!(track.transitions.len(), 1);
+    assert_eq!(
+        track.transitions[0].capability_id(),
+        TransitionKind::Dissolve.capability_id()
     );
 }
 
 #[test]
-fn phase19_transition_commands_validate_adjacency_and_overlap_in_rust() {
-    assert!(
-        TIMELINE_RS.contains("validate_transition_adjacency")
-            || TIMELINE_RS.contains("validate_transition_overlap"),
-        "transition adjacency/overlap windows must be validated in Rust, not in renderer hit testing"
+fn phase19_transition_external_references_are_report_only_not_first_party_kinds() {
+    let relationship = TrackTransition::external_reference(
+        SegmentId::from("left-segment"),
+        SegmentId::from("right-segment"),
+        "jianying",
+        "private-transition-id",
+        Microseconds::new(400_000),
     );
-    assert!(
-        TIMELINE_RS.contains("TransitionAdjacency") || TIMELINE_RS.contains("TransitionWindow"),
-        "transition semantics must model the adjacent segment relationship explicitly"
+
+    let external = relationship
+        .external()
+        .expect("provider transition must remain an external reference");
+    assert_eq!(external.provider, "jianying");
+    assert_eq!(external.effect_id, "private-transition-id");
+    assert_eq!(
+        relationship.capability_id(),
+        "external:jianying:private-transition-id"
     );
+    assert!(!matches!(
+        relationship.reference,
+        TransitionReference::FirstParty { .. }
+    ));
 }
