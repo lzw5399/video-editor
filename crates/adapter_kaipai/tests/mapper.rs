@@ -3,8 +3,8 @@ use std::{collections::BTreeSet, env, fs, path::PathBuf};
 use adapter_kaipai::{KaipaiFormulaBundle, KaipaiImportOptions, map_kaipai_bundle_to_import_plan};
 use draft_import::{AdaptationStatus, ResourceLocalizationMode, validate_import_plan};
 use draft_model::{
-    CanvasAspectRatio, CanvasBackground, MaterialKind, Microseconds, SegmentAnchor, SegmentFitMode,
-    TrackKind,
+    CanvasAspectRatio, CanvasBackground, FilterKind, MaterialKind, Microseconds, RetimeMode,
+    SegmentAnchor, SegmentFitMode, SpeedRatio, TrackKind, TransitionReference,
 };
 use serde_json::{Value, json};
 
@@ -347,7 +347,11 @@ fn offline_mapper_maps_simple_transition_and_visual_keyframes_generically() {
         .transition
         .as_ref()
         .expect("simple dissolve should map to canonical transition");
-    assert_eq!(transition.name, "dissolve");
+    assert_eq!(
+        transition.reference,
+        TransitionReference::dissolve(),
+        "simple dissolve should map to first-party typed transition semantics"
+    );
     assert_eq!(transition.duration, Microseconds::new(300_000));
 
     assert_eq!(segment.keyframes.len(), 3);
@@ -375,6 +379,105 @@ fn offline_mapper_maps_simple_transition_and_visual_keyframes_generically() {
             ),
         ]
     );
+}
+
+#[test]
+fn offline_mapper_maps_phase19_supported_retime_transition_and_filters_without_provider_leak() {
+    let mut value = read_fixture_value("positive/main-video.json");
+    value["formula"]["videoClipList"][0]["transition"] = json!({
+        "type": "fade",
+        "durationMs": 450
+    });
+    value["formula"]["videoClipList"][0]["filterList"] = json!([
+        {"type": "gaussianBlur", "radiusMillis": 1500},
+        {
+            "type": "basicColorAdjustment",
+            "brightnessMillis": -120,
+            "contrastMillis": 1100,
+            "saturationMillis": 900
+        },
+        {"type": "opacityAdjustment", "opacityMillis": 720},
+        {
+            "type": "providerNative",
+            "effectId": "provider-private-skin-lut",
+            "displayName": "privateSkinLut"
+        }
+    ]);
+    value["formula"]["nativeEffectList"] = json!([
+        {
+            "effectId": "native-effect-beauty-retouch",
+            "nativeEffectName": "beautyRetouch",
+            "effectType": "beautyRetouch",
+            "targetSegmentId": "segment-main-video",
+            "strengthMillis": 650
+        }
+    ]);
+    let bundle = KaipaiFormulaBundle::from_json_value(value).expect("mutated fixture should parse");
+    let mapped = map_bundle(bundle, "offline-phase19-supported-effects");
+
+    validate_import_plan(&mapped.plan).expect("phase19 effect import plan should validate");
+    let segment = &mapped.plan.tracks[0].track.segments[0];
+    assert_eq!(
+        segment.retiming.mode,
+        RetimeMode::Constant {
+            speed: SpeedRatio::new(3, 2)
+        },
+        "durationMsWithSpeed should become first-party constant-speed retime semantics"
+    );
+    assert_eq!(
+        segment.transition.as_ref().map(|transition| &transition.reference),
+        Some(&TransitionReference::dissolve()),
+        "supported fade/dissolve provider concepts should become first-party dissolve semantics"
+    );
+    assert_eq!(
+        segment
+            .filters
+            .iter()
+            .map(|filter| &filter.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            &FilterKind::GaussianBlur {
+                radius_millis: 1500
+            },
+            &FilterKind::BasicColorAdjustment {
+                brightness_millis: -120,
+                contrast_millis: 1100,
+                saturation_millis: 900
+            },
+            &FilterKind::OpacityAdjustment {
+                opacity_millis: 720
+            }
+        ],
+        "only supported first-party filter concepts should enter canonical draft filters"
+    );
+    assert!(
+        mapped.report.items.iter().any(|item| {
+            item.status == AdaptationStatus::Dropped
+                && item
+                    .message
+                    .contains("Provider-native effect is report-only")
+        }),
+        "provider-native clip filter IDs must remain report-only adaptation rows"
+    );
+    assert_statuses(
+        &mapped.report.items,
+        &[AdaptationStatus::Supported, AdaptationStatus::NeedsNativeEffect, AdaptationStatus::Dropped],
+    );
+    let serialized_plan =
+        serde_json::to_value(&mapped.plan).expect("phase19 import plan should serialize");
+    assert_no_provider_runtime_refs(&serialized_plan);
+    let serialized_plan = serde_json::to_string(&serialized_plan).expect("plan should serialize");
+    for forbidden in [
+        "provider-private-skin-lut",
+        "native-effect-beauty-retouch",
+        "beautyRetouch",
+        "privateSkinLut",
+    ] {
+        assert!(
+            !serialized_plan.contains(forbidden),
+            "provider/private effect ID leaked into canonical semantics: {serialized_plan}"
+        );
+    }
 }
 
 fn map_fixture(path: &str, import_id: &str) -> adapter_kaipai::KaipaiMappedFixture {
