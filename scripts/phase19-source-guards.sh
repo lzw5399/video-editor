@@ -422,6 +422,10 @@ scan_mask_blend_filter_ownership() {
 require_ui_files() {
   require_file "apps/desktop-electron/tests/production-effects.spec.ts"
   require_fixed "apps/desktop-electron/tests/production-effects.spec.ts" "production-effects"
+  require_fixed "apps/desktop-electron/tests/template-import.spec.ts" "phase19ImportedProductionEffectReportEvidence"
+  require_fixed "apps/desktop-electron/tests/template-import.spec.ts" "expectPhase19ImportedProductionEffectsCanonical"
+  require_fixed "apps/desktop-electron/tests/production-effects.spec.ts" "phase19ProductionEffectsTemplateImportCoverage"
+  require_fixed "apps/desktop-electron/tests/production-effects.spec.ts" "productionEffectsPreviewExportParity"
 }
 
 run_wave0() {
