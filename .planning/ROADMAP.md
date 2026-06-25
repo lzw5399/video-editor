@@ -943,5 +943,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
-| 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete   | 2026-06-25 |
+| 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete    | 2026-06-25 |
 | 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
