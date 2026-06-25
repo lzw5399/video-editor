@@ -183,6 +183,35 @@ fn abi_smoke_depends_on_editor_runtime_and_not_desktop_adapter() {
     assert!(!manifest.contains(&forbidden));
 }
 
+#[test]
+fn abi_smoke_generated_header_declares_smoke_surface() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let config = std::fs::read_to_string(manifest_dir.join("cbindgen.toml"))
+        .expect("cbindgen config exists");
+    assert!(config.contains("video_editor_runtime.h"));
+
+    let header = std::fs::read_to_string(manifest_dir.join("include/video_editor_runtime.h"))
+        .expect("generated C header exists");
+    for symbol in [
+        "ve_status_t",
+        "ve_error_code_t",
+        "ve_handle_t",
+        "ve_buffer_t",
+        "ve_runtime_config_t",
+        "ve_runtime_create",
+        "ve_runtime_close",
+        "ve_project_open",
+        "ve_handle_acquire",
+        "ve_handle_retain",
+        "ve_handle_release",
+        "ve_texture_handle_resolve",
+        "ve_last_error_json",
+        "ve_buffer_free",
+    ] {
+        assert!(header.contains(symbol), "header missing {symbol}");
+    }
+}
+
 struct JsonBuffer {
     bytes: Vec<u8>,
     buffer: ve_buffer_t,
