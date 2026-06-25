@@ -1,6 +1,7 @@
 use draft_model::{
-    Draft, Filter, Material, MaterialKind, MaterialMetadata, Microseconds, RationalFrameRate,
-    Segment, SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
+    Draft, ExternalEffectReference, Filter, FilterKind, Material, MaterialKind, MaterialMetadata,
+    Microseconds, RationalFrameRate, Segment, SourceTimerange, TargetTimerange, TextSegment,
+    TextStyle, Track, TrackKind,
 };
 use realtime_preview_runtime::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewGraphInput, RealtimePreviewGraphSupport,
@@ -170,8 +171,11 @@ fn divergent_text_and_effect_draft() -> Draft {
     ));
 
     draft.tracks[0].segments[0].filters.push(Filter {
-        name: "cinematic-lut".to_owned(),
-        parameters: Default::default(),
+        kind: FilterKind::ExternalReference {
+            reference: ExternalEffectReference::new("testkit", "cinematic-lut")
+                .with_display_name("cinematic-lut"),
+        },
+        enabled: true,
     });
 
     let mut text = Segment::new(
