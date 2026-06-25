@@ -18,7 +18,9 @@ members = [
   "crates/preview_service",
   "crates/testkit",
   "crates/editor_runtime",
+  "crates/bindings_c",
   "crates/bindings_node",
+  "crates/server_runtime",
 ]
 resolver = "3"
 
