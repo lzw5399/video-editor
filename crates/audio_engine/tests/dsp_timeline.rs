@@ -145,3 +145,24 @@ fn volume_keyframe(at: u64, value: u32) -> Keyframe {
         easing: KeyframeEasing::None,
     }
 }
+
+#[test]
+fn phase19_audio_dsp_timeline_requires_retime_mapping_and_follow_speed_diagnostics() {
+    const DSP_TIMELINE_RS: &str = include_str!("../src/dsp_timeline.rs");
+
+    assert!(
+        DSP_TIMELINE_RS.contains("source_sample_at_target")
+            || DSP_TIMELINE_RS.contains("RetimeSourceSampleMap"),
+        "audio DSP timeline must map target samples through retime-aware source sample semantics"
+    );
+    assert!(
+        DSP_TIMELINE_RS.contains("follow_speed")
+            || DSP_TIMELINE_RS.contains("FollowSpeedDiagnostic"),
+        "audio follow-speed/pitch behavior must be explicit diagnostic state, not hidden success"
+    );
+    assert!(
+        DSP_TIMELINE_RS.contains("AudioRetimeMixIntent")
+            || DSP_TIMELINE_RS.contains("retime_mix_intent"),
+        "mix intent must expose retime facts for preview/export parity"
+    );
+}
