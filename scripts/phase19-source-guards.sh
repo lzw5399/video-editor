@@ -271,7 +271,23 @@ scan_retime_filter_ownership() {
 
 require_retiming_audio_files() {
   require_file "crates/audio_engine/tests/dsp_timeline.rs"
+  require_file "crates/audio_engine/src/dsp_timeline.rs"
+  require_file "crates/audio_engine/src/mix_intent.rs"
+  require_file "crates/testkit/src/audio_parity.rs"
+  require_file "crates/testkit/tests/audio_preview_export_parity.rs"
   require_fixed "crates/audio_engine/tests/dsp_timeline.rs" "phase19_"
+  require_retiming_audio_parity_coverage
+}
+
+require_retiming_audio_parity_coverage() {
+  require_fixed "crates/audio_engine/src/dsp_timeline.rs" "retime_mix_intent"
+  require_fixed "crates/audio_engine/src/dsp_timeline.rs" "source_position_for_retime"
+  require_fixed "crates/audio_engine/src/mix_intent.rs" "AudioRetimeMixIntent"
+  require_fixed "crates/audio_engine/src/mix_intent.rs" "AudioRetimeSourceSampleMap"
+  require_fixed "crates/testkit/src/audio_parity.rs" "RetimeSourceSampleMismatch"
+  require_fixed "crates/testkit/src/audio_parity.rs" "UnsupportedAudioFollowSpeed"
+  require_fixed "crates/testkit/tests/audio_preview_export_parity.rs" "audio_preview_export_parity_classifies_retime_source_sample_mismatch"
+  require_fixed "crates/testkit/tests/audio_preview_export_parity.rs" "audio_preview_export_parity_classifies_unsupported_audio_follow_speed"
 }
 
 require_transition_files() {

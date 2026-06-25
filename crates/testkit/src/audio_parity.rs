@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use audio_engine::{AudioMixClassification, AudioMixIntent, AudioMixSegment};
+use audio_engine::{
+    AudioMixClassification, AudioMixIntent, AudioMixSegment, AudioRetimeMixSupport,
+};
 use draft_model::{MaterialId, Microseconds, SegmentId, SourceTimerange, TargetTimerange, TrackId};
 use render_graph::{
     RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixClassification,
-    RenderAudioVolumeKeyframe,
+    RenderAudioVolumeKeyframe, RenderIntentSupport,
 };
 use serde::{Deserialize, Serialize};
 
@@ -107,6 +109,21 @@ pub enum AudioMixParityDifference {
         preview_target_timerange: TargetTimerange,
         export_target_timerange: TargetTimerange,
     },
+    RetimeSourceSampleMismatch {
+        track_id: TrackId,
+        segment_id: SegmentId,
+        preview_retimed_source_timerange: SourceTimerange,
+        export_retimed_source_timerange: SourceTimerange,
+        preview_retimed_source_duration_samples: u64,
+        export_retimed_source_duration_samples: u64,
+    },
+    UnsupportedAudioFollowSpeed {
+        track_id: TrackId,
+        segment_id: SegmentId,
+        preview_support: AudioRetimeMixSupport,
+        export_support: RenderIntentSupport,
+        reason: String,
+    },
 }
 
 pub fn audio_preview_export_parity_diagnostic(
@@ -146,9 +163,12 @@ pub fn audio_preview_export_parity_diagnostic(
         .collect::<BTreeSet<_>>()
     {
         match (preview_by_key.get(&key), export_by_key.get(&key)) {
-            (Some(preview_segment), Some(export_segment)) => {
-                compare_segment_pair(preview_segment, export_segment, &mut differences)
-            }
+            (Some(preview_segment), Some(export_segment)) => compare_segment_pair(
+                preview_segment,
+                export_segment,
+                export_sample_rate_hz,
+                &mut differences,
+            ),
             (Some(preview_segment), None) => {
                 differences.push(AudioMixParityDifference::PreviewOnly {
                     track_id: preview_segment.track_id.clone(),
@@ -265,6 +285,7 @@ impl AudioSampleSummary {
 fn compare_segment_pair(
     preview: &AudioMixSegment,
     export: &RenderAudioMix,
+    export_sample_rate_hz: u32,
     differences: &mut Vec<AudioMixParityDifference>,
 ) {
     if preview.source_timerange != export.source_timerange {
@@ -283,6 +304,7 @@ fn compare_segment_pair(
             export_target_timerange: export.target_timerange.clone(),
         });
     }
+    compare_retime_pair(preview, export, export_sample_rate_hz, differences);
     if preview.gain_envelope.base_gain_millis != export.gain_millis {
         differences.push(AudioMixParityDifference::GainMismatch {
             track_id: preview.track_id.clone(),
@@ -334,6 +356,76 @@ fn compare_segment_pair(
             material_id: preview.material_id.clone(),
         });
     }
+}
+
+fn compare_retime_pair(
+    preview: &AudioMixSegment,
+    export: &RenderAudioMix,
+    export_sample_rate_hz: u32,
+    differences: &mut Vec<AudioMixParityDifference>,
+) {
+    let preview_mapping = &preview.retime.source_sample_map;
+    let export_mapping = &export.retime.source_mapping;
+    if preview_mapping.source_timerange != export_mapping.source_timerange
+        || preview_mapping.retimed_source_timerange != export_mapping.retimed_source_timerange
+        || preview_mapping.target_timerange != export_mapping.target_timerange
+    {
+        differences.push(AudioMixParityDifference::RetimeSourceSampleMismatch {
+            track_id: preview.track_id.clone(),
+            segment_id: preview.segment_id.clone(),
+            preview_retimed_source_timerange: preview_mapping.retimed_source_timerange.clone(),
+            export_retimed_source_timerange: export_mapping.retimed_source_timerange.clone(),
+            preview_retimed_source_duration_samples: preview_mapping
+                .retimed_source_duration_samples,
+            export_retimed_source_duration_samples: sample_count(
+                export_mapping.retimed_source_timerange.duration,
+                export_sample_rate_hz,
+            ),
+        });
+    }
+
+    let preview_support = preview.retime.support;
+    let export_support = export.retime.audio.support;
+    let support_mismatch = preview_support != audio_support_from_render(export_support);
+    if preview_support != AudioRetimeMixSupport::Supported
+        || export_support != RenderIntentSupport::Supported
+        || support_mismatch
+        || preview.retime.policy != export.retime.audio.policy
+        || preview.retime.follow_speed != export.retime.audio.follow_speed
+    {
+        differences.push(AudioMixParityDifference::UnsupportedAudioFollowSpeed {
+            track_id: preview.track_id.clone(),
+            segment_id: preview.segment_id.clone(),
+            preview_support,
+            export_support,
+            reason: if support_mismatch {
+                format!(
+                    "preview audio retime support {:?} differs from export support {:?}",
+                    preview_support, export_support
+                )
+            } else if preview.retime.reason == export.retime.audio.reason {
+                preview.retime.reason.clone()
+            } else {
+                format!(
+                    "preview audio retime: {}; export audio retime: {}",
+                    preview.retime.reason, export.retime.audio.reason
+                )
+            },
+        });
+    }
+}
+
+fn audio_support_from_render(support: RenderIntentSupport) -> AudioRetimeMixSupport {
+    match support {
+        RenderIntentSupport::Supported => AudioRetimeMixSupport::Supported,
+        RenderIntentSupport::Degraded => AudioRetimeMixSupport::Degraded,
+        RenderIntentSupport::Unsupported => AudioRetimeMixSupport::Unsupported,
+    }
+}
+
+fn sample_count(value: Microseconds, sample_rate_hz: u32) -> u64 {
+    let samples = u128::from(value.get()) * u128::from(sample_rate_hz) / 1_000_000_u128;
+    u64::try_from(samples).unwrap_or(u64::MAX)
 }
 
 fn preview_volume_keyframes(preview: &AudioMixSegment) -> Vec<RenderAudioVolumeKeyframe> {

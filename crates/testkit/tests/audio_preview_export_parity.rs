@@ -1,8 +1,8 @@
 use draft_model::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, AudioRetimePolicy, Draft,
     Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
-    MaterialId, MaterialKind, Microseconds, RetimeMode, Segment, SegmentRetiming,
-    SourceTimerange, SpeedRatio, TargetTimerange, Track, TrackKind,
+    MaterialId, MaterialKind, Microseconds, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
+    SpeedRatio, TargetTimerange, Track, TrackKind,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{RenderAudioMix, build_render_graph};
@@ -190,6 +190,7 @@ fn export_audio_mixes(draft: &Draft) -> Vec<RenderAudioMix> {
 fn retimed_audio_parity_draft(retiming: SegmentRetiming) -> Draft {
     let mut draft = audio_parity_draft(false, false);
     draft.draft_id = "retimed-audio-parity-draft".into();
+    draft.materials[0].metadata.duration = Some(Microseconds::new(6_000_000));
     let segment = &mut draft.tracks[0].segments[0];
     segment.segment_id = "retimed-audio-segment".into();
     segment.source_timerange = SourceTimerange::new(500_000, 4_000_000);
