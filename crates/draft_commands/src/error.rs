@@ -63,6 +63,15 @@ pub enum TimelineCommandErrorKind {
         segment_id: SegmentId,
         split_at: Microseconds,
     },
+    InvalidRetime {
+        segment_id: SegmentId,
+        reason: String,
+    },
+    UnsupportedAudioRetime {
+        segment_id: SegmentId,
+        policy: String,
+        reason: String,
+    },
     HistoryEmpty {
         direction: String,
     },
@@ -152,6 +161,22 @@ impl fmt::Display for TimelineCommandError {
                 "invalid split point {} for segment {}",
                 split_at.get(),
                 segment_id.as_str()
+            ),
+            TimelineCommandErrorKind::InvalidRetime { segment_id, reason } => write!(
+                formatter,
+                "invalid retime for segment {}: {}",
+                segment_id.as_str(),
+                reason
+            ),
+            TimelineCommandErrorKind::UnsupportedAudioRetime {
+                segment_id,
+                policy,
+                reason,
+            } => write!(
+                formatter,
+                "unsupported audio retime policy {policy} for segment {}: {}",
+                segment_id.as_str(),
+                reason
             ),
             TimelineCommandErrorKind::HistoryEmpty { direction } => {
                 write!(formatter, "{direction} history is empty")

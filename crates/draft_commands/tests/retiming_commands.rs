@@ -1,8 +1,8 @@
 use draft_commands::{
     TimelineCommandErrorKind,
     history::{redo_timeline_edit, undo_timeline_edit},
-    retiming::{clear_segment_retime, set_segment_retime},
-    timeline::{execute_timeline_edit, split_segment, trim_segment},
+    retiming::set_segment_retime,
+    timeline::{execute_timeline_edit, move_segment, split_segment, trim_segment},
 };
 use draft_model::{
     AudioRetimePolicy, ClearSegmentRetimeCommandPayload, CommandState, DirtyDomain, Draft,
@@ -12,7 +12,7 @@ use draft_model::{
 };
 
 #[test]
-fn set_and_clear_segment_retime_commit_once_and_route_through_timeline_payloads() {
+fn phase19_retiming_commands_set_and_clear_commit_once_and_route_through_timeline_payloads() {
     let draft = draft_with_video_segment(4_000_000, 2_000_000);
     let state = CommandState::empty();
     let selection = selected_segment_context();
@@ -102,7 +102,7 @@ fn set_and_clear_segment_retime_commit_once_and_route_through_timeline_payloads(
 }
 
 #[test]
-fn invalid_segment_retime_rejects_atomically_with_structured_errors() {
+fn phase19_retiming_commands_invalid_retime_rejects_atomically_with_structured_errors() {
     let draft = draft_with_video_segment(1_000_000, 1_000_000);
     let state = CommandState::empty();
     let selection = selected_segment_context();
@@ -198,7 +198,10 @@ fn invalid_segment_retime_rejects_atomically_with_structured_errors() {
         SegmentRetiming::default(),
     )
     .expect_err("locked tracks reject retime commands");
-    assert!(matches!(locked.kind, TimelineCommandErrorKind::LockedTrack { .. }));
+    assert!(matches!(
+        locked.kind,
+        TimelineCommandErrorKind::LockedTrack { .. }
+    ));
 
     let missing = set_segment_retime(
         &draft,
@@ -219,7 +222,7 @@ fn invalid_segment_retime_rejects_atomically_with_structured_errors() {
 }
 
 #[test]
-fn split_and_trim_preserve_retimed_source_mapping() {
+fn phase19_retiming_commands_split_and_trim_preserve_retimed_source_mapping() {
     let mut draft = draft_with_video_segment(4_000_000, 2_000_000);
     draft.tracks[0].segments[0].retiming = SegmentRetiming {
         mode: RetimeMode::Constant {
@@ -244,9 +247,15 @@ fn split_and_trim_preserve_retimed_source_mapping() {
     assert_eq!(left.target_timerange.duration, Microseconds::new(500_000));
     assert_eq!(left.source_timerange.duration, Microseconds::new(1_000_000));
     assert_eq!(right.target_timerange.start, Microseconds::new(500_000));
-    assert_eq!(right.target_timerange.duration, Microseconds::new(1_500_000));
+    assert_eq!(
+        right.target_timerange.duration,
+        Microseconds::new(1_500_000)
+    );
     assert_eq!(right.source_timerange.start, Microseconds::new(1_000_000));
-    assert_eq!(right.source_timerange.duration, Microseconds::new(3_000_000));
+    assert_eq!(
+        right.source_timerange.duration,
+        Microseconds::new(3_000_000)
+    );
     assert_eq!(left.retiming, right.retiming);
 
     let trimmed = trim_segment(
@@ -260,10 +269,36 @@ fn split_and_trim_preserve_retimed_source_mapping() {
     .expect("retimed left trim should commit");
     let segment = &trimmed.draft.tracks[0].segments[0];
     assert_eq!(segment.target_timerange.start, Microseconds::new(500_000));
-    assert_eq!(segment.target_timerange.duration, Microseconds::new(1_500_000));
+    assert_eq!(
+        segment.target_timerange.duration,
+        Microseconds::new(1_500_000)
+    );
     assert_eq!(segment.source_timerange.start, Microseconds::new(1_000_000));
-    assert_eq!(segment.source_timerange.duration, Microseconds::new(3_000_000));
+    assert_eq!(
+        segment.source_timerange.duration,
+        Microseconds::new(3_000_000)
+    );
     assert_eq!(segment.retiming, draft.tracks[0].segments[0].retiming);
+
+    let moved = move_segment(
+        &draft,
+        &state,
+        &selection,
+        "video-segment".into(),
+        "video-track".into(),
+        Microseconds::new(1_000_000),
+    )
+    .expect("retimed move should preserve source mapping");
+    let moved_segment = &moved.draft.tracks[0].segments[0];
+    assert_eq!(
+        moved_segment.target_timerange.start,
+        Microseconds::new(1_000_000)
+    );
+    assert_eq!(
+        moved_segment.source_timerange,
+        draft.tracks[0].segments[0].source_timerange
+    );
+    assert_eq!(moved_segment.retiming, draft.tracks[0].segments[0].retiming);
 }
 
 fn draft_with_video_segment(source_duration: u64, target_duration: u64) -> Draft {

@@ -45,6 +45,8 @@ pub enum CommandDeltaName {
     SetTrackMute,
     UpdateDraftCanvasConfig,
     UpdateSegmentVisual,
+    SetSegmentRetime,
+    ClearSegmentRetime,
     SetSegmentKeyframe,
     RemoveSegmentKeyframe,
     CreateAudioPreviewSession,

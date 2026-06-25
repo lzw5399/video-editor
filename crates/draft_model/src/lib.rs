@@ -181,6 +181,8 @@ pub enum TimelineEditPayload {
     SetTrackMute(SetTrackMuteCommandPayload),
     UpdateDraftCanvasConfig(UpdateDraftCanvasConfigCommandPayload),
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
+    SetSegmentRetime(SetSegmentRetimeCommandPayload),
+    ClearSegmentRetime(ClearSegmentRetimeCommandPayload),
     SetSegmentKeyframe(SetSegmentKeyframeCommandPayload),
     RemoveSegmentKeyframe(RemoveSegmentKeyframeCommandPayload),
 }
@@ -655,6 +657,27 @@ pub struct UpdateSegmentVisualCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub visual: SegmentVisual,
+}
+
+/// Payload accepted by the Phase 19 segment retiming command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSegmentRetimeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub retiming: SegmentRetiming,
+}
+
+/// Payload accepted by the Phase 19 clear segment retiming command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClearSegmentRetimeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
 }
 
 /// Payload accepted by the Phase 10 segment keyframe set command.

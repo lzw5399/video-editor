@@ -17,6 +17,10 @@ use crate::{
     },
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
+    retiming::{
+        clear_segment_retime, set_segment_retime, source_offset_for_target_duration,
+        validate_draft_retime_source_ranges,
+    },
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment, import_subtitle_srt, import_subtitle_srt_intent},
     visual::update_segment_visual,
@@ -59,6 +63,7 @@ pub fn validate_timeline_rules(draft: &Draft) -> Result<(), TimelineCommandError
     validate_timeranges(draft)?;
     validate_track_material_rules(draft)?;
     validate_segment_material_bounds(draft)?;
+    validate_draft_retime_source_ranges(draft)?;
     validate_track_overlaps(draft)?;
     validate_draft(draft)?;
     Ok(())
@@ -352,6 +357,19 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.visual,
+        ),
+        TimelineEditPayload::SetSegmentRetime(payload) => set_segment_retime(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.retiming,
+        ),
+        TimelineEditPayload::ClearSegmentRetime(payload) => clear_segment_retime(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
         ),
         TimelineEditPayload::SetSegmentKeyframe(payload) => set_segment_keyframe(
             &payload.draft,
@@ -862,21 +880,35 @@ pub fn split_segment(
 
     let left_duration = Microseconds::new(split - target_start);
     let right_duration = Microseconds::new(target_end - split);
+    let left_source_duration =
+        preserve_retime_source_mapping(&original, left_duration, "split.leftSourceDuration")?;
     let right_source_start = original
         .source_timerange
         .start
         .get()
-        .checked_add(left_duration.get())
+        .checked_add(left_source_duration.get())
         .map(Microseconds::new)
         .ok_or_else(|| {
             TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
                 field: "sourceTimerange".to_owned(),
             })
         })?;
+    let right_source_duration = original
+        .source_timerange
+        .duration
+        .get()
+        .checked_sub(left_source_duration.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::InvalidRetime {
+                segment_id: segment_id.clone(),
+                reason: "split point consumes more source than the segment retime range".to_owned(),
+            })
+        })?;
 
     next_draft.tracks[track_index].segments[segment_index]
         .source_timerange
-        .duration = left_duration;
+        .duration = left_source_duration;
     next_draft.tracks[track_index].segments[segment_index]
         .target_timerange
         .duration = left_duration;
@@ -885,7 +917,7 @@ pub fn split_segment(
     right_segment.segment_id = right_segment_id.clone();
     right_segment.source_timerange = SourceTimerange {
         start: right_source_start,
-        duration: right_duration,
+        duration: right_source_duration,
     };
     right_segment.target_timerange = TargetTimerange {
         start: split_at,
@@ -969,7 +1001,12 @@ pub fn trim_segment(
                 return invalid_trim(&segment_id, target_timerange.start);
             }
             let new_source_start = if new_target_start >= old_target_start {
-                let source_delta = new_target_start - old_target_start;
+                let source_delta = preserve_retime_source_mapping(
+                    &original,
+                    Microseconds::new(new_target_start - old_target_start),
+                    "trim.leftSourceDelta",
+                )?
+                .get();
                 original
                     .source_timerange
                     .start
@@ -982,7 +1019,12 @@ pub fn trim_segment(
                         })
                     })?
             } else {
-                let source_delta = old_target_start - new_target_start;
+                let source_delta = preserve_retime_source_mapping(
+                    &original,
+                    Microseconds::new(old_target_start - new_target_start),
+                    "trim.leftExtensionSourceDelta",
+                )?
+                .get();
                 original
                     .source_timerange
                     .start
@@ -999,16 +1041,25 @@ pub fn trim_segment(
             next_draft.tracks[track_index].segments[segment_index].source_timerange =
                 SourceTimerange {
                     start: new_source_start,
-                    duration: target_timerange.duration,
+                    duration: source_duration_after_left_trim(
+                        &original,
+                        new_source_start,
+                        &target_timerange,
+                    )?,
                 };
         }
         TrimSegmentDirection::Right => {
             if new_target_start != old_target_start {
                 return invalid_trim(&segment_id, target_timerange.start);
             }
+            let new_source_duration = preserve_retime_source_mapping(
+                &original,
+                target_timerange.duration,
+                "trim.rightSourceDuration",
+            )?;
             next_draft.tracks[track_index].segments[segment_index]
                 .source_timerange
-                .duration = target_timerange.duration;
+                .duration = new_source_duration;
         }
     }
 
@@ -1252,6 +1303,65 @@ fn invalid_trim<T>(
             split_at,
         },
     ))
+}
+
+fn preserve_retime_source_mapping(
+    segment: &Segment,
+    target_duration: Microseconds,
+    field: &str,
+) -> Result<Microseconds, TimelineCommandError> {
+    source_offset_for_target_duration(&segment.retiming.mode, target_duration).map_err(|error| {
+        match error.kind {
+            TimelineCommandErrorKind::InvalidRetime { reason, .. } => {
+                TimelineCommandError::new(TimelineCommandErrorKind::InvalidRetime {
+                    segment_id: segment.segment_id.clone(),
+                    reason: format!("{field}: {reason}"),
+                })
+            }
+            TimelineCommandErrorKind::TimerangeOverflow { .. } => {
+                TimelineCommandError::new(TimelineCommandErrorKind::TimerangeOverflow {
+                    field: field.to_owned(),
+                })
+            }
+            kind => TimelineCommandError::new(kind),
+        }
+    })
+}
+
+fn source_duration_after_left_trim(
+    original: &Segment,
+    new_source_start: Microseconds,
+    target_timerange: &TargetTimerange,
+) -> Result<Microseconds, TimelineCommandError> {
+    let required = preserve_retime_source_mapping(
+        original,
+        target_timerange.duration,
+        "trim.leftSourceDuration",
+    )?;
+    let original_source_end = checked_source_end(&original.source_timerange)?;
+    let duration = original_source_end
+        .get()
+        .checked_sub(new_source_start.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            TimelineCommandError::new(TimelineCommandErrorKind::InvalidRetime {
+                segment_id: original.segment_id.clone(),
+                reason: "left trim moves source start beyond original retime range".to_owned(),
+            })
+        })?;
+    if duration.get() < required.get() {
+        return Err(TimelineCommandError::new(
+            TimelineCommandErrorKind::InvalidRetime {
+                segment_id: original.segment_id.clone(),
+                reason: format!(
+                    "left trim leaves {}us source but retime requires {}us",
+                    duration.get(),
+                    required.get()
+                ),
+            },
+        ));
+    }
+    Ok(duration)
 }
 
 fn validate_timeranges(draft: &Draft) -> Result<(), TimelineCommandError> {

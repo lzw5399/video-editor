@@ -11,6 +11,7 @@ pub mod delta;
 pub mod error;
 pub mod history;
 pub mod keyframe;
+pub mod retiming;
 pub mod selection;
 pub mod snapping;
 pub mod text;
