@@ -6,14 +6,14 @@ current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
 stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-06-25T08:24:18.651Z"
+last_updated: "2026-06-25T09:12:23.796Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 175
+  completed_plans: 176
   percent: 94
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 4 of 15
+Plan: 5 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -213,6 +213,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P01 | 12 min | 3 tasks | 14 files |
 | Phase 19 P02 | 26 min | 3 tasks | 22 files |
 | Phase 19 P03 | 27 min | 3 tasks | 16 files |
+| Phase 19 P04 | 37 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -615,6 +616,9 @@ Recent decisions affecting current work:
 - [Phase 19]: [Phase 19 Plan 03]: Retime edit payloads remain Rust-internal TimelineEditPayload variants while public CommandEnvelope contracts continue to exclude timeline edit commands.
 - [Phase 19]: [Phase 19 Plan 03]: engine_core owns retimed source-time mapping through SegmentTimeMap and source_position_for_retime so preview, render, export, and UI consumers do not recalculate timeline math.
 - [Phase 19]: [Phase 19 Plan 03]: Unsupported pitch/time-stretch retime combinations surface as typed audio diagnostics instead of silent success.
+- [Phase 19]: 19-04: Retime source mapping remains owned by engine_core and is consumed as typed render graph intent by compiler, preview, and testkit.
+- [Phase 19]: 19-04: FFmpeg retime timestamp/audio filters are generated only in ffmpeg_compiler and guarded by the Phase 19 retiming source guard.
+- [Phase 19]: 19-04: Testkit retime parity checks semantic source mapping and typed diagnostics rather than FFmpeg-only success outside the compiler crate.
 
 ### Pending Todos
 
@@ -696,6 +700,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T08:24:18.644Z
+Last session: 2026-06-25T09:11:36.052Z
 Stopped at: Completed 19-03-PLAN.md
 Resume file: None
