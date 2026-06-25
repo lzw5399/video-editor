@@ -5,8 +5,7 @@
 //! reaching into desktop Node bindings.
 
 pub use editor_runtime::{
-    EDITOR_RUNTIME_CONTRACT_VERSION, ExportService, ProjectSessionService,
-    RuntimeSessionRegistry,
+    EDITOR_RUNTIME_CONTRACT_VERSION, ExportService, ProjectSessionService, RuntimeSessionRegistry,
 };
 
 pub fn contract_version() -> &'static str {

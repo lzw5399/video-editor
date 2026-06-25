@@ -94,6 +94,62 @@ fn stale_wrong_owner_wrong_device_expired_double_release_and_unknown_fail_closed
         RuntimeErrorKind::WrongDevice,
     );
 
+    let mut wrong_backend = texture_descriptor(texture_device.clone());
+    wrong_backend.backend = TextureBackend::D3d12Resource;
+    assert_runtime_error(
+        registry.resolve_texture(
+            &owner,
+            &texture,
+            &TextureResolveExpectation {
+                descriptor: wrong_backend,
+            },
+            0,
+        ),
+        RuntimeErrorKind::WrongDevice,
+    );
+
+    let mut wrong_dimensions = texture_descriptor(texture_device.clone());
+    wrong_dimensions.dimensions.width = 1280;
+    assert_runtime_error(
+        registry.resolve_texture(
+            &owner,
+            &texture,
+            &TextureResolveExpectation {
+                descriptor: wrong_dimensions,
+            },
+            0,
+        ),
+        RuntimeErrorKind::TextureMetadataMismatch,
+    );
+
+    let mut wrong_pixel_format = texture_descriptor(texture_device.clone());
+    wrong_pixel_format.pixel_format = VideoPixelFormat::Rgba8;
+    assert_runtime_error(
+        registry.resolve_texture(
+            &owner,
+            &texture,
+            &TextureResolveExpectation {
+                descriptor: wrong_pixel_format,
+            },
+            0,
+        ),
+        RuntimeErrorKind::TextureMetadataMismatch,
+    );
+
+    let mut wrong_color = texture_descriptor(texture_device.clone());
+    wrong_color.color.range = ColorRange::Limited;
+    assert_runtime_error(
+        registry.resolve_texture(
+            &owner,
+            &texture,
+            &TextureResolveExpectation {
+                descriptor: wrong_color,
+            },
+            0,
+        ),
+        RuntimeErrorKind::TextureMetadataMismatch,
+    );
+
     let expiring = registry
         .acquire(HandleAcquireRequest::frame(owner.clone()).with_lease_expires_at_us(10))
         .expect("expiring frame handle should be acquired");

@@ -104,12 +104,9 @@ impl ProjectSessionService {
         &mut self,
         request: CreateProjectSessionRequest,
     ) -> Result<ProjectSessionOpened, RuntimeError> {
-        let bundle = create_project_bundle(
-            &StdPlatformFileSystem,
-            &request.bundle_path,
-            &request.draft,
-        )
-        .map_err(project_store_error)?;
+        let bundle =
+            create_project_bundle(&StdPlatformFileSystem, &request.bundle_path, &request.draft)
+                .map_err(project_store_error)?;
         Ok(self.insert_opened_project(
             request.runtime_session,
             bundle.bundle_path,
@@ -145,12 +142,9 @@ impl ProjectSessionService {
                 format!("project session not found: {}", request.handle.as_str()),
             )
         })?;
-        let bundle = save_project_bundle(
-            &StdPlatformFileSystem,
-            &record.bundle_path,
-            &record.draft,
-        )
-        .map_err(project_store_error)?;
+        let bundle =
+            save_project_bundle(&StdPlatformFileSystem, &record.bundle_path, &record.draft)
+                .map_err(project_store_error)?;
         record.revision = record.revision.saturating_add(1);
         record.bundle_path = bundle.bundle_path;
         record.project_json_path = bundle.project_json_path;

@@ -23,6 +23,12 @@ impl RuntimeSessionId {
     pub fn generation(&self) -> u64 {
         self.generation
     }
+
+    pub fn with_generation(&self, generation: u64) -> Self {
+        let mut session_id = self.clone();
+        session_id.generation = generation;
+        session_id
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

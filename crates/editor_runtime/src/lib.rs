@@ -7,19 +7,23 @@
 
 pub mod error;
 pub mod export;
+pub mod handles;
 pub mod project_session;
 pub mod session;
 
 pub use error::{RuntimeError, RuntimeErrorKind};
 pub use export::{ExportService, ProjectSessionExportJob, StartProjectSessionExportRequest};
+pub use handles::{
+    HandleAcquireRequest, HandleKind, HandleRegistry, HandleReleaseReport, HandleReleaseState,
+    HandleResolution, HandleToken, RuntimeCloseReport, RuntimeLeakDiagnostic,
+    TextureHandleDescriptor, TextureResolveExpectation,
+};
 pub use project_session::{
-    CreateProjectSessionRequest, ProjectSessionHandle, ProjectSessionOpened,
-    ProjectSessionService, ProjectSessionSnapshot, ProjectSessionWarning,
-    SaveProjectSessionRequest,
+    CreateProjectSessionRequest, ProjectSessionHandle, ProjectSessionOpened, ProjectSessionService,
+    ProjectSessionSnapshot, ProjectSessionWarning, SaveProjectSessionRequest,
 };
 pub use session::{
-    AdapterMetadata, RuntimeSession, RuntimeSessionConfig, RuntimeSessionId,
-    RuntimeSessionRegistry,
+    AdapterMetadata, RuntimeSession, RuntimeSessionConfig, RuntimeSessionId, RuntimeSessionRegistry,
 };
 
 pub const EDITOR_RUNTIME_CONTRACT_VERSION: &str = "0.1.0";

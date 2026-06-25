@@ -44,7 +44,10 @@ fn opening_project_session_records_project_store_bundle_paths() {
 
     assert_eq!(opened.handle.owner_session(), &runtime.id);
     assert_eq!(opened.bundle_path, bundle_path);
-    assert_eq!(opened.project_json_path, project_json_path(&opened.bundle_path));
+    assert_eq!(
+        opened.project_json_path,
+        project_json_path(&opened.bundle_path)
+    );
     assert_eq!(opened.draft_id, draft.draft_id);
     assert_eq!(opened.draft_name, draft.metadata.name);
 }
