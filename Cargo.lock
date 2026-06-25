@@ -2427,10 +2427,12 @@ dependencies = [
  "draft_model",
  "editor_runtime",
  "media_runtime",
+ "media_runtime_desktop",
  "project_store",
  "serde",
  "serde_json",
  "tempfile",
+ "testkit",
 ]
 
 [[package]]
