@@ -31,12 +31,14 @@ tech-stack:
 key-files:
   created:
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-14-SUMMARY.md"
+    - ".planning/phases/19-production-effects-retiming-and-transition-semantics/deferred-items.md"
   modified:
     - "crates/adapter_kaipai/src/mapper.rs"
     - "crates/adapter_kaipai/tests/mapper.rs"
     - "crates/testkit/tests/template_import_preview.rs"
     - "crates/testkit/tests/production_effects_preview.rs"
     - "crates/testkit/tests/production_effects_exports.rs"
+    - "apps/desktop-electron/src/renderer/workspace/Inspector.tsx"
     - "apps/desktop-electron/tests/template-import.spec.ts"
     - "apps/desktop-electron/tests/production-effects.spec.ts"
     - "scripts/phase19-source-guards.sh"
@@ -57,7 +59,7 @@ requirements-completed:
   - PRODFX-04
   - PRODFX-05
 
-duration: 36 min
+duration: 44 min
 completed: 2026-06-25
 status: complete
 ---
@@ -68,11 +70,11 @@ status: complete
 
 ## Performance
 
-- **Duration:** 36 min
+- **Duration:** 44 min
 - **Started:** 2026-06-25T15:03:43Z
-- **Completed:** 2026-06-25T15:39:00Z
+- **Completed:** 2026-06-25T15:47:58Z
 - **Tasks:** 3 completed
-- **Files modified:** 8 source/test files plus this summary
+- **Files modified:** 10 source/test/planning files plus this summary
 
 ## Accomplishments
 
@@ -90,6 +92,7 @@ status: complete
 4. **Task 2 GREEN: Add complex production effects parity fixtures** - `802597d` (`test`)
 5. **Task 3 RED: Add desktop template import product coverage and guards** - `133af47` (`test`)
 6. **Task 3 GREEN: Add desktop template production effects coverage** - `ce5538b` (`test`)
+7. **Gate fix: Idempotent Phase 19 interaction finish** - `ce99034` (`fix`)
 
 ## Files Created/Modified
 
@@ -100,7 +103,9 @@ status: complete
 - `crates/testkit/tests/production_effects_exports.rs` - Adds complex production effects export/compiler parity fixture and unsupported diagnostics.
 - `apps/desktop-electron/tests/template-import.spec.ts` - Adds Phase 19 imported production effects fixture, report assertions, canonical project JSON checks, preview/export proof, and row targeting.
 - `apps/desktop-electron/tests/production-effects.spec.ts` - Adds source-level product coverage guard for template import Phase 19 markers.
+- `apps/desktop-electron/src/renderer/workspace/Inspector.tsx` - Ensures Phase 19 inspector interaction finish is idempotent when release/blur paths race.
 - `scripts/phase19-source-guards.sh` - Requires desktop Phase 19 template import coverage markers.
+- `.planning/phases/19-production-effects-retiming-and-transition-semantics/deferred-items.md` - Documents the unrelated crop export limitation found while building the Phase 19 fixture gate.
 
 ## Decisions Made
 
@@ -152,9 +157,17 @@ status: complete
 - **Verification:** Desktop Playwright passed with real export completion.
 - **Committed in:** `ce5538b`
 
+**6. [Rule 1 - Bug] Made Phase 19 interaction finish idempotent**
+- **Found during:** Orchestrator re-run of Task 3 desktop verification
+- **Issue:** Window release, mouseup, and blur finish paths could race and record two `commitProjectInteraction` calls for one interaction session.
+- **Fix:** Added a `finishing` flag to production effect interaction state so only the first finish path can commit or cancel a session.
+- **Files modified:** `apps/desktop-electron/src/renderer/workspace/Inspector.tsx`
+- **Verification:** `pnpm run test:phase19-desktop` and the combined desktop template/production effects Playwright command passed.
+- **Committed in:** `ce99034`
+
 ---
 
-**Total deviations:** 5 auto-fixed (2 bugs, 3 blocking)
+**Total deviations:** 6 auto-fixed (3 bugs, 3 blocking)
 **Impact on plan:** All deviations were required to verify the planned semantics and did not add new product behavior outside the plan.
 
 ## Verification
@@ -166,11 +179,16 @@ status: complete
 - `cargo test -p testkit production_effects -- --nocapture` - passed, 12 production effects tests.
 - `pnpm --filter @video-editor/desktop package:dir` - passed; rebuilt packaged app used by foreground product E2E.
 - `pnpm --filter @video-editor/desktop exec playwright test tests/template-import.spec.ts tests/production-effects.spec.ts --reporter=line --workers=1` - passed, 7 tests.
+- `pnpm run test:phase19-desktop` - passed, 6 tests after idempotent finish fix.
 - `bash scripts/phase19-source-guards.sh --ui` - passed.
 
 ## Known Stubs
 
 None. The stub scan only found assertion text in source guards/tests and null checks in existing test helpers.
+
+## Deferred Issues
+
+- Existing crop export limitation in the reused `positive/main-video.json` fixture is documented in `deferred-items.md`. It is outside 19-14 because this plan verifies retime, transition, filter, report boundaries, and no provider ID leakage.
 
 ## Threat Flags
 
@@ -185,6 +203,7 @@ None.
 - The plan's combined Cargo test command was syntactically invalid; equivalent split commands completed the same verification surface.
 - Product E2E initially used a stale packaged app until `package:dir` rebuilt the app bundle consumed by the foreground CDP harness.
 - A pre-existing crop in the reused fixture blocked export with an FFmpeg crop error; the dedicated Phase 19 desktop fixture variant removes that unrelated crop while preserving retime, transition, filter, and provider-native report coverage.
+- Orchestrator verification found duplicate finish commits from overlapping release paths; `ce99034` made the Phase 19 interaction finish path idempotent.
 
 ## User Setup Required
 
@@ -198,7 +217,7 @@ Phase 19 now has template-fidelity gates for supported Kaipai/Jianying-like reti
 
 - Confirmed the SUMMARY file exists on disk.
 - Confirmed all key source/test files exist.
-- Confirmed task commits exist in git history: `672694a`, `212025f`, `c60a316`, `802597d`, `133af47`, `ce5538b`.
+- Confirmed task commits exist in git history: `672694a`, `212025f`, `c60a316`, `802597d`, `133af47`, `ce5538b`, `ce99034`.
 
 ---
 *Phase: 19-production-effects-retiming-and-transition-semantics*
