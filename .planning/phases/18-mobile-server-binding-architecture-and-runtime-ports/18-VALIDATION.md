@@ -1,7 +1,7 @@
 ---
 phase: 18
 slug: mobile-server-binding-architecture-and-runtime-ports
-status: closeout-in-progress
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-06-25
@@ -21,13 +21,13 @@ These are the final closeout commands for Plan 18-06 Task 3.
 
 | Command | Coverage | Result |
 |---------|----------|--------|
-| `pnpm run test:phase18` | editor runtime, Node adapter, C ABI, server runtime, ABI drift, mobile contracts, full source guards, cargo check, no-product-fallback, contract drift | awaiting Task 3 final run |
-| `pnpm run test:no-product-fallback` | independent fallback/mock/artifact/CPU/DOM product-success rejection | awaiting Task 3 final run |
-| `pnpm run test:contracts` | generated schema/TypeScript contract drift | awaiting Task 3 final run |
+| `pnpm run test:phase18` | editor runtime, Node adapter, C ABI, server runtime, ABI drift, mobile contracts, full source guards, cargo check, no-product-fallback, contract drift | PASSED |
+| `pnpm run test:no-product-fallback` | independent fallback/mock/artifact/CPU/DOM product-success rejection | PASSED |
+| `pnpm run test:contracts` | generated schema/TypeScript contract drift | PASSED |
 
-Task-level verification already runs the mobile contract guard, full/default
-Phase 18 source guard, and mobile handle smoke tests before these aggregate
-commands are recorded as final.
+Task-level verification also ran the mobile contract guard, full/default Phase
+18 source guard, ABI drift, and mobile handle smoke tests as standalone closeout
+commands before the aggregate gate.
 
 ## Implemented Artifact Inventory
 
@@ -82,15 +82,20 @@ commands are recorded as final.
 | 18-06-01 | `cargo test -p bindings_c --test mobile_contract_handles -- --nocapture` | PASSED, 2 tests; existing `media_runtime_desktop` macOS deprecation warning only |
 | 18-06-02 | `bash scripts/phase18-source-guards.sh` | PASSED |
 | 18-06-02 | `bash scripts/phase18-mobile-contract-guards.sh` | PASSED |
-| 18-06-03 | `pnpm run test:phase18` | awaiting Task 3 final run |
-| 18-06-03 | `pnpm run test:no-product-fallback` | awaiting Task 3 final run |
-| 18-06-03 | `pnpm run test:contracts` | awaiting Task 3 final run |
+| 18-06-03 | `bash scripts/phase18-source-guards.sh` | PASSED |
+| 18-06-03 | `bash scripts/phase18-mobile-contract-guards.sh` | PASSED |
+| 18-06-03 | `bash scripts/phase18-abi-drift.sh` | PASSED using project-local `cbindgen 0.29.4` |
+| 18-06-03 | `pnpm run test:phase18` | PASSED |
+| 18-06-03 | `pnpm run test:no-product-fallback` | PASSED independently |
+| 18-06-03 | `pnpm run test:contracts` | PASSED independently |
 
 ## Non-Blocking Warnings
 
 - Rust commands emit the pre-existing
   `objc2_av_foundation::AVAsset::tracksWithMediaType` deprecation warning in
   `media_runtime_desktop`.
+- `pnpm run test:phase18` also emits existing unused-helper warnings in
+  `bindings_node`.
 - `pnpm` commands may emit the pre-existing Node engine warning because
   `package.json` expects Node `24.12.0` and the local runtime is `24.15.0`.
 
@@ -108,7 +113,7 @@ commands are recorded as final.
 - [x] All Phase 18 requirements have automated verification.
 - [x] All GOAL, REQ, RESEARCH, and CONTEXT source rows are COVERED.
 - [x] Full/default source guard is reserved for Plan 18-06 and listed as a Task 2 gate.
-- [x] Aggregate Phase 18, no-product-fallback, and contract gates are listed as Task 3 final gates.
+- [x] Aggregate Phase 18, no-product-fallback, and contract gates passed.
 - [x] `nyquist_compliant: true` is set in frontmatter.
 
-**Approval:** closeout in progress, Plan 18-06 Task 3 final aggregate gates still required.
+**Approval:** complete 2026-06-25.
