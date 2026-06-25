@@ -908,11 +908,53 @@ Plans:
   4. Masks, blend modes, blur, and complex effects use the production GPU preview path for realtime interaction and classify unsupported export paths.
   5. Complex Jianying/Kaipai-like template fixtures verify preview/export parity, fallback reports, and performance budgets for production editing scenarios.
 
-**Plans**: TBD
+**Plans**: 11 plans
 
 Plans:
 
-- [ ] TBD - Plan after Phase 18 completion; sequence capability registry, retiming/speed, transitions, visual effects, then template fidelity gates; use `ROADMAP_PHASES_11_13_ARCHIVE.md` as historical input for retiming/effects/transition scope
+**Wave 0**
+
+- [ ] 19-01-PLAN.md — Add Phase 19 guards, package scripts, RED tests, and schema-push detection note
+
+**Wave 1** *(blocked on Wave 0 completion)*
+
+- [ ] 19-02-PLAN.md — Define typed capability registry and effect/transition/retime contracts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19-03-PLAN.md — Implement Rust retiming commands and engine source mapping
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-04-PLAN.md — Propagate retiming through render graph, preview, compiler, and parity fixtures
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19-05-PLAN.md — Implement first-class transition semantics, preview diagnostics, and export support
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 19-06-PLAN.md — Implement first-party effects, filters, adjustments, GPU preview, and compiler support
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 19-07-PLAN.md — Implement mask and blend semantics with GPU preview and export classification
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 19-08-PLAN.md — Expose Rust project-session command and interaction surfaces
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 19-09-PLAN.md — Integrate capability-backed desktop UI controls and product E2E
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 19-10-PLAN.md — Add Kaipai/Jianying-like template fidelity fixtures and report mapping
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 19-11-PLAN.md — Run independent UI audit, update boundaries, and close aggregate validation
 
 ## Progress
 
@@ -944,4 +986,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete    | 2026-06-25 |
-| 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
+| 19. Production Effects, Retiming, And Transition Semantics | 0/11 | Planned | - |
