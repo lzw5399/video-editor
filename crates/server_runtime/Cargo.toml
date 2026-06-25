@@ -11,3 +11,8 @@ path = "src/lib.rs"
 
 [dependencies]
 editor_runtime = { path = "../editor_runtime" }
+
+[dev-dependencies]
+draft_model = { path = "../draft_model" }
+project_store = { path = "../project_store" }
+tempfile = "3.23.0"

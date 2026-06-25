@@ -2424,7 +2424,10 @@ dependencies = [
 name = "server_runtime"
 version = "0.1.0"
 dependencies = [
+ "draft_model",
  "editor_runtime",
+ "project_store",
+ "tempfile",
 ]
 
 [[package]]
