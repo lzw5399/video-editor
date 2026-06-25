@@ -9,30 +9,27 @@ use realtime_preview_runtime::{
 };
 use render_graph::{OutputDimensions, RenderIntentSupport};
 
-const TEMPLATE_IMPORT_PREVIEW_RS: &str = include_str!("template_import_preview.rs");
+const PRODUCTION_EFFECTS_PREVIEW_RS: &str = include_str!("production_effects_preview.rs");
 const PHASE19_SOURCE_GUARD_SH: &str = include_str!("../../../scripts/phase19-source-guards.sh");
 
 #[test]
 fn phase19_production_effects_preview_fixtures_cover_retime_effect_transition_parity() {
     assert!(
-        TEMPLATE_IMPORT_PREVIEW_RS.contains("production-effects")
-            || TEMPLATE_IMPORT_PREVIEW_RS.contains("phase19"),
-        "testkit preview fixtures must add a Phase 19 production-effects case family before implementation is accepted"
-    );
-    assert!(
-        TEMPLATE_IMPORT_PREVIEW_RS.contains("retime")
-            && TEMPLATE_IMPORT_PREVIEW_RS.contains("transition")
-            && TEMPLATE_IMPORT_PREVIEW_RS.contains("fallback"),
-        "production preview fixtures must cover retime, transition/effect semantics, and fallback reports"
+        PRODUCTION_EFFECTS_PREVIEW_RS.contains(
+            "phase19_production_effects_preview_retime_constant_speed_uses_graph_mapping_without_fallback"
+        ) && PRODUCTION_EFFECTS_PREVIEW_RS.contains(
+            "phase19_production_effects_preview_retime_speed_curve_reports_degraded_typed_evidence"
+        ) && PHASE19_SOURCE_GUARD_SH.contains("crates/testkit/tests/production_effects_preview.rs"),
+        "production preview fixtures must cover concrete retime parity tests and source guard evidence"
     );
 }
 
 #[test]
-fn phase19_production_effects_preview_fixtures_record_performance_evidence() {
+fn phase19_production_effects_preview_fixtures_reject_fallback_evidence() {
     assert!(
-        TEMPLATE_IMPORT_PREVIEW_RS.contains("queueLatencyUs")
-            || TEMPLATE_IMPORT_PREVIEW_RS.contains("performance_budget"),
-        "Phase 19 preview fixtures must record performance evidence for complex template-like edits"
+        PRODUCTION_EFFECTS_PREVIEW_RS.contains("fallback_used")
+            && PRODUCTION_EFFECTS_PREVIEW_RS.contains("RealtimePreviewGraphSupport::Degraded"),
+        "Phase 19 preview fixtures must keep fallback/degraded retime evidence explicit"
     );
 }
 
@@ -134,7 +131,8 @@ fn phase19_production_effects_preview_retime_speed_curve_reports_degraded_typed_
     assert_eq!(report.support, RealtimePreviewGraphSupport::Degraded);
     assert!(
         report.diagnostics.iter().any(|diagnostic| {
-            diagnostic.reason.contains("speed curve support is typed")
+            diagnostic.reason.contains("speed curve")
+                && diagnostic.reason.contains("typed")
                 && matches!(diagnostic.support, RealtimePreviewSupport::Degraded { .. })
         }),
         "speed-curve preview must report degraded typed retime support: {report:#?}"

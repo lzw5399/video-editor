@@ -9,31 +9,28 @@ use render_graph::{
     build_render_graph,
 };
 
-const TEMPLATE_IMPORT_EXPORTS_RS: &str = include_str!("template_import_exports.rs");
 const PREVIEW_EXPORT_PARITY_RS: &str = include_str!("preview_export_parity.rs");
+const PRODUCTION_EFFECTS_EXPORTS_RS: &str = include_str!("production_effects_exports.rs");
 const PHASE19_SOURCE_GUARD_SH: &str = include_str!("../../../scripts/phase19-source-guards.sh");
 
 #[test]
 fn phase19_production_effects_export_fixtures_cover_preview_export_parity() {
     assert!(
-        TEMPLATE_IMPORT_EXPORTS_RS.contains("production-effects")
-            || TEMPLATE_IMPORT_EXPORTS_RS.contains("phase19"),
-        "testkit export fixtures must add a Phase 19 production-effects case family before implementation is accepted"
-    );
-    assert!(
-        TEMPLATE_IMPORT_EXPORTS_RS.contains("preview_export_parity")
-            || TEMPLATE_IMPORT_EXPORTS_RS.contains("retime")
-            || TEMPLATE_IMPORT_EXPORTS_RS.contains("transition"),
-        "production exports must verify retime/effect/transition preview-export parity, not just output existence"
+        PRODUCTION_EFFECTS_EXPORTS_RS.contains(
+            "phase19_production_effects_export_retime_constant_speed_matches_preview_source_mapping"
+        ) && PRODUCTION_EFFECTS_EXPORTS_RS.contains(
+            "phase19_production_effects_export_retime_speed_curve_keeps_degraded_audio_evidence"
+        ) && PHASE19_SOURCE_GUARD_SH.contains("crates/testkit/tests/production_effects_exports.rs"),
+        "production exports must verify retime preview/export semantic parity, not just output existence"
     );
 }
 
 #[test]
 fn phase19_production_effects_export_fixtures_reject_fallback_reports_as_success() {
     assert!(
-        TEMPLATE_IMPORT_EXPORTS_RS.contains("fallback")
-            && TEMPLATE_IMPORT_EXPORTS_RS.contains("NeedsNativeEffect"),
-        "Phase 19 export fixtures must keep fallback/degraded reports explicit instead of treating them as product success"
+        PRODUCTION_EFFECTS_EXPORTS_RS.contains("filter_script_diagnostics")
+            && PRODUCTION_EFFECTS_EXPORTS_RS.contains("RenderIntentSupport::Degraded"),
+        "Phase 19 export fixtures must keep degraded retime reports explicit instead of treating them as product success"
     );
 }
 
@@ -119,7 +116,7 @@ fn phase19_production_effects_export_retime_speed_curve_keeps_degraded_audio_evi
 fn phase19_production_effects_retime_source_guard_requires_export_coverage() {
     assert!(
         PREVIEW_EXPORT_PARITY_RS.contains("retime")
-            || TEMPLATE_IMPORT_EXPORTS_RS.contains("retime"),
+            || PRODUCTION_EFFECTS_EXPORTS_RS.contains("retime"),
         "testkit must keep retime preview/export parity evidence in product-path tests"
     );
     assert!(

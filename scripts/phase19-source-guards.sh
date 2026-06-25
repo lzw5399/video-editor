@@ -72,6 +72,7 @@ PROVIDER_NATIVE_SEMANTIC_PATTERN='\b(?:providerNativeEffect|nativeEffectId|nativ
 FALLBACK_SUCCESS_PATTERN='\b(?:(?:fallback|mock|artifact|cpuReadback|cpuProbe|decodedCpu|domOverlay|domOnly|debug|legacy)(?:Preview|Render|Export|Playback|Effect|Transition)?Success|(?:fallback|mock|artifact|cpu|dom|debug|legacy)[A-Za-z]*(?:Satisfied|Accepted|EvidenceOk)|success[A-Za-z]*(?:Fallback|Mock|Artifact|Cpu|Dom|Legacy))\b'
 POINTER_SAVE_LOOP_PATTERN='\b(?:pointermove|pointerMove|mousemove|mouseMove|onPointerMove|onMouseMove|dragMove|sliderMove|scrubMove|handle[A-Za-z]*(?:Drag|Slider|Scrub))[A-Za-z0-9_.,:;() =>{}[\]"'\'']{0,240}\b(?:saveProjectBundle|pushUndo|revision\s*(?:\+\+|=)|incrementRevision|executeProjectIntent|executeProjectTimelineIntent)\b'
 PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeconds|sourceTimeSeconds|retimeSeconds|speedFloat|speedF32|speedF64|durationF32|durationF64)\b'
+FFMPEG_RETIME_FILTER_PATTERN='\b(?:setpts|asetpts|atempo)\s*='
 
 ELECTRON_BOUNDARY_DIRS=(
   "apps/desktop-electron/src/main"
@@ -128,6 +129,10 @@ run_self_test() {
     "pointer sample save or undo loop" \
     "$POINTER_SAVE_LOOP_PATTERN" \
     'function onPointerMove() { executeProjectIntent(payload); saveProjectBundle(); }'
+  assert_pattern_rejects \
+    "non-compiler FFmpeg retime filter string" \
+    "$FFMPEG_RETIME_FILTER_PATTERN" \
+    'const filter = "setpts=PTS-STARTPTS";'
   echo "phase19 source guard self-test passed"
 }
 
@@ -222,6 +227,48 @@ require_retiming_files() {
     "apps/desktop-electron/src/generated/CommandResultEnvelope.ts"
 }
 
+require_retime_render_graph_compiler_testkit_coverage() {
+  require_file "crates/render_graph/src/effects.rs"
+  require_file "crates/render_graph/src/graph.rs"
+  require_file "crates/render_graph/src/fingerprint.rs"
+  require_file "crates/render_graph/src/incremental.rs"
+  require_file "crates/render_graph/tests/production_effects.rs"
+  require_file "crates/ffmpeg_compiler/src/effects.rs"
+  require_file "crates/ffmpeg_compiler/src/filters.rs"
+  require_file "crates/ffmpeg_compiler/tests/production_effects.rs"
+  require_file "crates/realtime_preview_runtime/src/capabilities.rs"
+  require_file "crates/realtime_preview_runtime/src/parity.rs"
+  require_file "crates/testkit/tests/production_effects_preview.rs"
+  require_file "crates/testkit/tests/production_effects_exports.rs"
+  require_fixed "crates/render_graph/src/graph.rs" "RenderRetimeIntent"
+  require_fixed "crates/render_graph/src/fingerprint.rs" "retime"
+  require_fixed "crates/render_graph/src/incremental.rs" "DirtyDomain::Timing"
+  require_fixed "crates/render_graph/tests/production_effects.rs" "phase19_production_effects_retime"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "compile_video_retime_filters"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "compile_audio_retime_filters"
+  require_fixed "crates/ffmpeg_compiler/src/filters.rs" "RenderRetimeIntent"
+  require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_production_effects_compiler_emits_retime_filters"
+  require_fixed "crates/realtime_preview_runtime/src/capabilities.rs" "classify_retime"
+  require_fixed "crates/realtime_preview_runtime/src/parity.rs" "mix.retime.audio.support"
+  require_fixed "crates/testkit/tests/production_effects_preview.rs" "phase19_production_effects_preview_retime_constant_speed"
+  require_fixed "crates/testkit/tests/production_effects_preview.rs" "phase19_production_effects_preview_retime_speed_curve"
+  require_fixed "crates/testkit/tests/production_effects_exports.rs" "phase19_production_effects_export_retime_constant_speed"
+  require_fixed "crates/testkit/tests/production_effects_exports.rs" "phase19_production_effects_export_retime_speed_curve"
+}
+
+scan_retime_filter_ownership() {
+  local matches
+  matches="$(
+    rg -n --pcre2 "$FFMPEG_RETIME_FILTER_PATTERN" apps crates \
+      --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!target/**' 2>/dev/null | strip_comments || true
+  )"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "FFmpeg retime filter strings must be generated only inside ffmpeg_compiler"
+  fi
+}
+
 require_retiming_audio_files() {
   require_file "crates/audio_engine/tests/dsp_timeline.rs"
   require_fixed "crates/audio_engine/tests/dsp_timeline.rs" "phase19_"
@@ -267,6 +314,8 @@ run_wave0() {
 run_retiming() {
   run_wave0
   require_retiming_files
+  require_retime_render_graph_compiler_testkit_coverage
+  scan_retime_filter_ownership
   echo "phase19 source guards passed for retiming"
 }
 
@@ -303,6 +352,7 @@ run_ui() {
 run_full() {
   require_wave0_files
   require_retiming_files
+  require_retime_render_graph_compiler_testkit_coverage
   require_retiming_audio_files
   require_transition_files
   require_effect_files
@@ -312,6 +362,7 @@ run_full() {
   scan_no_fallback_success
   scan_provider_native_semantics
   scan_pointer_save_loops
+  scan_retime_filter_ownership
   echo "phase19 source guards passed"
 }
 
