@@ -10,9 +10,12 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+draft_model = { path = "../draft_model" }
 editor_runtime = { path = "../editor_runtime" }
+media_runtime = { path = "../media_runtime" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
 
 [dev-dependencies]
-draft_model = { path = "../draft_model" }
 project_store = { path = "../project_store" }
 tempfile = "3.23.0"
