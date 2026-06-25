@@ -15,6 +15,7 @@ use editor_runtime::{
     RuntimeSession, RuntimeSessionConfig, RuntimeSessionId, RuntimeSessionRegistry,
 };
 use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
+use project_store::{ProjectStoreError, resolve_material_uri};
 use serde::{Deserialize, Serialize};
 
 pub fn contract_version() -> &'static str {
@@ -113,6 +114,12 @@ impl From<RuntimeError> for ServerRuntimeError {
     }
 }
 
+impl From<ProjectStoreError> for ServerRuntimeError {
+    fn from(error: ProjectStoreError) -> Self {
+        Self::new(ServerRuntimeErrorKind::ProjectSession, error.to_string())
+    }
+}
+
 impl From<ExportCommandError> for ServerRuntimeError {
     fn from(error: ExportCommandError) -> Self {
         Self::new(ServerRuntimeErrorKind::Export, error.to_string())
@@ -166,8 +173,9 @@ impl ServerRuntime {
         request: ServerExportRequest,
     ) -> Result<SchedulerExportStatusResponse, ServerRuntimeError> {
         let snapshot = self.project_snapshot(&request.project)?;
+        let draft = resolve_snapshot_materials_for_export(&snapshot)?;
         let payload = StartExportCommandPayload {
-            draft: snapshot.draft,
+            draft,
             output_path: request.output_path.display().to_string(),
             preset: request.preset,
             dirty_facts: None,
@@ -285,6 +293,18 @@ pub fn is_terminal_export_phase(phase: ExportJobPhase) -> bool {
             | ExportJobPhase::ValidationFailed
             | ExportJobPhase::Cancelled
     )
+}
+
+fn resolve_snapshot_materials_for_export(
+    snapshot: &ProjectSessionSnapshot,
+) -> Result<draft_model::Draft, ServerRuntimeError> {
+    let mut draft = snapshot.draft.clone();
+    for material in &mut draft.materials {
+        if let Some(path) = resolve_material_uri(&snapshot.bundle_path, &material.uri)? {
+            material.uri = format!("file://{}", path.display());
+        }
+    }
+    Ok(draft)
 }
 
 #[cfg(test)]

@@ -13,11 +13,11 @@ path = "src/lib.rs"
 draft_model = { path = "../draft_model" }
 editor_runtime = { path = "../editor_runtime" }
 media_runtime = { path = "../media_runtime" }
+project_store = { path = "../project_store" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 
 [dev-dependencies]
 media_runtime_desktop = { path = "../media_runtime_desktop" }
-project_store = { path = "../project_store" }
 testkit = { path = "../testkit" }
 tempfile = "3.23.0"
