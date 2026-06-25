@@ -1,10 +1,10 @@
 mod common;
 
 use draft_model::{
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MaterialKind,
-    Microseconds, RationalFrameRate, SegmentAnchor, SegmentBackgroundFilling, SegmentBlendMode,
-    SegmentCrop, SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation,
-    SegmentScale, TargetTimerange,
+    ExternalEffectReference, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty,
+    KeyframeValue, MaterialKind, Microseconds, RationalFrameRate, SegmentAnchor,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentMask,
+    SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, TargetTimerange,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{CompileContext, CompilerCapabilities, compile_ffmpeg_job};
@@ -171,11 +171,11 @@ fn transform_fit_mode_background_fill_and_visual_diagnostics_are_preserved() {
         color: "#224466".to_owned(),
     };
     overlay.visual.transform.rotation = SegmentRotation { degrees: 15 };
-    overlay.visual.blend_mode = SegmentBlendMode::Unsupported {
-        name: "screen".to_owned(),
+    overlay.visual.blend_mode = SegmentBlendMode::ExternalReference {
+        reference: ExternalEffectReference::new("fixture", "screen"),
     };
-    overlay.visual.mask = SegmentMask::Unsupported {
-        name: "linear".to_owned(),
+    overlay.visual.mask = SegmentMask::ExternalReference {
+        reference: ExternalEffectReference::new("fixture", "linear"),
     };
 
     let job = compile_ffmpeg_job(&export_plan_from_draft(draft), &compile_context())

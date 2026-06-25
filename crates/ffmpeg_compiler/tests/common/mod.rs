@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use std::collections::BTreeMap;
-
 use draft_model::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, BUNDLED_TEXT_FONT_REF, Draft,
     Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
@@ -322,14 +320,10 @@ pub fn compiler_draft() -> Draft {
 
     let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
     let mut video = segment("video-a", "video-material", 100_000, 0, 1_000_000);
-    video.filters.push(Filter {
-        name: "lut".to_owned(),
-        parameters: BTreeMap::from([("strengthMillis".to_owned(), "500".to_owned())]),
-    });
-    video.transition = Some(Transition {
-        name: "crossfade".to_owned(),
-        duration: Microseconds::new(120_000),
-    });
+    video
+        .filters
+        .push(Filter::basic_color_adjustment(0, 1_000, 1_000));
+    video.transition = Some(Transition::dissolve(Microseconds::new(120_000)));
     video_track.segments.push(video);
 
     let mut overlay_track = Track::new("overlay-track", TrackKind::Video, "叠加");
