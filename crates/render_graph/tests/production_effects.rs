@@ -1,8 +1,8 @@
 use draft_model::{
-    AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Material, MaterialKind,
-    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId, SegmentRetiming,
-    SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind,
-    TrackTransition, TransitionKind, TransitionReference,
+    AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Filter, FilterKind,
+    Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId,
+    SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Track,
+    TrackKind, TrackTransition, TransitionKind, TransitionReference,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -44,6 +44,92 @@ fn phase19_production_effects_render_graph_fingerprints_and_dirty_ranges_include
             && (INCREMENTAL_RS.contains("DirtyDomain::Timing")
                 || INCREMENTAL_RS.contains("DirtyDomain::Retime")),
         "incremental dirty facts must cover production effects, transitions, and retiming"
+    );
+}
+
+#[test]
+fn phase19_production_effects_render_graph_carries_typed_effect_order_enabled_and_support() {
+    let graph = graph_for(&effect_stack_draft(vec![
+        Filter::gaussian_blur(250),
+        Filter::basic_color_adjustment(120, 1_150, 900),
+        disabled_filter(Filter::opacity_adjustment(640)),
+    ]));
+    let video_layer = graph
+        .video_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("video effect layer should exist");
+
+    assert_eq!(video_layer.filters.len(), 3);
+    assert_eq!(video_layer.filters[0].order_index, 0);
+    assert!(video_layer.filters[0].enabled);
+    assert!(matches!(
+        &video_layer.filters[0].kind,
+        FilterKind::GaussianBlur { radius_millis: 250 }
+    ));
+    assert_eq!(
+        video_layer.filters[0].capability.capability_id,
+        "effect.gaussianBlur"
+    );
+    assert_eq!(
+        video_layer.filters[0].capability.preview,
+        render_graph::RenderIntentSupport::Supported
+    );
+    assert_eq!(
+        video_layer.filters[0].capability.export,
+        render_graph::RenderIntentSupport::Supported
+    );
+
+    assert_eq!(video_layer.filters[1].order_index, 1);
+    assert!(matches!(
+        &video_layer.filters[1].kind,
+        FilterKind::BasicColorAdjustment {
+            brightness_millis: 120,
+            contrast_millis: 1_150,
+            saturation_millis: 900
+        }
+    ));
+    assert!(
+        video_layer.filters[1]
+            .capability
+            .preview_reason
+            .contains("first-party typed filter")
+    );
+
+    assert_eq!(video_layer.filters[2].order_index, 2);
+    assert!(
+        !video_layer.filters[2].enabled,
+        "effect intent must preserve disabled state instead of dropping the typed effect"
+    );
+    assert!(matches!(
+        &video_layer.filters[2].kind,
+        FilterKind::OpacityAdjustment {
+            opacity_millis: 640
+        }
+    ));
+}
+
+#[test]
+fn phase19_production_effects_filter_enabled_state_changes_semantic_fingerprint() {
+    let enabled = snapshot_for(&effect_stack_draft(vec![Filter::gaussian_blur(250)]));
+    let disabled = snapshot_for(&effect_stack_draft(vec![disabled_filter(
+        Filter::gaussian_blur(250),
+    )]));
+
+    let filter_key = "draft:phase19-effect-render-graph:track:video-track:segment:video-a:filter:0";
+    let enabled_filter = enabled
+        .node_fingerprint_by_key(filter_key)
+        .expect("enabled filter fingerprint should exist");
+    let disabled_filter = disabled
+        .node_fingerprint_by_key(filter_key)
+        .expect("disabled filter fingerprint should preserve stable identity");
+    assert_eq!(
+        enabled_filter.node_id, disabled_filter.node_id,
+        "enable toggles must keep the same stable effect node identity"
+    );
+    assert_ne!(
+        enabled_filter.semantic_fingerprint, disabled_filter.semantic_fingerprint,
+        "enable toggles must invalidate render graph fingerprints"
     );
 }
 
@@ -329,6 +415,30 @@ fn retimed_graph_draft(retiming: SegmentRetiming) -> Draft {
     video_track.segments.push(segment);
     draft.tracks.push(video_track);
     draft
+}
+
+fn effect_stack_draft(filters: Vec<Filter>) -> Draft {
+    let mut draft = Draft::new(
+        "phase19-effect-render-graph",
+        "Phase 19 Effect Render Graph",
+    );
+    draft.materials.push(video_material());
+    let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
+    let mut segment = Segment::new(
+        "video-a",
+        "video-material",
+        SourceTimerange::new(Microseconds::new(100_000), Microseconds::new(3_000_000)),
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+    );
+    segment.filters = filters;
+    video_track.segments.push(segment);
+    draft.tracks.push(video_track);
+    draft
+}
+
+fn disabled_filter(mut filter: Filter) -> Filter {
+    filter.enabled = false;
+    filter
 }
 
 fn video_material() -> Material {

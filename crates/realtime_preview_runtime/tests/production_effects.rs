@@ -1,9 +1,10 @@
 use draft_model::{
-    AudioRetimePolicy, Draft, Material, MaterialKind, MaterialMetadata, Microseconds,
-    RationalFrameRate, RetimeMode, Segment, SegmentRetiming, SourceTimerange, SpeedRatio,
-    TargetTimerange, Track, TrackKind, TrackTransition,
+    AudioRetimePolicy, Draft, Filter, FilterKind, Material, MaterialKind, MaterialMetadata,
+    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
+    SpeedRatio, TargetTimerange, Track, TrackKind, TrackTransition,
 };
 use realtime_preview_runtime::{
+    effects::{EffectPreviewPass, apply_phase19_effects},
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
     RealtimePreviewGraphInput, RealtimePreviewGraphSupport, RealtimePreviewSupport,
     prepare_realtime_preview_graph,
@@ -35,6 +36,69 @@ fn phase19_production_effects_preview_rejects_fallback_success_for_masks_blends_
             && CAPABILITIES_RS.contains("transition"),
         "supported Phase 19 preview diagnostics must prove real GPU support for masks, blends, and transitions with no fallback success"
     );
+}
+
+#[test]
+fn phase19_production_effects_preview_builds_gpu_passes_for_first_party_filter_stack() {
+    let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
+        draft: effect_preview_draft(),
+        target_time: Microseconds::new(500_000),
+        preview_dimensions: OutputDimensions::new(960, 540),
+    })
+    .expect("effect draft should prepare preview graph");
+    let layer = prepared
+        .graph
+        .video_layers
+        .iter()
+        .find(|layer| layer.segment_id.as_str() == "video-a")
+        .expect("effect video layer should exist");
+    let passes: Vec<EffectPreviewPass> = apply_phase19_effects(layer);
+
+    assert_eq!(passes.len(), 3);
+    assert_eq!(passes[0].order_index, 0);
+    assert!(matches!(
+        &passes[0].kind,
+        FilterKind::GaussianBlur { radius_millis: 250 }
+    ));
+    assert!(passes[0].requires_wgpu_render_pass);
+    assert_eq!(passes[1].order_index, 1);
+    assert!(matches!(
+        &passes[1].kind,
+        FilterKind::BasicColorAdjustment {
+            brightness_millis: 120,
+            contrast_millis: 1_150,
+            saturation_millis: 900
+        }
+    ));
+    assert!(passes[1].requires_wgpu_render_pass);
+    assert_eq!(passes[2].order_index, 2);
+    assert!(matches!(
+        &passes[2].kind,
+        FilterKind::OpacityAdjustment {
+            opacity_millis: 640
+        }
+    ));
+    assert!(passes[2].requires_wgpu_render_pass);
+
+    let report = RealtimePreviewCapabilityClassifier::supported_for_tests()
+        .with_supported_production_effects()
+        .classify(&prepared.graph);
+
+    assert_eq!(report.support, RealtimePreviewGraphSupport::Supported);
+    for expected in [
+        "effect.gaussianBlur",
+        "effect.basicColorAdjustment",
+        "effect.opacityAdjustment",
+    ] {
+        assert!(report.diagnostics.iter().any(|diagnostic| {
+            diagnostic.domain == RealtimePreviewDiagnosticDomain::Effect
+                && diagnostic.entity_id.as_deref() == Some("video-a")
+                && !diagnostic.fallback_used
+                && diagnostic.reason.contains(expected)
+                && diagnostic.reason.contains("WGPU")
+                && matches!(diagnostic.support, RealtimePreviewSupport::Supported)
+        }));
+    }
 }
 
 #[test]
@@ -173,6 +237,22 @@ fn transition_preview_draft(transition: TrackTransition) -> Draft {
         1_000_000,
     ));
     track.transitions.push(transition);
+    draft.tracks.push(track);
+    draft
+}
+
+fn effect_preview_draft() -> Draft {
+    let mut draft = Draft::new("phase19-preview-effects", "Phase 19 Preview Effects");
+    draft.materials.push(preview_video_material());
+
+    let mut segment = preview_segment("video-a", 0, 0, 1_000_000);
+    segment.filters = vec![
+        Filter::gaussian_blur(250),
+        Filter::basic_color_adjustment(120, 1_150, 900),
+        Filter::opacity_adjustment(640),
+    ];
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    track.segments.push(segment);
     draft.tracks.push(track);
     draft
 }
