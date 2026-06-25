@@ -1,10 +1,10 @@
 use draft_model::{
-    Draft, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    Material, MaterialKind, Microseconds, RationalFrameRate, Segment, SegmentBackgroundFilling,
-    SegmentBlendMode, SegmentFitMode, SegmentMask, SegmentPosition, SourceTimerange,
-    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
-    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, Track, TrackKind,
+    Draft, ExternalEffectReference, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    KeyframeProperty, KeyframeValue, Material, MaterialKind, Microseconds, RationalFrameRate,
+    Segment, SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask,
+    SegmentPosition, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox,
+    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 use engine_core::{
     EngineErrorKind, EngineProfile, TextLayoutProfile, frame_index_to_microseconds,
@@ -234,11 +234,11 @@ fn transform_frame_state_carries_visual_semantics_and_omits_hidden_segments() {
     video.visual.fit_mode = SegmentFitMode::Fill;
     video.visual.transform.position = SegmentPosition { x: 250, y: -125 };
     video.visual.background_filling = SegmentBackgroundFilling::Blur;
-    video.visual.blend_mode = SegmentBlendMode::Unsupported {
-        name: "screen".to_owned(),
+    video.visual.blend_mode = SegmentBlendMode::ExternalReference {
+        reference: ExternalEffectReference::new("jianying", "blend-screen"),
     };
-    video.visual.mask = SegmentMask::Unsupported {
-        name: "linear".to_owned(),
+    video.visual.mask = SegmentMask::ExternalReference {
+        reference: ExternalEffectReference::new("jianying", "mask-linear"),
     };
     draft.tracks[1].segments[0].visual.visible = false;
 
