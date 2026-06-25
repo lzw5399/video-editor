@@ -4,7 +4,7 @@ use draft_model::{
 };
 use render_graph::{
     RenderAudioEffectSlotSupport, RenderAudioMixClassification, RenderGraph, RenderIntentSupport,
-    RenderVideoLayer,
+    RenderRetimeIntent, RenderVideoLayer,
 };
 use serde::{Deserialize, Serialize};
 
@@ -219,8 +219,38 @@ fn classify_visual_layers(graph: &RenderGraph, diagnostics: &mut Vec<RealtimePre
             false,
         ));
         classify_transform(layer, diagnostics);
+        classify_retime(&layer.retime, &layer.segment_id, diagnostics);
         classify_filters_and_transitions(layer, diagnostics);
         classify_keyframes(graph, layer, diagnostics);
+    }
+}
+
+fn classify_retime(
+    retime: &RenderRetimeIntent,
+    segment_id: &draft_model::SegmentId,
+    diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
+) {
+    if retime.support != RenderIntentSupport::Supported {
+        let fallback_used = retime.support != RenderIntentSupport::Supported;
+        diagnostics.push(RealtimePreviewDiagnostic::new(
+            Some(segment_id.as_str().to_owned()),
+            RealtimePreviewDiagnosticDomain::Effect,
+            support_from_render_intent(retime.support, &retime.reason),
+            retime.reason.clone(),
+            None,
+            fallback_used,
+        ));
+    }
+
+    if retime.audio.support != RenderIntentSupport::Supported {
+        diagnostics.push(RealtimePreviewDiagnostic::new(
+            Some(segment_id.as_str().to_owned()),
+            RealtimePreviewDiagnosticDomain::Audio,
+            support_from_render_intent(retime.audio.support, &retime.audio.reason),
+            retime.audio.reason.clone(),
+            None,
+            true,
+        ));
     }
 }
 
@@ -253,13 +283,10 @@ fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePr
 
     match &visual.mask {
         SegmentMask::None | SegmentMask::Rectangle { .. } | SegmentMask::Ellipse { .. } => {
-            diagnostics.push(RealtimePreviewDiagnostic::new(
+            diagnostics.push(supported_production_effect_diagnostic(
                 Some(layer.segment_id.as_str().to_owned()),
                 RealtimePreviewDiagnosticDomain::VisualLayer,
-                RealtimePreviewSupport::Supported,
                 "mask capability is registry-backed and realtime supported",
-                None,
-                false,
             ));
         }
         SegmentMask::ExternalReference { reference } => {
@@ -281,13 +308,10 @@ fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePr
     }
     match &visual.blend_mode {
         SegmentBlendMode::Normal | SegmentBlendMode::Multiply | SegmentBlendMode::Screen => {
-            diagnostics.push(RealtimePreviewDiagnostic::new(
+            diagnostics.push(supported_production_effect_diagnostic(
                 Some(layer.segment_id.as_str().to_owned()),
                 RealtimePreviewDiagnosticDomain::VisualLayer,
-                RealtimePreviewSupport::Supported,
                 "blend capability is registry-backed and realtime supported",
-                None,
-                false,
             ));
         }
         SegmentBlendMode::ExternalReference { reference } => {
@@ -329,17 +353,42 @@ fn classify_filters_and_transitions(
     }
     if let Some(transition) = &layer.transition {
         let fallback_used = transition.capability.preview != RenderIntentSupport::Supported;
-        diagnostics.push(RealtimePreviewDiagnostic::new(
-            Some(layer.segment_id.as_str().to_owned()),
-            RealtimePreviewDiagnosticDomain::Effect,
-            support_from_render_intent(
-                transition.capability.preview,
-                &transition.capability.preview_reason,
-            ),
-            transition.capability.preview_reason.clone(),
-            None,
-            fallback_used,
-        ));
+        if fallback_used {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Effect,
+                support_from_render_intent(
+                    transition.capability.preview,
+                    &transition.capability.preview_reason,
+                ),
+                transition.capability.preview_reason.clone(),
+                None,
+                true,
+            ));
+        } else {
+            diagnostics.push(supported_production_effect_diagnostic(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Effect,
+                "transition capability is registry-backed and realtime supported",
+            ));
+        }
+    }
+}
+
+fn supported_production_effect_diagnostic(
+    entity_id: Option<String>,
+    domain: RealtimePreviewDiagnosticDomain,
+    reason: impl Into<String>,
+) -> RealtimePreviewDiagnostic {
+    RealtimePreviewDiagnostic {
+        entity_id,
+        domain,
+        support: RealtimePreviewSupport::Supported,
+        reason: reason.into(),
+        fallback: None,
+        fallback_used: false,
+        canceled: false,
+        cancellation_token: None,
     }
 }
 
@@ -408,6 +457,18 @@ fn classify_text(
 
 fn classify_audio(graph: &RenderGraph, diagnostics: &mut Vec<RealtimePreviewDiagnostic>) {
     for mix in &graph.audio_mixes {
+        if mix.retime.audio.support != RenderIntentSupport::Supported {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(mix.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::Audio,
+                support_from_render_intent(mix.retime.audio.support, &mix.retime.audio.reason),
+                mix.retime.audio.reason.clone(),
+                None,
+                true,
+            ));
+            continue;
+        }
+
         let unsupported_effect = mix
             .effect_slots
             .iter()

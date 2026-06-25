@@ -12,10 +12,22 @@ use render_graph::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::effects::{
+    compile_audio_retime_filters, compile_video_retime_filters, retimed_source_timerange_for_output,
+};
 use crate::job::{
     CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegInput, FfmpegSidecar,
     format_seconds, input_index_by_material, sanitize_id,
 };
+
+#[allow(dead_code)]
+const PHASE19_PRODUCTION_EFFECT_COMPILER_MARKERS: &[&str] = &[
+    "RenderRetimeIntent",
+    "RenderTransitionWindow",
+    "ProductionEffectCapabilityDecision",
+    "UnsupportedProductionEffect",
+    "xfade",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -80,11 +92,7 @@ pub fn generate_filter_script(
         let input_index = input_indexes
             .get(&layer.material_id)
             .ok_or_else(|| missing_input(&layer.material_id))?;
-        let Some(clip) = clipped_source_timerange(
-            &layer.source_timerange,
-            &layer.target_timerange,
-            output_timerange(plan),
-        ) else {
+        let Some(clip) = clipped_layer_source_timerange(layer, output_timerange(plan)) else {
             continue;
         };
         let source_dimensions = material_dimensions
@@ -148,11 +156,7 @@ pub fn generate_filter_script(
     if supports_audio_output {
         for (audio_index, audio) in plan.graph.audio_mixes.iter().enumerate() {
             let output_range = output_timerange(plan);
-            let Some(clip) = clipped_source_timerange(
-                &audio.source_timerange,
-                &audio.target_timerange,
-                output_range,
-            ) else {
+            let Some(clip) = clipped_audio_source_timerange(audio, output_range) else {
                 continue;
             };
             reject_unsupported_audio_automation(audio)?;
@@ -160,8 +164,12 @@ pub fn generate_filter_script(
                 .get(&audio.material_id)
                 .ok_or_else(|| missing_input(&audio.material_id))?;
             let label = format!("a{audio_index}");
-            let filters = compile_audio_mix_filters(audio, &clip, output_range);
-            lines.push(format!("[{input_index}:a]{}[{label}]", filters.join(",")));
+            let compiled_audio = compile_audio_mix_filters(audio, &clip, output_range);
+            lines.push(format!(
+                "[{input_index}:a]{}[{label}]",
+                compiled_audio.filters.join(",")
+            ));
+            diagnostics.extend(compiled_audio.diagnostics);
             diagnostics.extend(audio_effect_slot_diagnostics(audio));
             audio_labels.push(label);
         }
@@ -192,7 +200,7 @@ fn compile_audio_mix_filters(
     audio: &RenderAudioMix,
     clip: &SourceTimerange,
     output: &TargetTimerange,
-) -> Vec<String> {
+) -> CompiledAudioMixFilters {
     let mut filters = vec![format!(
         "atrim=start={start}:duration={duration}",
         start = format_seconds(clip.start),
@@ -227,7 +235,23 @@ fn compile_audio_mix_filters(
             format_seconds(audio.fade_out_duration)
         ));
     }
-    filters
+    let retime = compile_audio_retime_filters(
+        &audio.track_id,
+        &audio.segment_id,
+        &audio.material_id,
+        &audio.retime,
+    );
+    filters.extend(retime.filters);
+    CompiledAudioMixFilters {
+        filters,
+        diagnostics: retime.diagnostics,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CompiledAudioMixFilters {
+    filters: Vec<String>,
+    diagnostics: Vec<RenderAudioMixDiagnostic>,
 }
 
 fn target_delay_from_output(target: &TargetTimerange, output: &TargetTimerange) -> Microseconds {
@@ -433,7 +457,7 @@ fn visual_source_filters(
             "loop=loop=-1:size=1:start=0".to_owned(),
             format!("fps={}", frame_rate_arg(plan)),
             format!("trim=duration={}", format_seconds(clip.duration)),
-            visual_setpts_filter(target_delay),
+            compile_video_retime_filters(&layer.retime, target_delay).join(","),
         ],
         _ => vec![
             format!(
@@ -441,16 +465,8 @@ fn visual_source_filters(
                 start = format_seconds(clip.start),
                 duration = format_seconds(clip.duration)
             ),
-            visual_setpts_filter(target_delay),
+            compile_video_retime_filters(&layer.retime, target_delay).join(","),
         ],
-    }
-}
-
-fn visual_setpts_filter(target_delay: Microseconds) -> String {
-    if target_delay == Microseconds::ZERO {
-        "setpts=PTS-STARTPTS".to_owned()
-    } else {
-        format!("setpts=PTS-STARTPTS+{}/TB", format_seconds(target_delay))
     }
 }
 
@@ -732,6 +748,24 @@ fn output_timerange(plan: &RenderGraphPlan) -> &TargetTimerange {
             target_timerange, ..
         } => target_timerange,
     }
+}
+
+fn clipped_layer_source_timerange(
+    layer: &RenderVideoLayer,
+    output: &TargetTimerange,
+) -> Option<SourceTimerange> {
+    retimed_source_timerange_for_output(&layer.retime.source_mapping, output).or_else(|| {
+        clipped_source_timerange(&layer.source_timerange, &layer.target_timerange, output)
+    })
+}
+
+fn clipped_audio_source_timerange(
+    audio: &RenderAudioMix,
+    output: &TargetTimerange,
+) -> Option<SourceTimerange> {
+    retimed_source_timerange_for_output(&audio.retime.source_mapping, output).or_else(|| {
+        clipped_source_timerange(&audio.source_timerange, &audio.target_timerange, output)
+    })
 }
 
 fn clipped_source_timerange(

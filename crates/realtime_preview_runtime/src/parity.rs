@@ -99,6 +99,9 @@ fn export_support_for(
                     .find(|mix| mix.segment_id.as_str() == entity_id)
             })
             .map(|mix| {
+                if mix.retime.audio.support != RenderIntentSupport::Supported {
+                    return mix.retime.audio.support;
+                }
                 if mix.effect_slots.iter().any(|slot| slot.enabled) {
                     RenderIntentSupport::Unsupported
                 } else {
@@ -113,6 +116,9 @@ fn export_support_for(
                     .find(|layer| layer.segment_id.as_str() == entity_id)
             })
             .map(|layer| {
+                if layer.retime.support != RenderIntentSupport::Supported {
+                    return layer.retime.support;
+                }
                 layer
                     .filters
                     .first()
