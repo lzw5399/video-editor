@@ -72,10 +72,13 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
   const missingResource = await prepareTemplateFixture("missing-resource", "negative/missing-resource.json");
   const textSticker = await prepareTemplateFixture("text-sticker", "positive/text-sticker.json");
   const nativeEffect = await prepareTemplateFixture("native-effect", "negative/native-effect.json");
+  const phase19Effects = await prepareTemplateFixture("phase19-production-effects", "positive/main-video.json", {
+    mutate: phase19ImportedProductionEffectReportEvidence
+  });
   const outputPath = join(dirname(projectBundlePath), "template-import-export.mp4");
   const { app, page } = await launchProductJourneyApp([], {
     VIDEO_EDITOR_TEST_NEW_PROJECT_BUNDLE: projectBundlePath,
-    VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE: JSON.stringify([missingResource, textSticker, nativeEffect])
+    VIDEO_EDITOR_TEST_OPEN_TEMPLATE_BUNDLE: JSON.stringify([missingResource, textSticker, nativeEffect, phase19Effects])
   });
 
   try {
@@ -138,6 +141,31 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
     ).toBeLessThanOrEqual(2);
     await expectTemplateNavigationQueueLatencyWithinBudget(page);
 
+    await importTemplateThroughProductPanel(app, page);
+    await expectTemplateReportSummary(page, {
+      "已支持": 5,
+      "近似还原": 0,
+      "已舍弃": 2,
+      "缺少资源": 0,
+      "需本地效果": 1
+    });
+    await expect(page.getByText("本地效果能力待补齐")).toBeVisible();
+    await expect(page.getByText("本地效果未写入草稿")).toBeVisible();
+    await expectTemplateReportRows(page, [
+      "needsNativeEffect",
+      "dropped",
+      "dropped",
+      "supported",
+      "supported",
+      "supported",
+      "supported",
+      "supported"
+    ]);
+    await clickTemplateReportRow(page, "supported", /片段已接入本地草稿/, /片段 · 片段/);
+    await expectTemplateReportFocusState(page, /已定位/);
+    await expectSelectedTimelineSegment(page, { targetStartUs: 0 });
+    await expectLatestPreviewSeek(app, 0);
+
     const reportText = (await page.getByLabel("模板适配报告").textContent()) ?? "";
     for (const forbidden of FORBIDDEN_REPORT_COPY) {
       expect(reportText, `template report must not expose ${forbidden}`).not.toContain(forbidden);
@@ -157,7 +185,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
         })
       ])
     );
-    expect(importCalls).toHaveLength(3);
+    expect(importCalls).toHaveLength(4);
     const latestDeltaImportCall = [...importCalls]
       .reverse()
       .find((call) => call.resultOk === true && call.resultDeltaCommand === "importTemplate");
@@ -180,6 +208,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
 
     const projectJson = await readFile(join(projectBundlePath, "project.json"), "utf8");
     assertProjectJsonIsCanonical(projectJson);
+    expectPhase19ImportedProductionEffectsCanonical(projectJson);
 
     await exportProductProject(page, app, outputPath);
     expectNoProductFallbackCalls(await readRealtimePreviewHostCalls(app));
@@ -192,7 +221,7 @@ test("product user imports offline Kaipai template, sees report copy, previews, 
 async function prepareTemplateFixture(
   family: string,
   fixturePath: string,
-  options: { missingUris?: string[] } = {}
+  options: { missingUris?: string[]; mutate?: (fixture: unknown) => void } = {}
 ): Promise<TemplatePickerSelection> {
   const sourceBundlePath = join(KAIPAI_FIXTURE_ROOT, fixturePath);
   const caseRoot = join(
@@ -205,6 +234,7 @@ async function prepareTemplateFixture(
     "resources"
   );
   const fixture = JSON.parse(await readFile(sourceBundlePath, "utf8")) as unknown;
+  options.mutate?.(fixture);
   const missingUris = new Set(options.missingUris ?? []);
   const seededSha256ByUri = new Map<string, string>();
 
@@ -357,9 +387,13 @@ async function expectTemplateReportRows(page: Page, expectedStatuses: string[]):
   expect(actualStatuses).toEqual(expectedStatuses);
 }
 
-async function clickTemplateReportRow(page: Page, status: string, label: RegExp): Promise<void> {
+async function clickTemplateReportRow(page: Page, status: string, label: RegExp, detail?: RegExp): Promise<void> {
   const panel = page.getByLabel("模板适配报告");
-  const row = panel.locator(`.template-report-row.status-${status}`).filter({ hasText: label }).first();
+  let row = panel.locator(`.template-report-row.status-${status}`).filter({ hasText: label });
+  if (detail !== undefined) {
+    row = row.filter({ hasText: detail });
+  }
+  row = row.first();
   await expect(row).toBeVisible();
   await row.click();
   await expect(row).toHaveAttribute("aria-current", "true");
@@ -484,6 +518,77 @@ function assertProjectJsonIsCanonical(projectJson: string): void {
   const serialized = JSON.stringify(parsed);
   for (const forbidden of FORBIDDEN_PROJECT_JSON_TOKENS) {
     expect(serialized, `project.json must not leak ${forbidden}`).not.toContain(forbidden);
+  }
+}
+
+function phase19ImportedProductionEffectReportEvidence(fixture: unknown): void {
+  if (!isRecord(fixture) || !isRecord(fixture.formula)) {
+    throw new Error("Phase 19 template fixture must expose formula");
+  }
+  const formula = fixture.formula;
+  const videoClipList = formula.videoClipList;
+  if (!Array.isArray(videoClipList)) {
+    throw new Error("Phase 19 template fixture must expose formula.videoClipList");
+  }
+  const [clip] = videoClipList;
+  if (!isRecord(clip)) {
+    throw new Error("Phase 19 template fixture first video clip must be an object");
+  }
+  clip.transition = {
+    type: "fade",
+    durationMs: 450
+  };
+  delete clip.crop;
+  clip.filterList = [
+    { type: "gaussianBlur", radiusMillis: 1500 },
+    {
+      type: "basicColorAdjustment",
+      brightnessMillis: -120,
+      contrastMillis: 1100,
+      saturationMillis: 900
+    },
+    { type: "opacityAdjustment", opacityMillis: 720 },
+    {
+      type: "providerNative",
+      effectId: "provider-private-skin-lut",
+      displayName: "privateSkinLut"
+    }
+  ];
+  formula.nativeEffectList = [
+    {
+      effectId: "native-effect-beauty-retouch",
+      nativeEffectName: "beautyRetouch",
+      effectType: "beautyRetouch",
+      targetSegmentId: "segment-main-video",
+      strengthMillis: 650
+    }
+  ];
+}
+
+function expectPhase19ImportedProductionEffectsCanonical(projectJson: string): void {
+  const parsed = JSON.parse(projectJson) as unknown;
+  const serialized = JSON.stringify(parsed);
+  for (const required of [
+    "\"gaussianBlur\"",
+    "\"basicColorAdjustment\"",
+    "\"opacityAdjustment\"",
+    "\"retiming\"",
+    "\"numerator\":3",
+    "\"denominator\":2",
+    "\"transition\"",
+    "\"dissolve\""
+  ]) {
+    expect(serialized, `Phase 19 imported production effects must persist ${required}`).toContain(required);
+  }
+  for (const forbidden of [
+    "provider-private-skin-lut",
+    "privateSkinLut",
+    "native-effect-beauty-retouch",
+    "beautyRetouch",
+    "nativeEffectList",
+    "filterList"
+  ]) {
+    expect(serialized, `Phase 19 imported production effects must keep ${forbidden} report-only`).not.toContain(forbidden);
   }
 }
 

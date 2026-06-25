@@ -48,6 +48,18 @@ test("phase19 production-effects desktop workflow requires no-fallback product e
   ).toContain("productionEffectsPreviewExportParity");
 });
 
+test("phase19 production-effects desktop workflow includes template import coverage", async () => {
+  const phase19ProductionEffectsTemplateImportCoverage = await readFile(
+    join(REPO_ROOT, "apps/desktop-electron/tests/template-import.spec.ts"),
+    "utf8"
+  );
+
+  expect(phase19ProductionEffectsTemplateImportCoverage).toContain("phase19ImportedProductionEffectReportEvidence");
+  expect(phase19ProductionEffectsTemplateImportCoverage).toContain("expectPhase19ImportedProductionEffectsCanonical");
+  expect(phase19ProductionEffectsTemplateImportCoverage).toContain("provider-private-skin-lut");
+  expect(phase19ProductionEffectsTemplateImportCoverage).toContain("native-effect-beauty-retouch");
+});
+
 test("phase19 timeline and preview affordances use project interaction sessions", async () => {
   const timeline = await readFile(join(REPO_ROOT, "apps/desktop-electron/src/renderer/workspace/Timeline.tsx"), "utf8");
   const previewMonitor = await readFile(join(REPO_ROOT, "apps/desktop-electron/src/renderer/workspace/PreviewMonitor.tsx"), "utf8");
