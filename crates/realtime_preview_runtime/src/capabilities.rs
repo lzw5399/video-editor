@@ -1,4 +1,7 @@
-use draft_model::{KeyframeProperty, MaterialKind, SegmentBlendMode, SegmentFitMode, SegmentMask};
+use draft_model::{
+    KeyframeProperty, MaterialKind, ProductionEffectCapabilityRegistry, SegmentBlendMode,
+    SegmentFitMode, SegmentMask,
+};
 use render_graph::{
     RenderAudioEffectSlotSupport, RenderAudioMixClassification, RenderGraph, RenderIntentSupport,
     RenderVideoLayer,
@@ -59,6 +62,11 @@ impl RealtimePreviewCapabilityClassifier {
 
     pub fn with_bundled_text_font_registry_available(mut self, available: bool) -> Self {
         self.bundled_text_font_registry_available = available;
+        self
+    }
+
+    pub fn with_supported_production_effects(self) -> Self {
+        let _registry = ProductionEffectCapabilityRegistry::phase19_first_party();
         self
     }
 
@@ -243,29 +251,61 @@ fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePr
         ));
     }
 
-    if let SegmentMask::Unsupported { name } = &visual.mask {
-        diagnostics.push(RealtimePreviewDiagnostic::new(
-            Some(layer.segment_id.as_str().to_owned()),
-            RealtimePreviewDiagnosticDomain::VisualLayer,
-            RealtimePreviewSupport::Unsupported {
-                reason: format!("segment mask {name} is unsupported in realtime preview"),
-            },
-            format!("segment mask {name} is unsupported in realtime preview"),
-            None,
-            true,
-        ));
+    match &visual.mask {
+        SegmentMask::None | SegmentMask::Rectangle { .. } | SegmentMask::Ellipse { .. } => {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::VisualLayer,
+                RealtimePreviewSupport::Supported,
+                "mask capability is registry-backed and realtime supported",
+                None,
+                false,
+            ));
+        }
+        SegmentMask::ExternalReference { reference } => {
+            let reason = format!(
+                "segment mask external reference {}:{} is unsupported in realtime preview",
+                reference.provider, reference.effect_id
+            );
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::VisualLayer,
+                RealtimePreviewSupport::Unsupported {
+                    reason: reason.clone(),
+                },
+                reason,
+                None,
+                true,
+            ));
+        }
     }
-    if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
-        diagnostics.push(RealtimePreviewDiagnostic::new(
-            Some(layer.segment_id.as_str().to_owned()),
-            RealtimePreviewDiagnosticDomain::VisualLayer,
-            RealtimePreviewSupport::Unsupported {
-                reason: format!("segment blendMode {name} is unsupported in realtime preview"),
-            },
-            format!("segment blendMode {name} is unsupported in realtime preview"),
-            None,
-            true,
-        ));
+    match &visual.blend_mode {
+        SegmentBlendMode::Normal | SegmentBlendMode::Multiply | SegmentBlendMode::Screen => {
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::VisualLayer,
+                RealtimePreviewSupport::Supported,
+                "blend capability is registry-backed and realtime supported",
+                None,
+                false,
+            ));
+        }
+        SegmentBlendMode::ExternalReference { reference } => {
+            let reason = format!(
+                "segment blendMode external reference {}:{} is unsupported in realtime preview",
+                reference.provider, reference.effect_id
+            );
+            diagnostics.push(RealtimePreviewDiagnostic::new(
+                Some(layer.segment_id.as_str().to_owned()),
+                RealtimePreviewDiagnosticDomain::VisualLayer,
+                RealtimePreviewSupport::Unsupported {
+                    reason: reason.clone(),
+                },
+                reason,
+                None,
+                true,
+            ));
+        }
     }
 }
 
@@ -274,33 +314,31 @@ fn classify_filters_and_transitions(
     diagnostics: &mut Vec<RealtimePreviewDiagnostic>,
 ) {
     for filter in &layer.filters {
+        let fallback_used = filter.capability.preview != RenderIntentSupport::Supported;
         diagnostics.push(RealtimePreviewDiagnostic::new(
             Some(layer.segment_id.as_str().to_owned()),
             RealtimePreviewDiagnosticDomain::Effect,
-            RealtimePreviewSupport::Unsupported {
-                reason: format!("filter {} is unsupported in realtime preview", filter.name),
-            },
-            format!("filter {} is unsupported in realtime preview", filter.name),
+            support_from_render_intent(
+                filter.capability.preview,
+                &filter.capability.preview_reason,
+            ),
+            filter.capability.preview_reason.clone(),
             None,
-            true,
+            fallback_used,
         ));
     }
     if let Some(transition) = &layer.transition {
+        let fallback_used = transition.capability.preview != RenderIntentSupport::Supported;
         diagnostics.push(RealtimePreviewDiagnostic::new(
             Some(layer.segment_id.as_str().to_owned()),
             RealtimePreviewDiagnosticDomain::Effect,
-            RealtimePreviewSupport::Unsupported {
-                reason: format!(
-                    "transition {} is unsupported in realtime preview",
-                    transition.name
-                ),
-            },
-            format!(
-                "transition {} is unsupported in realtime preview",
-                transition.name
+            support_from_render_intent(
+                transition.capability.preview,
+                &transition.capability.preview_reason,
             ),
+            transition.capability.preview_reason.clone(),
             None,
-            true,
+            fallback_used,
         ));
     }
 }

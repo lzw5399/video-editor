@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     RenderAudioMix, RenderCanvas, RenderFilterIntent, RenderGraph, RenderGraphNodeId,
-    RenderMaterial, RenderOutputProfile, RenderSampledFrame, RenderTextOverlay,
+    RenderMaterial, RenderOutputProfile, RenderRetimeIntent, RenderSampledFrame, RenderTextOverlay,
     RenderTransitionIntent, RenderVideoLayer,
 };
 
@@ -230,6 +230,7 @@ fn video_layer_fingerprint(
             stack_index: layer.stack_index,
             source_timerange: &layer.source_timerange,
             target_timerange: &layer.target_timerange,
+            retime: &layer.retime,
             keyframes: &layer.keyframes,
             filters: &layer.filters,
             transition: layer.transition.as_ref(),
@@ -254,6 +255,7 @@ fn audio_mix_fingerprint(
         mix.node_id.clone(),
         &AudioMixSemanticInput {
             target_timerange: &mix.target_timerange,
+            retime: &mix.retime,
             keyframes: &mix.keyframes,
             volume_level_millis: mix.volume_level_millis,
             gain_millis: mix.gain_millis,
@@ -284,6 +286,7 @@ fn text_overlay_fingerprint(
         overlay.node_id.clone(),
         &TextOverlaySemanticInput {
             overlay: &overlay.overlay,
+            retime: &overlay.retime,
             keyframes: &overlay.keyframes,
             filters: &overlay.filters,
             transition: overlay.transition.as_ref(),
@@ -343,7 +346,8 @@ fn filter_fingerprint(
         filter.node_id.clone(),
         &FilterSemanticInput {
             name: &filter.name,
-            parameters: &filter.parameters,
+            kind: &filter.kind,
+            capability: &filter.capability,
             support: filter.support,
             reason: &filter.reason,
         },
@@ -367,6 +371,8 @@ fn transition_fingerprint(
         &TransitionSemanticInput {
             name: &transition.name,
             duration: transition.duration,
+            window: &transition.window,
+            capability: &transition.capability,
             support: transition.support,
             reason: &transition.reason,
         },
@@ -517,6 +523,7 @@ struct VideoLayerSemanticInput<'a> {
     stack_index: u32,
     source_timerange: &'a draft_model::SourceTimerange,
     target_timerange: &'a TargetTimerange,
+    retime: &'a RenderRetimeIntent,
     keyframes: &'a [draft_model::Keyframe],
     filters: &'a [RenderFilterIntent],
     transition: Option<&'a RenderTransitionIntent>,
@@ -527,6 +534,7 @@ struct VideoLayerSemanticInput<'a> {
 #[serde(rename_all = "camelCase")]
 struct AudioMixSemanticInput<'a> {
     target_timerange: &'a TargetTimerange,
+    retime: &'a RenderRetimeIntent,
     keyframes: &'a [draft_model::Keyframe],
     volume_level_millis: u32,
     gain_millis: u32,
@@ -543,6 +551,7 @@ struct AudioMixSemanticInput<'a> {
 #[serde(rename_all = "camelCase")]
 struct TextOverlaySemanticInput<'a> {
     overlay: &'a engine_core::FrameTextOverlay,
+    retime: &'a RenderRetimeIntent,
     keyframes: &'a [draft_model::Keyframe],
     filters: &'a [RenderFilterIntent],
     transition: Option<&'a RenderTransitionIntent>,
@@ -562,7 +571,8 @@ struct TextOverlayInputFacts<'a> {
 #[serde(rename_all = "camelCase")]
 struct FilterSemanticInput<'a> {
     name: &'a str,
-    parameters: &'a std::collections::BTreeMap<String, String>,
+    kind: &'a draft_model::FilterKind,
+    capability: &'a crate::RenderEffectCapability,
     support: crate::RenderIntentSupport,
     reason: &'a str,
 }
@@ -572,6 +582,8 @@ struct FilterSemanticInput<'a> {
 struct TransitionSemanticInput<'a> {
     name: &'a str,
     duration: draft_model::Microseconds,
+    window: &'a crate::RenderTransitionWindow,
+    capability: &'a crate::RenderEffectCapability,
     support: crate::RenderIntentSupport,
     reason: &'a str,
 }

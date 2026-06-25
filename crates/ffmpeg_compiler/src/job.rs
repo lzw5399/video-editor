@@ -11,8 +11,9 @@ use draft_model::{
 };
 use render_graph::{
     ExportMp4Preset, PreviewFrameFormat, RenderAudioCodec, RenderAudioMixDiagnostic,
-    RenderCanvasDiagnostic, RenderContainer, RenderGraphPlan, RenderOutputProfile,
-    RenderVideoCodec, RenderVisualDiagnostic,
+    RenderCanvasDiagnostic, RenderContainer, RenderFilterIntent, RenderGraphPlan,
+    RenderIntentSupport, RenderOutputProfile, RenderTransitionIntent, RenderVideoCodec,
+    RenderVisualDiagnostic,
 };
 use serde::{Deserialize, Serialize};
 
@@ -299,6 +300,9 @@ pub fn compile_ffmpeg_job(
         filter.has_audio_output,
     );
 
+    let mut visual_diagnostics = plan.graph.visual_diagnostics.clone();
+    visual_diagnostics.extend(effect_capability_diagnostics(plan));
+
     Ok(FfmpegJob {
         job_id,
         output_kind,
@@ -310,8 +314,111 @@ pub fn compile_ffmpeg_job(
         encode_settings,
         validation,
         canvas_diagnostics: plan.graph.canvas.diagnostics.clone(),
-        visual_diagnostics: plan.graph.visual_diagnostics.clone(),
+        visual_diagnostics,
         args,
+    })
+}
+
+fn effect_capability_diagnostics(plan: &RenderGraphPlan) -> Vec<RenderVisualDiagnostic> {
+    let mut diagnostics = Vec::new();
+    for layer in &plan.graph.video_layers {
+        diagnostics.extend(layer.filters.iter().filter_map(|filter| {
+            filter_export_diagnostic(
+                &layer.track_id,
+                &layer.segment_id,
+                &layer.material_id,
+                filter,
+            )
+        }));
+        if let Some(transition) = &layer.transition {
+            if let Some(diagnostic) = transition_export_diagnostic(
+                &layer.track_id,
+                &layer.segment_id,
+                &layer.material_id,
+                transition,
+            ) {
+                diagnostics.push(diagnostic);
+            }
+        }
+    }
+    for overlay in &plan.graph.text_overlays {
+        diagnostics.extend(overlay.filters.iter().filter_map(|filter| {
+            filter_export_diagnostic(
+                &overlay.overlay.track_id,
+                &overlay.overlay.segment_id,
+                &overlay.material_id,
+                filter,
+            )
+        }));
+        if let Some(transition) = &overlay.transition {
+            if let Some(diagnostic) = transition_export_diagnostic(
+                &overlay.overlay.track_id,
+                &overlay.overlay.segment_id,
+                &overlay.material_id,
+                transition,
+            ) {
+                diagnostics.push(diagnostic);
+            }
+        }
+    }
+    for mix in &plan.graph.audio_mixes {
+        diagnostics.extend(mix.filters.iter().filter_map(|filter| {
+            filter_export_diagnostic(&mix.track_id, &mix.segment_id, &mix.material_id, filter)
+        }));
+    }
+    diagnostics
+}
+
+fn filter_export_diagnostic(
+    track_id: &draft_model::TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    filter: &RenderFilterIntent,
+) -> Option<RenderVisualDiagnostic> {
+    export_support_diagnostic(
+        track_id,
+        segment_id,
+        material_id,
+        "filter",
+        filter.support,
+        &filter.reason,
+    )
+}
+
+fn transition_export_diagnostic(
+    track_id: &draft_model::TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    transition: &RenderTransitionIntent,
+) -> Option<RenderVisualDiagnostic> {
+    export_support_diagnostic(
+        track_id,
+        segment_id,
+        material_id,
+        "transition",
+        transition.support,
+        &transition.reason,
+    )
+}
+
+fn export_support_diagnostic(
+    track_id: &draft_model::TrackId,
+    segment_id: &SegmentId,
+    material_id: &MaterialId,
+    property: &str,
+    support: RenderIntentSupport,
+    reason: &str,
+) -> Option<RenderVisualDiagnostic> {
+    if support == RenderIntentSupport::Supported {
+        return None;
+    }
+    Some(RenderVisualDiagnostic {
+        track_id: track_id.clone(),
+        segment_id: segment_id.clone(),
+        material_id: material_id.clone(),
+        property: property.to_owned(),
+        support,
+        reason: reason.to_owned(),
     })
 }
 

@@ -3,10 +3,10 @@ use std::error::Error;
 use std::fmt;
 
 use draft_model::{
-    AudioEffectSlotKind, CanvasBackground, DraftId, Filter, Keyframe, KeyframeProperty,
+    AudioEffectSlotKind, CanvasBackground, DraftId, Filter, FilterKind, Keyframe, KeyframeProperty,
     KeyframeValue, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask, SegmentVisual,
-    SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    SegmentBackgroundFilling, SegmentId, SegmentRetiming, SegmentVisual, SourceTimerange,
+    TargetTimerange, TrackId, TrackKind, Transition,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -17,6 +17,10 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_AUDIO_SAMPLE_RATE_HZ: u32 = 48_000;
 
 use crate::incremental::RenderGraphNodeId;
+use crate::{
+    RenderEffectCapability, render_blend_capability, render_effect_capability,
+    render_mask_capability, render_retime_capability, render_transition_capability,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -125,6 +129,7 @@ pub struct RenderVideoLayer {
     pub stack_index: u32,
     pub source_timerange: SourceTimerange,
     pub target_timerange: TargetTimerange,
+    pub retime: RenderRetimeIntent,
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
@@ -140,6 +145,7 @@ pub struct RenderAudioMix {
     pub material_id: MaterialId,
     pub source_timerange: SourceTimerange,
     pub target_timerange: TargetTimerange,
+    pub retime: RenderRetimeIntent,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keyframes: Vec<Keyframe>,
     pub volume_level_millis: u32,
@@ -254,6 +260,7 @@ pub struct RenderTextOverlay {
     pub node_id: RenderGraphNodeId,
     pub overlay: FrameTextOverlay,
     pub material_id: MaterialId,
+    pub retime: RenderRetimeIntent,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
@@ -277,7 +284,8 @@ pub struct RenderVisualDiagnostic {
 pub struct RenderFilterIntent {
     pub node_id: RenderGraphNodeId,
     pub name: String,
-    pub parameters: BTreeMap<String, String>,
+    pub kind: FilterKind,
+    pub capability: RenderEffectCapability,
     pub support: RenderIntentSupport,
     pub reason: String,
 }
@@ -288,6 +296,23 @@ pub struct RenderTransitionIntent {
     pub node_id: RenderGraphNodeId,
     pub name: String,
     pub duration: Microseconds,
+    pub window: RenderTransitionWindow,
+    pub capability: RenderEffectCapability,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderTransitionWindow {
+    pub duration: Microseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderRetimeIntent {
+    pub retiming: SegmentRetiming,
+    pub capability: RenderEffectCapability,
     pub support: RenderIntentSupport,
     pub reason: String,
 }
@@ -694,6 +719,7 @@ fn render_video_layer(
         stack_index,
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
+        retime: render_retime_intent(&segment.retiming),
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
         transition: segment
@@ -721,6 +747,7 @@ fn render_audio_mix(
         material_id: segment.material.material_id.clone(),
         source_timerange: segment.source_timerange.clone(),
         target_timerange: segment.target_timerange.clone(),
+        retime: render_retime_intent(&segment.retiming),
         keyframes: segment.keyframes.clone(),
         volume_level_millis: segment.volume_level_millis,
         gain_millis: segment.audio.gain_millis,
@@ -749,6 +776,7 @@ fn render_text_overlay(
         ),
         overlay,
         material_id: segment.material.material_id.clone(),
+        retime: render_retime_intent(&segment.retiming),
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
         transition: segment
@@ -842,24 +870,26 @@ fn visual_diagnostics_for(
             "static rotation is supported only for center-anchor segment transforms",
         ));
     }
-    if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
+    let blend_capability = render_blend_capability(&visual.blend_mode);
+    if blend_capability.export != RenderIntentSupport::Supported {
         diagnostics.push(render_visual_diagnostic(
             &track_id,
             &segment_id,
             &material_id,
             "blendMode",
-            RenderIntentSupport::Unsupported,
-            format!("segment blendMode {name} is unsupported"),
+            blend_capability.export,
+            blend_capability.export_reason,
         ));
     }
-    if let SegmentMask::Unsupported { name } = &visual.mask {
+    let mask_capability = render_mask_capability(&visual.mask);
+    if mask_capability.export != RenderIntentSupport::Supported {
         diagnostics.push(render_visual_diagnostic(
             &track_id,
             &segment_id,
             &material_id,
             "mask",
-            RenderIntentSupport::Unsupported,
-            format!("segment mask {name} is unsupported"),
+            mask_capability.export,
+            mask_capability.export_reason,
         ));
     }
     diagnostics
@@ -979,21 +1009,34 @@ fn render_filter_intents(
     filters
         .iter()
         .enumerate()
-        .map(|(filter_index, filter)| RenderFilterIntent {
-            node_id: RenderGraphNodeId::segment_filter(
-                draft_id,
-                &track.track_id,
-                &segment.segment_id,
-                &segment.material.material_id,
-                filter_index,
-            ),
-            name: filter.name.clone(),
-            parameters: filter.parameters.clone(),
-            support: RenderIntentSupport::Degraded,
-            reason: "filter intent is preserved for compiler/runtime capability handling"
-                .to_owned(),
+        .map(|(filter_index, filter)| {
+            let capability = render_effect_capability(filter);
+            RenderFilterIntent {
+                node_id: RenderGraphNodeId::segment_filter(
+                    draft_id,
+                    &track.track_id,
+                    &segment.segment_id,
+                    &segment.material.material_id,
+                    filter_index,
+                ),
+                name: filter.display_name(),
+                kind: filter.kind.clone(),
+                support: capability.export,
+                reason: capability.export_reason.clone(),
+                capability,
+            }
         })
         .collect()
+}
+
+fn render_retime_intent(retiming: &SegmentRetiming) -> RenderRetimeIntent {
+    let capability = render_retime_capability(retiming);
+    RenderRetimeIntent {
+        retiming: retiming.clone(),
+        support: capability.export,
+        reason: capability.export_reason.clone(),
+        capability,
+    }
 }
 
 fn render_transition_intent(
@@ -1002,6 +1045,7 @@ fn render_transition_intent(
     segment: &NormalizedSegment,
     transition: &Transition,
 ) -> RenderTransitionIntent {
+    let capability = render_transition_capability(transition);
     RenderTransitionIntent {
         node_id: RenderGraphNodeId::segment_transition(
             draft_id,
@@ -1009,11 +1053,14 @@ fn render_transition_intent(
             &segment.segment_id,
             &segment.material.material_id,
         ),
-        name: transition.name.clone(),
+        name: transition.display_name(),
         duration: transition.duration,
-        support: RenderIntentSupport::Degraded,
-        reason: "transition intent is preserved for compiler/runtime capability handling"
-            .to_owned(),
+        window: RenderTransitionWindow {
+            duration: transition.duration,
+        },
+        support: capability.export,
+        reason: capability.export_reason.clone(),
+        capability,
     }
 }
 

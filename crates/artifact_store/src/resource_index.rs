@@ -274,17 +274,19 @@ fn index_segment_resources(
         index_text_resources(index, text)?;
     }
     for filter in &segment.filters {
+        let display_name = filter.display_name();
         upsert_resource(
             index,
-            resource_ref_for_effect(ResourceKind::Filter, &filter.name),
-            None,
+            resource_ref_for_effect(ResourceKind::Filter, filter.capability_id()),
+            Some(&display_name),
         )?;
     }
     if let Some(transition) = &segment.transition {
+        let display_name = transition.display_name();
         upsert_resource(
             index,
-            resource_ref_for_effect(ResourceKind::Transition, &transition.name),
-            None,
+            resource_ref_for_effect(ResourceKind::Transition, transition.capability_id()),
+            Some(&display_name),
         )?;
     }
     Ok(())

@@ -116,6 +116,7 @@ pub struct NormalizedSegment {
     pub source_end: Microseconds,
     pub target_timerange: TargetTimerange,
     pub target_end: Microseconds,
+    pub retiming: draft_model::SegmentRetiming,
     pub renderable: MaterialRenderableState,
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<Filter>,
@@ -428,6 +429,7 @@ fn normalize_segment(
         source_end,
         target_timerange: segment.target_timerange.clone(),
         target_end,
+        retiming: segment.retiming.clone(),
         renderable,
         keyframes: segment.keyframes.clone(),
         filters: segment.filters.clone(),
@@ -466,22 +468,28 @@ fn collect_visual_diagnostics(
         )),
     }
 
-    if let SegmentBlendMode::Unsupported { name } = &visual.blend_mode {
+    if let SegmentBlendMode::ExternalReference { reference } = &visual.blend_mode {
         diagnostics.push(EngineDiagnostic::new(
             EngineErrorKind::UnsupportedVisualIntent,
             Some(track_id.clone()),
             Some(segment_id.clone()),
             Some(material_id.clone()),
-            format!("segment blendMode {name} is unsupported"),
+            format!(
+                "segment blendMode external reference {}:{} is unsupported",
+                reference.provider, reference.effect_id
+            ),
         ));
     }
-    if let SegmentMask::Unsupported { name } = &visual.mask {
+    if let SegmentMask::ExternalReference { reference } = &visual.mask {
         diagnostics.push(EngineDiagnostic::new(
             EngineErrorKind::UnsupportedVisualIntent,
             Some(track_id.clone()),
             Some(segment_id.clone()),
             Some(material_id.clone()),
-            format!("segment mask {name} is unsupported"),
+            format!(
+                "segment mask external reference {}:{} is unsupported",
+                reference.provider, reference.effect_id
+            ),
         ));
     }
 }

@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{RenderGraphNodeFingerprint, RenderGraphSnapshot};
 
+pub const PHASE19_PRODUCTION_EFFECT_DIRTY_DOMAINS: &[DirtyDomain] = &[
+    DirtyDomain::Timing,
+    DirtyDomain::Effect,
+    DirtyDomain::Transition,
+];
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderGraphNodeId {

@@ -1,15 +1,13 @@
 #![recursion_limit = "256"]
 
-use std::collections::BTreeMap;
-
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Filter, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
-    Microseconds, RationalFrameRate, Segment, SegmentBackgroundFilling, SegmentBlendMode,
-    SegmentFitMode, SegmentMask, SegmentPosition, SourceTimerange, TargetTimerange, TextAlignment,
-    TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
-    Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft,
+    ExternalEffectReference, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    KeyframeProperty, KeyframeValue, Material, MaterialKind, Microseconds, RationalFrameRate,
+    Segment, SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentMask,
+    SegmentPosition, SourceTimerange, TargetTimerange, TextAlignment, TextBackground, TextBox,
+    TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment, TextSegmentSource,
+    TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind, Transition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -360,11 +358,9 @@ fn transform_render_graph_preserves_visual_intent_without_ffmpeg_syntax() {
     video.visual.fit_mode = SegmentFitMode::Fill;
     video.visual.transform.position = SegmentPosition { x: 180, y: -90 };
     video.visual.background_filling = SegmentBackgroundFilling::Blur;
-    video.visual.blend_mode = SegmentBlendMode::Unsupported {
-        name: "screen".to_owned(),
-    };
-    video.visual.mask = SegmentMask::Unsupported {
-        name: "linear".to_owned(),
+    video.visual.blend_mode = SegmentBlendMode::Screen;
+    video.visual.mask = SegmentMask::ExternalReference {
+        reference: ExternalEffectReference::new("fixture", "linear-mask"),
     };
     draft.tracks[1].segments[0].visual.visible = false;
     draft.tracks[3].segments[0].visual.transform.position = SegmentPosition { x: 24, y: 48 };
@@ -834,14 +830,10 @@ fn render_graph_draft() -> Draft {
 
     let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
     let mut video = segment("video-a", "video-material", 100_000, 0, 1_000_000);
-    video.filters.push(Filter {
-        name: "lut".to_owned(),
-        parameters: BTreeMap::from([("strengthMillis".to_owned(), "500".to_owned())]),
-    });
-    video.transition = Some(Transition {
-        name: "crossfade".to_owned(),
-        duration: Microseconds::new(120_000),
-    });
+    video
+        .filters
+        .push(Filter::basic_color_adjustment(0, 1_000, 1_000));
+    video.transition = Some(Transition::dissolve(Microseconds::new(120_000)));
     video_track.segments.push(video);
 
     let mut overlay_track = Track::new("overlay-track", TrackKind::Video, "叠加");

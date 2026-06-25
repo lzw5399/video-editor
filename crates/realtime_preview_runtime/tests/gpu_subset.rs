@@ -3,9 +3,9 @@ use std::rc::Rc;
 
 use draft_model::{
     Draft, DraftId, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentScale, SegmentVisual, SourceTimerange,
-    TargetTimerange, TextAlignment, TextLayoutRegion, TextSegment, TextStyle, Track, TrackId,
-    TrackKind,
+    SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentRetiming, SegmentScale, SegmentVisual,
+    SourceTimerange, TargetTimerange, TextAlignment, TextLayoutRegion, TextSegment, TextStyle,
+    Track, TrackId, TrackKind,
 };
 use media_runtime::{
     MediaSessionId, NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RuntimeDeviceId,
@@ -25,7 +25,8 @@ use realtime_preview_runtime::{
 use render_graph::{
     OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
     RenderCanvasBackgroundMode, RenderGraph, RenderGraphNodeId, RenderIntentSupport,
-    RenderMaterial, RenderSampledFrame, RenderVideoLayer,
+    RenderMaterial, RenderRetimeIntent, RenderSampledFrame, RenderVideoLayer,
+    render_retime_capability,
 };
 
 #[test]
@@ -671,6 +672,8 @@ fn layer(
 
     let track_id = TrackId::from(format!("track-{stack_index}"));
     let segment_id = draft_model::SegmentId::from(segment_id);
+    let retiming = SegmentRetiming::default();
+    let retime_capability = render_retime_capability(&retiming);
 
     RenderVideoLayer {
         node_id: RenderGraphNodeId::video_segment(
@@ -687,6 +690,12 @@ fn layer(
         source_timerange: SourceTimerange::new(0, 1_000_000),
         target_timerange: TargetTimerange::new(0, 1_000_000),
         keyframes: Vec::new(),
+        retime: RenderRetimeIntent {
+            retiming,
+            support: retime_capability.export,
+            reason: retime_capability.export_reason.clone(),
+            capability: retime_capability,
+        },
         filters: Vec::new(),
         transition: None,
         visual,

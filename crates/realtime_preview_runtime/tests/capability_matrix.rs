@@ -1,8 +1,6 @@
-use std::collections::BTreeMap;
-
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, Draft, Filter, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
+    AudioEffectSlot, AudioEffectSlotKind, Draft, ExternalEffectReference, Filter, Keyframe,
+    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
     MaterialMetadata, Microseconds, RationalFrameRate, Segment, SegmentBlendMode, SegmentFitMode,
     SegmentMask, SourceTimerange, TargetTimerange, TextSegment, TextStyle, Track, TrackKind,
     Transition,
@@ -145,19 +143,19 @@ fn capability_matrix_rejects_unsupported_audio_effects_for_baseline_playback() {
 fn capability_matrix_marks_filters_transitions_masks_and_blends_unsupported() {
     let mut draft = base_video_draft();
     let segment = &mut draft.tracks[0].segments[0];
-    segment.filters.push(Filter {
-        name: "cinematic-lut".to_owned(),
-        parameters: BTreeMap::new(),
-    });
-    segment.transition = Some(Transition {
-        name: "crossfade".to_owned(),
-        duration: Microseconds::new(120_000),
-    });
-    segment.visual.mask = SegmentMask::Unsupported {
-        name: "linear-gradient-mask".to_owned(),
+    segment
+        .filters
+        .push(Filter::external_reference("fixture", "cinematic-lut"));
+    segment.transition = Some(Transition::external_reference(
+        "fixture",
+        "crossfade",
+        Microseconds::new(120_000),
+    ));
+    segment.visual.mask = SegmentMask::ExternalReference {
+        reference: ExternalEffectReference::new("fixture", "linear-gradient-mask"),
     };
-    segment.visual.blend_mode = SegmentBlendMode::Unsupported {
-        name: "screen".to_owned(),
+    segment.visual.blend_mode = SegmentBlendMode::ExternalReference {
+        reference: ExternalEffectReference::new("fixture", "screen"),
     };
 
     let report = classify_draft(
