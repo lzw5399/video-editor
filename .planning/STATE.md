@@ -6,15 +6,15 @@ current_phase: 18
 current_phase_name: mobile-server-binding-architecture-and-runtime-ports
 status: executing
 stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-06-25T01:43:47.495Z"
+last_updated: "2026-06-25T02:09:07.514Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 25
   completed_phases: 23
   total_plans: 172
-  completed_plans: 169
-  percent: 98
+  completed_plans: 170
+  percent: 92
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 18 (mobile-server-binding-architecture-and-runtime-ports) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 18 execution started
 
@@ -206,6 +206,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, and 17.1 are complete; Phase 18 is nex
 | Phase 18 P01 | 12 min | 2 tasks | 15 files |
 | Phase 18 P02 | 13 min | 3 tasks | 4 files |
 | Phase 18 P03 | 30 min | 3 tasks | 14 files |
+| Phase 18 P04 | 19 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -589,6 +590,10 @@ Recent decisions affecting current work:
 - [Phase 18]: Plan 18-03 moved desktop Node project-session semantics into editor_runtime while keeping bindings_node as N-API transport.
 - [Phase 18]: Plan 18-03 moved export scheduler/render graph/FFmpeg compile/validation authority into editor_runtime::export.
 - [Phase 18]: Plan 18-03 preserved explicit Electron IPC/native binding contracts without changing @napi-rs/cli.
+- [Phase 18]: bindings_c exposes explicit C ABI functions over editor_runtime instead of a generic JSON command envelope.
+- [Phase 18]: C ABI handle validation reconstructs opaque tokens and delegates owner/generation/device/release checks to editor_runtime::HandleRegistry.
+- [Phase 18]: video_editor_runtime.h is generated and drift-checked only through scripts/phase18-abi-drift.sh with cbindgen 0.29.4.
+- [Phase 18]: editor_runtime::HandleRegistry::retain owns shared retain/release semantics so bindings_c does not track adapter-local reference policy.
 
 ### Pending Todos
 
@@ -670,6 +675,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T01:42:05.666Z
+Last session: 2026-06-25T02:08:29.734Z
 Stopped at: Completed 18-03-PLAN.md
 Resume file: None
