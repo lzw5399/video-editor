@@ -1,9 +1,7 @@
-use std::collections::BTreeMap;
-
 use draft_model::{
     AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, DraftSchemaVersion,
-    DraftValidationError, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    DraftValidationError, ExternalEffectReference, Filter, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
     MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
     MainTrackMagnet, Material, MaterialKind, MaterialMetadata, MaterialStatus, Microseconds,
     RationalFrameRate, Segment, SegmentAnchor, SegmentAudio, SegmentBackgroundFilling,
@@ -54,14 +52,12 @@ fn draft_schema_serializes_material_track_and_segment_records() {
         status: MaterialStatus::Available,
     };
 
-    let mut filter_parameters = BTreeMap::new();
-    filter_parameters.insert("intensity".to_owned(), "0.75".to_owned());
-
     let segment = Segment {
         segment_id: "segment-001".into(),
         material_id: material.material_id.clone(),
         source_timerange: SourceTimerange::new(250_000, 1_000_000),
         target_timerange: TargetTimerange::new(0, 1_000_000),
+        retiming: Default::default(),
         main_track_magnet: MainTrackMagnet::enabled(),
         keyframes: vec![Keyframe {
             at: Microseconds::new(500_000),
@@ -70,14 +66,8 @@ fn draft_schema_serializes_material_track_and_segment_records() {
             interpolation: KeyframeInterpolation::Linear,
             easing: KeyframeEasing::None,
         }],
-        filters: vec![Filter {
-            name: "brightness".to_owned(),
-            parameters: filter_parameters,
-        }],
-        transition: Some(Transition {
-            name: "fade".to_owned(),
-            duration: Microseconds::new(100_000),
-        }),
+        filters: vec![Filter::basic_color_adjustment(0, 1_000, 1_000)],
+        transition: Some(Transition::dissolve(Microseconds::new(100_000))),
         text: None,
         volume: Default::default(),
         audio: Default::default(),
@@ -879,14 +869,14 @@ fn set_invalid_background_color(visual: &mut SegmentVisual) {
 }
 
 fn set_missing_blend_name(visual: &mut SegmentVisual) {
-    visual.blend_mode = SegmentBlendMode::Unsupported {
-        name: " ".to_owned(),
+    visual.blend_mode = SegmentBlendMode::ExternalReference {
+        reference: ExternalEffectReference::new("", ""),
     };
 }
 
 fn set_missing_mask_name(visual: &mut SegmentVisual) {
-    visual.mask = SegmentMask::Unsupported {
-        name: String::new(),
+    visual.mask = SegmentMask::ExternalReference {
+        reference: ExternalEffectReference::new("", ""),
     };
 }
 

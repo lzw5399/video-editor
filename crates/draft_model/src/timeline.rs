@@ -1,10 +1,13 @@
-use std::{borrow::Cow, collections::BTreeMap};
+use std::borrow::Cow;
 
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
-use crate::{MaterialId, Microseconds, SegmentId, TrackId};
+use crate::{
+    BlendModeKind, ExternalEffectReference, Filter, MaskKind, MaterialId, Microseconds, SegmentId,
+    SegmentRetiming, TrackId, Transition,
+};
 
 pub const MAX_SEGMENT_VOLUME_MILLIS: u32 = 4_000;
 pub const MIN_AUDIO_PAN_BALANCE_MILLIS: i32 = -1_000;
@@ -174,20 +177,6 @@ pub enum KeyframeEasing {
     EaseIn,
     EaseOut,
     EaseInOut,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Filter {
-    pub name: String,
-    pub parameters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Transition {
-    pub name: String,
-    pub duration: Microseconds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -762,7 +751,9 @@ impl Default for SegmentBackgroundFilling {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SegmentBlendMode {
     Normal,
-    Unsupported { name: String },
+    Multiply,
+    Screen,
+    ExternalReference { reference: ExternalEffectReference },
 }
 
 impl Default for SegmentBlendMode {
@@ -771,16 +762,81 @@ impl Default for SegmentBlendMode {
     }
 }
 
+impl SegmentBlendMode {
+    pub fn kind(&self) -> Option<BlendModeKind> {
+        match self {
+            Self::Normal => Some(BlendModeKind::Normal),
+            Self::Multiply => Some(BlendModeKind::Multiply),
+            Self::Screen => Some(BlendModeKind::Screen),
+            Self::ExternalReference { .. } => None,
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Normal => "normal".to_owned(),
+            Self::Multiply => "multiply".to_owned(),
+            Self::Screen => "screen".to_owned(),
+            Self::ExternalReference { reference } => reference
+                .display_name
+                .clone()
+                .unwrap_or_else(|| format!("{}:{}", reference.provider, reference.effect_id)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SegmentMask {
     None,
-    Unsupported { name: String },
+    Rectangle {
+        x_millis: u32,
+        y_millis: u32,
+        width_millis: u32,
+        height_millis: u32,
+        #[serde(default)]
+        feather_millis: u32,
+    },
+    Ellipse {
+        x_millis: u32,
+        y_millis: u32,
+        width_millis: u32,
+        height_millis: u32,
+        #[serde(default)]
+        feather_millis: u32,
+    },
+    ExternalReference {
+        reference: ExternalEffectReference,
+    },
 }
 
 impl Default for SegmentMask {
     fn default() -> Self {
         Self::None
+    }
+}
+
+impl SegmentMask {
+    pub fn mask_kind(&self) -> Option<MaskKind> {
+        match self {
+            Self::Rectangle { .. } => Some(MaskKind::Rectangle),
+            Self::Ellipse { .. } => Some(MaskKind::Ellipse),
+            Self::None | Self::ExternalReference { .. } => None,
+        }
+    }
+
+    pub fn display_name(&self) -> Option<String> {
+        match self {
+            Self::None => None,
+            Self::Rectangle { .. } => Some("rectangle".to_owned()),
+            Self::Ellipse { .. } => Some("ellipse".to_owned()),
+            Self::ExternalReference { reference } => Some(
+                reference
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}:{}", reference.provider, reference.effect_id)),
+            ),
+        }
     }
 }
 
@@ -821,6 +877,8 @@ pub struct Segment {
     pub material_id: MaterialId,
     pub source_timerange: SourceTimerange,
     pub target_timerange: TargetTimerange,
+    #[serde(default)]
+    pub retiming: SegmentRetiming,
     pub main_track_magnet: MainTrackMagnet,
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<Filter>,
@@ -850,6 +908,7 @@ impl Segment {
             material_id: material_id.into(),
             source_timerange,
             target_timerange,
+            retiming: SegmentRetiming::default(),
             main_track_magnet: MainTrackMagnet::disabled(),
             keyframes: Vec::new(),
             filters: Vec::new(),

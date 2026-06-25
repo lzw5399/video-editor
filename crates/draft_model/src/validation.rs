@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::{
-    AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion, Keyframe,
-    KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
-    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
-    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentAudio,
-    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask, SegmentVisual,
-    SourceTimerange, TargetTimerange, TextBox, TextBubbleRef, TextEffectRef, TextLayoutRegion,
-    TextSegment, TextStyle, reduce_ratio,
+    AudioEffectSlotKind, CanvasAspectRatio, CanvasBackground, Draft, DraftSchemaVersion,
+    FilterKind, Keyframe, KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_VOLUME_MILLIS,
+    MIN_AUDIO_PAN_BALANCE_MILLIS, MaterialId, MaterialKind, Microseconds, RationalFrameRate,
+    RetimeMode, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentMask,
+    SegmentRetiming, SegmentVisual, SourceTimerange, TargetTimerange, TextBox, TextBubbleRef,
+    TextEffectRef, TextLayoutRegion, TextSegment, TextStyle, reduce_ratio,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -184,6 +184,7 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                 "tracks[].segments[].targetTimerange",
                 &segment.target_timerange,
             )?;
+            validate_segment_retiming("tracks[].segments[].retiming", &segment.retiming)?;
 
             validate_keyframes(
                 "tracks[].segments[].keyframes",
@@ -191,13 +192,27 @@ pub fn validate_draft(draft: &Draft) -> Result<(), DraftValidationError> {
                 segment.target_timerange.duration,
             )?;
             for filter in &segment.filters {
-                if filter.name.trim().is_empty() {
-                    return Err(missing_field("tracks[].segments[].filters[].name"));
+                if let FilterKind::ExternalReference { reference } = &filter.kind {
+                    validate_required_text(
+                        "tracks[].segments[].filters[].kind.reference.provider",
+                        &reference.provider,
+                    )?;
+                    validate_required_text(
+                        "tracks[].segments[].filters[].kind.reference.effectId",
+                        &reference.effect_id,
+                    )?;
                 }
             }
             if let Some(transition) = &segment.transition {
-                if transition.name.trim().is_empty() {
-                    return Err(missing_field("tracks[].segments[].transition.name"));
+                if let Some(reference) = transition.external() {
+                    validate_required_text(
+                        "tracks[].segments[].transition.reference.reference.provider",
+                        &reference.provider,
+                    )?;
+                    validate_required_text(
+                        "tracks[].segments[].transition.reference.reference.effectId",
+                        &reference.effect_id,
+                    )?;
                 }
                 validate_duration(
                     "tracks[].segments[].transition.duration",
@@ -1056,9 +1071,10 @@ fn validate_segment_blend_mode(
     blend_mode: &SegmentBlendMode,
 ) -> Result<(), DraftValidationError> {
     match blend_mode {
-        SegmentBlendMode::Normal => Ok(()),
-        SegmentBlendMode::Unsupported { name } => {
-            validate_required_text(&format!("{field}.name"), name)
+        SegmentBlendMode::Normal | SegmentBlendMode::Multiply | SegmentBlendMode::Screen => Ok(()),
+        SegmentBlendMode::ExternalReference { reference } => {
+            validate_required_text(&format!("{field}.reference.provider"), &reference.provider)?;
+            validate_required_text(&format!("{field}.reference.effectId"), &reference.effect_id)
         }
     }
 }
@@ -1066,8 +1082,70 @@ fn validate_segment_blend_mode(
 fn validate_segment_mask(field: &str, mask: &SegmentMask) -> Result<(), DraftValidationError> {
     match mask {
         SegmentMask::None => Ok(()),
-        SegmentMask::Unsupported { name } => validate_required_text(&format!("{field}.name"), name),
+        SegmentMask::Rectangle {
+            width_millis,
+            height_millis,
+            ..
+        }
+        | SegmentMask::Ellipse {
+            width_millis,
+            height_millis,
+            ..
+        } => {
+            validate_millis_range(
+                &format!("{field}.widthMillis"),
+                *width_millis,
+                MAX_SEGMENT_CROP_MILLIS,
+                "mask width must be expressed in normalized millis",
+            )?;
+            validate_millis_range(
+                &format!("{field}.heightMillis"),
+                *height_millis,
+                MAX_SEGMENT_CROP_MILLIS,
+                "mask height must be expressed in normalized millis",
+            )
+        }
+        SegmentMask::ExternalReference { reference } => {
+            validate_required_text(&format!("{field}.reference.provider"), &reference.provider)?;
+            validate_required_text(&format!("{field}.reference.effectId"), &reference.effect_id)
+        }
     }
+}
+
+fn validate_segment_retiming(
+    field: &str,
+    retiming: &SegmentRetiming,
+) -> Result<(), DraftValidationError> {
+    match &retiming.mode {
+        RetimeMode::Constant { speed } => {
+            validate_speed_ratio(&format!("{field}.mode.speed"), speed)
+        }
+        RetimeMode::SpeedCurve { points } => {
+            if points.is_empty() {
+                return Err(invalid_segment_visual(
+                    field,
+                    "speed curve retiming requires at least one typed point",
+                ));
+            }
+            for (index, point) in points.iter().enumerate() {
+                validate_speed_ratio(&format!("{field}.mode.points[{index}].speed"), &point.speed)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_speed_ratio(
+    field: &str,
+    speed: &crate::SpeedRatio,
+) -> Result<(), DraftValidationError> {
+    if speed.numerator == 0 || speed.denominator == 0 {
+        return Err(invalid_segment_visual(
+            field,
+            "speed ratios must use nonzero integer numerators and denominators",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_millis_range(

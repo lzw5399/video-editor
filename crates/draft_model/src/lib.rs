@@ -13,6 +13,7 @@ use ts_rs::TS;
 pub mod canvas;
 pub mod delta;
 pub mod draft;
+pub mod effects;
 pub mod font_registry;
 pub mod ids;
 pub mod interaction;
@@ -31,6 +32,12 @@ pub use delta::{
     InvalidationScope,
 };
 pub use draft::{Draft, DraftMetadata, DraftSchemaVersion};
+pub use effects::{
+    AudioRetimePolicy, BlendModeKind, CapabilityReportItem, CapabilitySupport, CapabilitySurface,
+    EffectCapabilityRegistry, EffectKind, ExternalEffectReference, Filter, FilterKind, MaskKind,
+    ProductionEffectCapabilityRegistry, RetimeMode, SegmentRetiming, SpeedCurvePoint, SpeedRatio,
+    Transition, TransitionKind, TransitionReference,
+};
 pub use font_registry::{
     BUNDLED_SERIF_TEXT_FONT_FAMILY, BUNDLED_SERIF_TEXT_FONT_LICENSE_PATH,
     BUNDLED_SERIF_TEXT_FONT_REF, BUNDLED_SERIF_TEXT_FONT_RELATIVE_PATH,
@@ -52,18 +59,17 @@ pub use material::{
 };
 pub use time::Microseconds;
 pub use timeline::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Filter, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MAX_AUDIO_FADE_DURATION_MICROSECONDS, MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_ANCHOR_MILLIS,
-    MAX_SEGMENT_CROP_MILLIS, MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS,
-    MAX_TEXT_LAYOUT_MILLIS, MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS,
-    MIN_AUDIO_PAN_BALANCE_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment,
-    SegmentAnchor, SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop,
-    SegmentFitMode, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
-    SegmentTransform, SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange,
-    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, Track, TrackKind, Transition,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_AUDIO_FADE_DURATION_MICROSECONDS,
+    MAX_AUDIO_PAN_BALANCE_MILLIS, MAX_SEGMENT_ANCHOR_MILLIS, MAX_SEGMENT_CROP_MILLIS,
+    MAX_SEGMENT_OPACITY_MILLIS, MAX_SEGMENT_VOLUME_MILLIS, MAX_TEXT_LAYOUT_MILLIS,
+    MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_AUDIO_PAN_BALANCE_MILLIS,
+    MIN_TEXT_LINE_HEIGHT_MILLIS, MainTrackMagnet, Segment, SegmentAnchor, SegmentAudio,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode, SegmentMask,
+    SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale, SegmentTransform,
+    SegmentVisual, SegmentVolume, SourceTimerange, TargetTimerange, TextAlignment, TextBackground,
+    TextBox, TextBubbleRef, TextEffectRef, TextFont, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, Track, TrackKind,
 };
 pub use validation::{DraftValidationError, migrate_draft_json, validate_draft};
 
