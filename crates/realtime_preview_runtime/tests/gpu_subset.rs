@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use draft_model::{
-    Draft, DraftId, Material, MaterialId, MaterialKind, Microseconds, RationalFrameRate, Segment,
-    SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentRetiming, SegmentScale, SegmentVisual,
-    SourceTimerange, TargetTimerange, TextAlignment, TextLayoutRegion, TextSegment, TextStyle,
-    Track, TrackId, TrackKind,
+    AudioRetimePolicy, Draft, DraftId, Material, MaterialId, MaterialKind, Microseconds,
+    RationalFrameRate, Segment, SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentRetiming,
+    SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextLayoutRegion,
+    TextSegment, TextStyle, Track, TrackId, TrackKind,
 };
 use media_runtime::{
     MediaSessionId, NativeTextureLeaseRegistry, NativeTextureLeaseResourceKind, RuntimeDeviceId,
@@ -25,8 +25,8 @@ use realtime_preview_runtime::{
 use render_graph::{
     OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
     RenderCanvasBackgroundMode, RenderGraph, RenderGraphNodeId, RenderIntentSupport,
-    RenderMaterial, RenderRetimeIntent, RenderSampledFrame, RenderVideoLayer,
-    render_retime_capability,
+    RenderMaterial, RenderRetimeAudioIntent, RenderRetimeIntent, RenderRetimeSourceMapping,
+    RenderSampledFrame, RenderVideoLayer, render_retime_capability,
 };
 
 #[test]
@@ -674,6 +674,8 @@ fn layer(
     let segment_id = draft_model::SegmentId::from(segment_id);
     let retiming = SegmentRetiming::default();
     let retime_capability = render_retime_capability(&retiming);
+    let source_timerange = SourceTimerange::new(0, 1_000_000);
+    let target_timerange = TargetTimerange::new(0, 1_000_000);
 
     RenderVideoLayer {
         node_id: RenderGraphNodeId::video_segment(
@@ -687,11 +689,22 @@ fn layer(
         material_id: material_id.clone(),
         material_kind,
         stack_index,
-        source_timerange: SourceTimerange::new(0, 1_000_000),
-        target_timerange: TargetTimerange::new(0, 1_000_000),
+        source_timerange: source_timerange.clone(),
+        target_timerange: target_timerange.clone(),
         keyframes: Vec::new(),
         retime: RenderRetimeIntent {
             retiming,
+            source_mapping: RenderRetimeSourceMapping {
+                source_timerange,
+                retimed_source_timerange: SourceTimerange::new(0, 1_000_000),
+                target_timerange,
+            },
+            audio: RenderRetimeAudioIntent {
+                policy: AudioRetimePolicy::FollowVideoSpeed,
+                follow_speed: true,
+                support: RenderIntentSupport::Supported,
+                reason: "default 1x retime is realtime supported".to_owned(),
+            },
             support: retime_capability.export,
             reason: retime_capability.export_reason.clone(),
             capability: retime_capability,
