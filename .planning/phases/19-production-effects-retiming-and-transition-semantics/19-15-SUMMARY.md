@@ -33,6 +33,7 @@ key-files:
   created:
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-UI-AUDIT.md"
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-REVIEW.md"
+    - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-VERIFICATION.md"
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-15-SUMMARY.md"
   modified:
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-VALIDATION.md"

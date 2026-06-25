@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 17: Template Import Core And Kaipai Offline Adapter Foundation** - Provider-neutral template import foundation with Kaipai as an offline external adapter (completed 2026-06-24)
 - [x] **Phase 17.1: Interaction Session And Template Import Main-Chain Hardening** - Rust-owned high-frequency interaction sessions, delta-driven invalidation, template report navigation, and UI correction before mobile/server work (completed 2026-06-24)
 - [x] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary (completed 2026-06-25)
-- [ ] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
+- [x] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation (completed 2026-06-25)
 
 ## Phase Details
 
@@ -967,7 +967,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 19-15-PLAN.md — Run independent UI audit, update boundaries, and close aggregate validation
+- [x] 19-15-PLAN.md — Run independent UI audit, update boundaries, and close aggregate validation
 
 ## Progress
 
@@ -999,4 +999,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete    | 2026-06-25 |
-| 19. Production Effects, Retiming, And Transition Semantics | 14/15 | In Progress|  |
+| 19. Production Effects, Retiming, And Transition Semantics | 15/15 | Complete    | 2026-06-25 |
