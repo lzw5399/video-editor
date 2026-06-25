@@ -23,10 +23,11 @@ use realtime_preview_runtime::{
     TextureHandleDescriptor, prepare_realtime_preview_graph,
 };
 use render_graph::{
-    OutputDimensions, RenderAudioMix, RenderCanvas, RenderCanvasBackground,
+    OutputDimensions, RenderAudioMix, RenderBlendIntent, RenderCanvas, RenderCanvasBackground,
     RenderCanvasBackgroundMode, RenderGraph, RenderGraphNodeId, RenderIntentSupport,
-    RenderMaterial, RenderRetimeAudioIntent, RenderRetimeIntent, RenderRetimeSourceMapping,
-    RenderSampledFrame, RenderVideoLayer, render_retime_capability,
+    RenderMaskIntent, RenderMaterial, RenderRetimeAudioIntent, RenderRetimeIntent,
+    RenderRetimeSourceMapping, RenderSampledFrame, RenderVideoLayer, render_blend_capability,
+    render_mask_capability, render_retime_capability,
 };
 
 #[test]
@@ -674,6 +675,8 @@ fn layer(
     let segment_id = draft_model::SegmentId::from(segment_id);
     let retiming = SegmentRetiming::default();
     let retime_capability = render_retime_capability(&retiming);
+    let mask_capability = render_mask_capability(&visual.mask);
+    let blend_capability = render_blend_capability(&visual.blend_mode);
     let source_timerange = SourceTimerange::new(0, 1_000_000);
     let target_timerange = TargetTimerange::new(0, 1_000_000);
 
@@ -711,6 +714,18 @@ fn layer(
         },
         filters: Vec::new(),
         transition: None,
+        mask: RenderMaskIntent {
+            mask: visual.mask.clone(),
+            support: mask_capability.export,
+            reason: mask_capability.export_reason.clone(),
+            capability: mask_capability,
+        },
+        blend: RenderBlendIntent {
+            blend_mode: visual.blend_mode.clone(),
+            support: blend_capability.export,
+            reason: blend_capability.export_reason.clone(),
+            capability: blend_capability,
+        },
         visual,
     }
 }

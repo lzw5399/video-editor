@@ -15,7 +15,9 @@ use render_graph::{
     RenderCanvasBackgroundMode, RenderGraph, RenderMaterial, RenderTextOverlay, RenderVideoLayer,
 };
 
-use crate::effects::{EffectPreviewUniforms, preview_effect_uniforms_for_layer};
+use crate::effects::{
+    EffectPreviewUniforms, apply_phase19_mask_blend, preview_effect_uniforms_for_layer,
+};
 use crate::{
     PlaybackGeneration, PreviewFrameInput, PreviewFrameProvider,
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnostic,
@@ -704,8 +706,12 @@ fn encode_wgpu_graph_to_view(
 
 struct RealtimePreviewWgpuPipelines {
     texture_pipeline: wgpu::RenderPipeline,
+    texture_multiply_pipeline: wgpu::RenderPipeline,
+    texture_screen_pipeline: wgpu::RenderPipeline,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     external_pipeline: Option<wgpu::RenderPipeline>,
+    external_multiply_pipeline: Option<wgpu::RenderPipeline>,
+    external_screen_pipeline: Option<wgpu::RenderPipeline>,
     external_bind_group_layout: Option<wgpu::BindGroupLayout>,
     linear_sampler: wgpu::Sampler,
     text_sampler: wgpu::Sampler,
@@ -776,38 +782,33 @@ impl RealtimePreviewWgpuPipelines {
                 shader_location: 2,
             },
         ];
-        let texture_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("realtime-preview-textured-quad-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 20,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &vertex_attributes,
-                }],
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: format.wgpu_format(),
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+        let texture_pipeline = create_wgpu_layer_pipeline(
+            device,
+            &pipeline_layout,
+            &shader,
+            &vertex_attributes,
+            format,
+            WgpuBlendMode::Normal,
+            "realtime-preview-textured-quad-pipeline",
+        );
+        let texture_multiply_pipeline = create_wgpu_layer_pipeline(
+            device,
+            &pipeline_layout,
+            &shader,
+            &vertex_attributes,
+            format,
+            WgpuBlendMode::Multiply,
+            "realtime-preview-textured-quad-multiply-pipeline",
+        );
+        let texture_screen_pipeline = create_wgpu_layer_pipeline(
+            device,
+            &pipeline_layout,
+            &shader,
+            &vertex_attributes,
+            format,
+            WgpuBlendMode::Screen,
+            "realtime-preview-textured-quad-screen-pipeline",
+        );
         let linear_sampler = device.create_sampler(&linear_layer_sampler_descriptor());
         let text_sampler = device.create_sampler(&text_layer_sampler_descriptor());
         let ui_chrome_border_texture = Rc::new(create_wgpu_rgba_texture(
@@ -828,88 +829,95 @@ impl RealtimePreviewWgpuPipelines {
             &[247, 251, 252, 255],
             "realtime-preview-selection-handle-texture",
         )?);
-        let (external_pipeline, external_bind_group_layout) =
-            if device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
-                let external_bind_group_layout =
-                    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: Some("realtime-preview-external-texture-bind-group-layout"),
-                        entries: &[
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                ty: wgpu::BindingType::ExternalTexture,
-                                count: None,
+        let (
+            external_pipeline,
+            external_multiply_pipeline,
+            external_screen_pipeline,
+            external_bind_group_layout,
+        ) = if device.features().contains(wgpu::Features::EXTERNAL_TEXTURE) {
+            let external_bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("realtime-preview-external-texture-bind-group-layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::ExternalTexture,
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
                             },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 2,
-                                visibility: wgpu::ShaderStages::FRAGMENT,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Uniform,
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
-                                count: None,
-                            },
-                        ],
-                    });
-                let external_pipeline_layout =
-                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("realtime-preview-external-texture-pipeline-layout"),
-                        bind_group_layouts: &[Some(&external_bind_group_layout)],
-                        immediate_size: 0,
-                    });
-                let external_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("realtime-preview-external-texture-shader"),
-                    source: wgpu::ShaderSource::Wgsl(EXTERNAL_TEXTURE_QUAD_SHADER.into()),
+                            count: None,
+                        },
+                    ],
                 });
-                let external_pipeline =
-                    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("realtime-preview-external-texture-pipeline"),
-                        layout: Some(&external_pipeline_layout),
-                        vertex: wgpu::VertexState {
-                            module: &external_shader,
-                            entry_point: Some("vs_main"),
-                            compilation_options: wgpu::PipelineCompilationOptions::default(),
-                            buffers: &[wgpu::VertexBufferLayout {
-                                array_stride: 20,
-                                step_mode: wgpu::VertexStepMode::Vertex,
-                                attributes: &vertex_attributes,
-                            }],
-                        },
-                        primitive: wgpu::PrimitiveState {
-                            topology: wgpu::PrimitiveTopology::TriangleList,
-                            ..Default::default()
-                        },
-                        depth_stencil: None,
-                        multisample: wgpu::MultisampleState::default(),
-                        fragment: Some(wgpu::FragmentState {
-                            module: &external_shader,
-                            entry_point: Some("fs_main"),
-                            compilation_options: wgpu::PipelineCompilationOptions::default(),
-                            targets: &[Some(wgpu::ColorTargetState {
-                                format: format.wgpu_format(),
-                                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                                write_mask: wgpu::ColorWrites::ALL,
-                            })],
-                        }),
-                        multiview_mask: None,
-                        cache: None,
-                    });
-                (Some(external_pipeline), Some(external_bind_group_layout))
-            } else {
-                (None, None)
-            };
+            let external_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("realtime-preview-external-texture-pipeline-layout"),
+                    bind_group_layouts: &[Some(&external_bind_group_layout)],
+                    immediate_size: 0,
+                });
+            let external_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("realtime-preview-external-texture-shader"),
+                source: wgpu::ShaderSource::Wgsl(EXTERNAL_TEXTURE_QUAD_SHADER.into()),
+            });
+            let external_pipeline = create_wgpu_layer_pipeline(
+                device,
+                &external_pipeline_layout,
+                &external_shader,
+                &vertex_attributes,
+                format,
+                WgpuBlendMode::Normal,
+                "realtime-preview-external-texture-pipeline",
+            );
+            let external_multiply_pipeline = create_wgpu_layer_pipeline(
+                device,
+                &external_pipeline_layout,
+                &external_shader,
+                &vertex_attributes,
+                format,
+                WgpuBlendMode::Multiply,
+                "realtime-preview-external-texture-multiply-pipeline",
+            );
+            let external_screen_pipeline = create_wgpu_layer_pipeline(
+                device,
+                &external_pipeline_layout,
+                &external_shader,
+                &vertex_attributes,
+                format,
+                WgpuBlendMode::Screen,
+                "realtime-preview-external-texture-screen-pipeline",
+            );
+            (
+                Some(external_pipeline),
+                Some(external_multiply_pipeline),
+                Some(external_screen_pipeline),
+                Some(external_bind_group_layout),
+            )
+        } else {
+            (None, None, None, None)
+        };
 
         Ok(Self {
             texture_pipeline,
+            texture_multiply_pipeline,
+            texture_screen_pipeline,
             texture_bind_group_layout: bind_group_layout,
             external_pipeline,
+            external_multiply_pipeline,
+            external_screen_pipeline,
             external_bind_group_layout,
             linear_sampler,
             text_sampler,
@@ -920,12 +928,99 @@ impl RealtimePreviewWgpuPipelines {
 
     fn pipeline(&self, kind: WgpuLayerPipelineKind) -> &wgpu::RenderPipeline {
         match kind {
-            WgpuLayerPipelineKind::Texture => &self.texture_pipeline,
-            WgpuLayerPipelineKind::ExternalTexture => self
-                .external_pipeline
-                .as_ref()
-                .expect("external texture draw should be rejected before render pass"),
+            WgpuLayerPipelineKind::Texture(blend) => self.texture_pipeline(blend),
+            WgpuLayerPipelineKind::ExternalTexture(blend) => self.external_pipeline(blend),
         }
+    }
+
+    fn texture_pipeline(&self, blend: WgpuBlendMode) -> &wgpu::RenderPipeline {
+        match blend {
+            WgpuBlendMode::Normal => &self.texture_pipeline,
+            WgpuBlendMode::Multiply => &self.texture_multiply_pipeline,
+            WgpuBlendMode::Screen => &self.texture_screen_pipeline,
+        }
+    }
+
+    fn external_pipeline(&self, blend: WgpuBlendMode) -> &wgpu::RenderPipeline {
+        match blend {
+            WgpuBlendMode::Normal => self.external_pipeline.as_ref(),
+            WgpuBlendMode::Multiply => self.external_multiply_pipeline.as_ref(),
+            WgpuBlendMode::Screen => self.external_screen_pipeline.as_ref(),
+        }
+        .expect("external texture draw should be rejected before render pass")
+    }
+}
+
+fn create_wgpu_layer_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    shader: &wgpu::ShaderModule,
+    vertex_attributes: &[wgpu::VertexAttribute],
+    format: super::RealtimePreviewTargetFormat,
+    blend_mode: WgpuBlendMode,
+    label: &'static str,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[wgpu::VertexBufferLayout {
+                array_stride: 20,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: vertex_attributes,
+            }],
+        },
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: format.wgpu_format(),
+                blend: Some(blend_state_for(blend_mode)),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+fn blend_state_for(blend_mode: WgpuBlendMode) -> wgpu::BlendState {
+    match blend_mode {
+        WgpuBlendMode::Normal => wgpu::BlendState::ALPHA_BLENDING,
+        WgpuBlendMode::Multiply => wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::Dst,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+        },
+        WgpuBlendMode::Screen => wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrc,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+        },
     }
 }
 
@@ -999,8 +1094,26 @@ enum WgpuLayerResources {
 
 #[derive(Clone, Copy)]
 enum WgpuLayerPipelineKind {
-    Texture,
-    ExternalTexture,
+    Texture(WgpuBlendMode),
+    ExternalTexture(WgpuBlendMode),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WgpuBlendMode {
+    Normal,
+    Multiply,
+    Screen,
+}
+
+impl WgpuBlendMode {
+    fn from_mask_blend_pass(pass: &crate::effects::MaskBlendPreviewPass) -> Self {
+        match &pass.blend.blend_mode {
+            draft_model::SegmentBlendMode::Multiply => Self::Multiply,
+            draft_model::SegmentBlendMode::Screen => Self::Screen,
+            draft_model::SegmentBlendMode::Normal
+            | draft_model::SegmentBlendMode::ExternalReference { .. } => Self::Normal,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1177,6 +1290,7 @@ fn push_wgpu_video_layer_draw(
         material.width.unwrap_or(1),
         material.height.unwrap_or(1),
     );
+    let blend_mode = WgpuBlendMode::from_mask_blend_pass(&apply_phase19_mask_blend(layer));
     push_wgpu_layer_draw(
         device,
         queue,
@@ -1184,6 +1298,7 @@ fn push_wgpu_video_layer_draw(
         draws,
         texture,
         WgpuLayerSamplerKind::Linear,
+        blend_mode,
         effect_uniforms,
         textured_quad_vertices(target, material, visual),
     );
@@ -1266,6 +1381,7 @@ fn push_wgpu_text_layer_draw(
         draws,
         WgpuLayerTexture::Imported(Rc::clone(&cached.texture)),
         text_layer_sampler_kind(&text.visual, raster_scale),
+        WgpuBlendMode::Normal,
         EffectPreviewUniforms::identity(cached.width, cached.height),
         textured_text_rect_vertices(
             target,
@@ -1369,6 +1485,7 @@ fn push_wgpu_ui_chrome_draws(
             draws,
             WgpuLayerTexture::Imported(texture),
             WgpuLayerSamplerKind::Text,
+            WgpuBlendMode::Normal,
             EffectPreviewUniforms::identity(1, 1),
             solid_rect_vertices_from_geometry(geometry, rect, 1.0),
         );
@@ -1490,16 +1607,18 @@ fn push_wgpu_layer_draw(
     draws: &mut Vec<WgpuLayerDraw>,
     texture: WgpuLayerTexture,
     sampler_kind: WgpuLayerSamplerKind,
+    blend_mode: WgpuBlendMode,
     effect_uniforms: EffectPreviewUniforms,
     vertices: Vec<u8>,
 ) {
+    let effect_uniform_bytes = effect_uniforms.as_wgpu_bytes();
     let effect_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("realtime-preview-effect-uniforms"),
-        size: 32,
+        size: effect_uniform_bytes.len() as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&effect_uniform_buffer, 0, &effect_uniforms.as_wgpu_bytes());
+    queue.write_buffer(&effect_uniform_buffer, 0, &effect_uniform_bytes);
     let (layer_resources, bind_group, pipeline_kind) = match texture {
         WgpuLayerTexture::ExternalNv12 { planes, color } => {
             let Some(layout) = resources.external_bind_group_layout.as_ref() else {
@@ -1547,7 +1666,7 @@ fn push_wgpu_layer_draw(
                     _effect_uniform_buffer: effect_uniform_buffer,
                 },
                 bind_group,
-                WgpuLayerPipelineKind::ExternalTexture,
+                WgpuLayerPipelineKind::ExternalTexture(blend_mode),
             )
         }
         texture => {
@@ -1582,7 +1701,7 @@ fn push_wgpu_layer_draw(
                     _effect_uniform_buffer: effect_uniform_buffer,
                 },
                 bind_group,
-                WgpuLayerPipelineKind::Texture,
+                WgpuLayerPipelineKind::Texture(blend_mode),
             )
         }
     };
@@ -2019,6 +2138,18 @@ struct EffectUniforms {
     texel_width: f32,
     texel_height: f32,
     active: f32,
+    mask_kind: f32,
+    mask_x: f32,
+    mask_y: f32,
+    mask_width: f32,
+    mask_height: f32,
+    mask_feather: f32,
+    mask_opacity: f32,
+    mask_inverted: f32,
+    blend_mode: f32,
+    pad0: f32,
+    pad1: f32,
+    pad2: f32,
 };
 @group(0) @binding(2) var<uniform> effects: EffectUniforms;
 
@@ -2048,9 +2179,57 @@ fn sample_effect_texture(uv: vec2<f32>) -> vec4<f32> {
     return center + horizontal + vertical;
 }
 
+fn mask_alpha(uv: vec2<f32>) -> f32 {
+    if (effects.mask_kind < 0.5) {
+        return 1.0;
+    }
+
+    let mask_min = vec2<f32>(effects.mask_x, effects.mask_y);
+    let mask_size = vec2<f32>(max(effects.mask_width, 0.001), max(effects.mask_height, 0.001));
+    let mask_max = mask_min + mask_size;
+    var alpha = 0.0;
+
+    if (effects.mask_kind < 1.5) {
+        if (uv.x >= mask_min.x && uv.y >= mask_min.y && uv.x <= mask_max.x && uv.y <= mask_max.y) {
+            let edge = min(min(uv.x - mask_min.x, mask_max.x - uv.x), min(uv.y - mask_min.y, mask_max.y - uv.y));
+            if (effects.mask_feather > 0.0001) {
+                alpha = smoothstep(0.0, effects.mask_feather, edge);
+            } else {
+                alpha = 1.0;
+            }
+        }
+    } else {
+        let center = mask_min + mask_size * 0.5;
+        let radius = max(mask_size * 0.5, vec2<f32>(0.001, 0.001));
+        let distance = length((uv - center) / radius);
+        if (effects.mask_feather > 0.0001) {
+            alpha = 1.0 - smoothstep(max(0.0, 1.0 - effects.mask_feather), 1.0, distance);
+        } else if (distance <= 1.0) {
+            alpha = 1.0;
+        }
+    }
+
+    if (effects.mask_inverted > 0.5) {
+        alpha = 1.0 - alpha;
+    }
+    return clamp(alpha * effects.mask_opacity, 0.0, 1.0);
+}
+
+fn apply_mask(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
+    let alpha = mask_alpha(uv);
+    return vec4<f32>(color.rgb, color.a * alpha);
+}
+
+fn prepare_blend_color(color: vec4<f32>) -> vec4<f32> {
+    if (effects.blend_mode > 0.5) {
+        return vec4<f32>(color.rgb * color.a, color.a);
+    }
+    return color;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    return adjust_effect_color(sample_effect_texture(in.uv), in.opacity);
+    return prepare_blend_color(apply_mask(adjust_effect_color(sample_effect_texture(in.uv), in.opacity), in.uv));
 }
 "#;
 
@@ -2085,6 +2264,18 @@ struct EffectUniforms {
     texel_width: f32,
     texel_height: f32,
     active: f32,
+    mask_kind: f32,
+    mask_x: f32,
+    mask_y: f32,
+    mask_width: f32,
+    mask_height: f32,
+    mask_feather: f32,
+    mask_opacity: f32,
+    mask_inverted: f32,
+    blend_mode: f32,
+    pad0: f32,
+    pad1: f32,
+    pad2: f32,
 };
 @group(0) @binding(2) var<uniform> effects: EffectUniforms;
 
@@ -2114,6 +2305,54 @@ fn sample_effect_texture(uv: vec2<f32>) -> vec4<f32> {
     return center + horizontal + vertical;
 }
 
+fn mask_alpha(uv: vec2<f32>) -> f32 {
+    if (effects.mask_kind < 0.5) {
+        return 1.0;
+    }
+
+    let mask_min = vec2<f32>(effects.mask_x, effects.mask_y);
+    let mask_size = vec2<f32>(max(effects.mask_width, 0.001), max(effects.mask_height, 0.001));
+    let mask_max = mask_min + mask_size;
+    var alpha = 0.0;
+
+    if (effects.mask_kind < 1.5) {
+        if (uv.x >= mask_min.x && uv.y >= mask_min.y && uv.x <= mask_max.x && uv.y <= mask_max.y) {
+            let edge = min(min(uv.x - mask_min.x, mask_max.x - uv.x), min(uv.y - mask_min.y, mask_max.y - uv.y));
+            if (effects.mask_feather > 0.0001) {
+                alpha = smoothstep(0.0, effects.mask_feather, edge);
+            } else {
+                alpha = 1.0;
+            }
+        }
+    } else {
+        let center = mask_min + mask_size * 0.5;
+        let radius = max(mask_size * 0.5, vec2<f32>(0.001, 0.001));
+        let distance = length((uv - center) / radius);
+        if (effects.mask_feather > 0.0001) {
+            alpha = 1.0 - smoothstep(max(0.0, 1.0 - effects.mask_feather), 1.0, distance);
+        } else if (distance <= 1.0) {
+            alpha = 1.0;
+        }
+    }
+
+    if (effects.mask_inverted > 0.5) {
+        alpha = 1.0 - alpha;
+    }
+    return clamp(alpha * effects.mask_opacity, 0.0, 1.0);
+}
+
+fn apply_mask(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
+    let alpha = mask_alpha(uv);
+    return vec4<f32>(color.rgb, color.a * alpha);
+}
+
+fn prepare_blend_color(color: vec4<f32>) -> vec4<f32> {
+    if (effects.blend_mode > 0.5) {
+        return vec4<f32>(color.rgb * color.a, color.a);
+    }
+    return color;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let color = if (effects.blur_radius_px <= 0.001) {
@@ -2121,7 +2360,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     } else {
         sample_effect_texture(in.uv)
     };
-    return adjust_effect_color(color, in.opacity);
+    return prepare_blend_color(apply_mask(adjust_effect_color(color, in.opacity), in.uv));
 }
 "#;
 

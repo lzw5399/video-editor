@@ -281,12 +281,15 @@ fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePr
         ));
     }
 
-    match &visual.mask {
+    match &layer.mask.mask {
         SegmentMask::None | SegmentMask::Rectangle { .. } | SegmentMask::Ellipse { .. } => {
             diagnostics.push(supported_production_effect_diagnostic(
                 Some(layer.segment_id.as_str().to_owned()),
                 RealtimePreviewDiagnosticDomain::VisualLayer,
-                "mask capability is registry-backed and realtime supported",
+                format!(
+                    "{} mask capability is registry-backed and applied by the WGPU native compositor",
+                    layer.mask.capability.capability_id
+                ),
             ));
         }
         SegmentMask::ExternalReference { reference } => {
@@ -306,12 +309,15 @@ fn classify_transform(layer: &RenderVideoLayer, diagnostics: &mut Vec<RealtimePr
             ));
         }
     }
-    match &visual.blend_mode {
+    match &layer.blend.blend_mode {
         SegmentBlendMode::Normal | SegmentBlendMode::Multiply | SegmentBlendMode::Screen => {
             diagnostics.push(supported_production_effect_diagnostic(
                 Some(layer.segment_id.as_str().to_owned()),
                 RealtimePreviewDiagnosticDomain::VisualLayer,
-                "blend capability is registry-backed and realtime supported",
+                format!(
+                    "{} blend capability is registry-backed and applied by the WGPU native compositor",
+                    layer.blend.capability.capability_id
+                ),
             ));
         }
         SegmentBlendMode::ExternalReference { reference } => {

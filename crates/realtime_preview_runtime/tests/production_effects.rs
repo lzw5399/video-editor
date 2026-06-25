@@ -1,12 +1,15 @@
 use draft_model::{
     AudioRetimePolicy, Draft, Filter, FilterKind, Material, MaterialKind, MaterialMetadata,
-    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
-    SpeedRatio, SegmentBlendMode, SegmentMask, TargetTimerange, Track, TrackKind, TrackTransition,
+    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentBlendMode, SegmentMask,
+    SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track, TrackKind,
+    TrackTransition,
 };
 use realtime_preview_runtime::{
     RealtimePreviewCapabilityClassifier, RealtimePreviewDiagnosticDomain,
     RealtimePreviewGraphInput, RealtimePreviewGraphSupport, RealtimePreviewSupport,
-    effects::{EffectPreviewPass, MaskBlendPreviewPass, apply_phase19_effects, apply_phase19_mask_blend},
+    effects::{
+        EffectPreviewPass, MaskBlendPreviewPass, apply_phase19_effects, apply_phase19_mask_blend,
+    },
     prepare_realtime_preview_graph,
 };
 use render_graph::OutputDimensions;
@@ -182,7 +185,10 @@ fn phase19_production_effects_preview_builds_gpu_mask_blend_pass_for_first_party
     assert!(pass.requires_wgpu_render_pass);
     assert_eq!(pass.mask.capability.capability_id, "mask.ellipse");
     assert_eq!(pass.blend.capability.capability_id, "blend.screen");
-    assert!(matches!(pass.mask.mask, SegmentMask::Ellipse { inverted: true, .. }));
+    assert!(matches!(
+        pass.mask.mask,
+        SegmentMask::Ellipse { inverted: true, .. }
+    ));
     assert!(matches!(pass.blend.blend_mode, SegmentBlendMode::Screen));
     assert_eq!(pass.support, RealtimePreviewSupport::Supported);
     assert!(

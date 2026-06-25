@@ -1,7 +1,7 @@
 use draft_model::{
     AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Filter, FilterKind,
-    Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId,
-    SegmentBlendMode, SegmentMask, SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio,
+    Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentBlendMode,
+    SegmentId, SegmentMask, SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio,
     TargetTimerange, Track, TrackKind, TrackTransition, TransitionKind, TransitionReference,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
@@ -399,11 +399,14 @@ fn phase19_production_effects_render_graph_carries_mask_blend_intents() {
         .expect("mask/blend video layer should exist");
 
     assert_eq!(layer.mask.capability.capability_id, "mask.rectangle");
-    assert_eq!(layer.mask.support, render_graph::RenderIntentSupport::Supported);
+    assert_eq!(
+        layer.mask.support,
+        render_graph::RenderIntentSupport::Supported
+    );
     assert_eq!(layer.mask.mask, layer.visual.mask);
     assert!(
-        layer.mask.reason.contains("first-party typed mask"),
-        "mask intent should carry the registry support reason"
+        layer.mask.reason.contains("compiler-owned alpha mask"),
+        "mask intent should carry the registry export support reason"
     );
     assert_eq!(layer.blend.capability.capability_id, "blend.multiply");
     assert_eq!(
@@ -412,8 +415,11 @@ fn phase19_production_effects_render_graph_carries_mask_blend_intents() {
     );
     assert_eq!(layer.blend.blend_mode, layer.visual.blend_mode);
     assert!(
-        layer.blend.reason.contains("first-party typed compositing"),
-        "blend intent should carry the registry support reason"
+        layer
+            .blend
+            .reason
+            .contains("compiler-owned blend semantics"),
+        "blend intent should carry the registry export support reason"
     );
 }
 

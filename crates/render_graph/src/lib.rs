@@ -22,11 +22,12 @@ pub use fingerprint::{
 pub use graph::{
     RenderAudioEffectSlot, RenderAudioEffectSlotSupport, RenderAudioMix,
     RenderAudioMixClassification, RenderAudioMixDiagnostic, RenderAudioVolumeKeyframe,
-    RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode, RenderCanvasDiagnostic,
-    RenderFilterIntent, RenderGraph, RenderGraphError, RenderGraphErrorKind, RenderIntentSupport,
-    RenderMaterial, RenderRetimeAudioIntent, RenderRetimeIntent, RenderRetimeSourceMapping,
-    RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent, RenderTransitionWindow,
-    RenderVideoLayer, RenderVisualDiagnostic, build_render_graph,
+    RenderBlendIntent, RenderCanvas, RenderCanvasBackground, RenderCanvasBackgroundMode,
+    RenderCanvasDiagnostic, RenderFilterIntent, RenderGraph, RenderGraphError,
+    RenderGraphErrorKind, RenderIntentSupport, RenderMaskIntent, RenderMaterial,
+    RenderRetimeAudioIntent, RenderRetimeIntent, RenderRetimeSourceMapping, RenderSampledFrame,
+    RenderTextOverlay, RenderTransitionIntent, RenderTransitionWindow, RenderVideoLayer,
+    RenderVisualDiagnostic, build_render_graph,
 };
 pub use incremental::{
     RenderGraphDiff, RenderGraphNodeChange, RenderGraphNodeId, RenderGraphNodeRole,

@@ -5,9 +5,9 @@ use std::fmt;
 use draft_model::{
     AudioEffectSlotKind, AudioRetimePolicy, CanvasBackground, DraftId, Filter, FilterKind,
     Keyframe, KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds,
-    RationalFrameRate, SegmentBackgroundFilling, SegmentId, SegmentRetiming, SegmentVisual,
-    SourceTimerange, TargetTimerange, TrackId, TrackKind, TrackTransition, Transition,
-    TransitionReference,
+    RationalFrameRate, SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask,
+    SegmentRetiming, SegmentVisual, SourceTimerange, TargetTimerange, TrackId, TrackKind,
+    TrackTransition, Transition, TransitionReference,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -136,6 +136,8 @@ pub struct RenderVideoLayer {
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
+    pub mask: RenderMaskIntent,
+    pub blend: RenderBlendIntent,
     pub visual: SegmentVisual,
 }
 
@@ -268,6 +270,8 @@ pub struct RenderTextOverlay {
     pub keyframes: Vec<Keyframe>,
     pub filters: Vec<RenderFilterIntent>,
     pub transition: Option<RenderTransitionIntent>,
+    pub mask: RenderMaskIntent,
+    pub blend: RenderBlendIntent,
     pub visual: SegmentVisual,
 }
 
@@ -278,6 +282,24 @@ pub struct RenderVisualDiagnostic {
     pub segment_id: SegmentId,
     pub material_id: MaterialId,
     pub property: String,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderMaskIntent {
+    pub mask: SegmentMask,
+    pub capability: RenderEffectCapability,
+    pub support: RenderIntentSupport,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderBlendIntent {
+    pub blend_mode: SegmentBlendMode,
+    pub capability: RenderEffectCapability,
     pub support: RenderIntentSupport,
     pub reason: String,
 }
@@ -762,6 +784,8 @@ fn render_video_layer(
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
         transition: render_transition_intent(draft_id, track, segment, transition)?,
+        mask: render_mask_intent(&segment.visual.mask),
+        blend: render_blend_intent(&segment.visual.blend_mode),
         visual: segment.visual.clone(),
     })
 }
@@ -820,6 +844,8 @@ fn render_text_overlay(
             .as_ref()
             .map(|transition| render_legacy_transition_intent(draft_id, track, segment, transition))
             .transpose()?,
+        mask: render_mask_intent(&segment.visual.mask),
+        blend: render_blend_intent(&segment.visual.blend_mode),
         visual: segment.visual.clone(),
     })
 }
@@ -1066,6 +1092,26 @@ fn render_filter_intents(
             }
         })
         .collect()
+}
+
+fn render_mask_intent(mask: &SegmentMask) -> RenderMaskIntent {
+    let capability = render_mask_capability(mask);
+    RenderMaskIntent {
+        mask: mask.clone(),
+        support: capability.export,
+        reason: capability.export_reason.clone(),
+        capability,
+    }
+}
+
+fn render_blend_intent(blend_mode: &SegmentBlendMode) -> RenderBlendIntent {
+    let capability = render_blend_capability(blend_mode);
+    RenderBlendIntent {
+        blend_mode: blend_mode.clone(),
+        support: capability.export,
+        reason: capability.export_reason.clone(),
+        capability,
+    }
 }
 
 fn render_retime_intent(

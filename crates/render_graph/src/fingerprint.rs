@@ -4,9 +4,9 @@ use draft_model::{DraftId, RationalFrameRate, TargetTimerange};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    RenderAudioMix, RenderCanvas, RenderFilterIntent, RenderGraph, RenderGraphNodeId,
-    RenderMaterial, RenderOutputProfile, RenderRetimeIntent, RenderSampledFrame, RenderTextOverlay,
-    RenderTransitionIntent, RenderVideoLayer,
+    RenderAudioMix, RenderBlendIntent, RenderCanvas, RenderFilterIntent, RenderGraph,
+    RenderGraphNodeId, RenderMaskIntent, RenderMaterial, RenderOutputProfile, RenderRetimeIntent,
+    RenderSampledFrame, RenderTextOverlay, RenderTransitionIntent, RenderVideoLayer,
 };
 
 pub const GRAPH_SCHEMA_VERSION: u32 = 1;
@@ -234,6 +234,8 @@ fn video_layer_fingerprint(
             keyframes: &layer.keyframes,
             filters: &layer.filters,
             transition: layer.transition.as_ref(),
+            mask: &layer.mask,
+            blend: &layer.blend,
             visual: &layer.visual,
         },
         &SegmentInputFacts {
@@ -290,6 +292,8 @@ fn text_overlay_fingerprint(
             keyframes: &overlay.keyframes,
             filters: &overlay.filters,
             transition: overlay.transition.as_ref(),
+            mask: &overlay.mask,
+            blend: &overlay.blend,
             visual: &overlay.visual,
         },
         &TextOverlayInputFacts {
@@ -532,6 +536,8 @@ struct VideoLayerSemanticInput<'a> {
     keyframes: &'a [draft_model::Keyframe],
     filters: &'a [RenderFilterIntent],
     transition: Option<&'a RenderTransitionIntent>,
+    mask: &'a RenderMaskIntent,
+    blend: &'a RenderBlendIntent,
     visual: &'a draft_model::SegmentVisual,
 }
 
@@ -560,6 +566,8 @@ struct TextOverlaySemanticInput<'a> {
     keyframes: &'a [draft_model::Keyframe],
     filters: &'a [RenderFilterIntent],
     transition: Option<&'a RenderTransitionIntent>,
+    mask: &'a RenderMaskIntent,
+    blend: &'a RenderBlendIntent,
     visual: &'a draft_model::SegmentVisual,
 }
 
