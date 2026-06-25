@@ -284,6 +284,87 @@ VIDEO_EDITOR_TEST_WGPU=1 cargo test -p realtime_preview_runtime real_wgpu_adapte
 pnpm --filter @video-editor/desktop test:workspace -g "实时预览 native preview host rectangle reports integer bounds and telemetry"
 ```
 
+## Phase 19 Production Effect, Retiming, And Transition Ownership
+
+Phase 19 promotes retiming, transitions, effects, filters, masks, blends, and
+high-frequency editor manipulation into Rust-owned production semantics. The
+desktop UI may expose controls only after Rust reports capability-backed
+support, degraded support, or unsupported diagnostics through the shared runtime
+contracts.
+
+### Semantic Ownership Map
+
+| Layer | Owns | Does Not Own |
+|-------|------|--------------|
+| `draft_model` | First-party draft schema for retiming, transitions, production effects, filters, masks, blends, capability states, external compatibility references, and integer/rational timing fields | Provider-private IDs as internal semantics, FFmpeg filter strings, UI preview shortcuts |
+| `draft_commands` | Undoable commands for retime, transition, effect, filter, mask, blend, and project interaction begin/update/commit/cancel flows | Renderer drag math, per-pointer save loops, direct project persistence from UI samples |
+| `engine_core` | Accepted draft normalization, integer-microsecond source/target mapping, transition relationship resolution, and frame-state evaluation inputs | Electron-local time mapping, FFmpeg filter compilation, provider-native behavior |
+| `audio_engine` | Audio graph retime intent, follow-speed classification, source sample mapping, and parity diagnostics | UI-owned audio speed math, silent audio fallback success |
+| `render_graph` | Typed render intents, capability-aware graph nodes, semantic fingerprints, dirty domains, cache invalidation inputs, and preview/export graph parity | FFmpeg process execution, DOM/CSS effect rendering, adapter-private effect semantics |
+| `realtime_preview_runtime` | GPU/native preview support classification, production effect/filter/mask/blend/transition preview execution, interaction-generation telemetry, and unavailable diagnostics | Mock/artifact/CPU/DOM evidence as product preview success, renderer-side effect evaluation |
+| `ffmpeg_compiler` | Compilation from typed render graph intents into FFmpeg filter scripts and export diagnostics for supported/degraded paths | Editing behavior decisions, Electron-constructed FFmpeg commands, provider-native passthrough semantics |
+| `editor_runtime` | Project session interaction routing, coalesced interaction updates, commit/cancel authority, project save/revision ownership, and runtime capability reports | N-API transport details, React state management, default UI copy |
+
+The root invariant is unchanged: `.veproj/project.json` is the canonical
+semantic source of truth. Render graphs, compiled FFmpeg scripts, thumbnails,
+waveforms, preview caches, and exported media remain derived artifacts.
+
+### Desktop UI Boundary
+
+Electron renderer code displays state returned from Rust and emits typed project
+intents or project interaction events. It may keep immediate ghost/provisional
+preview state for pointer responsiveness, but draft mutation, undo/revision
+creation, save timing, source-to-target mapping, transition validity, effect
+evaluation, capability decisions, dirty ranges, cache fingerprints, render graph
+construction, and FFmpeg command generation remain below the binding boundary.
+
+High-frequency controls such as effect strength sliders, filter strength
+sliders, mask handles, blend opacity, transition duration handles, retime
+handles, and keyframe drags must follow the Rust interaction route:
+
+```text
+beginProjectInteraction -> coalesced updateProjectInteraction -> commitProjectInteraction / cancelProjectInteraction
+```
+
+Renderer-side `requestAnimationFrame` coalescing is allowed for reducing pointer
+traffic and drawing ghost state. It must not create one save, undo entry,
+revision increment, or semantic commit per pointer sample. Committed product
+state is accepted only from the Rust response/generation.
+
+### External Adapter Boundary
+
+Kaipai, Jianying, CapCut, and other external draft adapters may carry proprietary
+or provider-native effect/filter/transition IDs only as external compatibility
+references in import/export reports. Those IDs do not become internal render
+semantics, capability keys, or default UI labels. Adapters translate the
+supported subset into first-party draft semantics and report unsupported,
+degraded, or approximate mappings explicitly.
+
+### Phase 19 Gate Scripts
+
+The root Phase 19 gate is:
+
+```bash
+pnpm run test:phase19
+```
+
+It composes:
+
+- `pnpm run test:phase19-source-guards`
+- `pnpm run test:no-product-fallback`
+- `pnpm run test:phase19-rust`
+- `pnpm run test:phase19-desktop`
+- `cargo check --workspace --locked`
+- `pnpm run test:contracts`
+
+`test:phase19-source-guards` runs `scripts/phase19-source-guards.sh` in default
+aggregate mode. The guard blocks Electron-owned FFmpeg construction, renderer
+retime mapping, transition validation, effect/filter/mask/blend evaluation,
+cache/fingerprint semantics, provider-native IDs as internal semantics,
+fallback/mock/artifact/CPU/DOM success evidence, and high-frequency pointer
+samples that directly save, push undo, increment revisions, or commit project
+intents.
+
 ## Deferred Hardware Encoder Boundary
 
 `HardwareEncoder` is documented only and is not implemented as a Rust type in

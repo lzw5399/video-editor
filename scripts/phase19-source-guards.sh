@@ -272,6 +272,7 @@ scan_retime_filter_ownership() {
   matches="$(
     rg -n --pcre2 "$FFMPEG_RETIME_FILTER_PATTERN" apps crates \
       --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!crates/testkit/tests/production_effects_exports.rs' \
       --glob '!target/**' 2>/dev/null | strip_comments || true
   )"
   if [ -n "$matches" ]; then
@@ -331,6 +332,7 @@ scan_transition_filter_ownership() {
   matches="$(
     rg -n --pcre2 "$FFMPEG_TRANSITION_FILTER_PATTERN" apps crates \
       --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!crates/testkit/tests/production_effects_exports.rs' \
       --glob '!target/**' 2>/dev/null | strip_comments || true
   )"
   if [ -n "$matches" ]; then
@@ -371,6 +373,7 @@ scan_effect_filter_ownership() {
   matches="$(
     rg -n --pcre2 "$FFMPEG_EFFECT_FILTER_PATTERN" apps crates \
       --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!crates/testkit/tests/production_effects_exports.rs' \
       --glob '!target/**' 2>/dev/null | strip_comments || true
   )"
   if [ -n "$matches" ]; then
@@ -411,6 +414,7 @@ scan_mask_blend_filter_ownership() {
   matches="$(
     rg -n --pcre2 "$FFMPEG_MASK_BLEND_FILTER_PATTERN" apps crates \
       --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!crates/testkit/tests/production_effects_exports.rs' \
       --glob '!target/**' 2>/dev/null | strip_comments || true
   )"
   if [ -n "$matches" ]; then
