@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 18
 current_phase_name: mobile-server-binding-architecture-and-runtime-ports
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-06-25T00:25:54.056Z"
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-06-25T00:43:36.955Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 25
   completed_phases: 23
   total_plans: 172
-  completed_plans: 166
+  completed_plans: 167
   percent: 92
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 18 (mobile-server-binding-architecture-and-runtime-ports) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 18
+Plan: 2 of 6
+Status: Ready to execute
 Last activity: 2026-06-25 — Phase 18 execution started
 
 Progress: Phase 15.1, 15.2, 15.3, 16, 17, and 17.1 are complete; Phase 18 is next and should define portable binding/runtime boundaries before Phase 19 effects semantics.
@@ -203,6 +203,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, and 17.1 are complete; Phase 18 is nex
 | Phase 17.1 P05 | resumed | 3 tasks | 13 files |
 | Phase 17.1 P06 | 31 min | 3 tasks | 7 files |
 | Phase 17.1 P07 | 23 min | 3 tasks | 9 files |
+| Phase 18 P01 | 12 min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -577,6 +578,9 @@ Recent decisions affecting current work:
 - [Phase 17.1]: The Phase 17.1 desktop aggregate uses Playwright --workers=1 because packaged Electron/native preview tests share heavy runtime state and previously overloaded under parallel execution.
 - [Phase 17.1]: Transition, fade, and direct crop handles are validated as product-gated surfaces until production Rust semantics, preview, export, and undo behavior exist.
 - [Phase 17.1]: The validation matrix treats each supported interaction row as auditable only when it names implementation path, test command, no-save/no-undo behavior, preview evidence, stale/cancel behavior, and product UI state.
+- [Phase 18]: editor_runtime is the shared Rust authority layer below Node, C, server, and future mobile adapters. — Plan 18-01 established runtime, project-session, export, and handle contracts under adapters.
+- [Phase 18]: Project-session contracts call project_store for .veproj/project.json create/open/save paths. — This preserves .veproj/project.json as the canonical source of truth across adapters.
+- [Phase 18]: Opaque HandleToken values include owner and generation facts while resource metadata remains in Rust. — The handle registry rejects stale, fabricated, wrong-owner, wrong-device, expired, and double-release tokens with typed diagnostics.
 
 ### Pending Todos
 
@@ -658,6 +662,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T23:16:07.694Z
-Stopped at: Phase 18 context gathered
-Resume file: .planning/phases/18-mobile-server-binding-architecture-and-runtime-ports/18-CONTEXT.md
+Last session: 2026-06-25T00:43:36.948Z
+Stopped at: Completed 18-01-PLAN.md
+Resume file: None
