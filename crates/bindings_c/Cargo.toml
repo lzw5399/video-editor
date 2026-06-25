@@ -12,3 +12,11 @@ path = "src/lib.rs"
 
 [dependencies]
 editor_runtime = { path = "../editor_runtime" }
+media_runtime = { path = "../media_runtime" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[dev-dependencies]
+draft_model = { path = "../draft_model" }
+serde_json = "1.0.150"
+tempfile = "3.27.0"

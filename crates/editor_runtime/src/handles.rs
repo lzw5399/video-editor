@@ -302,6 +302,29 @@ impl HandleRegistry {
         })
     }
 
+    pub fn retain(
+        &mut self,
+        owner_session: &RuntimeSessionId,
+        token: &HandleToken,
+        now_us: u64,
+    ) -> Result<HandleResolution, RuntimeError> {
+        let key = {
+            let record = self.validated_record(owner_session, token, now_us)?;
+            record.token.key()
+        };
+        let record = self
+            .records
+            .get_mut(&key)
+            .expect("validated handle record must still exist");
+        record.outstanding_count = record.outstanding_count.saturating_add(1);
+        Ok(HandleResolution {
+            token: token.clone(),
+            kind: record.token.kind,
+            owner_session: record.token.owner_session.clone(),
+            generation: record.token.generation,
+        })
+    }
+
     pub fn release(
         &mut self,
         owner_session: &RuntimeSessionId,
@@ -314,13 +337,19 @@ impl HandleRegistry {
             }
         }
         let key = token.key();
+        let kind;
         {
             let record = self
                 .records
                 .get_mut(&key)
                 .expect("validated handle record must still exist");
-            record.release_state = Some(HandleReleaseState::Explicit);
-            record.outstanding_count = 0;
+            kind = record.token.kind;
+            if record.outstanding_count > 1 {
+                record.outstanding_count -= 1;
+            } else {
+                record.release_state = Some(HandleReleaseState::Explicit);
+                record.outstanding_count = 0;
+            }
         }
         let record = self
             .records
@@ -331,7 +360,7 @@ impl HandleRegistry {
             kind: record.token.kind,
             owner_session: record.token.owner_session.clone(),
             generation: record.token.generation,
-            outstanding_count: self.outstanding_count(owner_session, record.token.kind),
+            outstanding_count: self.outstanding_count(owner_session, kind),
             release_state: HandleReleaseState::Explicit,
         })
     }

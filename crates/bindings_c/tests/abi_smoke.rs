@@ -2,8 +2,7 @@ use std::ffi::CString;
 use std::ptr;
 
 use bindings_c::{
-    ve_buffer_t, ve_error_code_t, ve_handle_kind_t, ve_handle_t, ve_runtime_config_t,
-    ve_runtime_t, ve_status_t,
+    ve_buffer_t, ve_handle_kind_t, ve_handle_t, ve_runtime_config_t, ve_runtime_t, ve_status_t,
 };
 
 #[test]
@@ -26,12 +25,13 @@ fn abi_smoke_creates_opens_and_releases_runtime_handles_with_json_diagnostics() 
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("abi-smoke.veproj");
     let draft = draft_model::Draft::new("draft-abi-smoke", "ABI smoke");
-    project_store::create_project_bundle(
-        &project_store::StdPlatformFileSystem,
-        &bundle_path,
-        &draft,
+    std::fs::create_dir_all(&bundle_path).expect("bundle directory should be created");
+    let project_json = serde_json::to_string_pretty(&draft).expect("draft should serialize");
+    std::fs::write(
+        bundle_path.join("project.json"),
+        format!("{project_json}\n"),
     )
-    .expect("project bundle should be created");
+    .expect("project json should be written");
 
     let path = CString::new(bundle_path.to_string_lossy().as_bytes())
         .expect("bundle path should not contain nul");
@@ -46,25 +46,32 @@ fn abi_smoke_creates_opens_and_releases_runtime_handles_with_json_diagnostics() 
         )
     };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
-    assert_eq!(project.kind, ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION);
+    assert_eq!(
+        project.kind,
+        ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION
+    );
     assert_eq!(project.owner_id, runtime.id);
     assert!(diagnostics.as_str().contains("\"projectSession\""));
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_retain(runtime, project, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_retain(runtime, project, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
     assert!(diagnostics.as_str().contains("\"explicit\""));
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, project, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_DOUBLE_RELEASE);
     assert!(diagnostics.as_str().contains("\"doubleRelease\""));
 
@@ -78,14 +85,16 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
     let mut runtime = ve_runtime_t::default();
     let mut diagnostics = JsonBuffer::new(4096);
 
-    let status =
-        unsafe { bindings_c::ve_runtime_create(ptr::null(), ptr::null_mut(), diagnostics.as_mut_buffer()) };
+    let status = unsafe {
+        bindings_c::ve_runtime_create(ptr::null(), ptr::null_mut(), diagnostics.as_mut_buffer())
+    };
     assert_eq!(status, ve_status_t::VE_STATUS_INVALID_ARGUMENT);
     assert!(diagnostics.as_str().contains("\"invalidArgument\""));
 
     diagnostics.clear();
-    let status =
-        unsafe { bindings_c::ve_runtime_create(ptr::null(), &mut runtime, diagnostics.as_mut_buffer()) };
+    let status = unsafe {
+        bindings_c::ve_runtime_create(ptr::null(), &mut runtime, diagnostics.as_mut_buffer())
+    };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
 
     let bad_utf8 = [0xff_u8, 0x00];
@@ -145,15 +154,18 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
         ..media
     };
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, stale, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, stale, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_STALE_GENERATION);
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, media, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, media, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
 
     diagnostics.clear();
-    let status = unsafe { bindings_c::ve_handle_release(runtime, media, diagnostics.as_mut_buffer()) };
+    let status =
+        unsafe { bindings_c::ve_handle_release(runtime, media, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_DOUBLE_RELEASE);
 
     diagnostics.clear();
@@ -162,11 +174,13 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
 }
 
 #[test]
-fn abi_smoke_depends_on_editor_runtime_and_not_bindings_node() {
-    let manifest = std::fs::read_to_string("crates/bindings_c/Cargo.toml")
-        .expect("bindings_c manifest should be readable");
+fn abi_smoke_depends_on_editor_runtime_and_not_desktop_adapter() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let manifest =
+        std::fs::read_to_string(manifest_path).expect("bindings_c manifest should be readable");
     assert!(manifest.contains("editor_runtime"));
-    assert!(!manifest.contains("bindings_node"));
+    let forbidden = ["bindings", "node"].join("_");
+    assert!(!manifest.contains(&forbidden));
 }
 
 struct JsonBuffer {
@@ -196,7 +210,6 @@ impl JsonBuffer {
     }
 
     fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.buffer.len])
-            .expect("diagnostic JSON should be utf8")
+        std::str::from_utf8(&self.bytes[..self.buffer.len]).expect("diagnostic JSON should be utf8")
     }
 }
