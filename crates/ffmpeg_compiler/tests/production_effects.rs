@@ -102,7 +102,7 @@ fn phase19_production_effects_compiler_emits_dissolve_transition_from_graph_inte
     );
     assert!(
         job.filter_script
-            .contains("[vtransition_left_segment_to_right_segment]"),
+            .contains("[vtransition_left-segment_to_right-segment]"),
         "transition output label should be deterministic and endpoint-based"
     );
     assert!(
@@ -111,6 +111,43 @@ fn phase19_production_effects_compiler_emits_dissolve_transition_from_graph_inte
                 && diagnostic.support != RenderIntentSupport::Supported
         }),
         "supported dissolve transitions should not emit export unsupported diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn phase19_production_effects_compiler_emits_chained_dissolve_transitions_without_label_reuse()
+-> Result<(), FfmpegCompileError> {
+    let plan = transition_chain_export_plan(vec![
+        TrackTransition::dissolve("left-segment", "middle-segment", Microseconds::new(300_000)),
+        TrackTransition::dissolve(
+            "middle-segment",
+            "right-segment",
+            Microseconds::new(300_000),
+        ),
+    ]);
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert_eq!(
+        job.filter_script
+            .matches("xfade=transition=fade:duration=0.300000")
+            .count(),
+        2,
+        "each canonical transition relationship should compile once"
+    );
+    assert!(
+        job.filter_script
+            .contains("[v1]split=3[v1main][v1transition0][v1transition1]"),
+        "middle segment must be split once for main output plus both transition taps"
+    );
+    assert!(
+        job.filter_script
+            .contains("[vtransition_left-segment_to_middle-segment]")
+            && job
+                .filter_script
+                .contains("[vtransition_middle-segment_to_right-segment]"),
+        "transition labels should remain deterministic and endpoint-based"
     );
 
     Ok(())
@@ -165,6 +202,54 @@ fn retimed_export_plan(audio_policy: AudioRetimePolicy) -> RenderGraphPlan {
 }
 
 fn transition_export_plan(transition: TrackTransition) -> RenderGraphPlan {
+    two_segment_transition_export_plan(transition)
+}
+
+fn transition_chain_export_plan(transitions: Vec<TrackTransition>) -> RenderGraphPlan {
+    let mut draft = Draft::new(
+        "phase19-transition-compiler",
+        "Phase 19 Transition Compiler",
+    );
+    let mut material = Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file:///media/transition-source.mp4",
+        "Transition Source",
+    );
+    material.metadata.duration = Some(Microseconds::new(4_000_000));
+    material.metadata.width = Some(1_920);
+    material.metadata.height = Some(1_080);
+    material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    material.metadata.has_video = true;
+    material.metadata.has_audio = false;
+    draft.materials.push(material);
+
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    track
+        .segments
+        .push(transition_segment("left-segment", 0, 0, 1_000_000));
+    track.segments.push(transition_segment(
+        "middle-segment",
+        1_000_000,
+        1_000_000,
+        1_000_000,
+    ));
+    track.segments.push(transition_segment(
+        "right-segment",
+        2_000_000,
+        2_000_000,
+        1_000_000,
+    ));
+    track.transitions.extend(transitions);
+    draft.tracks.push(track);
+
+    graph_plan_from_draft_with_range(
+        &draft,
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(3_000_000)),
+    )
+}
+
+fn two_segment_transition_export_plan(transition: TrackTransition) -> RenderGraphPlan {
     let mut draft = Draft::new(
         "phase19-transition-compiler",
         "Phase 19 Transition Compiler",

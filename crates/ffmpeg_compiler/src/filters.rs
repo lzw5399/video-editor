@@ -3,17 +3,18 @@ use std::path::Path;
 
 use draft_model::{
     MaterialId, MaterialKind, Microseconds, SegmentBackgroundFilling, SegmentCrop, SegmentFitMode,
-    SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
+    SegmentId, SegmentScale, SegmentVisual, SourceTimerange, TargetTimerange,
 };
 use render_graph::{
     OutputDimensions, RenderAudioEffectSlotSupport, RenderAudioMix, RenderAudioMixDiagnostic,
     RenderCanvasBackgroundMode, RenderGraphPlan, RenderIntentSupport, RenderMaterial,
-    RenderOutputProfile, RenderVideoLayer,
+    RenderOutputProfile, RenderTransitionIntent, RenderVideoLayer,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::effects::{
-    compile_audio_retime_filters, compile_video_retime_filters, retimed_source_timerange_for_output,
+    compile_audio_retime_filters, compile_dissolve_transition_filter, compile_video_retime_filters,
+    retimed_source_timerange_for_output,
 };
 use crate::job::{
     CompileContext, FfmpegCompileError, FfmpegCompileErrorKind, FfmpegInput, FfmpegSidecar,
@@ -53,7 +54,9 @@ struct LayerPlacement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct VisualLayerFilter {
+    segment_id: SegmentId,
     label: String,
+    transition: Option<RenderTransitionIntent>,
     placement: LayerPlacement,
     active_start: Microseconds,
     active_end: Microseconds,
@@ -111,6 +114,7 @@ pub fn generate_filter_script(
         lines.extend(visual_layer.lines.iter().cloned());
         visual_layers.push(visual_layer);
     }
+    append_transition_filters(&mut lines, &mut visual_layers, output_timerange(plan));
 
     let mut current_video = if visual_layers.is_empty() {
         let background_color = canvas_background_color_arg(plan);
@@ -335,7 +339,9 @@ fn compile_visual_layer(
     let active_end = Microseconds::new(active_start.get().saturating_add(clip.duration.get()));
     if is_full_canvas_identity(&layer.visual) {
         return VisualLayerFilter {
+            segment_id: layer.segment_id.clone(),
             label: label.clone(),
+            transition: layer.transition.clone(),
             placement: LayerPlacement { x: 0, y: 0 },
             active_start,
             active_end,
@@ -438,12 +444,156 @@ fn compile_visual_layer(
     }
 
     VisualLayerFilter {
+        segment_id: layer.segment_id.clone(),
         label,
+        transition: layer.transition.clone(),
         placement: layer_placement(&layer.visual, output_dimensions, rotated_dimensions),
         active_start,
         active_end,
         lines,
     }
+}
+
+fn append_transition_filters(
+    lines: &mut Vec<String>,
+    visual_layers: &mut Vec<VisualLayerFilter>,
+    output: &TargetTimerange,
+) {
+    let mut transition_specs = visual_layers
+        .iter()
+        .filter_map(|layer| layer_transition_spec(layer, visual_layers, output))
+        .collect::<Vec<_>>();
+
+    let mut transition_uses = vec![Vec::new(); visual_layers.len()];
+    for (spec_index, spec) in transition_specs.iter().enumerate() {
+        transition_uses[spec.from_index].push((spec_index, TransitionEndpoint::From));
+        transition_uses[spec.to_index].push((spec_index, TransitionEndpoint::To));
+    }
+
+    for (layer_index, uses) in transition_uses.into_iter().enumerate() {
+        if uses.is_empty() {
+            continue;
+        }
+
+        let layer_label = visual_layers[layer_index].label.clone();
+        let main_label = format!("{layer_label}main");
+        let mut output_labels = vec![main_label.clone()];
+        for (use_index, (spec_index, endpoint)) in uses.into_iter().enumerate() {
+            let transition_label = format!("{layer_label}transition{use_index}");
+            match endpoint {
+                TransitionEndpoint::From => {
+                    transition_specs[spec_index].from_transition_label = transition_label.clone();
+                }
+                TransitionEndpoint::To => {
+                    transition_specs[spec_index].to_transition_label = transition_label.clone();
+                }
+            }
+            output_labels.push(transition_label);
+        }
+        lines.push(format!(
+            "[{from}]split={outputs}{labels}",
+            from = layer_label,
+            outputs = output_labels.len(),
+            labels = output_labels
+                .iter()
+                .map(|label| format!("[{label}]"))
+                .collect::<String>(),
+        ));
+        visual_layers[layer_index].label = main_label;
+    }
+
+    for spec in transition_specs {
+        let Some(filter) = compile_dissolve_transition_filter(
+            &spec.transition,
+            &spec.from_transition_label,
+            &spec.to_transition_label,
+            &spec.output_label,
+            spec.offset,
+        ) else {
+            continue;
+        };
+        lines.push(filter);
+        visual_layers.push(VisualLayerFilter {
+            segment_id: spec.transition.from_segment_id.clone(),
+            label: spec.output_label,
+            transition: None,
+            placement: spec.placement,
+            active_start: spec.active_start,
+            active_end: spec.active_end,
+            lines: Vec::new(),
+        });
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransitionEndpoint {
+    From,
+    To,
+}
+
+struct TransitionFilterSpec {
+    from_index: usize,
+    to_index: usize,
+    from_transition_label: String,
+    to_transition_label: String,
+    output_label: String,
+    transition: RenderTransitionIntent,
+    offset: Microseconds,
+    placement: LayerPlacement,
+    active_start: Microseconds,
+    active_end: Microseconds,
+}
+
+fn layer_transition_spec(
+    layer: &VisualLayerFilter,
+    visual_layers: &[VisualLayerFilter],
+    output: &TargetTimerange,
+) -> Option<TransitionFilterSpec> {
+    let transition = layer.transition.as_ref()?;
+    if transition.support != RenderIntentSupport::Supported {
+        return None;
+    }
+    let from_index = visual_layers
+        .iter()
+        .position(|candidate| candidate.segment_id == transition.from_segment_id)?;
+    let to_index = visual_layers
+        .iter()
+        .position(|candidate| candidate.segment_id == transition.to_segment_id)?;
+    let active_start = target_delay_from_output(&transition.window.target_timerange, output);
+    let active_end = Microseconds::new(
+        active_start
+            .get()
+            .saturating_add(transition.window.target_timerange.duration.get()),
+    );
+    let offset = Microseconds::new(
+        transition
+            .window
+            .target_timerange
+            .start
+            .get()
+            .saturating_sub(output.start.get()),
+    );
+
+    Some(TransitionFilterSpec {
+        from_index,
+        to_index,
+        from_transition_label: String::new(),
+        to_transition_label: String::new(),
+        output_label: transition_output_label(transition),
+        transition: transition.clone(),
+        offset,
+        placement: visual_layers[from_index].placement,
+        active_start,
+        active_end,
+    })
+}
+
+fn transition_output_label(transition: &RenderTransitionIntent) -> String {
+    format!(
+        "vtransition_{}_to_{}",
+        sanitize_id(transition.from_segment_id.as_str()),
+        sanitize_id(transition.to_segment_id.as_str())
+    )
 }
 
 fn visual_source_filters(

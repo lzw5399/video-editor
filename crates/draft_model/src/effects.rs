@@ -138,7 +138,7 @@ impl EffectCapabilityRegistry {
             "Dissolve transition",
             CapabilityCategory::Transition,
             "dissolve transition is the first typed transition contract",
-            "dissolve transition maps to compiler-owned xfade semantics",
+            "dissolve transition maps to compiler-owned transition export semantics",
         ));
         entries.push(supported_entry(
             FilterKind::GaussianBlur {

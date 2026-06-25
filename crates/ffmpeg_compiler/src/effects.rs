@@ -1,9 +1,10 @@
 use draft_model::{
     AudioRetimePolicy, MaterialId, Microseconds, RetimeMode, SegmentId, SourceTimerange,
-    SpeedCurvePoint, SpeedRatio, TargetTimerange, TrackId,
+    SpeedCurvePoint, SpeedRatio, TargetTimerange, TrackId, TransitionKind, TransitionReference,
 };
 use render_graph::{
     RenderAudioMixDiagnostic, RenderIntentSupport, RenderRetimeIntent, RenderRetimeSourceMapping,
+    RenderTransitionIntent,
 };
 
 use crate::job::format_seconds;
@@ -12,6 +13,32 @@ use crate::job::format_seconds;
 pub struct CompiledAudioRetimeFilters {
     pub filters: Vec<String>,
     pub diagnostics: Vec<RenderAudioMixDiagnostic>,
+}
+
+pub fn compile_dissolve_transition_filter(
+    transition: &RenderTransitionIntent,
+    from_label: &str,
+    to_label: &str,
+    output_label: &str,
+    offset: Microseconds,
+) -> Option<String> {
+    if transition.capability.export != RenderIntentSupport::Supported {
+        return None;
+    }
+    if !matches!(
+        transition.reference,
+        TransitionReference::FirstParty {
+            transition: TransitionKind::Dissolve
+        }
+    ) {
+        return None;
+    }
+
+    Some(format!(
+        "[{from_label}][{to_label}]xfade=transition=fade:duration={duration}:offset={offset}[{output_label}]",
+        duration = format_seconds(transition.duration),
+        offset = format_seconds(offset),
+    ))
 }
 
 pub fn compile_video_retime_filters(

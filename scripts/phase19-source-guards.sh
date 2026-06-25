@@ -73,6 +73,7 @@ FALLBACK_SUCCESS_PATTERN='\b(?:(?:fallback|mock|artifact|cpuReadback|cpuProbe|de
 POINTER_SAVE_LOOP_PATTERN='\b(?:pointermove|pointerMove|mousemove|mouseMove|onPointerMove|onMouseMove|dragMove|sliderMove|scrubMove|handle[A-Za-z]*(?:Drag|Slider|Scrub))[A-Za-z0-9_.,:;() =>{}[\]"'\'']{0,240}\b(?:saveProjectBundle|pushUndo|revision\s*(?:\+\+|=)|incrementRevision|executeProjectIntent|executeProjectTimelineIntent)\b'
 PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeconds|sourceTimeSeconds|retimeSeconds|speedFloat|speedF32|speedF64|durationF32|durationF64)\b'
 FFMPEG_RETIME_FILTER_PATTERN='\b(?:setpts|asetpts|atempo)\s*='
+FFMPEG_TRANSITION_FILTER_PATTERN='\b(?:xfade|acrossfade|transition=fade)\b'
 
 ELECTRON_BOUNDARY_DIRS=(
   "apps/desktop-electron/src/main"
@@ -292,7 +293,40 @@ require_retiming_audio_parity_coverage() {
 
 require_transition_files() {
   require_file "crates/draft_commands/tests/transition_commands.rs"
+  require_file "crates/render_graph/src/graph.rs"
+  require_file "crates/render_graph/src/fingerprint.rs"
+  require_file "crates/render_graph/tests/production_effects.rs"
+  require_file "crates/realtime_preview_runtime/src/capabilities.rs"
+  require_file "crates/realtime_preview_runtime/tests/production_effects.rs"
+  require_file "crates/ffmpeg_compiler/src/effects.rs"
+  require_file "crates/ffmpeg_compiler/src/filters.rs"
+  require_file "crates/ffmpeg_compiler/tests/production_effects.rs"
   require_fixed "crates/draft_commands/tests/transition_commands.rs" "phase19_"
+  require_fixed "crates/render_graph/src/graph.rs" "RenderTransitionIntent"
+  require_fixed "crates/render_graph/src/graph.rs" "from_segment_id"
+  require_fixed "crates/render_graph/src/graph.rs" "to_segment_id"
+  require_fixed "crates/render_graph/src/fingerprint.rs" "TransitionSemanticInput"
+  require_fixed "crates/render_graph/tests/production_effects.rs" "phase19_production_effects_transition"
+  require_fixed "crates/realtime_preview_runtime/src/capabilities.rs" "transition capability is registry-backed and realtime supported"
+  require_fixed "crates/realtime_preview_runtime/tests/production_effects.rs" "phase19_production_effects_preview_reports_first_party_dissolve_transition_support"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "compile_dissolve_transition_filter"
+  require_fixed "crates/ffmpeg_compiler/src/effects.rs" "xfade=transition=fade"
+  require_fixed "crates/ffmpeg_compiler/src/filters.rs" "RenderTransitionIntent"
+  require_fixed "crates/ffmpeg_compiler/src/filters.rs" "compile_dissolve_transition_filter"
+  require_fixed "crates/ffmpeg_compiler/tests/production_effects.rs" "phase19_production_effects_compiler_emits_dissolve_transition"
+}
+
+scan_transition_filter_ownership() {
+  local matches
+  matches="$(
+    rg -n --pcre2 "$FFMPEG_TRANSITION_FILTER_PATTERN" apps crates \
+      --glob '!crates/ffmpeg_compiler/**' \
+      --glob '!target/**' 2>/dev/null | strip_comments || true
+  )"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "FFmpeg transition filter strings must be generated only inside ffmpeg_compiler"
+  fi
 }
 
 require_effect_files() {
@@ -344,6 +378,7 @@ run_retiming_audio() {
 run_transition() {
   run_wave0
   require_transition_files
+  scan_transition_filter_ownership
   echo "phase19 source guards passed for transition"
 }
 
@@ -379,6 +414,7 @@ run_full() {
   scan_provider_native_semantics
   scan_pointer_save_loops
   scan_retime_filter_ownership
+  scan_transition_filter_ownership
   echo "phase19 source guards passed"
 }
 
