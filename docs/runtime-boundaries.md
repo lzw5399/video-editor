@@ -182,6 +182,88 @@ evaluation, and floating-point persisted timeline request fields while allowing
 DOM measurement, Chinese telemetry display, main-process handle acquisition, and
 binding route/type names.
 
+## Phase 18 Portable Runtime And Binding Boundaries
+
+Phase 18 promotes the desktop-first Rust core into a portable runtime surface.
+The ownership split is destructive by design: shared project, export, handle,
+and lifecycle semantics live below every adapter in `editor_runtime`. Desktop
+Node-API, portable C ABI, future Android JNI, future iOS Swift/ObjC, and server
+entrypoints are transport layers over that shared Rust authority.
+
+### Shared Runtime Ownership Map
+
+| Layer | Owns | Does Not Own |
+|-------|------|--------------|
+| `editor_runtime` | Runtime sessions, project sessions, project-store calls, Node-shaped project-session semantics, export service, render graph build, FFmpeg job compilation, scheduler state, export telemetry, handle registry, owner/generation/ref/lease/release/cascade diagnostics | N-API transport, C ABI buffer layout, Electron IPC, Android lifecycle callbacks, iOS permission UX, server CLI argument parsing |
+| `bindings_node` | Desktop Node-API and JSON transport, explicit N-API function names, serde conversion, desktop resource wiring | Project-session registry, draft mutation semantics, export scheduler policy, render graph or FFmpeg compilation, portable handle lifetime policy |
+| Electron main/preload/renderer | UI commands, desktop IPC validation, native binding loading, preview host geometry, product display | Draft/project/export semantics, FFmpeg command construction, render graph construction, fallback success decisions, handle metadata |
+| `bindings_c` | Stable C ABI transport, generated `video_editor_runtime.h`, `repr(C)` status/runtime/handle/buffer/texture structs, bounded diagnostic buffers | Draft semantics, project lifecycle policy, export scheduler policy, handle retain/release metadata |
+| Future Android JNI adapter | JNI thread attachment, Activity/process lifecycle forwarding, Java/Kotlin wrappers around C ABI handles, platform permission prompts | Rust resource metadata, fabricated handles, garbage-collection-only release, duplicated project/export semantics |
+| Future iOS Swift/ObjC adapter | C header import, Swift/ObjC wrappers around opaque handles, security-scoped resource coordination, app lifecycle forwarding | Rust resource metadata, fabricated handles, ARC-only release, duplicated project/export semantics |
+| `server_runtime` | Electron-free `.veproj` open, export start/status/cancel/wait entrypoints, JSON CLI events, bundle-relative material resolution before export | Electron, BrowserWindow, preload IPC, DOM state, desktop UI view models, independent render/export scheduler |
+
+`editor_runtime::EDITOR_RUNTIME_CONTRACT_VERSION` names the shared Rust
+contract. Adapter-specific versioning may wrap it, but adapters must not fork
+draft, project, render, export, scheduler, or handle semantics.
+
+### Project And Export Boundary
+
+`.veproj/project.json` remains the canonical semantic source of truth across
+desktop, C ABI, mobile contracts, and server runtime. `editor_runtime` opens and
+saves bundles through `project_store`, then builds export jobs through
+`engine_core`, `render_graph`, `ffmpeg_compiler`, `task_runtime`, and
+`media_runtime` services. Adapters pass requests and receive typed responses;
+they do not construct FFmpeg commands or render graphs.
+
+`server_runtime` is the first non-Electron entrypoint over the shared export
+path. It opens `.veproj` bundles, resolves bundle-relative filesystem materials
+at export time without mutating `project.json`, starts exports through
+`editor_runtime::ExportService`, reports structured progress/status/error JSON,
+supports cancellation, and validates output media through the same runtime path.
+
+### Opaque Handles And Mobile Contracts
+
+Runtime sessions, project sessions, media handles, frame handles, texture
+handles, and artifact handles are Rust-owned opaque tokens. Public tokens carry
+only kind, ID, owner session, owner generation, and generation facts. Rust stores
+the resource metadata, retain/release state, lease expiry, texture/device facts,
+and leak diagnostics.
+
+Future JNI and Swift/ObjC adapters import the C ABI contract in
+`crates/bindings_c/include/video_editor_runtime.h` and follow
+[`docs/mobile-runtime-contracts.md`](mobile-runtime-contracts.md). Phase 18
+documents mobile lifecycle, background/foreground, sandboxed permission
+invalidation, file handle, texture/device, cancellation, explicit release, and
+cascading close rules. It does not ship full Android/iOS apps, mobile UI,
+permission UX, platform packaging, or store deployment.
+
+### Phase 18 Gate Scripts
+
+The root Phase 18 gate is:
+
+```bash
+pnpm run test:phase18
+```
+
+It composes:
+
+- `pnpm run test:phase18-rust`
+- `pnpm run test:phase18-source-guards`
+- `pnpm run test:phase18-abi`
+- `pnpm run test:phase18-server`
+- `pnpm run test:phase18-mobile-contracts`
+- `cargo check --workspace --locked`
+- `pnpm run test:no-product-fallback`
+- `pnpm run test:contracts`
+
+The source guard blocks duplicated adapter semantics, C ABI dependency on the
+desktop Node adapter, server Electron dependencies, adapter-owned handle
+lifetime policy, Electron render/export construction, and fallback/mock/artifact
+success evidence. The ABI drift guard regenerates the checked-in C header
+through project-local pinned `cbindgen 0.29.4`. The mobile contract guard checks
+the contract document and `bindings_c` smoke tests for owner, generation,
+device, release, and cascading close coverage.
+
 ### Manual Platform Smoke
 
 These platform smokes are required before declaring a release build ready, but
