@@ -12,28 +12,30 @@ use draft_import::{
 };
 use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
-    AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload, AudioEffectSlot,
-    AudioFade, AudioPanBalance, ChangedEntity, CommandDelta, CommandDeltaName, CommandError,
-    CommandErrorKind, CommandEvent, CommandResultEnvelope, CommandState,
-    DeleteSegmentCommandPayload, DirtyDomain, Draft, DraftCanvasConfig,
-    EditTextSegmentCommandPayload, EffectParameterUpdate, ImportSubtitleSrtIntentCommandPayload,
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
-    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialStatus, Microseconds,
-    MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload, ProjectInteractionKind,
-    ProjectInteractionSequenceError, ProjectInteractionSession as DraftProjectInteractionSession,
-    RationalFrameRate, RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment,
-    SegmentAudio, SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentMask,
+    AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload,
+    AddTransitionCommandPayload, ApplySegmentEffectCommandPayload, AudioEffectSlot, AudioFade,
+    AudioPanBalance, ChangedEntity, CommandDelta, CommandDeltaName, CommandError, CommandErrorKind,
+    CommandEvent, CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload, DirtyDomain,
+    Draft, DraftCanvasConfig, EditTextSegmentCommandPayload, EffectParameterUpdate, Filter,
+    ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
+    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload,
+    ProjectInteractionKind, ProjectInteractionSequenceError,
+    ProjectInteractionSession as DraftProjectInteractionSession, RationalFrameRate,
+    RemoveSegmentEffectCommandPayload, RemoveSegmentKeyframeCommandPayload,
+    RemoveTransitionCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
+    SegmentBackgroundFilling, SegmentBlendMode, SegmentFitMode, SegmentId, SegmentMask,
     SegmentPosition, SegmentRetiming, SegmentVisual, SegmentVolume,
-    SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
-    SetSegmentRetimeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
-    SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
-    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBackground,
-    TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
-    TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
-    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentEffectParameterCommandPayload, UpdateSegmentVisualCommandPayload,
-    UpdateTransitionDurationCommandPayload,
+    SelectTimelineSegmentsCommandPayload, SetSegmentBlendModeCommandPayload,
+    SetSegmentKeyframeCommandPayload, SetSegmentMaskCommandPayload, SetSegmentRetimeCommandPayload,
+    SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload, SetTrackMuteCommandPayload,
+    SetTrackVisibilityCommandPayload, SourceTimerange, SplitSelectedSegmentIntentCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
+    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
+    TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind, TransitionReference,
+    TrimSegmentCommandPayload, TrimSegmentDirection, UpdateDraftCanvasConfigCommandPayload,
+    UpdateSegmentAudioCommandPayload, UpdateSegmentEffectParameterCommandPayload,
+    UpdateSegmentVisualCommandPayload, UpdateTransitionDurationCommandPayload,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config, run_scheduled_material_probe};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -268,6 +270,51 @@ enum ProjectIntent {
     },
     UpdateSelectedSegmentVisual {
         patch: SegmentVisualPatch,
+    },
+    SetSelectedSegmentRetime {
+        retiming: SegmentRetiming,
+    },
+    ApplySelectedSegmentEffect {
+        effect: Filter,
+    },
+    UpdateSelectedSegmentEffectParameter {
+        #[serde(rename = "effectIndex")]
+        effect_index: u32,
+        parameter: EffectParameterUpdate,
+    },
+    RemoveSelectedSegmentEffect {
+        #[serde(rename = "effectIndex")]
+        effect_index: u32,
+    },
+    SetSelectedSegmentMask {
+        mask: SegmentMask,
+    },
+    SetSelectedSegmentBlendMode {
+        #[serde(rename = "blendMode")]
+        blend_mode: SegmentBlendMode,
+    },
+    AddTransitionAtBoundary {
+        #[serde(rename = "fromSegmentId")]
+        from_segment_id: SegmentId,
+        #[serde(rename = "toSegmentId")]
+        to_segment_id: SegmentId,
+        reference: TransitionReference,
+        duration: Microseconds,
+        #[serde(default)]
+        parameters: BTreeMap<String, String>,
+    },
+    UpdateSelectedTransitionDuration {
+        #[serde(rename = "fromSegmentId")]
+        from_segment_id: SegmentId,
+        #[serde(rename = "toSegmentId")]
+        to_segment_id: SegmentId,
+        duration: Microseconds,
+    },
+    RemoveSelectedTransition {
+        #[serde(rename = "fromSegmentId")]
+        from_segment_id: SegmentId,
+        #[serde(rename = "toSegmentId")]
+        to_segment_id: SegmentId,
     },
     SetSelectedSegmentKeyframe {
         property: KeyframeProperty,
@@ -2498,17 +2545,13 @@ impl ProjectSession {
                 ),
             )),
             ProjectInteractionPayload::SelectedSegmentMask { mask } => {
-                let segment = self.selected_segment("调整遮罩")?;
-                let segment_id = segment.segment_id.clone();
-                let mut visual = segment.visual.clone();
-                visual.mask = mask;
                 Ok(ResolvedProjectInteraction::Timeline(
-                    TimelineEditPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
+                    TimelineEditPayload::SetSegmentMask(SetSegmentMaskCommandPayload {
                         draft: self.draft.clone(),
                         command_state: self.command_state.clone(),
                         selection: self.selection.clone(),
-                        segment_id,
-                        visual,
+                        segment_id: self.selected_segment_id("调整遮罩")?,
+                        mask,
                     }),
                 ))
             }
@@ -2867,6 +2910,108 @@ impl ProjectSession {
                     },
                 ))
             }
+            ProjectIntent::SetSelectedSegmentRetime { retiming } => Ok(
+                TimelineEditPayload::SetSegmentRetime(SetSegmentRetimeCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("调整速度")?,
+                    retiming,
+                }),
+            ),
+            ProjectIntent::ApplySelectedSegmentEffect { effect } => Ok(
+                TimelineEditPayload::ApplySegmentEffect(ApplySegmentEffectCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("应用效果")?,
+                    effect,
+                }),
+            ),
+            ProjectIntent::UpdateSelectedSegmentEffectParameter {
+                effect_index,
+                parameter,
+            } => Ok(TimelineEditPayload::UpdateSegmentEffectParameter(
+                UpdateSegmentEffectParameterCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("调整效果")?,
+                    effect_index,
+                    parameter,
+                },
+            )),
+            ProjectIntent::RemoveSelectedSegmentEffect { effect_index } => Ok(
+                TimelineEditPayload::RemoveSegmentEffect(RemoveSegmentEffectCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("移除效果")?,
+                    effect_index,
+                }),
+            ),
+            ProjectIntent::SetSelectedSegmentMask { mask } => Ok(
+                TimelineEditPayload::SetSegmentMask(SetSegmentMaskCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("设置遮罩")?,
+                    mask,
+                }),
+            ),
+            ProjectIntent::SetSelectedSegmentBlendMode { blend_mode } => Ok(
+                TimelineEditPayload::SetSegmentBlendMode(SetSegmentBlendModeCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    segment_id: self.selected_segment_id("设置混合模式")?,
+                    blend_mode,
+                }),
+            ),
+            ProjectIntent::AddTransitionAtBoundary {
+                from_segment_id,
+                to_segment_id,
+                reference,
+                duration,
+                parameters,
+            } => Ok(TimelineEditPayload::AddTransition(
+                AddTransitionCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    from_segment_id,
+                    to_segment_id,
+                    reference,
+                    duration,
+                    parameters,
+                },
+            )),
+            ProjectIntent::UpdateSelectedTransitionDuration {
+                from_segment_id,
+                to_segment_id,
+                duration,
+            } => Ok(TimelineEditPayload::UpdateTransitionDuration(
+                UpdateTransitionDurationCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    from_segment_id,
+                    to_segment_id,
+                    duration,
+                },
+            )),
+            ProjectIntent::RemoveSelectedTransition {
+                from_segment_id,
+                to_segment_id,
+            } => Ok(TimelineEditPayload::RemoveTransition(
+                RemoveTransitionCommandPayload {
+                    draft: self.draft.clone(),
+                    command_state: self.command_state.clone(),
+                    selection: self.selection.clone(),
+                    from_segment_id,
+                    to_segment_id,
+                },
+            )),
             ProjectIntent::SetSelectedSegmentKeyframe {
                 property,
                 interpolation,

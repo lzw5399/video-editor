@@ -164,7 +164,7 @@ pub fn set_segment_mask(
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let segment = &next_draft.tracks[track_index].segments[segment_index];
     let delta = effect_segment_delta(
-        CommandDeltaName::UpdateSegmentVisual,
+        CommandDeltaName::SetSegmentMask,
         &track_id,
         segment,
         "segment mask set",
@@ -199,7 +199,7 @@ pub fn set_segment_blend_mode(
     let track_id = next_draft.tracks[track_index].track_id.clone();
     let segment = &next_draft.tracks[track_index].segments[segment_index];
     let delta = effect_segment_delta(
-        CommandDeltaName::UpdateSegmentVisual,
+        CommandDeltaName::SetSegmentBlendMode,
         &track_id,
         segment,
         "segment blend mode set",

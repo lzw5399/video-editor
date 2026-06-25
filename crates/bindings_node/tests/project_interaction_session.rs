@@ -737,7 +737,10 @@ fn phase19_retime_effect_mask_blend_interactions_update_provisionally_and_commit
     .expect("retime commit should return an envelope");
     assert_eq!(retime_commit["ok"], true, "{retime_commit:#}");
     assert_eq!(retime_commit["data"]["revision"], revision + 1);
-    assert_eq!(retime_commit["data"]["delta"]["command"], "setSegmentRetime");
+    assert_eq!(
+        retime_commit["data"]["delta"]["command"],
+        "setSegmentRetime"
+    );
     assert_eq!(
         retime_commit["data"]["viewModel"]["editControls"]["canUndo"],
         true
@@ -849,7 +852,7 @@ fn phase19_retime_effect_mask_blend_interactions_update_provisionally_and_commit
     assert_eq!(masked["data"]["revisionUnchanged"], true);
     assert_eq!(
         masked["data"]["provisionalDelta"]["command"],
-        "updateSegmentVisual"
+        "setSegmentMask"
     );
     assert_eq!(project_json_bytes(&bundle_path), before_mask);
     let mask_commit = commit_project_interaction(json!({
@@ -926,7 +929,9 @@ fn phase19_retime_effect_mask_blend_interactions_update_provisionally_and_commit
 #[test]
 fn phase19_transition_duration_interaction_updates_provisionally_and_commits_once() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
-    let bundle_path = temp_dir.path().join("interaction-phase19-transition.veproj");
+    let bundle_path = temp_dir
+        .path()
+        .join("interaction-phase19-transition.veproj");
     let revision =
         open_phase19_session_with_selected_segment(&bundle_path, "interaction-phase19-transition");
 

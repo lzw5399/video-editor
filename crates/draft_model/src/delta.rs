@@ -48,6 +48,8 @@ pub enum CommandDeltaName {
     ApplySegmentEffect,
     UpdateSegmentEffectParameter,
     RemoveSegmentEffect,
+    SetSegmentMask,
+    SetSegmentBlendMode,
     SetSegmentRetime,
     ClearSegmentRetime,
     AddTransition,

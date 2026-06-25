@@ -15,7 +15,10 @@ use crate::{
         current_range, moved_segment_delta, previous_range, segment_delta,
         segment_with_canvas_delta, split_segment_delta, track_delta, track_visibility_delta,
     },
-    effects::{apply_segment_effect, remove_segment_effect, update_segment_effect_parameter},
+    effects::{
+        apply_segment_effect, remove_segment_effect, set_segment_blend_mode, set_segment_mask,
+        update_segment_effect_parameter,
+    },
     history::{push_undo_snapshot, redo_timeline_edit, undo_timeline_edit},
     keyframe::{remove_segment_keyframe, set_segment_keyframe},
     retiming::{
@@ -387,6 +390,20 @@ pub fn execute_timeline_edit(
             &payload.selection,
             payload.segment_id,
             payload.effect_index,
+        ),
+        TimelineEditPayload::SetSegmentMask(payload) => set_segment_mask(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.mask,
+        ),
+        TimelineEditPayload::SetSegmentBlendMode(payload) => set_segment_blend_mode(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.segment_id,
+            payload.blend_mode,
         ),
         TimelineEditPayload::SetSegmentRetime(payload) => set_segment_retime(
             &payload.draft,

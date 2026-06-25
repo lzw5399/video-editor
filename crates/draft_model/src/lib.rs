@@ -185,6 +185,8 @@ pub enum TimelineEditPayload {
     ApplySegmentEffect(ApplySegmentEffectCommandPayload),
     UpdateSegmentEffectParameter(UpdateSegmentEffectParameterCommandPayload),
     RemoveSegmentEffect(RemoveSegmentEffectCommandPayload),
+    SetSegmentMask(SetSegmentMaskCommandPayload),
+    SetSegmentBlendMode(SetSegmentBlendModeCommandPayload),
     SetSegmentRetime(SetSegmentRetimeCommandPayload),
     ClearSegmentRetime(ClearSegmentRetimeCommandPayload),
     AddTransition(AddTransitionCommandPayload),
@@ -698,6 +700,28 @@ pub struct RemoveSegmentEffectCommandPayload {
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
     pub effect_index: u32,
+}
+
+/// Payload accepted by the Phase 19 segment mask command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSegmentMaskCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub mask: SegmentMask,
+}
+
+/// Payload accepted by the Phase 19 segment blend mode command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetSegmentBlendModeCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub segment_id: SegmentId,
+    pub blend_mode: SegmentBlendMode,
 }
 
 /// Payload accepted by the Phase 19 segment retiming command.
