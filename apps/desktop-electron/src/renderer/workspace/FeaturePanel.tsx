@@ -198,6 +198,13 @@ const PRODUCTION_RESOURCE_CARDS: readonly ProductionResourceCardSpec[] = [
     buildEffect: () => ({ kind: { kind: "opacityAdjustment", opacityMillis: 1000 }, enabled: true })
   },
   {
+    capabilityId: "external.unsupportedLightLeak",
+    title: "外部光效",
+    category: "特效",
+    actionLabel: "暂不支持",
+    disabledFallbackLabel: "暂不支持"
+  },
+  {
     capabilityId: "transition.dissolve",
     title: "叠化",
     category: "转场",

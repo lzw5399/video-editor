@@ -52,7 +52,7 @@ pub(crate) struct EffectPreviewUniforms {
     pub blur_radius_px: f32,
     pub texel_width: f32,
     pub texel_height: f32,
-    pub active: f32,
+    pub effect_active: f32,
     pub mask_kind: f32,
     pub mask_x: f32,
     pub mask_y: f32,
@@ -74,7 +74,7 @@ impl EffectPreviewUniforms {
             blur_radius_px: 0.0,
             texel_width: 1.0 / material_width.max(1) as f32,
             texel_height: 1.0 / material_height.max(1) as f32,
-            active: 0.0,
+            effect_active: 0.0,
             mask_kind: 0.0,
             mask_x: 0.0,
             mask_y: 0.0,
@@ -96,7 +96,7 @@ impl EffectPreviewUniforms {
             self.blur_radius_px,
             self.texel_width,
             self.texel_height,
-            self.active,
+            self.effect_active,
             self.mask_kind,
             self.mask_x,
             self.mask_y,
@@ -179,7 +179,7 @@ pub(crate) fn preview_effect_uniforms_for_layer(
         return uniforms;
     }
 
-    uniforms.active = 1.0;
+    uniforms.effect_active = 1.0;
     for pass in passes {
         match pass.kind {
             FilterKind::GaussianBlur { radius_millis } => {

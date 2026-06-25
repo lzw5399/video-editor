@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 
 import type {
   CanvasAspectRatioPreset,
@@ -791,6 +791,10 @@ export function Inspector({
       flushProductionEffectInteraction(interaction);
     });
     productionInteractionRef.current = interaction;
+    armRangeFinishListeners(
+      () => void finishProductionEffectInteraction("commit"),
+      () => void finishProductionEffectInteraction("cancel")
+    );
     return interaction;
   }
 
@@ -1808,12 +1812,16 @@ function RetimeInspectorSection({
           step="5"
           value={draftPercent}
           disabled={pending}
-          onPointerDown={() => queueProductionEffectInteraction("selectedSegmentRetime", {
-            kind: "selectedSegmentRetime",
-            retiming: retimingFromPercent(draftPercent, audioFollows)
-          })}
+          onPointerDown={(event) => {
+            captureRangePointer(event);
+            queueProductionEffectInteraction("selectedSegmentRetime", {
+              kind: "selectedSegmentRetime",
+              retiming: retimingFromPercent(draftPercent, audioFollows)
+            });
+          }}
           onPointerUp={() => void finishProductionEffectInteraction("commit")}
           onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+          onMouseUp={() => void finishProductionEffectInteraction("commit")}
           onBlur={() => void finishProductionEffectInteraction("commit")}
           onChange={(event) => {
             const percent = toBoundedNumber(event.currentTarget.valueAsNumber, draftPercent, 25, 300);
@@ -1978,15 +1986,17 @@ function AppliedEffectControls({
             step={slider.step}
             value={slider.value}
             disabled={pending || !filter.enabled}
-            onPointerDown={() =>
+            onPointerDown={(event) => {
+              captureRangePointer(event);
               queueProductionEffectInteraction("selectedSegmentEffect", {
                 kind: "selectedSegmentEffect",
                 effectIndex,
                 parameter: slider.parameter(slider.value)
-              })
-            }
+              });
+            }}
             onPointerUp={() => void finishProductionEffectInteraction("commit")}
             onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+            onMouseUp={() => void finishProductionEffectInteraction("commit")}
             onBlur={() => void finishProductionEffectInteraction("commit")}
             onChange={(event) => {
               const value = toBoundedNumber(event.currentTarget.valueAsNumber, slider.value, slider.min, slider.max);
@@ -2114,9 +2124,13 @@ function MaskSlider({
         step="10"
         value={value}
         disabled={pending}
-        onPointerDown={() => onChange(value)}
+        onPointerDown={(event) => {
+          captureRangePointer(event);
+          onChange(value);
+        }}
         onPointerUp={() => void onFinish("commit")}
         onPointerCancel={() => void onFinish("cancel")}
+        onMouseUp={() => void onFinish("commit")}
         onBlur={() => void onFinish("commit")}
         onChange={(event) => onChange(toBoundedNumber(event.currentTarget.valueAsNumber, value, 0, max))}
       />
@@ -2173,14 +2187,16 @@ function BlendInspectorSection({
           step="10"
           value={opacityMillis}
           disabled={pending}
-          onPointerDown={() =>
+          onPointerDown={(event) => {
+            captureRangePointer(event);
             queueProductionEffectInteraction("selectedSegmentBlend", {
               kind: "selectedSegmentBlend",
               opacityMillis
-            })
-          }
+            });
+          }}
           onPointerUp={() => void finishProductionEffectInteraction("commit")}
           onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+          onMouseUp={() => void finishProductionEffectInteraction("commit")}
           onBlur={() => void finishProductionEffectInteraction("commit")}
           onChange={(event) =>
             queueProductionEffectInteraction("selectedSegmentBlend", {
@@ -2250,6 +2266,30 @@ function speedPercentLabel(percent: number): string {
     return `${percent / 100}x`;
   }
   return `${(percent / 100).toFixed(2).replace(/0$/, "")}x`;
+}
+
+function captureRangePointer(event: ReactPointerEvent<HTMLInputElement>): void {
+  event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): void {
+  const cleanup = (): void => {
+    window.removeEventListener("pointerup", commit);
+    window.removeEventListener("mouseup", commit);
+    window.removeEventListener("pointercancel", cancel);
+  };
+  const commit = (): void => {
+    cleanup();
+    onCommit();
+  };
+  const cancel = (): void => {
+    cleanup();
+    onCancel();
+  };
+
+  window.addEventListener("pointerup", commit, { once: true });
+  window.addEventListener("mouseup", commit, { once: true });
+  window.addEventListener("pointercancel", cancel, { once: true });
 }
 
 function productionEffectQuickAdds(tab: "效果" | "滤镜" | "调节", capabilities: CapabilityReportItem[]): CapabilityReportItem[] {

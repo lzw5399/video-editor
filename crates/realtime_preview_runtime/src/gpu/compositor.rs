@@ -2137,7 +2137,7 @@ struct EffectUniforms {
     blur_radius_px: f32,
     texel_width: f32,
     texel_height: f32,
-    active: f32,
+    effect_active: f32,
     mask_kind: f32,
     mask_x: f32,
     mask_y: f32,
@@ -2263,7 +2263,7 @@ struct EffectUniforms {
     blur_radius_px: f32,
     texel_width: f32,
     texel_height: f32,
-    active: f32,
+    effect_active: f32,
     mask_kind: f32,
     mask_x: f32,
     mask_y: f32,
@@ -2355,11 +2355,12 @@ fn prepare_blend_color(color: vec4<f32>) -> vec4<f32> {
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let color = if (effects.blur_radius_px <= 0.001) {
-        textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv)
+    var color: vec4<f32>;
+    if (effects.blur_radius_px <= 0.001) {
+        color = textureSampleBaseClampToEdge(layer_texture, layer_sampler, in.uv);
     } else {
-        sample_effect_texture(in.uv)
-    };
+        color = sample_effect_texture(in.uv);
+    }
     return prepare_blend_color(apply_mask(adjust_effect_color(color, in.opacity), in.uv));
 }
 "#;

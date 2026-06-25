@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -74,7 +74,7 @@ test("phase19 visible controls apply through Rust intents and coalesced interact
     const artifactRequestsBefore = requestProjectSessionPreviewFrameCount(await readNativeCommandObservations(app));
 
     await page.getByRole("tab", { name: "变速" }).click();
-    await dragRange(page, page.getByRole("slider", { name: "变速倍率" }), 0.62);
+    await nudgeRange(page, page.getByRole("slider", { name: "变速倍率" }), "ArrowLeft", 10);
     await expectProjectInteractionSettled(app, "selectedSegmentRetime");
 
     await selectPhase19Category(page, "特效");
@@ -138,7 +138,7 @@ test("phase19 controls fit desktop regression viewports", async () => {
 
 type ProjectSessionCall = Awaited<ReturnType<typeof readProjectSessionCalls>>[number];
 
-async function selectPhase19Category(page: import("@playwright/test").Page, category: string): Promise<void> {
+async function selectPhase19Category(page: Page, category: string): Promise<void> {
   const topFeatureNav = page.getByRole("navigation", { name: "顶部功能区" });
   const visibleButton = topFeatureNav.getByRole("button", { name: category });
   if ((await visibleButton.count()) > 0) {
@@ -170,15 +170,27 @@ async function expectProjectInteractionSettled(
 ): Promise<void> {
   await expect
     .poll(async () => {
-      const calls = (await readProjectSessionCalls(app)).filter((call) => call.interactionKind === interactionKind);
+      const allCalls = await readProjectSessionCalls(app);
+      const calls = allCalls.filter((call) => call.interactionKind === interactionKind);
+      const interactionIds = new Set(calls.map((call) => call.interactionId).filter((id): id is string => id !== null));
       const begins = calls.filter((call) => call.command === "beginProjectInteraction").length;
       const updates = calls.filter((call) => call.command === "updateProjectInteraction");
-      const commits = calls.filter((call) => call.command === "commitProjectInteraction");
+      const commits = allCalls.filter(
+        (call) => call.command === "commitProjectInteraction" && call.interactionId !== null && interactionIds.has(call.interactionId)
+      );
       if (begins === 0 || updates.length === 0 || commits.length === 0) {
         return `pending:${begins}:${updates.length}:${commits.length}`;
       }
-      if (updates.some((call) => call.revisionUnchanged !== true)) {
-        return "update-mutated-revision";
+      const mutatedUpdate = updates.find((call) => call.revisionUnchanged !== true);
+      if (mutatedUpdate !== undefined) {
+        return `update-mutated-revision:${JSON.stringify({
+          resultOk: mutatedUpdate.resultOk,
+          resultErrorKind: mutatedUpdate.resultErrorKind,
+          resultErrorMessage: mutatedUpdate.resultErrorMessage,
+          expectedRevision: mutatedUpdate.expectedRevision,
+          resultRevision: mutatedUpdate.resultRevision,
+          sequence: mutatedUpdate.interactionSequence
+        })}`;
       }
       if (commits.length !== 1) {
         return `commit-count:${commits.length}`;
@@ -189,26 +201,44 @@ async function expectProjectInteractionSettled(
 }
 
 async function dragRange(
-  page: import("@playwright/test").Page,
+  page: Page,
   slider: import("@playwright/test").Locator,
-  endRatio: number
+  endRatio: number,
+  startRatio = 0.35
 ): Promise<void> {
   await expect(slider).toBeVisible({ timeout: 10_000 });
   const box = await slider.boundingBox();
   if (box === null) {
     throw new Error("Phase 19 slider is not visible");
   }
-  const startX = box.x + box.width * 0.35;
+  const startX = box.x + box.width * Math.max(0.05, Math.min(0.95, startRatio));
   const endX = box.x + box.width * Math.max(0.05, Math.min(0.95, endRatio));
   const y = box.y + box.height / 2;
   await page.mouse.move(startX, y);
   await page.mouse.down();
   await page.mouse.move(endX, y, { steps: 8 });
   await page.mouse.up();
+  await page.evaluate(() => window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })));
+  await slider.evaluate((element) => (element as HTMLInputElement).blur());
+}
+
+async function nudgeRange(
+  page: Page,
+  slider: import("@playwright/test").Locator,
+  key: "ArrowLeft" | "ArrowRight",
+  steps: number
+): Promise<void> {
+  await expect(slider).toBeVisible({ timeout: 10_000 });
+  await slider.focus();
+  for (let index = 0; index < steps; index += 1) {
+    await page.keyboard.press(key);
+  }
+  await page.evaluate(() => window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })));
+  await slider.evaluate((element) => (element as HTMLInputElement).blur());
 }
 
 async function dragElement(
-  page: import("@playwright/test").Page,
+  page: Page,
   element: import("@playwright/test").Locator,
   deltaX: number,
   deltaY: number
@@ -227,7 +257,7 @@ async function dragElement(
 }
 
 async function expectPhase19LayoutWithinViewport(
-  page: import("@playwright/test").Page,
+  page: Page,
   width: number,
   height: number
 ): Promise<void> {
