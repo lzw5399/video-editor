@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-13-PLAN.md
-last_updated: "2026-06-25T14:59:27.785Z"
+stopped_at: Completed 19-14-PLAN.md
+last_updated: "2026-06-25T15:41:49.443Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 185
+  completed_plans: 186
   percent: 99
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 14 of 15
+Plan: 15 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -223,6 +223,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P11 | 26min | 2 tasks | 15 files |
 | Phase 19 P12 | 64 min | 3 tasks | 12 files |
 | Phase 19 P13 | 78 min | 3 tasks | 19 files |
+| Phase 19 P14 | 36 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -650,6 +651,9 @@ Recent decisions affecting current work:
 - [Phase 19]: First-party rectangle/ellipse masks compile in ffmpeg_compiler as RGBA alpha expressions derived from typed render graph intent. — Keeps mask pixels owned by Rust compiler/export semantics instead of UI or renderer code.
 - [Phase 19]: Multiply/screen blend export remains unsupported until an alpha-correct FFmpeg blend compositor is implemented; jobs carry unsupported diagnostics and product-success metadata is false. — Avoids normal-overlay fallback being treated as a successful product export for unsupported blend semantics.
 - [Phase 19]: External mask/blend provider IDs stay out of filter scripts and appear only in typed diagnostics. — Preserves the adapter/report boundary for proprietary provider references.
+- [Phase 19]: 19-14: Supported Kaipai dissolve, constant speed, Gaussian blur, color adjustment, and opacity concepts become typed first-party semantics; provider-native effects remain report-only.
+- [Phase 19]: 19-14: Desktop template import E2E proves Phase 19 semantics through canonical project JSON, GPU preview evidence, real export, and bounded compatibility report UI.
+- [Phase 19]: 19-14: The desktop Phase 19 fixture removes an unrelated existing crop so the product export gate targets retime, transition, and filter semantics instead of pre-existing crop compiler behavior.
 
 ### Pending Todos
 
@@ -731,6 +735,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T14:59:27.545Z
-Stopped at: Completed 19-13-PLAN.md
+Last session: 2026-06-25T15:41:27.132Z
+Stopped at: Completed 19-14-PLAN.md
 Resume file: None
