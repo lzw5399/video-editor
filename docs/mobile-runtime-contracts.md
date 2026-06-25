@@ -47,13 +47,16 @@ The C ABI exposes explicit functions over Rust-owned state:
   `ve_handle_t` for the project session.
 - `ve_handle_acquire`, `ve_handle_retain`, and `ve_handle_release` are the only
   portable retain/release surface for media, frame, texture, and artifact
-  handles.
+  handles. Runtime and project-session handles are lifecycle handles and must
+  only come from `ve_runtime_create` and `ve_project_open`.
+- `ve_handle_acquire` accepts an optional lease duration in microseconds. Rust
+  converts that duration to a runtime-owned monotonic expiry deadline; mobile
+  callers never pass platform-clock deadlines from an external epoch.
 - `ve_texture_handle_resolve` validates backend, adapter ID, device ID, size,
   pixel format, and color metadata before a texture handle may be used.
 - `ve_last_error_json` writes structured diagnostics for the runtime session.
-- `ve_buffer_free` releases Rust-owned buffers if a later ABI function returns
-  allocated memory. Current bounded diagnostic buffers are caller-owned unless a
-  function explicitly documents Rust allocation.
+- Diagnostic buffers are caller-owned. The current ABI does not return
+  Rust-allocated buffers and therefore exposes no Rust free function.
 
 All ABI calls return `ve_status_t`. Callers must treat any non-OK status as
 fail-closed. They may show diagnostics, retry after reacquiring permission, or
@@ -91,8 +94,8 @@ Future iOS adapters import `video_editor_runtime.h` directly from Swift or ObjC.
   shell has permission to use at call time.
 - Swift `String`, `Data`, and buffer wrappers must respect the ABI ownership
   contract. Caller-owned output buffers remain valid for the duration of the C
-  call. Any Rust-allocated buffer returned by a future function must be released
-  with `ve_buffer_free`.
+  call. Any future Rust-allocated buffer surface must use a distinct owned
+  buffer type plus its matching release API.
 - ObjC and Swift wrappers must keep `ve_handle_t` opaque. They cannot edit
   owner ID, owner generation, handle ID, kind, or generation fields except by
   receiving a fresh token from the C ABI.
@@ -134,7 +137,8 @@ Foregrounding requires revalidation:
 - Recreate device/context-bound texture handles if the platform GPU device or
   surface generation changed.
 - Treat stale owner generation, stale handle generation, wrong device, lease
-  expiry, and missing permission as typed diagnostics.
+  expiry, and missing permission as typed diagnostics. Lease values passed to
+  the ABI are durations, not platform-clock deadlines.
 
 ## Sandboxed Media Permissions
 
@@ -186,14 +190,19 @@ The default ABI pattern is caller-owned output buffers:
 
 - Caller passes `ve_buffer_t { data, capacity }`.
 - Rust writes UTF-8 JSON diagnostics and sets `len`.
-- If capacity is too small, Rust returns `VE_STATUS_BUFFER_TOO_SMALL`.
 - Caller keeps ownership of the memory and may reuse it after the call.
+- Diagnostic-only reads such as `ve_last_error_json` return
+  `VE_STATUS_BUFFER_TOO_SMALL` when the caller-owned buffer is too small.
+- Side-effecting ABI calls return the semantic operation status. If their
+  diagnostic buffer is too small, Rust records the buffer failure as last error
+  and reports the required length through `len`; mobile wrappers should then
+  call `ve_last_error_json` with a sufficiently large buffer.
 
 If future ABI calls return Rust-allocated strings or byte buffers, those
-functions must document ownership and the caller must free them with
-`ve_buffer_free`. Mobile wrappers must not free Rust-owned memory with platform
-allocators, and Rust must not retain pointers to caller-owned Java, Swift, or
-ObjC memory after the C call returns.
+functions must use a distinct owned-buffer type plus a matching release API.
+Mobile wrappers must not free Rust-owned memory with platform allocators, and
+Rust must not retain pointers to caller-owned Java, Swift, or ObjC memory after
+the C call returns.
 
 ## Cancellation
 

@@ -1,8 +1,14 @@
 use std::ffi::CString;
 use std::ptr;
+use std::thread;
+use std::time::Duration;
 
 use bindings_c::{
-    ve_buffer_t, ve_handle_kind_t, ve_handle_t, ve_runtime_config_t, ve_runtime_t, ve_status_t,
+    VE_COLOR_MATRIX_IDENTITY, VE_COLOR_PRIMARIES_BT709, VE_COLOR_RANGE_FULL,
+    VE_COLOR_TRANSFER_SRGB, VE_HANDLE_KIND_MEDIA, VE_HANDLE_KIND_PROJECT_SESSION,
+    VE_HANDLE_KIND_RUNTIME_SESSION, VE_HANDLE_KIND_TEXTURE, VE_PIXEL_FORMAT_BGRA8,
+    VE_TEXTURE_BACKEND_METAL_TEXTURE, ve_buffer_t, ve_handle_t, ve_runtime_config_t, ve_runtime_t,
+    ve_status_t, ve_texture_descriptor_t,
 };
 
 #[test]
@@ -46,10 +52,7 @@ fn abi_smoke_creates_opens_and_releases_runtime_handles_with_json_diagnostics() 
         )
     };
     assert_eq!(status, ve_status_t::VE_STATUS_OK);
-    assert_eq!(
-        project.kind,
-        ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION
-    );
+    assert_eq!(project.kind, VE_HANDLE_KIND_PROJECT_SESSION);
     assert_eq!(project.owner_id, runtime.id);
     assert!(diagnostics.as_str().contains("\"projectSession\""));
 
@@ -115,7 +118,7 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
     assert_eq!(status, ve_status_t::VE_STATUS_BUFFER_TOO_SMALL);
 
     let fabricated = ve_handle_t {
-        kind: ve_handle_kind_t::VE_HANDLE_KIND_MEDIA,
+        kind: VE_HANDLE_KIND_MEDIA,
         id: 999_999,
         owner_id: runtime.id,
         owner_generation: runtime.generation,
@@ -126,12 +129,37 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
         unsafe { bindings_c::ve_handle_release(runtime, fabricated, diagnostics.as_mut_buffer()) };
     assert_eq!(status, ve_status_t::VE_STATUS_UNKNOWN_HANDLE);
 
+    for forbidden_kind in [
+        VE_HANDLE_KIND_RUNTIME_SESSION,
+        VE_HANDLE_KIND_PROJECT_SESSION,
+    ] {
+        let mut fabricated_lifecycle_handle = ve_handle_t::default();
+        diagnostics.clear();
+        let status = unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                forbidden_kind,
+                ptr::null(),
+                0,
+                &mut fabricated_lifecycle_handle,
+                diagnostics.as_mut_buffer(),
+            )
+        };
+        assert_eq!(status, ve_status_t::VE_STATUS_INVALID_ARGUMENT);
+        assert_eq!(
+            fabricated_lifecycle_handle,
+            ve_handle_t::default(),
+            "forbidden lifecycle acquire must not fabricate a handle"
+        );
+        assert!(diagnostics.as_str().contains("lifecycle APIs"));
+    }
+
     let mut media = ve_handle_t::default();
     diagnostics.clear();
     let status = unsafe {
         bindings_c::ve_handle_acquire(
             runtime,
-            ve_handle_kind_t::VE_HANDLE_KIND_MEDIA,
+            VE_HANDLE_KIND_MEDIA,
             ptr::null(),
             0,
             &mut media,
@@ -174,6 +202,157 @@ fn abi_smoke_rejects_invalid_inputs_without_panicking() {
 }
 
 #[test]
+fn abi_smoke_enforces_lease_expiry_and_validates_integer_discriminants() {
+    let (runtime, mut diagnostics) = runtime("abi-lease-and-discriminants");
+    let descriptor = texture_descriptor("adapter-a", "device-a");
+
+    let mut short_texture = ve_handle_t::default();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                VE_HANDLE_KIND_TEXTURE,
+                &descriptor,
+                100_000,
+                &mut short_texture,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_OK
+    );
+    diagnostics.clear();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_texture_handle_resolve(
+                runtime,
+                short_texture,
+                &descriptor,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_OK
+    );
+    thread::sleep(Duration::from_millis(120));
+    diagnostics.clear();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_texture_handle_resolve(
+                runtime,
+                short_texture,
+                &descriptor,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_LEASE_EXPIRED
+    );
+
+    let mut expired_texture = ve_handle_t::default();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                VE_HANDLE_KIND_TEXTURE,
+                &descriptor,
+                1,
+                &mut expired_texture,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_OK
+    );
+    thread::sleep(Duration::from_millis(2));
+
+    diagnostics.clear();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_texture_handle_resolve(
+                runtime,
+                expired_texture,
+                &descriptor,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_LEASE_EXPIRED
+    );
+
+    let mut invalid_texture = descriptor;
+    invalid_texture.backend = 999_999;
+    let mut handle = ve_handle_t::default();
+    diagnostics.clear();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                VE_HANDLE_KIND_TEXTURE,
+                &invalid_texture,
+                0,
+                &mut handle,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_INVALID_ARGUMENT
+    );
+
+    diagnostics.clear();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                999_999,
+                ptr::null(),
+                0,
+                &mut handle,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_INVALID_ARGUMENT
+    );
+
+    diagnostics.clear();
+    assert_eq!(
+        unsafe { bindings_c::ve_runtime_close(runtime, diagnostics.as_mut_buffer()) },
+        ve_status_t::VE_STATUS_OK
+    );
+}
+
+#[test]
+fn abi_smoke_diagnostic_buffer_errors_do_not_mask_successful_side_effects() {
+    let (runtime, mut diagnostics) = runtime("abi-diagnostic-side-effects");
+    let mut media = ve_handle_t::default();
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_handle_acquire(
+                runtime,
+                VE_HANDLE_KIND_MEDIA,
+                ptr::null(),
+                0,
+                &mut media,
+                diagnostics.as_mut_buffer(),
+            )
+        },
+        ve_status_t::VE_STATUS_OK
+    );
+
+    let mut tiny = JsonBuffer::new(4);
+    assert_eq!(
+        unsafe { bindings_c::ve_handle_release(runtime, media, tiny.as_mut_buffer()) },
+        ve_status_t::VE_STATUS_OK
+    );
+
+    diagnostics.clear();
+    assert_eq!(
+        unsafe { bindings_c::ve_handle_release(runtime, media, diagnostics.as_mut_buffer()) },
+        ve_status_t::VE_STATUS_DOUBLE_RELEASE
+    );
+
+    diagnostics.clear();
+    assert_eq!(
+        unsafe { bindings_c::ve_runtime_close(runtime, diagnostics.as_mut_buffer()) },
+        ve_status_t::VE_STATUS_OK
+    );
+}
+
+#[test]
 fn abi_smoke_depends_on_editor_runtime_and_not_desktop_adapter() {
     let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let manifest =
@@ -206,9 +385,47 @@ fn abi_smoke_generated_header_declares_smoke_surface() {
         "ve_handle_release",
         "ve_texture_handle_resolve",
         "ve_last_error_json",
-        "ve_buffer_free",
+        "VE_HANDLE_KIND_TEXTURE",
+        "VE_TEXTURE_BACKEND_METAL_TEXTURE",
     ] {
         assert!(header.contains(symbol), "header missing {symbol}");
+    }
+    assert!(
+        !header.contains("ve_buffer_free"),
+        "caller-owned diagnostic buffers must not expose a Rust free function"
+    );
+}
+
+fn runtime(label: &str) -> (ve_runtime_t, JsonBuffer) {
+    let mut runtime = ve_runtime_t::default();
+    let mut diagnostics = JsonBuffer::new(4096);
+    let label = CString::new(label).expect("label should not contain nul");
+    let config = ve_runtime_config_t {
+        diagnostic_label: label.as_ptr(),
+    };
+    assert_eq!(
+        unsafe {
+            bindings_c::ve_runtime_create(&config, &mut runtime, diagnostics.as_mut_buffer())
+        },
+        ve_status_t::VE_STATUS_OK
+    );
+    (runtime, diagnostics)
+}
+
+fn texture_descriptor(adapter_id: &str, device_id: &str) -> ve_texture_descriptor_t {
+    let adapter_id = CString::new(adapter_id).expect("adapter id should not contain nul");
+    let device_id = CString::new(device_id).expect("device id should not contain nul");
+    ve_texture_descriptor_t {
+        backend: VE_TEXTURE_BACKEND_METAL_TEXTURE,
+        adapter_id: adapter_id.into_raw(),
+        device_id: device_id.into_raw(),
+        width: 1920,
+        height: 1080,
+        pixel_format: VE_PIXEL_FORMAT_BGRA8,
+        color_primaries: VE_COLOR_PRIMARIES_BT709,
+        color_transfer: VE_COLOR_TRANSFER_SRGB,
+        color_matrix: VE_COLOR_MATRIX_IDENTITY,
+        color_range: VE_COLOR_RANGE_FULL,
     }
 }
 

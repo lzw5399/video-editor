@@ -39,7 +39,7 @@ use project_store::{
     open_project_bundle, project_io_scheduler_envelope, save_project_bundle,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -636,7 +636,8 @@ struct ProjectSessionImportMaterialResponse {
     material: draft_model::Material,
     materials: Vec<draft_model::Material>,
     probe_status: ProjectSessionProbeStatus,
-    probe_job_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    probe_job_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostic: Option<MissingMaterialCommandDiagnostic>,
     #[serde(rename = "viewModel")]
@@ -846,6 +847,7 @@ struct ProjectSessionRegistry {
 
 struct MaterialProbeSchedulerState {
     scheduler: task_runtime::JobScheduler,
+    pending: BTreeMap<JobId, ScheduledMaterialProbe>,
     started_at: Instant,
     next_token_id: u64,
 }
@@ -856,10 +858,12 @@ struct ProjectIoSchedulerState {
     next_token_id: u64,
 }
 
+#[derive(Clone)]
 struct ScheduledMaterialProbe {
     session_id: String,
     expected_revision: u64,
     material_id: MaterialId,
+    material_uri: String,
     material_path: PathBuf,
     task_token: TaskCancellationToken,
 }
@@ -874,6 +878,7 @@ impl Default for MaterialProbeSchedulerState {
     fn default() -> Self {
         Self {
             scheduler: task_runtime::JobScheduler::new(TaskRuntimeConfig::portable_default()),
+            pending: BTreeMap::new(),
             started_at: Instant::now(),
             next_token_id: 1,
         }
@@ -1243,6 +1248,68 @@ fn global_material_probe_scheduler() -> &'static Mutex<MaterialProbeSchedulerSta
     SCHEDULER.get_or_init(|| Mutex::new(MaterialProbeSchedulerState::default()))
 }
 
+#[cfg(feature = "test-hooks")]
+fn material_probe_enqueue_failure_for_tests() -> &'static Mutex<Option<String>> {
+    static FAILURE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    FAILURE.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(feature = "test-hooks")]
+pub struct MaterialProbeEnqueueFailureGuard {
+    previous: Option<String>,
+}
+
+#[cfg(feature = "test-hooks")]
+pub fn force_material_probe_enqueue_failure_for_tests(
+    message: impl Into<String>,
+) -> MaterialProbeEnqueueFailureGuard {
+    let mut failure = material_probe_enqueue_failure_for_tests()
+        .lock()
+        .expect("material probe enqueue failure hook lock should not be poisoned");
+    let previous = failure.replace(message.into());
+    MaterialProbeEnqueueFailureGuard { previous }
+}
+
+#[cfg(feature = "test-hooks")]
+impl Drop for MaterialProbeEnqueueFailureGuard {
+    fn drop(&mut self) {
+        if let Ok(mut failure) = material_probe_enqueue_failure_for_tests().lock() {
+            *failure = self.previous.take();
+        }
+    }
+}
+
+#[cfg(feature = "test-hooks")]
+fn material_probe_worker_spawn_failure_for_tests() -> &'static Mutex<Option<String>> {
+    static FAILURE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    FAILURE.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(feature = "test-hooks")]
+pub struct MaterialProbeWorkerSpawnFailureGuard {
+    previous: Option<String>,
+}
+
+#[cfg(feature = "test-hooks")]
+pub fn force_material_probe_worker_spawn_failure_for_tests(
+    message: impl Into<String>,
+) -> MaterialProbeWorkerSpawnFailureGuard {
+    let mut failure = material_probe_worker_spawn_failure_for_tests()
+        .lock()
+        .expect("material probe worker spawn failure hook lock should not be poisoned");
+    let previous = failure.replace(message.into());
+    MaterialProbeWorkerSpawnFailureGuard { previous }
+}
+
+#[cfg(feature = "test-hooks")]
+impl Drop for MaterialProbeWorkerSpawnFailureGuard {
+    fn drop(&mut self) {
+        if let Ok(mut failure) = material_probe_worker_spawn_failure_for_tests().lock() {
+            *failure = self.previous.take();
+        }
+    }
+}
+
 fn global_project_io_scheduler() -> &'static Mutex<ProjectIoSchedulerState> {
     static SCHEDULER: OnceLock<Mutex<ProjectIoSchedulerState>> = OnceLock::new();
     SCHEDULER.get_or_init(|| Mutex::new(ProjectIoSchedulerState::default()))
@@ -1296,18 +1363,29 @@ impl ProjectIoSchedulerState {
 }
 
 fn enqueue_material_probe(work: ScheduledMaterialProbe) -> std::result::Result<String, String> {
-    let job_id = JobId::new(format!(
-        "material-probe-{}-{}",
-        work.material_id.as_str(),
-        work.expected_revision
-    ));
-    let started = {
+    #[cfg(feature = "test-hooks")]
+    if let Some(message) = material_probe_enqueue_failure_for_tests()
+        .lock()
+        .map_err(|_| "material probe enqueue failure hook lock poisoned".to_owned())?
+        .clone()
+    {
+        return Err(message);
+    }
+
+    let (job_id_string, started) = {
         let scheduler = global_material_probe_scheduler();
         let mut state = scheduler
             .lock()
             .map_err(|_| "material probe scheduler lock poisoned".to_owned())?;
         let submitted_at_us = state.now_us();
         let token = state.next_task_token();
+        let job_id = JobId::new(format!(
+            "material-probe-{}-{}-{}-{}",
+            work.session_id,
+            work.material_id.as_str(),
+            work.expected_revision,
+            token.id()
+        ));
         let envelope = JobEnvelope::new(
             job_id.clone(),
             JobDomain::MediaProbe,
@@ -1315,42 +1393,127 @@ fn enqueue_material_probe(work: ScheduledMaterialProbe) -> std::result::Result<S
             ResourceClass::ValidationProbe,
             token.clone(),
             submitted_at_us,
-        )
-        .with_freshness(
-            JobFreshness::timeline(Microseconds::ZERO, PlaybackGeneration::new(0))
-                .with_project_session(work.session_id.clone(), work.expected_revision),
         );
+        let mut work = work;
+        work.task_token = token;
         state
             .scheduler
             .submit(envelope)
             .map_err(|error| format!("material probe scheduler rejected: {error}"))?;
-        let mut work = work;
-        work.task_token = token;
+        let job_id_string = job_id.as_str().to_owned();
+        state.pending.insert(job_id.clone(), work);
+        (job_id_string, start_ready_material_probe_jobs(&mut state)?)
+    };
+
+    spawn_material_probe_jobs_with_failure_policy(started, false)?;
+
+    Ok(job_id_string)
+}
+
+fn start_ready_material_probe_jobs(
+    state: &mut MaterialProbeSchedulerState,
+) -> std::result::Result<Vec<(JobId, ScheduledMaterialProbe)>, String> {
+    let mut started = Vec::new();
+    loop {
         let start_at_us = state.now_us();
-        match state
+        let Some(envelope) = state
             .scheduler
             .start_next(start_at_us)
             .map_err(|error| format!("material probe scheduler start failed: {error}"))?
-        {
-            Some(envelope) => {
-                state.record_task_runtime_telemetry();
-                Some((envelope.job_id, work))
-            }
-            None => {
-                state.record_task_runtime_telemetry();
-                None
-            }
-        }
-    };
+        else {
+            break;
+        };
+        let Some(work) = state.pending.remove(&envelope.job_id) else {
+            return Err(format!(
+                "material probe work missing for scheduled job {}",
+                envelope.job_id.as_str()
+            ));
+        };
+        started.push((envelope.job_id, work));
+    }
+    state.record_task_runtime_telemetry();
+    Ok(started)
+}
 
-    if let Some((started_job_id, work)) = started {
-        thread::Builder::new()
+fn spawn_material_probe_jobs(
+    jobs: Vec<(JobId, ScheduledMaterialProbe)>,
+) -> std::result::Result<(), String> {
+    spawn_material_probe_jobs_with_failure_policy(jobs, true)
+}
+
+fn spawn_material_probe_jobs_with_failure_policy(
+    jobs: Vec<(JobId, ScheduledMaterialProbe)>,
+    apply_spawn_failure_to_material: bool,
+) -> std::result::Result<(), String> {
+    let mut first_error = None;
+    for (job_id, work) in jobs {
+        #[cfg(feature = "test-hooks")]
+        if let Some(message) = material_probe_worker_spawn_failure_for_tests()
+            .lock()
+            .map_err(|_| "material probe worker spawn failure hook lock poisoned".to_owned())?
+            .clone()
+        {
+            fail_started_material_probe_job(
+                job_id,
+                work,
+                message.clone(),
+                apply_spawn_failure_to_material,
+            );
+            first_error.get_or_insert(message);
+            continue;
+        }
+
+        let thread_job_id = job_id.clone();
+        let thread_work = work.clone();
+        if let Err(error) = thread::Builder::new()
             .name("task-runtime-media-probe".to_owned())
-            .spawn(move || run_material_probe_worker(started_job_id, work))
-            .map_err(|error| format!("material probe worker failed to start: {error}"))?;
+            .spawn(move || run_material_probe_worker(thread_job_id, thread_work))
+        {
+            let message = format!("material probe worker failed to start: {error}");
+            fail_started_material_probe_job(
+                job_id,
+                work,
+                message.clone(),
+                apply_spawn_failure_to_material,
+            );
+            first_error.get_or_insert(message);
+        }
+    }
+    if let Some(error) = first_error {
+        Err(error)
+    } else {
+        Ok(())
+    }
+}
+
+fn fail_started_material_probe_job(
+    job_id: JobId,
+    work: ScheduledMaterialProbe,
+    message: String,
+    apply_material_failure: bool,
+) {
+    let mut accepted = false;
+    let mut next_jobs = Vec::new();
+    let scheduler = global_material_probe_scheduler();
+    if let Ok(mut state) = scheduler.lock() {
+        let completed_at_us = state.now_us();
+        let _ = state.scheduler.complete_with_commit(
+            &job_id,
+            JobResult::new(job_id.clone(), task_runtime::JobResultKind::Failed),
+            completed_at_us,
+            CompletionFreshness::none(),
+            |_| accepted = true,
+        );
+        if let Ok(started) = start_ready_material_probe_jobs(&mut state) {
+            next_jobs = started;
+        }
+        state.record_task_runtime_telemetry();
     }
 
-    Ok(job_id.as_str().to_owned())
+    if accepted && apply_material_failure {
+        let _ = complete_material_probe_job_error(&work, message);
+    }
+    let _ = spawn_material_probe_jobs_with_failure_policy(next_jobs, apply_material_failure);
 }
 
 fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
@@ -1367,8 +1530,8 @@ fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
         Err(_) => JobResult::new(job_id.clone(), task_runtime::JobResultKind::Failed),
     };
 
-    let current_revision = project_session_current_revision(&work.session_id);
     let mut accepted = false;
+    let mut next_jobs = Vec::new();
     let scheduler = global_material_probe_scheduler();
     if let Ok(mut state) = scheduler.lock() {
         let completed_at_us = state.now_us();
@@ -1376,10 +1539,12 @@ fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
             &job_id,
             job_result,
             completed_at_us,
-            CompletionFreshness::none()
-                .with_expected_revision(current_revision.unwrap_or(u64::MAX)),
+            CompletionFreshness::none(),
             |_| accepted = true,
         );
+        if let Ok(started) = start_ready_material_probe_jobs(&mut state) {
+            next_jobs = started;
+        }
         state.record_task_runtime_telemetry();
     }
 
@@ -1393,6 +1558,7 @@ fn run_material_probe_worker(job_id: JobId, work: ScheduledMaterialProbe) {
             }
         }
     }
+    let _ = spawn_material_probe_jobs(next_jobs);
 }
 
 fn complete_material_probe_job(
@@ -1407,7 +1573,10 @@ fn complete_material_probe_job(
     let Some(session) = registry.sessions.get_mut(&work.session_id) else {
         return false;
     };
-    if session.revision != work.expected_revision {
+    let material_still_matches = session.draft.materials.iter().any(|material| {
+        material.material_id == work.material_id && material.uri == work.material_uri
+    });
+    if !material_still_matches {
         return false;
     }
     let mut next_draft = session.draft.clone();
@@ -3171,21 +3340,29 @@ impl ProjectSession {
         self.project_json_path = saved.project_json_path;
         self.active_interactions.clear();
         let material = imported.material;
-        let probe_job_id = match enqueue_material_probe(ScheduledMaterialProbe {
+        let probe_result = enqueue_material_probe(ScheduledMaterialProbe {
             session_id: self.session_id.clone(),
             expected_revision: self.revision,
             material_id: material.material_id.clone(),
-            material_path,
+            material_uri: material.uri.clone(),
+            material_path: material_path.clone(),
             task_token: TaskCancellationToken::new(0),
-        }) {
-            Ok(job_id) => job_id,
-            Err(error) => {
-                return to_runtime_value(error_envelope(
-                    CommandErrorKind::MaterialProbeFailed,
+        });
+        let (probe_status, probe_job_id, diagnostic) = match probe_result {
+            Ok(job_id) => (
+                ProjectSessionProbeStatus::Queued,
+                Some(job_id),
+                imported.diagnostic.map(command_diagnostic),
+            ),
+            Err(error) => (
+                ProjectSessionProbeStatus::Failed,
+                None,
+                Some(material_probe_schedule_diagnostic(
+                    &material,
+                    &material_path,
                     error,
-                    Some("executeProjectIntent".to_string()),
-                ));
-            }
+                )),
+            ),
         };
         let delta = material_dependency_delta(
             CommandDeltaName::ImportMaterial,
@@ -3199,9 +3376,9 @@ impl ProjectSession {
             revision: self.revision,
             material,
             materials: crate::material_service::list_materials(&self.draft),
-            probe_status: ProjectSessionProbeStatus::Queued,
+            probe_status,
             probe_job_id,
-            diagnostic: imported.diagnostic.map(command_diagnostic),
+            diagnostic,
             view_model: project_session_view_model(
                 &self.draft,
                 &self.command_state,
@@ -4567,6 +4744,21 @@ fn command_diagnostic(
             .map(|path| path.display().to_string()),
         status: diagnostic.status,
         message: diagnostic.message,
+    }
+}
+
+fn material_probe_schedule_diagnostic(
+    material: &Material,
+    material_path: &Path,
+    message: String,
+) -> MissingMaterialCommandDiagnostic {
+    MissingMaterialCommandDiagnostic {
+        material_id: material.material_id.clone(),
+        kind: draft_model::MissingMaterialCommandDiagnosticKind::ProbeFailed,
+        original_uri: material.uri.clone(),
+        last_known_resolved_path: Some(material_path.display().to_string()),
+        status: material.status,
+        message: format!("Material imported, but metadata probe could not be scheduled: {message}"),
     }
 }
 

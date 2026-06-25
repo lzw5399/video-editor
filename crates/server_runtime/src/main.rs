@@ -14,10 +14,19 @@ use server_runtime::{
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 enum CliEvent<T: Serialize> {
-    Opened { project: T },
-    Started { status: T },
-    Status { status: T },
-    Error { kind: ServerRuntimeErrorKind, message: String },
+    Opened {
+        project: T,
+    },
+    Started {
+        status: T,
+    },
+    Status {
+        status: T,
+    },
+    Error {
+        kind: ServerRuntimeErrorKind,
+        message: String,
+    },
 }
 
 fn main() {

@@ -168,6 +168,7 @@ pub struct HandleReleaseReport {
     pub kind: HandleKind,
     pub owner_session: RuntimeSessionId,
     pub generation: u64,
+    pub remaining_retain_count: usize,
     pub outstanding_count: usize,
     pub release_state: HandleReleaseState,
 }
@@ -338,6 +339,7 @@ impl HandleRegistry {
         }
         let key = token.key();
         let kind;
+        let remaining_retain_count;
         {
             let record = self
                 .records
@@ -350,6 +352,7 @@ impl HandleRegistry {
                 record.release_state = Some(HandleReleaseState::Explicit);
                 record.outstanding_count = 0;
             }
+            remaining_retain_count = record.outstanding_count;
         }
         let record = self
             .records
@@ -360,6 +363,7 @@ impl HandleRegistry {
             kind: record.token.kind,
             owner_session: record.token.owner_session.clone(),
             generation: record.token.generation,
+            remaining_retain_count,
             outstanding_count: self.outstanding_count(owner_session, kind),
             release_state: HandleReleaseState::Explicit,
         })

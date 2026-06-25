@@ -11,8 +11,8 @@ use draft_model::{ExportJobPhase, ExportPreset, StartExportCommandPayload};
 use editor_runtime::export::{ExportCommandError, SchedulerExportStatusResponse};
 use editor_runtime::{
     EDITOR_RUNTIME_CONTRACT_VERSION, ExportService, ProjectSessionHandle, ProjectSessionOpened,
-    ProjectSessionService, ProjectSessionSnapshot, RuntimeError, RuntimeErrorKind,
-    RuntimeSession, RuntimeSessionConfig, RuntimeSessionId, RuntimeSessionRegistry,
+    ProjectSessionService, ProjectSessionSnapshot, RuntimeError, RuntimeErrorKind, RuntimeSession,
+    RuntimeSessionConfig, RuntimeSessionId, RuntimeSessionRegistry,
 };
 use media_runtime::{DiscoveryError, RuntimeConfig, discover_runtime_config};
 use project_store::{ProjectStoreError, resolve_material_uri};
@@ -189,14 +189,18 @@ impl ServerRuntime {
         &self,
         job_id: &str,
     ) -> Result<SchedulerExportStatusResponse, ServerRuntimeError> {
-        self.exports.status(job_id).map_err(ServerRuntimeError::from)
+        self.exports
+            .status(job_id)
+            .map_err(ServerRuntimeError::from)
     }
 
     pub fn cancel_export(
         &self,
         job_id: &str,
     ) -> Result<SchedulerExportStatusResponse, ServerRuntimeError> {
-        self.exports.cancel(job_id).map_err(ServerRuntimeError::from)
+        self.exports
+            .cancel(job_id)
+            .map_err(ServerRuntimeError::from)
     }
 
     pub fn wait_for_export(

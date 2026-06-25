@@ -7,6 +7,10 @@ use bindings_node::{
     update_realtime_preview_project_session_snapshot,
 };
 use draft_model::{Draft, TextSegmentSource};
+use editor_runtime::project_session_node::{
+    force_material_probe_enqueue_failure_for_tests,
+    force_material_probe_worker_spawn_failure_for_tests,
+};
 use media_runtime::{
     discover_runtime_config, replace_configured_bundled_runtime_directory_for_tests,
 };
@@ -1520,6 +1524,291 @@ fn project_session_material_reads_use_canonical_session_draft() {
 }
 
 #[test]
+fn project_session_material_probe_queue_preserves_work_for_burst_imports() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = ExportSandbox::new("session-material-probe-queue");
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success_slow(160, 90, false, 300);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-probe-queue.veproj");
+    save_empty_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-probe-queue"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    for (index, material_id) in [
+        "session-queue-material-a",
+        "session-queue-material-b",
+        "session-queue-material-c",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let material_path = temp_dir.path().join(format!("queue-{index}.mp4"));
+        fs::write(&material_path, format!("queued material {index}"))
+            .expect("queued material fixture should be written");
+        let imported = execute_project_intent(json!({
+            "sessionId": "test-session-probe-queue",
+            "expectedRevision": index,
+            "intent": {
+                "kind": "importMaterial",
+                "materialPath": material_path.display().to_string(),
+                "materialId": material_id,
+                "displayName": format!("queue-{index}.mp4")
+            }
+        }))
+        .expect("queued importMaterial intent should return an envelope");
+        assert_eq!(imported["ok"], true, "{imported:#}");
+        assert_eq!(imported["data"]["revision"], index as u64 + 1);
+        assert_eq!(imported["data"]["probeStatus"], "queued");
+    }
+
+    let listed = wait_for_material_probe_metadata(
+        "test-session-probe-queue",
+        &[
+            "session-queue-material-a",
+            "session-queue-material-b",
+            "session-queue-material-c",
+        ],
+    );
+    assert!(
+        listed["data"]["revision"].as_u64().unwrap() >= 6,
+        "three queued probe completions should advance the canonical session revision: {listed:#}"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-probe-queue" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_import_material_reports_probe_schedule_failure_after_commit_as_success() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let _probe_failure = force_material_probe_enqueue_failure_for_tests(
+        "material probe scheduler rejected: scheduler queue for MediaProbe is full at 8 jobs",
+    );
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir
+        .path()
+        .join("session-probe-schedule-failure.veproj");
+    save_empty_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-probe-schedule-failure"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    let material_path = temp_dir.path().join("probe-schedule-failure.mp4");
+    fs::write(&material_path, "probe schedule failure material")
+        .expect("material fixture should be written");
+    let imported = execute_project_intent(json!({
+        "sessionId": "test-session-probe-schedule-failure",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "importMaterial",
+            "materialPath": material_path.display().to_string(),
+            "materialId": "probe-schedule-failure-material",
+            "displayName": "probe-schedule-failure.mp4"
+        }
+    }))
+    .expect("importMaterial intent should return an envelope");
+
+    assert_eq!(imported["ok"], true, "{imported:#}");
+    assert_eq!(imported["data"]["revision"], 1);
+    assert_eq!(imported["data"]["probeStatus"], "failed");
+    assert!(
+        imported["data"].get("probeJobId").is_none(),
+        "failed probe scheduling must not fabricate a job id: {imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["diagnostic"]["kind"], "probeFailed",
+        "{imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["diagnostic"]["materialId"], "probe-schedule-failure-material",
+        "{imported:#}"
+    );
+    assert!(
+        imported["data"]["diagnostic"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("could not be scheduled"),
+        "{imported:#}"
+    );
+    assert_eq!(
+        imported["data"]["materials"][0]["materialId"], "probe-schedule-failure-material",
+        "{imported:#}"
+    );
+
+    let listed = list_project_session_materials(json!({
+        "sessionId": "test-session-probe-schedule-failure",
+        "expectedRevision": 1
+    }))
+    .expect("listProjectSessionMaterials should return an envelope");
+    assert_eq!(listed["ok"], true, "{listed:#}");
+    assert_eq!(listed["data"]["revision"], 1);
+    assert!(
+        listed["data"]["materials"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|material| material["materialId"] == "probe-schedule-failure-material"),
+        "committed import must remain visible after probe scheduling failure: {listed:#}"
+    );
+
+    let project_json = fs::read_to_string(imported["data"]["projectJsonPath"].as_str().unwrap())
+        .expect("project.json should be readable after committed import");
+    assert!(
+        project_json.contains("probe-schedule-failure-material"),
+        "committed import must be persisted in project.json"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-probe-schedule-failure" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_material_probe_worker_spawn_failure_releases_scheduler_capacity() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = ExportSandbox::new("session-material-probe-spawn-failure");
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success_slow(160, 90, false, 50);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-probe-spawn-failure.veproj");
+    save_empty_timeline_draft(&bundle_path);
+    open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-probe-spawn-failure"
+    }))
+    .expect("openProjectSession should return an envelope");
+
+    {
+        let _spawn_failure =
+            force_material_probe_worker_spawn_failure_for_tests("test worker spawn failure");
+        let failed_material_path = temp_dir.path().join("spawn-failure-a.mp4");
+        fs::write(&failed_material_path, "spawn failure material")
+            .expect("spawn failure material fixture should be written");
+        let imported = execute_project_intent(json!({
+            "sessionId": "test-session-probe-spawn-failure",
+            "expectedRevision": 0,
+            "intent": {
+                "kind": "importMaterial",
+                "materialPath": failed_material_path.display().to_string(),
+                "materialId": "spawn-failure-material-a",
+                "displayName": "spawn-failure-a.mp4"
+            }
+        }))
+        .expect("spawn failure importMaterial intent should return an envelope");
+        assert_eq!(imported["ok"], true, "{imported:#}");
+        assert_eq!(imported["data"]["revision"], 1);
+        assert_eq!(imported["data"]["probeStatus"], "failed");
+        assert!(
+            imported["data"].get("probeJobId").is_none(),
+            "worker spawn failure must not expose a running job id: {imported:#}"
+        );
+    }
+
+    let recover_material_path = temp_dir.path().join("spawn-failure-b.mp4");
+    fs::write(&recover_material_path, "recover material")
+        .expect("recover material fixture should be written");
+    let recovered = execute_project_intent(json!({
+        "sessionId": "test-session-probe-spawn-failure",
+        "expectedRevision": 1,
+        "intent": {
+            "kind": "importMaterial",
+            "materialPath": recover_material_path.display().to_string(),
+            "materialId": "spawn-failure-material-b",
+            "displayName": "spawn-failure-b.mp4"
+        }
+    }))
+    .expect("recover importMaterial intent should return an envelope");
+    assert_eq!(recovered["ok"], true, "{recovered:#}");
+    assert_eq!(recovered["data"]["revision"], 2);
+    assert_eq!(recovered["data"]["probeStatus"], "queued");
+
+    let listed = wait_for_material_probe_metadata(
+        "test-session-probe-spawn-failure",
+        &["spawn-failure-material-b"],
+    );
+    assert!(
+        listed["data"]["revision"].as_u64().unwrap() >= 3,
+        "successful follow-up probe proves the failed spawn released scheduler capacity: {listed:#}"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-probe-spawn-failure" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
+fn project_session_material_probe_jobs_are_unique_across_sessions() {
+    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let sandbox = ExportSandbox::new("session-material-probe-cross-session");
+    let _ffmpeg = sandbox.ffmpeg_complete();
+    let _ffprobe = sandbox.ffprobe_success_slow(160, 90, false, 300);
+    let _runtime_dir = RuntimeDirectoryGuard::set(&sandbox.root);
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_a = temp_dir.path().join("session-probe-a.veproj");
+    let bundle_b = temp_dir.path().join("session-probe-b.veproj");
+    save_empty_timeline_draft(&bundle_a);
+    save_empty_timeline_draft(&bundle_b);
+    open_project_session(json!({
+        "bundlePath": bundle_a.display().to_string(),
+        "sessionId": "test-session-probe-a"
+    }))
+    .expect("openProjectSession A should return an envelope");
+    open_project_session(json!({
+        "bundlePath": bundle_b.display().to_string(),
+        "sessionId": "test-session-probe-b"
+    }))
+    .expect("openProjectSession B should return an envelope");
+
+    let material_path_a = temp_dir.path().join("shared-a.mp4");
+    let material_path_b = temp_dir.path().join("shared-b.mp4");
+    fs::write(&material_path_a, "shared material a").expect("material A should be written");
+    fs::write(&material_path_b, "shared material b").expect("material B should be written");
+    for (session_id, material_path) in [
+        ("test-session-probe-a", &material_path_a),
+        ("test-session-probe-b", &material_path_b),
+    ] {
+        let imported = execute_project_intent(json!({
+            "sessionId": session_id,
+            "expectedRevision": 0,
+            "intent": {
+                "kind": "importMaterial",
+                "materialPath": material_path.display().to_string(),
+                "materialId": "shared-session-material",
+                "displayName": "shared-session-material.mp4"
+            }
+        }))
+        .expect("cross-session importMaterial intent should return an envelope");
+        assert_eq!(imported["ok"], true, "{imported:#}");
+        assert_eq!(imported["data"]["revision"], 1);
+        assert_eq!(imported["data"]["probeStatus"], "queued");
+    }
+
+    let listed_a =
+        wait_for_material_probe_metadata("test-session-probe-a", &["shared-session-material"]);
+    let listed_b =
+        wait_for_material_probe_metadata("test-session-probe-b", &["shared-session-material"]);
+    assert!(
+        listed_a["data"]["revision"].as_u64().unwrap() >= 2,
+        "session A probe should advance independently: {listed_a:#}"
+    );
+    assert!(
+        listed_b["data"]["revision"].as_u64().unwrap() >= 2,
+        "session B probe should advance independently: {listed_b:#}"
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-probe-a" }))
+        .expect("closeProjectSession A should return an envelope");
+    close_project_session(json!({ "sessionId": "test-session-probe-b" }))
+        .expect("closeProjectSession B should return an envelope");
+}
+
+#[test]
 fn project_session_missing_material_reads_use_session_bundle_path() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-missing-read.veproj");
@@ -2904,6 +3193,35 @@ fn wait_for_export_phase(job_id: &str) -> Value {
     panic!("export job did not complete; last={last:#}");
 }
 
+fn wait_for_material_probe_metadata(session_id: &str, material_ids: &[&str]) -> Value {
+    let mut last = Value::Null;
+    for _ in 0..40 {
+        let listed = list_project_session_materials(json!({
+            "sessionId": session_id,
+            "expectedRevision": 0
+        }))
+        .expect("listProjectSessionMaterials should return an envelope");
+        last = listed.clone();
+        let materials = listed["data"]["materials"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let all_probed = material_ids.iter().all(|material_id| {
+            materials.iter().any(|material| {
+                material["materialId"] == *material_id
+                    && material["metadata"]["width"] == 160
+                    && material["metadata"]["height"] == 90
+                    && material["metadata"]["duration"] == 1_000_000
+            })
+        });
+        if all_probed {
+            return listed;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    panic!("material probes did not complete; last={last:#}");
+}
+
 struct ExportSandbox {
     root: PathBuf,
 }
@@ -2957,10 +3275,35 @@ printf 'progress=end\n'
     }
 
     fn ffprobe_success(&self, width: u32, height: u32, has_audio: bool) -> PathBuf {
+        self.ffprobe_success_with_delay(width, height, has_audio, 0)
+    }
+
+    fn ffprobe_success_slow(
+        &self,
+        width: u32,
+        height: u32,
+        has_audio: bool,
+        delay_ms: u64,
+    ) -> PathBuf {
+        self.ffprobe_success_with_delay(width, height, has_audio, delay_ms)
+    }
+
+    fn ffprobe_success_with_delay(
+        &self,
+        width: u32,
+        height: u32,
+        has_audio: bool,
+        delay_ms: u64,
+    ) -> PathBuf {
         let audio_stream = if has_audio {
             r#",{"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2,"duration":"1.000000"}"#
         } else {
             ""
+        };
+        let delay = if delay_ms > 0 {
+            format!("sleep {}\n", delay_ms as f64 / 1000.0)
+        } else {
+            String::new()
         };
         self.script(
             "ffprobe",
@@ -2970,6 +3313,7 @@ if [ "$1" = "-version" ]; then
   printf 'ffprobe version session-export-test\n'
   exit 0
 fi
+{delay}
 cat <<'JSON'
 {{"streams":[{{"codec_type":"video","codec_name":"h264","width":{width},"height":{height},"r_frame_rate":"30/1","duration":"1.000000"}}{audio_stream}],"format":{{"duration":"1.000000"}}}}
 JSON

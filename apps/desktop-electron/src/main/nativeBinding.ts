@@ -532,7 +532,7 @@ export type ProjectSessionImportMaterialResponse = {
   material: Material;
   materials: Material[];
   probeStatus: "queued" | "running" | "probed" | "failed" | "stale";
-  probeJobId: string;
+  probeJobId?: string | null;
   diagnostic?: MissingMaterialCommandDiagnostic | null;
   viewModel: ProjectSessionViewModel;
   events: CommandEvent[];

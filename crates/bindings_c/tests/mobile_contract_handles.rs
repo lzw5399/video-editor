@@ -2,10 +2,13 @@ use std::ffi::CString;
 use std::ptr;
 
 use bindings_c::{
-    ve_buffer_t, ve_color_matrix_t, ve_color_primaries_t, ve_color_range_t, ve_color_transfer_t,
-    ve_handle_kind_t, ve_handle_t, ve_pixel_format_t, ve_runtime_t, ve_status_t,
-    ve_texture_backend_t, ve_texture_descriptor_t,
+    VE_COLOR_MATRIX_IDENTITY, VE_COLOR_PRIMARIES_BT709, VE_COLOR_RANGE_FULL,
+    VE_COLOR_TRANSFER_SRGB, VE_HANDLE_KIND_ARTIFACT, VE_HANDLE_KIND_FRAME, VE_HANDLE_KIND_MEDIA,
+    VE_HANDLE_KIND_TEXTURE, VE_PIXEL_FORMAT_BGRA8, VE_PIXEL_FORMAT_RGBA8,
+    VE_TEXTURE_BACKEND_METAL_TEXTURE, ve_buffer_t, ve_handle_t, ve_runtime_t, ve_status_t,
+    ve_texture_descriptor_t,
 };
+use serde_json::Value;
 
 #[test]
 fn mobile_contract_handles_validate_owner_generation_and_release() {
@@ -16,7 +19,7 @@ fn mobile_contract_handles_validate_owner_generation_and_release() {
         unsafe {
             bindings_c::ve_handle_acquire(
                 runtime,
-                ve_handle_kind_t::VE_HANDLE_KIND_MEDIA,
+                VE_HANDLE_KIND_MEDIA,
                 ptr::null(),
                 0,
                 &mut media,
@@ -77,7 +80,7 @@ fn mobile_contract_handles_validate_owner_generation_and_release() {
         unsafe {
             bindings_c::ve_handle_acquire(
                 runtime,
-                ve_handle_kind_t::VE_HANDLE_KIND_TEXTURE,
+                VE_HANDLE_KIND_TEXTURE,
                 &descriptor,
                 0,
                 &mut texture,
@@ -114,7 +117,7 @@ fn mobile_contract_handles_validate_owner_generation_and_release() {
     );
 
     let mut wrong_pixel_format = texture_descriptor("adapter-a", "device-a");
-    wrong_pixel_format.pixel_format = ve_pixel_format_t::VE_PIXEL_FORMAT_RGBA8;
+    wrong_pixel_format.pixel_format = VE_PIXEL_FORMAT_RGBA8;
     diagnostics.clear();
     assert_eq!(
         unsafe {
@@ -149,9 +152,9 @@ fn mobile_contract_handles_report_cascading_close_for_unreleased_tokens() {
     let mut frame = ve_handle_t::default();
     let mut artifact = ve_handle_t::default();
     for (kind, out_handle) in [
-        (ve_handle_kind_t::VE_HANDLE_KIND_MEDIA, &mut media),
-        (ve_handle_kind_t::VE_HANDLE_KIND_FRAME, &mut frame),
-        (ve_handle_kind_t::VE_HANDLE_KIND_ARTIFACT, &mut artifact),
+        (VE_HANDLE_KIND_MEDIA, &mut media),
+        (VE_HANDLE_KIND_FRAME, &mut frame),
+        (VE_HANDLE_KIND_ARTIFACT, &mut artifact),
     ] {
         diagnostics.clear();
         assert_eq!(
@@ -181,11 +184,24 @@ fn mobile_contract_handles_report_cascading_close_for_unreleased_tokens() {
         ve_status_t::VE_STATUS_OK
     );
     let close_json = diagnostics.as_str();
-    assert!(close_json.contains("\"leaks\""));
-    assert!(close_json.contains("\"cascadeClose\""));
-    assert!(close_json.contains(&format!("\"id\":{}", media.id)));
-    assert!(close_json.contains(&format!("\"id\":{}", artifact.id)));
-    assert!(!close_json.contains(&format!("\"id\":{}", frame.id)));
+    let close: Value = serde_json::from_str(close_json).expect("close diagnostics should be JSON");
+    let leaks = close["leaks"]
+        .as_array()
+        .expect("runtime close should include leak diagnostics");
+    assert!(leaks.iter().any(|leak| {
+        leak["kind"] == "media" && leak["id"] == media.id && leak["releaseState"] == "cascadeClose"
+    }));
+    assert!(leaks.iter().any(|leak| {
+        leak["kind"] == "artifact"
+            && leak["id"] == artifact.id
+            && leak["releaseState"] == "cascadeClose"
+    }));
+    assert!(
+        !leaks
+            .iter()
+            .any(|leak| leak["kind"] == "frame" && leak["id"] == frame.id),
+        "explicitly released frame handle must not be reported as leaked: {close:#}"
+    );
 }
 
 fn runtime(label: &str) -> (ve_runtime_t, JsonBuffer) {
@@ -208,16 +224,16 @@ fn texture_descriptor(adapter_id: &str, device_id: &str) -> ve_texture_descripto
     let adapter_id = CString::new(adapter_id).expect("adapter id should not contain nul");
     let device_id = CString::new(device_id).expect("device id should not contain nul");
     ve_texture_descriptor_t {
-        backend: ve_texture_backend_t::VE_TEXTURE_BACKEND_METAL_TEXTURE,
+        backend: VE_TEXTURE_BACKEND_METAL_TEXTURE,
         adapter_id: adapter_id.into_raw(),
         device_id: device_id.into_raw(),
         width: 1920,
         height: 1080,
-        pixel_format: ve_pixel_format_t::VE_PIXEL_FORMAT_BGRA8,
-        color_primaries: ve_color_primaries_t::VE_COLOR_PRIMARIES_BT709,
-        color_transfer: ve_color_transfer_t::VE_COLOR_TRANSFER_SRGB,
-        color_matrix: ve_color_matrix_t::VE_COLOR_MATRIX_IDENTITY,
-        color_range: ve_color_range_t::VE_COLOR_RANGE_FULL,
+        pixel_format: VE_PIXEL_FORMAT_BGRA8,
+        color_primaries: VE_COLOR_PRIMARIES_BT709,
+        color_transfer: VE_COLOR_TRANSFER_SRGB,
+        color_matrix: VE_COLOR_MATRIX_IDENTITY,
+        color_range: VE_COLOR_RANGE_FULL,
     }
 }
 

@@ -9,6 +9,7 @@ use std::os::raw::c_char;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use editor_runtime::{
     EDITOR_RUNTIME_CONTRACT_VERSION, HandleAcquireRequest, HandleKind, HandleRegistry,
@@ -71,79 +72,58 @@ pub enum ve_error_code_t {
 }
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_handle_kind_t {
-    VE_HANDLE_KIND_INVALID = 0,
-    VE_HANDLE_KIND_RUNTIME_SESSION = 1,
-    VE_HANDLE_KIND_PROJECT_SESSION = 2,
-    VE_HANDLE_KIND_MEDIA = 3,
-    VE_HANDLE_KIND_FRAME = 4,
-    VE_HANDLE_KIND_TEXTURE = 5,
-    VE_HANDLE_KIND_ARTIFACT = 6,
-}
+pub type ve_handle_kind_t = u32;
+pub const VE_HANDLE_KIND_INVALID: ve_handle_kind_t = 0;
+pub const VE_HANDLE_KIND_RUNTIME_SESSION: ve_handle_kind_t = 1;
+pub const VE_HANDLE_KIND_PROJECT_SESSION: ve_handle_kind_t = 2;
+pub const VE_HANDLE_KIND_MEDIA: ve_handle_kind_t = 3;
+pub const VE_HANDLE_KIND_FRAME: ve_handle_kind_t = 4;
+pub const VE_HANDLE_KIND_TEXTURE: ve_handle_kind_t = 5;
+pub const VE_HANDLE_KIND_ARTIFACT: ve_handle_kind_t = 6;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_texture_backend_t {
-    VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D = 1,
-    VE_TEXTURE_BACKEND_D3D12_RESOURCE = 2,
-    VE_TEXTURE_BACKEND_METAL_TEXTURE = 3,
-    VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER = 4,
-}
+pub type ve_texture_backend_t = u32;
+pub const VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D: ve_texture_backend_t = 1;
+pub const VE_TEXTURE_BACKEND_D3D12_RESOURCE: ve_texture_backend_t = 2;
+pub const VE_TEXTURE_BACKEND_METAL_TEXTURE: ve_texture_backend_t = 3;
+pub const VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER: ve_texture_backend_t = 4;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_pixel_format_t {
-    VE_PIXEL_FORMAT_NV12 = 1,
-    VE_PIXEL_FORMAT_BGRA8 = 2,
-    VE_PIXEL_FORMAT_RGBA8 = 3,
-    VE_PIXEL_FORMAT_P010 = 4,
-    VE_PIXEL_FORMAT_YUV420P = 5,
-    VE_PIXEL_FORMAT_UNKNOWN = 255,
-}
+pub type ve_pixel_format_t = u32;
+pub const VE_PIXEL_FORMAT_NV12: ve_pixel_format_t = 1;
+pub const VE_PIXEL_FORMAT_BGRA8: ve_pixel_format_t = 2;
+pub const VE_PIXEL_FORMAT_RGBA8: ve_pixel_format_t = 3;
+pub const VE_PIXEL_FORMAT_P010: ve_pixel_format_t = 4;
+pub const VE_PIXEL_FORMAT_YUV420P: ve_pixel_format_t = 5;
+pub const VE_PIXEL_FORMAT_UNKNOWN: ve_pixel_format_t = 255;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_color_primaries_t {
-    VE_COLOR_PRIMARIES_BT709 = 1,
-    VE_COLOR_PRIMARIES_BT2020 = 2,
-    VE_COLOR_PRIMARIES_DISPLAY_P3 = 3,
-    VE_COLOR_PRIMARIES_UNKNOWN = 255,
-}
+pub type ve_color_primaries_t = u32;
+pub const VE_COLOR_PRIMARIES_BT709: ve_color_primaries_t = 1;
+pub const VE_COLOR_PRIMARIES_BT2020: ve_color_primaries_t = 2;
+pub const VE_COLOR_PRIMARIES_DISPLAY_P3: ve_color_primaries_t = 3;
+pub const VE_COLOR_PRIMARIES_UNKNOWN: ve_color_primaries_t = 255;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_color_transfer_t {
-    VE_COLOR_TRANSFER_BT709 = 1,
-    VE_COLOR_TRANSFER_SRGB = 2,
-    VE_COLOR_TRANSFER_PQ = 3,
-    VE_COLOR_TRANSFER_HLG = 4,
-    VE_COLOR_TRANSFER_UNKNOWN = 255,
-}
+pub type ve_color_transfer_t = u32;
+pub const VE_COLOR_TRANSFER_BT709: ve_color_transfer_t = 1;
+pub const VE_COLOR_TRANSFER_SRGB: ve_color_transfer_t = 2;
+pub const VE_COLOR_TRANSFER_PQ: ve_color_transfer_t = 3;
+pub const VE_COLOR_TRANSFER_HLG: ve_color_transfer_t = 4;
+pub const VE_COLOR_TRANSFER_UNKNOWN: ve_color_transfer_t = 255;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_color_matrix_t {
-    VE_COLOR_MATRIX_BT709 = 1,
-    VE_COLOR_MATRIX_BT2020_NON_CONSTANT = 2,
-    VE_COLOR_MATRIX_IDENTITY = 3,
-    VE_COLOR_MATRIX_UNKNOWN = 255,
-}
+pub type ve_color_matrix_t = u32;
+pub const VE_COLOR_MATRIX_BT709: ve_color_matrix_t = 1;
+pub const VE_COLOR_MATRIX_BT2020_NON_CONSTANT: ve_color_matrix_t = 2;
+pub const VE_COLOR_MATRIX_IDENTITY: ve_color_matrix_t = 3;
+pub const VE_COLOR_MATRIX_UNKNOWN: ve_color_matrix_t = 255;
 
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ve_color_range_t {
-    VE_COLOR_RANGE_LIMITED = 1,
-    VE_COLOR_RANGE_FULL = 2,
-    VE_COLOR_RANGE_UNKNOWN = 255,
-}
+pub type ve_color_range_t = u32;
+pub const VE_COLOR_RANGE_LIMITED: ve_color_range_t = 1;
+pub const VE_COLOR_RANGE_FULL: ve_color_range_t = 2;
+pub const VE_COLOR_RANGE_UNKNOWN: ve_color_range_t = 255;
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
@@ -174,7 +154,7 @@ pub struct ve_handle_t {
 impl Default for ve_handle_t {
     fn default() -> Self {
         Self {
-            kind: ve_handle_kind_t::VE_HANDLE_KIND_INVALID,
+            kind: VE_HANDLE_KIND_INVALID,
             id: 0,
             owner_id: 0,
             owner_generation: 0,
@@ -324,6 +304,7 @@ pub unsafe extern "C" fn ve_project_open(
         )) {
             Ok(token) => token,
             Err(error) => {
+                let _ = entry.projects.close_project_session(&opened.handle);
                 let status = status_from_runtime_error(&error);
                 return (
                     Some(runtime),
@@ -332,6 +313,19 @@ pub unsafe extern "C" fn ve_project_open(
                 );
             }
         };
+        if let Err(error) = entry
+            .projects
+            .bind_portable_handle(token.clone(), opened.handle.clone())
+        {
+            let _ = entry.handles.release(&entry.session.id, &token);
+            let _ = entry.projects.close_project_session(&opened.handle);
+            let status = status_from_runtime_error(&error);
+            return (
+                Some(runtime),
+                status,
+                Diagnostic::from_runtime_error(status, &error),
+            );
+        }
         let handle = handle_from_token(runtime, &token);
         unsafe {
             *out_handle = handle;
@@ -349,7 +343,7 @@ pub unsafe extern "C" fn ve_handle_acquire(
     runtime: ve_runtime_t,
     kind: ve_handle_kind_t,
     texture: *const ve_texture_descriptor_t,
-    lease_expires_at_us: u64,
+    lease_duration_us: u64,
     out_handle: *mut ve_handle_t,
     out_json: *mut ve_buffer_t,
 ) -> ve_status_t {
@@ -368,7 +362,13 @@ pub unsafe extern "C" fn ve_handle_acquire(
         let Some(entry) = state.open_runtime_mut(runtime) else {
             return state.unknown_runtime(runtime);
         };
-        let request = match acquire_request(kind, texture, &entry.session.id, lease_expires_at_us) {
+        let request = match acquire_request(
+            kind,
+            texture,
+            &entry.session.id,
+            entry.now_us(),
+            lease_duration_us,
+        ) {
             Ok(request) => request,
             Err((status, diagnostic)) => return (Some(runtime), status, diagnostic),
         };
@@ -411,7 +411,8 @@ pub unsafe extern "C" fn ve_handle_retain(
             Ok(token) => token,
             Err((status, diagnostic)) => return (Some(runtime), status, diagnostic),
         };
-        match entry.handles.retain(&entry.session.id, &token, 0) {
+        let now_us = entry.now_us();
+        match entry.handles.retain(&entry.session.id, &token, now_us) {
             Ok(_) => (
                 Some(runtime),
                 ve_status_t::VE_STATUS_OK,
@@ -445,11 +446,23 @@ pub unsafe extern "C" fn ve_handle_release(
             Err((status, diagnostic)) => return (Some(runtime), status, diagnostic),
         };
         match entry.handles.release(&entry.session.id, &token) {
-            Ok(report) => (
-                Some(runtime),
-                ve_status_t::VE_STATUS_OK,
-                Diagnostic::handle_released(runtime, handle, report.release_state),
-            ),
+            Ok(report) => {
+                if report.kind == HandleKind::ProjectSession && report.remaining_retain_count == 0 {
+                    if let Err(error) = entry.projects.close_portable_handle_binding(&token) {
+                        let status = status_from_runtime_error(&error);
+                        return (
+                            Some(runtime),
+                            status,
+                            Diagnostic::from_runtime_error(status, &error),
+                        );
+                    }
+                }
+                (
+                    Some(runtime),
+                    ve_status_t::VE_STATUS_OK,
+                    Diagnostic::handle_released(runtime, handle, report.release_state),
+                )
+            }
             Err(error) => {
                 let status = status_from_runtime_error(&error);
                 (
@@ -482,11 +495,12 @@ pub unsafe extern "C" fn ve_texture_handle_resolve(
             Ok(token) => token,
             Err((status, diagnostic)) => return (Some(runtime), status, diagnostic),
         };
+        let now_us = entry.now_us();
         match entry.handles.resolve_texture(
             &entry.session.id,
             &token,
             &TextureResolveExpectation { descriptor },
-            0,
+            now_us,
         ) {
             Ok(_) => (
                 Some(runtime),
@@ -528,29 +542,6 @@ pub unsafe extern "C" fn ve_last_error_json(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ve_buffer_free(buffer: *mut ve_buffer_t) {
-    if buffer.is_null() {
-        return;
-    }
-    let buffer = unsafe { &mut *buffer };
-    if buffer.data.is_null() || buffer.capacity == 0 {
-        buffer.len = 0;
-        buffer.capacity = 0;
-        return;
-    }
-    unsafe {
-        drop(Vec::from_raw_parts(
-            buffer.data,
-            buffer.len.min(buffer.capacity),
-            buffer.capacity,
-        ));
-    }
-    buffer.data = ptr::null_mut();
-    buffer.len = 0;
-    buffer.capacity = 0;
-}
-
 #[derive(Debug)]
 struct AbiState {
     ticket: u64,
@@ -581,9 +572,16 @@ enum RuntimeSlot {
 struct AbiRuntime {
     runtime: ve_runtime_t,
     session: RuntimeSession,
+    started_at: Instant,
     projects: ProjectSessionService,
     handles: HandleRegistry,
     last_error: Option<Diagnostic>,
+}
+
+impl AbiRuntime {
+    fn now_us(&self) -> u64 {
+        u64::try_from(self.started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    }
 }
 
 impl AbiState {
@@ -596,6 +594,7 @@ impl AbiState {
         self.runtimes.push(RuntimeSlot::Open(AbiRuntime {
             runtime,
             session,
+            started_at: Instant::now(),
             projects: ProjectSessionService::default(),
             handles: HandleRegistry::default(),
             last_error: None,
@@ -625,6 +624,7 @@ impl AbiState {
                     if entry.runtime.id == runtime.id
                         && entry.runtime.generation == runtime.generation =>
                 {
+                    let _ = entry.projects.close_all_project_sessions();
                     let report = entry.handles.close_runtime_session(&entry.session.id);
                     let diagnostics = report
                         .leak_diagnostics
@@ -875,7 +875,7 @@ fn finish(
                 runtime,
                 Diagnostic::error(write_status, "diagnostic buffer failed"),
             );
-            write_status
+            status
         }
     }
 }
@@ -955,22 +955,35 @@ fn acquire_request(
     kind: ve_handle_kind_t,
     texture: *const ve_texture_descriptor_t,
     owner: &editor_runtime::RuntimeSessionId,
-    lease_expires_at_us: u64,
+    now_us: u64,
+    lease_duration_us: u64,
 ) -> Result<HandleAcquireRequest, (ve_status_t, Diagnostic)> {
     let request = match kind {
-        ve_handle_kind_t::VE_HANDLE_KIND_RUNTIME_SESSION => {
-            HandleAcquireRequest::runtime_session(owner.clone())
+        VE_HANDLE_KIND_RUNTIME_SESSION | VE_HANDLE_KIND_PROJECT_SESSION => {
+            return Err((
+                ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+                Diagnostic::error(
+                    ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+                    "runtime and project session handles are created only by lifecycle APIs",
+                ),
+            ));
         }
-        ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION => {
-            HandleAcquireRequest::project_session(owner.clone())
-        }
-        ve_handle_kind_t::VE_HANDLE_KIND_MEDIA => HandleAcquireRequest::media(owner.clone()),
-        ve_handle_kind_t::VE_HANDLE_KIND_FRAME => HandleAcquireRequest::frame(owner.clone()),
-        ve_handle_kind_t::VE_HANDLE_KIND_TEXTURE => {
+        VE_HANDLE_KIND_MEDIA => HandleAcquireRequest::media(owner.clone()),
+        VE_HANDLE_KIND_FRAME => HandleAcquireRequest::frame(owner.clone()),
+        VE_HANDLE_KIND_TEXTURE => {
             HandleAcquireRequest::texture(owner.clone(), texture_descriptor(texture)?)
         }
-        ve_handle_kind_t::VE_HANDLE_KIND_ARTIFACT => HandleAcquireRequest::artifact(owner.clone()),
-        ve_handle_kind_t::VE_HANDLE_KIND_INVALID => {
+        VE_HANDLE_KIND_ARTIFACT => HandleAcquireRequest::artifact(owner.clone()),
+        VE_HANDLE_KIND_INVALID => {
+            return Err((
+                ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+                Diagnostic::error(
+                    ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+                    "handle kind is invalid",
+                ),
+            ));
+        }
+        _ => {
             return Err((
                 ve_status_t::VE_STATUS_INVALID_ARGUMENT,
                 Diagnostic::error(
@@ -980,8 +993,8 @@ fn acquire_request(
             ));
         }
     };
-    Ok(if lease_expires_at_us > 0 {
-        request.with_lease_expires_at_us(lease_expires_at_us)
+    Ok(if lease_duration_us > 0 {
+        request.with_lease_expires_at_us(now_us.saturating_add(lease_duration_us))
     } else {
         request
     })
@@ -1000,7 +1013,7 @@ fn texture_descriptor(
         ));
     }
     let texture = unsafe { &*ptr };
-    let backend = texture_backend(texture.backend);
+    let backend = texture_backend(texture.backend)?;
     let adapter_id = required_c_string(texture.adapter_id, "texture adapter id")?;
     let device_id = required_c_string(texture.device_id, "texture device id")?;
     Ok(TextureHandleDescriptor {
@@ -1014,12 +1027,12 @@ fn texture_descriptor(
             width: texture.width,
             height: texture.height,
         },
-        pixel_format: pixel_format(texture.pixel_format),
+        pixel_format: pixel_format(texture.pixel_format)?,
         color: VideoColorMetadata {
-            primaries: color_primaries(texture.color_primaries),
-            transfer: color_transfer(texture.color_transfer),
-            matrix: color_matrix(texture.color_matrix),
-            range: color_range(texture.color_range),
+            primaries: color_primaries(texture.color_primaries)?,
+            transfer: color_transfer(texture.color_transfer)?,
+            matrix: color_matrix(texture.color_matrix)?,
+            range: color_range(texture.color_range)?,
             diagnostics: Vec::new(),
         },
     })
@@ -1045,18 +1058,7 @@ fn token_from_handle(
             ),
         ));
     }
-    let kind = match handle_kind(handle.kind) {
-        Some(kind) => kind,
-        None => {
-            return Err((
-                ve_status_t::VE_STATUS_INVALID_ARGUMENT,
-                Diagnostic::error(
-                    ve_status_t::VE_STATUS_INVALID_ARGUMENT,
-                    "handle kind is invalid",
-                ),
-            ));
-        }
-    };
+    let kind = handle_kind(handle.kind)?;
     let owner_session = owner.with_generation(handle.owner_generation);
     Ok(HandleToken::from_raw_parts(
         kind,
@@ -1101,38 +1103,40 @@ fn parse_token_id(token: &str) -> u64 {
         .unwrap_or(0)
 }
 
-fn handle_kind(kind: ve_handle_kind_t) -> Option<HandleKind> {
+fn handle_kind(kind: ve_handle_kind_t) -> Result<HandleKind, (ve_status_t, Diagnostic)> {
     match kind {
-        ve_handle_kind_t::VE_HANDLE_KIND_RUNTIME_SESSION => Some(HandleKind::RuntimeSession),
-        ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION => Some(HandleKind::ProjectSession),
-        ve_handle_kind_t::VE_HANDLE_KIND_MEDIA => Some(HandleKind::Media),
-        ve_handle_kind_t::VE_HANDLE_KIND_FRAME => Some(HandleKind::Frame),
-        ve_handle_kind_t::VE_HANDLE_KIND_TEXTURE => Some(HandleKind::Texture),
-        ve_handle_kind_t::VE_HANDLE_KIND_ARTIFACT => Some(HandleKind::Artifact),
-        ve_handle_kind_t::VE_HANDLE_KIND_INVALID => None,
+        VE_HANDLE_KIND_RUNTIME_SESSION => Ok(HandleKind::RuntimeSession),
+        VE_HANDLE_KIND_PROJECT_SESSION => Ok(HandleKind::ProjectSession),
+        VE_HANDLE_KIND_MEDIA => Ok(HandleKind::Media),
+        VE_HANDLE_KIND_FRAME => Ok(HandleKind::Frame),
+        VE_HANDLE_KIND_TEXTURE => Ok(HandleKind::Texture),
+        VE_HANDLE_KIND_ARTIFACT => Ok(HandleKind::Artifact),
+        VE_HANDLE_KIND_INVALID => Err(invalid_abi_value("handle kind")),
+        _ => Err(invalid_abi_value("handle kind")),
     }
 }
 
 fn handle_kind_c(kind: HandleKind) -> ve_handle_kind_t {
     match kind {
-        HandleKind::RuntimeSession => ve_handle_kind_t::VE_HANDLE_KIND_RUNTIME_SESSION,
-        HandleKind::ProjectSession => ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION,
-        HandleKind::Media => ve_handle_kind_t::VE_HANDLE_KIND_MEDIA,
-        HandleKind::Frame => ve_handle_kind_t::VE_HANDLE_KIND_FRAME,
-        HandleKind::Texture => ve_handle_kind_t::VE_HANDLE_KIND_TEXTURE,
-        HandleKind::Artifact => ve_handle_kind_t::VE_HANDLE_KIND_ARTIFACT,
+        HandleKind::RuntimeSession => VE_HANDLE_KIND_RUNTIME_SESSION,
+        HandleKind::ProjectSession => VE_HANDLE_KIND_PROJECT_SESSION,
+        HandleKind::Media => VE_HANDLE_KIND_MEDIA,
+        HandleKind::Frame => VE_HANDLE_KIND_FRAME,
+        HandleKind::Texture => VE_HANDLE_KIND_TEXTURE,
+        HandleKind::Artifact => VE_HANDLE_KIND_ARTIFACT,
     }
 }
 
 fn handle_kind_name(kind: ve_handle_kind_t) -> &'static str {
     match kind {
-        ve_handle_kind_t::VE_HANDLE_KIND_RUNTIME_SESSION => "runtimeSession",
-        ve_handle_kind_t::VE_HANDLE_KIND_PROJECT_SESSION => "projectSession",
-        ve_handle_kind_t::VE_HANDLE_KIND_MEDIA => "media",
-        ve_handle_kind_t::VE_HANDLE_KIND_FRAME => "frame",
-        ve_handle_kind_t::VE_HANDLE_KIND_TEXTURE => "texture",
-        ve_handle_kind_t::VE_HANDLE_KIND_ARTIFACT => "artifact",
-        ve_handle_kind_t::VE_HANDLE_KIND_INVALID => "invalid",
+        VE_HANDLE_KIND_RUNTIME_SESSION => "runtimeSession",
+        VE_HANDLE_KIND_PROJECT_SESSION => "projectSession",
+        VE_HANDLE_KIND_MEDIA => "media",
+        VE_HANDLE_KIND_FRAME => "frame",
+        VE_HANDLE_KIND_TEXTURE => "texture",
+        VE_HANDLE_KIND_ARTIFACT => "artifact",
+        VE_HANDLE_KIND_INVALID => "invalid",
+        _ => "invalid",
     }
 }
 
@@ -1147,62 +1151,80 @@ fn token_prefix(kind: HandleKind) -> &'static str {
     }
 }
 
-fn texture_backend(value: ve_texture_backend_t) -> TextureBackend {
+fn texture_backend(
+    value: ve_texture_backend_t,
+) -> Result<TextureBackend, (ve_status_t, Diagnostic)> {
     match value {
-        ve_texture_backend_t::VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D => TextureBackend::D3d11Texture2D,
-        ve_texture_backend_t::VE_TEXTURE_BACKEND_D3D12_RESOURCE => TextureBackend::D3d12Resource,
-        ve_texture_backend_t::VE_TEXTURE_BACKEND_METAL_TEXTURE => TextureBackend::MetalTexture,
-        ve_texture_backend_t::VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER => {
-            TextureBackend::CoreVideoPixelBuffer
-        }
+        VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D => Ok(TextureBackend::D3d11Texture2D),
+        VE_TEXTURE_BACKEND_D3D12_RESOURCE => Ok(TextureBackend::D3d12Resource),
+        VE_TEXTURE_BACKEND_METAL_TEXTURE => Ok(TextureBackend::MetalTexture),
+        VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER => Ok(TextureBackend::CoreVideoPixelBuffer),
+        _ => Err(invalid_abi_value("texture backend")),
     }
 }
 
-fn pixel_format(value: ve_pixel_format_t) -> VideoPixelFormat {
+fn pixel_format(value: ve_pixel_format_t) -> Result<VideoPixelFormat, (ve_status_t, Diagnostic)> {
     match value {
-        ve_pixel_format_t::VE_PIXEL_FORMAT_NV12 => VideoPixelFormat::Nv12,
-        ve_pixel_format_t::VE_PIXEL_FORMAT_BGRA8 => VideoPixelFormat::Bgra8,
-        ve_pixel_format_t::VE_PIXEL_FORMAT_RGBA8 => VideoPixelFormat::Rgba8,
-        ve_pixel_format_t::VE_PIXEL_FORMAT_P010 => VideoPixelFormat::P010,
-        ve_pixel_format_t::VE_PIXEL_FORMAT_YUV420P => VideoPixelFormat::Yuv420P,
-        ve_pixel_format_t::VE_PIXEL_FORMAT_UNKNOWN => VideoPixelFormat::Unknown,
+        VE_PIXEL_FORMAT_NV12 => Ok(VideoPixelFormat::Nv12),
+        VE_PIXEL_FORMAT_BGRA8 => Ok(VideoPixelFormat::Bgra8),
+        VE_PIXEL_FORMAT_RGBA8 => Ok(VideoPixelFormat::Rgba8),
+        VE_PIXEL_FORMAT_P010 => Ok(VideoPixelFormat::P010),
+        VE_PIXEL_FORMAT_YUV420P => Ok(VideoPixelFormat::Yuv420P),
+        VE_PIXEL_FORMAT_UNKNOWN => Ok(VideoPixelFormat::Unknown),
+        _ => Err(invalid_abi_value("pixel format")),
     }
 }
 
-fn color_primaries(value: ve_color_primaries_t) -> ColorPrimaries {
+fn color_primaries(
+    value: ve_color_primaries_t,
+) -> Result<ColorPrimaries, (ve_status_t, Diagnostic)> {
     match value {
-        ve_color_primaries_t::VE_COLOR_PRIMARIES_BT709 => ColorPrimaries::Bt709,
-        ve_color_primaries_t::VE_COLOR_PRIMARIES_BT2020 => ColorPrimaries::Bt2020,
-        ve_color_primaries_t::VE_COLOR_PRIMARIES_DISPLAY_P3 => ColorPrimaries::DisplayP3,
-        ve_color_primaries_t::VE_COLOR_PRIMARIES_UNKNOWN => ColorPrimaries::Unknown,
+        VE_COLOR_PRIMARIES_BT709 => Ok(ColorPrimaries::Bt709),
+        VE_COLOR_PRIMARIES_BT2020 => Ok(ColorPrimaries::Bt2020),
+        VE_COLOR_PRIMARIES_DISPLAY_P3 => Ok(ColorPrimaries::DisplayP3),
+        VE_COLOR_PRIMARIES_UNKNOWN => Ok(ColorPrimaries::Unknown),
+        _ => Err(invalid_abi_value("color primaries")),
     }
 }
 
-fn color_transfer(value: ve_color_transfer_t) -> ColorTransfer {
+fn color_transfer(value: ve_color_transfer_t) -> Result<ColorTransfer, (ve_status_t, Diagnostic)> {
     match value {
-        ve_color_transfer_t::VE_COLOR_TRANSFER_BT709 => ColorTransfer::Bt709,
-        ve_color_transfer_t::VE_COLOR_TRANSFER_SRGB => ColorTransfer::Srgb,
-        ve_color_transfer_t::VE_COLOR_TRANSFER_PQ => ColorTransfer::Pq,
-        ve_color_transfer_t::VE_COLOR_TRANSFER_HLG => ColorTransfer::Hlg,
-        ve_color_transfer_t::VE_COLOR_TRANSFER_UNKNOWN => ColorTransfer::Unknown,
+        VE_COLOR_TRANSFER_BT709 => Ok(ColorTransfer::Bt709),
+        VE_COLOR_TRANSFER_SRGB => Ok(ColorTransfer::Srgb),
+        VE_COLOR_TRANSFER_PQ => Ok(ColorTransfer::Pq),
+        VE_COLOR_TRANSFER_HLG => Ok(ColorTransfer::Hlg),
+        VE_COLOR_TRANSFER_UNKNOWN => Ok(ColorTransfer::Unknown),
+        _ => Err(invalid_abi_value("color transfer")),
     }
 }
 
-fn color_matrix(value: ve_color_matrix_t) -> ColorMatrix {
+fn color_matrix(value: ve_color_matrix_t) -> Result<ColorMatrix, (ve_status_t, Diagnostic)> {
     match value {
-        ve_color_matrix_t::VE_COLOR_MATRIX_BT709 => ColorMatrix::Bt709,
-        ve_color_matrix_t::VE_COLOR_MATRIX_BT2020_NON_CONSTANT => ColorMatrix::Bt2020NonConstant,
-        ve_color_matrix_t::VE_COLOR_MATRIX_IDENTITY => ColorMatrix::Identity,
-        ve_color_matrix_t::VE_COLOR_MATRIX_UNKNOWN => ColorMatrix::Unknown,
+        VE_COLOR_MATRIX_BT709 => Ok(ColorMatrix::Bt709),
+        VE_COLOR_MATRIX_BT2020_NON_CONSTANT => Ok(ColorMatrix::Bt2020NonConstant),
+        VE_COLOR_MATRIX_IDENTITY => Ok(ColorMatrix::Identity),
+        VE_COLOR_MATRIX_UNKNOWN => Ok(ColorMatrix::Unknown),
+        _ => Err(invalid_abi_value("color matrix")),
     }
 }
 
-fn color_range(value: ve_color_range_t) -> ColorRange {
+fn color_range(value: ve_color_range_t) -> Result<ColorRange, (ve_status_t, Diagnostic)> {
     match value {
-        ve_color_range_t::VE_COLOR_RANGE_LIMITED => ColorRange::Limited,
-        ve_color_range_t::VE_COLOR_RANGE_FULL => ColorRange::Full,
-        ve_color_range_t::VE_COLOR_RANGE_UNKNOWN => ColorRange::Unknown,
+        VE_COLOR_RANGE_LIMITED => Ok(ColorRange::Limited),
+        VE_COLOR_RANGE_FULL => Ok(ColorRange::Full),
+        VE_COLOR_RANGE_UNKNOWN => Ok(ColorRange::Unknown),
+        _ => Err(invalid_abi_value("color range")),
     }
+}
+
+fn invalid_abi_value(name: &'static str) -> (ve_status_t, Diagnostic) {
+    (
+        ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+        Diagnostic::error(
+            ve_status_t::VE_STATUS_INVALID_ARGUMENT,
+            format!("{name} is invalid"),
+        ),
+    )
 }
 
 fn status_from_runtime_error(error: &RuntimeError) -> ve_status_t {

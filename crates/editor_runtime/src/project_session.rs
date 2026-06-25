@@ -8,7 +8,7 @@ use project_store::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{RuntimeError, RuntimeErrorKind, RuntimeSessionId};
+use crate::{HandleToken, RuntimeError, RuntimeErrorKind, RuntimeSessionId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,6 +84,17 @@ pub struct ProjectSessionSnapshot {
     pub draft: Draft,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSessionClosed {
+    pub handle: ProjectSessionHandle,
+    pub revision: u64,
+    pub bundle_path: PathBuf,
+    pub project_json_path: PathBuf,
+    pub draft_id: DraftId,
+    pub draft_name: String,
+}
+
 #[derive(Debug, Clone)]
 struct ProjectSessionRecord {
     handle: ProjectSessionHandle,
@@ -97,6 +108,7 @@ struct ProjectSessionRecord {
 pub struct ProjectSessionService {
     next_id: u64,
     sessions: BTreeMap<ProjectSessionHandle, ProjectSessionRecord>,
+    portable_handle_bindings: BTreeMap<HandleToken, ProjectSessionHandle>,
 }
 
 impl ProjectSessionService {
@@ -165,6 +177,55 @@ impl ProjectSessionService {
         Ok(record.snapshot())
     }
 
+    pub fn close_project_session(
+        &mut self,
+        handle: &ProjectSessionHandle,
+    ) -> Result<ProjectSessionClosed, RuntimeError> {
+        self.portable_handle_bindings
+            .retain(|_, bound_handle| bound_handle != handle);
+        let record = self.sessions.remove(handle).ok_or_else(|| {
+            RuntimeError::new(
+                RuntimeErrorKind::UnknownProjectSession,
+                format!("project session not found: {}", handle.as_str()),
+            )
+        })?;
+        Ok(record.closed())
+    }
+
+    pub fn bind_portable_handle(
+        &mut self,
+        token: HandleToken,
+        handle: ProjectSessionHandle,
+    ) -> Result<(), RuntimeError> {
+        if !self.sessions.contains_key(&handle) {
+            return Err(RuntimeError::new(
+                RuntimeErrorKind::UnknownProjectSession,
+                format!("project session not found: {}", handle.as_str()),
+            ));
+        }
+        self.portable_handle_bindings.insert(token, handle);
+        Ok(())
+    }
+
+    pub fn close_portable_handle_binding(
+        &mut self,
+        token: &HandleToken,
+    ) -> Result<Option<ProjectSessionClosed>, RuntimeError> {
+        let Some(handle) = self.portable_handle_bindings.remove(token) else {
+            return Ok(None);
+        };
+        self.close_project_session(&handle).map(Some)
+    }
+
+    pub fn close_all_project_sessions(&mut self) -> Vec<ProjectSessionClosed> {
+        self.portable_handle_bindings.clear();
+        let handles = self.sessions.keys().cloned().collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .filter_map(|handle| self.close_project_session(&handle).ok())
+            .collect()
+    }
+
     fn insert_opened_project(
         &mut self,
         runtime_session: RuntimeSessionId,
@@ -208,6 +269,17 @@ impl ProjectSessionRecord {
             bundle_path: self.bundle_path.clone(),
             project_json_path: self.project_json_path.clone(),
             draft: self.draft.clone(),
+        }
+    }
+
+    fn closed(self) -> ProjectSessionClosed {
+        ProjectSessionClosed {
+            handle: self.handle,
+            revision: self.revision,
+            bundle_path: self.bundle_path,
+            project_json_path: self.project_json_path,
+            draft_id: self.draft.draft_id,
+            draft_name: self.draft.metadata.name,
         }
     }
 }

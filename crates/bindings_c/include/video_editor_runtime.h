@@ -34,60 +34,6 @@ enum ve_status_t {
   VE_STATUS_PANIC = 255,
 };
 
-enum ve_handle_kind_t {
-  VE_HANDLE_KIND_INVALID = 0,
-  VE_HANDLE_KIND_RUNTIME_SESSION = 1,
-  VE_HANDLE_KIND_PROJECT_SESSION = 2,
-  VE_HANDLE_KIND_MEDIA = 3,
-  VE_HANDLE_KIND_FRAME = 4,
-  VE_HANDLE_KIND_TEXTURE = 5,
-  VE_HANDLE_KIND_ARTIFACT = 6,
-};
-
-enum ve_texture_backend_t {
-  VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D = 1,
-  VE_TEXTURE_BACKEND_D3D12_RESOURCE = 2,
-  VE_TEXTURE_BACKEND_METAL_TEXTURE = 3,
-  VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER = 4,
-};
-
-enum ve_pixel_format_t {
-  VE_PIXEL_FORMAT_NV12 = 1,
-  VE_PIXEL_FORMAT_BGRA8 = 2,
-  VE_PIXEL_FORMAT_RGBA8 = 3,
-  VE_PIXEL_FORMAT_P010 = 4,
-  VE_PIXEL_FORMAT_YUV420P = 5,
-  VE_PIXEL_FORMAT_UNKNOWN = 255,
-};
-
-enum ve_color_primaries_t {
-  VE_COLOR_PRIMARIES_BT709 = 1,
-  VE_COLOR_PRIMARIES_BT2020 = 2,
-  VE_COLOR_PRIMARIES_DISPLAY_P3 = 3,
-  VE_COLOR_PRIMARIES_UNKNOWN = 255,
-};
-
-enum ve_color_transfer_t {
-  VE_COLOR_TRANSFER_BT709 = 1,
-  VE_COLOR_TRANSFER_SRGB = 2,
-  VE_COLOR_TRANSFER_PQ = 3,
-  VE_COLOR_TRANSFER_HLG = 4,
-  VE_COLOR_TRANSFER_UNKNOWN = 255,
-};
-
-enum ve_color_matrix_t {
-  VE_COLOR_MATRIX_BT709 = 1,
-  VE_COLOR_MATRIX_BT2020_NON_CONSTANT = 2,
-  VE_COLOR_MATRIX_IDENTITY = 3,
-  VE_COLOR_MATRIX_UNKNOWN = 255,
-};
-
-enum ve_color_range_t {
-  VE_COLOR_RANGE_LIMITED = 1,
-  VE_COLOR_RANGE_FULL = 2,
-  VE_COLOR_RANGE_UNKNOWN = 255,
-};
-
 enum ve_error_code_t {
   VE_ERROR_NONE = 0,
   VE_ERROR_INVALID_ARGUMENT = 1,
@@ -124,26 +70,106 @@ struct ve_buffer_t {
   size_t capacity;
 };
 
+typedef uint32_t ve_handle_kind_t;
+
 struct ve_handle_t {
-  enum ve_handle_kind_t kind;
+  ve_handle_kind_t kind;
   uint64_t id;
   uint64_t owner_id;
   uint64_t owner_generation;
   uint64_t generation;
 };
 
+typedef uint32_t ve_texture_backend_t;
+
+typedef uint32_t ve_pixel_format_t;
+
+typedef uint32_t ve_color_primaries_t;
+
+typedef uint32_t ve_color_transfer_t;
+
+typedef uint32_t ve_color_matrix_t;
+
+typedef uint32_t ve_color_range_t;
+
 struct ve_texture_descriptor_t {
-  enum ve_texture_backend_t backend;
+  ve_texture_backend_t backend;
   const char *adapter_id;
   const char *device_id;
   uint32_t width;
   uint32_t height;
-  enum ve_pixel_format_t pixel_format;
-  enum ve_color_primaries_t color_primaries;
-  enum ve_color_transfer_t color_transfer;
-  enum ve_color_matrix_t color_matrix;
-  enum ve_color_range_t color_range;
+  ve_pixel_format_t pixel_format;
+  ve_color_primaries_t color_primaries;
+  ve_color_transfer_t color_transfer;
+  ve_color_matrix_t color_matrix;
+  ve_color_range_t color_range;
 };
+
+#define VE_HANDLE_KIND_INVALID 0
+
+#define VE_HANDLE_KIND_RUNTIME_SESSION 1
+
+#define VE_HANDLE_KIND_PROJECT_SESSION 2
+
+#define VE_HANDLE_KIND_MEDIA 3
+
+#define VE_HANDLE_KIND_FRAME 4
+
+#define VE_HANDLE_KIND_TEXTURE 5
+
+#define VE_HANDLE_KIND_ARTIFACT 6
+
+#define VE_TEXTURE_BACKEND_D3D11_TEXTURE_2D 1
+
+#define VE_TEXTURE_BACKEND_D3D12_RESOURCE 2
+
+#define VE_TEXTURE_BACKEND_METAL_TEXTURE 3
+
+#define VE_TEXTURE_BACKEND_CORE_VIDEO_PIXEL_BUFFER 4
+
+#define VE_PIXEL_FORMAT_NV12 1
+
+#define VE_PIXEL_FORMAT_BGRA8 2
+
+#define VE_PIXEL_FORMAT_RGBA8 3
+
+#define VE_PIXEL_FORMAT_P010 4
+
+#define VE_PIXEL_FORMAT_YUV420P 5
+
+#define VE_PIXEL_FORMAT_UNKNOWN 255
+
+#define VE_COLOR_PRIMARIES_BT709 1
+
+#define VE_COLOR_PRIMARIES_BT2020 2
+
+#define VE_COLOR_PRIMARIES_DISPLAY_P3 3
+
+#define VE_COLOR_PRIMARIES_UNKNOWN 255
+
+#define VE_COLOR_TRANSFER_BT709 1
+
+#define VE_COLOR_TRANSFER_SRGB 2
+
+#define VE_COLOR_TRANSFER_PQ 3
+
+#define VE_COLOR_TRANSFER_HLG 4
+
+#define VE_COLOR_TRANSFER_UNKNOWN 255
+
+#define VE_COLOR_MATRIX_BT709 1
+
+#define VE_COLOR_MATRIX_BT2020_NON_CONSTANT 2
+
+#define VE_COLOR_MATRIX_IDENTITY 3
+
+#define VE_COLOR_MATRIX_UNKNOWN 255
+
+#define VE_COLOR_RANGE_LIMITED 1
+
+#define VE_COLOR_RANGE_FULL 2
+
+#define VE_COLOR_RANGE_UNKNOWN 255
 
 enum ve_status_t ve_runtime_create(const struct ve_runtime_config_t *config,
                                    struct ve_runtime_t *out_runtime,
@@ -157,9 +183,9 @@ enum ve_status_t ve_project_open(struct ve_runtime_t runtime,
                                  struct ve_buffer_t *out_json);
 
 enum ve_status_t ve_handle_acquire(struct ve_runtime_t runtime,
-                                   enum ve_handle_kind_t kind,
+                                   ve_handle_kind_t kind,
                                    const struct ve_texture_descriptor_t *texture,
-                                   uint64_t lease_expires_at_us,
+                                   uint64_t lease_duration_us,
                                    struct ve_handle_t *out_handle,
                                    struct ve_buffer_t *out_json);
 
@@ -177,7 +203,5 @@ enum ve_status_t ve_texture_handle_resolve(struct ve_runtime_t runtime,
                                            struct ve_buffer_t *out_json);
 
 enum ve_status_t ve_last_error_json(struct ve_runtime_t runtime, struct ve_buffer_t *out_json);
-
-void ve_buffer_free(struct ve_buffer_t *buffer);
 
 #endif  /* VIDEO_EDITOR_RUNTIME_H */

@@ -22,8 +22,9 @@ pub use handles::{
     TextureHandleDescriptor, TextureResolveExpectation,
 };
 pub use project_session::{
-    CreateProjectSessionRequest, ProjectSessionHandle, ProjectSessionOpened, ProjectSessionService,
-    ProjectSessionSnapshot, ProjectSessionWarning, SaveProjectSessionRequest,
+    CreateProjectSessionRequest, ProjectSessionClosed, ProjectSessionHandle, ProjectSessionOpened,
+    ProjectSessionService, ProjectSessionSnapshot, ProjectSessionWarning,
+    SaveProjectSessionRequest,
 };
 pub use session::{
     AdapterMetadata, RuntimeSession, RuntimeSessionConfig, RuntimeSessionId, RuntimeSessionRegistry,

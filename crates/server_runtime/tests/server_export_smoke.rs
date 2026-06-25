@@ -43,7 +43,10 @@ fn server_export_smoke_exports_bundle_relative_multimedia_project_and_validates_
         ),
     )
     .expect("server export should start");
-    assert_eq!(started.status.output_path, output_path.display().to_string());
+    assert_eq!(
+        started.status.output_path,
+        output_path.display().to_string()
+    );
     assert!(
         started.scheduler.started_count >= 1,
         "scheduler should start export work: {started:#?}"
@@ -62,10 +65,7 @@ fn server_export_smoke_exports_bundle_relative_multimedia_project_and_validates_
         .expect("completed export should include validation");
     assert_eq!(validation.width, Some(WIDTH));
     assert_eq!(validation.height, Some(HEIGHT));
-    assert_eq!(
-        validation.frame_rate,
-        Some(RationalFrameRate::new(FPS, 1))
-    );
+    assert_eq!(validation.frame_rate, Some(RationalFrameRate::new(FPS, 1)));
     assert_eq!(validation.has_audio, true);
     assert!(validation.file_size_bytes > 0);
     assert!(
