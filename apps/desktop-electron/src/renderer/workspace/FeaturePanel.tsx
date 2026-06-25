@@ -8,7 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
 
-import type { Material } from "../../generated/Draft";
+import type { CapabilityReportItem, CapabilitySupport, Filter, Material, TransitionReference } from "../../generated/Draft";
 import type {
   AdaptationCategory,
   AdaptationReport,
@@ -70,6 +70,13 @@ type FeaturePanelProps = {
     fadeOutDuration: number;
   }) => void;
   onSetSelectedTrackMute: (itemHandle: string, muted: boolean) => void;
+  onApplySelectedSegmentEffect: (effect: Filter) => void;
+  onAddSelectedSegmentTransition: (
+    fromSegmentId: string,
+    toSegmentId: string,
+    reference: TransitionReference,
+    duration: number
+  ) => void;
   onNavigateTemplateReportItem: (target: TemplateReportRowNavigationTarget) => void;
 };
 
@@ -84,6 +91,14 @@ type ShowcasePanelSpec = {
   rail: readonly string[];
   cards: readonly string[];
   unavailableReason: string;
+};
+type ProductionResourceCardSpec = {
+  capabilityId: string;
+  title: string;
+  category: ShowcaseCategory;
+  actionLabel: string;
+  disabledFallbackLabel: string;
+  buildEffect?: () => Filter;
 };
 type AudioPanelOptions = {
   gainMillis: number;
@@ -165,6 +180,64 @@ const SHOWCASE_PANEL_SPECS: Record<ShowcaseCategory, ShowcasePanelSpec> = {
   }
 };
 
+const PRODUCTION_RESOURCE_CARDS: readonly ProductionResourceCardSpec[] = [
+  {
+    capabilityId: "effect.gaussianBlur",
+    title: "高斯模糊",
+    category: "特效",
+    actionLabel: "应用效果",
+    disabledFallbackLabel: "暂不支持",
+    buildEffect: () => ({ kind: { kind: "gaussianBlur", radiusMillis: 1000 }, enabled: true })
+  },
+  {
+    capabilityId: "effect.opacityAdjustment",
+    title: "不透明度",
+    category: "特效",
+    actionLabel: "应用效果",
+    disabledFallbackLabel: "暂不支持",
+    buildEffect: () => ({ kind: { kind: "opacityAdjustment", opacityMillis: 1000 }, enabled: true })
+  },
+  {
+    capabilityId: "transition.dissolve",
+    title: "叠化",
+    category: "转场",
+    actionLabel: "添加转场",
+    disabledFallbackLabel: "需要相邻片段"
+  },
+  {
+    capabilityId: "effect.basicColorAdjustment",
+    title: "基础调色",
+    category: "滤镜",
+    actionLabel: "应用滤镜",
+    disabledFallbackLabel: "暂不支持",
+    buildEffect: () => ({
+      kind: {
+        kind: "basicColorAdjustment",
+        brightnessMillis: 0,
+        contrastMillis: 1000,
+        saturationMillis: 1000
+      },
+      enabled: true
+    })
+  },
+  {
+    capabilityId: "effect.basicColorAdjustment",
+    title: "亮度 / 对比度",
+    category: "调节",
+    actionLabel: "应用滤镜",
+    disabledFallbackLabel: "暂不支持",
+    buildEffect: () => ({
+      kind: {
+        kind: "basicColorAdjustment",
+        brightnessMillis: 0,
+        contrastMillis: 1000,
+        saturationMillis: 1000
+      },
+      enabled: true
+    })
+  }
+];
+
 export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   let content: React.ReactElement;
 
@@ -179,7 +252,7 @@ export function FeaturePanel(props: FeaturePanelProps): React.ReactElement {
   } else if (props.category === "模板") {
     content = <TemplatePanel {...props} />;
   } else {
-    content = <ShowcaseCategoryPanel category={props.category as ShowcaseCategory} />;
+    content = <ShowcaseCategoryPanel {...props} category={props.category as ShowcaseCategory} />;
   }
 
   return (
@@ -1111,54 +1184,162 @@ function AudioPanel({
   );
 }
 
-function ShowcaseCategoryPanel({ category }: { category: ShowcaseCategory }): React.ReactElement {
+function ShowcaseCategoryPanel({
+  category,
+  workspace,
+  onApplySelectedSegmentEffect,
+  onAddSelectedSegmentTransition
+}: FeaturePanelProps & { category: ShowcaseCategory }): React.ReactElement {
   const label = WORKSPACE_CATEGORY_META[category].label;
   const spec = SHOWCASE_PANEL_SPECS[category];
+  const capabilityEntries = workspace.viewModel.productionEffectCapabilities.entries;
+  const selectedSegment = workspace.viewModel.selectedSegment;
+  const productionCards = PRODUCTION_RESOURCE_CARDS.filter((card) => card.category === category);
+  const cards =
+    productionCards.length > 0
+      ? productionCards
+      : spec.cards.map((title) => ({
+          capabilityId: `unsupported.${category}.${title}`,
+          title,
+          category,
+          actionLabel: "暂不支持",
+          disabledFallbackLabel: "暂不支持"
+        }));
+  const hasProductionCards = productionCards.length > 0;
 
   return (
     <div
-      className="feature-panel-content showcase-feature-panel product-unavailable-feature-gate"
-      data-product-unavailable-feature-gate={category}
-      aria-label={`${label}暂不可用`}
+      className={hasProductionCards ? "feature-panel-content showcase-feature-panel production-effect-panel" : "feature-panel-content showcase-feature-panel product-unavailable-feature-gate"}
+      data-product-unavailable-feature-gate={hasProductionCards ? undefined : category}
+      aria-label={hasProductionCards ? `${label}资源` : `${label}暂不可用`}
     >
       <div className="panel-header showcase-panel-header">
         <h2>{label}</h2>
       </div>
-      <p className="showcase-unavailable-copy">
-        <strong>暂不可用</strong>
-        <span>{spec.unavailableReason}</span>
-      </p>
+      {hasProductionCards ? null : (
+        <p className="showcase-unavailable-copy">
+          <strong>暂不可用</strong>
+          <span>{spec.unavailableReason}</span>
+        </p>
+      )}
       <div className="showcase-panel-layout" aria-disabled="true">
         <nav className="showcase-rail" aria-label={`${label}分类`}>
           {spec.rail.map((item) => (
             <button
               key={item}
               type="button"
-              aria-disabled="true"
-              title={`${item}暂不可用`}
-              disabled
+              className={item === spec.rail[0] ? "active" : ""}
+              aria-pressed={item === spec.rail[0]}
+              title={item}
+              disabled={!hasProductionCards}
             >
               {item}
             </button>
           ))}
         </nav>
         <div className="showcase-card-grid" aria-label={`${label}资源`}>
-          {spec.cards.map((item) => (
-            <article
-              key={item}
-              className="showcase-card unavailable"
-              aria-label={`${label} ${item}暂不可用`}
-              aria-disabled="true"
-            >
-              <span className="showcase-card-preview" aria-hidden="true" />
-              <strong>{item}</strong>
-              <em>暂不可用</em>
-            </article>
-          ))}
+          {cards.map((card) => {
+            const capability = capabilityEntries.find((entry) => entry.capabilityId === card.capabilityId) ?? null;
+            const supportState = capability === null ? "unsupported" : productionCapabilityActionState(capability);
+            const selectedRequired = category !== "转场" && card.buildEffect !== undefined;
+            const transitionBoundary = selectedSegment?.phase19.transitionBoundary ?? null;
+            const transitionReady = category !== "转场" || transitionBoundary !== null;
+            const enabled =
+              workspace.pendingCommand === null &&
+              capability !== null &&
+              supportState !== "unsupported" &&
+              selectedSegment !== null &&
+              (!selectedRequired || card.buildEffect !== undefined) &&
+              transitionReady;
+            const statusLabel =
+              capability === null
+                ? card.disabledFallbackLabel
+                : !transitionReady
+                  ? "需要相邻片段"
+                  : productionCapabilityCardStatus(capability);
+            return (
+              <button
+                key={`${card.category}-${card.title}`}
+                type="button"
+                className={enabled ? "showcase-card production-card" : "showcase-card production-card unavailable"}
+                aria-label={`${card.title} ${statusLabel}`}
+                aria-disabled={!enabled}
+                disabled={!enabled}
+                onClick={() => {
+                  if (!enabled) {
+                    return;
+                  }
+                  if (card.buildEffect !== undefined) {
+                    onApplySelectedSegmentEffect(card.buildEffect());
+                    return;
+                  }
+                  if (transitionBoundary !== null) {
+                    onAddSelectedSegmentTransition(
+                      transitionBoundary.fromSegmentId,
+                      transitionBoundary.toSegmentId,
+                      { kind: "firstParty", transition: "dissolve" },
+                      transitionBoundary.duration
+                    );
+                  }
+                }}
+              >
+                <span className={`showcase-card-preview capability-preview ${capabilityToneClass(capability)}`} aria-hidden="true" />
+                <strong>{card.title}</strong>
+                <em>{statusLabel}</em>
+                <span className="showcase-card-action">{card.actionLabel}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
   );
+}
+
+function productionCapabilityActionState(entry: CapabilityReportItem): "supported" | "degraded" | "unsupported" {
+  if (entry.preview.state === "externalReference" || entry.export.state === "externalReference") {
+    return "unsupported";
+  }
+  if (entry.preview.state === "unsupported" || entry.export.state === "unsupported") {
+    return "unsupported";
+  }
+  if (entry.preview.state === "degraded" || entry.export.state === "degraded") {
+    return "degraded";
+  }
+  return "supported";
+}
+
+function productionCapabilityCardStatus(entry: CapabilityReportItem): string {
+  const preview = supportLabel("预览", entry.preview);
+  const exportStatus = supportLabel("导出", entry.export);
+  return preview === exportStatus ? preview : `${preview} · ${exportStatus}`;
+}
+
+function supportLabel(surface: "预览" | "导出", support: CapabilitySupport): string {
+  switch (support.state) {
+    case "supported":
+      return `${surface}支持`;
+    case "degraded":
+      return `${surface}降级`;
+    case "unsupported":
+      return "暂不支持";
+    case "externalReference":
+      return "外部参考";
+  }
+}
+
+function capabilityToneClass(entry: CapabilityReportItem | null): string {
+  if (entry === null) {
+    return "capability-muted";
+  }
+  const state = productionCapabilityActionState(entry);
+  if (state === "supported") {
+    return "capability-ready";
+  }
+  if (state === "degraded") {
+    return "capability-warning";
+  }
+  return "capability-error";
 }
 
 function MaterialList({

@@ -12,7 +12,18 @@ import {
   type WorkspaceState
 } from "../viewModel";
 import type { ExportPreset } from "../../generated/CommandEnvelope";
-import type { DraftCanvasConfig, KeyframeEasing, KeyframeInterpolation, KeyframeProperty } from "../../generated/Draft";
+import type {
+  DraftCanvasConfig,
+  EffectParameterUpdate,
+  Filter,
+  KeyframeEasing,
+  KeyframeInterpolation,
+  KeyframeProperty,
+  SegmentBlendMode,
+  SegmentMask,
+  SegmentRetiming,
+  TransitionReference
+} from "../../generated/Draft";
 import type { AdaptationReport } from "../../generated/TemplateImport";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import { FeaturePanel, type TemplateReportRowNavigationTarget } from "./FeaturePanel";
@@ -65,6 +76,18 @@ type WorkspaceShellProps = {
   onEditSelectedText: Parameters<typeof Inspector>[0]["onEditSelectedText"];
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: Parameters<typeof Inspector>[0]["onUpdateSelectedSegmentVisual"];
+  onSetSelectedSegmentRetime: (retiming: SegmentRetiming) => void;
+  onApplySelectedSegmentEffect: (effect: Filter) => void;
+  onUpdateSelectedSegmentEffectParameter: (effectIndex: number, parameter: EffectParameterUpdate) => void;
+  onRemoveSelectedSegmentEffect: (effectIndex: number) => void;
+  onSetSelectedSegmentMask: (mask: SegmentMask) => void;
+  onSetSelectedSegmentBlendMode: (blendMode: SegmentBlendMode) => void;
+  onAddSelectedSegmentTransition: (
+    fromSegmentId: string,
+    toSegmentId: string,
+    reference: TransitionReference,
+    duration: number
+  ) => void;
   onSelectPreviewTextOverlay: (selectionHandle: string) => void;
   onEditPreviewTextOverlay: (selectionHandle: string) => void;
   onSetSelectedSegmentKeyframe: (
@@ -155,6 +178,13 @@ export function WorkspaceShell({
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
+  onSetSelectedSegmentRetime,
+  onApplySelectedSegmentEffect,
+  onUpdateSelectedSegmentEffectParameter,
+  onRemoveSelectedSegmentEffect,
+  onSetSelectedSegmentMask,
+  onSetSelectedSegmentBlendMode,
+  onAddSelectedSegmentTransition,
   onSelectPreviewTextOverlay,
   onEditPreviewTextOverlay,
   onSetSelectedSegmentKeyframe,
@@ -294,6 +324,8 @@ export function WorkspaceShell({
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}
           onUpdateSelectedSegmentAudio={onUpdateSelectedSegmentAudio}
           onSetSelectedTrackMute={onSetSelectedTrackMute}
+          onApplySelectedSegmentEffect={onApplySelectedSegmentEffect}
+          onAddSelectedSegmentTransition={onAddSelectedSegmentTransition}
           onNavigateTemplateReportItem={onNavigateTemplateReportItem}
         />
       </section>
@@ -340,6 +372,12 @@ export function WorkspaceShell({
           onEditSelectedText={onEditSelectedText}
           onUpdateDraftCanvasConfig={onUpdateDraftCanvasConfig}
           onUpdateSelectedSegmentVisual={onUpdateSelectedSegmentVisual}
+          onSetSelectedSegmentRetime={onSetSelectedSegmentRetime}
+          onApplySelectedSegmentEffect={onApplySelectedSegmentEffect}
+          onUpdateSelectedSegmentEffectParameter={onUpdateSelectedSegmentEffectParameter}
+          onRemoveSelectedSegmentEffect={onRemoveSelectedSegmentEffect}
+          onSetSelectedSegmentMask={onSetSelectedSegmentMask}
+          onSetSelectedSegmentBlendMode={onSetSelectedSegmentBlendMode}
           onSetSelectedSegmentKeyframe={onSetSelectedSegmentKeyframe}
           onRemoveSelectedSegmentKeyframe={onRemoveSelectedSegmentKeyframe}
           onSetSelectedSegmentVolume={onSetSelectedSegmentVolume}

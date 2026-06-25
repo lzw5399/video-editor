@@ -3,14 +3,21 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   CanvasAspectRatioPreset,
   CanvasBackground,
+  CapabilityReportItem,
+  CapabilitySupport,
   DraftCanvasConfig,
+  EffectParameterUpdate,
+  Filter,
   Keyframe,
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
   KeyframeValue,
+  SegmentBlendMode,
   SegmentBackgroundFilling,
   SegmentFitMode,
+  SegmentMask,
+  SegmentRetiming,
   SegmentVisual,
   TextAlignment,
   TextSegment
@@ -45,6 +52,12 @@ type InspectorProps = {
   onEditSelectedText: (patch: TextSegmentPatch) => void;
   onUpdateDraftCanvasConfig: (canvasConfig: DraftCanvasConfig) => void;
   onUpdateSelectedSegmentVisual: (patch: SegmentVisualPatch) => void;
+  onSetSelectedSegmentRetime: (retiming: SegmentRetiming) => void;
+  onApplySelectedSegmentEffect: (effect: Filter) => void;
+  onUpdateSelectedSegmentEffectParameter: (effectIndex: number, parameter: EffectParameterUpdate) => void;
+  onRemoveSelectedSegmentEffect: (effectIndex: number) => void;
+  onSetSelectedSegmentMask: (mask: SegmentMask) => void;
+  onSetSelectedSegmentBlendMode: (blendMode: SegmentBlendMode) => void;
   onSetSelectedSegmentKeyframe: (
     property: KeyframeProperty,
     interpolation?: KeyframeInterpolation,
@@ -61,7 +74,7 @@ type InspectorProps = {
   onSetSelectedTrackMute: (itemHandle: string, muted: boolean) => void;
 };
 
-type InspectorTab = "画面" | "音频" | "变速" | "动画" | "调节" | "AI效果";
+type InspectorTab = "画面" | "音频" | "变速" | "动画" | "效果" | "滤镜" | "调节" | "蒙版" | "混合";
 
 type TextFormState = {
   content: string;
@@ -174,6 +187,16 @@ type AudioInteractionState = {
   updateInFlight: boolean;
   rafId: number | null;
   pendingOptions: AudioEditOptions | null;
+};
+
+type ProductionEffectInteractionState = {
+  kind: "selectedSegmentRetime" | "selectedSegmentEffect" | "selectedSegmentMask" | "selectedSegmentBlend";
+  interactionId: string | null;
+  sequence: number;
+  beginPromise: Promise<void>;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingPayload: ProjectInteractionPayload | null;
 };
 
 const DEFAULT_TEXT_STATE: TextFormState = {
@@ -308,6 +331,12 @@ export function Inspector({
   onEditSelectedText,
   onUpdateDraftCanvasConfig,
   onUpdateSelectedSegmentVisual,
+  onSetSelectedSegmentRetime,
+  onApplySelectedSegmentEffect,
+  onUpdateSelectedSegmentEffectParameter,
+  onRemoveSelectedSegmentEffect,
+  onSetSelectedSegmentMask,
+  onSetSelectedSegmentBlendMode,
   onSetSelectedSegmentKeyframe,
   onRemoveSelectedSegmentKeyframe,
   onSetSelectedSegmentVolume,
@@ -329,6 +358,7 @@ export function Inspector({
   const audioDraftOptionsRef = useRef<AudioEditOptions>(audioOptionsFromState(100, 0, 0, 0));
   const audioHydrationSelectionRef = useRef<string | null>(null);
   const audioInteractionRef = useRef<AudioInteractionState | null>(null);
+  const productionInteractionRef = useRef<ProductionEffectInteractionState | null>(null);
   const sequenceDuration = workspace.viewModel.project.sequenceDuration;
   const hasText = selected?.text !== null && selected?.text !== undefined;
   const pendingKeyframe = workspace.pendingCommand === "设置关键帧" || workspace.pendingCommand === "删除关键帧";
@@ -360,6 +390,7 @@ export function Inspector({
       audioCommitKeyRef.current = null;
       audioDraftOptionsRef.current = audioOptionsFromState(100, 0, 0, 0);
       audioHydrationSelectionRef.current = null;
+      productionInteractionRef.current = null;
       setVolumePercent(100);
       setPanPercent(0);
       setFadeInUs(0);
@@ -730,6 +761,98 @@ export function Inspector({
     }
     if (action === "commit") {
       audioCommitKeyRef.current = audioOptionsKey(audioDraftOptionsRef.current);
+      await projectInteractions.commit(interaction.interactionId);
+      return;
+    }
+    await projectInteractions.cancel(interaction.interactionId);
+  }
+
+  function beginProductionEffectInteraction(
+    kind: ProductionEffectInteractionState["kind"]
+  ): ProductionEffectInteractionState {
+    const existing = productionInteractionRef.current;
+    if (existing !== null && existing.kind === kind) {
+      return existing;
+    }
+    const interaction: ProductionEffectInteractionState = {
+      kind,
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null
+    };
+    interaction.beginPromise = projectInteractions.begin(kind).then((begin) => {
+      if (productionInteractionRef.current !== interaction || begin === null) {
+        return;
+      }
+      interaction.interactionId = begin.interactionId;
+      flushProductionEffectInteraction(interaction);
+    });
+    productionInteractionRef.current = interaction;
+    return interaction;
+  }
+
+  function queueProductionEffectInteraction(
+    kind: ProductionEffectInteractionState["kind"],
+    payload: ProjectInteractionPayload
+  ): void {
+    if (selected === null || workspace.pendingCommand !== null) {
+      return;
+    }
+    const interaction = beginProductionEffectInteraction(kind);
+    interaction.pendingPayload = payload;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushProductionEffectInteraction(interaction);
+    });
+  }
+
+  function flushProductionEffectInteraction(interaction: ProductionEffectInteractionState): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPayload === null) {
+      return;
+    }
+    const payload = interaction.pendingPayload;
+    interaction.pendingPayload = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, payload).then(() => {
+      interaction.updateInFlight = false;
+      if (productionInteractionRef.current !== interaction) {
+        return;
+      }
+      flushProductionEffectInteraction(interaction);
+    });
+  }
+
+  async function finishProductionEffectInteraction(action: "commit" | "cancel"): Promise<void> {
+    const interaction = productionInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPayload !== null) {
+      flushProductionEffectInteraction(interaction);
+      while (interaction.updateInFlight || interaction.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    productionInteractionRef.current = null;
+    if (interaction.interactionId === null) {
+      return;
+    }
+    if (action === "commit") {
       await projectInteractions.commit(interaction.interactionId);
       return;
     }
@@ -1245,6 +1368,52 @@ export function Inspector({
             </section>
           ) : null}
 
+          {effectiveActiveTab === "变速" ? (
+            <RetimeInspectorSection
+              selected={selected}
+              pending={inspectorFieldsDisabled}
+              queueProductionEffectInteraction={queueProductionEffectInteraction}
+              finishProductionEffectInteraction={finishProductionEffectInteraction}
+              onSetSelectedSegmentRetime={onSetSelectedSegmentRetime}
+            />
+          ) : null}
+
+          {effectiveActiveTab === "效果" || effectiveActiveTab === "滤镜" || effectiveActiveTab === "调节" ? (
+            <EffectsInspectorSection
+              tab={effectiveActiveTab}
+              selected={selected}
+              capabilities={workspace.viewModel.productionEffectCapabilities.entries}
+              pending={inspectorFieldsDisabled}
+              queueProductionEffectInteraction={queueProductionEffectInteraction}
+              finishProductionEffectInteraction={finishProductionEffectInteraction}
+              onApplySelectedSegmentEffect={onApplySelectedSegmentEffect}
+              onUpdateSelectedSegmentEffectParameter={onUpdateSelectedSegmentEffectParameter}
+              onRemoveSelectedSegmentEffect={onRemoveSelectedSegmentEffect}
+            />
+          ) : null}
+
+          {effectiveActiveTab === "蒙版" ? (
+            <MaskInspectorSection
+              selected={selected}
+              capabilities={workspace.viewModel.productionEffectCapabilities.entries}
+              pending={inspectorFieldsDisabled}
+              queueProductionEffectInteraction={queueProductionEffectInteraction}
+              finishProductionEffectInteraction={finishProductionEffectInteraction}
+              onSetSelectedSegmentMask={onSetSelectedSegmentMask}
+            />
+          ) : null}
+
+          {effectiveActiveTab === "混合" ? (
+            <BlendInspectorSection
+              selected={selected}
+              capabilities={workspace.viewModel.productionEffectCapabilities.entries}
+              pending={inspectorFieldsDisabled}
+              queueProductionEffectInteraction={queueProductionEffectInteraction}
+              finishProductionEffectInteraction={finishProductionEffectInteraction}
+              onSetSelectedSegmentBlendMode={onSetSelectedSegmentBlendMode}
+            />
+          ) : null}
+
           {effectiveActiveTab === "动画" ? (
             <AnimationInspectorTab
               selected={selected}
@@ -1574,6 +1743,701 @@ function CanvasDraftSettings({
       ) : null}
     </section>
   );
+}
+
+function RetimeInspectorSection({
+  selected,
+  pending,
+  queueProductionEffectInteraction,
+  finishProductionEffectInteraction,
+  onSetSelectedSegmentRetime
+}: {
+  selected: SelectedSegmentView;
+  pending: boolean;
+  queueProductionEffectInteraction: (
+    kind: "selectedSegmentRetime",
+    payload: ProjectInteractionPayload
+  ) => void;
+  finishProductionEffectInteraction: (action: "commit" | "cancel") => Promise<void>;
+  onSetSelectedSegmentRetime: (retiming: SegmentRetiming) => void;
+}): React.ReactElement {
+  const acceptedPercent = retimePercentFromSelected(selected);
+  const [draftPercent, setDraftPercent] = useState(acceptedPercent);
+
+  useEffect(() => {
+    setDraftPercent(acceptedPercent);
+  }, [acceptedPercent, selected.selectionHandle]);
+
+  const audioFollows = selected.retiming.audioPolicy === "followVideoSpeed";
+  const commitPercent = (percent: number): void => {
+    onSetSelectedSegmentRetime(retimingFromPercent(percent, audioFollows));
+  };
+
+  return (
+    <section className="inspector-section production-inspector-section" aria-label="变速" role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>变速</h3>
+        <span className="phase19-inline-status">{selected.phase19.retimeLabel}</span>
+      </div>
+      <div className="segmented-control phase19-segmented" role="group" aria-label="常规变速">
+        {([50, 100, 200] as const).map((percent) => (
+          <button
+            key={percent}
+            type="button"
+            className={draftPercent === percent ? "active" : ""}
+            disabled={pending}
+            onClick={() => {
+              setDraftPercent(percent);
+              commitPercent(percent);
+            }}
+          >
+            {speedPercentLabel(percent)}
+          </button>
+        ))}
+        <button type="button" className={!([50, 100, 200] as const).includes(draftPercent as 50 | 100 | 200) ? "active" : ""} disabled>
+          自定义
+        </button>
+      </div>
+      <label className="field-row compact-row">
+        <span>倍率</span>
+        <input
+          aria-label="变速倍率"
+          type="range"
+          min="25"
+          max="300"
+          step="5"
+          value={draftPercent}
+          disabled={pending}
+          onPointerDown={() => queueProductionEffectInteraction("selectedSegmentRetime", {
+            kind: "selectedSegmentRetime",
+            retiming: retimingFromPercent(draftPercent, audioFollows)
+          })}
+          onPointerUp={() => void finishProductionEffectInteraction("commit")}
+          onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+          onBlur={() => void finishProductionEffectInteraction("commit")}
+          onChange={(event) => {
+            const percent = toBoundedNumber(event.currentTarget.valueAsNumber, draftPercent, 25, 300);
+            setDraftPercent(percent);
+            queueProductionEffectInteraction("selectedSegmentRetime", {
+              kind: "selectedSegmentRetime",
+              retiming: retimingFromPercent(percent, audioFollows)
+            });
+          }}
+        />
+      </label>
+      <div className="field-row compact-row phase19-readout-row">
+        <span>当前倍率</span>
+        <strong>{speedPercentLabel(draftPercent)}</strong>
+      </div>
+      <label className="toggle-row compact-toggle">
+        <input
+          type="checkbox"
+          checked={audioFollows}
+          disabled={pending}
+          onChange={(event) => onSetSelectedSegmentRetime(retimingFromPercent(draftPercent, event.currentTarget.checked))}
+        />
+        <span>音频跟随变速</span>
+      </label>
+      <p className="phase19-compact-note">保持音调暂不支持</p>
+    </section>
+  );
+}
+
+function EffectsInspectorSection({
+  tab,
+  selected,
+  capabilities,
+  pending,
+  queueProductionEffectInteraction,
+  finishProductionEffectInteraction,
+  onApplySelectedSegmentEffect,
+  onUpdateSelectedSegmentEffectParameter,
+  onRemoveSelectedSegmentEffect
+}: {
+  tab: "效果" | "滤镜" | "调节";
+  selected: SelectedSegmentView;
+  capabilities: CapabilityReportItem[];
+  pending: boolean;
+  queueProductionEffectInteraction: (
+    kind: "selectedSegmentEffect",
+    payload: ProjectInteractionPayload
+  ) => void;
+  finishProductionEffectInteraction: (action: "commit" | "cancel") => Promise<void>;
+  onApplySelectedSegmentEffect: (effect: Filter) => void;
+  onUpdateSelectedSegmentEffectParameter: (effectIndex: number, parameter: EffectParameterUpdate) => void;
+  onRemoveSelectedSegmentEffect: (effectIndex: number) => void;
+}): React.ReactElement {
+  const available = productionEffectQuickAdds(tab, capabilities);
+  const filters = selected.filters
+    .map((filter, index) => ({ filter, index }))
+    .filter(({ filter }) => filterVisibleInTab(filter, tab));
+
+  return (
+    <section className="inspector-section production-inspector-section" aria-label={tab} role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>{tab}</h3>
+        <span className="phase19-inline-status">{selected.phase19.effectCount} 个</span>
+      </div>
+      <ProductionCapabilityChips selected={selected} capabilities={capabilities} />
+      <div className="phase19-quick-actions" role="group" aria-label={`${tab}快捷应用`}>
+        {available.map((entry) => (
+          <button
+            key={entry.capabilityId}
+            type="button"
+            className="compact-action"
+            disabled={pending}
+            onClick={() => onApplySelectedSegmentEffect(effectForCapability(entry.capabilityId))}
+          >
+            {capabilityProductLabel(entry.capabilityId)}
+          </button>
+        ))}
+      </div>
+      {filters.length === 0 ? (
+        <p className="phase19-empty-copy">未应用</p>
+      ) : (
+        <div className="phase19-effect-list">
+          {filters.map(({ filter, index }) => (
+            <AppliedEffectControls
+              key={`${index}-${filterCapabilityId(filter)}`}
+              filter={filter}
+              effectIndex={index}
+              pending={pending}
+              queueProductionEffectInteraction={queueProductionEffectInteraction}
+              finishProductionEffectInteraction={finishProductionEffectInteraction}
+              onUpdateSelectedSegmentEffectParameter={onUpdateSelectedSegmentEffectParameter}
+              onRemoveSelectedSegmentEffect={onRemoveSelectedSegmentEffect}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AppliedEffectControls({
+  filter,
+  effectIndex,
+  pending,
+  queueProductionEffectInteraction,
+  finishProductionEffectInteraction,
+  onUpdateSelectedSegmentEffectParameter,
+  onRemoveSelectedSegmentEffect
+}: {
+  filter: Filter;
+  effectIndex: number;
+  pending: boolean;
+  queueProductionEffectInteraction: (
+    kind: "selectedSegmentEffect",
+    payload: ProjectInteractionPayload
+  ) => void;
+  finishProductionEffectInteraction: (action: "commit" | "cancel") => Promise<void>;
+  onUpdateSelectedSegmentEffectParameter: (effectIndex: number, parameter: EffectParameterUpdate) => void;
+  onRemoveSelectedSegmentEffect: (effectIndex: number) => void;
+}): React.ReactElement {
+  const capabilityId = filterCapabilityId(filter);
+  const title = capabilityProductLabel(capabilityId);
+  const sliders = effectSliders(filter);
+
+  return (
+    <article className="phase19-effect-row" aria-label={title}>
+      <div className="phase19-effect-row-header">
+        <strong>{title}</strong>
+        <label className="mini-toggle">
+          <input
+            type="checkbox"
+            checked={filter.enabled}
+            disabled={pending}
+            onChange={(event) =>
+              onUpdateSelectedSegmentEffectParameter(effectIndex, {
+                parameter: "enabled",
+                enabled: event.currentTarget.checked
+              })
+            }
+          />
+          <span>启用</span>
+        </label>
+        <button
+          type="button"
+          className="icon-text-action danger"
+          aria-label={`移除${title}`}
+          title={`移除${title}`}
+          disabled={pending}
+          onClick={() => onRemoveSelectedSegmentEffect(effectIndex)}
+        >
+          移除
+        </button>
+      </div>
+      {sliders.map((slider) => (
+        <label className="field-row compact-row" key={slider.label}>
+          <span>{slider.label}</span>
+          <input
+            aria-label={slider.label}
+            type="range"
+            min={slider.min}
+            max={slider.max}
+            step={slider.step}
+            value={slider.value}
+            disabled={pending || !filter.enabled}
+            onPointerDown={() =>
+              queueProductionEffectInteraction("selectedSegmentEffect", {
+                kind: "selectedSegmentEffect",
+                effectIndex,
+                parameter: slider.parameter(slider.value)
+              })
+            }
+            onPointerUp={() => void finishProductionEffectInteraction("commit")}
+            onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+            onBlur={() => void finishProductionEffectInteraction("commit")}
+            onChange={(event) => {
+              const value = toBoundedNumber(event.currentTarget.valueAsNumber, slider.value, slider.min, slider.max);
+              queueProductionEffectInteraction("selectedSegmentEffect", {
+                kind: "selectedSegmentEffect",
+                effectIndex,
+                parameter: slider.parameter(value)
+              });
+            }}
+          />
+        </label>
+      ))}
+    </article>
+  );
+}
+
+function MaskInspectorSection({
+  selected,
+  capabilities,
+  pending,
+  queueProductionEffectInteraction,
+  finishProductionEffectInteraction,
+  onSetSelectedSegmentMask
+}: {
+  selected: SelectedSegmentView;
+  capabilities: CapabilityReportItem[];
+  pending: boolean;
+  queueProductionEffectInteraction: (
+    kind: "selectedSegmentMask",
+    payload: ProjectInteractionPayload
+  ) => void;
+  finishProductionEffectInteraction: (action: "commit" | "cancel") => Promise<void>;
+  onSetSelectedSegmentMask: (mask: SegmentMask) => void;
+}): React.ReactElement {
+  const mask = selected.visual.mask.kind === "none" || selected.visual.mask.kind === "externalReference"
+    ? defaultMask("rectangle")
+    : selected.visual.mask;
+  const shape = mask.kind === "ellipse" ? "ellipse" : "rectangle";
+
+  return (
+    <section className="inspector-section production-inspector-section" aria-label="蒙版" role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>蒙版</h3>
+        <span className="phase19-inline-status">{selected.phase19.maskLabel}</span>
+      </div>
+      <ProductionCapabilityChips selected={selected} capabilities={capabilities} capabilityIds={["mask.rectangle", "mask.ellipse"]} />
+      <div className="segmented-control phase19-segmented" role="group" aria-label="蒙版形状">
+        {(["rectangle", "ellipse"] as const).map((nextShape) => (
+          <button
+            key={nextShape}
+            type="button"
+            className={shape === nextShape ? "active" : ""}
+            disabled={pending}
+            onClick={() => onSetSelectedSegmentMask(defaultMask(nextShape))}
+          >
+            {nextShape === "rectangle" ? "矩形" : "椭圆"}
+          </button>
+        ))}
+      </div>
+      <MaskSlider
+        label="羽化"
+        value={mask.featherMillis}
+        max={1000}
+        pending={pending}
+        onChange={(value) =>
+          queueProductionEffectInteraction("selectedSegmentMask", {
+            kind: "selectedSegmentMask",
+            mask: { ...mask, featherMillis: value }
+          })
+        }
+        onFinish={finishProductionEffectInteraction}
+      />
+      <MaskSlider
+        label="透明度"
+        value={mask.opacityMillis}
+        max={1000}
+        pending={pending}
+        onChange={(value) =>
+          queueProductionEffectInteraction("selectedSegmentMask", {
+            kind: "selectedSegmentMask",
+            mask: { ...mask, opacityMillis: value }
+          })
+        }
+        onFinish={finishProductionEffectInteraction}
+      />
+      <label className="toggle-row compact-toggle">
+        <input
+          type="checkbox"
+          checked={mask.inverted}
+          disabled={pending}
+          onChange={(event) => onSetSelectedSegmentMask({ ...mask, inverted: event.currentTarget.checked })}
+        />
+        <span>反选蒙版</span>
+      </label>
+      <button type="button" className="compact-action" disabled={pending} onClick={() => onSetSelectedSegmentMask({ kind: "none" })}>
+        重置效果
+      </button>
+    </section>
+  );
+}
+
+function MaskSlider({
+  label,
+  value,
+  max,
+  pending,
+  onChange,
+  onFinish
+}: {
+  label: string;
+  value: number;
+  max: number;
+  pending: boolean;
+  onChange: (value: number) => void;
+  onFinish: (action: "commit" | "cancel") => Promise<void>;
+}): React.ReactElement {
+  return (
+    <label className="field-row compact-row">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        type="range"
+        min="0"
+        max={max}
+        step="10"
+        value={value}
+        disabled={pending}
+        onPointerDown={() => onChange(value)}
+        onPointerUp={() => void onFinish("commit")}
+        onPointerCancel={() => void onFinish("cancel")}
+        onBlur={() => void onFinish("commit")}
+        onChange={(event) => onChange(toBoundedNumber(event.currentTarget.valueAsNumber, value, 0, max))}
+      />
+    </label>
+  );
+}
+
+function BlendInspectorSection({
+  selected,
+  capabilities,
+  pending,
+  queueProductionEffectInteraction,
+  finishProductionEffectInteraction,
+  onSetSelectedSegmentBlendMode
+}: {
+  selected: SelectedSegmentView;
+  capabilities: CapabilityReportItem[];
+  pending: boolean;
+  queueProductionEffectInteraction: (
+    kind: "selectedSegmentBlend",
+    payload: ProjectInteractionPayload
+  ) => void;
+  finishProductionEffectInteraction: (action: "commit" | "cancel") => Promise<void>;
+  onSetSelectedSegmentBlendMode: (blendMode: SegmentBlendMode) => void;
+}): React.ReactElement {
+  const opacityMillis = selected.visual.transform.opacity.valueMillis;
+  return (
+    <section className="inspector-section production-inspector-section" aria-label="混合" role="tabpanel">
+      <div className="inspector-section-title">
+        <h3>混合</h3>
+        <span className="phase19-inline-status">{selected.phase19.blendLabel}</span>
+      </div>
+      <ProductionCapabilityChips selected={selected} capabilities={capabilities} capabilityIds={["blend.normal", "blend.multiply", "blend.screen"]} />
+      <label className="field-row compact-row">
+        <span>混合模式</span>
+        <select
+          aria-label="混合模式"
+          value={selected.visual.blendMode.kind}
+          disabled={pending}
+          onChange={(event) => onSetSelectedSegmentBlendMode({ kind: event.currentTarget.value as "normal" | "multiply" | "screen" })}
+        >
+          <option value="normal">正常</option>
+          <option value="multiply">正片叠底</option>
+          <option value="screen">滤色</option>
+        </select>
+      </label>
+      <label className="field-row compact-row">
+        <span>透明度</span>
+        <input
+          aria-label="混合透明度"
+          type="range"
+          min="0"
+          max="1000"
+          step="10"
+          value={opacityMillis}
+          disabled={pending}
+          onPointerDown={() =>
+            queueProductionEffectInteraction("selectedSegmentBlend", {
+              kind: "selectedSegmentBlend",
+              opacityMillis
+            })
+          }
+          onPointerUp={() => void finishProductionEffectInteraction("commit")}
+          onPointerCancel={() => void finishProductionEffectInteraction("cancel")}
+          onBlur={() => void finishProductionEffectInteraction("commit")}
+          onChange={(event) =>
+            queueProductionEffectInteraction("selectedSegmentBlend", {
+              kind: "selectedSegmentBlend",
+              opacityMillis: toBoundedNumber(event.currentTarget.valueAsNumber, opacityMillis, 0, 1000)
+            })
+          }
+        />
+      </label>
+    </section>
+  );
+}
+
+function ProductionCapabilityChips({
+  selected,
+  capabilities,
+  capabilityIds
+}: {
+  selected: SelectedSegmentView;
+  capabilities: CapabilityReportItem[];
+  capabilityIds?: readonly string[];
+}): React.ReactElement {
+  const chips = (capabilityIds ?? selected.phase19.supportChips.map((chip) => chip.capabilityId))
+    .map((capabilityId) => capabilities.find((entry) => entry.capabilityId === capabilityId) ?? null)
+    .filter((entry): entry is CapabilityReportItem => entry !== null)
+    .slice(0, 4);
+
+  return (
+    <div className="phase19-capability-chips" aria-label="能力支持">
+      {chips.length === 0 ? (
+        <span className="phase19-chip muted">暂不支持</span>
+      ) : (
+        chips.map((entry) => (
+          <span className={`phase19-chip ${capabilityChipTone(entry)}`} key={entry.capabilityId}>
+            {supportLabel("预览", entry.preview)}
+          </span>
+        ))
+      )}
+    </div>
+  );
+}
+
+function retimePercentFromSelected(selected: SelectedSegmentView): number {
+  const mode = selected.retiming.mode;
+  if (mode.kind !== "constant" || mode.speed.denominator <= 0) {
+    return 100;
+  }
+  return Math.max(25, Math.min(300, Math.round((mode.speed.numerator * 100) / mode.speed.denominator)));
+}
+
+function retimingFromPercent(percent: number, audioFollows: boolean): SegmentRetiming {
+  const bounded = Math.max(25, Math.min(300, Math.round(percent)));
+  return {
+    mode: {
+      kind: "constant",
+      speed: {
+        numerator: bounded,
+        denominator: 100
+      }
+    },
+    audioPolicy: audioFollows ? "followVideoSpeed" : "muteUnsupported"
+  };
+}
+
+function speedPercentLabel(percent: number): string {
+  if (percent % 100 === 0) {
+    return `${percent / 100}x`;
+  }
+  return `${(percent / 100).toFixed(2).replace(/0$/, "")}x`;
+}
+
+function productionEffectQuickAdds(tab: "效果" | "滤镜" | "调节", capabilities: CapabilityReportItem[]): CapabilityReportItem[] {
+  const ids =
+    tab === "效果"
+      ? ["effect.gaussianBlur", "effect.opacityAdjustment"]
+      : tab === "滤镜"
+        ? ["effect.basicColorAdjustment"]
+        : ["effect.basicColorAdjustment", "effect.opacityAdjustment"];
+  return ids
+    .map((id) => capabilities.find((entry) => entry.capabilityId === id) ?? null)
+    .filter((entry): entry is CapabilityReportItem => entry !== null && capabilityActionState(entry) !== "unsupported");
+}
+
+function filterVisibleInTab(filter: Filter, tab: "效果" | "滤镜" | "调节"): boolean {
+  const capabilityId = filterCapabilityId(filter);
+  if (tab === "效果") {
+    return capabilityId === "effect.gaussianBlur" || capabilityId === "effect.opacityAdjustment";
+  }
+  if (tab === "滤镜") {
+    return capabilityId === "effect.basicColorAdjustment";
+  }
+  return capabilityId === "effect.basicColorAdjustment" || capabilityId === "effect.opacityAdjustment";
+}
+
+function effectForCapability(capabilityId: string): Filter {
+  if (capabilityId === "effect.basicColorAdjustment") {
+    return {
+      kind: {
+        kind: "basicColorAdjustment",
+        brightnessMillis: 0,
+        contrastMillis: 1000,
+        saturationMillis: 1000
+      },
+      enabled: true
+    };
+  }
+  if (capabilityId === "effect.opacityAdjustment") {
+    return { kind: { kind: "opacityAdjustment", opacityMillis: 1000 }, enabled: true };
+  }
+  return { kind: { kind: "gaussianBlur", radiusMillis: 1000 }, enabled: true };
+}
+
+function filterCapabilityId(filter: Filter): string {
+  switch (filter.kind.kind) {
+    case "gaussianBlur":
+      return "effect.gaussianBlur";
+    case "basicColorAdjustment":
+      return "effect.basicColorAdjustment";
+    case "opacityAdjustment":
+      return "effect.opacityAdjustment";
+    case "externalReference":
+      return "externalReference";
+  }
+}
+
+function capabilityProductLabel(capabilityId: string): string {
+  switch (capabilityId) {
+    case "effect.gaussianBlur":
+      return "高斯模糊";
+    case "effect.basicColorAdjustment":
+      return "基础调色";
+    case "effect.opacityAdjustment":
+      return "不透明度";
+    case "mask.rectangle":
+      return "矩形蒙版";
+    case "mask.ellipse":
+      return "椭圆蒙版";
+    case "blend.multiply":
+      return "正片叠底";
+    case "blend.screen":
+      return "滤色";
+    default:
+      return "暂不支持";
+  }
+}
+
+function effectSliders(filter: Filter): Array<{
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  parameter: (value: number) => EffectParameterUpdate;
+}> {
+  switch (filter.kind.kind) {
+    case "gaussianBlur":
+      return [
+        {
+          label: "模糊",
+          min: 0,
+          max: 3000,
+          step: 50,
+          value: filter.kind.radiusMillis,
+          parameter: (value) => ({ parameter: "gaussianBlurRadiusMillis", radiusMillis: Math.round(value) })
+        }
+      ];
+    case "basicColorAdjustment":
+      return [
+        {
+          label: "亮度",
+          min: -1000,
+          max: 1000,
+          step: 25,
+          value: filter.kind.brightnessMillis,
+          parameter: (value) => ({ parameter: "basicColorBrightnessMillis", brightnessMillis: Math.round(value) })
+        },
+        {
+          label: "对比度",
+          min: 0,
+          max: 3000,
+          step: 25,
+          value: filter.kind.contrastMillis,
+          parameter: (value) => ({ parameter: "basicColorContrastMillis", contrastMillis: Math.max(0, Math.round(value)) })
+        },
+        {
+          label: "饱和度",
+          min: 0,
+          max: 3000,
+          step: 25,
+          value: filter.kind.saturationMillis,
+          parameter: (value) => ({ parameter: "basicColorSaturationMillis", saturationMillis: Math.max(0, Math.round(value)) })
+        }
+      ];
+    case "opacityAdjustment":
+      return [
+        {
+          label: "不透明度",
+          min: 0,
+          max: 1000,
+          step: 10,
+          value: filter.kind.opacityMillis,
+          parameter: (value) => ({ parameter: "opacityMillis", opacityMillis: Math.max(0, Math.round(value)) })
+        }
+      ];
+    case "externalReference":
+      return [];
+  }
+}
+
+function defaultMask(shape: "rectangle" | "ellipse"): Extract<SegmentMask, { kind: "rectangle" | "ellipse" }> {
+  return {
+    kind: shape,
+    xMillis: 250,
+    yMillis: 250,
+    widthMillis: 500,
+    heightMillis: 500,
+    featherMillis: 0,
+    opacityMillis: 1000,
+    inverted: false
+  };
+}
+
+function supportLabel(surface: "预览" | "导出", support: CapabilitySupport): string {
+  switch (support.state) {
+    case "supported":
+      return `${surface}支持`;
+    case "degraded":
+      return `${surface}降级`;
+    case "unsupported":
+      return "暂不支持";
+    case "externalReference":
+      return "外部参考";
+  }
+}
+
+function capabilityActionState(entry: CapabilityReportItem): "supported" | "degraded" | "unsupported" {
+  if (entry.preview.state === "externalReference" || entry.export.state === "externalReference") {
+    return "unsupported";
+  }
+  if (entry.preview.state === "unsupported" || entry.export.state === "unsupported") {
+    return "unsupported";
+  }
+  if (entry.preview.state === "degraded" || entry.export.state === "degraded") {
+    return "degraded";
+  }
+  return "supported";
+}
+
+function capabilityChipTone(entry: CapabilityReportItem): string {
+  const state = capabilityActionState(entry);
+  if (state === "supported") {
+    return "ready";
+  }
+  if (state === "degraded") {
+    return "warning";
+  }
+  return "error";
 }
 
 function AnimationInspectorTab({
@@ -2027,18 +2891,18 @@ function inspectorTabsForSelection(selected: SelectedSegmentView | null): Inspec
   const context = selectedSegmentContext(selected);
 
   if (context.hasAudioSemantics && !context.hasText && context.materialKind !== "video") {
-    return ["音频", "动画"];
+    return ["音频", "变速", "动画"];
   }
 
   if (context.hasText) {
-    return ["画面", "动画"];
+    return ["画面", "变速", "效果", "蒙版", "混合", "动画"];
   }
 
   if (context.hasAudioSemantics) {
-    return ["画面", "音频", "动画"];
+    return ["画面", "音频", "变速", "效果", "滤镜", "调节", "蒙版", "混合", "动画"];
   }
 
-  return ["画面", "动画"];
+  return ["画面", "变速", "效果", "滤镜", "调节", "蒙版", "混合", "动画"];
 }
 
 function keyframeGroupsForSelection(selected: SelectedSegmentView): typeof KEYFRAME_PROPERTY_GROUPS {

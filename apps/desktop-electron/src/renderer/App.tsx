@@ -54,11 +54,17 @@ import type {
 import type { ExportPreset } from "../generated/CommandEnvelope";
 import type {
   DraftCanvasConfig,
+  EffectParameterUpdate,
+  Filter,
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
   Material,
+  SegmentBlendMode,
+  SegmentMask,
+  SegmentRetiming,
   SegmentVolume,
+  TransitionReference,
   TrackKind
 } from "../generated/Draft";
 import type { AdaptationReport } from "../generated/TemplateImport";
@@ -2509,6 +2515,89 @@ export function App(): React.ReactElement {
     })();
   }
 
+  function handleSetSelectedSegmentRetime(retiming: SegmentRetiming): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "setSelectedSegmentRetime",
+        retiming
+      },
+      "调整变速"
+    );
+  }
+
+  function handleApplySelectedSegmentEffect(effect: Filter): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "applySelectedSegmentEffect",
+        effect
+      },
+      "应用效果"
+    );
+  }
+
+  function handleUpdateSelectedSegmentEffectParameter(
+    effectIndex: number,
+    parameter: EffectParameterUpdate
+  ): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "updateSelectedSegmentEffectParameter",
+        effectIndex,
+        parameter
+      },
+      "调整效果"
+    );
+  }
+
+  function handleRemoveSelectedSegmentEffect(effectIndex: number): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "removeSelectedSegmentEffect",
+        effectIndex
+      },
+      "移除效果"
+    );
+  }
+
+  function handleSetSelectedSegmentMask(mask: SegmentMask): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "setSelectedSegmentMask",
+        mask
+      },
+      "编辑蒙版"
+    );
+  }
+
+  function handleSetSelectedSegmentBlendMode(blendMode: SegmentBlendMode): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "setSelectedSegmentBlendMode",
+        blendMode
+      },
+      "设置混合"
+    );
+  }
+
+  function handleAddSelectedSegmentTransition(
+    fromSegmentId: string,
+    toSegmentId: string,
+    reference: TransitionReference,
+    duration: number
+  ): void {
+    void executeProjectTimelineIntent(
+      {
+        kind: "addTransitionAtBoundary",
+        fromSegmentId,
+        toSegmentId,
+        reference,
+        duration: Math.max(1, Math.round(duration)),
+        parameters: {}
+      },
+      "添加转场"
+    );
+  }
+
   function handleSetSelectedSegmentKeyframe(
     property: KeyframeProperty,
     interpolation: KeyframeInterpolation = "linear",
@@ -3150,6 +3239,13 @@ export function App(): React.ReactElement {
       onEditSelectedText={handleEditSelectedText}
       onUpdateDraftCanvasConfig={handleUpdateDraftCanvasConfig}
       onUpdateSelectedSegmentVisual={handleUpdateSelectedSegmentVisual}
+      onSetSelectedSegmentRetime={handleSetSelectedSegmentRetime}
+      onApplySelectedSegmentEffect={handleApplySelectedSegmentEffect}
+      onUpdateSelectedSegmentEffectParameter={handleUpdateSelectedSegmentEffectParameter}
+      onRemoveSelectedSegmentEffect={handleRemoveSelectedSegmentEffect}
+      onSetSelectedSegmentMask={handleSetSelectedSegmentMask}
+      onSetSelectedSegmentBlendMode={handleSetSelectedSegmentBlendMode}
+      onAddSelectedSegmentTransition={handleAddSelectedSegmentTransition}
       onSelectPreviewTextOverlay={handleSelectTimelineSegment}
       onEditPreviewTextOverlay={handleSelectTimelineSegment}
       onSetSelectedSegmentKeyframe={handleSetSelectedSegmentKeyframe}

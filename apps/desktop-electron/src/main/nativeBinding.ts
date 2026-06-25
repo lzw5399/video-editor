@@ -22,6 +22,7 @@ import type {
   AudioEffectSlot,
   AudioFade,
   AudioPanBalance,
+  EffectCapabilityRegistry,
   DraftCanvasConfig,
   EffectParameterUpdate,
   Filter,
@@ -47,6 +48,7 @@ import type {
   TextAlignment,
   TextSegment,
   TextWrapping,
+  Transition,
   TransitionReference,
   TrackKind
 } from "../generated/Draft";
@@ -594,6 +596,7 @@ export type ProjectSessionViewModel = {
   project: ProjectSummaryViewModel;
   editControls: EditControlsViewModel;
   timeline: TimelineViewModel;
+  productionEffectCapabilities: EffectCapabilityRegistry;
   selectedTrack: SelectedTrackViewModel | null;
   selectedSegment: SelectedSegmentViewModel | null;
 };
@@ -635,6 +638,9 @@ export type SelectedSegmentViewModel = {
   targetTimerange: TargetTimerange;
   sourceLabel: string;
   targetLabel: string;
+  retiming: SegmentRetiming;
+  filters: Filter[];
+  transition: Transition | null;
   visual: SegmentVisual;
   volume: SegmentVolume;
   audio: SegmentAudio;
@@ -642,6 +648,36 @@ export type SelectedSegmentViewModel = {
   keyframes: Keyframe[];
   hasText: boolean;
   hasAudioControls: boolean;
+  phase19: SelectedSegmentPhase19ViewModel;
+};
+
+export type SelectedSegmentPhase19ViewModel = {
+  retimeLabel: string;
+  audioRetimeLabel: string;
+  effectCount: number;
+  maskLabel: string;
+  blendLabel: string;
+  transitionLabel: string | null;
+  supportChips: ProductionCapabilityChipViewModel[];
+  transitionBoundary: SelectedSegmentTransitionBoundaryViewModel | null;
+};
+
+export type ProductionCapabilityTone = "ready" | "warning" | "error" | "muted";
+
+export type ProductionCapabilityChipViewModel = {
+  capabilityId: string;
+  label: string;
+  previewLabel: string;
+  exportLabel: string;
+  tone: ProductionCapabilityTone;
+};
+
+export type SelectedSegmentTransitionBoundaryViewModel = {
+  fromSegmentId: SegmentId;
+  toSegmentId: SegmentId;
+  label: string;
+  duration: Microseconds;
+  hasTransition: boolean;
 };
 
 export type TimelineViewModel = {
@@ -694,6 +730,13 @@ export type TimelineSegmentViewModel = {
   duration: Microseconds;
   selected: boolean;
   keyframeMarkers: TimelineKeyframeMarkerViewModel[];
+  retimeLabel: string;
+  speedAdjusted: boolean;
+  effectCount: number;
+  maskLabel: string | null;
+  blendLabel: string;
+  transitionLabel: string | null;
+  transitionDuration: Microseconds | null;
 };
 
 export type TimelineKeyframeMarkerViewModel = {

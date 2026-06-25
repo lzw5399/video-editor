@@ -14,13 +14,14 @@ use draft_model::{
     AddAudioSegmentIntentCommandPayload, AddTextSegmentIntentCommandPayload,
     AddTimelineSegmentIntentCommandPayload, AddTrackIntentCommandPayload,
     AddTransitionCommandPayload, ApplySegmentEffectCommandPayload, AudioEffectSlot, AudioFade,
-    AudioPanBalance, ChangedEntity, CommandDelta, CommandDeltaName, CommandError, CommandErrorKind,
-    CommandEvent, CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload, DirtyDomain,
-    Draft, DraftCanvasConfig, EditTextSegmentCommandPayload, EffectParameterUpdate, Filter,
-    ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing, KeyframeInterpolation,
-    KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId, MaterialKind,
-    MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload,
-    ProjectInteractionKind, ProjectInteractionSequenceError,
+    AudioPanBalance, BlendModeKind, CapabilityReportItem, CapabilitySupport, ChangedEntity,
+    CommandDelta, CommandDeltaName, CommandError, CommandErrorKind, CommandEvent,
+    CommandResultEnvelope, CommandState, DeleteSegmentCommandPayload, DirtyDomain, Draft,
+    DraftCanvasConfig, EditTextSegmentCommandPayload, EffectCapabilityRegistry,
+    EffectParameterUpdate, Filter, ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing,
+    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId,
+    MaterialKind, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
+    MoveSegmentCommandPayload, ProjectInteractionKind, ProjectInteractionSequenceError,
     ProjectInteractionSession as DraftProjectInteractionSession, RationalFrameRate,
     RemoveSegmentEffectCommandPayload, RemoveSegmentKeyframeCommandPayload,
     RemoveTransitionCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
@@ -32,10 +33,11 @@ use draft_model::{
     SetTrackVisibilityCommandPayload, SourceTimerange, SplitSelectedSegmentIntentCommandPayload,
     TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
     TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
-    TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind, TransitionReference,
-    TrimSegmentCommandPayload, TrimSegmentDirection, UpdateDraftCanvasConfigCommandPayload,
-    UpdateSegmentAudioCommandPayload, UpdateSegmentEffectParameterCommandPayload,
-    UpdateSegmentVisualCommandPayload, UpdateTransitionDurationCommandPayload,
+    TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind, Transition,
+    TransitionReference, TrimSegmentCommandPayload, TrimSegmentDirection,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    UpdateSegmentEffectParameterCommandPayload, UpdateSegmentVisualCommandPayload,
+    UpdateTransitionDurationCommandPayload,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config, run_scheduled_material_probe};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -794,6 +796,7 @@ struct ProjectSessionViewModel {
     project: ProjectSummaryViewModel,
     edit_controls: EditControlsViewModel,
     timeline: TimelineViewModel,
+    production_effect_capabilities: EffectCapabilityRegistry,
     selected_track: Option<SelectedTrackViewModel>,
     selected_segment: Option<SelectedSegmentViewModel>,
 }
@@ -843,6 +846,9 @@ struct SelectedSegmentViewModel {
     target_timerange: TargetTimerange,
     source_label: String,
     target_label: String,
+    retiming: SegmentRetiming,
+    filters: Vec<Filter>,
+    transition: Option<Transition>,
     visual: SegmentVisual,
     volume: SegmentVolume,
     audio: SegmentAudio,
@@ -850,6 +856,49 @@ struct SelectedSegmentViewModel {
     keyframes: Vec<Keyframe>,
     has_text: bool,
     has_audio_controls: bool,
+    phase19: SelectedSegmentPhase19ViewModel,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectedSegmentPhase19ViewModel {
+    retime_label: String,
+    audio_retime_label: String,
+    effect_count: usize,
+    mask_label: String,
+    blend_label: String,
+    transition_label: Option<String>,
+    support_chips: Vec<ProductionCapabilityChipViewModel>,
+    transition_boundary: Option<SelectedSegmentTransitionBoundaryViewModel>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProductionCapabilityChipViewModel {
+    capability_id: String,
+    label: String,
+    preview_label: String,
+    export_label: String,
+    tone: ProductionCapabilityTone,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ProductionCapabilityTone {
+    Ready,
+    Warning,
+    Error,
+    Muted,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectedSegmentTransitionBoundaryViewModel {
+    from_segment_id: SegmentId,
+    to_segment_id: SegmentId,
+    label: String,
+    duration: Microseconds,
+    has_transition: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -910,6 +959,13 @@ struct TimelineSegmentViewModel {
     duration: Microseconds,
     selected: bool,
     keyframe_markers: Vec<TimelineKeyframeMarkerViewModel>,
+    retime_label: String,
+    speed_adjusted: bool,
+    effect_count: usize,
+    mask_label: Option<String>,
+    blend_label: String,
+    transition_label: Option<String>,
+    transition_duration: Option<Microseconds>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3897,6 +3953,7 @@ fn project_session_view_model(
     let project = project_summary_view_model(draft);
     let edit_controls = edit_controls_view_model(command_state, selection);
     let timeline = timeline_view_model(draft, selection);
+    let production_effect_capabilities = EffectCapabilityRegistry::phase19_first_party();
     let selected_track = selected_track_view_model(draft, selection);
     let selected_segment = selected_segment_view_model(draft, selection);
 
@@ -3904,6 +3961,7 @@ fn project_session_view_model(
         project,
         edit_controls,
         timeline,
+        production_effect_capabilities,
         selected_track,
         selected_segment,
     }
@@ -3991,6 +4049,7 @@ fn selected_segment_view_model(
                         MaterialKind::Video => material.metadata.has_audio,
                         _ => false,
                     });
+            let registry = EffectCapabilityRegistry::phase19_first_party();
             return Some(SelectedSegmentViewModel {
                 segment_key: segment.segment_id.as_str().to_owned(),
                 selection_handle: timeline_segment_selection_handle(
@@ -4003,6 +4062,9 @@ fn selected_segment_view_model(
                 target_timerange: segment.target_timerange.clone(),
                 source_label: format!("源 {source_start} / {source_duration}"),
                 target_label: format!("目标 {target_start} / {target_duration}"),
+                retiming: segment.retiming.clone(),
+                filters: segment.filters.clone(),
+                transition: segment.transition.clone(),
                 visual: segment.visual.clone(),
                 volume: segment.volume,
                 audio: segment.audio.clone(),
@@ -4010,6 +4072,7 @@ fn selected_segment_view_model(
                 keyframes: segment.keyframes.clone(),
                 has_text,
                 has_audio_controls,
+                phase19: selected_segment_phase19_view_model(track, segment, &registry),
             });
         }
     }
@@ -4162,6 +4225,23 @@ fn timeline_segment_view_model(
         selected,
         keyframe_markers: timeline_keyframe_markers(segment, &label),
         material,
+        retime_label: format_segment_retime_label(&segment.retiming),
+        speed_adjusted: is_segment_speed_adjusted(&segment.retiming),
+        effect_count: segment.filters.len(),
+        mask_label: segment
+            .visual
+            .mask
+            .display_name()
+            .map(|label| localize_mask_label(&label)),
+        blend_label: localize_blend_mode_label(&segment.visual.blend_mode),
+        transition_label: segment
+            .transition
+            .as_ref()
+            .map(|transition| localize_transition_label(&transition.reference)),
+        transition_duration: segment
+            .transition
+            .as_ref()
+            .map(|transition| transition.duration),
     }
 }
 
@@ -4189,6 +4269,237 @@ fn timeline_keyframe_markers(
             }
         })
         .collect()
+}
+
+fn selected_segment_phase19_view_model(
+    track: &Track,
+    segment: &Segment,
+    registry: &EffectCapabilityRegistry,
+) -> SelectedSegmentPhase19ViewModel {
+    let mut support_chips = Vec::new();
+    push_capability_chip(
+        &mut support_chips,
+        registry,
+        segment.retiming.mode.capability_id(),
+    );
+    for filter in &segment.filters {
+        push_capability_chip(&mut support_chips, registry, &filter.capability_id());
+    }
+    if let Some(kind) = segment.visual.mask.mask_kind() {
+        push_capability_chip(&mut support_chips, registry, kind.capability_id());
+    }
+    if let Some(kind) = segment.visual.blend_mode.kind() {
+        push_capability_chip(&mut support_chips, registry, kind.capability_id());
+    }
+    if let Some(transition) = &segment.transition {
+        push_capability_chip(&mut support_chips, registry, &transition.capability_id());
+    }
+    support_chips.sort_by(|left, right| left.capability_id.cmp(&right.capability_id));
+    support_chips.dedup_by(|left, right| left.capability_id == right.capability_id);
+
+    SelectedSegmentPhase19ViewModel {
+        retime_label: format_segment_retime_label(&segment.retiming),
+        audio_retime_label: localize_audio_retime_policy(segment.retiming.audio_policy),
+        effect_count: segment.filters.len(),
+        mask_label: segment
+            .visual
+            .mask
+            .display_name()
+            .map(|label| localize_mask_label(&label))
+            .unwrap_or_else(|| "无蒙版".to_owned()),
+        blend_label: localize_blend_mode_label(&segment.visual.blend_mode),
+        transition_label: segment
+            .transition
+            .as_ref()
+            .map(|transition| localize_transition_label(&transition.reference)),
+        support_chips,
+        transition_boundary: selected_segment_transition_boundary_view_model(track, segment),
+    }
+}
+
+fn push_capability_chip(
+    chips: &mut Vec<ProductionCapabilityChipViewModel>,
+    registry: &EffectCapabilityRegistry,
+    capability_id: &str,
+) {
+    if let Some(entry) = registry.entry(capability_id) {
+        chips.push(production_capability_chip_view_model(entry));
+    }
+}
+
+fn production_capability_chip_view_model(
+    entry: &CapabilityReportItem,
+) -> ProductionCapabilityChipViewModel {
+    ProductionCapabilityChipViewModel {
+        capability_id: entry.capability_id.clone(),
+        label: localize_capability_display_name(entry),
+        preview_label: capability_support_label("预览", &entry.preview),
+        export_label: capability_support_label("导出", &entry.export),
+        tone: capability_tone(&entry.preview, &entry.export),
+    }
+}
+
+fn capability_support_label(surface_label: &str, support: &CapabilitySupport) -> String {
+    match support {
+        CapabilitySupport::Supported { .. } => format!("{surface_label}支持"),
+        CapabilitySupport::Degraded { .. } => format!("{surface_label}降级"),
+        CapabilitySupport::Unsupported { .. } => "暂不支持".to_owned(),
+        CapabilitySupport::ExternalReference { .. } => "外部参考".to_owned(),
+    }
+}
+
+fn capability_tone(
+    preview: &CapabilitySupport,
+    export: &CapabilitySupport,
+) -> ProductionCapabilityTone {
+    if matches!(preview, CapabilitySupport::ExternalReference { .. })
+        || matches!(export, CapabilitySupport::ExternalReference { .. })
+    {
+        return ProductionCapabilityTone::Muted;
+    }
+    if preview.is_supported() && export.is_supported() {
+        return ProductionCapabilityTone::Ready;
+    }
+    if matches!(preview, CapabilitySupport::Unsupported { .. })
+        || matches!(export, CapabilitySupport::Unsupported { .. })
+    {
+        return ProductionCapabilityTone::Error;
+    }
+    ProductionCapabilityTone::Warning
+}
+
+fn localize_capability_display_name(entry: &CapabilityReportItem) -> String {
+    match entry.capability_id.as_str() {
+        "retime.constantSpeed" => "常规变速".to_owned(),
+        "retime.speedCurve" => "曲线变速".to_owned(),
+        "transition.dissolve" => "叠化".to_owned(),
+        "effect.gaussianBlur" => "高斯模糊".to_owned(),
+        "effect.basicColorAdjustment" => "基础调色".to_owned(),
+        "effect.opacityAdjustment" => "不透明度".to_owned(),
+        "mask.rectangle" => "矩形蒙版".to_owned(),
+        "mask.ellipse" => "椭圆蒙版".to_owned(),
+        "blend.normal" => "正常混合".to_owned(),
+        "blend.multiply" => "正片叠底".to_owned(),
+        "blend.screen" => "滤色".to_owned(),
+        _ => entry.display_name.clone(),
+    }
+}
+
+fn selected_segment_transition_boundary_view_model(
+    track: &Track,
+    segment: &Segment,
+) -> Option<SelectedSegmentTransitionBoundaryViewModel> {
+    if !matches!(track.kind, TrackKind::Video | TrackKind::Filter) {
+        return None;
+    }
+    let segment_index = track
+        .segments
+        .iter()
+        .position(|candidate| candidate.segment_id == segment.segment_id)?;
+    let (from_segment, to_segment) =
+        if let Some(next_segment) = track.segments.get(segment_index + 1) {
+            (segment, next_segment)
+        } else if segment_index > 0 {
+            (track.segments.get(segment_index - 1)?, segment)
+        } else {
+            return None;
+        };
+    let transition = transition_for_boundary(track, from_segment, to_segment);
+    let duration = transition
+        .as_ref()
+        .map(|candidate| candidate.duration)
+        .unwrap_or_else(|| Microseconds::new(500_000));
+    Some(SelectedSegmentTransitionBoundaryViewModel {
+        from_segment_id: from_segment.segment_id.clone(),
+        to_segment_id: to_segment.segment_id.clone(),
+        label: format!(
+            "{} → {}",
+            from_segment.segment_id.as_str(),
+            to_segment.segment_id.as_str()
+        ),
+        duration,
+        has_transition: transition.is_some(),
+    })
+}
+
+fn transition_for_boundary(
+    track: &Track,
+    from_segment: &Segment,
+    to_segment: &Segment,
+) -> Option<Transition> {
+    if from_segment
+        .transition
+        .as_ref()
+        .is_some_and(|transition| transition.capability_id() == "transition.dissolve")
+    {
+        return from_segment.transition.clone();
+    }
+    track
+        .transitions
+        .iter()
+        .find(|candidate| {
+            candidate.from_segment_id == from_segment.segment_id
+                && candidate.to_segment_id == to_segment.segment_id
+        })
+        .map(|candidate| Transition {
+            reference: candidate.reference.clone(),
+            duration: candidate.duration,
+        })
+}
+
+fn format_segment_retime_label(retiming: &SegmentRetiming) -> String {
+    match &retiming.mode {
+        draft_model::RetimeMode::Constant { speed } => {
+            if speed.denominator == 0 {
+                return "常规变速".to_owned();
+            }
+            let per_mille = (u64::from(speed.numerator) * 1_000) / u64::from(speed.denominator);
+            format!("{}.{:01}x", per_mille / 1_000, (per_mille % 1_000) / 100)
+        }
+        draft_model::RetimeMode::SpeedCurve { .. } => "曲线变速".to_owned(),
+    }
+}
+
+fn is_segment_speed_adjusted(retiming: &SegmentRetiming) -> bool {
+    match &retiming.mode {
+        draft_model::RetimeMode::Constant { speed } => speed.numerator != speed.denominator,
+        draft_model::RetimeMode::SpeedCurve { .. } => true,
+    }
+}
+
+fn localize_audio_retime_policy(policy: draft_model::AudioRetimePolicy) -> String {
+    match policy {
+        draft_model::AudioRetimePolicy::FollowVideoSpeed => "音频跟随变速".to_owned(),
+        draft_model::AudioRetimePolicy::PreservePitch => "保持音调暂不支持".to_owned(),
+        draft_model::AudioRetimePolicy::MuteUnsupported => "不支持时静音".to_owned(),
+    }
+}
+
+fn localize_mask_label(label: &str) -> String {
+    match label {
+        "rectangle" => "矩形蒙版".to_owned(),
+        "ellipse" => "椭圆蒙版".to_owned(),
+        _ => label.to_owned(),
+    }
+}
+
+fn localize_blend_mode_label(blend_mode: &SegmentBlendMode) -> String {
+    match blend_mode.kind() {
+        Some(BlendModeKind::Normal) => "正常".to_owned(),
+        Some(BlendModeKind::Multiply) => "正片叠底".to_owned(),
+        Some(BlendModeKind::Screen) => "滤色".to_owned(),
+        None => blend_mode.display_name(),
+    }
+}
+
+fn localize_transition_label(reference: &TransitionReference) -> String {
+    match reference {
+        TransitionReference::FirstParty { .. } => "叠化".to_owned(),
+        TransitionReference::ExternalReference { reference } => reference
+            .display_name
+            .clone()
+            .unwrap_or_else(|| format!("{}:{}", reference.provider, reference.effect_id)),
+    }
 }
 
 fn timeline_duration(draft: &Draft) -> u64 {

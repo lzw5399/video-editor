@@ -385,6 +385,9 @@ export function createEmptyProjectSessionViewModel(): ProjectSessionViewModel {
         hasAudioTrack: false
       }
     },
+    productionEffectCapabilities: {
+      entries: []
+    },
     selectedTrack: null,
     selectedSegment: null
   };
