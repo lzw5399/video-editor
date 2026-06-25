@@ -15,6 +15,7 @@ import {
   type TimelineSegmentView,
   type TimelineSegmentVisualKind,
   type TimelineTrackRow as TimelineTrackRowView,
+  type SelectedSegmentView,
   type WaveformDisplayModel,
   type WorkspaceState
 } from "../viewModel";
@@ -66,6 +67,10 @@ type TimelineKeyframeDragPreviewState = {
 type TimelineMoveTrimPayload = Extract<ProjectInteractionPayload, { kind: "timelineMoveTrim" }>;
 type TimelinePlayheadScrubPayload = Extract<ProjectInteractionPayload, { kind: "playheadScrub" }>;
 type TimelineKeyframeEditPayload = Extract<ProjectInteractionPayload, { kind: "keyframeEdit" }>;
+type TimelineRetimePayload = Extract<ProjectInteractionPayload, { kind: "selectedSegmentRetime" }>;
+type TimelineTransitionDurationPayload = Extract<ProjectInteractionPayload, { kind: "selectedTransitionDuration" }>;
+type TimelinePhase19Payload = TimelineRetimePayload | TimelineTransitionDurationPayload;
+type SegmentTransitionBoundary = NonNullable<SelectedSegmentView["phase19"]["transitionBoundary"]>;
 
 type TimelineTrackDropTarget = {
   selectionHandle: string;
@@ -471,6 +476,7 @@ export function Timeline({
               row={row}
               waveform={workspace.waveform}
               timelineDuration={timeline.duration}
+              selectedSegment={workspace.viewModel.selectedSegment}
               onSelectSegment={onSelectSegment}
               onSelectTrack={onSelectTrack}
               onRenameTrack={onRenameTrack}
@@ -804,6 +810,7 @@ function TimelineTrackRow({
   row,
   waveform,
   timelineDuration,
+  selectedSegment,
   onSelectSegment,
   onSelectTrack,
   onRenameTrack,
@@ -818,6 +825,7 @@ function TimelineTrackRow({
   row: TimelineTrackRowView;
   waveform: WaveformDisplayModel;
   timelineDuration: number;
+  selectedSegment: SelectedSegmentView | null;
   onSelectSegment?: (itemHandle: string) => void;
   onSelectTrack?: (itemHandle: string) => void;
   onRenameTrack?: (itemHandle: string, name: string) => void;
@@ -913,6 +921,7 @@ function TimelineTrackRow({
             segment={segment}
             waveform={waveform}
             timelineDuration={timelineDuration}
+            selectedSegment={selectedSegment}
             onSelectSegment={onSelectSegment}
             projectInteractions={projectInteractions}
             interactionEvidence={interactionEvidence}
@@ -930,6 +939,7 @@ function TimelineSegmentBlock({
   segment,
   waveform,
   timelineDuration,
+  selectedSegment,
   onSelectSegment,
   projectInteractions,
   interactionEvidence,
@@ -940,6 +950,7 @@ function TimelineSegmentBlock({
   segment: TimelineSegmentView;
   waveform: WaveformDisplayModel;
   timelineDuration: number;
+  selectedSegment: SelectedSegmentView | null;
   onSelectSegment?: (itemHandle: string) => void;
   projectInteractions: ProjectInteractionController;
   interactionEvidence: ProjectInteractionEvidence | null;
@@ -951,6 +962,8 @@ function TimelineSegmentBlock({
   const showAudioWaveform = segment.visualKind === "audio";
   const [dragPreview, setDragPreview] = useState<TimelineDragPreviewState | null>(null);
   const [keyframeDragPreview, setKeyframeDragPreview] = useState<TimelineKeyframeDragPreviewState | null>(null);
+  const [retimePreviewPercent, setRetimePreviewPercent] = useState<number | null>(null);
+  const [transitionPreviewDuration, setTransitionPreviewDuration] = useState<number | null>(null);
   const dragRef = useRef<{
     mode: "move" | "trim-left" | "trim-right";
     pointerId: number;
@@ -985,8 +998,35 @@ function TimelineSegmentBlock({
     pendingPayload: TimelineKeyframeEditPayload | null;
     cleanup: () => void;
   } | null>(null);
+  const phase19DragRef = useRef<{
+    kind: "selectedSegmentRetime" | "selectedTransitionDuration";
+    pointerId: number;
+    startClientX: number;
+    laneWidth: number;
+    moved: boolean;
+    basePercent: number;
+    audioPolicy: SelectedSegmentView["retiming"]["audioPolicy"];
+    baseDuration: number;
+    fromSegmentId: string;
+    toSegmentId: string;
+    interactionId: string | null;
+    sequence: number;
+    beginPromise: Promise<void>;
+    updateInFlight: boolean;
+    rafId: number | null;
+    pendingPayload: TimelinePhase19Payload | null;
+  } | null>(null);
   const suppressClickRef = useRef(false);
   const segmentStyle = buildTimelineSegmentBlockStyle(segment, timelineDuration, dragPreview);
+  const retimePercent =
+    retimePreviewPercent ??
+    (segment.selected && selectedSegment !== null
+      ? retimePercentFromSegment(selectedSegment.retiming)
+      : retimePercentFromLabel(segment.retimeLabel));
+  const transitionBoundary = transitionBoundaryForSegment(segment, selectedSegment);
+  const transitionDurationLabel = formatTimelineDuration(transitionPreviewDuration ?? transitionBoundary?.duration ?? segment.transitionDuration);
+  const showTransitionGrip = transitionBoundary !== null || segment.transitionLabel !== null;
+  const showRetimeGrip = segment.selected || segment.speedAdjusted;
 
   useEffect(() => {
     setDragPreview((current) => {
@@ -1459,8 +1499,229 @@ function TimelineSegmentBlock({
     }
   }
 
+  function beginRetimeGripInteraction(event: ReactPointerEvent<HTMLElement>): void {
+    if (event.button !== 0 || pending || selectedSegment === null || !segment.selected) {
+      return;
+    }
+    const lane = event.currentTarget.closest(".segment-lane");
+    if (!(lane instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const basePercent = retimePercentFromSegment(selectedSegment.retiming);
+    const interaction = {
+      kind: "selectedSegmentRetime" as const,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      laneWidth: Math.max(1, lane.getBoundingClientRect().width),
+      moved: false,
+      basePercent,
+      audioPolicy: selectedSegment.retiming.audioPolicy,
+      baseDuration: 0,
+      fromSegmentId: "",
+      toSegmentId: "",
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null
+    };
+    phase19DragRef.current = {
+      ...interaction,
+      beginPromise: projectInteractions.begin("selectedSegmentRetime").then((begin) => {
+        if (phase19DragRef.current === null || phase19DragRef.current.pointerId !== interaction.pointerId || begin === null) {
+          return;
+        }
+        phase19DragRef.current.interactionId = begin.interactionId;
+        onInteractionEvidenceChange({ kind: "selectedSegmentRetime", generation: begin.generation });
+        flushPhase19TimelineUpdate(phase19DragRef.current);
+      })
+    };
+    setRetimePreviewPercent(basePercent);
+  }
+
+  function beginTransitionGripInteraction(event: ReactPointerEvent<HTMLElement>): void {
+    if (event.button !== 0 || pending || transitionBoundary === null) {
+      return;
+    }
+    const lane = event.currentTarget.closest(".segment-lane");
+    if (!(lane instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const interaction = {
+      kind: "selectedTransitionDuration" as const,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      laneWidth: Math.max(1, lane.getBoundingClientRect().width),
+      moved: false,
+      basePercent: 100,
+      audioPolicy: "followVideoSpeed" as SelectedSegmentView["retiming"]["audioPolicy"],
+      baseDuration: Math.max(1, transitionBoundary.duration),
+      fromSegmentId: transitionBoundary.fromSegmentId,
+      toSegmentId: transitionBoundary.toSegmentId,
+      interactionId: null,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null
+    };
+    phase19DragRef.current = {
+      ...interaction,
+      beginPromise: projectInteractions.begin("selectedTransitionDuration").then((begin) => {
+        if (phase19DragRef.current === null || phase19DragRef.current.pointerId !== interaction.pointerId || begin === null) {
+          return;
+        }
+        phase19DragRef.current.interactionId = begin.interactionId;
+        onInteractionEvidenceChange({ kind: "selectedTransitionDuration", generation: begin.generation });
+        flushPhase19TimelineUpdate(phase19DragRef.current);
+      })
+    };
+    setTransitionPreviewDuration(interaction.baseDuration);
+  }
+
+  function updatePhase19TimelinePointer(event: ReactPointerEvent<HTMLElement>): void {
+    const interaction = phase19DragRef.current;
+    if (interaction === null || interaction.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (Math.abs(event.clientX - interaction.startClientX) >= 2) {
+      interaction.moved = true;
+    }
+    queuePhase19TimelineUpdate(interaction, phase19TimelinePayloadFromPointer(interaction, event.clientX));
+  }
+
+  function completePhase19TimelinePointer(event: ReactPointerEvent<HTMLElement>): void {
+    const interaction = phase19DragRef.current;
+    if (interaction === null || interaction.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const payload = phase19TimelinePayloadFromPointer(interaction, event.clientX);
+    queuePhase19TimelineUpdate(interaction, payload);
+    void finishPhase19TimelineInteraction(interaction, interaction.moved ? "commit" : "cancel");
+  }
+
+  function phase19TimelinePayloadFromPointer(
+    interaction: NonNullable<typeof phase19DragRef.current>,
+    clientX: number
+  ): TimelinePhase19Payload {
+    const deltaPx = clientX - interaction.startClientX;
+    if (interaction.kind === "selectedSegmentRetime") {
+      const percent = clamp(interaction.basePercent + Math.round(deltaPx / 2), 25, 300);
+      return {
+        kind: "selectedSegmentRetime",
+        retiming: {
+          mode: {
+            kind: "constant",
+            speed: {
+              numerator: percent,
+              denominator: 100
+            }
+          },
+          audioPolicy: interaction.audioPolicy
+        }
+      };
+    }
+    const deltaUs = Math.round((deltaPx / interaction.laneWidth) * Math.max(1, timelineDuration));
+    return {
+      kind: "selectedTransitionDuration",
+      fromSegmentId: interaction.fromSegmentId,
+      toSegmentId: interaction.toSegmentId,
+      duration: Math.max(1, interaction.baseDuration + deltaUs)
+    };
+  }
+
+  function queuePhase19TimelineUpdate(
+    interaction: NonNullable<typeof phase19DragRef.current>,
+    payload: TimelinePhase19Payload
+  ): void {
+    if (payload.kind === "selectedSegmentRetime") {
+      setRetimePreviewPercent(retimePercentFromSegment(payload.retiming));
+    } else {
+      setTransitionPreviewDuration(payload.duration);
+    }
+    interaction.pendingPayload = payload;
+    if (interaction.rafId !== null) {
+      return;
+    }
+    interaction.rafId = window.requestAnimationFrame(() => {
+      interaction.rafId = null;
+      flushPhase19TimelineUpdate(interaction);
+    });
+  }
+
+  function flushPhase19TimelineUpdate(interaction: NonNullable<typeof phase19DragRef.current>): void {
+    if (interaction.updateInFlight || interaction.interactionId === null || interaction.pendingPayload === null) {
+      return;
+    }
+    const payload = interaction.pendingPayload;
+    interaction.pendingPayload = null;
+    interaction.updateInFlight = true;
+    interaction.sequence += 1;
+    void projectInteractions.update(interaction.interactionId, interaction.sequence, payload).then((update) => {
+      interaction.updateInFlight = false;
+      if (update !== null) {
+        onInteractionEvidenceChange({ kind: update.kind, generation: update.generation });
+      }
+      if (phase19DragRef.current !== interaction) {
+        return;
+      }
+      flushPhase19TimelineUpdate(interaction);
+    });
+  }
+
+  async function finishPhase19TimelineInteraction(
+    interaction: NonNullable<typeof phase19DragRef.current>,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (interaction.rafId !== null) {
+      window.cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = null;
+    }
+    await interaction.beginPromise;
+    while (interaction.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (interaction.pendingPayload !== null) {
+      flushPhase19TimelineUpdate(interaction);
+      while (interaction.updateInFlight || interaction.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (interaction.interactionId !== null) {
+      if (action === "commit") {
+        await projectInteractions.commit(interaction.interactionId);
+      } else {
+        await projectInteractions.cancel(interaction.interactionId);
+      }
+    }
+    if (phase19DragRef.current === interaction) {
+      phase19DragRef.current = null;
+    }
+    setRetimePreviewPercent(null);
+    setTransitionPreviewDuration(null);
+    onInteractionEvidenceChange(null);
+  }
+
   const rustProvisionalActive =
-    segment.selected && (interactionEvidence?.kind === "timelineMoveTrim" || interactionEvidence?.kind === "keyframeEdit")
+    segment.selected &&
+    (interactionEvidence?.kind === "timelineMoveTrim" ||
+      interactionEvidence?.kind === "keyframeEdit" ||
+      interactionEvidence?.kind === "selectedSegmentRetime" ||
+      interactionEvidence?.kind === "selectedTransitionDuration")
       ? interactionEvidence
       : null;
 
@@ -1502,6 +1763,46 @@ function TimelineSegmentBlock({
       <SegmentVisualBed visualKind={segment.visualKind} />
       <strong>{segment.label}</strong>
       <span className="segment-time-label">{segment.targetLabel}</span>
+      {showTransitionGrip ? (
+        <span
+          className="segment-transition-grip"
+          data-phase19-transition-grip="true"
+          data-interaction-source={interactionEvidence?.kind === "selectedTransitionDuration" ? "rust-provisional" : undefined}
+          data-interaction-kind={interactionEvidence?.kind === "selectedTransitionDuration" ? interactionEvidence.kind : undefined}
+          aria-label="调整叠化转场时长"
+          title="调整叠化转场时长"
+          onPointerDown={beginTransitionGripInteraction}
+          onPointerMove={updatePhase19TimelinePointer}
+          onPointerUp={completePhase19TimelinePointer}
+          onPointerCancel={completePhase19TimelinePointer}
+        >
+          <span>{segment.transitionLabel ?? "叠化"} · {transitionDurationLabel}</span>
+        </span>
+      ) : null}
+      {showRetimeGrip ? (
+        <span
+          className="segment-retime-cluster"
+          data-phase19-speed-badge="true"
+          aria-label={`变速 ${speedPercentLabel(retimePercent)}`}
+          title={`变速 ${speedPercentLabel(retimePercent)}`}
+        >
+          <span>{speedPercentLabel(retimePercent)}</span>
+          {segment.selected ? (
+            <span
+              className="segment-retime-grip"
+              data-phase19-retime-grip="true"
+              data-interaction-source={interactionEvidence?.kind === "selectedSegmentRetime" ? "rust-provisional" : undefined}
+              data-interaction-kind={interactionEvidence?.kind === "selectedSegmentRetime" ? interactionEvidence.kind : undefined}
+              aria-label="调整常规变速"
+              title="调整常规变速"
+              onPointerDown={beginRetimeGripInteraction}
+              onPointerMove={updatePhase19TimelinePointer}
+              onPointerUp={completePhase19TimelinePointer}
+              onPointerCancel={completePhase19TimelinePointer}
+            />
+          ) : null}
+        </span>
+      ) : null}
       {showAudioWaveform && segment.waveformMaterialId !== null ? (
         <AudioWaveform waveform={waveform} materialId={segment.waveformMaterialId} />
       ) : null}
@@ -1669,6 +1970,47 @@ function AudioWaveform({
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function transitionBoundaryForSegment(
+  segment: TimelineSegmentView,
+  selectedSegment: SelectedSegmentView | null
+): SegmentTransitionBoundary | null {
+  const boundary = selectedSegment?.phase19.transitionBoundary ?? null;
+  if (boundary === null) {
+    return null;
+  }
+  return boundary.fromSegmentId === segment.segmentKey || boundary.toSegmentId === segment.segmentKey ? boundary : null;
+}
+
+function retimePercentFromSegment(retiming: SelectedSegmentView["retiming"]): number {
+  if (retiming.mode.kind !== "constant" || retiming.mode.speed.denominator <= 0) {
+    return 100;
+  }
+  return clamp((retiming.mode.speed.numerator * 100) / retiming.mode.speed.denominator, 25, 300);
+}
+
+function retimePercentFromLabel(label: string): number {
+  const match = /^(\d+(?:\.\d+)?)x$/.exec(label.trim());
+  if (match === null) {
+    return 100;
+  }
+  return clamp(Number(match[1]) * 100, 25, 300);
+}
+
+function speedPercentLabel(percent: number): string {
+  if (percent % 100 === 0) {
+    return `${percent / 100}x`;
+  }
+  return `${(percent / 100).toFixed(2).replace(/0$/, "")}x`;
+}
+
+function formatTimelineDuration(duration: number | null): string {
+  if (duration === null) {
+    return "0.5s";
+  }
+  const tenths = Math.max(1, Math.round(duration / 100_000));
+  return `${Math.floor(tenths / 10)}.${tenths % 10}s`;
 }
 
 function keyframeMarkerTargetAtPoint(

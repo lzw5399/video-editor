@@ -435,6 +435,34 @@ export function expectProductPlaybackSuccessEvidence({
   expect(after.hostState?.frameDisplay).toBeNull();
 }
 
+export function productionEffectsPreviewExportParity({
+  previewEvidence,
+  projectSessionCalls,
+  nativeCommandObservations = []
+}: {
+  previewEvidence: PreviewEvidence;
+  projectSessionCalls: ProjectSessionCall[];
+  nativeCommandObservations?: NativeCommandObservation[];
+}): void {
+  expect(previewEvidence.hostState?.ok, "Phase 19 preview evidence requires an ok realtime host state").toBe(true);
+  expect(previewEvidence.hostState?.productReady, "Phase 19 preview evidence requires product-ready native preview").toBe(true);
+  expect(previewEvidence.hostState?.fallbackActive, "Phase 19 preview evidence must not use a fallback path").toBe(false);
+  expect(previewEvidence.hostState?.backend, "Phase 19 preview backend must be renderGraphGpu").toBe("renderGraphGpu");
+  expect(
+    previewEvidence.hostState?.contentEvidence?.source,
+    "Phase 19 product evidence must come from render-graph GPU compositing"
+  ).toBe("renderGraphGpuComposited");
+  expect(previewEvidence.hostState?.frameDisplay, "Phase 19 product evidence must not be a runtime frame artifact").toBeNull();
+  expect(
+    requestProjectSessionPreviewFrameCount(nativeCommandObservations),
+    "Phase 19 workflows must not drive preview-frame artifact loops"
+  ).toBe(0);
+  expect(
+    projectSessionCalls.every((call) => call.hasDraftField === false),
+    "Phase 19 desktop flows must not send renderer-owned draft payloads"
+  ).toBe(true);
+}
+
 export async function waitForVisiblePreviewCenterChange(
   page: Page,
   app: ProductJourneyAppController | undefined,

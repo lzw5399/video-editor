@@ -7,8 +7,8 @@ import {
   type PointerEvent as ReactPointerEvent
 } from "react";
 
-import type { DraftCanvasConfig, SegmentVisual } from "../../generated/Draft";
-import type { SegmentVisualPatch } from "../../main/nativeBinding";
+import type { DraftCanvasConfig, SegmentMask, SegmentVisual } from "../../generated/Draft";
+import type { ProjectInteractionPayload, SegmentVisualPatch } from "../../main/nativeBinding";
 import type { ProjectInteractionController, ProjectInteractionEvidence } from "./projectInteraction";
 import { appIconUrls, type AppIconName } from "../assets/icons";
 import {
@@ -279,6 +279,26 @@ type PreviewDragPreviewState =
       deltaDegrees: number;
     };
 
+type EditableMask = Extract<SegmentMask, { kind: "rectangle" | "ellipse" }>;
+
+type PreviewMaskDragState = {
+  mode: "move" | "topLeft" | "bottomRight";
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  moved: boolean;
+  sequence: number;
+  beginPromise: Promise<void>;
+  interactionId: string | null;
+  interactionGeneration: number | null;
+  updateInFlight: boolean;
+  rafId: number | null;
+  pendingPayload: Extract<ProjectInteractionPayload, { kind: "selectedSegmentMask" }> | null;
+  baseMask: EditableMask;
+};
+
 type CanvasFitSize = {
   width: number;
   height: number;
@@ -365,9 +385,11 @@ export function PreviewMonitor({
   const previewStageRef = useRef<HTMLDivElement>(null);
   const lastSentHostRectRef = useRef<string | null>(null);
   const previewDragRef = useRef<PreviewDragState | null>(null);
+  const previewMaskDragRef = useRef<PreviewMaskDragState | null>(null);
   const [nativeHostState, setNativeHostState] = useState<RealtimePreviewHostState>(INITIAL_REALTIME_PREVIEW_HOST_STATE);
   const [canvasFitSize, setCanvasFitSize] = useState<CanvasFitSize | null>(null);
   const [previewDragPreview, setPreviewDragPreview] = useState<PreviewDragPreviewState | null>(null);
+  const [previewMaskPreview, setPreviewMaskPreview] = useState<EditableMask | null>(null);
   const [previewInteractionEvidence, setPreviewInteractionEvidence] = useState<ProjectInteractionEvidence | null>(null);
   const safePlayheadUs = Math.max(0, Math.round(playheadUs));
   const safeTimelineDurationUs = Math.max(0, Math.round(timelineDurationUs));
@@ -417,6 +439,7 @@ export function PreviewMonitor({
     nativeHostState.contentEvidence,
     previewDragPreview
   );
+  const maskGhost = buildMaskGhostModel(selectedSegment, previewMaskPreview);
   const textOverlayStyle = !showRealtimeSurface ? buildTextOverlayStyle(selectedSegment, previewDragPreview) : null;
 
   function handlePreviewDragPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -567,6 +590,185 @@ export function PreviewMonitor({
     if (drag !== null && drag.pointerId === event.pointerId) {
       void finishPreviewTransformInteraction(drag, "cancel");
     }
+  }
+
+  function handlePreviewMaskPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    mode: PreviewMaskDragState["mode"]
+  ): void {
+    const mask = editableMaskFromSelectedSegment(selectedSegment);
+    if (mask === null || pending) {
+      return;
+    }
+    const canvas = event.currentTarget.closest(".preview-canvas");
+    if (!(canvas instanceof HTMLElement)) {
+      return;
+    }
+    const canvasRect = canvas.getBoundingClientRect();
+    if (canvasRect.width <= 0 || canvasRect.height <= 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const drag: PreviewMaskDragState = {
+      mode,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      moved: false,
+      sequence: 0,
+      beginPromise: Promise.resolve(),
+      interactionId: null,
+      interactionGeneration: null,
+      updateInFlight: false,
+      rafId: null,
+      pendingPayload: null,
+      baseMask: mask
+    };
+    drag.beginPromise = beginPreviewMaskInteraction(drag);
+    previewMaskDragRef.current = drag;
+    setPreviewInteractionEvidence(null);
+    setPreviewMaskPreview(mask);
+  }
+
+  function handlePreviewMaskPointerMove(event: ReactPointerEvent<HTMLElement>): void {
+    const drag = previewMaskDragRef.current;
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    drag.moved =
+      drag.moved ||
+      Math.abs(event.clientX - drag.startClientX) + Math.abs(event.clientY - drag.startClientY) > 2;
+    queuePreviewMaskUpdate(drag, previewMaskPayloadFromPointer(drag, event.clientX, event.clientY));
+  }
+
+  function handlePreviewMaskPointerUp(event: ReactPointerEvent<HTMLElement>): void {
+    const drag = previewMaskDragRef.current;
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    queuePreviewMaskUpdate(drag, previewMaskPayloadFromPointer(drag, event.clientX, event.clientY));
+    void finishPreviewMaskInteraction(drag, drag.moved ? "commit" : "cancel");
+  }
+
+  function handlePreviewMaskPointerCancel(event: ReactPointerEvent<HTMLElement>): void {
+    const drag = previewMaskDragRef.current;
+    if (drag !== null && drag.pointerId === event.pointerId) {
+      void finishPreviewMaskInteraction(drag, "cancel");
+    }
+  }
+
+  async function beginPreviewMaskInteraction(drag: PreviewMaskDragState): Promise<void> {
+    const begin = await projectInteractions.begin("selectedSegmentMask");
+    if (previewMaskDragRef.current !== drag) {
+      if (begin !== null) {
+        void projectInteractions.cancel(begin.interactionId);
+      }
+      return;
+    }
+    if (begin === null) {
+      if (drag.rafId !== null) {
+        window.cancelAnimationFrame(drag.rafId);
+        drag.rafId = null;
+      }
+      drag.pendingPayload = null;
+      previewMaskDragRef.current = null;
+      setPreviewMaskPreview(null);
+      setPreviewInteractionEvidence(null);
+      return;
+    }
+    drag.interactionId = begin.interactionId;
+    drag.interactionGeneration = begin.generation;
+    flushPreviewMaskUpdate(drag);
+  }
+
+  function previewMaskPayloadFromPointer(
+    drag: PreviewMaskDragState,
+    clientX: number,
+    clientY: number
+  ): Extract<ProjectInteractionPayload, { kind: "selectedSegmentMask" }> {
+    const deltaXMillis = Math.round(((clientX - drag.startClientX) / drag.canvasWidth) * 1000);
+    const deltaYMillis = Math.round(((clientY - drag.startClientY) / drag.canvasHeight) * 1000);
+    const mask = maskWithDeltas(drag.baseMask, drag.mode, deltaXMillis, deltaYMillis);
+    return { kind: "selectedSegmentMask", mask };
+  }
+
+  function queuePreviewMaskUpdate(
+    drag: PreviewMaskDragState,
+    payload: Extract<ProjectInteractionPayload, { kind: "selectedSegmentMask" }>
+  ): void {
+    if (payload.mask.kind === "rectangle" || payload.mask.kind === "ellipse") {
+      setPreviewMaskPreview(payload.mask);
+    }
+    drag.pendingPayload = payload;
+    if (drag.rafId !== null) {
+      return;
+    }
+    drag.rafId = window.requestAnimationFrame(() => {
+      drag.rafId = null;
+      flushPreviewMaskUpdate(drag);
+    });
+  }
+
+  function flushPreviewMaskUpdate(drag: PreviewMaskDragState): void {
+    if (drag.updateInFlight || drag.interactionId === null || drag.pendingPayload === null) {
+      return;
+    }
+    const payload = drag.pendingPayload;
+    drag.pendingPayload = null;
+    drag.updateInFlight = true;
+    drag.sequence += 1;
+    void projectInteractions.update(drag.interactionId, drag.sequence, payload).then((update) => {
+      drag.updateInFlight = false;
+      if (previewMaskDragRef.current !== drag || update === null) {
+        return;
+      }
+      drag.interactionGeneration = update.generation;
+      setPreviewInteractionEvidence({ kind: update.kind, generation: update.generation });
+      flushPreviewMaskUpdate(drag);
+    });
+  }
+
+  async function finishPreviewMaskInteraction(
+    drag: PreviewMaskDragState,
+    action: "commit" | "cancel"
+  ): Promise<void> {
+    if (drag.rafId !== null) {
+      window.cancelAnimationFrame(drag.rafId);
+      drag.rafId = null;
+    }
+    await drag.beginPromise;
+    while (drag.updateInFlight) {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    if (drag.pendingPayload !== null) {
+      flushPreviewMaskUpdate(drag);
+      while (drag.updateInFlight || drag.pendingPayload !== null) {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (drag.interactionId !== null) {
+      if (action === "commit") {
+        await projectInteractions.commit(drag.interactionId);
+      } else {
+        await projectInteractions.cancel(drag.interactionId);
+      }
+    }
+    if (previewMaskDragRef.current === drag) {
+      previewMaskDragRef.current = null;
+    }
+    setPreviewMaskPreview(null);
+    setPreviewInteractionEvidence(null);
   }
 
   async function beginPreviewTransformInteraction(drag: PreviewDragState): Promise<void> {
@@ -968,6 +1170,43 @@ export function PreviewMonitor({
                 <span aria-hidden="true">↻</span>
               </button>
             ) : null}
+          </div>
+          ) : null}
+          {maskGhost !== null ? (
+          <div
+            className={`preview-phase19-mask-ghost preview-mask-${maskGhost.mask.kind}`}
+            data-phase19-mask-ghost="true"
+            data-phase19-preview-proxy="mask"
+            data-product-preview-evidence="false"
+            data-interaction-source={previewInteractionEvidence?.kind === "selectedSegmentMask" ? "rust-provisional" : "ui-local"}
+            data-interaction-kind={previewInteractionEvidence?.kind === "selectedSegmentMask" ? previewInteractionEvidence.kind : undefined}
+            data-interaction-generation={previewInteractionEvidence?.kind === "selectedSegmentMask" ? previewInteractionEvidence.generation : undefined}
+            aria-label="蒙版交互预览"
+            title="蒙版交互预览"
+            style={maskGhost.style}
+            onPointerDown={(event) => handlePreviewMaskPointerDown(event, "move")}
+            onPointerMove={handlePreviewMaskPointerMove}
+            onPointerUp={handlePreviewMaskPointerUp}
+            onPointerCancel={handlePreviewMaskPointerCancel}
+          >
+            <span
+              className="preview-mask-handle top-left"
+              aria-label="调整蒙版左上角"
+              title="调整蒙版左上角"
+              onPointerDown={(event) => handlePreviewMaskPointerDown(event, "topLeft")}
+              onPointerMove={handlePreviewMaskPointerMove}
+              onPointerUp={handlePreviewMaskPointerUp}
+              onPointerCancel={handlePreviewMaskPointerCancel}
+            />
+            <span
+              className="preview-mask-handle bottom-right"
+              aria-label="调整蒙版右下角"
+              title="调整蒙版右下角"
+              onPointerDown={(event) => handlePreviewMaskPointerDown(event, "bottomRight")}
+              onPointerMove={handlePreviewMaskPointerMove}
+              onPointerUp={handlePreviewMaskPointerUp}
+              onPointerCancel={handlePreviewMaskPointerCancel}
+            />
           </div>
           ) : null}
           {selectedSegment !== null && selectedSegment.text !== null && textOverlayStyle !== null ? (
@@ -1402,6 +1641,69 @@ function buildSelectionOverlayModel(
       transform: buildCenteredPreviewTransform(visual.transform.rotation.degrees, dragPreview)
     }
   };
+}
+
+function buildMaskGhostModel(
+  selectedSegment: SelectedSegmentView | null,
+  previewMask: EditableMask | null
+): { mask: EditableMask; style: CSSProperties } | null {
+  const mask = previewMask ?? editableMaskFromSelectedSegment(selectedSegment);
+  if (selectedSegment === null || !selectedSegment.visual.visible || mask === null) {
+    return null;
+  }
+  return {
+    mask,
+    style: {
+      left: `${clampMaskMillis(mask.xMillis) / 10}%`,
+      top: `${clampMaskMillis(mask.yMillis) / 10}%`,
+      width: `${Math.max(4, clampMaskMillis(mask.widthMillis)) / 10}%`,
+      height: `${Math.max(4, clampMaskMillis(mask.heightMillis)) / 10}%`
+    }
+  };
+}
+
+function editableMaskFromSelectedSegment(selectedSegment: SelectedSegmentView | null): EditableMask | null {
+  const mask = selectedSegment?.visual.mask ?? null;
+  if (mask === null) {
+    return null;
+  }
+  return mask.kind === "rectangle" || mask.kind === "ellipse" ? mask : null;
+}
+
+function maskWithDeltas(
+  baseMask: EditableMask,
+  mode: PreviewMaskDragState["mode"],
+  deltaXMillis: number,
+  deltaYMillis: number
+): EditableMask {
+  const minSizeMillis = 40;
+  if (mode === "move") {
+    return {
+      ...baseMask,
+      xMillis: clampMaskMillis(baseMask.xMillis + deltaXMillis, 0, 1000 - baseMask.widthMillis),
+      yMillis: clampMaskMillis(baseMask.yMillis + deltaYMillis, 0, 1000 - baseMask.heightMillis)
+    };
+  }
+  if (mode === "topLeft") {
+    const nextX = clampMaskMillis(baseMask.xMillis + deltaXMillis, 0, baseMask.xMillis + baseMask.widthMillis - minSizeMillis);
+    const nextY = clampMaskMillis(baseMask.yMillis + deltaYMillis, 0, baseMask.yMillis + baseMask.heightMillis - minSizeMillis);
+    return {
+      ...baseMask,
+      xMillis: nextX,
+      yMillis: nextY,
+      widthMillis: clampMaskMillis(baseMask.widthMillis + baseMask.xMillis - nextX, minSizeMillis, 1000),
+      heightMillis: clampMaskMillis(baseMask.heightMillis + baseMask.yMillis - nextY, minSizeMillis, 1000)
+    };
+  }
+  return {
+    ...baseMask,
+    widthMillis: clampMaskMillis(baseMask.widthMillis + deltaXMillis, minSizeMillis, 1000 - baseMask.xMillis),
+    heightMillis: clampMaskMillis(baseMask.heightMillis + deltaYMillis, minSizeMillis, 1000 - baseMask.yMillis)
+  };
+}
+
+function clampMaskMillis(value: number, min = 0, max = 1000): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function buildCenteredPreviewTransform(

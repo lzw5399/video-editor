@@ -735,6 +735,91 @@
   line-height: 12px;
 }
 
+.segment-transition-grip {
+  position: absolute;
+  top: 2px;
+  right: 18px;
+  z-index: 4;
+  display: inline-grid;
+  place-items: center;
+  max-width: calc(100% - 36px);
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid rgba(32, 199, 217, 0.74);
+  border-radius: 999px;
+  color: #061314;
+  background: #20c7d9;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.segment-transition-grip[data-interaction-source="rust-provisional"] {
+  border-color: #d6a23f;
+  background: #d6a23f;
+}
+
+.segment-transition-grip span {
+  max-width: 100%;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-retime-cluster {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  min-height: 16px;
+  padding: 0 5px;
+  border: 1px solid rgba(6, 19, 20, 0.54);
+  border-radius: 999px;
+  color: #dffcff;
+  background: rgba(9, 40, 43, 0.88);
+  pointer-events: none;
+}
+
+.segment-retime-cluster > span:first-child {
+  max-width: 44px;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-retime-grip {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(240, 238, 232, 0.7);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent 0 5px, rgba(240, 238, 232, 0.85) 5px 6px, transparent 6px 10px, rgba(240, 238, 232, 0.85) 10px 11px, transparent 11px 100%),
+    #0f3034;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.segment-retime-grip[data-interaction-source="rust-provisional"] {
+  border-color: #d6a23f;
+  background:
+    linear-gradient(90deg, transparent 0 5px, rgba(6, 19, 20, 0.82) 5px 6px, transparent 6px 10px, rgba(6, 19, 20, 0.82) 10px 11px, transparent 11px 100%),
+    #d6a23f;
+}
+
 .segment-keyframe-strip {
   position: absolute;
   right: 4px;
