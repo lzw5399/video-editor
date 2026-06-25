@@ -1083,15 +1083,35 @@ fn validate_segment_mask(field: &str, mask: &SegmentMask) -> Result<(), DraftVal
     match mask {
         SegmentMask::None => Ok(()),
         SegmentMask::Rectangle {
+            x_millis,
+            y_millis,
             width_millis,
             height_millis,
+            feather_millis,
+            opacity_millis,
             ..
         }
         | SegmentMask::Ellipse {
+            x_millis,
+            y_millis,
             width_millis,
             height_millis,
+            feather_millis,
+            opacity_millis,
             ..
         } => {
+            validate_millis_range(
+                &format!("{field}.xMillis"),
+                *x_millis,
+                MAX_SEGMENT_CROP_MILLIS,
+                "mask x must be expressed in normalized millis",
+            )?;
+            validate_millis_range(
+                &format!("{field}.yMillis"),
+                *y_millis,
+                MAX_SEGMENT_CROP_MILLIS,
+                "mask y must be expressed in normalized millis",
+            )?;
             validate_millis_range(
                 &format!("{field}.widthMillis"),
                 *width_millis,
@@ -1103,7 +1123,44 @@ fn validate_segment_mask(field: &str, mask: &SegmentMask) -> Result<(), DraftVal
                 *height_millis,
                 MAX_SEGMENT_CROP_MILLIS,
                 "mask height must be expressed in normalized millis",
-            )
+            )?;
+            validate_millis_range(
+                &format!("{field}.featherMillis"),
+                *feather_millis,
+                MAX_SEGMENT_CROP_MILLIS,
+                "mask feather must be expressed in normalized millis",
+            )?;
+            validate_millis_range(
+                &format!("{field}.opacityMillis"),
+                *opacity_millis,
+                crate::MAX_SEGMENT_OPACITY_MILLIS,
+                "mask opacity must be expressed in normalized millis",
+            )?;
+            if *width_millis == 0 {
+                return Err(invalid_segment_visual(
+                    &format!("{field}.widthMillis"),
+                    "mask width must be greater than zero",
+                ));
+            }
+            if *height_millis == 0 {
+                return Err(invalid_segment_visual(
+                    &format!("{field}.heightMillis"),
+                    "mask height must be greater than zero",
+                ));
+            }
+            if *x_millis + *width_millis > MAX_SEGMENT_CROP_MILLIS {
+                return Err(invalid_segment_visual(
+                    field,
+                    "mask x and width must stay inside normalized bounds",
+                ));
+            }
+            if *y_millis + *height_millis > MAX_SEGMENT_CROP_MILLIS {
+                return Err(invalid_segment_visual(
+                    field,
+                    "mask y and height must stay inside normalized bounds",
+                ));
+            }
+            Ok(())
         }
         SegmentMask::ExternalReference { reference } => {
             validate_required_text(&format!("{field}.reference.provider"), &reference.provider)?;

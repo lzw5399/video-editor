@@ -1308,9 +1308,19 @@
               "format": "uint32",
               "minimum": 0
             },
+            "inverted": {
+              "type": "boolean",
+              "default": false
+            },
             "kind": {
               "type": "string",
               "const": "rectangle"
+            },
+            "opacityMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1000,
+              "minimum": 0
             },
             "widthMillis": {
               "type": "integer",
@@ -1350,9 +1360,19 @@
               "format": "uint32",
               "minimum": 0
             },
+            "inverted": {
+              "type": "boolean",
+              "default": false
+            },
             "kind": {
               "type": "string",
               "const": "ellipse"
+            },
+            "opacityMillis": {
+              "type": "integer",
+              "format": "uint32",
+              "default": 1000,
+              "minimum": 0
             },
             "widthMillis": {
               "type": "integer",

@@ -1,9 +1,10 @@
 //! Rust-owned segment effect/filter command semantics.
 
 use draft_model::{
-    CapabilityCategory, CommandDeltaName, CommandEvent, CommandState, Draft,
-    EffectCapabilityRegistry, EffectParameterUpdate, Filter, FilterKind, SegmentId,
-    TimelineCommandResponse, TimelineSelection, TrackKind,
+    BlendModeKind, CapabilityCategory, CommandDeltaName, CommandEvent, CommandState, Draft,
+    EffectCapabilityRegistry, EffectParameterUpdate, ExternalEffectReference, Filter, FilterKind,
+    MaskKind, SegmentBlendMode, SegmentId, SegmentMask, TimelineCommandResponse, TimelineSelection,
+    TrackKind,
 };
 
 use crate::{
@@ -18,6 +19,7 @@ const MIN_BRIGHTNESS_MILLIS: i32 = -1_000;
 const MAX_BRIGHTNESS_MILLIS: i32 = 1_000;
 const MAX_COLOR_MULTIPLIER_MILLIS: u32 = 5_000;
 const MAX_OPACITY_MILLIS: u32 = 1_000;
+const MAX_MASK_NORMALIZED_MILLIS: u32 = 1_000;
 
 pub fn apply_segment_effect(
     draft: &Draft,
@@ -142,6 +144,76 @@ pub fn remove_segment_effect(
     ))
 }
 
+pub fn set_segment_mask(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+    mask: SegmentMask,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+    validate_effect_track(next_draft.tracks[track_index].kind, &segment_id)?;
+    validate_supported_mask(&segment_id, &mask)?;
+
+    next_draft.tracks[track_index].segments[segment_index]
+        .visual
+        .mask = mask;
+    validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let segment = &next_draft.tracks[track_index].segments[segment_index];
+    let delta = effect_segment_delta(
+        CommandDeltaName::UpdateSegmentVisual,
+        &track_id,
+        segment,
+        "segment mask set",
+    );
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "setSegmentMask"),
+        selection.clone(),
+        "segmentMaskSet",
+        delta,
+    ))
+}
+
+pub fn set_segment_blend_mode(
+    draft: &Draft,
+    command_state: &CommandState,
+    selection: &TimelineSelection,
+    segment_id: SegmentId,
+    blend_mode: SegmentBlendMode,
+) -> Result<TimelineCommandResponse, TimelineCommandError> {
+    let mut next_draft = draft.clone();
+    let (track_index, segment_index) = find_segment_location(&next_draft, &segment_id)?;
+    validate_track_unlocked(&next_draft.tracks[track_index])?;
+    validate_effect_track(next_draft.tracks[track_index].kind, &segment_id)?;
+    validate_supported_blend_mode(&segment_id, &blend_mode)?;
+
+    next_draft.tracks[track_index].segments[segment_index]
+        .visual
+        .blend_mode = blend_mode;
+    validate_timeline_rules(&next_draft)?;
+    let track_id = next_draft.tracks[track_index].track_id.clone();
+    let segment = &next_draft.tracks[track_index].segments[segment_index];
+    let delta = effect_segment_delta(
+        CommandDeltaName::UpdateSegmentVisual,
+        &track_id,
+        segment,
+        "segment blend mode set",
+    );
+
+    Ok(response(
+        next_draft,
+        command_state_after_commit(command_state, draft, selection, "setSegmentBlendMode"),
+        selection.clone(),
+        "segmentBlendModeSet",
+        delta,
+    ))
+}
+
 fn validate_supported_effect(
     segment_id: &SegmentId,
     effect: &Filter,
@@ -188,6 +260,230 @@ fn validate_supported_effect(
         );
     }
 
+    Ok(())
+}
+
+fn validate_supported_mask(
+    segment_id: &SegmentId,
+    mask: &SegmentMask,
+) -> Result<(), TimelineCommandError> {
+    match mask {
+        SegmentMask::None => Ok(()),
+        SegmentMask::Rectangle {
+            x_millis,
+            y_millis,
+            width_millis,
+            height_millis,
+            feather_millis,
+            opacity_millis,
+            ..
+        } => {
+            validate_mask_parameters(
+                segment_id,
+                MaskKind::Rectangle.capability_id(),
+                MaskParameters {
+                    x_millis: *x_millis,
+                    y_millis: *y_millis,
+                    width_millis: *width_millis,
+                    height_millis: *height_millis,
+                    feather_millis: *feather_millis,
+                    opacity_millis: *opacity_millis,
+                },
+            )?;
+            validate_registered_semantic(
+                segment_id,
+                MaskKind::Rectangle.capability_id(),
+                CapabilityCategory::Mask,
+                "capability is not a mask command target",
+            )
+        }
+        SegmentMask::Ellipse {
+            x_millis,
+            y_millis,
+            width_millis,
+            height_millis,
+            feather_millis,
+            opacity_millis,
+            ..
+        } => {
+            validate_mask_parameters(
+                segment_id,
+                MaskKind::Ellipse.capability_id(),
+                MaskParameters {
+                    x_millis: *x_millis,
+                    y_millis: *y_millis,
+                    width_millis: *width_millis,
+                    height_millis: *height_millis,
+                    feather_millis: *feather_millis,
+                    opacity_millis: *opacity_millis,
+                },
+            )?;
+            validate_registered_semantic(
+                segment_id,
+                MaskKind::Ellipse.capability_id(),
+                CapabilityCategory::Mask,
+                "capability is not a mask command target",
+            )
+        }
+        SegmentMask::ExternalReference { reference } => unsupported_effect(
+            segment_id,
+            external_capability_id(reference),
+            "external provider masks are report-only diagnostics and cannot commit as supported first-party masks",
+        ),
+    }
+}
+
+fn validate_supported_blend_mode(
+    segment_id: &SegmentId,
+    blend_mode: &SegmentBlendMode,
+) -> Result<(), TimelineCommandError> {
+    let capability_id = match blend_mode {
+        SegmentBlendMode::Normal => BlendModeKind::Normal.capability_id(),
+        SegmentBlendMode::Multiply => BlendModeKind::Multiply.capability_id(),
+        SegmentBlendMode::Screen => BlendModeKind::Screen.capability_id(),
+        SegmentBlendMode::ExternalReference { reference } => {
+            return unsupported_effect(
+                segment_id,
+                external_capability_id(reference),
+                "external provider blend modes are report-only diagnostics and cannot commit as supported first-party blends",
+            );
+        }
+    };
+
+    validate_registered_semantic(
+        segment_id,
+        capability_id,
+        CapabilityCategory::Blend,
+        "capability is not a blend command target",
+    )
+}
+
+fn validate_registered_semantic(
+    segment_id: &SegmentId,
+    capability_id: &str,
+    expected_category: CapabilityCategory,
+    wrong_category_reason: &'static str,
+) -> Result<(), TimelineCommandError> {
+    let registry = EffectCapabilityRegistry::phase19_first_party();
+    let Some(entry) = registry.entry(capability_id) else {
+        return unsupported_effect(
+            segment_id,
+            capability_id,
+            "capability is not registered for Phase 19 first-party semantics",
+        );
+    };
+
+    if entry.category != expected_category {
+        return unsupported_effect(segment_id, capability_id, wrong_category_reason);
+    }
+
+    if !entry.preview.is_supported() || !entry.export.is_supported() {
+        return unsupported_effect(
+            segment_id,
+            capability_id,
+            format!(
+                "preview/export support is not fully supported: preview={}, export={}",
+                entry.preview.reason(),
+                entry.export.reason()
+            ),
+        );
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MaskParameters {
+    x_millis: u32,
+    y_millis: u32,
+    width_millis: u32,
+    height_millis: u32,
+    feather_millis: u32,
+    opacity_millis: u32,
+}
+
+fn validate_mask_parameters(
+    segment_id: &SegmentId,
+    capability_id: &'static str,
+    parameters: MaskParameters,
+) -> Result<(), TimelineCommandError> {
+    validate_normalized_mask_parameter(segment_id, capability_id, "xMillis", parameters.x_millis)?;
+    validate_normalized_mask_parameter(segment_id, capability_id, "yMillis", parameters.y_millis)?;
+    validate_normalized_mask_parameter(
+        segment_id,
+        capability_id,
+        "widthMillis",
+        parameters.width_millis,
+    )?;
+    validate_normalized_mask_parameter(
+        segment_id,
+        capability_id,
+        "heightMillis",
+        parameters.height_millis,
+    )?;
+    validate_normalized_mask_parameter(
+        segment_id,
+        capability_id,
+        "featherMillis",
+        parameters.feather_millis,
+    )?;
+    validate_normalized_mask_parameter(
+        segment_id,
+        capability_id,
+        "opacityMillis",
+        parameters.opacity_millis,
+    )?;
+
+    if parameters.width_millis == 0 {
+        return invalid_parameter(
+            segment_id,
+            capability_id,
+            "widthMillis",
+            "mask width must be greater than zero",
+        );
+    }
+    if parameters.height_millis == 0 {
+        return invalid_parameter(
+            segment_id,
+            capability_id,
+            "heightMillis",
+            "mask height must be greater than zero",
+        );
+    }
+    if parameters.x_millis + parameters.width_millis > MAX_MASK_NORMALIZED_MILLIS {
+        return invalid_parameter(
+            segment_id,
+            capability_id,
+            "xMillis",
+            "mask x and width must stay inside normalized bounds",
+        );
+    }
+    if parameters.y_millis + parameters.height_millis > MAX_MASK_NORMALIZED_MILLIS {
+        return invalid_parameter(
+            segment_id,
+            capability_id,
+            "yMillis",
+            "mask y and height must stay inside normalized bounds",
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_normalized_mask_parameter(
+    segment_id: &SegmentId,
+    capability_id: &'static str,
+    parameter: &'static str,
+    value: u32,
+) -> Result<(), TimelineCommandError> {
+    if value > MAX_MASK_NORMALIZED_MILLIS {
+        return invalid_parameter(
+            segment_id,
+            capability_id,
+            parameter,
+            format!("mask parameter must be <= {MAX_MASK_NORMALIZED_MILLIS}"),
+        );
+    }
     Ok(())
 }
 
@@ -387,6 +683,10 @@ fn unsupported_effect<T>(
             reason: reason.into(),
         },
     ))
+}
+
+fn external_capability_id(reference: &ExternalEffectReference) -> String {
+    format!("external:{}:{}", reference.provider, reference.effect_id)
 }
 
 fn effect_not_found(segment_id: &SegmentId, effect_index: u32) -> TimelineCommandError {

@@ -800,6 +800,10 @@ pub enum SegmentMask {
         height_millis: u32,
         #[serde(default)]
         feather_millis: u32,
+        #[serde(default = "default_mask_opacity_millis")]
+        opacity_millis: u32,
+        #[serde(default)]
+        inverted: bool,
     },
     Ellipse {
         x_millis: u32,
@@ -808,6 +812,10 @@ pub enum SegmentMask {
         height_millis: u32,
         #[serde(default)]
         feather_millis: u32,
+        #[serde(default = "default_mask_opacity_millis")]
+        opacity_millis: u32,
+        #[serde(default)]
+        inverted: bool,
     },
     ExternalReference {
         reference: ExternalEffectReference,
@@ -842,6 +850,10 @@ impl SegmentMask {
             ),
         }
     }
+}
+
+fn default_mask_opacity_millis() -> u32 {
+    MAX_SEGMENT_OPACITY_MILLIS
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

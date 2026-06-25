@@ -344,7 +344,10 @@ fn effect_commands_set_rect_and_ellipse_masks_as_typed_undoable_semantics() {
     )
     .expect("clearing a mask should commit through the same Rust command");
     assert_eq!(cleared.command_state.undo_stack.len(), 3);
-    assert_eq!(cleared.draft.tracks[0].segments[0].visual.mask, SegmentMask::None);
+    assert_eq!(
+        cleared.draft.tracks[0].segments[0].visual.mask,
+        SegmentMask::None
+    );
 
     let undone = undo_timeline_edit(&cleared.draft, &cleared.command_state, &cleared.selection)
         .expect("mask clear should be undoable");
@@ -393,8 +396,12 @@ fn effect_commands_set_supported_blend_modes_as_typed_undoable_semantics() {
         SegmentBlendMode::Screen
     );
 
-    let undone = undo_timeline_edit(&screened.draft, &screened.command_state, &screened.selection)
-        .expect("blend update should be undoable");
+    let undone = undo_timeline_edit(
+        &screened.draft,
+        &screened.command_state,
+        &screened.selection,
+    )
+    .expect("blend update should be undoable");
     assert_eq!(
         undone.draft.tracks[0].segments[0].visual.blend_mode,
         SegmentBlendMode::Multiply
@@ -457,21 +464,19 @@ fn effect_commands_mask_blend_invalid_parameters_and_locked_tracks_reject_atomic
             },
         ),
     ] {
-        let rejected = set_segment_mask(
-            &draft,
-            &state,
-            &selection,
-            "video-segment".into(),
-            mask,
-        )
-        .expect_err(label);
+        let rejected = set_segment_mask(&draft, &state, &selection, "video-segment".into(), mask)
+            .expect_err(label);
         assert!(matches!(
             rejected.kind,
             TimelineCommandErrorKind::InvalidEffectParameter { .. }
         ));
         assert_eq!(draft, draft_with_video_segment(), "{label} mutated draft");
         assert_eq!(state, CommandState::empty(), "{label} mutated state");
-        assert_eq!(selection, selected_segment_context(), "{label} mutated selection");
+        assert_eq!(
+            selection,
+            selected_segment_context(),
+            "{label} mutated selection"
+        );
     }
 
     let mut locked = draft.clone();
