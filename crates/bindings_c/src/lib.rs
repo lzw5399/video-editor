@@ -629,7 +629,15 @@ impl AbiState {
                     let diagnostics = report
                         .leak_diagnostics
                         .iter()
-                        .map(|leak| handle_diagnostic(handle_from_token(runtime, &leak.token)))
+                        .map(|leak| {
+                            let mut diagnostic =
+                                handle_diagnostic(handle_from_token(runtime, &leak.token));
+                            diagnostic.release_state = Some(match leak.release_state {
+                                HandleReleaseState::Explicit => "explicit",
+                                HandleReleaseState::CascadeClose => "cascadeClose",
+                            });
+                            diagnostic
+                        })
                         .collect::<Vec<_>>();
                     *slot = RuntimeSlot::Closed {
                         runtime,
