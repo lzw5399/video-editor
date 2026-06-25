@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 19
-status: complete
-stopped_at: Completed Phase 19
-last_updated: "2026-06-25T16:48:43.164Z"
-last_activity: 2026-06-25
-last_activity_desc: Phase 19 complete
+current_phase: 0
+status: Awaiting next milestone
+stopped_at: Completed 19-14-PLAN.md
+last_updated: "2026-06-26T02:45:26.598+08:00"
+last_activity: 2026-06-26
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 25
   completed_phases: 25
@@ -21,19 +21,17 @@ current_phase_name: production-effects-retiming-and-transition-semantics
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-17)
+See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** Users can reliably import media, edit segments on a familiar Jianying-style timeline, preview the result, save the draft, and export a video through one consistent editing and rendering model.
-**Current focus:** Phase 19 complete — production-effects-retiming-and-transition-semantics
+**Current focus:** v1.0 complete — awaiting next milestone planning
 
 ## Current Position
 
-Phase: 19
-Plan: 15 of 15
-Status: Complete
-Last activity: 2026-06-25 — Phase 19 complete
-
-Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, 18, and 19 are complete; the current milestone is fully executed.
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-26 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -671,6 +669,60 @@ None.
 | Compatibility | Full Jianying/CapCut/Kaipai parity and live provider integrations beyond the offline Phase 17 foundation | Deferred beyond Phase 19 production architecture | Initialization |
 | Platform | Full mobile app productization | Deferred beyond Phase 18 binding/runtime foundation | Initialization |
 | Effects | 100% proprietary effect/preset parity beyond first-party supported/degraded semantics | Deferred; Phase 19 covers self-owned production effects semantics | Initialization |
+| debug | production-editor-uat | investigating | Milestone close 2026-06-26 |
+| verification_gap | Phase 04.1 04.1-VERIFICATION.md | human_needed | Milestone close 2026-06-26 |
+| quick_task | 260621-sg2-session-owned-material-reads | unknown | Milestone close 2026-06-26 |
+| quick_task | 260621-sg3-bundled-ffmpeg-only | unknown | Milestone close 2026-06-26 |
+| quick_task | 260621-sg5-preview-telemetry-subscription-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260621-sg8-session-owned-export-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-combo-preview-evidence-gate | completed | Milestone close 2026-06-26 |
+| quick_task | 260622-jianying-top-tabs-icons | missing | Milestone close 2026-06-26 |
+| quick_task | 260622-material-library-jianying-density | missing | Milestone close 2026-06-26 |
+| quick_task | 260622-p0-preview-export-audio-regressions | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-p0-user-material-regression | missing | Milestone close 2026-06-26 |
+| quick_task | 260622-pr56-preview-portrait-modal-regression | missing | Milestone close 2026-06-26 |
+| quick_task | 260622-sg10-audio-preview-session-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg11-import-material-no-draft-response | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg12-selection-handle-intent | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg13-rust-timeline-view-model | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg14-session-project-summary-view-model | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg15-session-edit-controls-view-model | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg16-session-opaque-timeline-view-model | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg17-session-no-renderer-draft-state | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg18-session-import-view-model-response | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg19-bundled-ffmpeg-product-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg20-product-ui-diagnostic-copy-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg21-session-owned-playhead-keyframes | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg22-session-owned-split-playhead | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg23-session-owned-trim-boundary | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg24-session-owned-move-target | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg25-session-owned-add-at-playhead | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg26-session-owned-add-media-timing | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg27-session-owned-text-presets | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg28-explicit-export-control-api | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg29-explicit-audio-preview-api | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg30-explicit-artifact-control-api | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg31-explicit-runtime-capability-api | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg32-explicit-runtime-discovery-api | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg33-remove-electron-generic-command-ipc | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg34-remove-native-generic-command-export | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg35-rename-native-command-observations | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg36-align-workspace-product-contract | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg37-remove-test-legacy-intent-aliases | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg38-remove-generic-project-bundle-commands | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg39-remove-ffmpeg-env-runtime-lookup | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg40-remove-generic-material-draft-commands | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg41-remove-generic-preview-commands | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-sg43-native-surface-content-coverage | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-text-subtitle-e2e-gates | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-wc55-hide-native-titlebar | missing | Milestone close 2026-06-26 |
+| quick_task | 260622-yk19-material-drag-to-timeline | unknown | Milestone close 2026-06-26 |
+| quick_task | 260622-yt31-combo-preview-evidence | unknown | Milestone close 2026-06-26 |
+| quick_task | 260623-clean-ui-reference-media | unknown | Milestone close 2026-06-26 |
+| quick_task | 260623-native-surface-window-reflow | unknown | Milestone close 2026-06-26 |
+| quick_task | 260623-product-ui-reference-gap | unknown | Milestone close 2026-06-26 |
+| quick_task | 260623-titlebar-jianying-chrome | unknown | Milestone close 2026-06-26 |
+| quick_task | 260623-ui-reference-material-thumbnails | completed | Milestone close 2026-06-26 |
 
 ## Quick Tasks Completed
 
@@ -739,3 +791,7 @@ None.
 Last session: 2026-06-25T15:41:27.132Z
 Stopped at: Completed 19-14-PLAN.md
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with $gsd-new-milestone
