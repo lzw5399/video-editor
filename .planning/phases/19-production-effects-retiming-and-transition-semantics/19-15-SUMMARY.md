@@ -32,6 +32,7 @@ tech-stack:
 key-files:
   created:
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-UI-AUDIT.md"
+    - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-REVIEW.md"
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-15-SUMMARY.md"
   modified:
     - ".planning/phases/19-production-effects-retiming-and-transition-semantics/19-VALIDATION.md"
@@ -76,6 +77,7 @@ Phase 19 is closed with aggregate source/runtime/product validation, a passing i
 - Updated `test:phase19` so the aggregate gate composes source guards, no-product-fallback, Rust suites, packaged desktop E2E, `cargo check --workspace --locked`, and contract drift checks.
 - Narrowed Phase 19 source guard FFmpeg filter scans so compiler output assertions in `testkit` can verify generated scripts without weakening production ownership checks.
 - Ran an independent UI audit. The first audit failed sign-off; the implementation then fixed the blockers and obtained a separate independent re-audit pass.
+- Resolved execute:post code-review warnings for production interaction lifecycle cleanup, destructive confirmation target drift, multiline pointer save-loop guard coverage, and Phase 19 aggregate desktop regression composition.
 - Updated `19-VALIDATION.md` to `status: complete`, `nyquist_compliant: true`, and `wave_0_complete: true` after all required gates passed.
 
 ## Task Commits
@@ -121,6 +123,14 @@ Phase 19 is closed with aggregate source/runtime/product validation, a passing i
 - **Verification:** Independent worker returned `## UI REVIEW COMPLETE` with status `pass`.
 - **Committed in:** `9a4d714`
 
+**4. [Rule 1 - Bug] Execute:post code review found interaction and guard gaps**
+- **Found during:** Required execute:post code review.
+- **Issue:** Four warning-level gaps remained: production effect interaction sessions could be orphaned on selection change/unmount, destructive confirmations could drift to a different effect or mask target, the pointer save-loop guard missed multiline handlers, and the Phase 19 desktop aggregate skipped regression specs changed by this plan.
+- **Fix:** Added deterministic production interaction cleanup/cancel lifecycle, target-scoped destructive confirmations, multiline pointer save-loop guard self-tests and scans, and expanded `test:phase19-desktop` to include production effects, UI reference regression, and the touched workspace runtime-boundary regression.
+- **Files modified:** `Inspector.tsx`, `scripts/phase19-source-guards.sh`, `package.json`, `19-REVIEW.md`.
+- **Verification:** `pnpm --filter @video-editor/desktop build`, `pnpm run test:phase19-source-guards`, `pnpm run test:phase19-desktop`, `pnpm run test:phase19`, and `git diff --check` passed.
+- **Committed in:** current closeout fix commit
+
 ## Verification
 
 - `pnpm run test:phase19-source-guards` - passed.
@@ -128,6 +138,7 @@ Phase 19 is closed with aggregate source/runtime/product validation, a passing i
 - `pnpm run test:phase19-rust` - passed.
 - `pnpm --filter @video-editor/desktop build` - passed.
 - `pnpm --filter @video-editor/desktop exec playwright test tests/production-effects.spec.ts tests/ui-regression.spec.ts --reporter=line --workers=1` - passed, 10/10.
+- `pnpm --filter @video-editor/desktop exec playwright test tests/workspace.spec.ts --grep "Phase 11 runtime boundary docs" --reporter=line --workers=1` - passed, 1/1.
 - `pnpm run test:phase19` - passed.
 - `cargo check --workspace --locked` - passed.
 - `pnpm run test:contracts` - passed.

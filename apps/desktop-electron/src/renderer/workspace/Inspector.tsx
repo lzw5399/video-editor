@@ -198,6 +198,7 @@ type ProductionEffectInteractionState = {
   finishing: boolean;
   rafId: number | null;
   pendingPayload: ProjectInteractionPayload | null;
+  cleanupListeners: (() => void) | null;
 };
 
 const DEFAULT_TEXT_STATE: TextFormState = {
@@ -384,6 +385,12 @@ export function Inspector({
   );
 
   useEffect(() => {
+    return () => {
+      void cancelActiveProductionEffectInteraction();
+    };
+  }, [selected?.selectionHandle]);
+
+  useEffect(() => {
     if (selected === null) {
       setTextState(DEFAULT_TEXT_STATE);
       textCommitKeyRef.current = null;
@@ -391,7 +398,6 @@ export function Inspector({
       audioCommitKeyRef.current = null;
       audioDraftOptionsRef.current = audioOptionsFromState(100, 0, 0, 0);
       audioHydrationSelectionRef.current = null;
-      productionInteractionRef.current = null;
       setVolumePercent(100);
       setPanPercent(0);
       setFadeInUs(0);
@@ -783,17 +789,21 @@ export function Inspector({
       updateInFlight: false,
       finishing: false,
       rafId: null,
-      pendingPayload: null
+      pendingPayload: null,
+      cleanupListeners: null
     };
     interaction.beginPromise = projectInteractions.begin(kind).then((begin) => {
-      if (productionInteractionRef.current !== interaction || begin === null) {
+      if (begin === null) {
         return;
       }
       interaction.interactionId = begin.interactionId;
+      if (productionInteractionRef.current !== interaction) {
+        return;
+      }
       flushProductionEffectInteraction(interaction);
     });
     productionInteractionRef.current = interaction;
-    armRangeFinishListeners(
+    interaction.cleanupListeners = armRangeFinishListeners(
       () => void finishProductionEffectInteraction("commit"),
       () => void finishProductionEffectInteraction("cancel")
     );
@@ -840,10 +850,27 @@ export function Inspector({
     if (interaction === null) {
       return;
     }
+    await closeProductionEffectInteraction(interaction, action);
+  }
+
+  async function cancelActiveProductionEffectInteraction(): Promise<void> {
+    const interaction = productionInteractionRef.current;
+    if (interaction === null) {
+      return;
+    }
+    await closeProductionEffectInteraction(interaction, "cancel");
+  }
+
+  async function closeProductionEffectInteraction(
+    interaction: ProductionEffectInteractionState,
+    action: "commit" | "cancel"
+  ): Promise<void> {
     if (interaction.finishing) {
       return;
     }
     interaction.finishing = true;
+    interaction.cleanupListeners?.();
+    interaction.cleanupListeners = null;
     if (interaction.rafId !== null) {
       window.cancelAnimationFrame(interaction.rafId);
       interaction.rafId = null;
@@ -852,13 +879,17 @@ export function Inspector({
     while (interaction.updateInFlight) {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     }
-    if (interaction.pendingPayload !== null) {
+    if (action === "commit" && interaction.pendingPayload !== null) {
       flushProductionEffectInteraction(interaction);
       while (interaction.updateInFlight || interaction.pendingPayload !== null) {
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
+    } else {
+      interaction.pendingPayload = null;
     }
-    productionInteractionRef.current = null;
+    if (productionInteractionRef.current === interaction) {
+      productionInteractionRef.current = null;
+    }
     if (interaction.interactionId === null) {
       return;
     }
@@ -1951,7 +1982,13 @@ function AppliedEffectControls({
   const capabilityId = filterCapabilityId(filter);
   const title = capabilityProductLabel(capabilityId);
   const sliders = effectSliders(filter);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  const effectTargetKey = `${effectIndex}:${capabilityId}:${JSON.stringify(filter)}`;
+  const [confirmRemoveTargetKey, setConfirmRemoveTargetKey] = useState<string | null>(null);
+  const confirmRemove = confirmRemoveTargetKey === effectTargetKey;
+
+  useEffect(() => {
+    setConfirmRemoveTargetKey(null);
+  }, [effectTargetKey]);
 
   return (
     <article className="phase19-effect-row" aria-label={title}>
@@ -1977,7 +2014,7 @@ function AppliedEffectControls({
           aria-label={`移除${title}`}
           title={`移除${title}`}
           disabled={pending}
-          onClick={() => setConfirmRemove(true)}
+          onClick={() => setConfirmRemoveTargetKey(effectTargetKey)}
         >
           移除效果
         </button>
@@ -1989,13 +2026,17 @@ function AppliedEffectControls({
             className="icon-text-action danger"
             disabled={pending}
             onClick={() => {
+              if (confirmRemoveTargetKey !== effectTargetKey) {
+                setConfirmRemoveTargetKey(null);
+                return;
+              }
               onRemoveSelectedSegmentEffect(effectIndex);
-              setConfirmRemove(false);
+              setConfirmRemoveTargetKey(null);
             }}
           >
             确认移除效果
           </button>
-          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmRemove(false)}>
+          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmRemoveTargetKey(null)}>
             保留效果
           </button>
         </div>
@@ -2060,7 +2101,13 @@ function MaskInspectorSection({
     ? defaultMask("rectangle")
     : selected.visual.mask;
   const shape = mask.kind === "ellipse" ? "ellipse" : "rectangle";
-  const [confirmReset, setConfirmReset] = useState(false);
+  const maskTargetKey = `${selected.selectionHandle}:${JSON.stringify(selected.visual.mask)}`;
+  const [confirmResetTargetKey, setConfirmResetTargetKey] = useState<string | null>(null);
+  const confirmReset = confirmResetTargetKey === maskTargetKey;
+
+  useEffect(() => {
+    setConfirmResetTargetKey(null);
+  }, [maskTargetKey]);
 
   return (
     <section className="inspector-section production-inspector-section" aria-label="蒙版" role="tabpanel">
@@ -2117,7 +2164,7 @@ function MaskInspectorSection({
         />
         <span>反选蒙版</span>
       </label>
-      <button type="button" className="compact-action" disabled={pending} onClick={() => setConfirmReset(true)}>
+      <button type="button" className="compact-action" disabled={pending} onClick={() => setConfirmResetTargetKey(maskTargetKey)}>
         重置效果
       </button>
       {confirmReset ? (
@@ -2127,13 +2174,17 @@ function MaskInspectorSection({
             className="icon-text-action danger"
             disabled={pending}
             onClick={() => {
+              if (confirmResetTargetKey !== maskTargetKey) {
+                setConfirmResetTargetKey(null);
+                return;
+              }
               onSetSelectedSegmentMask({ kind: "none" });
-              setConfirmReset(false);
+              setConfirmResetTargetKey(null);
             }}
           >
             确认重置效果
           </button>
-          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmReset(false)}>
+          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmResetTargetKey(null)}>
             继续保留当前效果
           </button>
         </div>
@@ -2319,18 +2370,26 @@ function captureRangePointer(event: ReactPointerEvent<HTMLInputElement>): void {
   event.currentTarget.setPointerCapture(event.pointerId);
 }
 
-function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): void {
+function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): () => void {
+  let active = true;
   const cleanup = (): void => {
+    active = false;
     window.removeEventListener("pointerup", commit);
     window.removeEventListener("mouseup", commit);
     window.removeEventListener("pointercancel", cancel);
     window.removeEventListener("keydown", cancelOnEscape);
   };
   const commit = (): void => {
+    if (!active) {
+      return;
+    }
     cleanup();
     onCommit();
   };
   const cancel = (): void => {
+    if (!active) {
+      return;
+    }
     cleanup();
     onCancel();
   };
@@ -2346,6 +2405,7 @@ function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): vo
   window.addEventListener("mouseup", commit, { once: true });
   window.addEventListener("pointercancel", cancel, { once: true });
   window.addEventListener("keydown", cancelOnEscape);
+  return cleanup;
 }
 
 function productionEffectQuickAdds(tab: "效果" | "滤镜" | "调节", capabilities: CapabilityReportItem[]): CapabilityReportItem[] {

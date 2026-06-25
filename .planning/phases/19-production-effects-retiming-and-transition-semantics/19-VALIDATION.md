@@ -86,8 +86,8 @@ The Wave 0 commands now pass through the final aggregate gate or their later imp
 | `pnpm run test:no-product-fallback` | PASSED | Product success cannot be satisfied by fallback/mock/artifact/CPU/DOM evidence. |
 | `pnpm run test:phase19-rust` | PASSED | Covers draft_model, draft_commands, engine_core, audio_engine, render_graph, realtime_preview_runtime, ffmpeg_compiler, and testkit production effects suites. |
 | `pnpm --filter @video-editor/desktop build` | PASSED | Confirms renderer/native/electron build after UI audit fixes. |
-| `pnpm --filter @video-editor/desktop exec playwright test tests/production-effects.spec.ts tests/ui-regression.spec.ts --reporter=line --workers=1` | PASSED, 10/10 | Confirms Phase 19 product controls plus UI regression surfaces after audit fixes. |
-| `pnpm run test:phase19` | PASSED | Composes source guards, no-product-fallback, Rust suites, packaged production-effects desktop E2E, `cargo check --workspace --locked`, and contracts. |
+| `pnpm run test:phase19-desktop` | PASSED, 11/11 | Runs packaged production-effects E2E, UI reference regression via `ui-regression.spec.ts`, and the touched workspace runtime-boundary regression grep. |
+| `pnpm run test:phase19` | PASSED | Composes source guards, no-product-fallback, Rust suites, expanded packaged desktop E2E/regression coverage, `cargo check --workspace --locked`, and contracts. |
 | `cargo check --workspace --locked` | PASSED | Re-run independently and inside `pnpm run test:phase19`. |
 | `pnpm run test:contracts` | PASSED | Generated schema/TypeScript contracts have no drift. |
 | `git diff --check` | PASSED | No whitespace errors in final diff. |
@@ -96,8 +96,15 @@ The Wave 0 commands now pass through the final aggregate gate or their later imp
 
 - `scripts/phase19-source-guards.sh` default mode is the aggregate guard.
 - It blocks Electron-owned FFmpeg construction, renderer retime mapping, transition validation, effect/filter/mask/blend evaluation, cache/fingerprint ownership, provider-native IDs as internal semantics, fallback/mock/artifact/CPU/DOM success evidence, and high-frequency pointer samples that directly save, push undo, increment revision, or commit intents.
-- `package.json` `test:phase19` now includes `cargo check --workspace --locked` between desktop E2E and contract drift checks.
+- `package.json` `test:phase19-desktop` now includes production-effects E2E, UI reference regression coverage, and the touched workspace runtime-boundary regression grep; `test:phase19` includes `cargo check --workspace --locked` between desktop E2E and contract drift checks.
 - `docs/runtime-boundaries.md` now has a Phase 19 ownership section covering `draft_model`, `draft_commands`, `engine_core`, `audio_engine`, `render_graph`, `realtime_preview_runtime`, `ffmpeg_compiler`, `editor_runtime`, Electron UI boundaries, high-frequency interactions, and external adapter/report boundaries.
+
+## Execute:Post Code Review
+
+- Required code-review artifact: `.planning/phases/19-production-effects-retiming-and-transition-semantics/19-REVIEW.md`.
+- Initial review found four warning-level gaps after aggregate validation: production interaction cleanup, destructive confirmation target drift, multiline pointer save-loop guard coverage, and desktop aggregate regression composition.
+- Final re-review status: `clean`.
+- Final fixes are covered by `pnpm --filter @video-editor/desktop build`, `pnpm run test:phase19-source-guards`, `pnpm run test:phase19-desktop`, `pnpm run test:phase19`, and `git diff --check`.
 
 ## Independent UI Audit
 

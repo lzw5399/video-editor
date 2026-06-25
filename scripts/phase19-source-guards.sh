@@ -32,12 +32,30 @@ matches_for_pattern() {
   rg -n --pcre2 "$pattern" "$@" 2>/dev/null | strip_comments
 }
 
+matches_for_multiline_pattern() {
+  local pattern="$1"
+  shift
+  rg -n -U --pcre2 "$pattern" "$@" 2>/dev/null | strip_comments
+}
+
 fail_matches() {
   local message="$1"
   local pattern="$2"
   shift 2
   local matches
   matches="$(matches_for_pattern "$pattern" "$@" || true)"
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" >&2
+    fail "$message"
+  fi
+}
+
+fail_multiline_matches() {
+  local message="$1"
+  local pattern="$2"
+  shift 2
+  local matches
+  matches="$(matches_for_multiline_pattern "$pattern" "$@" || true)"
   if [ -n "$matches" ]; then
     printf '%s\n' "$matches" >&2
     fail "$message"
@@ -55,8 +73,27 @@ assert_pattern_rejects() {
   if [ -z "$(matches_for_pattern "$pattern" "$tmp_dir/InjectedPhase19Violation.tsx" || true)" ]; then
     fail "negative check did not catch injected ${description}"
   fi
-  printf '%s\n' "// $source" >"$tmp_dir/CommentOnly.tsx"
+  printf '%s\n' "$source" | sed 's|^|// |' >"$tmp_dir/CommentOnly.tsx"
   if [ -n "$(matches_for_pattern "$pattern" "$tmp_dir/CommentOnly.tsx" || true)" ]; then
+    fail "comment-filtered negative check matched comment-only ${description}"
+  fi
+  rm -rf "$tmp_dir"
+  trap - RETURN
+}
+
+assert_multiline_pattern_rejects() {
+  local description="$1"
+  local pattern="$2"
+  local source="$3"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  printf '%s\n' "$source" >"$tmp_dir/InjectedPhase19Violation.tsx"
+  if [ -z "$(matches_for_multiline_pattern "$pattern" "$tmp_dir/InjectedPhase19Violation.tsx" || true)" ]; then
+    fail "negative check did not catch injected ${description}"
+  fi
+  printf '%s\n' "$source" | sed 's|^|// |' >"$tmp_dir/CommentOnly.tsx"
+  if [ -n "$(matches_for_multiline_pattern "$pattern" "$tmp_dir/CommentOnly.tsx" || true)" ]; then
     fail "comment-filtered negative check matched comment-only ${description}"
   fi
   rm -rf "$tmp_dir"
@@ -70,7 +107,7 @@ EFFECT_EVALUATION_PATTERN='\b(?:evaluate(?:Effect|Filter|Mask|Blend)|apply(?:Eff
 CACHE_FINGERPRINT_PATTERN='\b(?:previewCacheKey|semanticFingerprint|graphFingerprint|cacheFingerprint|effectFingerprint|retimeFingerprint|transitionFingerprint|computeDirtyRanges?|buildDirtyRanges?|makeDirtyRanges?|deriveDirtyRanges?)\b'
 PROVIDER_NATIVE_SEMANTIC_PATTERN='\b(?:providerNativeEffect|nativeEffectId|nativeFilterId|nativeTransitionId|kaipaiEffectId|kaipaiFilterId|kaipaiTransitionId|jianyingEffectId|jianyingFilterId|jianyingTransitionId|capcutEffectId|capcutFilterId|capcutTransitionId|externalEffectId|externalFilterId|externalTransitionId)\b'
 FALLBACK_SUCCESS_PATTERN='\b(?:(?:fallback|mock|artifact|cpuReadback|cpuProbe|decodedCpu|domOverlay|domOnly|debug|legacy)(?:Preview|Render|Export|Playback|Effect|Transition)?Success|(?:fallback|mock|artifact|cpu|dom|debug|legacy)[A-Za-z]*(?:Satisfied|Accepted|EvidenceOk)|success[A-Za-z]*(?:Fallback|Mock|Artifact|Cpu|Dom|Legacy))\b'
-POINTER_SAVE_LOOP_PATTERN='\b(?:pointermove|pointerMove|mousemove|mouseMove|onPointerMove|onMouseMove|dragMove|sliderMove|scrubMove|handle[A-Za-z]*(?:Drag|Slider|Scrub))[A-Za-z0-9_.,:;() =>{}[\]"'\'']{0,240}\b(?:saveProjectBundle|pushUndo|revision\s*(?:\+\+|=)|incrementRevision|executeProjectIntent|executeProjectTimelineIntent)\b'
+POINTER_SAVE_LOOP_PATTERN='(?s)\b(?:pointermove|pointerMove|mousemove|mouseMove|onPointerMove|onMouseMove|dragMove|sliderMove|scrubMove|handle[A-Za-z]*(?:Drag|Slider|Scrub))\b.{0,1200}\b(?:saveProjectBundle|pushUndo|revision\s*(?:\+\+|=)|incrementRevision|executeProjectIntent|executeProjectTimelineIntent)\b'
 PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeconds|sourceTimeSeconds|retimeSeconds|speedFloat|speedF32|speedF64|durationF32|durationF64)\b'
 FFMPEG_RETIME_FILTER_PATTERN='\b(?:setpts|asetpts|atempo)\s*='
 FFMPEG_TRANSITION_FILTER_PATTERN='\b(?:xfade|acrossfade|transition=fade)\b'
@@ -128,10 +165,13 @@ run_self_test() {
     "fallback evidence as product success" \
     "$FALLBACK_SUCCESS_PATTERN" \
     'const artifactPreviewSuccess = true;'
-  assert_pattern_rejects \
+  assert_multiline_pattern_rejects \
     "pointer sample save or undo loop" \
     "$POINTER_SAVE_LOOP_PATTERN" \
-    'function onPointerMove() { executeProjectIntent(payload); saveProjectBundle(); }'
+    'function onPointerMove() {
+  executeProjectIntent(payload);
+  saveProjectBundle();
+}'
   assert_pattern_rejects \
     "non-compiler FFmpeg retime filter string" \
     "$FFMPEG_RETIME_FILTER_PATTERN" \
@@ -197,7 +237,7 @@ scan_provider_native_semantics() {
 }
 
 scan_pointer_save_loops() {
-  fail_matches \
+  fail_multiline_matches \
     "high-frequency pointer/drag/slider/scrub samples must not directly save, increment revision, or push undo entries" \
     "$POINTER_SAVE_LOOP_PATTERN" \
     "${ELECTRON_BOUNDARY_DIRS[@]}"
