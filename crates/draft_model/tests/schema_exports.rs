@@ -15,13 +15,14 @@ use draft_model::{
     AudioRetimePolicy, BlendModeKind, CancelExportCommandPayload, CanvasAdaptationPolicy,
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
     CapabilityCategory, CapabilityReportItem, CapabilitySupport, CapabilitySurface, ChangedEntity,
-    CommandDelta, CommandDeltaName, CommandEnvelope, CommandError, CommandErrorKind, CommandEvent,
-    CommandHistorySnapshot, CommandName, CommandPayload, CommandResultEnvelope, CommandState,
-    DirtyDomain, DirtyRange, DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig,
-    DraftId, DraftMetadata, DraftSchemaVersion, EffectCapabilityRegistry, EffectKind,
-    ExportDiagnostic, ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse,
-    ExportPrepDirtyFacts, ExportPreset, ExportValidationReport, ExternalEffectReference, Filter,
-    FilterKind, GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
+    ClearSegmentRetimeCommandPayload, CommandDelta, CommandDeltaName, CommandEnvelope,
+    CommandError, CommandErrorKind, CommandEvent, CommandHistorySnapshot, CommandName,
+    CommandPayload, CommandResultEnvelope, CommandState, DirtyDomain, DirtyRange,
+    DirtyRangeSource, DisplayableArtifactRef, Draft, DraftCanvasConfig, DraftId, DraftMetadata,
+    DraftSchemaVersion, EffectCapabilityRegistry, EffectKind, ExportDiagnostic,
+    ExportDiagnosticKind, ExportJobPhase, ExportJobStatusResponse, ExportPrepDirtyFacts,
+    ExportPreset, ExportValidationReport, ExternalEffectReference, Filter, FilterKind,
+    GetArtifactQuotaStatusCommandPayload, GetArtifactStatusCommandPayload,
     GetExportJobStatusCommandPayload, InvalidationScope, Keyframe, KeyframeEasing,
     KeyframeInterpolation, KeyframeProperty, KeyframeValue, MAX_TEXT_LAYOUT_MILLIS,
     MAX_TEXT_LETTER_SPACING_MILLIS, MAX_TEXT_LINE_HEIGHT_MILLIS, MIN_TEXT_LINE_HEIGHT_MILLIS,
@@ -41,13 +42,13 @@ use draft_model::{
     RuntimeVideoPixelFormat, RuntimeWindowsMediaIoCapabilities, Segment, SegmentAnchor,
     SegmentAudio, SegmentBackgroundFilling, SegmentBlendMode, SegmentCrop, SegmentFitMode,
     SegmentId, SegmentMask, SegmentOpacity, SegmentPosition, SegmentRetiming, SegmentRotation,
-    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SnappingSettings,
-    SourceTimerange, SpeedCurvePoint, SpeedRatio, StartExportCommandPayload, TargetTimerange,
-    TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef, TextFont,
-    TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
-    TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
-    Transition, TransitionKind, TransitionReference, VersionCommandPayload, WaveformDisplayPeak,
-    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
+    SegmentScale, SegmentTransform, SegmentVisual, SegmentVolume, SetSegmentRetimeCommandPayload,
+    SnappingSettings, SourceTimerange, SpeedCurvePoint, SpeedRatio, StartExportCommandPayload,
+    TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
+    TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke,
+    TextStyle, TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId,
+    TrackKind, Transition, TransitionKind, TransitionReference, VersionCommandPayload,
+    WaveformDisplayPeak, WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -84,6 +85,8 @@ const PUBLIC_TIMELINE_EDIT_PAYLOAD_CONTRACTS: &[&str] = &[
     "SetTrackMuteCommandPayload",
     "UpdateDraftCanvasConfigCommandPayload",
     "UpdateSegmentVisualCommandPayload",
+    "SetSegmentRetimeCommandPayload",
+    "ClearSegmentRetimeCommandPayload",
     "SetSegmentKeyframeCommandPayload",
     "RemoveSegmentKeyframeCommandPayload",
 ];
@@ -117,6 +120,8 @@ const PUBLIC_TIMELINE_EDIT_COMMAND_NAMES: &[&str] = &[
     "setTrackMute",
     "updateDraftCanvasConfig",
     "updateSegmentVisual",
+    "setSegmentRetime",
+    "clearSegmentRetime",
     "setSegmentKeyframe",
     "removeSegmentKeyframe",
 ];
@@ -1433,6 +1438,68 @@ fn schema_exports_include_keyframe_command_contracts() {
             && !command_envelope_ts.contains("\"removeSegmentKeyframe\""),
         "public CommandEnvelope.ts must not expose keyframe edit commands"
     );
+}
+
+#[test]
+fn schema_exports_include_retime_command_contracts() {
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+    let retime_payload_ts = ts_contract(&[
+        export_decl::<SetSegmentRetimeCommandPayload>(),
+        export_decl::<ClearSegmentRetimeCommandPayload>(),
+    ]);
+    let draft_ts = ts_contract(&[
+        export_decl::<SpeedRatio>(),
+        export_decl::<SpeedCurvePoint>(),
+        export_decl::<RetimeMode>(),
+        export_decl::<AudioRetimePolicy>(),
+        export_decl::<SegmentRetiming>(),
+    ]);
+
+    for expected_export in [
+        "export type SpeedRatio",
+        "export type SpeedCurvePoint",
+        "export type RetimeMode",
+        "export type AudioRetimePolicy",
+        "export type SegmentRetiming",
+    ] {
+        assert!(
+            draft_ts.contains(expected_export),
+            "draft TypeScript should include retime semantic contract {expected_export}"
+        );
+    }
+
+    for expected_payload_contract in [
+        "export type SetSegmentRetimeCommandPayload",
+        "retiming: SegmentRetiming",
+        "export type ClearSegmentRetimeCommandPayload",
+    ] {
+        assert!(
+            retime_payload_ts.contains(expected_payload_contract),
+            "internal retime payload contract should generate {expected_payload_contract}"
+        );
+    }
+
+    for expected_delta in ["setSegmentRetime", "clearSegmentRetime"] {
+        assert!(
+            command_result_ts.contains(expected_delta),
+            "CommandResultEnvelope.ts should expose retime delta name {expected_delta}"
+        );
+        assert!(
+            !command_envelope_ts.contains(expected_delta),
+            "public CommandEnvelope.ts must not expose internal timeline retime command {expected_delta}"
+        );
+    }
+
+    for forbidden_contract in [
+        "SetSegmentRetimeCommandPayload",
+        "ClearSegmentRetimeCommandPayload",
+    ] {
+        assert!(
+            !command_envelope_ts.contains(forbidden_contract),
+            "public CommandEnvelope.ts must not export internal retime payload {forbidden_contract}"
+        );
+    }
 }
 
 fn export_decl<T>() -> String

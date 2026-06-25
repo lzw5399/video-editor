@@ -71,6 +71,7 @@ CACHE_FINGERPRINT_PATTERN='\b(?:previewCacheKey|semanticFingerprint|graphFingerp
 PROVIDER_NATIVE_SEMANTIC_PATTERN='\b(?:providerNativeEffect|nativeEffectId|nativeFilterId|nativeTransitionId|kaipaiEffectId|kaipaiFilterId|kaipaiTransitionId|jianyingEffectId|jianyingFilterId|jianyingTransitionId|capcutEffectId|capcutFilterId|capcutTransitionId|externalEffectId|externalFilterId|externalTransitionId)\b'
 FALLBACK_SUCCESS_PATTERN='\b(?:(?:fallback|mock|artifact|cpuReadback|cpuProbe|decodedCpu|domOverlay|domOnly|debug|legacy)(?:Preview|Render|Export|Playback|Effect|Transition)?Success|(?:fallback|mock|artifact|cpu|dom|debug|legacy)[A-Za-z]*(?:Satisfied|Accepted|EvidenceOk)|success[A-Za-z]*(?:Fallback|Mock|Artifact|Cpu|Dom|Legacy))\b'
 POINTER_SAVE_LOOP_PATTERN='\b(?:pointermove|pointerMove|mousemove|mouseMove|onPointerMove|onMouseMove|dragMove|sliderMove|scrubMove|handle[A-Za-z]*(?:Drag|Slider|Scrub))[A-Za-z0-9_.,:;() =>{}[\]"'\'']{0,240}\b(?:saveProjectBundle|pushUndo|revision\s*(?:\+\+|=)|incrementRevision|executeProjectIntent|executeProjectTimelineIntent)\b'
+PERSISTED_RETIME_FLOAT_PATTERN='\b(?:speedSeconds|durationSeconds|targetTimeSeconds|sourceTimeSeconds|retimeSeconds|speedFloat|speedF32|speedF64|durationF32|durationF64)\b'
 
 ELECTRON_BOUNDARY_DIRS=(
   "apps/desktop-electron/src/main"
@@ -189,8 +190,36 @@ scan_pointer_save_loops() {
 require_retiming_files() {
   require_file "crates/draft_commands/tests/retiming_commands.rs"
   require_file "crates/engine_core/tests/retiming.rs"
+  require_file "crates/draft_commands/src/retiming.rs"
+  require_file "crates/engine_core/src/time_mapping.rs"
+  require_file "schemas/draft.schema.json"
+  require_file "schemas/command.schema.json"
+  require_file "apps/desktop-electron/src/generated/Draft.ts"
+  require_file "apps/desktop-electron/src/generated/CommandResultEnvelope.ts"
   require_fixed "crates/draft_commands/tests/retiming_commands.rs" "phase19_"
   require_fixed "crates/engine_core/tests/retiming.rs" "phase19_"
+  require_fixed "crates/draft_commands/src/retiming.rs" "SetSegmentRetime"
+  require_fixed "crates/draft_commands/src/retiming.rs" "ClearSegmentRetime"
+  require_fixed "crates/draft_commands/src/timeline.rs" "TimelineEditPayload::SetSegmentRetime"
+  require_fixed "crates/draft_commands/src/timeline.rs" "TimelineEditPayload::ClearSegmentRetime"
+  require_fixed "crates/engine_core/src/time_mapping.rs" "SegmentTimeMap"
+  require_fixed "crates/engine_core/src/time_mapping.rs" "source_position_for_retime"
+  require_fixed "crates/engine_core/src/time_mapping.rs" "retimed_source_range"
+  require_fixed "crates/engine_core/src/time_mapping.rs" "audio_retime_diagnostic"
+  require_fixed "schemas/draft.schema.json" "SegmentRetiming"
+  require_fixed "schemas/draft.schema.json" "SpeedRatio"
+  require_fixed "apps/desktop-electron/src/generated/Draft.ts" "export type SegmentRetiming"
+  require_fixed "apps/desktop-electron/src/generated/Draft.ts" "export type SpeedRatio"
+  require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "setSegmentRetime"
+  require_fixed "apps/desktop-electron/src/generated/CommandResultEnvelope.ts" "clearSegmentRetime"
+  fail_matches \
+    "generated retime contracts must not persist naked floating retime/time fields" \
+    "$PERSISTED_RETIME_FLOAT_PATTERN" \
+    "schemas/draft.schema.json" \
+    "schemas/command.schema.json" \
+    "apps/desktop-electron/src/generated/Draft.ts" \
+    "apps/desktop-electron/src/generated/CommandEnvelope.ts" \
+    "apps/desktop-electron/src/generated/CommandResultEnvelope.ts"
 }
 
 require_retiming_audio_files() {
