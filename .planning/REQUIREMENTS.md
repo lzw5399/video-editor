@@ -375,9 +375,9 @@
 | BIND-04 | Phase 17 | Planned |
 | BIND-05 | Phase 17 | Planned |
 | PRODFX-01 | Phase 18 | Planned |
-| PRODFX-02 | Phase 18 | Planned |
-| PRODFX-03 | Phase 18 | Planned |
-| PRODFX-04 | Phase 18 | Planned |
+| PRODFX-02 | Phase 18 | Complete |
+| PRODFX-03 | Phase 18 | Complete |
+| PRODFX-04 | Phase 18 | Complete |
 | PRODFX-05 | Phase 17 | Complete |
 | COMP-01 | Phase 17 | Complete |
 | COMP-02 | Phase 17 | Complete |
