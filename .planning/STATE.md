@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 19
 current_phase_name: production-effects-retiming-and-transition-semantics
 status: executing
-stopped_at: Completed 19-09-PLAN.md
-last_updated: "2026-06-25T11:24:22.706Z"
+stopped_at: Completed 19-10-PLAN.md
+last_updated: "2026-06-25T11:41:56.939Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 25
   completed_phases: 24
   total_plans: 187
-  completed_plans: 181
+  completed_plans: 182
   percent: 96
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 19 (production-effects-retiming-and-transition-semantics) — EXECUTING
-Plan: 10 of 15
+Plan: 11 of 15
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 19 execution started
 
@@ -219,6 +219,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, 17.1, and 18 are complete; Phase 19 is
 | Phase 19 P07 | 21 min | 2 tasks | 13 files |
 | Phase 19 P08 | 9 min | 1 tasks | 9 files |
 | Phase 19 P09 | 18 min | 2 tasks | 13 files |
+| Phase 19 P10 | 10 min | 1 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -640,6 +641,9 @@ Recent decisions affecting current work:
 - [Phase 19]: Supported first-party filter intents are the only effects that emit realtime GPU preview passes or FFmpeg export filters.
 - [Phase 19]: Gaussian blur, basic color adjustment, and opacity adjustment share typed milliscale parameter normalization between preview and export.
 - [Phase 19]: External/degraded effects remain diagnostics and source guards reject FFmpeg effect strings outside ffmpeg_compiler.
+- [Phase 19]: Mask and blend edits commit only after the Phase 19 capability registry reports first-party preview and export support. — Keeps unsupported or degraded masks/blends from becoming product-success semantics.
+- [Phase 19]: External provider mask and blend references remain unsupported diagnostics and cannot mutate first-party draft semantics. — Preserves the adapter/report boundary for private provider references.
+- [Phase 19]: Rectangle and ellipse masks persist normalized integer geometry, feather, opacity, and inversion fields in Rust-owned segment visual state. — Keeps mask semantics typed and portable for preview/export follow-up plans.
 
 ### Pending Todos
 
@@ -721,6 +725,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T11:24:22.699Z
-Stopped at: Completed 19-09-PLAN.md
+Last session: 2026-06-25T11:41:18.403Z
+Stopped at: Completed 19-10-PLAN.md
 Resume file: None
