@@ -369,7 +369,10 @@ fn transition_fingerprint(
     fingerprint_parts(
         transition.node_id.clone(),
         &TransitionSemanticInput {
+            from_segment_id: &transition.from_segment_id,
+            to_segment_id: &transition.to_segment_id,
             name: &transition.name,
+            reference: &transition.reference,
             duration: transition.duration,
             window: &transition.window,
             capability: &transition.capability,
@@ -580,7 +583,10 @@ struct FilterSemanticInput<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TransitionSemanticInput<'a> {
+    from_segment_id: &'a draft_model::SegmentId,
+    to_segment_id: &'a draft_model::SegmentId,
     name: &'a str,
+    reference: &'a draft_model::TransitionReference,
     duration: draft_model::Microseconds,
     window: &'a crate::RenderTransitionWindow,
     capability: &'a crate::RenderEffectCapability,

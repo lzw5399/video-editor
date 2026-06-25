@@ -90,11 +90,16 @@ impl RenderGraphNodeId {
         track_id: &TrackId,
         segment_id: &SegmentId,
         material_id: &MaterialId,
+        to_segment_id: Option<&SegmentId>,
     ) -> Self {
-        Self::new(RenderGraphNodeRole::SegmentTransition, draft_id)
+        let mut node_id = Self::new(RenderGraphNodeRole::SegmentTransition, draft_id)
             .with_track_id(track_id)
             .with_segment_id(segment_id)
-            .with_material_id(material_id)
+            .with_material_id(material_id);
+        if let Some(to_segment_id) = to_segment_id {
+            node_id = node_id.with_local_id(format!("to:{}", to_segment_id.as_str()));
+        }
+        node_id
     }
 
     pub fn sampled_frame(draft_id: &DraftId, frame_index: u64, at_microseconds: u64) -> Self {
@@ -125,7 +130,15 @@ impl RenderGraphNodeId {
                 )
             }
             RenderGraphNodeRole::SegmentTransition => {
-                format!("{}:transition", self.segment_role_prefix())
+                if self.local_id.is_some() {
+                    format!(
+                        "{}:transition:{}",
+                        self.segment_role_prefix(),
+                        self.local_id_value()
+                    )
+                } else {
+                    format!("{}:transition", self.segment_role_prefix())
+                }
             }
             RenderGraphNodeRole::AudioMix => {
                 format!(

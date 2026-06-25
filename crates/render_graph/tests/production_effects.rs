@@ -1,8 +1,8 @@
 use draft_model::{
     AudioRetimePolicy, DirtyDomain, DirtyRange, DirtyRangeSource, Draft, Material, MaterialKind,
-    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId, SegmentRetiming, SourceTimerange,
-    SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind, TrackTransition,
-    TransitionKind, TransitionReference,
+    Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentId, SegmentRetiming,
+    SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind,
+    TrackTransition, TransitionKind, TransitionReference,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use render_graph::{
@@ -181,7 +181,7 @@ fn phase19_production_effects_retime_fingerprints_change_without_changing_stable
 }
 
 #[test]
-fn phase19_transition_relationships_become_render_graph_intents_with_endpoint_windows() {
+fn phase19_production_effects_transition_relationship_intent_windows() {
     let graph = graph_for(&transition_relationship_draft(
         TransitionReference::dissolve(),
         Microseconds::new(300_000),
@@ -220,7 +220,10 @@ fn phase19_transition_relationships_become_render_graph_intents_with_endpoint_wi
         TargetTimerange::new(Microseconds::new(1_000_000), Microseconds::new(300_000)),
         "to endpoint window should be the head of the incoming segment"
     );
-    assert_eq!(transition.support, render_graph::RenderIntentSupport::Supported);
+    assert_eq!(
+        transition.support,
+        render_graph::RenderIntentSupport::Supported
+    );
     assert!(
         transition
             .node_id
@@ -231,7 +234,7 @@ fn phase19_transition_relationships_become_render_graph_intents_with_endpoint_wi
 }
 
 #[test]
-fn phase19_transition_fingerprints_and_dirty_ranges_change_for_relationship_edits() {
+fn phase19_production_effects_transition_relationship_fingerprints_dirty_ranges() {
     let base = snapshot_for(&transition_relationship_draft(
         TransitionReference::dissolve(),
         Microseconds::new(300_000),
@@ -344,22 +347,16 @@ fn video_material() -> Material {
     material
 }
 
-fn transition_relationship_draft(
-    reference: TransitionReference,
-    duration: Microseconds,
-) -> Draft {
+fn transition_relationship_draft(reference: TransitionReference, duration: Microseconds) -> Draft {
     let mut draft = Draft::new(
         "phase19-transition-render-graph",
         "Phase 19 Transition Render Graph",
     );
     draft.materials.push(video_material());
     let mut video_track = Track::new("video-track", TrackKind::Video, "视频");
-    video_track.segments.push(transition_segment(
-        "left-segment",
-        0,
-        0,
-        1_000_000,
-    ));
+    video_track
+        .segments
+        .push(transition_segment("left-segment", 0, 0, 1_000_000));
     video_track.segments.push(transition_segment(
         "right-segment",
         1_000_000,

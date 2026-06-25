@@ -6,7 +6,8 @@ use draft_model::{
     AudioEffectSlotKind, AudioRetimePolicy, CanvasBackground, DraftId, Filter, FilterKind,
     Keyframe, KeyframeProperty, KeyframeValue, MaterialId, MaterialKind, Microseconds,
     RationalFrameRate, SegmentBackgroundFilling, SegmentId, SegmentRetiming, SegmentVisual,
-    SourceTimerange, TargetTimerange, TrackId, TrackKind, Transition,
+    SourceTimerange, TargetTimerange, TrackId, TrackKind, TrackTransition, Transition,
+    TransitionReference,
 };
 use engine_core::{
     FrameTextOverlay, MaterialRenderableState, NormalizedDraft, NormalizedMaterialRef,
@@ -20,7 +21,8 @@ const DEFAULT_AUDIO_SAMPLE_RATE_HZ: u32 = 48_000;
 use crate::incremental::RenderGraphNodeId;
 use crate::{
     RenderEffectCapability, render_blend_capability, render_effect_capability,
-    render_mask_capability, render_retime_capability, render_transition_capability,
+    render_mask_capability, render_retime_capability, render_track_transition_capability,
+    render_transition_capability,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,7 +297,10 @@ pub struct RenderFilterIntent {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderTransitionIntent {
     pub node_id: RenderGraphNodeId,
+    pub from_segment_id: SegmentId,
+    pub to_segment_id: SegmentId,
     pub name: String,
+    pub reference: TransitionReference,
     pub duration: Microseconds,
     pub window: RenderTransitionWindow,
     pub capability: RenderEffectCapability,
@@ -306,6 +311,9 @@ pub struct RenderTransitionIntent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderTransitionWindow {
+    pub target_timerange: TargetTimerange,
+    pub from_target_timerange: TargetTimerange,
+    pub to_target_timerange: TargetTimerange,
     pub duration: Microseconds,
 }
 
@@ -445,6 +453,7 @@ pub enum RenderGraphErrorKind {
     UnknownSegmentInRangeState,
     UnknownMaterialInRangeState,
     RetimeSourceMappingFailed,
+    TransitionWindowFailed,
     UnsupportedProfileSetting,
 }
 
@@ -478,7 +487,13 @@ pub fn build_render_graph(
             unknown_segment_error(&segment_key.0, &segment_key.1, "visual range state")
         })?;
         material_ids.insert(segment.material.material_id.clone());
-        video_layers.push(render_video_layer(&normalized.draft_id, track, segment)?);
+        let transition = transition_relationship_for_segment(track, segment);
+        video_layers.push(render_video_layer(
+            &normalized.draft_id,
+            track,
+            segment,
+            transition,
+        )?);
     }
 
     let mut audio_mixes = Vec::new();
@@ -715,6 +730,7 @@ fn render_video_layer(
     draft_id: &DraftId,
     track: &NormalizedTrack,
     segment: &NormalizedSegment,
+    transition: Option<(&TrackTransition, &NormalizedSegment)>,
 ) -> Result<RenderVideoLayer, RenderGraphError> {
     let stack_index = track.stack_index.ok_or_else(|| {
         RenderGraphError::new(
@@ -743,10 +759,7 @@ fn render_video_layer(
         retime: render_retime_intent(segment)?,
         keyframes: segment.keyframes.clone(),
         filters: render_filter_intents(draft_id, track, segment, &segment.filters),
-        transition: segment
-            .transition
-            .as_ref()
-            .map(|transition| render_transition_intent(draft_id, track, segment, transition)),
+        transition: render_transition_intent(draft_id, track, segment, transition)?,
         visual: segment.visual.clone(),
     })
 }
@@ -803,7 +816,8 @@ fn render_text_overlay(
         transition: segment
             .transition
             .as_ref()
-            .map(|transition| render_transition_intent(draft_id, track, segment, transition)),
+            .map(|transition| render_legacy_transition_intent(draft_id, track, segment, transition))
+            .transpose()?,
         visual: segment.visual.clone(),
     })
 }
@@ -1120,29 +1134,173 @@ fn render_retime_audio_intent(
     }
 }
 
+fn transition_relationship_for_segment<'a>(
+    track: &'a NormalizedTrack,
+    segment: &NormalizedSegment,
+) -> Option<(&'a TrackTransition, &'a NormalizedSegment)> {
+    track
+        .transitions
+        .iter()
+        .find(|transition| transition.from_segment_id == segment.segment_id)
+        .and_then(|transition| {
+            track
+                .segments
+                .iter()
+                .find(|candidate| candidate.segment_id == transition.to_segment_id)
+                .map(|to_segment| (transition, to_segment))
+        })
+}
+
 fn render_transition_intent(
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
+    from_segment: &NormalizedSegment,
+    transition: Option<(&TrackTransition, &NormalizedSegment)>,
+) -> Result<Option<RenderTransitionIntent>, RenderGraphError> {
+    if let Some((transition, to_segment)) = transition {
+        return render_track_transition_intent(
+            draft_id,
+            track,
+            from_segment,
+            to_segment,
+            transition,
+        )
+        .map(Some);
+    }
+
+    from_segment
+        .transition
+        .as_ref()
+        .map(|transition| {
+            render_legacy_transition_intent(draft_id, track, from_segment, transition)
+        })
+        .transpose()
+}
+
+fn render_track_transition_intent(
+    draft_id: &DraftId,
+    track: &NormalizedTrack,
+    from_segment: &NormalizedSegment,
+    to_segment: &NormalizedSegment,
+    transition: &TrackTransition,
+) -> Result<RenderTransitionIntent, RenderGraphError> {
+    let capability = render_track_transition_capability(transition);
+    let window = render_transition_window(
+        &from_segment.target_timerange,
+        from_segment.target_end,
+        &to_segment.target_timerange,
+        transition.duration,
+        &track.track_id,
+        &from_segment.segment_id,
+        &to_segment.segment_id,
+    )?;
+    Ok(RenderTransitionIntent {
+        node_id: RenderGraphNodeId::segment_transition(
+            draft_id,
+            &track.track_id,
+            &transition.from_segment_id,
+            &from_segment.material.material_id,
+            Some(&transition.to_segment_id),
+        ),
+        from_segment_id: transition.from_segment_id.clone(),
+        to_segment_id: transition.to_segment_id.clone(),
+        name: transition.display_name(),
+        reference: transition.reference.clone(),
+        duration: transition.duration,
+        window,
+        support: capability.export,
+        reason: capability.export_reason.clone(),
+        capability,
+    })
+}
+
+fn render_legacy_transition_intent(
     draft_id: &DraftId,
     track: &NormalizedTrack,
     segment: &NormalizedSegment,
     transition: &Transition,
-) -> RenderTransitionIntent {
+) -> Result<RenderTransitionIntent, RenderGraphError> {
     let capability = render_transition_capability(transition);
-    RenderTransitionIntent {
+    let window = render_transition_window(
+        &segment.target_timerange,
+        segment.target_end,
+        &segment.target_timerange,
+        transition.duration,
+        &track.track_id,
+        &segment.segment_id,
+        &segment.segment_id,
+    )?;
+    Ok(RenderTransitionIntent {
         node_id: RenderGraphNodeId::segment_transition(
             draft_id,
             &track.track_id,
             &segment.segment_id,
             &segment.material.material_id,
+            None,
         ),
+        from_segment_id: segment.segment_id.clone(),
+        to_segment_id: segment.segment_id.clone(),
         name: transition.display_name(),
+        reference: transition.reference.clone(),
         duration: transition.duration,
-        window: RenderTransitionWindow {
-            duration: transition.duration,
-        },
+        window,
         support: capability.export,
         reason: capability.export_reason.clone(),
         capability,
+    })
+}
+
+fn render_transition_window(
+    from_target_timerange: &TargetTimerange,
+    from_target_end: Microseconds,
+    to_target_timerange: &TargetTimerange,
+    duration: Microseconds,
+    track_id: &TrackId,
+    from_segment_id: &SegmentId,
+    to_segment_id: &SegmentId,
+) -> Result<RenderTransitionWindow, RenderGraphError> {
+    let overlap_start = from_target_end
+        .get()
+        .checked_sub(duration.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            RenderGraphError::new(
+                RenderGraphErrorKind::TransitionWindowFailed,
+                "transition duration exceeds outgoing segment target range",
+            )
+            .with_track_id(track_id.clone())
+            .with_segment_id(from_segment_id.clone())
+        })?;
+    let to_window_end = to_target_timerange
+        .start
+        .get()
+        .checked_add(duration.get())
+        .map(Microseconds::new)
+        .ok_or_else(|| {
+            RenderGraphError::new(
+                RenderGraphErrorKind::TransitionWindowFailed,
+                "transition incoming segment window overflowed",
+            )
+            .with_track_id(track_id.clone())
+            .with_segment_id(to_segment_id.clone())
+        })?;
+    if overlap_start < from_target_timerange.start
+        || to_window_end > to_target_timerange.checked_end().unwrap_or(to_window_end)
+    {
+        return Err(RenderGraphError::new(
+            RenderGraphErrorKind::TransitionWindowFailed,
+            "transition relationship does not fit endpoint target ranges",
+        )
+        .with_track_id(track_id.clone())
+        .with_segment_id(from_segment_id.clone()));
     }
+
+    Ok(RenderTransitionWindow {
+        target_timerange: TargetTimerange::new(overlap_start, duration),
+        from_target_timerange: TargetTimerange::new(overlap_start, duration),
+        to_target_timerange: TargetTimerange::new(to_target_timerange.start, duration),
+        duration,
+    })
 }
 
 fn volume_keyframes_for(

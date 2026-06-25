@@ -1,6 +1,6 @@
 use draft_model::{
     BlendModeKind, CapabilitySupport, CapabilitySurface, EffectCapabilityRegistry, Filter,
-    SegmentBlendMode, SegmentMask, SegmentRetiming, Transition,
+    SegmentBlendMode, SegmentMask, SegmentRetiming, TrackTransition, Transition,
 };
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,26 @@ pub fn render_effect_capability(filter: &Filter) -> RenderEffectCapability {
 }
 
 pub fn render_transition_capability(transition: &Transition) -> RenderEffectCapability {
+    let registry = EffectCapabilityRegistry::phase19_first_party();
+    decision_from_registry(
+        &registry,
+        &transition.capability_id(),
+        transition.display_name(),
+        transition.external().is_some(),
+    )
+}
+
+pub fn render_track_transition_capability(transition: &TrackTransition) -> RenderEffectCapability {
+    if transition.external().is_some() {
+        return external_decision(
+            transition.capability_id(),
+            format!(
+                "external transition reference {} is report-only and unsupported",
+                transition.capability_id()
+            ),
+        );
+    }
+
     let registry = EffectCapabilityRegistry::phase19_first_party();
     decision_from_registry(
         &registry,

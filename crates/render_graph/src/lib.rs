@@ -13,7 +13,7 @@ pub mod profile;
 pub use effects::{
     ProductionEffectCapabilityDecision, RenderEffectCapability, render_blend_capability,
     render_effect_capability, render_mask_capability, render_retime_capability,
-    render_transition_capability,
+    render_track_transition_capability, render_transition_capability,
 };
 pub use fingerprint::{
     GRAPH_GENERATOR_VERSION, GRAPH_SCHEMA_VERSION, RenderGraphNodeFingerprint, RenderGraphSnapshot,

@@ -6,7 +6,8 @@ use draft_model::{
     CanvasBackground, Draft, DraftId, DraftValidationError, Filter, Keyframe, Material, MaterialId,
     MaterialKind, MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentAudio,
     SegmentBackgroundFilling, SegmentBlendMode, SegmentId, SegmentMask, SegmentVisual,
-    SourceTimerange, TargetTimerange, TextSegment, TrackId, TrackKind, Transition, validate_draft,
+    SourceTimerange, TargetTimerange, TextSegment, TrackId, TrackKind, TrackTransition, Transition,
+    validate_draft,
 };
 use serde::{Deserialize, Serialize};
 
@@ -105,6 +106,8 @@ pub struct NormalizedTrack {
     pub muted: bool,
     pub stack_index: Option<u32>,
     pub segments: Vec<NormalizedSegment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<TrackTransition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,6 +320,7 @@ pub fn normalize_draft(
             muted: track.muted,
             stack_index,
             segments,
+            transitions: track.transitions.clone(),
         });
     }
 
