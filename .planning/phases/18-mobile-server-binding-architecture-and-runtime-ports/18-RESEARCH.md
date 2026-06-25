@@ -158,7 +158,9 @@ The server path must be a real export runtime over `.veproj/project.json`, bundl
 **Installation:**
 
 ```bash
-cargo install cbindgen --version 0.29.4 --locked
+# Do not require a global cbindgen install.
+# scripts/phase18-abi-drift.sh bootstraps and reuses a repo-local 0.29.4 binary.
+bash scripts/phase18-abi-drift.sh --self-test
 ```
 
 **Version verification:**
@@ -481,25 +483,16 @@ git diff --exit-code crates/bindings_c/include/video_editor_runtime.h
 | A1 | New shared crate should be named `editor_runtime`. | Summary / Project Structure | Low; planner can rename while preserving boundary. |
 | A2 | New server crate/bin should be named `server_runtime`. | Standard Stack / Project Structure | Low; planner can choose another aligned name. |
 | A3 | Handle public token shape can use numeric `kind/id/owner_session/generation` fields. | Architecture Patterns / Code Examples | Medium; implementation may prefer string IDs or packed values, but validation requirements remain. |
-| A4 | Server runtime can initially use `media_runtime_desktop` executor for local/server FFmpeg execution. | Standard Stack | Medium; planner may split `media_runtime_server` if desktop naming is too misleading. |
-| A5 | C ABI should expose JSON responses through status/buffer contracts for complex data. | Architecture Patterns | Medium; planner may choose a typed C struct subset plus JSON diagnostics, but drift tests remain required. |
+| A4 | Server runtime uses `media_runtime_desktop` as the first FFmpeg executor adapter in Phase 18. | Resolved Decisions | Low; split only if implementation proves desktop naming leaks product semantics. |
+| A5 | C ABI exposes stable typed status/error/handle structs plus bounded JSON/string buffers for complex diagnostics and project/export payloads. | Resolved Decisions | Low; raw `serde_json` ownership cannot cross the ABI. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `media_runtime_desktop` be renamed or wrapped for server?** [ASSUMED]
-   - What we know: Existing docs call it the desktop implementation shell for FFmpeg execution. [VERIFIED: docs/runtime-boundaries.md]
-   - What's unclear: Server may need a neutral executor name to avoid depending on a desktop-only crate name. [ASSUMED]
-   - Recommendation: Use `media_runtime_desktop` only as the initial executor implementation if no UI/Electron dependency leaks; otherwise split `media_runtime_server`. [ASSUMED]
+1. **Server FFmpeg executor naming:** RESOLVED — Server runtime uses `media_runtime_desktop` as the first FFmpeg executor adapter in Phase 18. Do not create a separate `media_runtime_server` unless implementation proves desktop naming leaks product semantics into the server API or dependency graph. [VERIFIED: docs/runtime-boundaries.md]
 
-2. **What exact C response shape should be stable in Phase 18?** [ASSUMED]
-   - What we know: Stable error codes and explicit ownership are locked. [VERIFIED: .planning/phases/18-mobile-server-binding-architecture-and-runtime-ports/18-CONTEXT.md]
-   - What's unclear: Full typed structs versus JSON buffers for complex project/export responses is not locked. [ASSUMED]
-   - Recommendation: Use typed handles/status/error codes plus bounded UTF-8 JSON buffers for complex view/export data, and document that as ABI v1. [ASSUMED]
+2. **C ABI response shape:** RESOLVED — The C ABI uses stable typed status/error/handle structs plus bounded JSON/string buffers for complex diagnostics and project/export payloads. No raw `serde_json::Value`, Rust allocation ownership, or serde-owned response object crosses the ABI boundary. [VERIFIED: .planning/phases/18-mobile-server-binding-architecture-and-runtime-ports/18-CONTEXT.md]
 
-3. **Should `@napi-rs/cli` be upgraded during Phase 18?** [VERIFIED: npm registry]
-   - What we know: Existing project uses 3.7.2, and the legitimacy seam flags that version as SUS because it is very new. [VERIFIED: apps/desktop-electron/package.json] [VERIFIED: package-legitimacy check]
-   - What's unclear: Whether an upgrade is needed for this phase. [ASSUMED]
-   - Recommendation: Do not upgrade unless necessary; if install/upgrade is planned, add a human verification checkpoint. [VERIFIED: package_legitimacy_protocol]
+3. **`@napi-rs/cli` changes:** RESOLVED — Do not upgrade or reinstall `@napi-rs/cli` in Phase 18 unless a blocking checkpoint verifies package metadata. Current Phase 18 plans avoid changing it. [VERIFIED: npm registry] [VERIFIED: package-legitimacy check]
 
 ## Environment Availability
 
@@ -509,13 +502,13 @@ git diff --exit-code crates/bindings_c/include/video_editor_runtime.h
 | Node.js | Desktop build/test | ✓ | v24.15.0 | Existing warning only; package expects 24.12.0. [VERIFIED: node --version] [VERIFIED: package.json] |
 | pnpm | Desktop build/test | ✓ | 10.32.1 | None needed. [VERIFIED: pnpm --version] |
 | npm | Registry/package verification | ✓ | 11.12.1 | None needed. [VERIFIED: npm --version] |
-| `cbindgen` CLI | C header generation | ✗ | — | Install pinned 0.29.4 before header gate. [VERIFIED: command -v cbindgen] |
+| `cbindgen` CLI | C header generation | Project-local bootstrap planned | 0.29.4 | `scripts/phase18-abi-drift.sh` installs or reuses a deterministic repo-local pinned binary and fails if the resolved version is not exactly 0.29.4; no global manual setup required. [VERIFIED: command -v cbindgen] |
 | Bundled FFmpeg/ffprobe | Desktop/server export smoke | ✓ | `apps/desktop-electron/runtime/ffmpeg/darwin-arm64` exists | Do not use PATH as product fallback. [VERIFIED: find runtime/ffmpeg] [VERIFIED: docs/runtime-boundaries.md] |
 | PATH FFmpeg/ffprobe | Diagnostics only | ✓ | 8.1.2 | Product/server gates should use configured bundled runtime, not PATH fallback. [VERIFIED: ffmpeg -version] [VERIFIED: docs/runtime-boundaries.md] |
 
 **Missing dependencies with no fallback:**
 
-- `cbindgen` is missing and should be installed/pinned before header generation gates run. [VERIFIED: command -v cbindgen]
+- None. `cbindgen` is absent globally, but Phase 18 plans require `scripts/phase18-abi-drift.sh` to bootstrap a project-local pinned 0.29.4 binary before header generation gates run. [VERIFIED: command -v cbindgen]
 
 **Missing dependencies with fallback:**
 
@@ -536,14 +529,14 @@ git diff --exit-code crates/bindings_c/include/video_editor_runtime.h
 
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|--------------|
-| PLAT-01 | C ABI exposes runtime/session/handle open/release/error contracts. [VERIFIED: .planning/REQUIREMENTS.md] | ABI smoke | `cargo test -p bindings_c abi_smoke -- --nocapture` | ❌ Wave 0 |
-| PLAT-02 | Server renders `.veproj` without Electron. [VERIFIED: .planning/REQUIREMENTS.md] | integration/export smoke | `cargo test -p server_runtime server_export_smoke -- --nocapture` | ❌ Wave 0 |
-| PLAT-03 | JNI/Swift contracts cover lifecycle/file/texture/cancel/close and smoke-level handles. [VERIFIED: .planning/REQUIREMENTS.md] | docs + contract smoke | `cargo test -p bindings_c mobile_contract_handles -- --nocapture && bash scripts/phase18-mobile-contract-guards.sh` | ❌ Wave 0 |
+| PLAT-01 | C ABI exposes runtime/session/handle open/release/error contracts. [VERIFIED: .planning/REQUIREMENTS.md] | ABI smoke | `cargo test -p bindings_c --test abi_smoke -- --nocapture` | ❌ Wave 0 |
+| PLAT-02 | Server renders `.veproj` without Electron. [VERIFIED: .planning/REQUIREMENTS.md] | integration/export smoke | `cargo test -p server_runtime --test server_export_smoke -- --nocapture` | ❌ Wave 0 |
+| PLAT-03 | JNI/Swift contracts cover lifecycle/file/texture/cancel/close and smoke-level handles. [VERIFIED: .planning/REQUIREMENTS.md] | docs + contract smoke | `cargo test -p bindings_c --test mobile_contract_handles -- --nocapture && bash scripts/phase18-mobile-contract-guards.sh` | ❌ Wave 0 |
 | BIND-01 | Node/C/server adapters do not duplicate draft/project/export semantics. [VERIFIED: .planning/REQUIREMENTS.md] | source guard | `bash scripts/phase18-source-guards.sh` | ❌ Wave 0 |
-| BIND-02 | Handles validate owner, generation, ref/lease count, release, cascading close, leaks. [VERIFIED: .planning/REQUIREMENTS.md] | unit | `cargo test -p editor_runtime handle_registry -- --nocapture` | ❌ Wave 0 |
-| BIND-03 | Large frames/preview outputs use handles and reject unnecessary byte/artifact product paths. [VERIFIED: .planning/REQUIREMENTS.md] | unit + guard | `cargo test -p editor_runtime low_copy_handles -- --nocapture && pnpm run test:no-product-fallback` | ❌ Wave 0 / ✅ existing guard |
-| BIND-04 | Server open/resolve/export/progress/cancel works without Electron. [VERIFIED: .planning/REQUIREMENTS.md] | integration | `cargo test -p server_runtime server_export_progress_cancel -- --nocapture` | ❌ Wave 0 |
-| BIND-05 | ABI/header/schema/binding drift is caught. [VERIFIED: .planning/REQUIREMENTS.md] | drift + smoke | `pnpm run test:contracts && bash scripts/phase18-abi-drift.sh && cargo test -p bindings_node binding_smoke -- --nocapture` | ❌ Wave 0 / ✅ partial existing |
+| BIND-02 | Handles validate owner, generation, ref/lease count, release, cascading close, leaks. [VERIFIED: .planning/REQUIREMENTS.md] | unit | `cargo test -p editor_runtime --test handle_registry -- --nocapture` | ❌ Wave 0 |
+| BIND-03 | Large frames/preview outputs use handles and reject unnecessary byte/artifact product paths. [VERIFIED: .planning/REQUIREMENTS.md] | unit + guard | `cargo test -p editor_runtime --test handle_registry -- --nocapture && pnpm run test:no-product-fallback` | ❌ Wave 0 / ✅ existing guard |
+| BIND-04 | Server open/resolve/export/progress/cancel works without Electron. [VERIFIED: .planning/REQUIREMENTS.md] | integration | `cargo test -p server_runtime --test server_export_smoke -- --nocapture` | ❌ Wave 0 |
+| BIND-05 | ABI/header/schema/binding drift is caught. [VERIFIED: .planning/REQUIREMENTS.md] | drift + smoke | `pnpm run test:contracts && bash scripts/phase18-abi-drift.sh && cargo test -p bindings_node --test binding_smoke -- --nocapture` | ❌ Wave 0 / ✅ partial existing |
 
 ### Sampling Rate
 
@@ -560,7 +553,7 @@ git diff --exit-code crates/bindings_c/include/video_editor_runtime.h
 - [ ] `scripts/phase18-source-guards.sh` — semantic duplication/fallback/adapter ownership guard. [ASSUMED]
 - [ ] `scripts/phase18-abi-drift.sh` — cbindgen header regeneration and diff guard. [ASSUMED]
 - [ ] `package.json` scripts `test:phase18-rust`, `test:phase18-source-guards`, `test:phase18-abi`, `test:phase18-server`, and `test:phase18`. [ASSUMED]
-- [ ] `cbindgen` installation step or documented pinned local tool invocation. [VERIFIED: command -v cbindgen]
+- [ ] `scripts/phase18-abi-drift.sh` bootstraps a deterministic project-local `cbindgen` 0.29.4 binary and fails if the resolved version differs. [VERIFIED: command -v cbindgen]
 
 ## Security Domain
 
