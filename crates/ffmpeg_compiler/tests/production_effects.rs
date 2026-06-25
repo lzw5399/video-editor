@@ -1,8 +1,9 @@
 mod common;
 
 use draft_model::{
-    AudioRetimePolicy, Draft, Microseconds, RationalFrameRate, RetimeMode, SegmentRetiming,
-    SourceTimerange, SpeedRatio, TargetTimerange,
+    AudioRetimePolicy, Draft, Material, MaterialKind, Microseconds, RationalFrameRate, RetimeMode,
+    Segment, SegmentRetiming, SourceTimerange, SpeedRatio, TargetTimerange, Track, TrackKind,
+    TrackTransition,
 };
 use engine_core::{EngineProfile, normalize_draft, resolve_render_range};
 use ffmpeg_compiler::{FfmpegCompileError, compile_ffmpeg_job};
@@ -84,6 +85,63 @@ fn phase19_production_effects_compiler_reports_unsupported_preserve_pitch_retime
     Ok(())
 }
 
+#[test]
+fn phase19_production_effects_compiler_emits_dissolve_transition_from_graph_intent()
+-> Result<(), FfmpegCompileError> {
+    let plan = transition_export_plan(TrackTransition::dissolve(
+        "left-segment",
+        "right-segment",
+        Microseconds::new(300_000),
+    ));
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        job.filter_script
+            .contains("xfade=transition=fade:duration=0.300000:offset=0.700000"),
+        "first-party dissolve must compile to deterministic compiler-owned xfade timing"
+    );
+    assert!(
+        job.filter_script
+            .contains("[vtransition_left_segment_to_right_segment]"),
+        "transition output label should be deterministic and endpoint-based"
+    );
+    assert!(
+        !job.visual_diagnostics.iter().any(|diagnostic| {
+            diagnostic.property == "transition"
+                && diagnostic.support != RenderIntentSupport::Supported
+        }),
+        "supported dissolve transitions should not emit export unsupported diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn phase19_production_effects_compiler_reports_external_transition_without_success()
+-> Result<(), FfmpegCompileError> {
+    let plan = transition_export_plan(TrackTransition::external_reference(
+        "left-segment",
+        "right-segment",
+        "jianying",
+        "private-crossfade",
+        Microseconds::new(300_000),
+    ));
+    let job = compile_ffmpeg_job(&plan, &common::compile_context())?;
+
+    assert!(
+        !job.filter_script.contains("private-crossfade"),
+        "external transition identifiers must not become FFmpeg filter semantics"
+    );
+    assert!(job.visual_diagnostics.iter().any(|diagnostic| {
+        diagnostic.property == "transition"
+            && diagnostic.support == RenderIntentSupport::Unsupported
+            && diagnostic.reason.contains("external")
+            && diagnostic.reason.contains("private-crossfade")
+    }));
+
+    Ok(())
+}
+
 fn retimed_export_plan(audio_policy: AudioRetimePolicy) -> RenderGraphPlan {
     let mut draft = common::compiler_draft();
     let material = draft
@@ -106,10 +164,71 @@ fn retimed_export_plan(audio_policy: AudioRetimePolicy) -> RenderGraphPlan {
     graph_plan_from_draft(&draft)
 }
 
+fn transition_export_plan(transition: TrackTransition) -> RenderGraphPlan {
+    let mut draft = Draft::new(
+        "phase19-transition-compiler",
+        "Phase 19 Transition Compiler",
+    );
+    let mut material = Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file:///media/transition-source.mp4",
+        "Transition Source",
+    );
+    material.metadata.duration = Some(Microseconds::new(4_000_000));
+    material.metadata.width = Some(1_920);
+    material.metadata.height = Some(1_080);
+    material.metadata.frame_rate = Some(RationalFrameRate::new(30, 1));
+    material.metadata.has_video = true;
+    material.metadata.has_audio = false;
+    draft.materials.push(material);
+
+    let mut track = Track::new("video-track", TrackKind::Video, "视频");
+    track
+        .segments
+        .push(transition_segment("left-segment", 0, 0, 1_000_000));
+    track.segments.push(transition_segment(
+        "right-segment",
+        1_000_000,
+        1_000_000,
+        1_000_000,
+    ));
+    track.transitions.push(transition);
+    draft.tracks.push(track);
+
+    graph_plan_from_draft_with_range(
+        &draft,
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(2_000_000)),
+    )
+}
+
+fn transition_segment(
+    segment_id: &str,
+    source_start: u64,
+    target_start: u64,
+    duration: u64,
+) -> Segment {
+    Segment::new(
+        segment_id,
+        "video-material",
+        SourceTimerange::new(Microseconds::new(source_start), Microseconds::new(duration)),
+        TargetTimerange::new(Microseconds::new(target_start), Microseconds::new(duration)),
+    )
+}
+
 fn graph_plan_from_draft(draft: &Draft) -> RenderGraphPlan {
+    graph_plan_from_draft_with_range(
+        draft,
+        TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000)),
+    )
+}
+
+fn graph_plan_from_draft_with_range(
+    draft: &Draft,
+    target_timerange: TargetTimerange,
+) -> RenderGraphPlan {
     let normalized =
         normalize_draft(draft, &EngineProfile::mvp_default()).expect("draft should normalize");
-    let target_timerange = TargetTimerange::new(Microseconds::ZERO, Microseconds::new(1_000_000));
     let range = resolve_render_range(&normalized, target_timerange.clone())
         .expect("range state should resolve");
     let graph = build_render_graph(&normalized, &range).expect("render graph should build");
