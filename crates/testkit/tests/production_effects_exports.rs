@@ -20,9 +20,18 @@ fn phase19_production_effects_export_fixtures_cover_preview_export_parity() {
             "phase19_production_effects_export_retime_constant_speed_matches_preview_source_mapping"
         ) && PRODUCTION_EFFECTS_EXPORTS_RS.contains(
             "phase19_production_effects_export_retime_speed_curve_keeps_degraded_audio_evidence"
-        ) && PHASE19_SOURCE_GUARD_SH.contains("crates/testkit/tests/production_effects_exports.rs"),
+        ) && occurrences(
+            PRODUCTION_EFFECTS_EXPORTS_RS,
+            "phase19_production_effects_export_complex_template_fixture_preserves_supported_subset_and_diagnostics",
+        ) >= 2
+            && PHASE19_SOURCE_GUARD_SH
+                .contains("crates/testkit/tests/production_effects_exports.rs"),
         "production exports must verify retime preview/export semantic parity, not just output existence"
     );
+}
+
+fn occurrences(haystack: &str, needle: &str) -> usize {
+    haystack.match_indices(needle).count()
 }
 
 #[test]

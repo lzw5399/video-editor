@@ -19,9 +19,18 @@ fn phase19_production_effects_preview_fixtures_cover_retime_effect_transition_pa
             "phase19_production_effects_preview_retime_constant_speed_uses_graph_mapping_without_fallback"
         ) && PRODUCTION_EFFECTS_PREVIEW_RS.contains(
             "phase19_production_effects_preview_retime_speed_curve_reports_degraded_typed_evidence"
-        ) && PHASE19_SOURCE_GUARD_SH.contains("crates/testkit/tests/production_effects_preview.rs"),
+        ) && occurrences(
+            PRODUCTION_EFFECTS_PREVIEW_RS,
+            "phase19_production_effects_preview_complex_template_fixture_uses_gpu_evidence_without_fallback",
+        ) >= 2
+            && PHASE19_SOURCE_GUARD_SH
+                .contains("crates/testkit/tests/production_effects_preview.rs"),
         "production preview fixtures must cover concrete retime parity tests and source guard evidence"
     );
+}
+
+fn occurrences(haystack: &str, needle: &str) -> usize {
+    haystack.match_indices(needle).count()
 }
 
 #[test]
