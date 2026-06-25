@@ -425,7 +425,10 @@ fn offline_mapper_maps_phase19_supported_retime_transition_and_filters_without_p
         "durationMsWithSpeed should become first-party constant-speed retime semantics"
     );
     assert_eq!(
-        segment.transition.as_ref().map(|transition| &transition.reference),
+        segment
+            .transition
+            .as_ref()
+            .map(|transition| &transition.reference),
         Some(&TransitionReference::dissolve()),
         "supported fade/dissolve provider concepts should become first-party dissolve semantics"
     );
@@ -461,7 +464,11 @@ fn offline_mapper_maps_phase19_supported_retime_transition_and_filters_without_p
     );
     assert_statuses(
         &mapped.report.items,
-        &[AdaptationStatus::Supported, AdaptationStatus::NeedsNativeEffect, AdaptationStatus::Dropped],
+        &[
+            AdaptationStatus::Supported,
+            AdaptationStatus::NeedsNativeEffect,
+            AdaptationStatus::Dropped,
+        ],
     );
     let serialized_plan =
         serde_json::to_value(&mapped.plan).expect("phase19 import plan should serialize");

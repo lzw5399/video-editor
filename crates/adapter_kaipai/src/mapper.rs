@@ -13,12 +13,13 @@ use draft_import::{
 };
 use draft_model::{
     AudioFade, CanvasAdaptationPolicy, CanvasAspectRatio, CanvasAspectRatioPreset,
-    CanvasBackground, DraftCanvasConfig, Keyframe, KeyframeEasing, KeyframeInterpolation,
+    CanvasBackground, DraftCanvasConfig, Filter, Keyframe, KeyframeEasing, KeyframeInterpolation,
     KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialKind, MaterialMetadata,
-    MaterialStatus, Microseconds, RationalFrameRate, Segment, SegmentAnchor, SegmentAudio,
-    SegmentCrop, SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentRotation, SegmentScale,
-    SegmentTransform, SegmentVisual, SourceTimerange, TargetTimerange, TextAlignment, TextBox,
-    TextFont, TextLayoutRegion, TextSegment, TextStyle, TextWrapping, Track, TrackKind, Transition,
+    MaterialStatus, Microseconds, RationalFrameRate, RetimeMode, Segment, SegmentAnchor,
+    SegmentAudio, SegmentCrop, SegmentFitMode, SegmentOpacity, SegmentPosition, SegmentRetiming,
+    SegmentRotation, SegmentScale, SegmentTransform, SegmentVisual, SourceTimerange, SpeedRatio,
+    TargetTimerange, TextAlignment, TextBox, TextFont, TextLayoutRegion, TextSegment, TextStyle,
+    TextWrapping, Track, TrackKind, Transition,
 };
 use serde_json::{Map, Value};
 
@@ -469,6 +470,7 @@ impl<'a> MapperState<'a> {
             })?;
             let target_duration =
                 optional_u64_field(clip, "durationMsWithSpeed").unwrap_or(source_duration);
+            let retiming = retiming_from_durations(source_duration, target_duration, &path)?;
             self.ensure_resource_material(resource_id, Some(ms_to_us(source_end)), canvas_config);
             if !self.material_ids.contains(resource_id) {
                 self.report_missing_resource(
@@ -495,7 +497,9 @@ impl<'a> MapperState<'a> {
             } else {
                 MainTrackMagnet::disabled()
             };
+            segment.retiming = retiming;
             segment.visual = visual_from_formula(clip, false)?;
+            segment.filters = self.map_clip_filter_list(clip, &path, segment_id)?;
             segment.transition = transition_from_formula(clip)?;
             segment.keyframes = keyframes_from_formula(clip)?;
 
@@ -542,7 +546,9 @@ impl<'a> MapperState<'a> {
                     ms_to_us(duration),
                 ),
             );
+            segment.retiming = retiming_from_durations(source_duration, duration, &path)?;
             segment.visual = visual_from_formula(pip, true)?;
+            segment.filters = self.map_clip_filter_list(pip, &path, segment_id)?;
 
             let mut track = Track::new(track_id.to_owned(), TrackKind::Video, "覆盖视频");
             track.segments.push(segment);
@@ -633,6 +639,7 @@ impl<'a> MapperState<'a> {
                 ),
             );
             segment.visual = visual_from_formula(sticker, true)?;
+            segment.filters = self.map_clip_filter_list(sticker, &path, segment_id)?;
 
             let mut track = Track::new(track_id.to_owned(), TrackKind::Sticker, "贴纸");
             track.segments.push(segment);
@@ -642,6 +649,105 @@ impl<'a> MapperState<'a> {
             });
         }
         Ok(())
+    }
+
+    fn map_clip_filter_list(
+        &mut self,
+        clip: &Value,
+        path: &str,
+        segment_id: &str,
+    ) -> Result<Vec<Filter>, AdapterKaipaiError> {
+        let mut filters = Vec::new();
+        for (index, filter) in array_field_from_value(clip, "filterList")
+            .iter()
+            .enumerate()
+        {
+            let filter_path = format!("{path}.filterList[{index}]");
+            let filter_type = optional_string_field(filter, "type")
+                .or_else(|| optional_string_field(filter, "kind"))
+                .or_else(|| optional_string_field(filter, "name"))
+                .unwrap_or("");
+            match filter_type {
+                "gaussianBlur" | "blur" => {
+                    let radius_millis = optional_u32_field(filter, "radiusMillis").unwrap_or(1_000);
+                    filters.push(Filter::gaussian_blur(radius_millis));
+                    self.report_supported_filter(
+                        segment_id,
+                        "Gaussian blur provider concept maps to first-party FilterKind::GaussianBlur.",
+                        &filter_path,
+                    );
+                }
+                "basicColorAdjustment" | "colorAdjustment" | "color" => {
+                    let brightness_millis =
+                        optional_i32_field(filter, "brightnessMillis").unwrap_or(0);
+                    let contrast_millis =
+                        optional_u32_field(filter, "contrastMillis").unwrap_or(1_000);
+                    let saturation_millis =
+                        optional_u32_field(filter, "saturationMillis").unwrap_or(1_000);
+                    filters.push(Filter::basic_color_adjustment(
+                        brightness_millis,
+                        contrast_millis,
+                        saturation_millis,
+                    ));
+                    self.report_supported_filter(
+                        segment_id,
+                        "Basic color provider concept maps to first-party FilterKind::BasicColorAdjustment.",
+                        &filter_path,
+                    );
+                }
+                "opacityAdjustment" | "opacity" => {
+                    let opacity_millis = optional_u32_field(filter, "opacityMillis")
+                        .or_else(|| optional_f64_field(filter, "opacity").map(scale_to_millis))
+                        .unwrap_or(1_000);
+                    filters.push(Filter::opacity_adjustment(opacity_millis));
+                    self.report_supported_filter(
+                        segment_id,
+                        "Opacity provider concept maps to first-party FilterKind::OpacityAdjustment.",
+                        &filter_path,
+                    );
+                }
+                _ => {
+                    let effect_id = optional_string_field(filter, "effectId")
+                        .or_else(|| optional_string_field(filter, "filterId"))
+                        .or_else(|| optional_string_field(filter, "nativeEffectName"))
+                        .unwrap_or(filter_type)
+                        .trim();
+                    let target_id = if effect_id.is_empty() {
+                        format!("provider-filter-{segment_id}-{index}")
+                    } else {
+                        safe_stem(effect_id, &format!("provider-filter-{index}"))
+                    };
+                    self.report_items.push(report_item(
+                        AdaptationStatus::Dropped,
+                        AdaptationSeverity::Warning,
+                        AdaptationCategory::NativeEffect,
+                        AdaptationTargetKind::Filter,
+                        &target_id,
+                        "Provider-native effect is report-only and omitted from canonical draft filters.",
+                        Some(
+                            "Only first-party Phase 19 filter concepts may become render semantics.",
+                        ),
+                        &self.context.external_id(),
+                        &filter_path,
+                    ));
+                }
+            }
+        }
+        Ok(filters)
+    }
+
+    fn report_supported_filter(&mut self, segment_id: &str, message: &str, external_path: &str) {
+        self.report_items.push(report_item(
+            AdaptationStatus::Supported,
+            AdaptationSeverity::Info,
+            AdaptationCategory::Segment,
+            AdaptationTargetKind::Filter,
+            &format!("filter-{segment_id}"),
+            message,
+            Some("Filter parameters are normalized into integer first-party effect semantics."),
+            &self.context.external_id(),
+            external_path,
+        ));
     }
 
     fn map_bgm(&mut self, formula: &Map<String, Value>) -> Result<(), AdapterKaipaiError> {
@@ -912,6 +1018,54 @@ fn visual_from_formula(
     })
 }
 
+fn retiming_from_durations(
+    source_duration_ms: u64,
+    target_duration_ms: u64,
+    path: &str,
+) -> Result<SegmentRetiming, AdapterKaipaiError> {
+    if source_duration_ms == 0 || target_duration_ms == 0 {
+        return Err(mapper_error(
+            path,
+            "source and target durations must be positive for retime mapping",
+        ));
+    }
+    if source_duration_ms == target_duration_ms {
+        return Ok(SegmentRetiming::default());
+    }
+    let (numerator, denominator) =
+        normalized_u32_ratio(source_duration_ms, target_duration_ms, path)?;
+    Ok(SegmentRetiming {
+        mode: RetimeMode::Constant {
+            speed: SpeedRatio::new(numerator, denominator),
+        },
+        ..SegmentRetiming::default()
+    })
+}
+
+fn normalized_u32_ratio(
+    numerator: u64,
+    denominator: u64,
+    path: &str,
+) -> Result<(u32, u32), AdapterKaipaiError> {
+    let divisor = gcd(numerator, denominator);
+    let numerator = numerator / divisor;
+    let denominator = denominator / divisor;
+    let numerator = u32::try_from(numerator)
+        .map_err(|_| mapper_error(path, "retime speed numerator exceeds u32 range"))?;
+    let denominator = u32::try_from(denominator)
+        .map_err(|_| mapper_error(path, "retime speed denominator exceeds u32 range"))?;
+    Ok((numerator, denominator))
+}
+
+fn gcd(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left.max(1)
+}
+
 fn text_segment_from_formula(
     sticker: &Value,
     text_info: &Value,
@@ -1144,6 +1298,13 @@ fn optional_u64_field(value: &Value, field: &str) -> Option<u64> {
 
 fn optional_u32_field(value: &Value, field: &str) -> Option<u32> {
     optional_u64_field(value, field).and_then(|value| u32::try_from(value).ok())
+}
+
+fn optional_i32_field(value: &Value, field: &str) -> Option<i32> {
+    value
+        .get(field)
+        .and_then(Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok())
 }
 
 fn optional_f64_field(value: &Value, field: &str) -> Option<f64> {

@@ -66,6 +66,17 @@ const PREVIEW_CASES: &[PreviewFixtureCase] = &[
         target_time_us: 500_000,
         expected_statuses: &[AdaptationStatus::Supported],
     },
+    PreviewFixtureCase {
+        family: "native-effect",
+        input_path: "negative/native-effect.json",
+        import_id: "import-native-effect-preview",
+        target_time_us: 500_000,
+        expected_statuses: &[
+            AdaptationStatus::Supported,
+            AdaptationStatus::NeedsNativeEffect,
+            AdaptationStatus::Dropped,
+        ],
+    },
 ];
 
 #[test]
@@ -79,6 +90,7 @@ fn template_import_preview_uses_realtime_render_graph_without_fallback_evidence(
     for case in PREVIEW_CASES {
         let imported = import_fixture(case, sandbox.path(), &executor, &runtime);
         assert_report_statuses(&imported.report, case.expected_statuses);
+        assert_draft_has_no_provider_runtime_refs(case.family, &imported.draft);
 
         let prepared = prepare_realtime_preview_graph(RealtimePreviewGraphInput {
             draft: imported.draft,
@@ -102,6 +114,33 @@ fn template_import_preview_uses_realtime_render_graph_without_fallback_evidence(
                 || !prepared.graph.audio_mixes.is_empty(),
             "{} imported fixture should produce render-graph preview work",
             case.family
+        );
+    }
+}
+
+fn assert_draft_has_no_provider_runtime_refs(family: &str, draft: &Draft) {
+    let serialized = serde_json::to_string(draft).expect("imported draft should serialize");
+    for forbidden in [
+        "templateId",
+        "recipeId",
+        "formulaTaskId",
+        "formulaRequestId",
+        "rawFormula",
+        "\"formula\"",
+        "safeArea",
+        "remoteRuntimeUrl",
+        "remoteRenderUrl",
+        "renderUrl",
+        "http://",
+        "https://",
+        "kaipai",
+        "provider",
+        "native-effect-beauty-retouch",
+        "beautyRetouch",
+    ] {
+        assert!(
+            !serialized.contains(forbidden),
+            "{family} preview draft leaked provider/runtime evidence {forbidden}: {serialized}"
         );
     }
 }
