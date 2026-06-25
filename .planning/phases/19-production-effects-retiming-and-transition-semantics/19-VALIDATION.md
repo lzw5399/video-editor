@@ -39,21 +39,41 @@ created: 2026-06-25
 
 | Req ID | Behavior | Test Type | Automated Command | File Exists | Status |
 |--------|----------|-----------|-------------------|-------------|--------|
-| PRODFX-01 | Constant retiming and speed curve source mapping, split/trim/move validation, audio follow-speed diagnostics, render graph/audio graph/export representation | Rust unit/integration plus audio and export parity | `cargo test -p draft_commands retiming_commands -- --nocapture && cargo test -p engine_core retiming -- --nocapture && cargo test -p render_graph production_effects -- --nocapture && cargo test -p audio_engine dsp_timeline -- --nocapture && cargo test -p testkit audio_preview_export_parity -- --nocapture && cargo test -p ffmpeg_compiler production_effects -- --nocapture` | No; Wave 0/retime/audio plans must add tests | pending |
-| PRODFX-02 | Transition adjacency, overlap, undoable commands, preview/export support or explicit degraded diagnostics | Rust unit/integration plus visible timeline E2E when controls are enabled | `cargo test -p draft_commands transition && cargo test -p render_graph transition && cargo test -p realtime_preview_runtime transition && cargo test -p ffmpeg_compiler transition` | Partial placeholders only | pending |
-| PRODFX-03 | Capability registry maps semantic effect/filter/transition intent to preview/export support states | Rust capability matrix plus schema/contract checks | `cargo test -p draft_model capability && cargo test -p render_graph capability && cargo test -p realtime_preview_runtime capability_matrix` | Partial realtime matrix exists | pending |
-| PRODFX-04 | Masks, blends, blur, filters, and complex effects use GPU preview where supported and classify unsupported export paths | Rust GPU/offscreen tests, compiler diagnostics, desktop E2E | `cargo test -p realtime_preview_runtime effects && cargo test -p ffmpeg_compiler effects && pnpm --filter @video-editor/desktop exec playwright test tests/production-effects.spec.ts --reporter=line` | No Phase 19 file yet | pending |
-| PRODFX-05 | Kaipai-like fixtures verify template import preview/export parity, compatibility reports, and performance budgets | `testkit` plus desktop template import/product E2E | `cargo test -p testkit production_effects -- --nocapture && pnpm --filter @video-editor/desktop exec playwright test tests/template-import.spec.ts --reporter=line` | Existing template tests need Phase 19 cases | pending |
+| PRODFX-01 | Constant retiming and speed curve source mapping, split/trim/move validation, audio follow-speed diagnostics, render graph/audio graph/export representation | Rust unit/integration plus audio and export parity | `cargo test -p draft_commands retiming_commands -- --nocapture && cargo test -p engine_core retiming -- --nocapture && cargo test -p render_graph production_effects -- --nocapture && cargo test -p audio_engine dsp_timeline -- --nocapture && cargo test -p testkit audio_preview_export_parity -- --nocapture && cargo test -p ffmpeg_compiler production_effects -- --nocapture` | Wave 0 RED files now exist for draft_commands, engine_core, render_graph, audio_engine, ffmpeg_compiler | RED pending implementation |
+| PRODFX-02 | Transition adjacency, overlap, undoable commands, preview/export support or explicit degraded diagnostics | Rust unit/integration plus visible timeline E2E when controls are enabled | `cargo test -p draft_commands transition && cargo test -p render_graph transition && cargo test -p realtime_preview_runtime transition && cargo test -p ffmpeg_compiler transition` | Wave 0 RED files now exist for draft_commands/render_graph/realtime_preview_runtime/ffmpeg_compiler | RED pending implementation |
+| PRODFX-03 | Capability registry maps semantic effect/filter/transition intent to preview/export support states | Rust capability matrix plus schema/contract checks | `cargo test -p draft_model capability && cargo test -p render_graph capability && cargo test -p realtime_preview_runtime capability_matrix` | Wave 0 RED files now exist in draft_model/render_graph/realtime_preview_runtime | RED pending implementation |
+| PRODFX-04 | Masks, blends, blur, filters, and complex effects use GPU preview where supported and classify unsupported export paths | Rust GPU/offscreen tests, compiler diagnostics, desktop E2E | `cargo test -p realtime_preview_runtime production_effects -- --nocapture && cargo test -p ffmpeg_compiler production_effects -- --nocapture && pnpm --filter @video-editor/desktop exec playwright test tests/production-effects.spec.ts --reporter=line` | Wave 0 RED preview/compiler/desktop files now exist | RED pending implementation |
+| PRODFX-05 | Kaipai-like fixtures verify template import preview/export parity, compatibility reports, and performance budgets | `testkit` plus desktop template import/product E2E | `cargo test -p testkit production_effects -- --nocapture && pnpm --filter @video-editor/desktop exec playwright test tests/template-import.spec.ts --reporter=line` | Wave 0 RED testkit preview/export files now exist | RED pending implementation |
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/phase19-source-guards.sh` blocks renderer-owned FFmpeg strings, retime source mapping, transition overlap validation, effect evaluation, dirty-range/cache semantics, fallback success, provider-native IDs as internal semantics, and per-mousemove save/revision/undo loops.
-- [ ] Root `package.json` contains `test:phase19-rust`, `test:phase19-source-guards`, `test:phase19-desktop`, and `test:phase19`.
-- [ ] Rust RED tests exist before implementation for retiming, audio graph retiming, transition semantics, effect capability registry, GPU preview/export classification, and template fixture parity.
-- [ ] Playwright E2E is added before visible controls are treated as product-complete.
+- [x] `scripts/phase19-source-guards.sh` blocks renderer-owned FFmpeg strings, retime source mapping, transition overlap validation, effect evaluation, dirty-range/cache semantics, fallback success, provider-native IDs as internal semantics, and per-mousemove save/revision/undo loops.
+- [x] Root `package.json` contains `test:phase19-rust`, `test:phase19-source-guards`, `test:phase19-desktop`, and `test:phase19`.
+- [x] Rust RED tests exist before implementation for retiming, audio graph retiming, transition semantics, effect capability registry, GPU preview/export classification, and template fixture parity.
+- [x] Playwright E2E is added before visible controls are treated as product-complete.
 - [ ] UI implementation is followed by an independent UI review artifact from `gsd-ui-auditor`, the GSD UI review workflow, or another separate reviewer/subagent; if no independent reviewer path is available, sign-off remains blocked rather than falling back to self-audit.
+
+## Wave 0 RED Commands
+
+The following commands were added as executable RED gates in Plan 19-01. They are expected to fail until later Phase 19 implementation plans replace string-only semantics and wire Rust-owned production behavior:
+
+```bash
+pnpm run test:phase19-source-guards -- --wave0
+cargo test -p draft_model production_effects_contracts -- --nocapture
+cargo test -p draft_commands retiming_commands -- --nocapture
+cargo test -p draft_commands transition_commands -- --nocapture
+cargo test -p engine_core retiming -- --nocapture
+cargo test -p audio_engine dsp_timeline -- --nocapture
+cargo test -p render_graph production_effects -- --nocapture
+cargo test -p realtime_preview_runtime production_effects -- --nocapture
+cargo test -p ffmpeg_compiler production_effects -- --nocapture
+cargo test -p testkit production_effects -- --nocapture
+pnpm --filter @video-editor/desktop exec playwright test tests/production-effects.spec.ts --reporter=line
+```
+
+`nyquist_compliant` and `wave_0_complete` intentionally remain `false` in frontmatter. Plan 19-15 owns final closeout after all Phase 19 implementation gates and the independent UI audit pass.
 
 ---
 
