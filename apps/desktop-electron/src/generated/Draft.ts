@@ -36,6 +36,7 @@ export type EffectCapabilityRegistry = { entries: Array<CapabilityReportItem>, }
 export type EffectKind = "gaussianBlur" | "basicColorAdjustment" | "opacityAdjustment";
 export type FilterKind = { "kind": "gaussianBlur", radiusMillis: number, } | { "kind": "basicColorAdjustment", brightnessMillis: number, contrastMillis: number, saturationMillis: number, } | { "kind": "opacityAdjustment", opacityMillis: number, } | { "kind": "externalReference", reference: ExternalEffectReference, };
 export type Filter = { kind: FilterKind, enabled: boolean, };
+export type EffectParameterUpdate = { "parameter": "enabled", enabled: boolean, } | { "parameter": "gaussianBlurRadiusMillis", radiusMillis: number, } | { "parameter": "basicColorBrightnessMillis", brightnessMillis: number, } | { "parameter": "basicColorContrastMillis", contrastMillis: number, } | { "parameter": "basicColorSaturationMillis", saturationMillis: number, } | { "parameter": "opacityMillis", opacityMillis: number, };
 export type TransitionKind = "dissolve";
 export type TransitionReference = { "kind": "firstParty", transition: TransitionKind, } | { "kind": "externalReference", reference: ExternalEffectReference, };
 export type Transition = { reference: TransitionReference, duration: Microseconds, };

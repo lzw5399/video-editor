@@ -23,6 +23,8 @@ import type {
   AudioFade,
   AudioPanBalance,
   DraftCanvasConfig,
+  EffectParameterUpdate,
+  Filter,
   KeyframeEasing,
   KeyframeInterpolation,
   KeyframeProperty,
@@ -33,7 +35,11 @@ import type {
   MaterialKind,
   Microseconds,
   SegmentAudio,
+  SegmentBlendMode,
   SegmentFitMode,
+  SegmentId,
+  SegmentMask,
+  SegmentRetiming,
   SourceTimerange,
   SegmentVisual,
   SegmentVolume,
@@ -41,6 +47,7 @@ import type {
   TextAlignment,
   TextSegment,
   TextWrapping,
+  TransitionReference,
   TrackKind
 } from "../generated/Draft";
 import type { AdaptationReport } from "../generated/TemplateImport";
@@ -327,6 +334,31 @@ export type ProjectIntent =
   | { kind: "setSessionPlayhead"; playhead: Microseconds }
   | { kind: "updateDraftCanvasConfig"; canvasConfig: DraftCanvasConfig }
   | { kind: "updateSelectedSegmentVisual"; patch: SegmentVisualPatch }
+  | { kind: "setSelectedSegmentRetime"; retiming: SegmentRetiming }
+  | { kind: "applySelectedSegmentEffect"; effect: Filter }
+  | {
+      kind: "updateSelectedSegmentEffectParameter";
+      effectIndex: number;
+      parameter: EffectParameterUpdate;
+    }
+  | { kind: "removeSelectedSegmentEffect"; effectIndex: number }
+  | { kind: "setSelectedSegmentMask"; mask: SegmentMask }
+  | { kind: "setSelectedSegmentBlendMode"; blendMode: SegmentBlendMode }
+  | {
+      kind: "addTransitionAtBoundary";
+      fromSegmentId: SegmentId;
+      toSegmentId: SegmentId;
+      reference: TransitionReference;
+      duration: Microseconds;
+      parameters?: Record<string, string>;
+    }
+  | {
+      kind: "updateSelectedTransitionDuration";
+      fromSegmentId: SegmentId;
+      toSegmentId: SegmentId;
+      duration: Microseconds;
+    }
+  | { kind: "removeSelectedTransition"; fromSegmentId: SegmentId; toSegmentId: SegmentId }
   | {
       kind: "setSelectedSegmentKeyframe";
       property: KeyframeProperty;
@@ -390,14 +422,23 @@ export type ExecuteProjectIntentRequest = {
 
 export type ProjectInteractionKind =
   | "selectedSegmentVisual"
+  | "selectedSegmentRetime"
+  | "selectedSegmentEffect"
+  | "selectedSegmentMask"
+  | "selectedSegmentBlend"
   | "selectedText"
   | "selectedSegmentAudio"
   | "playheadScrub"
   | "timelineMoveTrim"
-  | "keyframeEdit";
+  | "keyframeEdit"
+  | "selectedTransitionDuration";
 
 export type ProjectInteractionPayload =
   | { kind: "selectedSegmentVisual"; patch: SegmentVisualPatch }
+  | { kind: "selectedSegmentRetime"; retiming: SegmentRetiming }
+  | { kind: "selectedSegmentEffect"; effectIndex: number; parameter: EffectParameterUpdate }
+  | { kind: "selectedSegmentMask"; mask: SegmentMask }
+  | { kind: "selectedSegmentBlend"; opacityMillis: number }
   | { kind: "selectedText"; patch: TextSegmentPatch }
   | {
       kind: "selectedSegmentAudio";
@@ -423,6 +464,12 @@ export type ProjectInteractionPayload =
       value?: KeyframeValue | null;
       interpolation?: KeyframeInterpolation | null;
       easing?: KeyframeEasing | null;
+    }
+  | {
+      kind: "selectedTransitionDuration";
+      fromSegmentId: SegmentId;
+      toSegmentId: SegmentId;
+      duration: Microseconds;
     };
 
 export type BeginProjectInteractionRequest = {
