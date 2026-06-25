@@ -1,11 +1,12 @@
 use audio_engine::{
-    AudioMixClassification, DspEffectSlotSupport, DspMixClassification, DspTimelineConfig,
-    evaluate_dsp_timeline,
+    AudioMixClassification, AudioRetimeMixSupport, DspEffectSlotSupport,
+    DspEvaluationDiagnosticKind, DspMixClassification, DspTimelineConfig, evaluate_dsp_timeline,
 };
 use draft_model::{
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, Draft, Keyframe,
-    KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material, MaterialKind,
-    Microseconds, Segment, SourceTimerange, TargetTimerange, Track, TrackKind,
+    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioPanBalance, AudioRetimePolicy, Draft,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, Material,
+    MaterialKind, Microseconds, RetimeMode, Segment, SegmentRetiming, SourceTimerange,
+    SpeedCurvePoint, SpeedRatio, TargetTimerange, Track, TrackKind,
 };
 
 #[test]
@@ -30,6 +31,7 @@ fn dsp_timeline_evaluates_audio_tracks_with_integer_sample_rows() {
         Microseconds::new(1_000_000)
     );
     assert_eq!(segment.gain_envelope.points[1].target_sample, 48_000);
+    assert_eq!(segment.gain_envelope.points[1].source_sample, 60_000);
     assert_eq!(segment.gain_envelope.points[1].gain_millis, 1_200);
     assert_eq!(segment.pan_envelope.balance_millis, -250);
     assert_eq!(segment.fade_envelope.fade_in_sample_count, 12_000);
@@ -41,6 +43,13 @@ fn dsp_timeline_evaluates_audio_tracks_with_integer_sample_rows() {
         AudioMixClassification::Audible
     );
     assert_eq!(plan.mix_intent.summary.audible_segment_count, 1);
+    assert_eq!(
+        plan.mix_intent.segments[0]
+            .retime
+            .source_sample_map
+            .retimed_source_duration_samples,
+        96_000
+    );
 }
 
 #[test]
@@ -147,22 +156,147 @@ fn volume_keyframe(at: u64, value: u32) -> Keyframe {
 }
 
 #[test]
-fn phase19_audio_dsp_timeline_requires_retime_mapping_and_follow_speed_diagnostics() {
-    const DSP_TIMELINE_RS: &str = include_str!("../src/dsp_timeline.rs");
+fn phase19_audio_dsp_constant_speed_maps_source_samples_and_mix_intent() {
+    let retiming = SegmentRetiming {
+        mode: RetimeMode::Constant {
+            speed: SpeedRatio::new(2, 1),
+        },
+        audio_policy: AudioRetimePolicy::FollowVideoSpeed,
+    };
+    let draft = retimed_audio_draft(retiming.clone());
 
-    assert!(
-        DSP_TIMELINE_RS.contains("source_sample_at_target")
-            || DSP_TIMELINE_RS.contains("RetimeSourceSampleMap"),
-        "audio DSP timeline must map target samples through retime-aware source sample semantics"
+    let plan = evaluate_dsp_timeline(&draft, DspTimelineConfig::new(48_000)).unwrap();
+
+    let segment = &plan.tracks[0].segments[0];
+    assert_eq!(segment.retime.retiming, retiming);
+    assert_eq!(segment.target_duration_samples, 72_000);
+    assert_eq!(
+        segment.retime.source_sample_map.source_start_sample,
+        24_000
     );
-    assert!(
-        DSP_TIMELINE_RS.contains("follow_speed")
-            || DSP_TIMELINE_RS.contains("FollowSpeedDiagnostic"),
-        "audio follow-speed/pitch behavior must be explicit diagnostic state, not hidden success"
+    assert_eq!(
+        segment
+            .retime
+            .source_sample_map
+            .retimed_source_duration_samples,
+        144_000
     );
-    assert!(
-        DSP_TIMELINE_RS.contains("AudioRetimeMixIntent")
-            || DSP_TIMELINE_RS.contains("retime_mix_intent"),
-        "mix intent must expose retime facts for preview/export parity"
+    assert_eq!(
+        segment.retime.source_sample_map.points[1].source_sample,
+        96_000,
+        "750ms target offset at 2x must map to 1.5s source offset"
     );
+    assert_eq!(segment.gain_envelope.points[1].source_sample, 96_000);
+    assert!(segment.retime.follow_speed);
+    assert_eq!(segment.retime.support, AudioRetimeMixSupport::Supported);
+    assert_eq!(plan.mix_intent.segments[0].retime, segment.retime);
+}
+
+#[test]
+fn phase19_audio_dsp_speed_curve_maps_source_samples_without_floats() {
+    let retiming = SegmentRetiming {
+        mode: RetimeMode::SpeedCurve {
+            points: vec![
+                SpeedCurvePoint {
+                    target_time: Microseconds::ZERO,
+                    speed: SpeedRatio::new(1, 1),
+                },
+                SpeedCurvePoint {
+                    target_time: Microseconds::new(1_000_000),
+                    speed: SpeedRatio::new(2, 1),
+                },
+                SpeedCurvePoint {
+                    target_time: Microseconds::new(2_000_000),
+                    speed: SpeedRatio::new(1, 2),
+                },
+            ],
+        },
+        audio_policy: AudioRetimePolicy::FollowVideoSpeed,
+    };
+    let draft = retimed_audio_draft(retiming);
+
+    let plan = evaluate_dsp_timeline(&draft, DspTimelineConfig::new(48_000)).unwrap();
+
+    let segment = &plan.tracks[0].segments[0];
+    assert_eq!(
+        segment
+            .retime
+            .source_sample_map
+            .retimed_source_duration_samples,
+        156_000,
+        "2.5s target maps to 3.25s source under the integer speed curve"
+    );
+    assert_eq!(
+        segment.retime.source_sample_map.points[1].source_sample,
+        96_000,
+        "1.5s target maps to 2.0s source under the curve"
+    );
+    assert_eq!(segment.gain_envelope.points[1].source_sample, 96_000);
+    assert!(segment.retime.follow_speed);
+    assert_eq!(segment.retime.support, AudioRetimeMixSupport::Degraded);
+    assert!(
+        segment
+            .retime
+            .reason
+            .contains("speed curve"),
+        "speed-curve follow-speed should carry explicit degradation reason"
+    );
+}
+
+#[test]
+fn phase19_audio_dsp_preserve_pitch_emits_typed_diagnostics() {
+    let retiming = SegmentRetiming {
+        mode: RetimeMode::Constant {
+            speed: SpeedRatio::new(2, 1),
+        },
+        audio_policy: AudioRetimePolicy::PreservePitch,
+    };
+    let draft = retimed_audio_draft(retiming);
+
+    let plan = evaluate_dsp_timeline(&draft, DspTimelineConfig::new(48_000)).unwrap();
+
+    let segment = &plan.tracks[0].segments[0];
+    assert!(!segment.retime.follow_speed);
+    assert_eq!(segment.retime.support, AudioRetimeMixSupport::Unsupported);
+    assert!(
+        segment.retime.reason.contains("preserve-pitch"),
+        "unsupported preserve-pitch retime should explain the degradation"
+    );
+    assert!(plan.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == DspEvaluationDiagnosticKind::UnsupportedPitchPreservation
+            && diagnostic.segment_id.as_str() == "retimed-audio-segment"
+    }));
+    assert_eq!(plan.mix_intent.segments[0].retime, segment.retime);
+}
+
+fn retimed_audio_draft(retiming: SegmentRetiming) -> Draft {
+    let mut material = Material::new(
+        "retimed-audio-material",
+        MaterialKind::Audio,
+        "media/retimed-bgm.wav",
+        "Retimed BGM",
+    );
+    material.metadata.duration = Some(Microseconds::new(6_000_000));
+    material.metadata.has_audio = true;
+    material.metadata.audio_sample_rate = Some(48_000);
+    material.metadata.audio_channels = Some(2);
+
+    let mut segment = Segment::new(
+        "retimed-audio-segment",
+        material.material_id.clone(),
+        SourceTimerange::new(500_000, 4_000_000),
+        TargetTimerange::new(250_000, 1_500_000),
+    );
+    segment.retiming = retiming;
+    segment.keyframes.push(volume_keyframe(0, 1_000));
+    segment.keyframes.push(volume_keyframe(750_000, 1_200));
+    segment.keyframes.push(volume_keyframe(1_500_000, 800));
+
+    let mut track = Track::new("retimed-audio-track", TrackKind::Audio, "Retimed audio");
+    track.segments.push(segment);
+
+    let mut draft = Draft::new("retimed-audio-draft", "Retimed audio draft");
+    draft.materials.push(material);
+    draft.tracks.push(track);
+    draft
 }
