@@ -195,6 +195,7 @@ type ProductionEffectInteractionState = {
   sequence: number;
   beginPromise: Promise<void>;
   updateInFlight: boolean;
+  finishing: boolean;
   rafId: number | null;
   pendingPayload: ProjectInteractionPayload | null;
 };
@@ -780,6 +781,7 @@ export function Inspector({
       sequence: 0,
       beginPromise: Promise.resolve(),
       updateInFlight: false,
+      finishing: false,
       rafId: null,
       pendingPayload: null
     };
@@ -838,6 +840,10 @@ export function Inspector({
     if (interaction === null) {
       return;
     }
+    if (interaction.finishing) {
+      return;
+    }
+    interaction.finishing = true;
     if (interaction.rafId !== null) {
       window.cancelAnimationFrame(interaction.rafId);
       interaction.rafId = null;
