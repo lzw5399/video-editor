@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 16: Task Scheduler, Job Isolation, And Performance Telemetry** - Priority queues, cancellation, backpressure, thread-pool isolation, export/preview/cache separation, and performance budgets (completed 2026-06-24)
 - [x] **Phase 17: Template Import Core And Kaipai Offline Adapter Foundation** - Provider-neutral template import foundation with Kaipai as an offline external adapter (completed 2026-06-24)
 - [x] **Phase 17.1: Interaction Session And Template Import Main-Chain Hardening** - Rust-owned high-frequency interaction sessions, delta-driven invalidation, template report navigation, and UI correction before mobile/server work (completed 2026-06-24)
-- [ ] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary
+- [x] **Phase 18: Mobile/Server Binding Architecture And Runtime Ports** - Node-API/C ABI/JNI/Swift binding split, lifecycle and permission contracts, texture/file handles, and server runtime boundary (completed 2026-06-25)
 - [ ] **Phase 19: Production Effects, Retiming, And Transition Semantics** - Restore retiming, effects, filters, masks, and transitions on top of the production preview/cache/audio/runtime foundation
 
 ## Phase Details
@@ -875,7 +875,7 @@ Plans:
   5. Server runtime can open `.veproj`, resolve materials, run render/export jobs, and report progress without Electron.
   6. ABI, serialization, and binding smoke tests protect contract drift across desktop, mobile contracts, and server rendering.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 Plans:
 
@@ -892,7 +892,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 18-06-PLAN.md — Document mobile contracts, update runtime boundaries, and close aggregate gates
+- [x] 18-06-PLAN.md — Document mobile contracts, update runtime boundaries, and close aggregate gates
 
 ### Phase 19: Production Effects, Retiming, And Transition Semantics
 
@@ -943,5 +943,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
-| 18. Mobile/Server Binding Architecture And Runtime Ports | 5/6 | In Progress|  |
+| 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete   | 2026-06-25 |
 | 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |
