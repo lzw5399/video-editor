@@ -116,6 +116,7 @@ const VISIBLE_TOP_CATEGORIES = ["素材", "音频", "文本", "贴纸", "特效"
 const OVERFLOW_TOP_CATEGORIES = ["模板导入", "滤镜", "调节", "数字人"] as const;
 const WORKSPACE_CATEGORIES = [...VISIBLE_TOP_CATEGORIES, ...OVERFLOW_TOP_CATEGORIES] as const;
 const SHOWCASE_CATEGORIES = ["贴纸", "特效", "转场", "滤镜", "调节", "数字人"] as const;
+const UNSUPPORTED_SHOWCASE_CATEGORIES = ["贴纸", "数字人"] as const;
 const REPO_ROOT = join(process.cwd(), "../..");
 const PHASE5_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase5");
 const PHASE7_SCREENSHOT_DIR = join(REPO_ROOT, "test-results/phase7");
@@ -956,12 +957,18 @@ test("workspace panels switch categories without losing Chinese empty states", a
       await expectNoLeftSecondaryMenu(page);
       await expect(page.getByLabel(`${category}分类`)).toBeVisible();
       await expect(page.getByLabel(`${category}资源`)).toBeVisible();
-      await expect(page.getByLabel("素材面板")).toContainText("暂不可用");
-      await expect(page.getByLabel("素材面板").locator(".product-unavailable-feature-gate")).toHaveAttribute(
-        "data-product-unavailable-feature-gate",
-        category
-      );
-      await expect(page.getByLabel("素材面板").locator(".showcase-rail button:not(:disabled)")).toHaveCount(0);
+      if ((UNSUPPORTED_SHOWCASE_CATEGORIES as readonly string[]).includes(category)) {
+        await expect(page.getByLabel("素材面板")).toContainText("暂不可用");
+        await expect(page.getByLabel("素材面板").locator(".product-unavailable-feature-gate")).toHaveAttribute(
+          "data-product-unavailable-feature-gate",
+          category
+        );
+        await expect(page.getByLabel("素材面板").locator(".showcase-rail button:not(:disabled)")).toHaveCount(0);
+      } else {
+        await expect(page.getByLabel("素材面板")).not.toContainText("暂不可用");
+        await expect(page.getByLabel("素材面板").locator(".product-unavailable-feature-gate")).toHaveCount(0);
+        await expect(page.getByLabel("素材面板").locator(".showcase-card.production-card")).not.toHaveCount(0);
+      }
       await expect(page.locator('[aria-label="素材面板"]')).toBeVisible();
     }
   } finally {

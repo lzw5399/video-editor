@@ -1209,8 +1209,8 @@ function ShowcaseCategoryPanel({
           capabilityId: `unsupported.${category}.${title}`,
           title,
           category,
-          actionLabel: "暂不支持",
-          disabledFallbackLabel: "暂不支持"
+          actionLabel: "暂不可用",
+          disabledFallbackLabel: "暂不可用"
         }));
   const hasProductionCards = productionCards.length > 0;
 

@@ -1951,6 +1951,7 @@ function AppliedEffectControls({
   const capabilityId = filterCapabilityId(filter);
   const title = capabilityProductLabel(capabilityId);
   const sliders = effectSliders(filter);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   return (
     <article className="phase19-effect-row" aria-label={title}>
@@ -1976,11 +1977,29 @@ function AppliedEffectControls({
           aria-label={`移除${title}`}
           title={`移除${title}`}
           disabled={pending}
-          onClick={() => onRemoveSelectedSegmentEffect(effectIndex)}
+          onClick={() => setConfirmRemove(true)}
         >
-          移除
+          移除效果
         </button>
       </div>
+      {confirmRemove ? (
+        <div className="phase19-confirm-row" role="group" aria-label="移除效果确认">
+          <button
+            type="button"
+            className="icon-text-action danger"
+            disabled={pending}
+            onClick={() => {
+              onRemoveSelectedSegmentEffect(effectIndex);
+              setConfirmRemove(false);
+            }}
+          >
+            确认移除效果
+          </button>
+          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmRemove(false)}>
+            保留效果
+          </button>
+        </div>
+      ) : null}
       {sliders.map((slider) => (
         <label className="field-row compact-row" key={slider.label}>
           <span>{slider.label}</span>
@@ -2041,6 +2060,7 @@ function MaskInspectorSection({
     ? defaultMask("rectangle")
     : selected.visual.mask;
   const shape = mask.kind === "ellipse" ? "ellipse" : "rectangle";
+  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <section className="inspector-section production-inspector-section" aria-label="蒙版" role="tabpanel">
@@ -2097,9 +2117,27 @@ function MaskInspectorSection({
         />
         <span>反选蒙版</span>
       </label>
-      <button type="button" className="compact-action" disabled={pending} onClick={() => onSetSelectedSegmentMask({ kind: "none" })}>
+      <button type="button" className="compact-action" disabled={pending} onClick={() => setConfirmReset(true)}>
         重置效果
       </button>
+      {confirmReset ? (
+        <div className="phase19-confirm-row" role="group" aria-label="重置效果确认">
+          <button
+            type="button"
+            className="icon-text-action danger"
+            disabled={pending}
+            onClick={() => {
+              onSetSelectedSegmentMask({ kind: "none" });
+              setConfirmReset(false);
+            }}
+          >
+            确认重置效果
+          </button>
+          <button type="button" className="icon-text-action" disabled={pending} onClick={() => setConfirmReset(false)}>
+            继续保留当前效果
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2235,11 +2273,14 @@ function ProductionCapabilityChips({
       {chips.length === 0 ? (
         <span className="phase19-chip muted">暂不支持</span>
       ) : (
-        chips.map((entry) => (
-          <span className={`phase19-chip ${capabilityChipTone(entry)}`} key={entry.capabilityId}>
+        chips.flatMap((entry) => [
+          <span className={`phase19-chip ${supportChipTone(entry.preview)}`} key={`${entry.capabilityId}-preview`}>
             {supportLabel("预览", entry.preview)}
+          </span>,
+          <span className={`phase19-chip ${supportChipTone(entry.export)}`} key={`${entry.capabilityId}-export`}>
+            {supportLabel("导出", entry.export)}
           </span>
-        ))
+        ])
       )}
     </div>
   );
@@ -2283,6 +2324,7 @@ function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): vo
     window.removeEventListener("pointerup", commit);
     window.removeEventListener("mouseup", commit);
     window.removeEventListener("pointercancel", cancel);
+    window.removeEventListener("keydown", cancelOnEscape);
   };
   const commit = (): void => {
     cleanup();
@@ -2292,10 +2334,18 @@ function armRangeFinishListeners(onCommit: () => void, onCancel: () => void): vo
     cleanup();
     onCancel();
   };
+  const cancelOnEscape = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    event.preventDefault();
+    cancel();
+  };
 
   window.addEventListener("pointerup", commit, { once: true });
   window.addEventListener("mouseup", commit, { once: true });
   window.addEventListener("pointercancel", cancel, { once: true });
+  window.addEventListener("keydown", cancelOnEscape);
 }
 
 function productionEffectQuickAdds(tab: "效果" | "滤镜" | "调节", capabilities: CapabilityReportItem[]): CapabilityReportItem[] {
@@ -2475,15 +2525,16 @@ function capabilityActionState(entry: CapabilityReportItem): "supported" | "degr
   return "supported";
 }
 
-function capabilityChipTone(entry: CapabilityReportItem): string {
-  const state = capabilityActionState(entry);
-  if (state === "supported") {
-    return "ready";
+function supportChipTone(support: CapabilitySupport): string {
+  switch (support.state) {
+    case "supported":
+      return "ready";
+    case "degraded":
+      return "warning";
+    case "unsupported":
+    case "externalReference":
+      return "error";
   }
-  if (state === "degraded") {
-    return "warning";
-  }
-  return "error";
 }
 
 function AnimationInspectorTab({

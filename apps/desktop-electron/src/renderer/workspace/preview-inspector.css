@@ -944,6 +944,13 @@
   white-space: nowrap;
 }
 
+.phase19-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
 .mini-toggle {
   display: inline-flex;
   align-items: center;

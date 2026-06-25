@@ -763,7 +763,7 @@
 .segment-transition-grip span {
   max-width: 100%;
   color: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 14px;
   text-overflow: ellipsis;
@@ -791,7 +791,7 @@
 .segment-retime-cluster > span:first-child {
   max-width: 44px;
   color: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 14px;
   text-overflow: ellipsis;
@@ -963,8 +963,13 @@
   .playhead-time,
   .timeline-status {
     display: flex;
-    flex: 0 1 64px;
-    max-width: 64px;
+    flex: 0 0 88px;
+    max-width: 88px;
     font-size: 11px;
+  }
+
+  .timeline-status {
+    flex-basis: 56px;
+    max-width: 56px;
   }
 }
