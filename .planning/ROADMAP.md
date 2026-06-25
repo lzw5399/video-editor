@@ -875,14 +875,14 @@ Plans:
   5. Server runtime can open `.veproj`, resolve materials, run render/export jobs, and report progress without Electron.
   6. ABI, serialization, and binding smoke tests protect contract drift across desktop, mobile contracts, and server rendering.
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 Plans:
 
 **Wave 1**
 
 - [x] 18-01-PLAN.md — Establish shared `editor_runtime` session, export, and handle authority
-- [ ] 18-02-PLAN.md — Add Phase 18 source, ABI, mobile contract, and aggregate guard scaffolding
+- [x] 18-02-PLAN.md — Add Phase 18 source, ABI, mobile contract, and aggregate guard scaffolding
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -943,5 +943,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 15.3 P0 Jianying-Style Production UI Convergence | 8/8 | Complete | 2026-06-20 |
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
-| 18. Mobile/Server Binding Architecture And Runtime Ports | 1/6 | In Progress|  |
+| 18. Mobile/Server Binding Architecture And Runtime Ports | 2/6 | In Progress|  |
 | 19. Production Effects, Retiming, And Transition Semantics | TBD | Not planned | - |

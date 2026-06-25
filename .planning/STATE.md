@@ -6,14 +6,14 @@ current_phase: 18
 current_phase_name: mobile-server-binding-architecture-and-runtime-ports
 status: executing
 stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-06-25T00:43:36.955Z"
+last_updated: "2026-06-25T01:03:31.665Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 25
   completed_phases: 23
   total_plans: 172
-  completed_plans: 167
+  completed_plans: 168
   percent: 92
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 18 (mobile-server-binding-architecture-and-runtime-ports) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 18 execution started
 
@@ -204,6 +204,7 @@ Progress: Phase 15.1, 15.2, 15.3, 16, 17, and 17.1 are complete; Phase 18 is nex
 | Phase 17.1 P06 | 31 min | 3 tasks | 7 files |
 | Phase 17.1 P07 | 23 min | 3 tasks | 9 files |
 | Phase 18 P01 | 12 min | 2 tasks | 15 files |
+| Phase 18 P02 | 13 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -581,6 +582,9 @@ Recent decisions affecting current work:
 - [Phase 18]: editor_runtime is the shared Rust authority layer below Node, C, server, and future mobile adapters. — Plan 18-01 established runtime, project-session, export, and handle contracts under adapters.
 - [Phase 18]: Project-session contracts call project_store for .veproj/project.json create/open/save paths. — This preserves .veproj/project.json as the canonical source of truth across adapters.
 - [Phase 18]: Opaque HandleToken values include owner and generation facts while resource metadata remains in Rust. — The handle registry rejects stale, fabricated, wrong-owner, wrong-device, expired, and double-release tokens with typed diagnostics.
+- [Phase 18]: Phase 18 source guard full/default mode is reserved for Plan 06 or aggregate verification; Wave 2 plans use owner-aware staged modes. — This prevents Plan 03, Plan 04, Plan 05, and mobile-contract verification from failing on sibling or later artifacts.
+- [Phase 18]: Phase 18 ABI drift uses a script-owned project-local cbindgen 0.29.4 binary and rejects any other resolved version. — This makes C header generation reproducible without changing Node or NAPI tooling.
+- [Phase 18]: Phase 18 package scripts expose stable per-wave and aggregate gate names without changing @napi-rs/cli. — Research flagged @napi-rs/cli changes as requiring human verification, so this plan only adds scripts and shell guards.
 
 ### Pending Todos
 
@@ -662,6 +666,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-25T00:43:36.948Z
+Last session: 2026-06-25T01:02:46.601Z
 Stopped at: Completed 18-01-PLAN.md
 Resume file: None
