@@ -316,6 +316,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 0,
                             "sourcePosition": 100000,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         },
                         {
@@ -326,6 +329,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 1,
                             "sourcePosition": 0,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         }
                     ],
@@ -336,6 +342,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialId": "audio-material",
                             "sourcePosition": 0,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "audioRetimeDiagnostic": null,
                             "volumeLevelMillis": 1000
                         }
                     ],
@@ -352,6 +360,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 0,
                             "sourcePosition": 133333,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         },
                         {
@@ -362,6 +373,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 1,
                             "sourcePosition": 33333,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         }
                     ],
@@ -372,6 +386,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialId": "audio-material",
                             "sourcePosition": 33333,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "audioRetimeDiagnostic": null,
                             "volumeLevelMillis": 1000
                         }
                     ],
@@ -388,6 +404,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 0,
                             "sourcePosition": 166666,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         },
                         {
@@ -398,6 +417,9 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "stackIndex": 1,
                             "sourcePosition": 66666,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "filters": [],
+                            "transition": null,
                             "visual": default_visual_json()
                         }
                     ],
@@ -408,6 +430,8 @@ fn render_range_state_samples_frame_positions_and_resolves_stable_json_snapshot(
                             "materialId": "audio-material",
                             "sourcePosition": 66666,
                             "targetTimerange": { "start": 0, "duration": 1000000 },
+                            "retiming": default_retiming_json(),
+                            "audioRetimeDiagnostic": null,
                             "volumeLevelMillis": 1000
                         }
                     ],
@@ -433,10 +457,15 @@ fn text_layout_resolves_pinned_profile_values_for_active_text_overlay() {
     assert_eq!(overlay.source, TextSegmentSource::Text);
     assert_eq!(overlay.font_family, "Source Han Sans SC");
     assert_eq!(overlay.font_ref.as_deref(), Some("source-han-local"));
-    assert_eq!(overlay.font_candidate, "VE_TEXT_FONT_PATH");
+    assert_eq!(
+        overlay.font_candidate,
+        "font://bundled/noto-sans-cjk-sc-regular"
+    );
     assert_eq!(
         overlay.fallback_candidates,
         vec![
+            "font://bundled/noto-sans-cjk-sc-regular",
+            "assets/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
             "VE_TEXT_FONT_PATH",
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -778,9 +807,22 @@ fn default_visual_json() -> serde_json::Value {
             },
             "anchor": { "xMillis": 500, "yMillis": 500 }
         },
-        "fitMode": "stretch",
+        "fitMode": "fit",
         "backgroundFilling": { "kind": "none" },
         "blendMode": { "kind": "normal" },
         "mask": { "kind": "none" }
+    })
+}
+
+fn default_retiming_json() -> serde_json::Value {
+    serde_json::json!({
+        "mode": {
+            "kind": "constant",
+            "speed": {
+                "numerator": 1,
+                "denominator": 1
+            }
+        },
+        "audioPolicy": "followVideoSpeed"
     })
 }

@@ -1,7 +1,7 @@
 use draft_model::{
     AudioRetimePolicy, Draft, Filter, Material, MaterialKind, Microseconds, RetimeMode, Segment,
-    SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Transition,
-    Track, TrackKind,
+    SegmentRetiming, SourceTimerange, SpeedCurvePoint, SpeedRatio, TargetTimerange, Track,
+    TrackKind, Transition,
 };
 use engine_core::{
     AudioRetimeDiagnosticKind, EngineProfile, audio_retime_diagnostic, normalize_draft,
@@ -102,22 +102,26 @@ fn phase19_retiming_engine_core_maps_speed_curve_boundaries_and_middle_samples()
 fn phase19_retiming_frame_state_carries_retime_transition_effect_and_audio_diagnostics() {
     let mut draft = retimed_draft();
     let video = &mut draft.tracks[0].segments[0];
-    video.retiming = SegmentRetiming {
+    let video_retiming = SegmentRetiming {
         mode: RetimeMode::Constant {
             speed: SpeedRatio::new(2, 1),
         },
         audio_policy: AudioRetimePolicy::FollowVideoSpeed,
     };
+    video.retiming = video_retiming.clone();
     video.filters.push(Filter::gaussian_blur(250));
     video.transition = Some(Transition::dissolve(Microseconds::new(120_000)));
+    let expected_filters = video.filters.clone();
+    let expected_transition = video.transition.clone();
 
     let audio = &mut draft.tracks[1].segments[0];
-    audio.retiming = SegmentRetiming {
+    let audio_retiming = SegmentRetiming {
         mode: RetimeMode::Constant {
             speed: SpeedRatio::new(2, 1),
         },
         audio_policy: AudioRetimePolicy::PreservePitch,
     };
+    audio.retiming = audio_retiming;
 
     let normalized = normalize_draft(&draft, &EngineProfile::mvp_default())
         .expect("retimed draft should normalize");
@@ -126,15 +130,19 @@ fn phase19_retiming_frame_state_carries_retime_transition_effect_and_audio_diagn
 
     let layer = &frame.visual_layers[0];
     assert_eq!(layer.source_position, Microseconds::new(1_000_000));
-    assert_eq!(layer.retiming, video.retiming);
-    assert_eq!(layer.filters, video.filters);
-    assert_eq!(layer.transition, video.transition);
+    assert_eq!(layer.retiming, video_retiming);
+    assert_eq!(layer.filters, expected_filters);
+    assert_eq!(layer.transition, expected_transition);
 
     let audio = &frame.audio_segments[0];
     assert_eq!(audio.source_position, Microseconds::new(1_000_000));
-    assert_eq!(audio.retiming.audio_policy, AudioRetimePolicy::PreservePitch);
     assert_eq!(
-        audio.audio_retime_diagnostic
+        audio.retiming.audio_policy,
+        AudioRetimePolicy::PreservePitch
+    );
+    assert_eq!(
+        audio
+            .audio_retime_diagnostic
             .as_ref()
             .expect("unsupported preserve pitch diagnostic")
             .kind,

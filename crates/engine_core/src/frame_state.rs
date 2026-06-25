@@ -1,13 +1,15 @@
 use draft_model::{
-    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue, MaterialId,
-    MaterialKind, Microseconds, RationalFrameRate, SegmentId, SegmentVisual, TargetTimerange,
-    TextSegment, TrackId,
+    Filter, Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    MaterialId, MaterialKind, Microseconds, RationalFrameRate, SegmentId, SegmentRetiming,
+    SegmentVisual, TargetTimerange, TextSegment, TrackId, Transition,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
     EngineError, EngineErrorKind, MaterialRenderableState, NormalizedDraft, NormalizedSegment,
-    ResolvedTextOverlay, text_layout::resolve_text_overlay,
+    ResolvedTextOverlay,
+    text_layout::resolve_text_overlay,
+    time_mapping::{AudioRetimeDiagnostic, SegmentTimeMap, audio_retime_diagnostic},
 };
 
 const MICROSECONDS_PER_SECOND: u128 = 1_000_000;
@@ -31,6 +33,9 @@ pub struct FrameVisualLayer {
     pub stack_index: u32,
     pub source_position: Microseconds,
     pub target_timerange: TargetTimerange,
+    pub retiming: SegmentRetiming,
+    pub filters: Vec<Filter>,
+    pub transition: Option<Transition>,
     pub visual: SegmentVisual,
 }
 
@@ -42,6 +47,8 @@ pub struct FrameAudioSegment {
     pub material_id: MaterialId,
     pub source_position: Microseconds,
     pub target_timerange: TargetTimerange,
+    pub retiming: SegmentRetiming,
+    pub audio_retime_diagnostic: Option<AudioRetimeDiagnostic>,
     pub volume_level_millis: u32,
 }
 
@@ -88,6 +95,8 @@ pub fn resolve_frame_state(
                     material_id: segment.material.material_id.clone(),
                     source_position,
                     target_timerange: segment.target_timerange.clone(),
+                    retiming: segment.retiming.clone(),
+                    audio_retime_diagnostic: audio_retime_diagnostic(&segment.retiming),
                     volume_level_millis: resolve_segment_volume(segment, segment_time),
                 }),
                 draft_model::TrackKind::Video | draft_model::TrackKind::Sticker => {
@@ -103,6 +112,9 @@ pub fn resolve_frame_state(
                             stack_index,
                             source_position,
                             target_timerange: segment.target_timerange.clone(),
+                            retiming: segment.retiming.clone(),
+                            filters: segment.filters.clone(),
+                            transition: segment.transition.clone(),
                             visual: resolve_segment_visual(segment, segment_time),
                         });
                     }
@@ -266,19 +278,12 @@ fn source_position_at(
     at: Microseconds,
 ) -> Result<Microseconds, EngineError> {
     let offset = segment_relative_time_at(segment, at)?;
-    segment
-        .source_timerange
-        .start
-        .get()
-        .checked_add(offset.get())
-        .map(Microseconds::new)
-        .ok_or_else(|| {
-            EngineError::new(
-                EngineErrorKind::TimerangeOverflow,
-                "sourceTimerange start plus timeline offset overflowed",
-            )
-            .with_segment_id(segment.segment_id.clone())
-            .with_material_id(segment.material.material_id.clone())
+    SegmentTimeMap::new(&segment.source_timerange, &segment.retiming)
+        .source_at_target(offset)
+        .map_err(|error| {
+            error
+                .with_segment_id(segment.segment_id.clone())
+                .with_material_id(segment.material.material_id.clone())
         })
 }
 

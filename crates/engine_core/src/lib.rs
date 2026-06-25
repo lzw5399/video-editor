@@ -7,6 +7,7 @@
 pub mod frame_state;
 pub mod normalize;
 pub mod text_layout;
+pub mod time_mapping;
 
 pub use frame_state::{
     FrameAudioSegment, FrameState, FrameTextOverlay, FrameVisualLayer, RenderRange,
@@ -19,6 +20,10 @@ pub use normalize::{
 pub use text_layout::{
     ResolvedTextOverlay, ResolvedTextStyle, TextFontPolicy, TextLayoutProfile, TextSafeArea,
     TextWrappingPolicy,
+};
+pub use time_mapping::{
+    AudioRetimeDiagnostic, AudioRetimeDiagnosticKind, SegmentTimeMap, audio_retime_diagnostic,
+    retimed_source_range, source_position_for_retime,
 };
 
 /// Boundary marker for the semantic engine crate.
