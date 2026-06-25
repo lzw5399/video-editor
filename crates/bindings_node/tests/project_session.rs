@@ -23,6 +23,38 @@ use testkit::generate_video_material_fixture;
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
+fn project_session_binding_delegates_lifecycle_authority_to_editor_runtime() {
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest = fs::read_to_string(crate_dir.join("Cargo.toml"))
+        .expect("bindings_node manifest should be readable");
+    assert!(
+        manifest.contains("editor_runtime"),
+        "bindings_node must depend on editor_runtime instead of owning project-session semantics"
+    );
+
+    let adapter = fs::read_to_string(crate_dir.join("src/project_session_service.rs"))
+        .expect("project session adapter source should be readable");
+    assert!(
+        adapter.contains("editor_runtime"),
+        "project-session adapter should delegate to editor_runtime"
+    );
+    for forbidden in [
+        "struct ProjectSessionRegistry",
+        "struct ProjectSession {",
+        "struct ActiveProjectInteraction",
+        "draft_commands::timeline::execute_timeline_edit",
+        "project_store::create_project_bundle",
+        "project_store::open_project_bundle",
+        "project_store::save_project_bundle",
+    ] {
+        assert!(
+            !adapter.contains(forbidden),
+            "bindings_node project session adapter still owns runtime semantics: {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn project_session_creates_project_without_renderer_draft() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-create.veproj");
