@@ -16,21 +16,24 @@ use draft_model::{
     AudioFade, AudioPanBalance, ChangedEntity, CommandDelta, CommandDeltaName, CommandError,
     CommandErrorKind, CommandEvent, CommandResultEnvelope, CommandState,
     DeleteSegmentCommandPayload, DirtyDomain, Draft, DraftCanvasConfig,
-    EditTextSegmentCommandPayload, ImportSubtitleSrtIntentCommandPayload, Keyframe, KeyframeEasing,
-    KeyframeInterpolation, KeyframeProperty, KeyframeValue, MainTrackMagnet, Material, MaterialId,
-    MaterialKind, MaterialStatus, Microseconds, MissingMaterialCommandDiagnostic,
-    MoveSegmentCommandPayload, ProjectInteractionKind, ProjectInteractionSequenceError,
-    ProjectInteractionSession as DraftProjectInteractionSession, RationalFrameRate,
-    RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment, SegmentAudio,
-    SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentPosition, SegmentVisual,
-    SegmentVolume, SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
-    SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload, SetTrackMuteCommandPayload,
-    SetTrackVisibilityCommandPayload, SourceTimerange, SplitSelectedSegmentIntentCommandPayload,
-    TargetTimerange, TextAlignment, TextBackground, TextBox, TextLayoutRegion, TextSegment,
-    TextSegmentSource, TextShadow, TextStroke, TextStyle, TextWrapping, TimelineCommandResponse,
-    TimelineEditPayload, TimelineSelection, Track, TrackId, TrackKind, TrimSegmentCommandPayload,
-    TrimSegmentDirection, UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
-    UpdateSegmentVisualCommandPayload,
+    EditTextSegmentCommandPayload, EffectParameterUpdate, ImportSubtitleSrtIntentCommandPayload,
+    Keyframe, KeyframeEasing, KeyframeInterpolation, KeyframeProperty, KeyframeValue,
+    MainTrackMagnet, Material, MaterialId, MaterialKind, MaterialStatus, Microseconds,
+    MissingMaterialCommandDiagnostic, MoveSegmentCommandPayload, ProjectInteractionKind,
+    ProjectInteractionSequenceError, ProjectInteractionSession as DraftProjectInteractionSession,
+    RationalFrameRate, RemoveSegmentKeyframeCommandPayload, RenameTrackCommandPayload, Segment,
+    SegmentAudio, SegmentBackgroundFilling, SegmentFitMode, SegmentId, SegmentMask,
+    SegmentPosition, SegmentRetiming, SegmentVisual, SegmentVolume,
+    SelectTimelineSegmentsCommandPayload, SetSegmentKeyframeCommandPayload,
+    SetSegmentRetimeCommandPayload, SetSegmentVolumeCommandPayload, SetTrackLockCommandPayload,
+    SetTrackMuteCommandPayload, SetTrackVisibilityCommandPayload, SourceTimerange,
+    SplitSelectedSegmentIntentCommandPayload, TargetTimerange, TextAlignment, TextBackground,
+    TextBox, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
+    TextWrapping, TimelineCommandResponse, TimelineEditPayload, TimelineSelection, Track, TrackId,
+    TrackKind, TrimSegmentCommandPayload, TrimSegmentDirection,
+    UpdateDraftCanvasConfigCommandPayload, UpdateSegmentAudioCommandPayload,
+    UpdateSegmentEffectParameterCommandPayload, UpdateSegmentVisualCommandPayload,
+    UpdateTransitionDurationCommandPayload,
 };
 use media_runtime::{DiscoveryError, discover_runtime_config, run_scheduled_material_probe};
 use media_runtime_desktop::DesktopFfmpegExecutor;
@@ -292,6 +295,21 @@ enum ProjectInteractionPayload {
     SelectedSegmentVisual {
         patch: SegmentVisualPatch,
     },
+    SelectedSegmentRetime {
+        retiming: SegmentRetiming,
+    },
+    SelectedSegmentEffect {
+        #[serde(rename = "effectIndex")]
+        effect_index: u32,
+        parameter: EffectParameterUpdate,
+    },
+    SelectedSegmentMask {
+        mask: SegmentMask,
+    },
+    SelectedSegmentBlend {
+        #[serde(rename = "opacityMillis")]
+        opacity_millis: u32,
+    },
     SelectedText {
         patch: TextSegmentPatch,
     },
@@ -331,6 +349,13 @@ enum ProjectInteractionPayload {
         #[serde(default)]
         easing: Option<KeyframeEasing>,
     },
+    SelectedTransitionDuration {
+        #[serde(rename = "fromSegmentId")]
+        from_segment_id: SegmentId,
+        #[serde(rename = "toSegmentId")]
+        to_segment_id: SegmentId,
+        duration: Microseconds,
+    },
 }
 
 impl ProjectInteractionPayload {
@@ -338,6 +363,18 @@ impl ProjectInteractionPayload {
         match self {
             ProjectInteractionPayload::SelectedSegmentVisual { .. } => {
                 ProjectInteractionKind::SelectedSegmentVisual
+            }
+            ProjectInteractionPayload::SelectedSegmentRetime { .. } => {
+                ProjectInteractionKind::SelectedSegmentRetime
+            }
+            ProjectInteractionPayload::SelectedSegmentEffect { .. } => {
+                ProjectInteractionKind::SelectedSegmentEffect
+            }
+            ProjectInteractionPayload::SelectedSegmentMask { .. } => {
+                ProjectInteractionKind::SelectedSegmentMask
+            }
+            ProjectInteractionPayload::SelectedSegmentBlend { .. } => {
+                ProjectInteractionKind::SelectedSegmentBlend
             }
             ProjectInteractionPayload::SelectedText { .. } => ProjectInteractionKind::SelectedText,
             ProjectInteractionPayload::SelectedSegmentAudio { .. } => {
@@ -350,6 +387,9 @@ impl ProjectInteractionPayload {
                 ProjectInteractionKind::TimelineMoveTrim
             }
             ProjectInteractionPayload::KeyframeEdit { .. } => ProjectInteractionKind::KeyframeEdit,
+            ProjectInteractionPayload::SelectedTransitionDuration { .. } => {
+                ProjectInteractionKind::SelectedTransitionDuration
+            }
         }
     }
 
@@ -358,6 +398,14 @@ impl ProjectInteractionPayload {
             ProjectInteractionPayload::SelectedSegmentVisual { patch } => {
                 Ok(ProjectIntent::UpdateSelectedSegmentVisual { patch })
             }
+            ProjectInteractionPayload::SelectedSegmentRetime { .. }
+            | ProjectInteractionPayload::SelectedSegmentEffect { .. }
+            | ProjectInteractionPayload::SelectedSegmentMask { .. }
+            | ProjectInteractionPayload::SelectedSegmentBlend { .. }
+            | ProjectInteractionPayload::SelectedTransitionDuration { .. } => Err(
+                "Phase 19 interaction payloads resolve through Rust command modules directly"
+                    .to_owned(),
+            ),
             ProjectInteractionPayload::SelectedText { patch } => {
                 Ok(ProjectIntent::EditSelectedText { patch })
             }
@@ -926,6 +974,11 @@ struct ProjectInteractionProvisionalResult {
     delta: CommandDelta,
     draft: Draft,
     selection: TimelineSelection,
+}
+
+enum ResolvedProjectInteraction {
+    Playhead(Microseconds),
+    Timeline(TimelineEditPayload),
 }
 
 #[derive(Debug, Clone)]
@@ -2322,8 +2375,8 @@ impl ProjectSession {
         &self,
         payload: &ProjectInteractionPayload,
     ) -> std::result::Result<ProjectInteractionProvisionalResult, String> {
-        match payload.clone().into_project_intent()? {
-            ProjectIntent::SetSessionPlayhead { .. } => Ok(ProjectInteractionProvisionalResult {
+        match self.resolve_interaction_payload(payload.clone())? {
+            ResolvedProjectInteraction::Playhead(_) => Ok(ProjectInteractionProvisionalResult {
                 view_model: project_session_view_model(
                     &self.draft,
                     &self.command_state,
@@ -2336,9 +2389,8 @@ impl ProjectSession {
                 draft: self.draft.clone(),
                 selection: self.selection.clone(),
             }),
-            intent => {
-                let edit_payload = self.intent_payload(intent)?;
-                let response = draft_commands::timeline::execute_timeline_edit(edit_payload)
+            ResolvedProjectInteraction::Timeline(payload) => {
+                let response = draft_commands::timeline::execute_timeline_edit(payload)
                     .map_err(|error| error.to_string())?;
                 Ok(ProjectInteractionProvisionalResult {
                     view_model: project_session_view_model(
@@ -2359,8 +2411,8 @@ impl ProjectSession {
         payload: ProjectInteractionPayload,
         interaction: &DraftProjectInteractionSession,
     ) -> Result<serde_json::Value> {
-        let intent = match payload.into_project_intent() {
-            Ok(intent) => intent,
+        let resolved = match self.resolve_interaction_payload(payload) {
+            Ok(resolved) => resolved,
             Err(message) => {
                 return project_interaction_error(
                     "commitProjectInteraction",
@@ -2369,8 +2421,8 @@ impl ProjectSession {
                 );
             }
         };
-        match intent {
-            ProjectIntent::SetSessionPlayhead { playhead } => {
+        match resolved {
+            ResolvedProjectInteraction::Playhead(playhead) => {
                 self.playhead = playhead;
                 to_runtime_value(ok_envelope(ProjectInteractionCommitResponse {
                     session_id: self.session_id.clone(),
@@ -2395,18 +2447,8 @@ impl ProjectSession {
                     project_json_path: self.project_json_path.display().to_string(),
                 }))
             }
-            intent => {
-                let edit_payload = match self.intent_payload(intent) {
-                    Ok(payload) => payload,
-                    Err(message) => {
-                        return project_interaction_error(
-                            "commitProjectInteraction",
-                            CommandErrorKind::InvalidTimelineEdit,
-                            message,
-                        );
-                    }
-                };
-                let response = match draft_commands::timeline::execute_timeline_edit(edit_payload) {
+            ResolvedProjectInteraction::Timeline(payload) => {
+                let response = match draft_commands::timeline::execute_timeline_edit(payload) {
                     Ok(response) => response,
                     Err(error) => {
                         return project_interaction_error(
@@ -2417,6 +2459,96 @@ impl ProjectSession {
                     }
                 };
                 self.apply_interaction_response(response, interaction)
+            }
+        }
+    }
+
+    fn resolve_interaction_payload(
+        &self,
+        payload: ProjectInteractionPayload,
+    ) -> std::result::Result<ResolvedProjectInteraction, String> {
+        match payload {
+            ProjectInteractionPayload::PlayheadScrub { playhead } => {
+                Ok(ResolvedProjectInteraction::Playhead(playhead))
+            }
+            ProjectInteractionPayload::SelectedSegmentRetime { retiming } => {
+                Ok(ResolvedProjectInteraction::Timeline(
+                    TimelineEditPayload::SetSegmentRetime(SetSegmentRetimeCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id: self.selected_segment_id("调整速度")?,
+                        retiming,
+                    }),
+                ))
+            }
+            ProjectInteractionPayload::SelectedSegmentEffect {
+                effect_index,
+                parameter,
+            } => Ok(ResolvedProjectInteraction::Timeline(
+                TimelineEditPayload::UpdateSegmentEffectParameter(
+                    UpdateSegmentEffectParameterCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id: self.selected_segment_id("调整效果")?,
+                        effect_index,
+                        parameter,
+                    },
+                ),
+            )),
+            ProjectInteractionPayload::SelectedSegmentMask { mask } => {
+                let segment = self.selected_segment("调整遮罩")?;
+                let segment_id = segment.segment_id.clone();
+                let mut visual = segment.visual.clone();
+                visual.mask = mask;
+                Ok(ResolvedProjectInteraction::Timeline(
+                    TimelineEditPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id,
+                        visual,
+                    }),
+                ))
+            }
+            ProjectInteractionPayload::SelectedSegmentBlend { opacity_millis } => {
+                let segment = self.selected_segment("调整混合")?;
+                let segment_id = segment.segment_id.clone();
+                let mut visual = segment.visual.clone();
+                visual.transform.opacity.value_millis =
+                    checked_u32("混合不透明度", opacity_millis, 0, 1_000)?;
+                Ok(ResolvedProjectInteraction::Timeline(
+                    TimelineEditPayload::UpdateSegmentVisual(UpdateSegmentVisualCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        segment_id,
+                        visual,
+                    }),
+                ))
+            }
+            ProjectInteractionPayload::SelectedTransitionDuration {
+                from_segment_id,
+                to_segment_id,
+                duration,
+            } => Ok(ResolvedProjectInteraction::Timeline(
+                TimelineEditPayload::UpdateTransitionDuration(
+                    UpdateTransitionDurationCommandPayload {
+                        draft: self.draft.clone(),
+                        command_state: self.command_state.clone(),
+                        selection: self.selection.clone(),
+                        from_segment_id,
+                        to_segment_id,
+                        duration,
+                    },
+                ),
+            )),
+            payload => {
+                let intent = payload.into_project_intent()?;
+                Ok(ResolvedProjectInteraction::Timeline(
+                    self.intent_payload(intent)?,
+                ))
             }
         }
     }

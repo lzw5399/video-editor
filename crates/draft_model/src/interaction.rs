@@ -7,11 +7,16 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 pub enum ProjectInteractionKind {
     SelectedSegmentVisual,
+    SelectedSegmentRetime,
+    SelectedSegmentEffect,
+    SelectedSegmentMask,
+    SelectedSegmentBlend,
     SelectedText,
     SelectedSegmentAudio,
     PlayheadScrub,
     TimelineMoveTrim,
     KeyframeEdit,
+    SelectedTransitionDuration,
 }
 
 /// Durable metadata for one live interaction session.
