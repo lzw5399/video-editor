@@ -7,10 +7,10 @@ use std::{
 };
 
 use draft_model::{
-    ArtifactGenerationActionCommandPayload, ArtifactGenerationTaskSummary,
-    ArtifactMaintenanceResult, ArtifactQuotaStatus, ArtifactStatusSummary, ArtifactTaskStatus,
-    AudioEffectSlot, AudioEffectSlotKind, AudioFade, AudioOutputDeviceStatus,
-    AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
+    AddTransitionCommandPayload, ArtifactGenerationActionCommandPayload,
+    ArtifactGenerationTaskSummary, ArtifactMaintenanceResult, ArtifactQuotaStatus,
+    ArtifactStatusSummary, ArtifactTaskStatus, AudioEffectSlot, AudioEffectSlotKind, AudioFade,
+    AudioOutputDeviceStatus, AudioOutputDeviceSummary, AudioPanBalance, AudioPreviewCommandPayload,
     AudioPreviewCommandResponse, AudioPreviewPlaybackStatus, AudioPreviewStatusResponse,
     AudioRetimePolicy, BlendModeKind, CancelExportCommandPayload, CanvasAdaptationPolicy,
     CanvasAspectRatio, CanvasAspectRatioPreset, CanvasBackground, CanvasBackgroundCapability,
@@ -30,10 +30,11 @@ use draft_model::{
     MissingMaterialCommandDiagnosticKind, PingCommandPayload, PreviewArtifactResponse,
     PreviewDiagnostic, PreviewDiagnosticKind, PreviewOutputProfile, PreviewStatus,
     ProbeMediaRuntimeCommandPayload, ProbeRuntimeCapabilitiesCommandPayload, RationalFrameRate,
-    RefreshArtifactStatusCommandPayload, RetimeMode, RunArtifactGarbageCollectionCommandPayload,
-    RuntimeBinaryCapability, RuntimeBinaryKind, RuntimeCapabilityReport, RuntimeCapabilityStatus,
-    RuntimeCodecCapability, RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries,
-    RuntimeColorRange, RuntimeColorTransfer, RuntimeDeviceId, RuntimeFallbackDecodePathCapability,
+    RefreshArtifactStatusCommandPayload, RemoveTransitionCommandPayload, RetimeMode,
+    RunArtifactGarbageCollectionCommandPayload, RuntimeBinaryCapability, RuntimeBinaryKind,
+    RuntimeCapabilityReport, RuntimeCapabilityStatus, RuntimeCodecCapability,
+    RuntimeColorDiagnostic, RuntimeColorMatrix, RuntimeColorPrimaries, RuntimeColorRange,
+    RuntimeColorTransfer, RuntimeDeviceId, RuntimeFallbackDecodePathCapability,
     RuntimeFallbackLadderCapability, RuntimeFeatureCapability, RuntimeFontCapability,
     RuntimeLicensePosture, RuntimeMacosMediaIoCapabilities, RuntimeMediaIoCapabilities,
     RuntimeMediaIoFallbackReason, RuntimePixelFormatCapability, RuntimeSelectedDecodePath,
@@ -46,8 +47,9 @@ use draft_model::{
     TargetTimerange, TextAlignment, TextBackground, TextBox, TextBubbleRef, TextEffectRef,
     TextFont, TextLayoutRegion, TextSegment, TextSegmentSource, TextShadow, TextStroke, TextStyle,
     TextWrapping, TimelineCommandResponse, TimelineSelection, Track, TrackId, TrackKind,
-    TrackTransition, Transition, TransitionKind, TransitionReference, VersionCommandPayload,
-    WaveformDisplayPeak, WaveformDisplayPeaksResponse, WaveformDisplayStatus,
+    TrackTransition, Transition, TransitionKind, TransitionReference,
+    UpdateTransitionDurationCommandPayload, VersionCommandPayload, WaveformDisplayPeak,
+    WaveformDisplayPeaksResponse, WaveformDisplayStatus,
 };
 use schemars::{Schema, schema_for};
 use serde_json::json;
@@ -86,6 +88,9 @@ const PUBLIC_TIMELINE_EDIT_PAYLOAD_CONTRACTS: &[&str] = &[
     "UpdateSegmentVisualCommandPayload",
     "SetSegmentRetimeCommandPayload",
     "ClearSegmentRetimeCommandPayload",
+    "AddTransitionCommandPayload",
+    "UpdateTransitionDurationCommandPayload",
+    "RemoveTransitionCommandPayload",
     "SetSegmentKeyframeCommandPayload",
     "RemoveSegmentKeyframeCommandPayload",
 ];
@@ -121,6 +126,9 @@ const PUBLIC_TIMELINE_EDIT_COMMAND_NAMES: &[&str] = &[
     "updateSegmentVisual",
     "setSegmentRetime",
     "clearSegmentRetime",
+    "addTransition",
+    "updateTransitionDuration",
+    "removeTransition",
     "setSegmentKeyframe",
     "removeSegmentKeyframe",
 ];
@@ -1499,6 +1507,72 @@ fn schema_exports_include_retime_command_contracts() {
         assert!(
             !command_envelope_ts.contains(forbidden_contract),
             "public CommandEnvelope.ts must not export internal retime payload {forbidden_contract}"
+        );
+    }
+}
+
+#[test]
+fn schema_exports_include_transition_command_contracts() {
+    let command_envelope_ts = command_envelope_ts_contract();
+    let command_result_ts = command_result_ts_contract();
+    let transition_payload_ts = ts_contract(&[
+        export_decl::<AddTransitionCommandPayload>(),
+        export_decl::<UpdateTransitionDurationCommandPayload>(),
+        export_decl::<RemoveTransitionCommandPayload>(),
+    ]);
+    let draft_ts = ts_contract(&[
+        export_decl::<TransitionKind>(),
+        export_decl::<TransitionReference>(),
+        export_decl::<TrackTransition>(),
+    ]);
+
+    for expected_export in [
+        "export type TransitionKind",
+        "export type TransitionReference",
+        "export type TrackTransition",
+    ] {
+        assert!(
+            draft_ts.contains(expected_export),
+            "draft TypeScript should include transition semantic contract {expected_export}"
+        );
+    }
+
+    for expected_payload_contract in [
+        "export type AddTransitionCommandPayload",
+        "reference: TransitionReference",
+        "duration: Microseconds",
+        "export type UpdateTransitionDurationCommandPayload",
+        "export type RemoveTransitionCommandPayload",
+    ] {
+        assert!(
+            transition_payload_ts.contains(expected_payload_contract),
+            "internal transition payload contract should generate {expected_payload_contract}"
+        );
+    }
+
+    for expected_delta in [
+        "addTransition",
+        "updateTransitionDuration",
+        "removeTransition",
+    ] {
+        assert!(
+            command_result_ts.contains(expected_delta),
+            "CommandResultEnvelope.ts should expose transition delta name {expected_delta}"
+        );
+        assert!(
+            !command_envelope_ts.contains(expected_delta),
+            "public CommandEnvelope.ts must not expose internal transition command {expected_delta}"
+        );
+    }
+
+    for forbidden_contract in [
+        "AddTransitionCommandPayload",
+        "UpdateTransitionDurationCommandPayload",
+        "RemoveTransitionCommandPayload",
+    ] {
+        assert!(
+            !command_envelope_ts.contains(forbidden_contract),
+            "public CommandEnvelope.ts must not export internal transition payload {forbidden_contract}"
         );
     }
 }

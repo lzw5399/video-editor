@@ -183,6 +183,9 @@ pub enum TimelineEditPayload {
     UpdateSegmentVisual(UpdateSegmentVisualCommandPayload),
     SetSegmentRetime(SetSegmentRetimeCommandPayload),
     ClearSegmentRetime(ClearSegmentRetimeCommandPayload),
+    AddTransition(AddTransitionCommandPayload),
+    UpdateTransitionDuration(UpdateTransitionDurationCommandPayload),
+    RemoveTransition(RemoveTransitionCommandPayload),
     SetSegmentKeyframe(SetSegmentKeyframeCommandPayload),
     RemoveSegmentKeyframe(RemoveSegmentKeyframeCommandPayload),
 }
@@ -678,6 +681,44 @@ pub struct ClearSegmentRetimeCommandPayload {
     pub command_state: CommandState,
     pub selection: TimelineSelection,
     pub segment_id: SegmentId,
+}
+
+/// Payload accepted by the Phase 19 transition add command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddTransitionCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub from_segment_id: SegmentId,
+    pub to_segment_id: SegmentId,
+    pub reference: TransitionReference,
+    pub duration: Microseconds,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub parameters: std::collections::BTreeMap<String, String>,
+}
+
+/// Payload accepted by the Phase 19 transition duration update command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateTransitionDurationCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub from_segment_id: SegmentId,
+    pub to_segment_id: SegmentId,
+    pub duration: Microseconds,
+}
+
+/// Payload accepted by the Phase 19 transition remove command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoveTransitionCommandPayload {
+    pub draft: Draft,
+    pub command_state: CommandState,
+    pub selection: TimelineSelection,
+    pub from_segment_id: SegmentId,
+    pub to_segment_id: SegmentId,
 }
 
 /// Payload accepted by the Phase 10 segment keyframe set command.

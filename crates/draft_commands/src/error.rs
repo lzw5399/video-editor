@@ -67,6 +67,12 @@ pub enum TimelineCommandErrorKind {
         segment_id: SegmentId,
         reason: String,
     },
+    InvalidTransitionRelationship {
+        track_id: TrackId,
+        from_segment_id: SegmentId,
+        to_segment_id: SegmentId,
+        reason: String,
+    },
     UnsupportedAudioRetime {
         segment_id: SegmentId,
         policy: String,
@@ -166,6 +172,19 @@ impl fmt::Display for TimelineCommandError {
                 formatter,
                 "invalid retime for segment {}: {}",
                 segment_id.as_str(),
+                reason
+            ),
+            TimelineCommandErrorKind::InvalidTransitionRelationship {
+                track_id,
+                from_segment_id,
+                to_segment_id,
+                reason,
+            } => write!(
+                formatter,
+                "invalid transition relationship on track {} from {} to {}: {}",
+                track_id.as_str(),
+                from_segment_id.as_str(),
+                to_segment_id.as_str(),
                 reason
             ),
             TimelineCommandErrorKind::UnsupportedAudioRetime {

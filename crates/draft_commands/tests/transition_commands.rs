@@ -4,10 +4,7 @@ use draft_commands::{
     TimelineCommandErrorKind,
     history::{redo_timeline_edit, undo_timeline_edit},
     timeline::{delete_segment, execute_timeline_edit, move_segment, split_segment, trim_segment},
-    transition::{
-        add_transition, remove_transition, update_transition_duration,
-        validate_transition_relationships,
-    },
+    transition::{add_transition, remove_transition, validate_transition_relationships},
 };
 use draft_model::{
     AddTransitionCommandPayload, CommandState, DirtyDomain, Draft, MainTrackMagnet, Material,
@@ -220,7 +217,10 @@ fn transition_commands_phase19_invalid_relationships_reject_atomically() {
         TimelineCommandErrorKind::LockedTrack { .. }
     ));
 
-    assert_eq!(draft, draft_with_adjacent_video_segments(1_000_000, 1_000_000));
+    assert_eq!(
+        draft,
+        draft_with_adjacent_video_segments(1_000_000, 1_000_000)
+    );
     assert_eq!(state, CommandState::empty());
 }
 
@@ -240,7 +240,9 @@ fn transition_commands_phase19_segment_edits_preserve_or_reject_relationships_at
     )
     .expect("snapping should preserve a transition-adjacent boundary");
     assert_eq!(
-        segment_by_id(&snapped.draft, "right-segment").target_timerange.start,
+        segment_by_id(&snapped.draft, "right-segment")
+            .target_timerange
+            .start,
         Microseconds::new(1_000_000)
     );
     validate_transition_relationships(&snapped.draft)
@@ -266,7 +268,7 @@ fn transition_commands_phase19_segment_edits_preserve_or_reject_relationships_at
         &selection,
         SegmentId::from("left-segment"),
         draft_model::TrimSegmentDirection::Right,
-        TargetTimerange::new(0, 900_000),
+        TargetTimerange::new(0, 800_000),
     )
     .expect_err("trim that breaks transition adjacency should reject");
     assert!(matches!(
@@ -356,25 +358,19 @@ fn transition_commands_phase19_dispatcher_routes_add_transition_payload() {
 
 fn draft_with_transition(duration: Microseconds) -> Draft {
     let mut draft = draft_with_adjacent_video_segments(1_000_000, 1_000_000);
-    draft.tracks[0]
-        .transitions
-        .push(TrackTransition::dissolve(
-            SegmentId::from("left-segment"),
-            SegmentId::from("right-segment"),
-            duration,
-        ));
+    draft.tracks[0].transitions.push(TrackTransition::dissolve(
+        SegmentId::from("left-segment"),
+        SegmentId::from("right-segment"),
+        duration,
+    ));
     draft
 }
 
 fn draft_with_gap_between_video_segments() -> Draft {
     let mut draft = draft_with_tracks_and_material();
-    draft.tracks[0].segments.push(segment(
-        "left-segment",
-        0,
-        1_000_000,
-        0,
-        1_000_000,
-    ));
+    draft.tracks[0]
+        .segments
+        .push(segment("left-segment", 0, 1_000_000, 0, 1_000_000));
     draft.tracks[0].segments.push(segment(
         "right-segment",
         1_200_000,
@@ -387,13 +383,9 @@ fn draft_with_gap_between_video_segments() -> Draft {
 
 fn draft_with_adjacent_video_segments(left_duration: u64, right_duration: u64) -> Draft {
     let mut draft = draft_with_tracks_and_material();
-    draft.tracks[0].segments.push(segment(
-        "left-segment",
-        0,
-        left_duration,
-        0,
-        left_duration,
-    ));
+    draft.tracks[0]
+        .segments
+        .push(segment("left-segment", 0, left_duration, 0, left_duration));
     draft.tracks[0].segments.push(segment(
         "right-segment",
         left_duration,

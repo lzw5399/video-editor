@@ -23,6 +23,10 @@ use crate::{
     },
     snapping::{apply_main_track_magnet, apply_snapping, snap_trim_boundary},
     text::{add_text_segment, edit_text_segment, import_subtitle_srt, import_subtitle_srt_intent},
+    transition::{
+        add_transition, remove_transition, update_transition_duration,
+        validate_transition_relationships,
+    },
     visual::update_segment_visual,
 };
 
@@ -65,6 +69,7 @@ pub fn validate_timeline_rules(draft: &Draft) -> Result<(), TimelineCommandError
     validate_segment_material_bounds(draft)?;
     validate_draft_retime_source_ranges(draft)?;
     validate_track_overlaps(draft)?;
+    validate_transition_relationships(draft)?;
     validate_draft(draft)?;
     Ok(())
 }
@@ -370,6 +375,31 @@ pub fn execute_timeline_edit(
             &payload.command_state,
             &payload.selection,
             payload.segment_id,
+        ),
+        TimelineEditPayload::AddTransition(payload) => add_transition(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.from_segment_id,
+            payload.to_segment_id,
+            payload.reference,
+            payload.duration,
+            payload.parameters,
+        ),
+        TimelineEditPayload::UpdateTransitionDuration(payload) => update_transition_duration(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.from_segment_id,
+            payload.to_segment_id,
+            payload.duration,
+        ),
+        TimelineEditPayload::RemoveTransition(payload) => remove_transition(
+            &payload.draft,
+            &payload.command_state,
+            &payload.selection,
+            payload.from_segment_id,
+            payload.to_segment_id,
         ),
         TimelineEditPayload::SetSegmentKeyframe(payload) => set_segment_keyframe(
             &payload.draft,
