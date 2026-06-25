@@ -6,7 +6,10 @@ use bindings_node::{
     seek_audio_preview, start_project_session_export, stop_audio_preview,
     update_realtime_preview_project_session_snapshot,
 };
-use draft_model::{Draft, TextSegmentSource};
+use draft_model::{
+    Draft, Filter, Material, MaterialKind, Microseconds, Segment, SegmentId, SourceTimerange,
+    TargetTimerange, TextSegmentSource, Track, TrackKind, TrackTransition,
+};
 use editor_runtime::project_session_node::{
     force_material_probe_enqueue_failure_for_tests,
     force_material_probe_worker_spawn_failure_for_tests,
@@ -2360,6 +2363,286 @@ fn project_session_view_model_encodes_timeline_item_handles() {
 }
 
 #[test]
+fn project_session_phase19_intents_delegate_to_rust_commands() {
+    let temp_dir = tempfile::tempdir().expect("tempdir should be created");
+    let bundle_path = temp_dir.path().join("session-phase19-intents.veproj");
+    save_phase19_project_intent_draft(&bundle_path);
+
+    let opened = open_project_session(json!({
+        "bundlePath": bundle_path.display().to_string(),
+        "sessionId": "test-session-phase19-intents"
+    }))
+    .expect("openProjectSession should return an envelope");
+    assert_eq!(opened["ok"], true, "{opened:#}");
+
+    let selected = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": 0,
+        "intent": {
+            "kind": "selectTimelineItemIntent",
+            "itemHandle": "timeline-segment:video-track:left-segment"
+        }
+    }))
+    .expect("selectTimelineItemIntent should return an envelope");
+    assert_eq!(selected["ok"], true, "{selected:#}");
+    let mut revision = selected["data"]["revision"]
+        .as_u64()
+        .expect("selection should return revision");
+
+    let stale = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision + 99,
+        "intent": {
+            "kind": "setSelectedSegmentRetime",
+            "retiming": {
+                "mode": {
+                    "kind": "constant",
+                    "speed": { "numerator": 1, "denominator": 2 }
+                },
+                "audioPolicy": "followVideoSpeed"
+            }
+        }
+    }))
+    .expect("stale phase19 retime intent should return an envelope");
+    assert_eq!(stale["ok"], false, "{stale:#}");
+    assert!(
+        stale["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Stale project session revision")
+    );
+
+    let retimed = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "setSelectedSegmentRetime",
+            "retiming": {
+                "mode": {
+                    "kind": "constant",
+                    "speed": { "numerator": 1, "denominator": 2 }
+                },
+                "audioPolicy": "followVideoSpeed"
+            }
+        }
+    }))
+    .expect("setSelectedSegmentRetime should return an envelope");
+    assert_eq!(retimed["ok"], true, "{retimed:#}");
+    revision += 1;
+    assert_eq!(retimed["data"]["revision"], revision);
+    assert_eq!(retimed["data"]["delta"]["command"], "setSegmentRetime");
+    assert_no_renderer_project_state_payload(&retimed);
+
+    let applied = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "applySelectedSegmentEffect",
+            "effect": {
+                "kind": { "kind": "opacityAdjustment", "opacityMillis": 900 },
+                "enabled": true
+            }
+        }
+    }))
+    .expect("applySelectedSegmentEffect should return an envelope");
+    assert_eq!(applied["ok"], true, "{applied:#}");
+    revision += 1;
+    assert_eq!(applied["data"]["revision"], revision);
+    assert_eq!(applied["data"]["delta"]["command"], "applySegmentEffect");
+
+    let effected = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "updateSelectedSegmentEffectParameter",
+            "effectIndex": 0,
+            "parameter": {
+                "parameter": "gaussianBlurRadiusMillis",
+                "radiusMillis": 750
+            }
+        }
+    }))
+    .expect("updateSelectedSegmentEffectParameter should return an envelope");
+    assert_eq!(effected["ok"], true, "{effected:#}");
+    revision += 1;
+    assert_eq!(effected["data"]["revision"], revision);
+    assert_eq!(
+        effected["data"]["delta"]["command"],
+        "updateSegmentEffectParameter"
+    );
+
+    let removed_effect = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "removeSelectedSegmentEffect",
+            "effectIndex": 1
+        }
+    }))
+    .expect("removeSelectedSegmentEffect should return an envelope");
+    assert_eq!(removed_effect["ok"], true, "{removed_effect:#}");
+    revision += 1;
+    assert_eq!(removed_effect["data"]["revision"], revision);
+    assert_eq!(
+        removed_effect["data"]["delta"]["command"],
+        "removeSegmentEffect"
+    );
+
+    let external_mask = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "setSelectedSegmentMask",
+            "mask": {
+                "kind": "externalReference",
+                "reference": {
+                    "provider": "jianying",
+                    "effectId": "private-mask"
+                }
+            }
+        }
+    }))
+    .expect("external mask intent should return an envelope");
+    assert_eq!(external_mask["ok"], false, "{external_mask:#}");
+    assert!(
+        external_mask["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("external")
+    );
+
+    let masked = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "setSelectedSegmentMask",
+            "mask": {
+                "kind": "rectangle",
+                "xMillis": 100,
+                "yMillis": 120,
+                "widthMillis": 500,
+                "heightMillis": 400,
+                "featherMillis": 40,
+                "opacityMillis": 900,
+                "inverted": false
+            }
+        }
+    }))
+    .expect("setSelectedSegmentMask should return an envelope");
+    assert_eq!(masked["ok"], true, "{masked:#}");
+    revision += 1;
+    assert_eq!(masked["data"]["revision"], revision);
+    assert_eq!(masked["data"]["events"][0]["kind"], "segmentMaskSet");
+    assert_eq!(masked["data"]["delta"]["command"], "setSegmentMask");
+
+    let blended = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "setSelectedSegmentBlendMode",
+            "blendMode": { "kind": "multiply" }
+        }
+    }))
+    .expect("setSelectedSegmentBlendMode should return an envelope");
+    assert_eq!(blended["ok"], true, "{blended:#}");
+    revision += 1;
+    assert_eq!(blended["data"]["revision"], revision);
+    assert_eq!(blended["data"]["events"][0]["kind"], "segmentBlendModeSet");
+    assert_eq!(blended["data"]["delta"]["command"], "setSegmentBlendMode");
+
+    let transition_updated = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "updateSelectedTransitionDuration",
+            "fromSegmentId": "left-segment",
+            "toSegmentId": "right-segment",
+            "duration": 250_000
+        }
+    }))
+    .expect("updateSelectedTransitionDuration should return an envelope");
+    assert_eq!(transition_updated["ok"], true, "{transition_updated:#}");
+    revision += 1;
+    assert_eq!(transition_updated["data"]["revision"], revision);
+    assert_eq!(
+        transition_updated["data"]["delta"]["command"],
+        "updateTransitionDuration"
+    );
+
+    let transition_removed = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "removeSelectedTransition",
+            "fromSegmentId": "left-segment",
+            "toSegmentId": "right-segment"
+        }
+    }))
+    .expect("removeSelectedTransition should return an envelope");
+    assert_eq!(transition_removed["ok"], true, "{transition_removed:#}");
+    revision += 1;
+    assert_eq!(transition_removed["data"]["revision"], revision);
+    assert_eq!(
+        transition_removed["data"]["delta"]["command"],
+        "removeTransition"
+    );
+
+    let transition_added = execute_project_intent(json!({
+        "sessionId": "test-session-phase19-intents",
+        "expectedRevision": revision,
+        "intent": {
+            "kind": "addTransitionAtBoundary",
+            "fromSegmentId": "left-segment",
+            "toSegmentId": "right-segment",
+            "reference": {
+                "kind": "firstParty",
+                "transition": "dissolve"
+            },
+            "duration": 200_000
+        }
+    }))
+    .expect("addTransitionAtBoundary should return an envelope");
+    assert_eq!(transition_added["ok"], true, "{transition_added:#}");
+    revision += 1;
+    assert_eq!(transition_added["data"]["revision"], revision);
+    assert_eq!(
+        transition_added["data"]["delta"]["command"],
+        "addTransition"
+    );
+
+    let reopened = open_project_bundle(&StdPlatformFileSystem, &bundle_path)
+        .expect("phase19 project intent commits should save canonical project.json");
+    let segment = &reopened.bundle.draft.tracks[0].segments[0];
+    assert_eq!(
+        serde_json::to_value(&segment.retiming.mode).expect("retime mode should serialize"),
+        json!({
+            "kind": "constant",
+            "speed": { "numerator": 1, "denominator": 2 }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(&segment.filters[0]).expect("filter should serialize")["kind"]["radiusMillis"],
+        750
+    );
+    assert_eq!(
+        serde_json::to_value(&segment.visual.mask).expect("mask should serialize")["kind"],
+        "rectangle"
+    );
+    assert_eq!(
+        serde_json::to_value(&segment.visual.blend_mode).expect("blend should serialize")["kind"],
+        "multiply"
+    );
+    assert_eq!(reopened.bundle.draft.tracks[0].transitions.len(), 1);
+    assert_eq!(
+        reopened.bundle.draft.tracks[0].transitions[0].duration,
+        Microseconds::new(200_000)
+    );
+
+    close_project_session(json!({ "sessionId": "test-session-phase19-intents" }))
+        .expect("closeProjectSession should return an envelope");
+}
+
+#[test]
 fn project_session_track_mutation_intents_use_selected_track() {
     let temp_dir = tempfile::tempdir().expect("tempdir should be created");
     let bundle_path = temp_dir.path().join("session-selected-track.veproj");
@@ -3020,6 +3303,45 @@ fn save_multimedia_timeline_draft(bundle_path: &std::path::Path) {
         .expect("multimedia timeline draft fixture should parse");
     save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
         .expect("multimedia timeline draft fixture should be saved");
+}
+
+fn save_phase19_project_intent_draft(bundle_path: &std::path::Path) {
+    let mut draft = Draft::new(
+        "phase19-project-intent-draft",
+        "Phase 19 Project Intent Draft",
+    );
+    draft.materials.push(Material::new(
+        "video-material",
+        MaterialKind::Video,
+        "file://video.mp4",
+        "video.mp4",
+    ));
+
+    let mut left_segment = Segment::new(
+        "left-segment",
+        "video-material",
+        SourceTimerange::new(0, 1_000_000),
+        TargetTimerange::new(0, 1_000_000),
+    );
+    left_segment.filters.push(Filter::gaussian_blur(500));
+    let right_segment = Segment::new(
+        "right-segment",
+        "video-material",
+        SourceTimerange::new(1_000_000, 1_000_000),
+        TargetTimerange::new(1_000_000, 1_000_000),
+    );
+    let mut track = Track::new("video-track", TrackKind::Video, "Video");
+    track.segments.push(left_segment);
+    track.segments.push(right_segment);
+    track.transitions.push(TrackTransition::dissolve(
+        SegmentId::from("left-segment"),
+        SegmentId::from("right-segment"),
+        Microseconds::new(300_000),
+    ));
+    draft.tracks.push(track);
+
+    save_project_bundle(&StdPlatformFileSystem, bundle_path, &draft)
+        .expect("phase19 project intent draft fixture should be saved");
 }
 
 fn multimedia_timeline_draft_json() -> Value {
