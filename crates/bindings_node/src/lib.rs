@@ -27,7 +27,8 @@ use crate::material_service::{
     MaterialServiceError, MissingMaterialDiagnostic, MissingMaterialDiagnosticKind,
 };
 use crate::preview_export_service::{
-    ExportCommandError, export_error_diagnostic, global_export_registry,
+    ExportCommandError, cancel as cancel_runtime_export, export_error_diagnostic,
+    start_export as start_runtime_export, status as runtime_export_status,
 };
 use crate::realtime_preview_service::{
     RealtimePreviewBindingRegistry, RealtimePreviewFrameBindingRequest,
@@ -757,7 +758,7 @@ fn start_export_command(payload: StartExportCommandPayload) -> Result<serde_json
             ));
         }
     };
-    match global_export_registry().start_export(runtime, payload) {
+    match start_runtime_export(runtime, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(export_error_envelope("startExport", error)),
     }
@@ -811,7 +812,7 @@ fn start_project_session_export_command(
         preset: request.preset,
         dirty_facts: None,
     };
-    match global_export_registry().start_export(runtime, payload) {
+    match start_runtime_export(runtime, payload) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(export_error_envelope("startProjectSessionExport", error)),
     }
@@ -840,14 +841,14 @@ fn draft_with_export_resolved_material_uris(
 fn get_export_job_status_command(
     payload: GetExportJobStatusCommandPayload,
 ) -> Result<serde_json::Value> {
-    match global_export_registry().status(&payload.job_id) {
+    match runtime_export_status(&payload.job_id) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(export_error_envelope("getExportJobStatus", error)),
     }
 }
 
 fn cancel_export_command(payload: CancelExportCommandPayload) -> Result<serde_json::Value> {
-    match global_export_registry().cancel(&payload.job_id) {
+    match cancel_runtime_export(&payload.job_id) {
         Ok(response) => to_js_value(ok_envelope(response)),
         Err(error) => to_js_value(export_error_envelope("cancelExport", error)),
     }

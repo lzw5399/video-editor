@@ -331,8 +331,7 @@ fn aggregate_task_runtime_telemetry(
 fn refresh_task_runtime_scheduler_snapshots() {
     crate::record_realtime_preview_task_runtime_telemetry_snapshots();
     crate::record_audio_preview_task_runtime_telemetry_snapshot();
-    crate::preview_export_service::global_export_registry()
-        .record_task_runtime_telemetry_snapshot();
+    crate::preview_export_service::record_export_task_runtime_telemetry_snapshot();
     crate::artifact_store_service::record_artifact_task_runtime_telemetry_snapshot();
     crate::project_session_service::record_project_session_task_runtime_telemetry_snapshots();
 }

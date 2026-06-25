@@ -19,9 +19,7 @@ blake3 = "1.8.5"
 draft_commands = { path = "../draft_commands" }
 draft_import = { path = "../draft_import" }
 draft_model = { path = "../draft_model" }
-engine_core = { path = "../engine_core" }
 editor_runtime = { path = "../editor_runtime" }
-ffmpeg_compiler = { path = "../ffmpeg_compiler" }
 media_runtime = { path = "../media_runtime" }
 media_runtime_desktop = { path = "../media_runtime_desktop" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
