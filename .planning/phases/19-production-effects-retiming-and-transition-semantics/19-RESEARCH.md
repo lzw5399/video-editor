@@ -538,22 +538,16 @@ Use this route for speed handles, effect sliders, mask handles, and transition d
 | A2 | A capability registry can live inside existing workspace crates instead of a new crate. | Recommended Project Structure | If compile boundaries become cyclic, planner may need a small dedicated internal crate. |
 | A3 | The exact performance budgets for Phase 19 should be derived from Phase 16/17 telemetry rather than invented in research. | Validation Architecture | Planner must set measurable thresholds during planning. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact supported slice**
-   - What we know: context recommends narrow real first-party support such as opacity/blur/basic color/filter primitives and one or more simple transitions. [VERIFIED: 19-CONTEXT.md]
-   - What's unclear: exact product-visible effect/transition names and parameter ranges are not locked. [VERIFIED: 19-CONTEXT.md]
-   - Recommendation: planner should pick the smallest complete slice and record deferred variants explicitly.
+1. **Exact supported slice — RESOLVED**
+   - Resolution: Phase 19 supports the smallest complete first-party slice that can be proven through draft schema, commands, engine/audio mapping, render graph, realtime GPU preview, FFmpeg compiler/export, desktop UI, and fixture parity: constant speed and speed curve retiming, dissolve transition, Gaussian blur, basic color/opacity adjustment, rectangular/ellipse masks, and normal/multiply/screen blend modes. Unsupported or proprietary variants remain degraded/unsupported/external report entries. [VERIFIED: 19-CONTEXT.md] [VERIFIED: 19-UI-SPEC.md]
 
-2. **Retiming breadth**
-   - What we know: constant speed, reverse playback, curve speed, and audio follow-speed boundaries were in archived scope. [VERIFIED: ROADMAP_PHASES_11_13_ARCHIVE.md]
-   - What's unclear: whether Phase 19 must support reverse/curve/pitch correction or only report them as degraded/unsupported. [VERIFIED: ROADMAP_PHASES_11_13_ARCHIVE.md]
-   - Recommendation: implement constant-speed source mapping first and classify reverse/curve/pitch combinations unless scoped in a later wave.
+2. **Retiming breadth — RESOLVED**
+   - Resolution: Phase 19 implements constant speed and speed curve source mapping end to end, including explicit audio follow-speed representation in `audio_engine`/audio mix parity. Reverse playback and pitch-preserving time-stretch are classified as degraded/unsupported unless they can be represented by the same typed contract and verified by the same audio preview/export parity gates during execution. [VERIFIED: 19-CONTEXT.md] [VERIFIED: crates/audio_engine/src/dsp_timeline.rs]
 
-3. **UI-SPEC granularity**
-   - What we know: visible control changes require UI-SPEC and independent UI audit. [VERIFIED: 19-CONTEXT.md]
-   - What's unclear: whether the first UI wave should expose resource panel presets, inspector controls, timeline handles, or only diagnostics. [VERIFIED: 19-CONTEXT.md]
-   - Recommendation: gate each visible control behind a completed Rust semantic and product E2E case.
+3. **UI-SPEC granularity — RESOLVED**
+   - Resolution: The approved UI-SPEC requires visible resource cards, inspector controls, timeline handles/badges, preview ghost/proxy affordances, Playwright coverage, and an independent UI audit. Each visible control is gated behind Rust capability/view-model support and product E2E evidence; unsupported entries stay disabled with product copy. [VERIFIED: 19-UI-SPEC.md]
 
 ## Environment Availability
 

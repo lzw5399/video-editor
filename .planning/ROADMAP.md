@@ -908,7 +908,7 @@ Plans:
   4. Masks, blend modes, blur, and complex effects use the production GPU preview path for realtime interaction and classify unsupported export paths.
   5. Complex Jianying/Kaipai-like template fixtures verify preview/export parity, fallback reports, and performance budgets for production editing scenarios.
 
-**Plans**: 11 plans
+**Plans**: 15 plans
 
 Plans:
 
@@ -930,31 +930,44 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19-05-PLAN.md — Implement first-class transition semantics, preview diagnostics, and export support
+- [ ] 19-05-PLAN.md — Represent retiming in audio_engine and testkit audio parity
+- [ ] 19-06-PLAN.md — Implement first-class transition model and undoable commands
 
-**Wave 5** *(blocked on Wave 4 completion)*
+**Wave 5** *(blocked on Wave 4 transition model completion)*
 
-- [ ] 19-06-PLAN.md — Implement first-party effects, filters, adjustments, GPU preview, and compiler support
+- [ ] 19-07-PLAN.md — Propagate transitions through graph, preview diagnostics, compiler, and guards
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 19-07-PLAN.md — Implement mask and blend semantics with GPU preview and export classification
+- [ ] 19-08-PLAN.md — Implement first-party effect/filter command semantics
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 19-08-PLAN.md — Expose Rust project-session command and interaction surfaces
+- [ ] 19-09-PLAN.md — Propagate first-party effects through graph, GPU preview, compiler, and guards
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 19-09-PLAN.md — Integrate capability-backed desktop UI controls and product E2E
+- [ ] 19-10-PLAN.md — Implement mask and blend model/command semantics
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 19-10-PLAN.md — Add Kaipai/Jianying-like template fidelity fixtures and report mapping
+- [ ] 19-11-PLAN.md — Propagate masks/blends through graph, GPU preview, compiler diagnostics, and guards
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 19-11-PLAN.md — Run independent UI audit, update boundaries, and close aggregate validation
+- [ ] 19-12-PLAN.md — Expose Rust project-session command and interaction surfaces
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 19-13-PLAN.md — Integrate capability-backed desktop UI controls and product E2E
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 19-14-PLAN.md — Add Kaipai/Jianying-like template fidelity fixtures and report mapping
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 19-15-PLAN.md — Run independent UI audit, update boundaries, and close aggregate validation
 
 ## Progress
 
@@ -986,4 +999,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 04.1 -> 5 -> 6 -> 7 -> 8 ->
 | 16. Task Scheduler, Job Isolation, And Performance Telemetry | 8/8 | Complete    | 2026-06-24 |
 | 17. Template Import Core And Kaipai Offline Adapter Foundation | 10/10 | Complete   | 2026-06-24 |
 | 18. Mobile/Server Binding Architecture And Runtime Ports | 6/6 | Complete    | 2026-06-25 |
-| 19. Production Effects, Retiming, And Transition Semantics | 0/11 | Planned | - |
+| 19. Production Effects, Retiming, And Transition Semantics | 0/15 | Planned | - |
